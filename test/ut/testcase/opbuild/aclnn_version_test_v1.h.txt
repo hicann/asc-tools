@@ -1,0 +1,57 @@
+
+/*
+ * calution: this file was generated automaticlly donot change it.
+*/
+
+#ifndef ACLNN_VERSION_TEST_V1_H_
+#define ACLNN_VERSION_TEST_V1_H_
+#include "aclnn/acl_meta.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+/* funtion: aclnnVersionTestV1GetWorkspaceSize
+ * parameters :
+ * x1Ref : required
+ * x2 : required
+ * x3Optional : optional
+ * bias1 : optional
+ * bias4Optional : optional
+ * bias5Optional : optional
+ * yOut : required
+ * x1Ref : required
+ * workspaceSize : size of workspace(output).
+ * executor : executor context(output).
+ */
+__attribute__((visibility("default")))
+aclnnStatus aclnnVersionTestV1GetWorkspaceSize(
+    aclTensor *x1Ref,
+    const aclTensor *x2,
+    const aclTensor *x3Optional,
+    int64_t bias1,
+    const aclBoolArray *bias4Optional,
+    const aclFloatArray *bias5Optional,
+    const aclTensor *yOut,
+    uint64_t *workspaceSize,
+    aclOpExecutor **executor);
+
+/* funtion: aclnnVersionTestV1
+ * parameters :
+ * workspace : workspace memory addr(input).
+ * workspaceSize : size of workspace(input).
+ * executor : executor context(input).
+ * stream : acl stream.
+ */
+__attribute__((visibility("default")))
+aclnnStatus aclnnVersionTestV1(
+    void *workspace,
+    uint64_t workspaceSize,
+    aclOpExecutor *executor,
+    aclrtStream stream);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif

@@ -1,0 +1,79 @@
+
+/*
+ * calution: this file was generated automaticlly donot change it.
+*/
+
+#ifndef TEST_ADD_TIK2_H_
+#define TEST_ADD_TIK2_H_
+
+#include "aclnn/acl_meta.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+/* funtion: testAddTik2GetWorkspaceSize
+ * parameters :
+ * x1Optional : optional
+ * x2 : dynamic
+ * bias0 : optional
+ * bias1 : optional
+ * bias2Optional : optional
+ * bias3Optional : optional
+ * bias4Optional : optional
+ * bias5Optional : optional
+ * bias6 : optional
+ * bias00 : required
+ * bias11 : required
+ * bias22 : required
+ * bias33 : required
+ * bias44 : required
+ * bias55 : required
+ * bias66 : required
+ * yOut : required
+ * y2Out : dynamic
+ * workspaceSize : size of workspace(output).
+ * executor : executor context(output).
+ */
+__attribute__((visibility("default")))
+aclnnStatus testAddTik2GetWorkspaceSize(
+    const aclTensor *x1Optional,
+    const aclTensorList *x2,
+    int64_t bias0,
+    double bias1,
+    const aclBoolArray *bias2Optional,
+    const aclFloatArray *bias3Optional,
+    const aclIntArray *bias4Optional,
+    char *bias5Optional,
+    bool bias6,
+    int64_t bias00,
+    double bias11,
+    const aclBoolArray *bias22,
+    const aclFloatArray *bias33,
+    const aclIntArray *bias44,
+    char *bias55,
+    bool bias66,
+    const aclTensor *yOut,
+    const aclTensorList *y2Out,
+    uint64_t *workspaceSize,
+    aclOpExecutor **executor);
+
+/* funtion: testAddTik2
+ * parameters :
+ * workspace : workspace memory addr(input).
+ * workspaceSize : size of workspace(input).
+ * executor : executor context(input).
+ * stream : acl stream.
+ */
+__attribute__((visibility("default")))
+aclnnStatus testAddTik2(
+    void *workspace,
+    uint64_t workspaceSize,
+    aclOpExecutor *executor,
+    aclrtStream stream);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<block name="AscendCToolkits" copy_type="delivery" src_path="lib/host" dst_path="" install_path="" install_own="$username:$usergroup" install_mod="550" install_type="run;devel">
+    <file_info value="msobjdump" copy_type="delivery" src_path="lib/host/" dst_path="tools/msobjdump" install_path="tools/msobjdump" install_mod="750">
+        <file value="msobjdump"/>
+    </file_info>
+    <file_info value="msobjdump_whl" copy_type="delivery" src_path="lib/host" dst_path="tools/" install_path="tools/" install_mod="440" feature="stress_detect">
+        <file value="msobjdump-0.1.0-py3-none-any.whl" file_type="whl"/>
+    </file_info>
+    <file_info value="show_kernel_debug_data" copy_type="delivery" src_path="lib/host/" dst_path="tools/show_kernel_debug_data" install_path="tools/show_kernel_debug_data" install_mod="750">
+        <file value="show_kernel_debug_data"/>
+    </file_info>
+    <file_info value="show_kernel_debug_data_whl" copy_type="delivery" src_path="lib/host" dst_path="tools/" install_path="tools/" install_mod="440" feature="stress_detect">
+        <file value="show_kernel_debug_data-0.1.0-py3-none-any.whl" file_type="whl"/>
+    </file_info>
+</block>

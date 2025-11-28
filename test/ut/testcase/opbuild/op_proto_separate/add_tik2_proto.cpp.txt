@@ -1,0 +1,5 @@
+#include "add_tik2_proto.h"
+namespace ge {
+
+}
+

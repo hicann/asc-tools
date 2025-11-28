@@ -1,0 +1,23 @@
+#ifndef SCALAR_TEST_PROTO_H_
+#define SCALAR_TEST_PROTO_H_
+
+#include "graph/operator_reg.h"
+#include "register/op_impl_registry.h"
+
+namespace ge {
+
+REG_OP(ScalarTest)
+    .INPUT(x1, ge::TensorType::ALL())
+    .INPUT(x2, ge::TensorType::ALL())
+    .INPUT(x3, ge::TensorType::ALL())
+    .INPUT(x4, ge::TensorType::ALL())
+    .INPUT(x5, ge::TensorType::ALL())
+    .INPUT(x6, ge::TensorType::ALL())
+    .INPUT(x7, ge::TensorType::ALL())
+    .INPUT(x8, ge::TensorType::ALL())
+    .OUTPUT(y, ge::TensorType::ALL())
+    .OP_END_FACTORY_REG(ScalarTest);
+
+}
+
+#endif

@@ -1,0 +1,32 @@
+#ifndef ADD_TIK2_PROTO_H_
+#define ADD_TIK2_PROTO_H_
+
+#include "graph/operator_reg.h"
+#include "register/op_impl_registry.h"
+
+namespace ge {
+
+REG_OP(AddTik2)
+    .OPTIONAL_INPUT(x1, ge::TensorType::ALL())
+    .DYNAMIC_INPUT(x2, ge::TensorType::ALL())
+    .OUTPUT(y, ge::TensorType::ALL())
+    .DYNAMIC_OUTPUT(y2, ge::TensorType::ALL())
+    .ATTR(bias0, Int, 0)
+    .ATTR(bias1, Float, 0)
+    .ATTR(bias2, ListBool, {true,false})
+    .ATTR(bias3, ListFloat, {0.1,0.2})
+    .ATTR(bias4, ListInt, {1,2})
+    .ATTR(bias5, String, "ssss")
+    .ATTR(bias6, Bool, true)
+    .REQUIRED_ATTR(bias00, Int)
+    .REQUIRED_ATTR(bias11, Float)
+    .REQUIRED_ATTR(bias22, ListBool)
+    .REQUIRED_ATTR(bias33, ListFloat)
+    .REQUIRED_ATTR(bias44, ListInt)
+    .REQUIRED_ATTR(bias55, String)
+    .REQUIRED_ATTR(bias66, Bool)
+    .OP_END_FACTORY_REG(AddTik2);
+
+}
+
+#endif

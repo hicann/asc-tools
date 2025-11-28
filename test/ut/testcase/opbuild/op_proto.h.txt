@@ -1,0 +1,123 @@
+#ifndef OP_PROTO_H_
+#define OP_PROTO_H_
+
+#include "graph/operator_reg.h"
+#include "register/op_impl_registry.h"
+
+namespace ge {
+
+REG_OP(AddTik2)
+    .OPTIONAL_INPUT(x1, ge::TensorType::ALL())
+    .DYNAMIC_INPUT(x2, ge::TensorType::ALL())
+    .OUTPUT(y, ge::TensorType::ALL())
+    .DYNAMIC_OUTPUT(y2, ge::TensorType::ALL())
+    .ATTR(bias0, Int, 0)
+    .ATTR(bias1, Float, 0)
+    .ATTR(bias2, ListBool, {true,false})
+    .ATTR(bias3, ListFloat, {0.1,0.2})
+    .ATTR(bias4, ListInt, {1,2})
+    .ATTR(bias5, String, "ssss")
+    .ATTR(bias6, Bool, true)
+    .REQUIRED_ATTR(bias00, Int)
+    .REQUIRED_ATTR(bias11, Float)
+    .REQUIRED_ATTR(bias22, ListBool)
+    .REQUIRED_ATTR(bias33, ListFloat)
+    .REQUIRED_ATTR(bias44, ListInt)
+    .REQUIRED_ATTR(bias55, String)
+    .REQUIRED_ATTR(bias66, Bool)
+    .OP_END_FACTORY_REG(AddTik2);
+
+REG_OP(InputTest)
+    .INPUT(x1, ge::TensorType::ALL())
+    .DYNAMIC_INPUT(x2, ge::TensorType::ALL())
+    .OP_END_FACTORY_REG(InputTest);
+
+REG_OP(OutputTest)
+    .OUTPUT(x1, ge::TensorType::ALL())
+    .DYNAMIC_OUTPUT(x2, ge::TensorType::ALL())
+    .OP_END_FACTORY_REG(OutputTest);
+
+REG_OP(ValueDependTest)
+    .INPUT(x1, ge::TensorType::ALL())
+    .INPUT(x2, ge::TensorType::ALL())
+    .OPTIONAL_INPUT(x3, ge::TensorType::ALL())
+    .OUTPUT(y, ge::TensorType::ALL())
+    .OP_END_FACTORY_REG(ValueDependTest);
+
+REG_OP(AutoContiguousTest)
+    .INPUT(x1, ge::TensorType::ALL())
+    .INPUT(x2, ge::TensorType::ALL())
+    .OUTPUT(y, ge::TensorType::ALL())
+    .OP_END_FACTORY_REG(AutoContiguousTest);
+
+REG_OP(ScalarTest)
+    .INPUT(x1, ge::TensorType::ALL())
+    .INPUT(x2, ge::TensorType::ALL())
+    .INPUT(x3, ge::TensorType::ALL())
+    .INPUT(x4, ge::TensorType::ALL())
+    .INPUT(x5, ge::TensorType::ALL())
+    .INPUT(x6, ge::TensorType::ALL())
+    .INPUT(x7, ge::TensorType::ALL())
+    .INPUT(x8, ge::TensorType::ALL())
+    .OUTPUT(y, ge::TensorType::ALL())
+    .OP_END_FACTORY_REG(ScalarTest);
+
+REG_OP(RefTest)
+    .INPUT(self, ge::TensorType::ALL())
+    .INPUT(x, ge::TensorType::ALL())
+    .OUTPUT(self, ge::TensorType::ALL())
+    .OP_END_FACTORY_REG(RefTest);
+
+REG_OP(RefContiguousTest)
+    .INPUT(self, ge::TensorType::ALL())
+    .INPUT(x, ge::TensorType::ALL())
+    .OUTPUT(self, ge::TensorType::ALL())
+    .OP_END_FACTORY_REG(RefContiguousTest);
+
+REG_OP(DynamicRefTest)
+    .DYNAMIC_INPUT(dynamicSelf, ge::TensorType::ALL())
+    .INPUT(x, ge::TensorType::ALL())
+    .DYNAMIC_OUTPUT(dynamicSelf, ge::TensorType::ALL())
+    .OP_END_FACTORY_REG(DynamicRefTest);
+
+REG_OP(VersionTest)
+    .INPUT(x1, ge::TensorType::ALL())
+    .INPUT(x2, ge::TensorType::ALL())
+    .OPTIONAL_INPUT(x3, ge::TensorType::ALL())
+    .OPTIONAL_INPUT(x4, ge::TensorType::ALL())
+    .OUTPUT(y, ge::TensorType::ALL())
+    .OUTPUT(x1, ge::TensorType::ALL())
+    .ATTR(bias1, Int, 1)
+    .ATTR(bias2, Float, 0)
+    .ATTR(bias3, Bool, true)
+    .ATTR(bias4, ListBool, {true,false})
+    .ATTR(bias5, ListFloat, {0.1,0.2})
+    .ATTR(bias6, ListInt, {1,2})
+    .ATTR(bias7, String, "ssss")
+    .OP_END_FACTORY_REG(VersionTest);
+
+REG_OP(MC2Test)
+    .INPUT(x, ge::TensorType::ALL())
+    .OUTPUT(y, ge::TensorType::ALL())
+    .REQUIRED_ATTR(group1, String)
+    .ATTR(group2, String, "")
+    .OP_END_FACTORY_REG(MC2Test);
+
+REG_OP(ValueDependScopeTest)
+    .INPUT(x1, ge::TensorType::ALL())
+    .INPUT(x2, ge::TensorType::ALL())
+    .OPTIONAL_INPUT(x3, ge::TensorType::ALL())
+    .OUTPUT(y, ge::TensorType::ALL())
+    .OP_END_FACTORY_REG(ValueDependScopeTest);
+
+REG_OP(OutShapeDepOnCompute)
+    .INPUT(x1, ge::TensorType::ALL())
+    .INPUT(x2, ge::TensorType::ALL())
+    .OUTPUT(y1, ge::TensorType::ALL())
+    .OUTPUT(y2, ge::TensorType::ALL())
+    .DYNAMIC_OUTPUT(y3, ge::TensorType::ALL())
+    .OP_END_FACTORY_REG(OutShapeDepOnCompute);
+
+}
+
+#endif

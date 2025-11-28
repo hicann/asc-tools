@@ -1,0 +1,358 @@
+#include <iostream>
+#include <fstream>
+#include <vector>
+#include <tuple>
+#include <cstring>
+#include <cstdint>
+#include <ctime>
+#include <sstream>
+#include <sys/stat.h>
+#include <sys/utsname.h>
+#include <dirent.h>
+#include <unistd.h>
+#include <dlfcn.h>
+#include "ge_table_op_resource.h"
+#include "graph/ascend_string.h"
+#include "graph/operator_reg.h"
+#include "register/op_lib_register.h"
+#include "register/op_impl_registry.h"
+#include "base/alog_pub.h"
+
+#define ASCENDC_MODULE_NAME static_cast<int32_t>(ASCENDCKERNEL)
+#define LOG_ERROR(format, ...)                                                                                                   \
+    do {                                                                                                                         \
+        if (AlogCheckDebugLevel(ASCENDC_MODULE_NAME, DLOG_ERROR) == 1) {                                                         \
+            AlogRecord(ASCENDC_MODULE_NAME, DLOG_TYPE_DEBUG, DLOG_ERROR, "[%s] " format "\n", __FUNCTION__, ##__VA_ARGS__);      \
+        }                                                                                                                        \
+    } while (0)
+#define LOG_WARN(format, ...)                                                                                                    \
+    do {                                                                                                                         \
+        if (AlogCheckDebugLevel(ASCENDC_MODULE_NAME, DLOG_WARN) == 1) {                                                          \
+            AlogRecord(ASCENDC_MODULE_NAME, DLOG_TYPE_DEBUG, DLOG_WARN, "[%s] " format "\n", __FUNCTION__, ##__VA_ARGS__);       \
+        }                                                                                                                        \
+    } while (0)
+#define LOG_INFO(format, ...)                                                                                                    \
+    do {                                                                                                                         \
+        if (AlogCheckDebugLevel(ASCENDC_MODULE_NAME, DLOG_INFO) == 1) {                                                          \
+            AlogRecord(ASCENDC_MODULE_NAME, DLOG_TYPE_DEBUG, DLOG_INFO, "[%s] " format "\n", __FUNCTION__, ##__VA_ARGS__);       \
+        }                                                                                                                        \
+    } while (0)
+char basePathChar[PATH_MAX];
+
+void CheckCloseDir(DIR* dir, const char* file, int line, const char* func)
+{
+    if (closedir(dir) != 0) {
+        LOG_ERROR("closedir failed, [%s:%d]%s", file, line, func);
+    }
+}
+
+bool FileExist(const std::string& filename)
+{
+    std::ifstream file(filename);
+    return file.good();
+}
+
+bool DirectoryExists(const std::string& path)
+{
+    DIR* dir = opendir(path.c_str());
+    if (dir != nullptr) {
+        CheckCloseDir(dir, __FILE__, __LINE__, __FUNCTION__);
+        return true;
+    } else {
+        return false;
+    }
+}
+
+std::string GetCurrentTimestamp()
+{
+    std::time_t now = std::time(nullptr);
+    char buf[64];
+    (void)std::strftime(buf, sizeof(buf), "%Y%m%d_%H%M%S", std::localtime(&now));
+    return std::to_string(getpid()) + "_" + std::string(buf);
+}
+
+bool CheckWritePermission(const std::string& path)
+{
+    if (access(path.c_str(), W_OK) != 0) {
+        LOG_ERROR("No write permission for the path: %s, errno: %d, error: %s", path.c_str(), errno, strerror(errno));
+        return false;
+    }
+    return true;
+}
+
+bool GetBasePath()
+{
+    const char *ascendWorkPathEnv = std::getenv("ASCEND_WORK_PATH");
+    std::string currentTimestamp = GetCurrentTimestamp();
+    std::string path;
+    if (ascendWorkPathEnv != nullptr) {
+        char resolvedPath[PATH_MAX];
+        if (realpath(ascendWorkPathEnv, resolvedPath) == nullptr) {
+            LOG_ERROR("Invalid ASCEND_WORK_PATH: %s", ascendWorkPathEnv);
+            return false;
+        } else {
+            std::string ascendWorkPath = std::string(resolvedPath);
+            path = ascendWorkPath + "/opp/" + currentTimestamp + "/vendors/";
+            if (!CheckWritePermission(ascendWorkPath)) {
+                return false;
+            }
+        }
+    } else {
+        path = "/tmp/opp/" + currentTimestamp + "/vendors/";
+        if (!CheckWritePermission("/tmp/")) {
+            return false;
+        }
+    }
+    errno_t err = strcpy_s(basePathChar, PATH_MAX, path.c_str());
+    if (err != 0) {
+        LOG_ERROR("Error copying string, error code: %d", err);
+        return false;
+    }
+    return true;
+}
+
+bool CreateDirectory(const std::string& path)
+{
+    if (DirectoryExists(path)) {
+        return true;
+    } else {
+        char* p = const_cast<char*>(path.c_str());
+        char* slash = strchr(p + 1, '/');
+        while (slash != nullptr) {
+            *slash = '\0';
+            int status = mkdir(p, S_IRWXU | S_IRWXG);
+            *slash = '/';
+            if (status == -1 && errno != EEXIST) {
+                LOG_ERROR("Error create diectory failed");
+                return false;
+            }
+            slash = strchr(slash + 1, '/');
+        }
+        int status = mkdir(p, S_IRWXU | S_IRWXG);
+        if (status == -1 && errno != EEXIST) {
+            LOG_ERROR("Error create diectory failed, path: %s", path.c_str());
+            return false;
+        }
+        return true;
+    }
+}
+
+void WriteBinaryFile(const std::string& path, const uint8_t* start, const uint8_t* end)
+{
+    std::ofstream outfile(path, std::ios::binary);
+    if (!outfile) {
+        LOG_ERROR("Error opening file for writing: %s", path.c_str());
+        return;
+    }
+    std::copy(start, end, std::ostreambuf_iterator<char>(outfile));
+    if (!outfile) {
+        LOG_ERROR("Error writing file: %s", path.c_str());
+    }
+    LOG_INFO("Successfully writing file: %s", path.c_str());
+}
+
+std::string GetParentPath(const std::string& path)
+{
+    size_t pos = path.find_last_of("/\\");
+    if (pos == std::string::npos) {
+        return "";
+    }
+    return path.substr(0, pos);
+}
+
+bool CreateSymlink(const std::string& targetPath, const std::string& linkPath)
+{
+    try {
+        if (!FileExist(targetPath)) {
+            throw std::runtime_error("Target file does not exist: " + targetPath);
+        }
+        std::string parentDir = GetParentPath(linkPath);
+        if (!DirectoryExists(parentDir)) {
+            if (!CreateDirectory(parentDir)) {
+                LOG_ERROR("Failed create directory: %s", parentDir.c_str());
+                return false;
+            }
+        }
+        if (symlink(targetPath.c_str(), linkPath.c_str()) != 0) {
+            LOG_ERROR("Error creating symlink failed.");
+            return false;
+        }
+        LOG_INFO("Successfully creating symlink: %s", linkPath.c_str());
+        return true;
+    } catch (const std::exception& e) {
+        LOG_ERROR("Error creating symlink: %s", e.what());
+        return false;
+    }
+}
+
+std::string GetSystemArchitecture() {
+    const char* systemArch = std::getenv("SYSTEM_PROCESSOR");
+    if (systemArch != nullptr) {
+        return std::string(systemArch);
+    } else {
+        struct utsname sysInfo;
+        if (uname(&sysInfo) == 0) {
+            return sysInfo.machine;
+        } else {
+            return "";
+        }
+    }
+}
+
+uint32_t ImplCustomOpRegistry(ge::AscendString& op_lib_path)
+{
+    if (!GetBasePath()) {
+        return 1;
+    }
+    std::string basePath = std::string(basePathChar);
+    if (!CreateDirectory(basePath)) {
+        return 1;
+    }
+    std::string vendorName = "";
+    for (const auto& fileInfo : AscendC::__ascendc_op_info) {
+        std::string fileName = std::get<0>(fileInfo).GetString();
+        std::string filePath = std::get<1>(fileInfo).GetString();
+        const uint8_t* start = std::get<2>(fileInfo);
+        const uint8_t* end = std::get<3>(fileInfo);
+        std::string fullPath = (basePath) + "/" + filePath + "/" + fileName;
+        if (!CreateDirectory((basePath) + "/" + filePath)) {
+            LOG_ERROR("Failed to create subdirectory: %s", filePath.c_str());
+            return 1;
+        }
+        WriteBinaryFile(fullPath, start, end);
+        if (vendorName.empty()) {
+            size_t firstSlashPos = filePath.find('/');
+            if (firstSlashPos != std::string::npos) {
+                vendorName = filePath.substr(0, firstSlashPos);
+            } else {
+                LOG_ERROR("Failed to get vendor_name");
+                return 1;
+            }
+        }
+    }
+    op_lib_path = ConvertToAscendString(basePath + vendorName);
+    Dl_info dlInfo;
+    if (!dladdr((void*)&ImplCustomOpRegistry, &dlInfo)) {
+        LOG_ERROR("dladdr failed: %s", dlerror());
+        return 1;
+    }
+    std::string targetPath = dlInfo.dli_fname;
+    char resolvedPath[PATH_MAX];
+    if (realpath(targetPath.c_str(), resolvedPath) == nullptr) {
+        LOG_ERROR("Failed to resolve libcust_opapi.so path: %s", strerror(errno));
+        return 1;
+    }
+    targetPath = std::string(resolvedPath);
+    LOG_INFO("Resolve libcust_opapi.so path is: %s", targetPath.c_str());
+    std::string arch = GetSystemArchitecture();
+    if (arch.empty()) {
+        LOG_ERROR("Failed to get system architecture name");
+        return 1;
+    }
+    std::string opmasterPath = basePath + vendorName + "/op_impl/ai_core/tbe/op_tiling/lib/linux/" +
+        arch + "/libcust_opmaster_rt2.0.so";
+    if (!CreateSymlink(targetPath, opmasterPath)) {
+        LOG_ERROR("Failed to create symlink for libcust_opmaster_rt2.0.so");
+        return 1;
+    }
+    std::string opsprotoPath = basePath + vendorName + "/op_proto/lib/linux/" + arch + "/libcust_opsproto_rt2.0.so";
+    if (!CreateSymlink(targetPath, opsprotoPath)) {
+        LOG_ERROR("Failed to create symlink for libcust_opsproto_rt2.0.so");
+        return 1;
+    }
+    std::string optilingPath = basePath + vendorName + "/op_impl/ai_core/tbe/op_tiling/liboptiling.so";
+    if (!CreateSymlink(targetPath, optilingPath)) {
+        LOG_ERROR("Failed to create symlink for liboptiling.so");
+        return 1;
+    }
+    return 0;
+}
+
+bool RemoveDirectoryRecursively(const std::string& path)
+{
+    DIR* dir = opendir(path.c_str());
+    if (dir == nullptr) {
+        const int32_t currentErr = errno;
+        if (currentErr == ENOENT) {
+            LOG_WARN("Directory does not exist: %s", path.c_str());
+            return true;
+        } else {
+            LOG_ERROR("Failed to open directory: %s", path.c_str());
+            return false;
+        }
+    }
+    dirent* entry = readdir(dir);
+    while (entry != nullptr) {
+        std::string entryPath = path + "/" + entry->d_name;
+        if (static_cast<int32_t>(entry->d_type) == DT_DIR) {
+            if (std::string(entry->d_name) != "." && std::string(entry->d_name) != "..") {
+                if (!RemoveDirectoryRecursively(entryPath)) {
+                    LOG_ERROR("Failed to remove subdirectory: %s", entryPath.c_str());
+                    CheckCloseDir(dir, __FILE__, __LINE__, __FUNCTION__);
+                    return false;
+                }
+                LOG_INFO("Successfully remove subdirectory: %s", entryPath.c_str());
+            }
+        } else {
+            if (unlink(entryPath.c_str()) != 0) {
+                LOG_ERROR("Failed to unlink file: %s", entryPath.c_str());
+                CheckCloseDir(dir, __FILE__, __LINE__, __FUNCTION__);
+                return false;
+            }
+            LOG_INFO("Successfully remove linkpath: %s", entryPath.c_str());
+        }
+        entry = readdir(dir);
+    }
+    CheckCloseDir(dir, __FILE__, __LINE__, __FUNCTION__);
+    bool result = (rmdir(path.c_str()) == 0);
+    return result;
+}
+
+REGISTER_OP_LIB(customize).RegOpLibInit(ImplCustomOpRegistry);
+
+bool IsDirectoryEmpty(const std::string& dirPath) {
+    DIR* dir = opendir(dirPath.c_str());
+    if (dir == nullptr) {
+        const int32_t currentErr = errno;
+        if (currentErr == ENOENT) {
+            LOG_WARN("Directory is already empty: %s", dirPath.c_str());
+            return true;
+        } else {
+            LOG_ERROR("Failed to open directory: %s", dirPath.c_str());
+            return false;
+        }
+    }
+    dirent* entry = readdir(dir);
+    while (entry != nullptr) {
+        if (strncmp(entry->d_name, ".", 1) != 0 && strncmp(entry->d_name, "..", 2) != 0) {
+            CheckCloseDir(dir, __FILE__, __LINE__, __FUNCTION__);
+            return false;
+        }
+        entry = readdir(dir);
+    }
+    CheckCloseDir(dir, __FILE__, __LINE__, __FUNCTION__);
+    return true;
+}
+
+__attribute__((destructor)) void DestroyCustomOpRegistry()
+{
+    std::string basePath = std::string(basePathChar);
+    size_t lastSlashPos = (basePath).rfind('/');
+    size_t secondLastSlashPos = (basePath).rfind('/', lastSlashPos - 1u);
+    std::string oppBasePath = (basePath).substr(0, secondLastSlashPos);
+    if (!RemoveDirectoryRecursively(oppBasePath)) {
+        LOG_ERROR("Failed to remove directory: %s", oppBasePath.c_str());
+    } else {
+        LOG_INFO("Successfully removed directory: %s", oppBasePath.c_str());
+        const std::string oppSubstring = "/opp/";
+        size_t pos = oppBasePath.find(oppSubstring);
+        std::string oppDir = oppBasePath.substr(0, pos + oppSubstring.length() - 1);
+        if (IsDirectoryEmpty(oppDir)) {
+            if (rmdir(oppDir.c_str()) != 0) {
+                LOG_WARN("Failed to remove empty opp directory: %s", oppDir.c_str());
+            } else {
+                LOG_INFO("Successfully removed empty opp directory: %s", oppDir.c_str());
+            }
+        }
+    }
+}

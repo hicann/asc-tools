@@ -1,0 +1,27 @@
+#ifndef VERSION_TEST_PROTO_H_
+#define VERSION_TEST_PROTO_H_
+
+#include "graph/operator_reg.h"
+#include "register/op_impl_registry.h"
+
+namespace ge {
+
+REG_OP(VersionTest)
+    .INPUT(x1, ge::TensorType::ALL())
+    .INPUT(x2, ge::TensorType::ALL())
+    .OPTIONAL_INPUT(x3, ge::TensorType::ALL())
+    .OPTIONAL_INPUT(x4, ge::TensorType::ALL())
+    .OUTPUT(y, ge::TensorType::ALL())
+    .OUTPUT(x1, ge::TensorType::ALL())
+    .ATTR(bias1, Int, 1)
+    .ATTR(bias2, Float, 0)
+    .ATTR(bias3, Bool, true)
+    .ATTR(bias4, ListBool, {true,false})
+    .ATTR(bias5, ListFloat, {0.1,0.2})
+    .ATTR(bias6, ListInt, {1,2})
+    .ATTR(bias7, String, "ssss")
+    .OP_END_FACTORY_REG(VersionTest);
+
+}
+
+#endif

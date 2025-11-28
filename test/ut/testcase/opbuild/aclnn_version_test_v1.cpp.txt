@@ -1,0 +1,61 @@
+#include <string.h>
+#include "graph/types.h"
+#include "aclnn_version_test_v1.h"
+#include "aclnn_version_test_v2.h"
+
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+aclnnStatus __attribute__((weak)) NnopbaseDisableOptionalInput(void *executor, const size_t irIndex);
+
+aclnnStatus aclnnVersionTestV1GetWorkspaceSize(
+    aclTensor *x1Ref,
+    const aclTensor *x2,
+    const aclTensor *x3Optional,
+    int64_t bias1,
+    const aclBoolArray *bias4Optional,
+    const aclFloatArray *bias5Optional,
+    const aclTensor *yOut,
+    uint64_t *workspaceSize,
+    aclOpExecutor **executor)
+{
+    static float bias2Def = 0;
+    static bool bias3Def = true;
+    static int64_t bias6OptionalDef[] = {1, 2};
+    static aclIntArray *bias6OptionalArray = aclCreateIntArray(bias6OptionalDef, 2);
+    static char *bias7OptionalDef = "ssss";
+    aclnnStatus ret = aclnnVersionTestV2GetWorkspaceSize(
+        x1Ref,
+        x2,
+        x3Optional,
+        NULL,
+        bias1,
+        bias2Def,
+        bias3Def,
+        bias4Optional,
+        bias5Optional,
+        bias6OptionalArray,
+        bias7OptionalDef,
+        yOut,
+        workspaceSize,
+        executor);
+    if (NnopbaseDisableOptionalInput != NULL) {
+        NnopbaseDisableOptionalInput(*executor, 3);
+    }
+    return ret;
+}
+
+aclnnStatus aclnnVersionTestV1(
+    void *workspace,
+    uint64_t workspaceSize,
+    aclOpExecutor *executor,
+    aclrtStream stream)
+{
+    return aclnnVersionTestV2(workspace, workspaceSize, executor, stream);
+}
+
+#ifdef __cplusplus
+}
+#endif
