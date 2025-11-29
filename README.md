@@ -28,18 +28,19 @@ Ascend C Tools是[CANN](https://hiascend.com/software/cann) （Compute Architect
 ├── cmake                               // Ascend C Tools构建源代码
 ├── cpudebug                            // Ascend C Tools cpu debug工具实现源代码
 │   ├── cmake                           // Ascend C Tools cpu debug 构建源代码
-│   ├── include                         // 
-│   ├── model                           // 
-│   └── src                             // 
+│   ├── include                         // Ascend C Tools cpu debug工具实现源代码
+│   ├── utils                           // Ascend C Tools cpu debug工具实现源代码
+│   └── src                             // Ascend C Tools cpu debug工具实现源代码
 ├── docs                                // Ascend C Tools使用说明
 ├── examples                            // Ascend C Tools样例工程
 ├── libraries                           // Ascend C Tools依赖的库文件
 ├── npuchk                              // Ascend C Tools npu check检查工具
-├── scripts                             // 
+├── scripts                             // Ascend C Tools打包脚本
 ├── test                                // Ascend C Tools的UT用例
 ├── third_party                         // Ascend C Tools依赖的第三方库文件
-├── utils                               //
+├── utils
 │   ├── msobjdump                       // Ascend C Tools msobjdump实现源代码
+│   ├── opbuild                         // Ascend C Tools opbuild实现源代码
 └── └── show_kernel_debug_data          // Ascend C Tools show_kernel_debug_data实现源代码
 ```
 
