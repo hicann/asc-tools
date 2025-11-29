@@ -31,14 +31,14 @@ LOG_RELATIVE_PATH=var/log/ascend_seclog # install log path and operation log pat
 log() {
     local content=`echo "$@" | cut -d" " -f2-`
     cur_date=`date +"%Y-%m-%d %H:%M:%S"`
-    echo "[Asc-Tookit] [${cur_date}] [$1]: $content" >> "${logFile}"
+    echo "[AscTools] [${cur_date}] [$1]: $content" >> "${logFile}"
 }
 
 log_and_print() {
     local content=`echo "$@" | cut -d" " -f2-`
     cur_date=`date +"%Y-%m-%d %H:%M:%S"`
-    echo "[Asc-Tookit] [${cur_date}] [$1]: $content"
-    echo "[Asc-Tookit] [${cur_date}] [$1]: $content" >> "${logFile}"
+    echo "[AscTools] [${cur_date}] [$1]: $content"
+    echo "[AscTools] [${cur_date}] [$1]: $content" >> "${logFile}"
 }
 
 if [ "$(id -u)" -ne 0 ]; then

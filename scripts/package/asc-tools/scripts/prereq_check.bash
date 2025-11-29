@@ -13,7 +13,7 @@ SHELL_DIR=$(cd "$(dirname "$0")" || exit; pwd)
 print_log() {
     local content=`echo "$@" | cut -d" " -f2-`
     cur_date=`date +"%Y-%m-%d %H:%M:%S"`
-    echo "[Asc-Tookit] [${cur_date}] [$1]: $content"
+    echo "[AscTools] [${cur_date}] [$1]: $content"
 }
 
 function check_tool_version() {

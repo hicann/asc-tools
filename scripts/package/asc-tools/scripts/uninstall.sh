@@ -42,20 +42,20 @@ export input_install_path=""
 log() {
     local content=`echo "$@" | cut -d" " -f2-`
     cur_date=`date +"%Y-%m-%d %H:%M:%S"`
-    echo "[Asc-Tookit] [${cur_date}] [$1]: $content" >> "${logFile}"
+    echo "[AscTools] [${cur_date}] [$1]: $content" >> "${logFile}"
 }
 
 log_and_print() {
     local content=`echo "$@" | cut -d" " -f2-`
     cur_date=`date +"%Y-%m-%d %H:%M:%S"`
-    echo "[Asc-Tookit] [${cur_date}] [$1]: $content"
-    echo "[Asc-Tookit] [${cur_date}] [$1]: $content" >> "${logFile}"
+    echo "[AscTools] [${cur_date}] [$1]: $content"
+    echo "[AscTools] [${cur_date}] [$1]: $content" >> "${logFile}"
 }
 
 print_log() {
     local content=`echo "$@" | cut -d" " -f2-`
     cur_date=`date +"%Y-%m-%d %H:%M:%S"`
-    echo "[Asc-Tookit] [${cur_date}] [$1]: $content"
+    echo "[AscTools] [${cur_date}] [$1]: $content"
 }
 
 logOperation() {
@@ -243,12 +243,12 @@ uninstallRun() {
         "$_uninstall_shell_path" --uninstall "$install_dir" ${_install_type} $quiet
     fi
     if [ $? -eq 0 ]; then
-        log_and_print $LEVEL_INFO "Asc-Tookit package uninstalled successfully! Uninstallation takes effect immediately."
+        log_and_print $LEVEL_INFO "AscTools package uninstalled successfully! Uninstallation takes effect immediately."
 
         rm -f "$INSTALL_INFO_FILE"
         removeInstallPath
     else
-        log_and_print $LEVEL_ERROR "Asc-Tookit package uninstall failed!"
+        log_and_print $LEVEL_ERROR "AscTools package uninstall failed!"
         return 1
     fi
     return 0

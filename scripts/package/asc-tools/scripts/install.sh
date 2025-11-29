@@ -62,20 +62,20 @@ fi
 log() {
     local content=`echo "$@" | cut -d" " -f2-`
     cur_date=`date +"%Y-%m-%d %H:%M:%S"`
-    echo "[Asc-Tools] [${cur_date}] [$1]: $content" >> "${logFile}"
+    echo "[AscTools] [${cur_date}] [$1]: $content" >> "${logFile}"
 }
 
 log_and_print() {
     local content=`echo "$@" | cut -d" " -f2-`
     cur_date=`date +"%Y-%m-%d %H:%M:%S"`
-    echo "[Asc-Tools] [${cur_date}] [$1]: $content"
-    echo "[Asc-Tools] [${cur_date}] [$1]: $content" >> "${logFile}"
+    echo "[AscTools] [${cur_date}] [$1]: $content"
+    echo "[AscTools] [${cur_date}] [$1]: $content" >> "${logFile}"
 }
 
 print_log() {
     local content=`echo "$@" | cut -d" " -f2-`
     cur_date=`date +"%Y-%m-%d %H:%M:%S"`
-    echo "[Asc-Tools] [${cur_date}] [$1]: $content"
+    echo "[AscTools] [${cur_date}] [$1]: $content"
 }
 
 logOperation() {
@@ -125,14 +125,14 @@ rotateLog() {
 # start info before shell executing
 startLog() {
     cur_date=`date +"%Y-%m-%d %H:%M:%S"`
-    echo "[Asc-Tools] [${cur_date}] [INFO]: Start Time: $cur_date"
-    echo "[Asc-Tools] [${cur_date}] [INFO]: Start Time: $cur_date" >> "${logFile}"
+    echo "[AscTools] [${cur_date}] [INFO]: Start Time: $cur_date"
+    echo "[AscTools] [${cur_date}] [INFO]: Start Time: $cur_date" >> "${logFile}"
 }
 
 exitLog() {
     cur_date=`date +"%Y-%m-%d %H:%M:%S"`
-    echo "[Asc-Tools] [${cur_date}] [INFO]: End Time: $cur_date"
-    echo "[Asc-Tools] [${cur_date}] [INFO]: End Time: $cur_date" >> "${logFile}"
+    echo "[AscTools] [${cur_date}] [INFO]: End Time: $cur_date"
+    echo "[AscTools] [${cur_date}] [INFO]: End Time: $cur_date" >> "${logFile}"
     exit $1
 }
 
@@ -587,9 +587,9 @@ installRun() {
     if [ $? -eq 0 ]; then
         log_and_print $LEVEL_INFO "InstallPath: $install_dir"
         if [ ${install} = y ]; then
-            log_and_print $LEVEL_INFO "Asc-Tools package installed successfully! The new version takes effect immediately."
+            log_and_print $LEVEL_INFO "AscTools package installed successfully! The new version takes effect immediately."
         else
-            log_and_print $LEVEL_INFO "Asc-Tools package upgraded successfully! The new version takes effect immediately."
+            log_and_print $LEVEL_INFO "AscTools package upgraded successfully! The new version takes effect immediately."
         fi
         local _install_path="${input_install_path}"
         if [ ! -z "$pkg_version_dir" ]; then
@@ -612,9 +612,9 @@ installRun() {
             removeInstallPath
         fi
         if [ ${install} = y ]; then
-            log_and_print $LEVEL_ERROR "Asc-Tools package install failed, please retry!"
+            log_and_print $LEVEL_ERROR "AscTools package install failed, please retry!"
         else
-            log_and_print $LEVEL_ERROR "Asc-Tools package upgrade failed, please retry!"
+            log_and_print $LEVEL_ERROR "AscTools package upgrade failed, please retry!"
         fi
         return 1
     fi
@@ -641,14 +641,14 @@ uninstallRun() {
     fi
     "${_uninstall_shell_path}" --uninstall "${install_dir}" "${install_mode}" $quiet
     if [ $? -eq 0 ]; then
-        log_and_print $LEVEL_INFO "Asc-Tools package uninstalled successfully! Uninstallation takes effect immediately."
+        log_and_print $LEVEL_INFO "AscTools package uninstalled successfully! Uninstallation takes effect immediately."
 
         if [ $uninstall = y ]; then
             rm -f "${installInfo}"
             removeInstallPath
         fi
     else
-        log_and_print $LEVEL_ERROR "Asc-Tools package uninstall failed!"
+        log_and_print $LEVEL_ERROR "AscTools package uninstall failed!"
         return 1
     fi
     return 0
@@ -660,7 +660,7 @@ uninstallLatest() {
 
     get_package_upgrade_version_dir "upgrade_version_dir" "${_install_path}" "asc-tools"
     if [ -z "$upgrade_version_dir" ]; then
-        log_and_print $LEVEL_ERROR "Asc-Tools has not bean installed, upgrade failed."
+        log_and_print $LEVEL_ERROR "AscTools has not bean installed, upgrade failed."
         return 1
     fi
 
@@ -683,13 +683,13 @@ uninstallLatest() {
 
     "$_uninstall_shell_path" --uninstall "$_install_path/$upgrade_version_dir" "$install_mode" $quiet
     if [ $? -eq 0 ]; then
-        log_and_print $LEVEL_INFO "Asc-Tools package uninstalled successfully! Uninstallation takes effect immediately."
+        log_and_print $LEVEL_INFO "AscTools package uninstalled successfully! Uninstallation takes effect immediately."
         if [ -f "$_install_info" ]; then
             rm -f "$_install_info"
         fi
         removeLatestInstallPath "$_install_path/$upgrade_version_dir"
     else
-        log_and_print $LEVEL_ERROR "Asc-Tools package uninstall failed!"
+        log_and_print $LEVEL_ERROR "AscTools package uninstall failed!"
         return 1
     fi
     return 0
@@ -707,7 +707,7 @@ uninstallOldRun() {
 
     local _uninstall_shell_path=$(readlink -f "$_install_path/$PACKAGE_NAME/script/run_asc-tools_uninstall.sh")
     if [ -z "$_uninstall_shell_path" ]; then
-        log_and_print $LEVEL_ERROR "Asc-Tools uninstall shell not exist."
+        log_and_print $LEVEL_ERROR "AscTools uninstall shell not exist."
         return 1
     fi
     local _install_type=$(getInstallParam "Install_Type" "${_install_info}")
@@ -718,7 +718,7 @@ uninstallOldRun() {
 
     "$_uninstall_shell_path" --uninstall "$_install_path" "$_install_type" $quiet
     if [ $? -eq 0 ]; then
-        log_and_print $LEVEL_INFO "Asc-Tools old package uninstalled successfully! Uninstallation takes effect immediately."
+        log_and_print $LEVEL_INFO "AscTools old package uninstalled successfully! Uninstallation takes effect immediately."
 
         if [ -f "$_install_info" ]; then
             rm -f "$_install_info"
@@ -732,7 +732,7 @@ uninstallOldRun() {
             rm -rf "$_install_path"
         fi
     else
-        log_and_print $LEVEL_ERROR "Asc-Tools old package uninstall failed!"
+        log_and_print $LEVEL_ERROR "AscTools old package uninstall failed!"
         return 1
     fi
     return 0
@@ -761,7 +761,7 @@ checkUninstallState() {
     if [ $install = y -a ! $quiet = y ]; then
         version1=$(getVersionInRunFile)
         version2=$(getVersionInstalled $install_dir/$PACKAGE_NAME)
-        print_log $LEVEL_INFO "Asc-Tools package has been installed on the path $install_dir, the version is" \
+        print_log $LEVEL_INFO "AscTools package has been installed on the path $install_dir, the version is" \
             "${version2}, and the version of this package is ${version1}," \
             "do you want to continue? [y/n] "
         while true; do
@@ -1044,7 +1044,7 @@ done
 if [ "$feature_type" != "all" ]; then
     contain_feature "ret" "$feature_type" "$FILELIST_PATH"
     if [ "$ret" = "false" ]; then
-        log_and_print $LEVEL_WARN "WARNING" "Asc-Tools package doesn't contain features $feature_type, skip installation."
+        log_and_print $LEVEL_WARN "WARNING" "AscTools package doesn't contain features $feature_type, skip installation."
         exit 0
     fi
 fi
