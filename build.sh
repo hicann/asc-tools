@@ -23,8 +23,8 @@ USER_ID=$(id -u)
 CPU_NUM=$(($(cat /proc/cpuinfo | grep "^processor" | wc -l)))
 THREAD_NUM=${CPU_NUM}
 CUSTOM_OPTION="-DCMAKE_INSTALL_PREFIX=${OUTPUT_DIR} -DBUILD_OPEN_PROJECT=ON -DCMAKE_BUILD_TYPE=Debug"
-CANN_3RD_LIB_PATH=${CURRENT_DIR}/thirdparty
-DEPS_FILE_PATH=${CURRENT_DIR}/thirdparty
+CANN_3RD_LIB_PATH=${CURRENT_DIR}/third_party
+DEPS_FILE_PATH=${CURRENT_DIR}/third_party
 
 dotted_line="----------------------------------------------------------------"
 

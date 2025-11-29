@@ -113,7 +113,7 @@
 
 1. **安装社区尝鲜版CANN toolkit包**
 
-    根据实际环境，下载对应`Ascend-cann-toolkit_${cann_version}_linux-${arch}.run`包，下载链接为[toolkit x86_64包](https://ascend-cann.obs.cn-north-4.myhuaweicloud.com/CANN/community/ge/Ascend-cann-toolkit_8.5.0.alpha001_linux-x86_64.run)、[toolkit aarch64包](https://ascend-cann.obs.cn-north-4.myhuaweicloud.com/CANN/community/ge/Ascend-cann-toolkit_8.5.0.alpha001_linux-aarch64.run)。
+    根据实际环境，下载对应`Ascend-cann-toolkit_${cann_version}_linux-${arch}.run`包，下载链接为[toolkit x86_64包](https://ascend-cann.obs.cn-north-4.myhuaweicloud.com/CANN/community/ascendc/Ascend-cann-toolkit_8.5.0.alpha001_linux-x86_64.run)、[toolkit aarch64包](https://ascend-cann.obs.cn-north-4.myhuaweicloud.com/CANN/community/ascendc/Ascend-cann-toolkit_8.5.0.alpha001_linux-aarch64.run)。
 
     ```bash
     # 确保安装包具有可执行权限
@@ -127,7 +127,25 @@
     - 缺省--install-path时， 则使用默认路径安装。
     若使用root用户安装，安装完成后相关软件存储在“/usr/local/Ascend/latest”路径下；若使用非root用户安装，安装完成后相关软件存储在“$HOME/Ascend/latest”路径下。
 
-2. **配置环境变量**
+2. **安装社区版CANN legacy包（运行态依赖）**
+
+    NPU方式运行样例前必须安装本包。
+
+    根据产品型号和环境架构，下载对应`cann-${soc_name}-ops-legacy_${cann_version}_linux-${arch}.run`包，下载链接如下：
+
+    - Ascend 910B：[legacy x86_64包](https://ascend-cann.obs.cn-north-4.myhuaweicloud.com/CANN/community/ascendc/cann-910b-ops-legacy_8.5.0.0.0_linux-x86_64.run)、[legacy aarch64包](https://ascend-cann.obs.cn-north-4.myhuaweicloud.com/CANN/community/ascendc/cann-910b-ops-legacy_8.5.0.0.0_linux-aarch64.run)。
+    - Ascend 910C：[legacy x86_64包](https://ascend-cann.obs.cn-north-4.myhuaweicloud.com/CANN/community/ascendc/cann-910_93-ops-legacy_8.5.0.0.0_linux-x86_64.run)、[legacy aarch64包](https://ascend-cann.obs.cn-north-4.myhuaweicloud.com/CANN/community/ascendc/cann-910_93-ops-legacy_8.5.0.0.0_linux-aarch64.run)。
+
+    ```bash
+    # 确保安装包具有可执行权限
+    chmod +x cann-${soc_name}-ops-legacy_${cann_version}_linux-${arch}.run
+    # 安装命令
+    ./cann-${soc_name}-ops-legacy_${cann_version}_linux-${arch}.run --full --install-path=${install_path}
+    ```
+    - \$\{soc\_name\}：表示NPU型号名称，即\$\{soc\_version\}删除“ascend”后剩余的内容。
+    - \$\{install\_path\}：表示指定安装路径，需要与toolkit包安装在相同路径，默认安装在`/usr/local/Ascend`目录。
+
+3. **配置环境变量**
 
 - 默认路径，root用户安装
 
@@ -145,7 +163,7 @@
     source ${install_path}/8.5.0.alpha001/set_env.sh
     ```
 
-3. **下载源码**
+4. **下载源码**
 
     可以使用以下两种方式下载，请选择其中一种进行源码准备。
 
@@ -154,7 +172,7 @@
   ```bash
   # 开发环境，非root用户命令行中执行以下命令下载源码仓。git_clone_path为用户自己创建的某个目录。
   cd ${git_clone_path}
-  git clone https://gitcode.com/cann/asc-tools-dev.git
+  git clone https://gitcode.com/cann/asc-tools.git
   ```
   **注：如果需要切换到其它tag版本，以v0.5.0为例，可执行以下命令。**
   ```bash
@@ -162,13 +180,13 @@
   ```
 - 压缩包方式下载（下载时间较短，但步骤稍微复杂）。
 
-  **注：如果需要下载其它版本代码，请先请根据前置条件说明进行asc-tools-dev仓分支切换。下载压缩包命名跟tag/branch相关，此处以master分支为例，下载的名字将会是asc-tools-dev-master.zip**
+  **注：如果需要下载其它版本代码，请先请根据前置条件说明进行asc-tools仓分支切换。下载压缩包命名跟tag/branch相关，此处以master分支为例，下载的名字将会是asc-tools-master.zip**
   ```bash
-  # 1. asc-tools-dev仓右上角选择 【克隆/下载】 下拉框并选择 【下载ZIP】。
-  # 2. 将ZIP包上传到开发环境中的普通用户某个目录中，【例如：${git_clone_path}/asc-tools-dev-master.zip】。
+  # 1. asc-tools仓右上角选择 【克隆/下载】 下拉框并选择 【下载ZIP】。
+  # 2. 将ZIP包上传到开发环境中的普通用户某个目录中，【例如：${git_clone_path}/asc-tools-master.zip】。
   # 3. 开发环境中，执行以下命令，解压zip包。
   cd ${git_clone_path}
-  unzip asc-tools-dev-master.zip
+  unzip asc-tools-master.zip
   ```
 
 ## 编译安装<a name="compile&install"></a>
@@ -178,7 +196,7 @@
    本开源仓提供一键式编译安装能力，进入本开源仓代码根目录，执行如下命令：
 
    ```bash
-   cd asc-tools-dev
+   cd asc-tools
    bash build.sh --pkg
    ```
 
