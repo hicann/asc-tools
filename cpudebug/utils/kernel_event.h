@@ -351,6 +351,7 @@ __aicore__ inline void WaitFlagInternal(event_t evt)
 #else
     wait_flag(srcPipe, dstPipe, evt);
 #endif
+(void)evt;
 }
 #endif
 
