@@ -25,14 +25,14 @@ usergroup=$(groups | cut -d" " -f1)
 log() {
     local content=`echo "$@" | cut -d" " -f2-`
     cur_date=`date +"%Y-%m-%d %H:%M:%S"`
-    echo "[Asc-Tookit] [${cur_date}] [$1]: $content" >> "${log_file}"
+    echo "[AscTools] [${cur_date}] [$1]: $content" >> "${log_file}"
 }
 
 log_and_print() {
     local content=`echo "$@" | cut -d" " -f2-`
     cur_date=`date +"%Y-%m-%d %H:%M:%S"`
-    echo "[Asc-Tookit] [${cur_date}] [$1]: $content"
-    echo "[Asc-Tookit] [${cur_date}] [$1]: $content" >> "${log_file}"
+    echo "[AscTools] [${cur_date}] [$1]: $content"
+    echo "[AscTools] [${cur_date}] [$1]: $content" >> "${log_file}"
 }
 
 checkPip() {
@@ -198,7 +198,7 @@ createPythonLocalDirSoftlink() {
     [ -z "$_py_dirs" ] && return
 
     createPythonLocalDir "$install_path/$PACKAGE"
-    # create softlink python/site-packages to Asc-Tools/python/site-packages
+    # create softlink python/site-packages to AscTools/python/site-packages
     local _py_pkg_path="$install_path/$PACKAGE/python/site-packages"
     for item in ${_py_dirs[@]}; do
         if [ -d "${_py_pkg_path}/${item}" ] || [ -f "${_py_pkg_path}/${item}" ]; then
@@ -234,7 +234,7 @@ installPyWhlLocal() {
         cp -Rfp "$_temp_install_path/$dir" "$_py_install_path"
     done
 
-    # create softlink python/site-packages to Asc-Tools/python/site-packages
+    # create softlink python/site-packages to AscTools/python/site-packages
     createPythonLocalDirSoftlink "$_py_dirs"
     # remove temp
     rm -rf "$_temp_install_path"

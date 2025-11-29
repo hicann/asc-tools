@@ -21,14 +21,14 @@ source "${COMMON_SHELL_PATH}"
 log() {
     local content=`echo "$@" | cut -d" " -f2-`
     cur_date=`date +"%Y-%m-%d %H:%M:%S"`
-    echo "[Asc-Tookit] [${cur_date}] [$1]: $content" >> "${log_file}"
+    echo "[AscTools] [${cur_date}] [$1]: $content" >> "${log_file}"
 }
 
 log_and_print() {
     local content=`echo "$@" | cut -d" " -f2-`
     cur_date=`date +"%Y-%m-%d %H:%M:%S"`
-    echo "[Asc-Tookit] [${cur_date}] [$1]: $content"
-    echo "[Asc-Tookit] [${cur_date}] [$1]: $content" >> "${log_file}"
+    echo "[AscTools] [${cur_date}] [$1]: $content"
+    echo "[AscTools] [${cur_date}] [$1]: $content" >> "${log_file}"
 }
 
 removeDir() {
