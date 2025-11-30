@@ -54,7 +54,7 @@ TEST_F(TestKernelPrintLock, KernelPrintLockFree)
     KernelPrintLock::FreeLock();
     EXPECT_TRUE(KernelPrintLock::printLock == nullptr);
 }
-/*
+
 void* MmapStub1(void* start,size_t length,int prot,int flags,int fd,off_t offset)
 {
     return ((void*)-1);
@@ -82,4 +82,3 @@ TEST_F(TestKernelPrintLock, KernelPrintLockMapFail)
     EXPECT_TRUE(static_cast<int>(reinterpret_cast<intptr_t>(KernelPrintLock::printLock)) == -1);
     KernelPrintLock::printLock = nullptr;
 }
-*/

@@ -202,6 +202,163 @@ add_custom_target(prepare_target_ut ALL
     DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/stub/stub_fun.h
 )
 
+####################################################################
+####################################################################
+set(TIKICPULIB_TEST_HEADER_FILES
+    ${LOCAL_DIR}/common/
+    ${LOCAL_DIR}/testcase/
+    ${ASCENDC_SYS_DIR}/tikcpp/tikcfw
+    ${ASCENDC_SYS_DIR}/tikcpp/tikcfw/interface
+    ${ASCENDC_SYS_DIR}/tikcpp/tikcfw/impl
+    ${ASCENDC_TOOLS_ROOT_DIR}/cpudebug/include/
+    ${ASCENDC_TOOLS_ROOT_DIR}/cpudebug/src/
+    ${ASCENDC_TOOLS_ROOT_DIR}/cpudebug/src/api_check/
+    ${ASCENDC_TOOLS_ROOT_DIR}/cpudebug/src/api_check/inc
+    ${CMAKE_CURRENT_BINARY_DIR}/stub
+    ${ASCENDC_TOOLS_ROOT_DIR}/libraries/lib/include
+)
+
+file(GLOB TIKICPULIB_SRC_FILES
+    ${ASCENDC_TOOLS_ROOT_DIR}/cpudebug/src/api_check/*.cpp
+    ${ASCENDC_TOOLS_ROOT_DIR}/cpudebug/src/regfwk/*.cpp
+)
+
+file(GLOB TEST_TIKICPULIB_CASE_FILES
+    ${LOCAL_DIR}/testcase/regfwk/test_stub_base.cpp
+    ${LOCAL_DIR}/testcase/regfwk/test_stub_reg.cpp
+    ${LOCAL_DIR}/testcase/regfwk/test_kernel_print_lock.cpp
+)
+
+# tikicpulib_utest
+foreach(product_type ${TIKICPULIB_PRODUCT_TYPE_LIST})
+    if (${product_type} STREQUAL "ascend910B1_AIC" OR ${product_type} STREQUAL "ascend910B1_AIV")
+        set(deps_product_type "ascend910B1")
+    else()
+        set(deps_product_type ${product_type})
+    endif()
+
+    add_executable(tikicpulib_utest_${product_type}
+        ${TIKICPULIB_SRC_FILES}
+        ${LOCAL_DIR}/main_global.cpp
+        ${TEST_TIKICPULIB_CASE_FILES}
+        ${ASCENDC_TEST_COMMON_SRC_FILES}
+        $<$<STREQUAL:${product_type},ascend910>:${ASCENDC_TEST_COMMON_CASE_SRC_FILES}>
+        $<$<STREQUAL:${product_type},ascend610>:${ASCENDC_TEST_COMMON_CASE_SRC_FILES}>
+        $<$<STREQUAL:${product_type},ascend310p>:${ASCENDC_TEST_COMMON_CASE_SRC_FILES}>
+        ${LOCAL_DIR}/common/dlog_stub.cpp
+        $<$<STREQUAL:${product_type},ascend910>:${LOCAL_DIR}/common/tik_pv_wrapper.cpp;${LOCAL_DIR}/common/alog_stub.cpp>
+        $<$<STREQUAL:${product_type},ascend610>:${LOCAL_DIR}/common/tik_pv_wrapper.cpp;${LOCAL_DIR}/common/alog_stub.cpp>
+        $<$<STREQUAL:${product_type},ascend310p>:${LOCAL_DIR}/common/tik_pv_wrapper.cpp;${LOCAL_DIR}/common/alog_stub.cpp>
+        $<$<STREQUAL:${product_type},ascend910B1_AIC>:${LOCAL_DIR}/common/k3_pvwrap.cpp>
+        $<$<STREQUAL:${product_type},ascend910B1_AIV>:${LOCAL_DIR}/common/k3_pvwrap.cpp>
+        $<$<STREQUAL:${product_type},ascend310B1>:${LOCAL_DIR}/common/k3_pvwrap.cpp>
+        $<$<STREQUAL:${product_type},ascend610Lite>:${LOCAL_DIR}/common/k3_pvwrap.cpp>
+    )
+
+    add_dependencies(tikicpulib_utest_${product_type} prepare_target_ut mockcpp_static cpudebug_${deps_product_type})
+
+    # add soc version flags
+    if(${product_type} STREQUAL "ascend910")
+        target_compile_definitions(tikicpulib_utest_${product_type} PRIVATE
+        UT_TEST
+        __CCE_AICORE__=100
+        __NPU_ARCH__=1001
+        __DAV_C100__
+        __UT_CHIP_VER__=910
+    )
+    elseif(${product_type} STREQUAL "ascend610")
+        target_compile_definitions(tikicpulib_utest_${product_type} PRIVATE
+            UT_TEST
+            __CCE_AICORE__=200
+            __NPU_ARCH__=2002
+            __DAV_M200__
+            __UT_CHIP_VER__=610
+        )
+    elseif(${product_type} STREQUAL "ascend310p")
+        target_compile_definitions(tikicpulib_utest_${product_type} PRIVATE
+            UT_TEST
+            __CCE_AICORE__=200
+            __NPU_ARCH__=2002
+            __DAV_M200__
+            __UT_CHIP_VER__=710
+        )
+    elseif(${product_type} STREQUAL "ascend910B1_AIC")
+        target_compile_definitions(tikicpulib_utest_${product_type} PRIVATE
+            UT_TEST
+            __CCE_AICORE__=220
+            __NPU_ARCH__=2201
+            __DAV_C220__
+            __DAV_C220_CUBE__
+        )
+    elseif(${product_type} STREQUAL "ascend910B1_AIV")
+        target_compile_definitions(tikicpulib_utest_${product_type} PRIVATE
+            UT_TEST
+            __CCE_AICORE__=220
+            __NPU_ARCH__=2201
+            __DAV_C220__
+            __DAV_C220_VEC__
+        )
+    elseif(${product_type} STREQUAL "ascend310B1")
+        target_compile_definitions(tikicpulib_utest_${product_type} PRIVATE
+            UT_TEST
+            __CCE_AICORE__=300
+            __NPU_ARCH__=3002
+            __DAV_M300__
+            __UT_CHIP_VER__=300
+        )
+    elseif(${product_type} STREQUAL "ascend610Lite")
+        target_compile_definitions(tikicpulib_utest_${product_type} PRIVATE
+            UT_TEST
+            __CCE_AICORE__=310
+            __DAV_M310__
+            __NPU_ARCH__=3102
+            __UT_CHIP_VER__=310
+        )
+    endif()
+
+    target_compile_definitions(tikicpulib_utest_${product_type} PRIVATE ASCENDC_CPU_DEBUG=1)
+
+    target_include_directories(tikicpulib_utest_${product_type} PRIVATE
+        ${TIKICPULIB_TEST_HEADER_FILES}
+        ${ASCENDC_SYS_DIR}/include/base/
+        ${ASCENDC_SYS_DIR}/include/experiment/metadef/
+        mmpa_headers
+        slog_headers
+    )
+
+    target_compile_options(tikicpulib_utest_${product_type} PRIVATE
+        -g
+        -fno-access-control
+        -DCMAKE_C_COMPILER_LAUNCHER=${CCACHE_PROGRAM}
+        -DCMAKE_CXX_COMPILER_LAUNCHER=${CCACHE_PROGRAM}
+    )
+
+    target_link_directories(tikicpulib_utest_${product_type} PRIVATE
+        ${CMAKE_CURRENT_BINARY_DIR}/../../cpudebug/${deps_product_type}
+        ${ASCENDC_TOOLS_ROOT_DIR}/libraries/lib
+    )
+
+    target_link_libraries(tikicpulib_utest_${product_type} PRIVATE
+        $<BUILD_INTERFACE:intf_llt_pub>
+        $<BUILD_INTERFACE:mmpa_headers>
+        -Wl,--no-as-needed
+        c_sec
+        mmpa
+        error_manager
+        tikcpp_debug
+        tikicpulib_cceprint
+        tikicpulib_npuchk
+        tikicpulib_stubreg
+        dl
+        -Wl,--as-needed
+    )
+
+    run_llt_test(
+        TARGET tikicpulib_utest_${product_type}
+        TASK_NUM 1
+    )
+endforeach()
+
 # ###################################opbuild ut#################################
 add_library(ops_utest SHARED ${LOCAL_DIR}/testcase/opbuild/test_ops.cpp)
 
