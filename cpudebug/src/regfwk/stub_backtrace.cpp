@@ -41,14 +41,17 @@ const std::map<int, std::string> &GetCoreTypeMap()
     return coreTypeMap;
 }
 
-std::map<int, std::string> g_signalMessage = {
-    { SIGILL, "SIGILL Signal (Illegal instruction) catched" },
-    { SIGBUS, "SIGBUS Signal (Bus error) catched" },
-    { SIGFPE, "SIGFPE Signal (Floating point exception) catched" },
-    { SIGSEGV, "SIGSEGV Signal (Invalid memory reference) catched" },
-    { SIGPIPE, "SIGPIPE Signal (Broken pipe: write to pipe with no readers) catched" },
-    { SIGABRT, "SIGABRT Signal (Abort Signal from abort) catched" },
-};
+std::map<int, std::string>& GetSignalMessage () {
+    static std::map<int, std::string> g_signalMessage = {
+        { SIGILL, "SIGILL Signal (Illegal instruction) catched" },
+        { SIGBUS, "SIGBUS Signal (Bus error) catched" },
+        { SIGFPE, "SIGFPE Signal (Floating point exception) catched" },
+        { SIGSEGV, "SIGSEGV Signal (Invalid memory reference) catched" },
+        { SIGPIPE, "SIGPIPE Signal (Broken pipe: write to pipe with no readers) catched" },
+        { SIGABRT, "SIGABRT Signal (Abort Signal from abort) catched" },
+    };
+    return g_signalMessage;
+}
 
 struct BacktraceData {
     std::string exeObjName;
@@ -260,7 +263,7 @@ void BacktracePrint(int sig)
     ret += std::to_string(getpid());
     ret += "] error happened! ========= \n";
     // samples: SIGSEGV Signal (Invalid memory reference) catched, backtrace info:
-    ret += g_signalMessage[sig] + ", backtrace info:\n";
+    ret += GetSignalMessage()[sig] + ", backtrace info:\n";
     ret += StackTrace();
     // using process lock to keep content clear
     AscendC::KernelPrintLock::GetLock()->Lock();

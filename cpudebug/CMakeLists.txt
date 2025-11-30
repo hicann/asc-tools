@@ -108,6 +108,13 @@ foreach(product_type ${PRODUCT_TYPE_LIST})
     $<$<STREQUAL:${product_type},bs9sx2aa>:NO_COSIM>
     $<$<STREQUAL:${product_type},mc61am21aa>:NO_COSIM>
   )
+  target_link_libraries(cpudebug_${product_type} PRIVATE
+    $<BUILD_INTERFACE:intf_pub>
+    $<BUILD_INTERFACE:tikcfw_headers>
+    $<BUILD_INTERFACE:mmpa_headers>
+    c_sec
+    dl
+  )
   set_target_properties(cpudebug_${product_type} PROPERTIES
     OUTPUT_NAME tikcpp_debug
     LIBRARY_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/${product_type}
