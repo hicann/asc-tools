@@ -29,16 +29,3 @@ export LD_LIBRARY_PATH=$base_path/air/graph_metadef/register:$LD_LIBRARY_PATH
 export ASCEND_OPP_PATH=$top_dir/out/onetrack/llt/$test_type/obj
 mkdir -p "$ASCEND_OPP_PATH"
 echo "os=linux" > "$ASCEND_OPP_PATH/scene.info"
-
-
-# fast execute
-# top_dir=~/davinci_trunk
-# test_type=py_st # py_ut
-# base_path=$top_dir/tmp/llt_gccnative-prefix/src/llt_gccnative-build/
-
-# export PATH=$top_dir/build/bin/toolchain/x86/ubuntu/ccec_libs/ccec_x86_ubuntu_20_04_adk/bin:$PATH
-# export PYTHONPATH=$top_dir/open_source/tvm/python:$top_dir/open_source/tvm/topi/python:$PYTHONPATH
-# export LD_LIBRARY_PATH=$base_path/llt/tensor_engine/ut:$LD_LIBRARY_PATH
-# export LD_LIBRARY_PATH=$base_path/metadef/register:$LD_LIBRARY_PATH
-# export ASCEND_OPP_PATH=$top_dir/out/onetrack/llt/$test_type/obj
-

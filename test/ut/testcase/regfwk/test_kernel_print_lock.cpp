@@ -59,14 +59,17 @@ void* MmapStub1(void* start,size_t length,int prot,int flags,int fd,off_t offset
 {
     return ((void*)-1);
 }
+
 int MunmapStub1(void* start,size_t length)
 {
     return -1;
 }
+
 int32_t RaiseStub1(int32_t i)
 {
     return 0;
 }
+
 TEST_F(TestKernelPrintLock, KernelPrintLockUnmapFail)
 {
     MOCKER(munmap, int (*)(void*, size_t)).times(1).will(invoke(MunmapStub1));
@@ -74,6 +77,7 @@ TEST_F(TestKernelPrintLock, KernelPrintLockUnmapFail)
     EXPECT_TRUE(KernelPrintLock::printLock != nullptr);
     KernelPrintLock::FreeLock();
 }
+
 TEST_F(TestKernelPrintLock, KernelPrintLockMapFail)
 {
     MOCKER(mmap, void* (*)(void*, size_t, int, int, int, off_t)).times(1).will(invoke(MmapStub1));

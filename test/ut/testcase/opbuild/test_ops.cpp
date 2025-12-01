@@ -302,6 +302,24 @@ public:
  
 OP_ADD(MC2Test);
 
+class MC2TestDavid : public OpDef {
+public:
+    MC2TestDavid(const char* name) : OpDef(name)
+    {
+        this->Input("x").ParamType(REQUIRED).DataType({ ge::DT_FLOAT }).Format({ ge::FORMAT_ND });
+        this->Output("y").ParamType(REQUIRED).DataType({ ge::DT_FLOAT }).Format({ ge::FORMAT_ND });
+        this->Attr("group1").AttrType(REQUIRED).String();
+        this->Attr("group2").AttrType(OPTIONAL).String();
+        OpAICoreConfig aicConfig;
+        this->AICore().AddConfig("ascend910_95", aicConfig);
+        this->MC2().HcclGroup({"group2", "group1"});
+        this->MC2().HcclServerType(HcclServerType::CCU, "ascend910_95");
+        this->EnableFallBack();
+    }
+};
+ 
+OP_ADD(MC2TestDavid);
+
 class ValueDependScopeTest : public OpDef {
 public:
     ValueDependScopeTest(const char* name) : OpDef(name)
