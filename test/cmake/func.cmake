@@ -20,17 +20,27 @@ function(run_llt_test)
         endif()
         # 谨慎修改 ASAN_OPTIONS_ 取值, 当前出现 ASAN 告警会使 UT 失败.
         set(ASAN_OPTIONS_ "ASAN_OPTIONS=detect_leaks=0:halt_on_error=0")
+        if(LLT_ENV_FILE)
+            set(ENV_PREFIX . ${LLT_ENV_FILE} && )
+        else()
+            set(ENV_PREFIX "")
+        endif()
         add_custom_command(
                 TARGET ${LLT_TARGET} POST_BUILD
-                COMMAND
-                COMMAND export LD_LIBRARY_PATH=$ENV{LD_LIBRARY_PATH} && ${LD_PRELOAD_} && ulimit -s 32768 && ${ASAN_OPTIONS_} $<TARGET_FILE:${LLT_TARGET}>
+                COMMAND ${ENV_PREFIX} export LD_LIBRARY_PATH=$ENV{LD_LIBRARY_PATH} && ${LD_PRELOAD_} && ulimit -s 32768 && ${ASAN_OPTIONS_} $<TARGET_FILE:${LLT_TARGET}>
                 COMMENT "Run ${LLT_TARGET} with asan"
         )
     else()
+        if(LLT_ENV_FILE)
+            set(ENV_PREFIX . ${LLT_ENV_FILE} && )
+        else()
+            set(ENV_PREFIX "")
+        endif()
+
         add_custom_command(
-                TARGET ${LLT_TARGET} POST_BUILD
-                COMMAND export LD_LIBRARY_PATH=$ENV{LD_LIBRARY_PATH} && $<TARGET_FILE:${LLT_TARGET}>
-                COMMENT "Run ${LLT_TARGET}"
+            TARGET ${LLT_TARGET} POST_BUILD
+            COMMAND ${ENV_PREFIX} export LD_LIBRARY_PATH=$ENV{LD_LIBRARY_PATH} && $<TARGET_FILE:${LLT_TARGET}>
+            COMMENT "Run ${LLT_TARGET}"
         )
     endif()
 

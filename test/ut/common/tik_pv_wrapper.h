@@ -73,5 +73,4 @@ extern "C" TIK_PV_API int32_t pv_write_va_register(PVEnv* p_env, int32_t va_inde
 extern "C" TIK_PV_API int32_t pv_read_smask_tbl(const PVEnv* p_env, int64_t addr, void* buffer, int32_t len);
 extern "C" TIK_PV_API int32_t pv_write_smask_tbl(const PVEnv* p_env, int64_t addr, const void* buffer, int32_t len);
 
-
 #endif

@@ -103,6 +103,13 @@ REG_OP(MC2Test)
     .ATTR(group2, String, "")
     .OP_END_FACTORY_REG(MC2Test);
 
+REG_OP(MC2TestDavid)
+    .INPUT(x, ge::TensorType::ALL())
+    .OUTPUT(y, ge::TensorType::ALL())
+    .REQUIRED_ATTR(group1, String)
+    .ATTR(group2, String, "")
+    .OP_END_FACTORY_REG(MC2TestDavid);
+
 REG_OP(ValueDependScopeTest)
     .INPUT(x1, ge::TensorType::ALL())
     .INPUT(x2, ge::TensorType::ALL())
