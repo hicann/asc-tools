@@ -12,10 +12,9 @@ asc-tools:
   team: "asc-tools"
   src:
     release:
-      -cpudebug
-      -npuchk
-      -utils/msobjdump
-      -utils/show_kernel_debug_data
+      - cpudebug
+      - npuchk
+      - utils
     unrelease:
   llt:
     ut_check: true

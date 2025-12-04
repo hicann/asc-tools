@@ -54,7 +54,7 @@ function(run_llt_test)
 
         if (NOT TARGET ${_collect_coverage_data_target})
             add_custom_target(${_collect_coverage_data_target} ALL
-                    COMMAND bash ${GENERATE_CPP_COV} ${_ops_builtin_bin_path} ${_cov_data} ${_cov_html}
+                    COMMAND bash ${GENERATE_CPP_COV} ${_ops_builtin_bin_path} ${_cov_data} ${_cov_html} ${ASCEND_CANN_PACKAGE_PATH}
                     COMMENT "Run collect coverage data"
             )
         endif()
