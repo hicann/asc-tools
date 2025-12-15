@@ -50,7 +50,7 @@ if (NOT EXISTS "${CMAKE_INSTALL_PREFIX}/mockcpp/lib/libmockcpp.a")
     endif()
     include(ExternalProject)
     ExternalProject_Add(mockcpp
-        URL "https://raw.gitcode.com/cann-src-third-party/mockcpp/blobs/868e1f78ddb352f201145283e0b8761a6245bde1/mockcpp-2.7.tar.gz"
+        URL "https://gitcode.com/cann-src-third-party/mockcpp/releases/download/v2.7-h2/mockcpp-2.7.tar.gz"
         URL_HASH SHA256=73ab0a8b6d1052361c2cebd85e022c0396f928d2e077bf132790ae3be766f603
         DOWNLOAD_DIR ${third_party_TEM_DIR}
         SOURCE_DIR ${mockcpp_SRC_DIR}
