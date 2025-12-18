@@ -107,13 +107,13 @@ foreach(product_type ${PRODUCT_TYPE_LIST})
     dl
   )
   set_target_properties(cpudebug_${product_type} PROPERTIES
-    OUTPUT_NAME tikcpp_debug
+    OUTPUT_NAME cpudebug
     LIBRARY_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/${product_type}
   )
   product_dir(${product_type} Product_cap)
   if(BUILD_OPEN_PROJECT)
     install(TARGETS cpudebug_${product_type}
-      LIBRARY DESTINATION tools/tikicpulib/lib/${Product_cap} OPTIONAL
+      LIBRARY DESTINATION lib/${Product_cap} OPTIONAL
     )
   else()
     install(TARGETS cpudebug_${product_type}
@@ -123,7 +123,7 @@ foreach(product_type ${PRODUCT_TYPE_LIST})
 endforeach()
 
 if(BUILD_OPEN_PROJECT)
-  set(_install_path tools/tikicpulib/lib)
+  set(_install_path lib)
 else()
   set(_install_path ${INSTALL_LIBRARY_DIR})
 endif()
@@ -146,7 +146,7 @@ install(FILES
   include/kern_fwk.h
   include/tikicpulib.h
   include/kernel_raise_signal.h
-  DESTINATION tools/tikicpulib/lib/include OPTIONAL
+  DESTINATION lib/include OPTIONAL
 )
 
 include(CMakePackageConfigHelpers)
@@ -163,8 +163,8 @@ install(FILES
 )
 
 install(FILES
-  ${CMAKE_SOURCE_DIR}/libraries/lib/libtikicpulib_cceprint.so
-  ${CMAKE_SOURCE_DIR}/libraries/lib/libtikicpulib_npuchk.so
-  ${CMAKE_SOURCE_DIR}/libraries/lib/libtikicpulib_stubreg.so
+  ${CMAKE_SOURCE_DIR}/libraries/lib/libcpudebug_cceprint.so
+  ${CMAKE_SOURCE_DIR}/libraries/lib/libcpudebug_npuchk.so
+  ${CMAKE_SOURCE_DIR}/libraries/lib/libcpudebug_stubreg.so
   DESTINATION ${_install_path} OPTIONAL
 )

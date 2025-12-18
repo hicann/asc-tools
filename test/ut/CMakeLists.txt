@@ -178,10 +178,10 @@ foreach(product_type ${TIKCPP_PRODUCT_TYPE_LIST})
         c_sec
         mmpa
         error_manager
-        tikcpp_debug
-        tikicpulib_cceprint
-        tikicpulib_npuchk
-        tikicpulib_stubreg
+        cpudebug
+        cpudebug_cceprint
+        cpudebug_npuchk
+        cpudebug_stubreg
         -Wl,--as-needed
     )
 
@@ -345,10 +345,10 @@ foreach(product_type ${TIKICPULIB_PRODUCT_TYPE_LIST})
         c_sec
         mmpa
         error_manager
-        tikcpp_debug
-        tikicpulib_cceprint
-        tikicpulib_npuchk
-        tikicpulib_stubreg
+        cpudebug
+        cpudebug_cceprint
+        cpudebug_npuchk
+        cpudebug_stubreg
         dl
         -Wl,--as-needed
     )
