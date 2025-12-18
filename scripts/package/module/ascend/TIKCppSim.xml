@@ -1,9 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <block name="TIKCppSim" copy_type="delivery" src_path="lib/host" dst_path="" install_path="" install_own="$username:$usergroup" install_mod="750" install_type="run;devel" feature="ascendc">
-    <dir_info value="TIKCppSim"  install_mod="550">
-        <path value="tools/tikicpulib" />
-        <path value="tools/ascendc_tools" install_mod="750"/>
-        <path value="tools/tikicpulib/lib" />
+    <dir_info value="TIKCppSim" install_mod="550">
+        <path value="tools"/>
+        <path value="tools/ascendc_tools"/>
+        <path value="tools/opbuild"/>
+        <path value="tools/tikicpulib"/>
+        <path value="tools/tikicpulib/lib"/>
         <path value="tools/tikicpulib/lib/cmake" />
         <path value="tools/tikicpulib/lib/include" />
         <path value="tools/tikicpulib/lib/Ascend910A" chip="Ascend910" install_softlink="tools/tikicpulib/lib/Ascend910B;tools/tikicpulib/lib/Ascend910PremiumA;tools/tikicpulib/lib/Ascend910ProA;tools/tikicpulib/lib/Ascend910ProB"/>
@@ -79,5 +81,8 @@
     </file_info>
     <file_info value="op_build" copy_type="delivery" src_path="lib/host/" dst_path="lib" install_path="tools/opbuild" install_mod="755" feature="ascendc">
         <file value="op_build" file_type= "executable" />
+    </file_info>
+    <file_info value="ascendc_acl_stub" copy_type="delivery" src_path="lib/host/" dst_path="lib" install_path="tools/tikicpulib/lib" install_mod="440" feature="ascendc">
+        <file value="libascendc_acl_stub.so" file_type="shared" install_mod="555"/>
     </file_info>
 </block>

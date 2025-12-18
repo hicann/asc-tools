@@ -68,7 +68,7 @@ function(pack_built_in)
 
   set(script_prefix ${CMAKE_SOURCE_DIR}/scripts/package/asc-tools/scripts)
   install(DIRECTORY ${script_prefix}/
-      DESTINATION asc-tools/script
+      DESTINATION share/info/asc-tools/script
       FILE_PERMISSIONS
       OWNER_READ OWNER_WRITE OWNER_EXECUTE  # 文件权限
       GROUP_READ GROUP_EXECUTE
@@ -90,7 +90,7 @@ function(pack_built_in)
   )
 
   install(FILES ${SCRIPTS_FILES}
-      DESTINATION asc-tools/script
+      DESTINATION share/info/asc-tools/script
   )
   set(COMMON_FILES
       ${CMAKE_SOURCE_DIR}/scripts/package/common/sh/install_common_parser.sh
@@ -114,7 +114,7 @@ function(pack_built_in)
       ${CMAKE_SOURCE_DIR}/scripts/package/common/cfg/path.cfg
   )
   install(FILES ${CMAKE_SOURCE_DIR}/version.info
-      DESTINATION .
+      DESTINATION share/info/asc-tools
   )
   install(FILES ${CMAKE_SOURCE_DIR}/libraries/lib/scripts/compile_options_config.json
       DESTINATION conf
@@ -123,7 +123,7 @@ function(pack_built_in)
       DESTINATION asc-tools/conf
   )
   install(FILES ${PACKAGE_FILES}
-      DESTINATION asc-tools/script
+      DESTINATION share/info/asc-tools/script
       PERMISSIONS
       OWNER_READ OWNER_WRITE OWNER_EXECUTE  # 文件权限
       GROUP_READ GROUP_EXECUTE
@@ -148,7 +148,7 @@ function(pack_built_in)
       ${CMAKE_SOURCE_DIR}/scripts/package/asc-tools/scripts/setenv.fish
   )
   install(FILES ${BIN_FILES}
-      DESTINATION asc-tools/bin
+      DESTINATION share/info/asc-tools/bin
   )
   set(CONF_FILES 
     ${CMAKE_SOURCE_DIR}/scripts/package/common/cfg/path.cfg
@@ -184,7 +184,7 @@ function(pack_built_in)
   set(CPACK_ARCH "${ARCH}")
   set(CPACK_SET_DESTDIR ON)
   set(CPACK_GENERATOR External)
-  set(CPACK_EXTERNAL_PACKAGE_SCRIPT "${CMAKE_SOURCE_DIR}/cmake/makeself_built_in.cmake")
+  set(CPACK_EXTERNAL_PACKAGE_SCRIPT "${CMAKE_SOURCE_DIR}/cmake/makeself.cmake")
   set(CPACK_EXTERNAL_ENABLE_STAGING true)
   set(CPACK_PACKAGE_DIRECTORY "${CMAKE_INSTALL_PREFIX}")
 

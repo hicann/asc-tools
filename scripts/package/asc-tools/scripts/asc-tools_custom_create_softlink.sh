@@ -68,6 +68,21 @@ get_arch_name() {
     grep '^arch=' $scene_file | cut -d"=" -f2
 }
 
+do_create_stub_softlink() {
+    local install_path=$1
+    local version_dir=$2
+
+    local arch_name="$(get_arch_name $install_path/$version_dir/share/info/asc-tools)"
+    local arch_linux_path="$install_path/$version_dir/$arch_name-linux"
+    if [ ! -e "$arch_linux_path" ] || [ -L "$arch_linux_path" ]; then
+        return
+    fi
+
+    local pwdbak="$(pwd)"
+    cd $install_path/$version_dir/tools && ln -sf "../$arch_name-linux/simulator" "simulator"
+    cd $pwdbak
+}
+
 createToolSoftLink()
 {
     local _install_path=$1
@@ -110,6 +125,11 @@ createToolSoftLink()
             ln -sr "$install_path/$version_dir/tools/tikicpulib" "$install_path/$latest_dir/tools/tikicpulib"
         fi
 
+        do_create_stub_softlink "$install_path" "$version_dir"
+
+        if [ ! -d "$install_path/$latest_dir/tools/simulator" ]; then
+            ln -sr "$install_path/$version_dir/tools/simulator" "$install_path/$latest_dir/tools/simulator"
+        fi
     fi
 }
 

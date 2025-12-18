@@ -16,6 +16,11 @@ set(CMAKE_MODULE_PATH
 )
 message(STATUS "CMAKE_MODULE_PATH            :${CMAKE_MODULE_PATH}")
 
+if (NOT CMAKE_BUILD_TYPE)
+    set(CMAKE_BUILD_TYPE "Release" CACHE STRING "Build type(default Release)"
+    FORCE)
+endif ()
+
 set(PVMODEL_PATH ${PROJECT_SOURCE_DIR}/libraries/simulator)
 
 find_package(alog MODULE REQUIRED)

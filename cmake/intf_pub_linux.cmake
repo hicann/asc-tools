@@ -18,7 +18,8 @@ target_compile_options(intf_pub INTERFACE
   -Wall
   -fPIC
   $<IF:$<VERSION_GREATER:${CMAKE_C_COMPILER_VERSION},4.8.5>,-fstack-protector-strong,-fstack-protector-all>
-  $<$<COMPILE_LANGUAGE:CXX>:-std=c++14>
+  $<$<COMPILE_LANGUAGE:CXX>:-std=c++17>
+  $<$<BOOL:${ENABLE_ASAN}>:-fsanitize=address -fsanitize=leak -fsanitize-recover=address,all -fno-stack-protector -fno-omit-frame-pointer -g>
   -DCMAKE_C_COMPILER_LAUNCHER=${CCACHE_PROGRAM}
   -DCMAKE_CXX_COMPILER_LAUNCHER=${CCACHE_PROGRAM}
 )
@@ -34,6 +35,7 @@ target_link_options(intf_pub INTERFACE
   -Wl,-z,now
   -Wl,-z,noexecstack
   $<$<CONFIG:Release>:-Wl,--build-id=none>
+  $<$<BOOL:${ENABLE_ASAN}>:-fsanitize=address -fsanitize=leak -fsanitize-recover=address,all -fno-stack-protector -fno-omit-frame-pointer -g>
 )
 target_link_directories(intf_pub INTERFACE)
 target_link_libraries(intf_pub INTERFACE

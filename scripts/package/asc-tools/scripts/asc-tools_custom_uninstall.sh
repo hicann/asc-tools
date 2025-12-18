@@ -15,6 +15,7 @@ PACKAGE=asc-tools
 LEVEL_INFO="INFO"
 LEVEL_WARN="WARNING"
 LEVEL_ERROR="ERROR"
+PLT_ARCH=$(uname -m)
 
 source "${COMMON_SHELL_PATH}"
 
@@ -186,15 +187,6 @@ uninstallAllPython() {
     return 0
 }
 
-uninstallMsprofPython() {
-    # remove msprof
-    changeDirMode 750 ${install_path}/tools/profiler/profiler_tool
-    changeFileMode 750 ${install_path}/tools/profiler/profiler_tool
-    whlUninstallPackage msprof ${install_path}/tools/profiler/profiler_tool analysis
-    [ $? -ne 0 ] && return 1
-    return 0
-}
-
 uninstallPython() {
     local _py_path="$install_path/$PACKAGE/python"
     # remove python softlink in asc-tools
@@ -206,9 +198,6 @@ uninstallPython() {
     [ $? -ne 0 ] && return 1
 
     uninstallAllPython
-    [ $? -ne 0 ] && return 1
-
-    uninstallMsprofPython
     [ $? -ne 0 ] && return 1
 
     # remove python dir
@@ -231,6 +220,14 @@ init() {
         local _home_path=$(eval echo "~")
         log_file="${_home_path}/${LOG_PATH}"
     fi
+}
+
+removeSoftLink()
+{
+    local _dst_dir="$1"
+    local _name="$2"
+
+    [ -L "$_dst_dir/$_name" ] && rm -rf "$_dst_dir/$_name"
 }
 
 log_file=""

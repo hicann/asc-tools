@@ -57,7 +57,6 @@ const std::map<std::string, int32_t> ACLNN_OP_ATTR_TYPE_MAP = {
 const std::map<enum HcclServerType, std::string> HCCL_SERVER_TYPE_MAP = {
     { HcclServerType::AICPU, "NNOPBASE_HCCL_SERVER_TYPE_AICPU" },
     { HcclServerType::AICORE, "NNOPBASE_HCCL_SERVER_TYPE_MTE" },
-    { HcclServerType::CCU, "NNOPBASE_HCCL_SERVER_TYPE_CCU" },
     { HcclServerType::MAX, "NNOPBASE_HCCL_SERVER_TYPE_END" },
 };
 
@@ -295,7 +294,8 @@ public:
     std::vector<std::string> Spilt(const std::string& str, const char delim) const;
     void AclnnGenMc2Declaration(OpDef &opDef, std::ofstream &outfile) const;
     bool AclnnOpCheckMC2Groups(
-        std::vector<std::string> &name, std::set<ge::AscendString> &groups, const std::string opType) const;
+        std::vector<std::string> &name, std::set<ge::AscendString> &groups, const std::string &opType) const;
+    void AclnnGenOutEmptyLaunchDeclaration(OpDef &opDef, ofstream &outfile) const;
     void AclnnOpGenCodeAttrParamsImpl(std::vector<OpAttrDef> &attrs, std::vector<std::string> &name, size_t index,
         int32_t type, std::ofstream &outfile) const;
     void AclnnOpGenCodeHcclGroup(

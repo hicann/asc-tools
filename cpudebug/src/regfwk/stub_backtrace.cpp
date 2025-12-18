@@ -25,7 +25,11 @@
 #include "stub_def.h"
 
 namespace {
-std::map<std::string, uint64_t> binaryBaseMap;
+std::map<std::string, uint64_t>& BinaryBaseMap() {
+    static std::map<std::string, uint64_t> instance;
+    return instance;
+}
+
 }
 
 namespace AscendC {
@@ -110,11 +114,11 @@ _Unwind_Reason_Code UnwindCallback(struct _Unwind_Context *context, void *arg)
     }
 
     std::string objName = GetExecName(info.dli_fname);
-    if (binaryBaseMap.count(objName) == 0) {
+    if (BinaryBaseMap().count(objName) == 0) {
         return _URC_NO_REASON;
     }
 
-    uint64_t baseAddr = binaryBaseMap[objName];
+    uint64_t baseAddr = BinaryBaseMap()[objName];
     uint64_t errorPC = static_cast<uint64_t>(pc) - baseAddr;
     std::vector<char> btCmd(BT_MAX);
     if (!IsValidBinary(info.dli_fname)) {
@@ -179,10 +183,10 @@ int32_t DlCallback(struct dl_phdr_info *info, size_t size, void *data)
     if (strlen(info->dlpi_name) == 0) {
         // first frame dlpi name is empty, means the main execut obj self
         if (count == 0) {
-            binaryBaseMap.insert(std::make_pair(GetMainExecName(), info->dlpi_addr));
+            BinaryBaseMap().insert(std::make_pair(GetMainExecName(), info->dlpi_addr));
         }
     } else {
-        binaryBaseMap.insert(std::make_pair(GetExecName(info->dlpi_name), info->dlpi_addr));
+        BinaryBaseMap().insert(std::make_pair(GetExecName(info->dlpi_name), info->dlpi_addr));
     }
     count++;
     return 0;
@@ -200,7 +204,7 @@ bool IsValidBinary(const std::string& exceutePath)
         }
     }
 
-    std::vector<std::string> skipFile = {"linux-vdso", "libtikicpulib_stubreg.so"};
+    std::vector<std::string> skipFile = {"linux-vdso", "libcpudebug_stubreg.so"};
     std::string objName = GetExecName(exceutePath);
     for (const std::string& file : skipFile) {
         size_t n = objName.find(file);

@@ -9,15 +9,15 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 # ----------------------------------------------------------------------------------------------------------
 
-# set -e
-src_file=$1
-out_path=$2
+# set -e	
+src_file=$1	
+out_path=$2	
 
-echo "[AscendC] Generate stub_fun.h start"
+echo "[AscendC] Generate stub_fun.h start"	
 
-rm -rf ${out_path}
-mkdir -p ${out_path}
-cp ${src_file} ${out_path}/stub_fun.h
+rm -rf ${out_path}	
+mkdir -p ${out_path}	
+cp ${src_file} ${out_path}/stub_fun.h	
 sed -i '569 i\namespace AscendC {' ${out_path}/stub_fun.h
 sed -i '5151 i\} // namespace AscendC' ${out_path}/stub_fun.h
 

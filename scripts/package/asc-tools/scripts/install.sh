@@ -11,7 +11,6 @@
 INSTALL_TYPE_ALL=full # run/devel/docker
 INSTALL_TYPE_RUN=run
 INSTALL_TYPE_DEV=devel
-# PACKAGE_NAME=asc-tools
 PACKAGE_NAME=asc-tools
 LEVEL_INFO="INFO"
 LEVEL_WARN="WARNING"
@@ -28,7 +27,7 @@ COMMON_INC="$SHELL_DIR/common_func.inc"
 VERSION_INC="$SHELL_DIR/version_cfg.inc"
 VERSION_COMPAT_FUNC_PATH="$SHELL_DIR/version_compatiable.inc"
 LOG_RELATIVE_PATH=/var/log/ascend_seclog # installing log path and operation log path
-VERSION_PATH="$SHELL_DIR/../../version.info"
+VERSION_PATH="$SHELL_DIR/../version.info"
 FILELIST_PATH="$SHELL_DIR/filelist.csv"
 PKG_INFO_FILE="$SHELL_DIR/../scene.info"
 PKG_ARCHITECTURE=$(grep -e "arch" "$PKG_INFO_FILE" | cut --only-delimited -d"=" -f2-) # INSTALL PACKAGES' ARCHITECTURE
@@ -230,7 +229,7 @@ getVersionInRunFile() {
 }
 
 logBaseVersion() {
-    installed_version=$(getVersionInstalled "${install_dir}/$PACKAGE_NAME")
+    installed_version=$(getVersionInstalled "${install_dir}/share/info/$PACKAGE_NAME")
     if [ ! "${installed_version}"x = ""x ]; then
         log_and_print $LEVEL_INFO "base version is ${installed_version}."
         return 0
@@ -499,7 +498,7 @@ checkInstallPath() {
 
 # init config file path
 initConfPath() {
-    installInfo="${install_dir}/$PACKAGE_NAME/$INSTALL_INFO_FILE" # install info path
+    installInfo="${install_dir}/share/info/$PACKAGE_NAME/$INSTALL_INFO_FILE" # install info path
 }
 
 # create install path and sub directory asc-tools
@@ -521,8 +520,8 @@ createInstallPath() {
             exitLog 1
         fi
     fi
-    if [ ! -d "${install_dir}/${PACKAGE_NAME}" ]; then
-        createFolder "${install_dir}/${PACKAGE_NAME}" $username:$usergroup 750
+    if [ ! -d "${install_dir}/share/info/${PACKAGE_NAME}" ]; then
+        createFolder "${install_dir}/share/info/${PACKAGE_NAME}" $username:$usergroup 750
         if [ $? -ne 0 ]; then
             log_and_print $LEVEL_ERROR "Create asc-tools path failed in install path."
             exitLog 1
@@ -533,10 +532,10 @@ createInstallPath() {
 removeLatestInstallPath() {
     local _install_dir="$1"
 
-    isDirEmpty "${_install_dir:?}/$PACKAGE_NAME"
+    isDirEmpty "${_install_dir:?}/share/info/$PACKAGE_NAME"
     if [ $? -eq 0 ]; then
         # remove asc-tools
-        rm -rf "${_install_dir:?}/$PACKAGE_NAME"
+        rm -rf "${_install_dir:?}/share/info/$PACKAGE_NAME"
     fi
     isDirEmpty "$_install_dir"
     if [ $? -eq 0 ]; then
@@ -559,7 +558,7 @@ removeInstallPath() {
 
 removeInstallShell()
 {
-    local _script_path="$install_dir/$PACKAGE_NAME/script"
+    local _script_path="$install_dir/share/info/$PACKAGE_NAME/script"
     local _install_shell="$_script_path/install.sh"
     local _pkg_install_shell="$_script_path/run_asc-tools_install.sh"
 
@@ -596,7 +595,7 @@ installRun() {
             _install_path="${_install_path}/${pkg_version_dir}"
         fi
         echo "Please make sure that"
-        echo "        - TOOLCHAIN_HOME set with ${_install_path}/$PACKAGE_NAME"
+        echo "        - TOOLCHAIN_HOME set with ${_install_path}/share/info/$PACKAGE_NAME"
         removeInstallShell
         return 0
     else
@@ -621,13 +620,13 @@ installRun() {
 }
 
 uninstallRun() {
-    checkDirPermission "${install_dir}/$PACKAGE_NAME"
+    checkDirPermission "${install_dir}/share/info/$PACKAGE_NAME"
     if [ $? -ne 0 ]; then
         return 1
     fi
 
-    chattr -i -R "${install_dir}/$PACKAGE_NAME" > /dev/null 2>&1
-    old_uninstall_shell="${install_dir}/$PACKAGE_NAME/script/run_asc-tools_uninstall.sh"
+    chattr -i -R "${install_dir}/share/info/$PACKAGE_NAME" > /dev/null 2>&1
+    old_uninstall_shell="${install_dir}/share/info/$PACKAGE_NAME/script/run_asc-tools_uninstall.sh"
     if [ ! -f "${old_uninstall_shell}" ]; then
         log_and_print $LEVEL_ERROR "ERR_NO:0X0080;ERR_DES: uninstall shell not exist."
         return 1
@@ -664,12 +663,12 @@ uninstallLatest() {
         return 1
     fi
 
-    local _uninstall_shell_path="$_install_path/$upgrade_version_dir/$PACKAGE_NAME/script/run_asc-tools_uninstall.sh"
+    local _uninstall_shell_path="$_install_path/$upgrade_version_dir/share/info/$PACKAGE_NAME/script/run_asc-tools_uninstall.sh"
     if [ -z "$_uninstall_shell_path" ]; then
         log_and_print $LEVEL_ERROR "ERR_NO:0X0080;ERR_DES: asc-tools uninstall shell not exist."
         return 1
     fi
-    local _install_info="$_install_path/$upgrade_version_dir/$PACKAGE_NAME/$INSTALL_INFO_FILE"
+    local _install_info="$_install_path/$upgrade_version_dir/share/info/$PACKAGE_NAME/$INSTALL_INFO_FILE"
     if [ ! -f "$_install_info" ]; then
         log_and_print $LEVEL_WARN "The install info file not exist, and use default $INSTALL_TYPE_ALL."
         install_mode=$INSTALL_TYPE_ALL
@@ -698,14 +697,14 @@ uninstallLatest() {
 # uninstall none multi-version package
 uninstallOldRun() {
     local _install_path="$docker_root_path/$input_install_path"
-    local _install_info="$_install_path/$PACKAGE_NAME/$INSTALL_INFO_FILE"
-    local _version_path="$_install_path/$PACKAGE_NAME/version.info"
+    local _install_info="$_install_path/share/info/$PACKAGE_NAME/$INSTALL_INFO_FILE"
+    local _version_path="$_install_path/share/info/$PACKAGE_NAME/version.info"
 
     get_version_dir "_pkg_version_dir" "$_version_path"
     [ ! -z "$_pkg_version_dir" ] && return 0
     [ ! -f "$_install_info" ] && return 0
 
-    local _uninstall_shell_path=$(readlink -f "$_install_path/$PACKAGE_NAME/script/run_asc-tools_uninstall.sh")
+    local _uninstall_shell_path=$(readlink -f "$_install_path/share/info/$PACKAGE_NAME/script/run_asc-tools_uninstall.sh")
     if [ -z "$_uninstall_shell_path" ]; then
         log_and_print $LEVEL_ERROR "AscTools uninstall shell not exist."
         return 1
@@ -723,9 +722,9 @@ uninstallOldRun() {
         if [ -f "$_install_info" ]; then
             rm -f "$_install_info"
         fi
-        isDirEmpty "${_install_path:?}/$PACKAGE_NAME"
+        isDirEmpty "${_install_path:?}/share/info/$PACKAGE_NAME"
         if [ $? -eq 0 ]; then
-            rm -rf "${_install_path:?}/$PACKAGE_NAME"
+            rm -rf "${_install_path:?}/share/info/$PACKAGE_NAME"
         fi
         isDirEmpty "$_install_path"
         if [ $? -eq 0 ]; then
@@ -739,17 +738,13 @@ uninstallOldRun() {
 }
 
 upgradeRun() {
-    # uninstall
-    get_version_dir "pkg_version_dir" "${VERSION_PATH}"
-    if [ ! -z "$pkg_version_dir" ]; then
-        # uninstall latest
-        uninstallLatest
-        [ $? -ne 0 ] && return 1
-    fi
     # uninstall current version package
     if [ -f "$installInfo" ]; then
         uninstallRun
         [ $? -ne 0 ] && return 1
+    else
+        log_and_print $LEVEL_ERROR "ERR_NO:0x0080;ERR_DES: Package is not installed on the path $install_dir, upgrade failed."
+        return 1
     fi
     # install
     installRun
@@ -760,7 +755,7 @@ upgradeRun() {
 checkUninstallState() {
     if [ $install = y -a ! $quiet = y ]; then
         version1=$(getVersionInRunFile)
-        version2=$(getVersionInstalled $install_dir/$PACKAGE_NAME)
+        version2=$(getVersionInstalled $install_dir/share/info/$PACKAGE_NAME)
         print_log $LEVEL_INFO "AscTools package has been installed on the path $install_dir, the version is" \
             "${version2}, and the version of this package is ${version1}," \
             "do you want to continue? [y/n] "
@@ -775,12 +770,6 @@ checkUninstallState() {
 }
 
 startOperation() {
-    if [ ! -z "$pkg_version_dir" ]; then
-        # uninstall none multi-version package
-        uninstallOldRun
-        [ $? -ne 0 ] && return 1
-    fi
-
     if [ $uninstall = y ]; then
         if [ -f "$installInfo" ]; then
             uninstallRun
@@ -816,7 +805,7 @@ preCheck() {
         return
     fi
 
-    local check_shell_path="${SHELL_DIR}/../${PACKAGE_NAME}/bin/prereq_check.bash"
+    local check_shell_path="${SHELL_DIR}/../share/info/${PACKAGE_NAME}/bin/prereq_check.bash"
     if [ ! -f ${check_shell_path} ]; then
         log ${LEVEL_WARN} "${check_shell_path} not exist."
         if [ $pre_check_only = y ]; then

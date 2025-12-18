@@ -1311,6 +1311,13 @@ void AclnnOpGenerator::AclnnGenExternFunc(ofstream &outfile) const
     outfile << str;
 }
 
+void AclnnOpGenerator::AclnnGenOutEmptyLaunchDeclaration(OpDef &opDef, ofstream &outfile) const
+{
+    if (opDef.AICore().GetZeroEleOutputLaunchFlag()) {
+        outfile << "extern void NnopbaseSetZeroEleOutputLaunchFlag(void *executor);\n";
+    }
+}
+
 void AclnnOpGenerator::AclnnGenCodeImplStart(
     string &declFile, bool hasOutputShapeDepend, ofstream &outfile, OpDef &opDef) const
 {
@@ -1343,6 +1350,7 @@ void AclnnOpGenerator::AclnnGenCodeImplStart(
     AclnnGenExternFunc(outfile);
     AclnnGenUncontDeclaration(opDef, outfile);
     AclnnGenMc2Declaration(opDef, outfile);
+    AclnnGenOutEmptyLaunchDeclaration(opDef, outfile);
     if (hasOutputShapeDepend) {
         outfile
             << "extern aclnnStatus __attribute__((weak)) NnopbaseAddOutputShapeDependTensor(void *executor, aclTensor "
@@ -1495,6 +1503,10 @@ void AclnnOpGenerator::AclopGenCodeCommon(
     AclnnOpGenCodeParamDesc(opDef, outfile, version);
     AclnnOpGenCodeParamCheck(opDef.GetInputs(), outputs, opdefName, outfile);
     AclnnOpGenCodeExecutor(opDef, outfile);
+    if (opDef.MC2().GetHcclServerType() != HcclServerType::MAX) {
+        outfile << "    NnopbaseSetHcclServerTypeList(*executor, hcclServerTypeList, "
+            "socSupportList, socSupportListLen);\n";
+    }
     
     AclnnOpGenFormatMode(opDef, outfile);
     AclnnOpGenCodeSetRef(opDef.GetInputs(), outputs, outfile);
@@ -1506,6 +1518,9 @@ void AclnnOpGenerator::AclopGenCodeCommon(
         outfile << "    NNOPBASE_ASSERT_OK_RETVAL(NnopbaseSetMc2(*executor));\n";
         AclnnOpGenCodeHcclGroup(opDef, opdefName.attrsName, attrTypes, outfile);
     }
+    if (opDef.AICore().GetZeroEleOutputLaunchFlag()) {
+        outfile << "    NnopbaseSetZeroEleOutputLaunchFlag(*executor);\n";
+    }
     AclOpGenMatchArgsFunc(outfile);
     if (opDef.GetInputs().size() == 0U && outputs.size() == 0U) {
         return;
@@ -1513,10 +1528,6 @@ void AclnnOpGenerator::AclopGenCodeCommon(
         AclnnOpGenAddParamName(opDef, opdefName, outfile);
         outfile << "    NNOPBASE_ASSERT_OK_RETVAL(NnopbaseAddSupportList(*executor, &supportList, socSupportList" <<
                    ", socSupportListLen));\n";
-    }
-    if (opDef.MC2().GetHcclServerType() != HcclServerType::MAX) {
-        outfile << "    NnopbaseSetHcclServerTypeList(*executor, hcclServerTypeList, "
-            "socSupportList, socSupportListLen);\n";
     }
     AclnnOpGenCodeSetUnContInfo(opDef, outfile);
 }

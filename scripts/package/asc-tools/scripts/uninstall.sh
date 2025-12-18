@@ -147,7 +147,7 @@ getVersionInstalled() {
 }
 
 logBaseVersion() {
-    installed_version=$(getVersionInstalled "$install_dir/$PACKAGE_NAME")
+    installed_version=$(getVersionInstalled "$install_dir/share/info/$PACKAGE_NAME")
     if [ ! "${installed_version}"x = ""x ]; then
         log_and_print $LEVEL_INFO "base version is ${installed_version}."
         return 0
@@ -200,10 +200,10 @@ checkInstallPath() {
 }
 
 removeInstallPath() {
-    isDirEmpty "${install_dir:?}/$PACKAGE_NAME"
+    isDirEmpty "${install_dir:?}/share/info/$PACKAGE_NAME"
     if [ $? -eq 0 ]; then
         # remove asc-tools
-        rm -rf "${install_dir:?}/$PACKAGE_NAME"
+        rm -rf "${install_dir:?}/share/info/$PACKAGE_NAME"
     fi
     isDirEmpty "${install_dir}"
     if [ $? -eq 0 ]; then
@@ -223,12 +223,12 @@ removeInstallPath() {
 uninstallRun() {
     local _install_type
 
-    checkDirPermission "$install_dir/$PACKAGE_NAME"
+    checkDirPermission "$install_dir/share/info/$PACKAGE_NAME"
     if [ $? -ne 0 ]; then
         return 1
     fi
 
-    chattr -i -R "$install_dir/$PACKAGE_NAME" > /dev/null 2>&1
+    chattr -i -R "$install_dir/share/info/$PACKAGE_NAME" > /dev/null 2>&1
     if [ ! -f "$UNINSTALL_SHELL" ]; then
         log_and_print $LEVEL_ERROR "ERR_NO:0X0080;ERR_DES: $UNINSTALL_SHELL does not exist."
         return 1

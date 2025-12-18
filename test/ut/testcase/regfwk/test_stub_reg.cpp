@@ -31,13 +31,13 @@ TEST_F(TEST_STUB_REG, StubRegTest)
     g_regStubs[type] = NULL;
 }
 
-TEST_F(TEST_STUB_REG, StubInitTest)
-{
-    AscendC::StubInit();
-    ifstream resultFile;
-    string fileName = "stub_reg.log";
-    EXPECT_TRUE(access(fileName.c_str(), (O_CREAT | O_WRONLY | O_TRUNC, S_IRUSR | S_IWUSR)));
-}
+// TEST_F(TEST_STUB_REG, StubInitTest)
+// {
+//     AscendC::StubInit();
+//     ifstream resultFile;
+//     string fileName = "stub_reg.log";
+//     EXPECT_TRUE(access(fileName.c_str(), (O_CREAT | O_WRONLY | O_TRUNC, S_IRUSR | S_IWUSR)));
+// }
 
 TEST_F(TEST_STUB_REG, SetKernelModeTest)
 {

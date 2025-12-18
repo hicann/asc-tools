@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <block name="CASimuRuntime" copy_type="delivery" src_path="lib/host" dst_path="" install_path="" install_own="$username:$usergroup" install_mod="550" install_type="run;devel" feature="ascendc">
     <dir_info value="simulator">
-        <path value="$(TARGET_ENV)/simulator"/>
+        <path value="tools"/>
+        <path value="$(TARGET_ENV)/simulator" install_softlink="tools/simulator"/>
         <path value="$(TARGET_ENV)/simulator/common"/>
         <path value="$(TARGET_ENV)/simulator/common/data"/>
         <path value="$(TARGET_ENV)/simulator/Ascend310" chip="Ascend310"/>
@@ -249,8 +250,8 @@
     </file_info>
     <file_info value="ascend310B_simulator" chip="Ascend310B;AS31XM1" copy_type="delivery" src_path="lib/host" install_mod="440" dst_path="tools/simulator/lib64/Ascend310B1/lib" install_path="$(TARGET_ENV)/simulator/Ascend310B1/lib">
         <file value="libruntime_camodel.so" file_type="shared"/>
-        <file value="libtik_profiling.so" file_type="shared" release_type="debug"/>
-        <file value="libtik_run_pvmodel.so" file_type="shared" release_type="debug"/>
+        <file value="libtik_profiling.so" file_type="shared" release_type="debug" optional="true"/>
+        <file value="libtik_run_pvmodel.so" file_type="shared" release_type="debug" optional="true"/>
         <file value="run_kernel"/>
         <file value="libruntime_cmodel.so" file_type="shared"/>
         <file value="libpem_davinci.so" file_type="shared"/>
@@ -276,8 +277,8 @@
     </file_info>
     <file_info value="ascend910b1_simulator" chip="Ascend910B;Ascend910_93" copy_type="delivery" src_path="lib/host" install_mod="440" dst_path="tools/simulator/lib64/Ascend910B1/lib" install_path="$(TARGET_ENV)/simulator/Ascend910B1/lib">
         <file value="libruntime_camodel.so" file_type="shared"/>
-        <file value="libtik_profiling.so" file_type="shared" release_type="debug"/>
-        <file value="libtik_run_pvmodel.so" file_type="shared" release_type="debug"/>
+        <file value="libtik_profiling.so" file_type="shared" release_type="debug" optional="true"/>
+        <file value="libtik_run_pvmodel.so" file_type="shared" release_type="debug" optional="true"/>
         <file value="libruntime_cmodel.so" file_type="shared"/>
         <file value="libpem_davinci.so" file_type="shared"/>
         <file value="libstars.so" file_type="shared"/>

@@ -25,7 +25,7 @@ INSTALL_COMMON_PARSER_PATH="$SHELL_DIR/install_common_parser.sh"
 COMMON_SHELL_PATH="$SHELL_DIR/common.sh"
 COMMON_INC="$SHELL_DIR/common_func.inc"
 FILELIST_PATH="$SHELL_DIR/filelist.csv"
-VERSION_INFO="$SHELL_DIR/../../version.info"
+VERSION_INFO="$SHELL_DIR/../version.info"
 LOG_RELATIVE_PATH=var/log/ascend_seclog # install log path and operation log path
 
 log() {
@@ -59,7 +59,7 @@ install_dir="$2"
 install_type="$3"
 quiet="$4"
 
-installInfo=$install_dir/$PACKAGE_NAME/$INSTALL_INFO_FILE # install config
+installInfo=$install_dir/share/info/$PACKAGE_NAME/$INSTALL_INFO_FILE # install config
 if [ ! -f "${installInfo}" ];then
     log_and_print $LEVEL_ERROR "ERR_NO:0x0080;ERR_DES: install info file $installInfo does not exist."
     exit 1
@@ -93,13 +93,13 @@ progress_bar(){
 copyVersionInfo() {
     # copy version.info to ${install_dir}/asc-tools
     if [ -f "${VERSION_INFO}" ]; then
-        cp -f "${VERSION_INFO}" "${install_dir}/${PACKAGE_NAME}"
+        cp -f "${VERSION_INFO}" "${install_dir}/share/info/${PACKAGE_NAME}"
         if [ $? -ne 0 ]; then
             log_and_print $LEVEL_ERROR "ERR_NO:0x0089;ERR_DES: copy version.info failed."
             return 1
         fi
-        changeFileMode 440 "${install_dir}/${PACKAGE_NAME}/version.info"
-        chown -hf "${username}:${usergroup}" "${install_dir}/${PACKAGE_NAME}/version.info"
+        changeFileMode 440 "${install_dir}/share/info/${PACKAGE_NAME}/version.info"
+        chown -hf "${username}:${usergroup}" "${install_dir}/share/info/${PACKAGE_NAME}/version.info"
     else
         log_and_print $LEVEL_ERROR "ERR_NO:0x0080;ERR_DES: The file version.info does not exist."
         return 1
@@ -109,7 +109,7 @@ copyVersionInfo() {
 
 removeVersionInfo() {
     # remove version.info
-    local _version_info="${install_dir}/${PACKAGE_NAME}/version.info"
+    local _version_info="${install_dir}/share/info/${PACKAGE_NAME}/version.info"
 
     if [ -f "${_version_info}" ]; then
         rm -f "${_version_info}"
@@ -148,7 +148,7 @@ installTool()
     if [ -d "$install_dir/tools/ascendc_tools" ];then
         chmod 755 "$install_dir/tools/ascendc_tools"
     fi
-    "$INSTALL_COMMON_PARSER_PATH" --install ${shell_options_} ${custom_options_} --feature=$feature_type --chip=$chip_type\
+    "$INSTALL_COMMON_PARSER_PATH" --install ${shell_options_} ${custom_options_} --feature=$feature_type --use-share-info --chip=$chip_type\
         "${install_type}" "${input_install_path}" "${FILELIST_PATH}"
     if [ -d "$install_dir/tools/ascendc_tools" ];then
         chmod 550 "$install_dir/tools/ascendc_tools"
@@ -159,16 +159,16 @@ installTool()
         return 1
     fi
 
-    chmod -Rf 500 "${install_dir}/${PACKAGE_NAME}/script"
+    chmod -Rf 500 "${install_dir}/share/info/${PACKAGE_NAME}/script"
     if [ "$(id -u)" -eq 0 ]; then
-        chown -Rf root:root "${install_dir}/${PACKAGE_NAME}/script"
+        chown -Rf root:root "${install_dir}/share/info/${PACKAGE_NAME}/script"
     fi
 
     checkAllFeature ${feature_type}
 }
 
 installProfiling() {
-    profiler_install_shell="${install_dir}/${PACKAGE_NAME}/script/install_msprof_fitter.sh"
+    profiler_install_shell="${install_dir}/share/info/${PACKAGE_NAME}/script/install_msprof_fitter.sh"
     if [ ! -f "${profiler_install_shell}" ]; then
         return 0
     fi
@@ -192,7 +192,7 @@ installProfiling() {
 }
 
 installModule() {
-    local shell_info="${install_dir}/${PACKAGE_NAME}/script/shells.info"
+    local shell_info="${install_dir}/share/info/${PACKAGE_NAME}/script/shells.info"
     if [ ! -f "${shell_info}" ]; then
         return 0
     fi
@@ -208,7 +208,7 @@ installModule() {
 
     shell_array=$(readShellInfo "${shell_info}" "[install]" "[end]")
     for item in ${shell_array[@]}; do
-        local shell_path="${install_dir}/${PACKAGE_NAME}/script/${item}"
+        local shell_path="${install_dir}/share/info/${PACKAGE_NAME}/script/${item}"
         if [ ! -f $shell_path ]; then
             log_and_print $LEVEL_WARN "$shell_path not exist."
             continue
