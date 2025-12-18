@@ -160,9 +160,6 @@ uninstallAllPython() {
     checkAllFeature ${feature_type}
     [ $? -ne 0 ] && return 0
 
-        whlUninstallPackage op_test_frame ${install_path}/python/site-packages
-    [ $? -ne 0 ] && return 1
-
     local module_arr_=(op_ut_run op_ut_helper msopst msopst.ini)
     removePythonLocalBin ${install_path}/python/site-packages ${module_arr_[@]}
     [ $? -ne 0 ] && return 1

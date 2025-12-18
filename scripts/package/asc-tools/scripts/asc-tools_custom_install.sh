@@ -220,8 +220,6 @@ installPyWhlLocal() {
         cp -Rfp "$_temp_install_path/$dir" "$_py_install_path"
     done
 
-    # create softlink python/site-packages to AscTools/python/site-packages
-    createPythonLocalDirSoftlink "$_py_dirs"
     # remove temp
     rm -rf "$_temp_install_path"
     return 0

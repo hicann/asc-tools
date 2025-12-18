@@ -18,7 +18,7 @@ echo "[AscendC] Generate stub_fun.h start"
 rm -rf ${out_path}	
 mkdir -p ${out_path}	
 cp ${src_file} ${out_path}/stub_fun.h	
-sed -i '569 i\namespace AscendC {' ${out_path}/stub_fun.h
-sed -i '5151 i\} // namespace AscendC' ${out_path}/stub_fun.h
+sed -i '610 i\namespace AscendC {' ${out_path}/stub_fun.h
+sed -i '17872 i\} // namespace AscendC' ${out_path}/stub_fun.h
 
 echo "[AscendC] stub_fun.h generated ."

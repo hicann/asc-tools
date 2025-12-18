@@ -18,39 +18,39 @@
         <path value="tools/tikicpulib/lib/MC61AM21AA" chip="MC61AM21AA"/>
     </dir_info>
     <!-- tikcpp simulator -->
-    <file_info value="tikcpp_simulator_ascend910" chip="Ascend910" copy_type="delivery" src_path="lib/host" dst_path="tools/tikicpulib/lib/Ascend910A" install_path="tools/tikicpulib/lib/Ascend910A">
-        <file value="ascend910/libtikcpp_debug.so" file_type="shared" install_mod="555"/>
+    <file_info value="tikcpp_simulator_ascend910" chip="Ascend910" copy_type="delivery" src_path="lib/host" dst_path="lib/Ascend910A" install_path="tools/tikicpulib/lib/Ascend910A">
+        <file value="ascend910/libcpudebug.so" file_type="shared" install_mod="555" install_softlink="tools/tikicpulib/lib/Ascend910A/libtikcpp_debug.so"/>
     </file_info>
-    <file_info value="tikcpp_simulator_ascend310p" chip="Ascend310P" copy_type="delivery" src_path="lib/host" dst_path="tools/tikicpulib/lib/Ascend310P1" install_path="tools/tikicpulib/lib/Ascend310P1">
-        <file value="ascend310p/libtikcpp_debug.so" file_type="shared" install_mod="555"/>
+    <file_info value="tikcpp_simulator_ascend310p" chip="Ascend310P" copy_type="delivery" src_path="lib/host" dst_path="lib/Ascend310P1" install_path="tools/tikicpulib/lib/Ascend310P1">
+        <file value="ascend310p/libcpudebug.so" file_type="shared" install_mod="555" install_softlink="tools/tikicpulib/lib/Ascend310P1/libtikcpp_debug.so"/>
     </file_info>
-    <file_info value="tikcpp_simulator_ascend610" chip="Ascend610" copy_type="delivery" src_path="lib/host" dst_path="tools/tikicpulib/lib/Ascend610" install_path="tools/tikicpulib/lib/Ascend610">
-        <file value="ascend610/libtikcpp_debug.so" file_type="shared" install_mod="555"/>
+    <file_info value="tikcpp_simulator_ascend610" chip="Ascend610" copy_type="delivery" src_path="lib/host" dst_path="lib/Ascend610" install_path="tools/tikicpulib/lib/Ascend610">
+        <file value="ascend610/libcpudebug.so" file_type="shared" install_mod="555" install_softlink="tools/tikicpulib/lib/Ascend610/libtikcpp_debug.so"/>
     </file_info>
-    <file_info value="tikcpp_simulator_ascend910B1" chip="Ascend910B" copy_type="delivery" src_path="lib/host" dst_path="tools/tikicpulib/lib/Ascend910B1" install_path="tools/tikicpulib/lib/Ascend910B1">
-        <file value="ascend910B1/libtikcpp_debug.so" file_type="shared" install_mod="555"/>
+    <file_info value="tikcpp_simulator_ascend910B1" chip="Ascend910B" copy_type="delivery" src_path="lib/host" dst_path="lib/Ascend910B1" install_path="tools/tikicpulib/lib/Ascend910B1">
+        <file value="ascend910B1/libcpudebug.so" file_type="shared" install_mod="555" install_softlink="tools/tikicpulib/lib/Ascend910B1/libtikcpp_debug.so"/>
     </file_info>
-    <file_info value="tikcpp_simulator_ascend310B1" chip="Ascend310B" copy_type="delivery" src_path="lib/host" dst_path="tools/tikicpulib/lib/Ascend310B1" install_path="tools/tikicpulib/lib/Ascend310B1">
-        <file value="ascend310B1/libtikcpp_debug.so" file_type="shared" install_mod="555"/>
+    <file_info value="tikcpp_simulator_ascend310B1" chip="Ascend310B" copy_type="delivery" src_path="lib/host" dst_path="lib/Ascend310B1" install_path="tools/tikicpulib/lib/Ascend310B1">
+        <file value="ascend310B1/libcpudebug.so" file_type="shared" install_mod="555" install_softlink="tools/tikicpulib/lib/Ascend310B1/libtikcpp_debug.so"/>
     </file_info>
-    <file_info value="tikcpp_simulator_ascend610Lite" chip="Ascend610Lite" copy_type="delivery" src_path="lib/host" dst_path="tools/tikicpulib/lib/Ascend610Lite" install_path="tools/tikicpulib/lib/Ascend610Lite">
-        <file value="ascend610Lite/libtikcpp_debug.so" file_type="shared" install_mod="555"/>
+    <file_info value="tikcpp_simulator_ascend610Lite" chip="Ascend610Lite" copy_type="delivery" src_path="lib/host" dst_path="lib/Ascend610Lite" install_path="tools/tikicpulib/lib/Ascend610Lite">
+        <file value="ascend610Lite/libcpudebug.so" file_type="shared" install_mod="555" install_softlink="tools/tikicpulib/lib/Ascend610Lite/libtikcpp_debug.so"/>
     </file_info>
-    <file_info value="tikcpp_simulator_bs9sx2aa" chip="BS9SX2AA" copy_type="delivery" src_path="lib/host" dst_path="tools/tikicpulib/lib/BS9SX2AA" install_path="tools/tikicpulib/lib/BS9SX2AA">
-        <file value="bs9sx2aa/libtikcpp_debug.so" file_type="shared" install_mod="555"/>
+    <file_info value="tikcpp_simulator_bs9sx2aa" chip="BS9SX2AA" copy_type="delivery" src_path="lib/host" dst_path="lib/BS9SX2AA" install_path="tools/tikicpulib/lib/BS9SX2AA">
+        <file value="bs9sx2aa/libcpudebug.so" file_type="shared" install_mod="555" install_softlink="tools/tikicpulib/lib/BS9SX2AA/libtikcpp_debug.so"/>
     </file_info>
-    <file_info value="tikcpp_simulator_mc61am21aa" chip="MC61AM21AA" copy_type="delivery" src_path="lib/host" dst_path="tools/tikicpulib/lib/MC61AM21AA" install_path="tools/tikicpulib/lib/MC61AM21AA">
-        <file value="mc61am21aa/libtikcpp_debug.so" file_type="shared" install_mod="555"/>
+    <file_info value="tikcpp_simulator_mc61am21aa" chip="MC61AM21AA" copy_type="delivery" src_path="lib/host" dst_path="lib/MC61AM21AA" install_path="tools/tikicpulib/lib/MC61AM21AA">
+        <file value="mc61am21aa/libcpudebug.so" file_type="shared" install_mod="555" install_softlink="tools/tikicpulib/lib/MC61AM21AA/libtikcpp_debug.so"/>
     </file_info>
     <!-- tikcpp simulator libs -->
-    <file_info value="tikcpp_simulator_libs" copy_type="delivery" src_path="lib/host" dst_path="tools/tikicpulib/lib" install_path="tools/tikicpulib/lib/">
-        <file value="libtikicpulib_stubreg.so" file_type="shared" install_mod="555"/>
-        <file value="libtikicpulib_cceprint.so" file_type="shared" install_mod="555"/>
-        <file value="libtikicpulib_npuchk.so" file_type="shared" install_mod="555"/>
+    <file_info value="tikcpp_simulator_libs" copy_type="delivery" src_path="lib/host" dst_path="lib" install_path="tools/tikicpulib/lib/">
+        <file value="libcpudebug_stubreg.so" file_type="shared" install_mod="555" install_softlink="tools/tikicpulib/lib/libtikicpulib_stubreg.so"/>
+        <file value="libcpudebug_cceprint.so" file_type="shared" install_mod="555" install_softlink="tools/tikicpulib/lib/libtikicpulib_cceprint.so"/>
+        <file value="libcpudebug_npuchk.so" file_type="shared" install_mod="555" install_softlink="tools/tikicpulib/lib/libtikicpulib_npuchk.so"/>
     </file_info>
 
     <!-- tikcpp simulator headers -->
-    <file_info value="tikcpp_simulator_headers" copy_type="delivery" src_path="lib/host" dst_path="tools/tikicpulib/lib/include" install_path="tools/tikicpulib/lib/include">
+    <file_info value="tikcpp_simulator_headers" copy_type="delivery" src_path="lib/host" dst_path="lib/include" install_path="tools/tikicpulib/lib/include">
         <file value="include/stub_fun.h" />
         <file value="include/intri_fun.h" />
         <file value="include/intri_fmt.h" />
@@ -70,19 +70,16 @@
         <file value="include/tikicpulib.h" />
     </file_info>
     <!-- tikcpp simulator cmake -->
-    <file_info value="tikcpp_simulator_cmake" copy_type="delivery" src_path="lib/host" dst_path="tools/tikicpulib/lib/cmake" install_path="tools/tikicpulib/lib/cmake">
+    <file_info value="tikcpp_simulator_cmake" copy_type="delivery" src_path="lib/host" dst_path="lib/cmake" install_path="tools/tikicpulib/lib/cmake">
         <file value="cmake/targets-tikicpulib.cmake" />
         <file value="cmake/targets-tikicpulib-debug.cmake" release_type="debug"/>
         <!-- <file value="cmake/targets-tikicpulib-release.cmake" release_type="release"/> -->
         <file value="cmake/tikicpulib-config.cmake" />
     </file_info>
-    <file_info value="ascendc_scripts" copy_type="delivery" src_path="lib/host/" dst_path="tools/ascendc_tools" install_path="tools/ascendc_tools" install_mod="750" feature="ascendc">
+    <file_info value="ascendc_scripts" copy_type="delivery" src_path="lib/host/" dst_path="tools/ascendc_tools" install_path="tools/ascendc_tools" install_mod="550" feature="ascendc">
         <file value="ascendc_npuchk_report.py"/>
     </file_info>
-    <file_info value="op_build" copy_type="delivery" src_path="lib/host/" dst_path="lib" install_path="tools/opbuild" install_mod="755" feature="ascendc">
+    <file_info value="op_build" copy_type="delivery" src_path="lib/host/" dst_path="lib" install_path="tools/opbuild" install_mod="555" feature="ascendc">
         <file value="op_build" file_type= "executable" />
-    </file_info>
-    <file_info value="ascendc_acl_stub" copy_type="delivery" src_path="lib/host/" dst_path="lib" install_path="tools/tikicpulib/lib" install_mod="440" feature="ascendc">
-        <file value="libascendc_acl_stub.so" file_type="shared" install_mod="555"/>
     </file_info>
 </block>
