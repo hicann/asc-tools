@@ -16,6 +16,9 @@ asc-tools:
       - npuchk
       - utils
     unrelease:
+      - cpudebug/src/acl_stub/ascendc_acl_stub.cpp
+      - cpudebug/src/regfwk/stub_backtrace.cpp
+      - utils/opbuild/op_aclnn_generator.cpp
   llt:
     ut_check: true
     st_check: false

@@ -313,7 +313,6 @@ public:
         OpAICoreConfig aicConfig;
         this->AICore().AddConfig("ascend910_95", aicConfig);
         this->MC2().HcclGroup({"group2", "group1"});
-        this->MC2().HcclServerType(HcclServerType::CCU, "ascend910_95");
         this->EnableFallBack();
     }
 };

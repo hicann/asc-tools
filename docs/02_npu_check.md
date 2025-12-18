@@ -82,10 +82,6 @@ npu check对内存读写、指令同步、Tensor操作的合法性进行检测�
 
 对于VECIN/VECOUT/VECCALC类型的Tensor，判断Tensor出现在搬运/计算指令时是否处于正确的状态，以保证同步的正确性，对于异常的状态，会在日志中记录。
 
-### 内存统计
-
-每次申请/释放接口统计当前状态的内存使用率，内存使用到的大小峰值。
-
 ### GM内存多核踩踏检查
 
 基于GM全局内存的管理机制，记录每个核操作的GM地址范围，发现多核写入地址范围有重叠的情况，记录错误；支持Atomic add场景下，对于重叠地址不记录错误。
@@ -140,7 +136,7 @@ python3 scripts/verify_result.py output_z.bin golden.bin
 python3 ${git_clone_path}/asc-tools/npuchk/ascendc_npuchk_report.py npuchk/add_custom_0_0_vec_npuchk.log
 ```
 
-  - 若不指定xxx_npuchk.log，脚本将会自动检索路径下的以_npuchk.log为后缀的文件进行检查。
+  - 若不指定xxx_npuchk.log，脚本将会自动检索路径下的以“_npuchk.log”为后缀的文件进行检查。
 
 此时查看log文件可以看到执行时npu check日志记录的堆栈信息。
 

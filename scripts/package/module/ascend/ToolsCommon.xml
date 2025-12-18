@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<block name="ToolsCommon" install_own="$username:$usergroup" install_mod="440" install_type="all">
+    <dir_info value="common" install_mod="550">
+        <path value="toolkit"/>
+        <path value="tools" install_softlink="toolkit/tools"/>
+    </dir_info>
+</block>

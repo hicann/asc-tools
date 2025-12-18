@@ -15,15 +15,6 @@ if(BUILD_OPEN_PROJECT)
 
   add_library(tikcfw_headers INTERFACE)
   target_include_directories(tikcfw_headers INTERFACE
-    $<BUILD_INTERFACE:${ASCEND_CANN_PACKAGE_PATH}/${CMAKE_SYSTEM_PROCESSOR}-linux/tikcpp/tikcfw>
-    $<BUILD_INTERFACE:${ASCEND_CANN_PACKAGE_PATH}/${CMAKE_SYSTEM_PROCESSOR}-linux/tikcpp/tikcfw/interface>
-    $<BUILD_INTERFACE:${ASCEND_CANN_PACKAGE_PATH}/${CMAKE_SYSTEM_PROCESSOR}-linux/tikcpp/tikcfw/impl>
-    $<BUILD_INTERFACE:${ASCEND_CANN_PACKAGE_PATH}/${CMAKE_SYSTEM_PROCESSOR}-linux/include>
-    $<BUILD_INTERFACE:${ASCEND_CANN_PACKAGE_PATH}/compiler/tikcpp/tikcfw>
-    $<BUILD_INTERFACE:${ASCEND_CANN_PACKAGE_PATH}/compiler/tikcpp/tikcfw/interface>
-    $<BUILD_INTERFACE:${ASCEND_CANN_PACKAGE_PATH}/compiler/tikcpp/tikcfw/impl>
-    $<BUILD_INTERFACE:${ASCEND_CANN_PACKAGE_PATH}/compiler/include>
-
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/utils>
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/utils/include>
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/utils/include/utils>

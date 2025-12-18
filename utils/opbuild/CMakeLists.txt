@@ -13,7 +13,6 @@ project(opbuild)
 
 add_executable(op_build op_build.cpp op_generator.cpp op_generator_factory.cpp op_cfg_generator.cpp
   op_proto_generator.cpp op_aclnn_generator.cpp op_custom_registry_generator.cpp op_aclnn_fallback_generator.cpp
-  op_cpu_cfg_generator.cpp
   op_build_params.cpp
 )
 
@@ -54,6 +53,10 @@ target_link_libraries(op_build PRIVATE
   alog
   mmpa
   error_manager
+)
+
+target_link_options(op_build PRIVATE
+    $<$<CONFIG:Release>:-s>
 )
 
 install(TARGETS op_build

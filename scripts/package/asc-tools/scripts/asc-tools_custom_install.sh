@@ -16,6 +16,7 @@ LEVEL_INFO="INFO"
 LEVEL_WARN="WARNING"
 LEVEL_ERROR="ERROR"
 MIN_PIP_VERSION=18
+PLT_ARCH=$(uname -m)
 
 source "${COMMON_SHELL_PATH}"
 
@@ -193,21 +194,6 @@ createPythonLocalDir() {
     return 0
 }
 
-createPythonLocalDirSoftlink() {
-    local _py_dirs="$@"
-    [ -z "$_py_dirs" ] && return
-
-    createPythonLocalDir "$install_path/$PACKAGE"
-    # create softlink python/site-packages to AscTools/python/site-packages
-    local _py_pkg_path="$install_path/$PACKAGE/python/site-packages"
-    for item in ${_py_dirs[@]}; do
-        if [ -d "${_py_pkg_path}/${item}" ] || [ -f "${_py_pkg_path}/${item}" ]; then
-            rm -f "${_py_pkg_path}/${item}"
-        fi
-        ln -s "../../../python/site-packages/${item}" "${_py_pkg_path}/${item}"
-    done
-}
-
 installPyWhlLocal() {
     local _whl_name="$1"
     local _py_whl_path="$install_path/tools/$_whl_name"
@@ -219,7 +205,7 @@ installPyWhlLocal() {
     [ $? -ne 0 -o ! -d "$_temp_install_path" ] && return 1
 
     changeDirMode 750 "$_temp_install_path"
-    changeFileMode 550 "$_temp_install_path"
+    changeFileMode 750 "$_temp_install_path"
     chown -RP "$username:$usergroup" "$_temp_install_path">/dev/null 2>&1
 
     # copy temp to dest path
@@ -277,6 +263,22 @@ init() {
         local _home_path=$(eval echo "~")
         log_file="${_home_path}/${LOG_PATH}"
     fi
+}
+
+createSoftLink()
+{
+    local _src_dir="$1"
+    local _dst_dir="$2"
+    local _name="$3"
+
+    [ ! -d "$_src_dir" -o ! -d "$_dst_dir" ] && return
+    [ ! -f "$_src_dir/$_name" -a ! -d "$_src_dir/$_name" ] && return
+
+    if [ -L "$_dst_dir/$_name" ]; then
+        rm -rf "$_dst_dir/$_name"
+    fi
+
+    ln -s "$_src_dir/$_name" "$_dst_dir/$_name"
 }
 
 log_file=""

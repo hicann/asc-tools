@@ -61,7 +61,7 @@ quiet="$4"
 
 removeVersionInfo() {
     # remove version.info
-    local _version_info="${install_dir}/${PACKAGE_NAME}/version.info"
+    local _version_info="${install_dir}/share/info/${PACKAGE_NAME}/version.info"
 
     if [ -f "${_version_info}" ]; then
         rm -f "${_version_info}"
@@ -94,7 +94,7 @@ uninstallTool()
     fi
     local custom_options_="--custom-options=--logfile=$logFile,--quiet=$quiet,--pylocal=$pylocal,\
 --feature=$feature_type --chip=$chip_type"
-    "$INSTALL_COMMON_PARSER_PATH" --uninstall ${shell_options_} ${custom_options_} \
+    "$INSTALL_COMMON_PARSER_PATH" --uninstall ${shell_options_} ${custom_options_} --use-share-info --remove-install-info\
         "${install_type}" "${input_install_path}" "${FILELIST_PATH}" "${feature_type}"
     if [ $? -ne 0 ]; then
         log_and_print $LEVEL_ERROR "Uninstall ${PACKAGE_NAME} files failed."
@@ -106,7 +106,7 @@ uninstallTool()
 }
 
 uninstallProfiling() {
-    profiler_install_shell="${install_dir}/${PACKAGE_NAME}/script/install_msprof_fitter.sh"
+    profiler_install_shell="${install_dir}/share/info/${PACKAGE_NAME}/script/install_msprof_fitter.sh"
     if [ ! -f "${profiler_install_shell}" ]; then
         return 0
     fi
@@ -126,7 +126,7 @@ uninstallProfiling() {
 }
 
 uninstallModule() {
-    local shell_info="${install_dir}/${PACKAGE_NAME}/script/shells.info"
+    local shell_info="${install_dir}/share/info/${PACKAGE_NAME}/script/shells.info"
     if [ ! -f "${shell_info}" ]; then
         return 0
     fi
@@ -138,7 +138,7 @@ uninstallModule() {
 
     shell_array=$(readShellInfo "${shell_info}" "[uninstall]" "[end]")
     for item in ${shell_array[@]}; do
-        local shell_path="${install_dir}/${PACKAGE_NAME}/script/${item}"
+        local shell_path="${install_dir}/share/info/${PACKAGE_NAME}/script/${item}"
         if [ ! -f $shell_path ]; then
             log_and_print $LEVEL_WARN "$shell_path not exist."
             continue
@@ -157,7 +157,7 @@ if [ -f "${COMMON_SHELL_PATH}" ]; then
     source "${COMMON_SHELL_PATH}"
 fi
 
-installInfo=$install_dir/$PACKAGE_NAME/$INSTALL_INFO_FILE # install config
+installInfo=$install_dir/share/info/$PACKAGE_NAME/$INSTALL_INFO_FILE # install config
 if [ ! -f "${installInfo}" ];then
     log ${LEVEL_WARN} "${installInfo} does not exist."
 fi

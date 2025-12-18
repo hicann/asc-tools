@@ -32,7 +32,7 @@ version_dir=`cat "$CUR_DIR/../version.info" | grep "version_dir" | cut -d"=" -f2
 if [ -z "$version_dir" ]; then
     INSTALL_DIR=`realpath ${CUR_DIR}/../..`
 else
-    INSTALL_DIR=`realpath ${CUR_DIR}/../../../latest`
+    INSTALL_DIR=`realpath ${CUR_DIR}/../../../cann`
 fi
 
 toolchain_path="${INSTALL_DIR}"

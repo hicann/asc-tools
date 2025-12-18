@@ -14,7 +14,6 @@
  */
 
 #include "op_generator_factory.h"
-#include <cstring>
 #include "ascendc_tool_log.h"
 #include "mmpa/mmpa_api.h"
 
@@ -29,21 +28,7 @@ void GeneratorFactory::AddBuilder(const char* name, GBuilder builder)
 
 opbuild::Status GeneratorFactory::Build(std::vector<std::string>& ops)
 {
-    size_t length;
-    std::string cpuArg;
-    const char* generatorName = "cpu_cfg";
-    length = strlen(generatorName);
-    Generator::GetCPUMode(cpuArg);
     for (auto it : g_generatorBuilder) {
-        if (cpuArg == "--aicpu" || cpuArg == "--hostcpu") {
-            if (strncmp(it.first.c_str(), generatorName, length) != 0) {
-                continue;
-            }
-        } else if (cpuArg == "--aicore") {
-            if (strncmp(it.first.c_str(), generatorName, length) == 0) {
-                continue;
-            }
-        }
         ASCENDLOGI("Generator: %s", it.first.c_str());
         if (it.second(ops) == opbuild::OPBUILD_FAILED) {
             ASCENDLOGE("%s build error !", it.first.c_str());
