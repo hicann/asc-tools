@@ -911,11 +911,14 @@ void AclnnOpGenerator::AclnnOpGenSocSupportList(OpDef& opDef, ofstream& outfile)
             Generator::SetErrorMessage(soc);
             return;
         }
+        if ((it->first).find("kirin") == 0) {
+            continue;
+        }
         socSupportSet.insert(it->second);
-        str.append(it->second);
-        if (iter != std::prev(map.end())) {
+        if (!str.empty()) {
             str.append(",");
         }
+        str.append(it->second);
         socSupportListLen++;
     }
     auto computeUnitCfg = opbuild::Params::GetInstance().Optional("compute_unit");
@@ -932,7 +935,7 @@ void AclnnOpGenerator::AclnnOpGenSocSupportList(OpDef& opDef, ofstream& outfile)
                 Generator::SetErrorMessage(soc);
                 return;
             }
-            if (socSupportSet.find(it->second) == socSupportSet.end()) {
+            if ((socSupportSet.find(it->second) == socSupportSet.end()) && ((it->first).find("kirin") != 0)) {
                 str.append(",");
                 str.append(it->second);
                 socSupportListLen++;
@@ -1150,7 +1153,9 @@ void AclnnOpGenerator::AclnnGenNameSpaceInfo(ofstream& outfile, OpDef& opDef) co
         "    SOC_VERSION_MC61AM21A,\n"
         "    SOC_VERSION_MC62CM12A,\n"
         "    SOC_VERSION_BS9SX2A,\n"
-        "    SOC_VERSION_ASCEND910_96\n"
+        "    SOC_VERSION_ASCEND910_96,\n"
+        "    SOC_VERSION_KIRINX90,\n"
+        "    SOC_VERSION_KIRIN9030\n"
         "};\n"
         "enum NnopbaseAttrDtype {\n"
         "    kNnopbaseBool = 0U,\n"

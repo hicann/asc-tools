@@ -487,6 +487,8 @@ opbuild::Status CfgGenerator::GenerateCode(void)
         "mc61am21a",
         "mc62cm12a",
         "ascend910_96",
+        "kirinx90",
+        "kirin9030",
     };
  
     for (auto op : ops) {
