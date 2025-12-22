@@ -68,18 +68,11 @@ int32_t main(int32_t argc, char* argv[])
 参考[CPU Debug直调样例说明](https://gitcode.com/cann/asc-devkit/blob/master/examples/01_utilities/03_cpudebug/README.md)，配置环境变量后执行以下命令编译生成CPU域的算子可执行文件。
 
 ```bash
-set -e && rm -rf build out && mkdir -p build
-cmake -B build -DCMAKE_INSTALL_PREFIX=./ -DSOC_VERSION=${SOC_VERSION}
-cmake --build build -j
-cmake --install build
-rm -f add
-cp ./build/add ./
-python3 scripts/gen_data.py
-(
-  export LD_LIBRARY_PATH=$(pwd)/out/lib:$(pwd)/out/lib64:${ASCEND_INSTALL_PATH}/lib64:$LD_LIBRARY_PATH
-  ./add | tee $file_path
-)
-python3 scripts/verify_result.py output_z.bin golden.bin
+mkdir -p build && cd build;
+cmake .. -DSOC_VERSION=${SOC_VERSION}; make -j
+python3 ../scripts/gen_data.py
+./add
+python3 ../scripts/verify_result.py output_z.bin golden.bin
 ```
 
 **步骤4**：printf命令打印
