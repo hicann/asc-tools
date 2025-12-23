@@ -1,0 +1,1 @@
+../../../common/util/ascendc_ops_config.py

@@ -1,0 +1,1 @@
+../../../common/util/ascendc_compile_kernel.py
