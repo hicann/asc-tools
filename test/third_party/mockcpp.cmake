@@ -41,11 +41,10 @@ if (NOT EXISTS "${CMAKE_INSTALL_PREFIX}/mockcpp/lib/libmockcpp.a")
     set(PATCH_FILE ${third_party_TEM_DIR}/mockcpp-2.7_py3.patch)
     if (NOT EXISTS ${PATCH_FILE})
         file(DOWNLOAD
-            "https://raw.gitcode.com/cann-src-third-party/mockcpp/blobs/7207d936a909ab59b7748da8c63c2419ae37297f/mockcpp-2.7_py3.patch"
+            "https://gitcode.com/cann-src-third-party/mockcpp/releases/download/v2.7-h3/mockcpp-2.7_py3-h3.patch"
             ${PATCH_FILE}
-            TLS_VERIFY OFF
             TIMEOUT 60
-            EXPECTED_HASH SHA256=f1e9091992bf5c340af7d8c2f800b8d43d198fe4a8130f7bcd3f7cba1b0a324b
+            EXPECTED_HASH SHA256=30f78d8173d50fa9af36efbc683aee82bcd5afc7acdc4dbef7381b92a1b4c800
         )
     endif()
     include(ExternalProject)
