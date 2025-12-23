@@ -1,0 +1,1 @@
+../../../common/util/ascendc_bin_param_build.py

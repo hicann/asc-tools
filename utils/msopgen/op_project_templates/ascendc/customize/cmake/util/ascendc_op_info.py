@@ -1,0 +1,1 @@
+../../../common/util/ascendc_op_info.py

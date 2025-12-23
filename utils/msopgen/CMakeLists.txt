@@ -7,33 +7,14 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # ----------------------------------------------------------------------------------------------------------
-
 cmake_minimum_required(VERSION 3.16.0)
-project(asc-tools)
-
-find_program(CCACHE_PROGRAM ccache)
-if(CCACHE_PROGRAM)
-  set(CMAKE_C_COMPILER_LAUNCHER ${CCACHE_PROGRAM})
-  set(CMAKE_CXX_COMPILER_LAUNCHER ${CCACHE_PROGRAM})
-endif()
+project(msopgen)
 
 if(BUILD_OPEN_PROJECT)
-    find_package(Python3 COMPONENTS Interpreter)
-    set(HI_PYTHON ${Python3_EXECUTABLE})
+    install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/op_project_templates
+        OPTIONAL DESTINATION tools/
+        FILE_PERMISSIONS OWNER_READ OWNER_WRITE GROUP_READ WORLD_READ
+        DIRECTORY_PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE
+    )
 
-    include(cmake/dependencies.cmake)
-    include(cmake/intf_pub_linux.cmake)
-    include(cmake/third_party/pvmodel.cmake)
-    include(cmake/third_party/cpudebug.cmake)
-    include(cmake/package.cmake)
-endif()
-
-add_subdirectory(cpudebug)
-add_subdirectory(npuchk)
-add_subdirectory(utils/msobjdump)
-add_subdirectory(utils/msopgen)
-add_subdirectory(utils/show_kernel_debug_data)
-add_subdirectory(utils/opbuild)
-if(ENABLE_TEST)
-  add_subdirectory(test)
 endif()
