@@ -178,6 +178,7 @@ aclnnStatus aclnnMC2TestGetWorkspaceSize(
     if (NnopbaseSetMatchArgsFlag != NULL) {
         NnopbaseSetMatchArgsFlag(*executor);
     }
+    NnopbaseSetHcclServerTypeList(*executor, hcclServerTypeList, socSupportList, socSupportListLen);
     NNOPBASE_ASSERT_OK_RETVAL(NnopbaseAddInput(*executor, x, 0));
     NNOPBASE_ASSERT_NOTNULL_RETVAL(group1);
     NNOPBASE_ASSERT_OK_RETVAL(NnopbaseAddAttrWithDtype(*executor, static_cast<void*>(group1), strlen(group1) + 1, 0, kNnopbaseString));
@@ -202,7 +203,6 @@ aclnnStatus aclnnMC2TestGetWorkspaceSize(
         NNOPBASE_ASSERT_OK_RETVAL(NnopbaseAddParamName(*executor, 0, "out", false));
     }
     NNOPBASE_ASSERT_OK_RETVAL(NnopbaseAddSupportList(*executor, &supportList, socSupportList, socSupportListLen));
-    NnopbaseSetHcclServerTypeList(*executor, hcclServerTypeList, socSupportList, socSupportListLen);
     NNOPBASE_ASSERT_OK_RETVAL(NnopbaseRunForWorkspace(*executor, workspaceSize));
     NnopbaseReportApiInfo(timeStamp, dfxId);
     return ACLNN_SUCCESS;
