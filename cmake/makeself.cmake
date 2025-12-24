@@ -53,9 +53,6 @@ endif ()
 set(SCENE_OUT_PUT
     ${CPACK_CMAKE_BINARY_DIR}/scene.info
 )
-set(NN_VERSION_OUT_PUT
-    ${CPACK_CMAKE_BINARY_DIR}/asc_tools_version.h
-)
 
 configure_file(
     ${SCENE_OUT_PUT}
@@ -67,11 +64,7 @@ configure_file(
     ${STAGING_DIR}/share/info/asc-tools/script/
     COPYONLY
 )
-configure_file(
-    ${NN_VERSION_OUT_PUT}
-    ${STAGING_DIR}/share/info/asc-tools/
-    COPYONLY
-)
+
 # makeself打包
 file(STRINGS ${CPACK_CMAKE_BINARY_DIR}/makeself.txt script_output)
 string(REPLACE " " ";" makeself_param_string "${script_output}")

@@ -21,10 +21,6 @@
         <path value="$(TARGET_ENV)/conf"/>
     </dir_info>
 
-    <generate_info value="asc_tools_version.h" dst_path="share/info/asc-tools" install_path="$(TARGET_ENV)/include/version" install_mod="440" install_type="devel" generator="version_header">
-       <ASC_TOOLS_VERSION>$(ASCEND_VER)</ASC_TOOLS_VERSION>
-       <ASC_TOOLS_TIMESTAMP>$(TIMESTAMP_NO)</ASC_TOOLS_TIMESTAMP>
-    </generate_info>
     <generate_info value="scene.info" dst_path="share/info/asc-tools" install_path="share/info/asc-tools" install_mod="440">
         <os>$(OS_NAME)</os>
         <os_version>$(OS_VER)</os_version>
@@ -40,7 +36,6 @@
     <version_info install="true" install_path="asc-tools" install_own="$username:$usergroup" install_mod="750"/>
     <file_info value="asc_tools_script" copy_type="source" src_path="" dst_path="share/info/asc-tools" install_path="share/info/asc-tools">
         <file value="script" entity="true"/>
-        <file value="bin" entity="true"/>
         <file value="version.info"/>
     </file_info>
     <file_info value="conf" copy_type="source" src_path="" dst_path="conf" install_path="$(TARGET_ENV)/conf" install_type="devel" install_mod="440">
