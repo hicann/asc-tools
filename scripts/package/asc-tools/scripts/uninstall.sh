@@ -140,7 +140,7 @@ initLog() {
 getVersionInstalled() {
     version2="none"
     if [ -f "$1/version.info" ]; then
-        . "$1/version.info"
+        . "$1/version.info" 2> /dev/null
         version2=${Version}
     fi
     echo $version2
@@ -179,7 +179,7 @@ getInstallPath() {
         exit 1
     fi
     # get multi version dir
-    get_version_dir "pkg_version_dir" "${VERSION_PATH}"
+    pkg_version_dir="$(basename "$(readlink -f "$SHELL_DIR/../../../..")")"
     if [ ! -z "${pkg_version_dir}" ]; then
         _temp_path=$(cd "${_temp_path}/${pkg_version_dir}" >/dev/null 2>&1 || exit; pwd)
         if [ -z "${_temp_path}" ]; then
@@ -238,9 +238,9 @@ uninstallRun() {
     _install_type=$(getInstallParam "Install_Type" "${INSTALL_INFO_FILE}")
     if [ x"${_install_type}" = "x" ]; then
         log_and_print $LEVEL_WARN "The key Install_Type does not exist in $INSTALL_INFO_FILE, and use default $INSTALL_TYPE_ALL."
-        "$_uninstall_shell_path" --uninstall "$install_dir" $INSTALL_TYPE_ALL $quiet
+        "$_uninstall_shell_path" --uninstall "$install_dir" $INSTALL_TYPE_ALL $quiet "$pkg_version_dir"
     else
-        "$_uninstall_shell_path" --uninstall "$install_dir" ${_install_type} $quiet
+        "$_uninstall_shell_path" --uninstall "$install_dir" ${_install_type} $quiet "$pkg_version_dir"
     fi
     if [ $? -eq 0 ]; then
         log_and_print $LEVEL_INFO "AscTools package uninstalled successfully! Uninstallation takes effect immediately."

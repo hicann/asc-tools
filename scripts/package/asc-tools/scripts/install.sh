@@ -212,7 +212,7 @@ initLog() {
 getVersionInstalled() {
     version2="none"
     if [ -f "$1/version.info" ]; then
-        . "$1/version.info"
+        . "$1/version.info" 2> /dev/null
         version2=${Version}
     fi
     echo $version2
@@ -222,7 +222,7 @@ getVersionInstalled() {
 getVersionInRunFile() {
     version1="none"
     if [ -f ./version.info ]; then
-        . ./version.info
+        . ./version.info 2> /dev/null
         version1=${Version}
     fi
     echo $version1
@@ -447,6 +447,12 @@ getInstallPath() {
         input_install_path=$(getDefaultInstallPath)
     fi
     input_install_path=$(getInstallRealPath ${input_install_path})
+    if is_version_dirpath "$input_install_path"; then
+        pkg_version_dir="$(basename "$input_install_path")"
+        input_install_path="$(dirname "$input_install_path")"
+    else
+        pkg_version_dir="cann"
+    fi
 
     if [ ${docker_flag} = y ]; then
         docker_root_path=$(getInstallRealPath ${docker_root_path})
@@ -456,7 +462,6 @@ getInstallPath() {
     install_dir="${docker_root_path}${input_install_path}"
 
     # get multi version dir
-    get_version_dir "pkg_version_dir" "${VERSION_PATH}"
     if [ ! -z "$pkg_version_dir" ]; then
         install_dir="${install_dir}/${pkg_version_dir}"
     fi
@@ -582,7 +587,7 @@ installRun() {
         return 1
     fi
     local _install_shell_path=$(readlink -f "$INSTALL_SHELL")
-    "$_install_shell_path" --install "${install_dir}" $install_mode $quiet
+    "$_install_shell_path" --install "${install_dir}" $install_mode $quiet "$pkg_version_dir"
     if [ $? -eq 0 ]; then
         log_and_print $LEVEL_INFO "InstallPath: $install_dir"
         if [ ${install} = y ]; then
@@ -603,7 +608,7 @@ installRun() {
         if [ ! -f "${UNINSTALL_SHELL}" ]; then
             log_and_print $LEVEL_ERROR "ERR_NO:0X0080;ERR_DES: uninstall shell not exist, fallback failed."
         else
-            "${UNINSTALL_SHELL}" --uninstall "${install_dir}" $install_mode $quiet
+            "${UNINSTALL_SHELL}" --uninstall "${install_dir}" $install_mode $quiet "$pkg_version_dir"
 
             if [ -f "$installInfo" ]; then
                 rm -f "${installInfo}"
@@ -638,7 +643,7 @@ uninstallRun() {
         log_and_print $LEVEL_WARN "The key Install_Type does not exist in $installInfo, and use default $INSTALL_TYPE_ALL."
         install_mode=$INSTALL_TYPE_ALL
     fi
-    "${_uninstall_shell_path}" --uninstall "${install_dir}" "${install_mode}" $quiet
+    "${_uninstall_shell_path}" --uninstall "${install_dir}" "${install_mode}" $quiet "$pkg_version_dir"
     if [ $? -eq 0 ]; then
         log_and_print $LEVEL_INFO "AscTools package uninstalled successfully! Uninstallation takes effect immediately."
 
@@ -680,7 +685,7 @@ uninstallLatest() {
         fi
     fi
 
-    "$_uninstall_shell_path" --uninstall "$_install_path/$upgrade_version_dir" "$install_mode" $quiet
+    "$_uninstall_shell_path" --uninstall "$_install_path/$upgrade_version_dir" "$install_mode" $quiet "$pkg_version_dir"
     if [ $? -eq 0 ]; then
         log_and_print $LEVEL_INFO "AscTools package uninstalled successfully! Uninstallation takes effect immediately."
         if [ -f "$_install_info" ]; then
@@ -698,10 +703,7 @@ uninstallLatest() {
 uninstallOldRun() {
     local _install_path="$docker_root_path/$input_install_path"
     local _install_info="$_install_path/share/info/$PACKAGE_NAME/$INSTALL_INFO_FILE"
-    local _version_path="$_install_path/share/info/$PACKAGE_NAME/version.info"
 
-    get_version_dir "_pkg_version_dir" "$_version_path"
-    [ ! -z "$_pkg_version_dir" ] && return 0
     [ ! -f "$_install_info" ] && return 0
 
     local _uninstall_shell_path=$(readlink -f "$_install_path/share/info/$PACKAGE_NAME/script/run_asc-tools_uninstall.sh")
@@ -715,7 +717,7 @@ uninstallOldRun() {
         _install_type=$INSTALL_TYPE_ALL
     fi
 
-    "$_uninstall_shell_path" --uninstall "$_install_path" "$_install_type" $quiet
+    "$_uninstall_shell_path" --uninstall "$_install_path" "$_install_type" $quiet "$pkg_version_dir"
     if [ $? -eq 0 ]; then
         log_and_print $LEVEL_INFO "AscTools old package uninstalled successfully! Uninstallation takes effect immediately."
 
@@ -800,49 +802,21 @@ startOperation() {
     return 0
 }
 
-preCheck() {
-    if [ "-${pre_check}" = "-n" ]; then
-        return
-    fi
-
-    local check_shell_path="${SHELL_DIR}/../share/info/${PACKAGE_NAME}/bin/prereq_check.bash"
-    if [ ! -f ${check_shell_path} ]; then
-        log ${LEVEL_WARN} "${check_shell_path} not exist."
-        if [ $pre_check_only = y ]; then
-            exitLog 0
-        fi
-        return
-    fi
-    ${check_shell_path} "${feature_type}"
-    local ret=$?
-    if [ ${ret} -ne 0 ]; then
-        log ${LEVEL_WARN} "execute ${check_shell_path} failed."
-    fi
-
-    if [ $pre_check_only = y ]; then
-        exitLog ${ret}
-    fi
-}
-
 checkVersion() {
     if [ ${check_flag} = y ]; then
-        if [ -z "$pkg_version_dir" ]; then
-            preinstall_check --install-path="${install_dir}" --docker-root="${docker_root_path}" \
-                --script-dir="$SHELL_DIR" --package="$PACKAGE_NAME" --logfile="$logFile"
-            if [ $? -eq 0 ]; then
-                log_and_print ${LEVEL_INFO} "version compatibility check successfully!"
-            fi
+        preinstall_check --install-path="${install_dir}" --docker-root="${docker_root_path}" \
+            --script-dir="$SHELL_DIR" --package="$PACKAGE_NAME" --logfile="$logFile"
+        if [ $? -eq 0 ]; then
+            log_and_print ${LEVEL_INFO} "version compatibility check successfully!"
         fi
         exitLog 0
     elif [ ${install} = y ] || [ ${upgrade} = y ]; then
-        if [ -z "$pkg_version_dir" ]; then
-            preinstall_process --install-path="${install_dir}" --docker-root="${docker_root_path}" \
-                --script-dir="$SHELL_DIR" --package="$PACKAGE_NAME" --logfile="$logFile"
-            if [ $? -ne 0 ]; then
-                exitLog 1
-            else
-                log_and_print ${LEVEL_INFO} "version compatibility check successfully!"
-            fi
+        preinstall_process --install-path="${install_dir}" --docker-root="${docker_root_path}" \
+            --script-dir="$SHELL_DIR" --package="$PACKAGE_NAME" --logfile="$logFile"
+        if [ $? -ne 0 ]; then
+            exitLog 1
+        else
+            log_and_print ${LEVEL_INFO} "version compatibility check successfully!"
         fi
     fi
 }
@@ -1055,8 +1029,6 @@ fi
 if [ $(id -u) -eq 0 ]; then
     install_for_all=y
 fi
-
-preCheck
 
 getInstallPath
 checkInstallPath

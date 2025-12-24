@@ -17,7 +17,7 @@ add_executable(op_build op_build.cpp op_generator.cpp op_generator_factory.cpp o
 )
 
 target_compile_options(op_build PRIVATE
-  -Wextra -Wfloat-equal -fno-common
+  -Wextra -Wfloat-equal -fno-common -fpie
   -DCMAKE_C_COMPILER_LAUNCHER=${CCACHE_PROGRAM}
   -DCMAKE_CXX_COMPILER_LAUNCHER=${CCACHE_PROGRAM}
 )
@@ -56,6 +56,7 @@ target_link_libraries(op_build PRIVATE
 )
 
 target_link_options(op_build PRIVATE
+    -pie
     $<$<CONFIG:Release>:-s>
 )
 

@@ -126,6 +126,10 @@ check_option_validity() {
   fi
 
   if [[ "$arg" =~ ^-[^-] ]]; then
+    if [[ $arg =~ ^-j[0-9]+$ ]]; then
+      return 0
+    fi
+
     if [[ ! " ${SUPPORTED_SHORT_OPTS[@]} " =~ " ${arg:1} " ]]; then
       log "[ERROR] Invalid short option: ${arg}"
       return 1
@@ -346,6 +350,11 @@ set_options() {
       check_param_clean
       clean
       exit 0
+      ;;
+    -j*)
+      THREAD_NUM="${1#-j}"
+      check_param_j
+      shift
       ;;
     -j=*)
       THREAD_NUM="${1#*=}"

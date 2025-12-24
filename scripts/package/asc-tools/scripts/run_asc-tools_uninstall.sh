@@ -51,13 +51,14 @@ fi
 ##########################################################################
 log $LEVEL_INFO "step into run_${PACKAGE_NAME}_uninstall.sh ..."
 
-if [ $# -ne 4 ]; then
+if [ $# -ne 5 ]; then
     log_and_print $LEVEL_ERROR "input params number error."
     exit 1
 fi
 install_dir="$2"
 install_type="$3"
 quiet="$4"
+version_dir_="$5"
 
 removeVersionInfo() {
     # remove version.info
@@ -83,7 +84,6 @@ uninstallTool()
     is_multi_version_pkg "is_multi_version_" "${VERSION_INFO}"
     if [ "${is_multi_version_}" = "true" ]; then
         get_version "version_" "${VERSION_INFO}"
-        get_version_dir "version_dir_" "${VERSION_INFO}"
         shell_options_="${shell_options_} --version=${version_} --version-dir=${version_dir_}"
     fi
     if [ "-${setenv}" = "-y" ]; then

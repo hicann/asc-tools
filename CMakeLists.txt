@@ -28,6 +28,20 @@ if(BUILD_OPEN_PROJECT)
     include(cmake/package.cmake)
 endif()
 
+set(ASC_TOOLS_VERSION_FILE ${CMAKE_CURRENT_BINARY_DIR}/_CPack_Packages/makeself_staging/share/info/asc-tools/version.info)
+add_custom_command(
+    OUTPUT ${ASC_TOOLS_VERSION_FILE}
+    COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/scripts/update_version_info/update_version_info.sh
+            ${CMAKE_CURRENT_SOURCE_DIR}/version.info
+            ${ASC_TOOLS_VERSION_FILE}
+    DEPENDS
+        ${CMAKE_CURRENT_SOURCE_DIR}/version.info
+    VERBATIM
+)
+
+add_custom_target(generate_asc_tools_version_file ALL
+    DEPENDS ${ASC_TOOLS_VERSION_FILE}
+)
 add_subdirectory(cpudebug)
 add_subdirectory(npuchk)
 add_subdirectory(utils/msobjdump)
