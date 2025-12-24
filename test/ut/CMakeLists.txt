@@ -221,12 +221,14 @@ set(TIKICPULIB_TEST_HEADER_FILES
 file(GLOB TIKICPULIB_SRC_FILES
     ${ASCENDC_TOOLS_ROOT_DIR}/cpudebug/src/api_check/*.cpp
     ${ASCENDC_TOOLS_ROOT_DIR}/cpudebug/src/regfwk/*.cpp
+    ${ASCENDC_TOOLS_ROOT_DIR}/cpudebug/src/acl_stub/*.cpp
 )
 
 file(GLOB TEST_TIKICPULIB_CASE_FILES
     ${LOCAL_DIR}/testcase/regfwk/test_stub_base.cpp
     ${LOCAL_DIR}/testcase/regfwk/test_stub_reg.cpp
     ${LOCAL_DIR}/testcase/regfwk/test_kernel_print_lock.cpp
+    ${LOCAL_DIR}/testcase/acl_stub/test_acl_stub.cpp
 )
 
 # tikicpulib_utest
