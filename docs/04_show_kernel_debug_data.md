@@ -11,17 +11,17 @@ show_kernel_debug_data工具提供了离线解析能力，帮助用户获取并�
 
 本工具跟随CANN软件包发布，请参考[环境搭建](00_quick_start.md)进行使用工具前必要的环境准备。
 
-对于本工具的演示样例，还需要额外安装opp_legacy包。根据实际环境，下载对应`cann-${soc_version}-ops-legacy_${cann_version}_linux-${arch}.run`包，下载链接为:
-[910B x86_64 opp_legacy包](https://ascend-cann.obs.cn-north-4.myhuaweicloud.com/CANN/2025112801_newest/cann-910b-ops-legacy_8.5.0.0.0_linux-x86_64.run);
-[910B aarch64 opp_legacy包](https://ascend-cann.obs.cn-north-4.myhuaweicloud.com/CANN/2025112801_newest/cann-910b-ops-legacy_8.5.0.0.0_linux-aarch64.run);
-[910C x86_64 opp_legacy包](https://ascend-cann.obs.cn-north-4.myhuaweicloud.com/CANN/2025112801_newest/cann-910_93-ops-legacy_8.5.0.0.0_linux-x86_64.run);
-[910C aarch64 opp_legacy包](https://ascend-cann.obs.cn-north-4.myhuaweicloud.com/CANN/2025112801_newest/cann-910_93-ops-legacy_8.5.0.0.0_linux-aarch64.run)。
+对于本工具的演示样例，还需要额外安装opp_legacy包。根据实际环境，下载对应`cann-${soc_version}-ops-legacy_8.5.0-beta.1_linux-${arch}.run`包，下载链接为:
+[910B x86_64 opp_legacy包](https://ascend.devcloud.huaweicloud.com/cann/run/software/8.5.0-beta.1/x86_64/ops/cann-910b-ops-legacy_8.5.0-beta.1_linux-x86_64.run);
+[910B aarch64 opp_legacy包](https://ascend.devcloud.huaweicloud.com/cann/run/software/8.5.0-beta.1/aarch64/ops/cann-910b-ops-legacy_8.5.0-beta.1_linux-aarch64.run);
+[910C x86_64 opp_legacy包](https://ascend.devcloud.huaweicloud.com/cann/run/software/8.5.0-beta.1/x86_64/ops/cann-910_93-ops-legacy_8.5.0-beta.1_linux-x86_64.run);
+[910C aarch64 opp_legacy包](https://ascend.devcloud.huaweicloud.com/cann/run/software/8.5.0-beta.1/aarch64/ops/cann-910_93-ops-legacy_8.5.0-beta.1_linux-aarch64.run)。
 
     ```bash
     # 确保安装包具有可执行权限
-    chmod +x cann-${soc_version}-ops-legacy_${cann_version}_linux-${arch}.run
+    chmod +x cann-${soc_version}-ops-legacy_8.5.0-beta.1_linux-${arch}.run
     # 安装命令
-    ./cann-${soc_version}-ops-legacy_${cann_version}_linux-${arch}.run --full --install-path=${install_path}
+    ./cann-${soc_version}-ops-legacy_8.5.0-beta.1_linux-${arch}.run --full --install-path=${install_path}
     ```
     - \$\{soc\_version\}：表示AI处理器型号（910B对于910b，910C对应910_93）。
     - \$\{cann\_version\}：表示CANN包版本号。
