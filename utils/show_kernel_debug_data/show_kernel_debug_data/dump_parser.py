@@ -622,7 +622,7 @@ class DumpBinFile:
         temp_dir = os.path.join(dump_dir, "predump")
         dump_file_name = os.path.basename(dump_bin)
         install_path = get_install_path()
-        search_re = f"{install_path}/latest/**/operator_cmp/compare/msaccucmp.py"
+        search_re = f"{install_path}/**/operator_cmp/compare/msaccucmp.py"
         search_result = glob.glob(search_re, recursive=True)
         if not search_result or not os.path.exists(search_result[0]):
             return dump_bin
@@ -726,16 +726,10 @@ class DumpBinFile:
 
 
 def get_install_path() -> str:
-    toolkit_home = os.environ.get('TOOLCHAIN_HOME')
-    if not toolkit_home:
+    ascend_home = os.environ.get('ASCEND_HOME_PATH')
+    if not ascend_home:
         raise RuntimeError(f'get install path env failed, Please set environment variables')
-    substring = "/latest"
-    index = toolkit_home.find(substring)
-    if index != -1:
-        install_path = toolkit_home[:index]
-        return install_path
-    else:
-        raise RuntimeError(f'get install path env failed, Please set environment variables')
+    return ascend_home
 
 
 def parse_dump_bin(bin_file_path, output_path):

@@ -79,7 +79,7 @@ class TestAscendump(unittest.TestCase):
     @patch('show_kernel_debug_data.dump_parser.DumpBinFile.show_print')
     @patch('show_kernel_debug_data.dump_parser.get_install_path')
     def test_parse_dump_shape(self, get_install_path_mock, show_mock):
-        get_install_path_mock.return_value  = ""
+        get_install_path_mock.return_value  = "/cann"
         from glob import glob
         data_path = self._make_out_dir("test_parse_dump_shape")
         test_dump_file = os.path.join(data_path, "test_dump_file.bin")
@@ -97,7 +97,7 @@ class TestAscendump(unittest.TestCase):
     @patch('show_kernel_debug_data.dump_parser.DumpBinFile.show_print')
     @patch('show_kernel_debug_data.dump_parser.get_install_path')
     def test_parse_time_stamp(self, get_install_path_mock, show_mock):
-        get_install_path_mock.return_value = ""
+        get_install_path_mock.return_value = "/cann"
         from glob import glob
         data_path = self._make_out_dir("test_parse_time_stamp")
         test_dump_file = os.path.join(data_path, "test_dump_file.bin")
@@ -120,7 +120,7 @@ class TestAscendump(unittest.TestCase):
     @patch('glob.glob')
     @patch("subprocess.run")
     def test_pre_process(self, run_mock, glob_mock, get_install_path_mock, show_mock):
-        get_install_path_mock.return_value = ""
+        get_install_path_mock.return_value = "/cann"
         from glob import glob
         data_path = self._make_out_dir("test_parse_time_stamp")
         test_dump_file = os.path.join(data_path, "test_dump_file.bin")
