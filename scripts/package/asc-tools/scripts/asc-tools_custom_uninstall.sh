@@ -164,6 +164,9 @@ uninstallAllPython() {
     removePythonLocalBin ${install_path}/python/site-packages ${module_arr_[@]}
     [ $? -ne 0 ] && return 1
 
+    whlUninstallPackage msopst ${install_path}/python/site-packages
+    [ $? -ne 0 ] && return 1
+
     # remove op generator
     whlUninstallPackage msopgen ${install_path}/python/site-packages
     [ $? -ne 0 ] && return 1
