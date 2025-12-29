@@ -131,6 +131,11 @@ installOpPython() {
         return 1
     fi
 
+    installWhlPackage "${install_path}/tools/msopgen-1.0.0-py3-none-any.whl"
+    if [ $? -ne 0 ]; then
+        return 1
+    fi
+
     return 0
 }
 
@@ -152,6 +157,11 @@ installAllPython() {
     fi
 
     installWhlPackage "${install_path}/tools/show_kernel_debug_data-0.1.0-py3-none-any.whl"
+    if [ $? -ne 0 ]; then
+        return 1
+    fi
+
+    installWhlPackage "${install_path}/tools/msopgen-1.0.0-py3-none-any.whl"
     if [ $? -ne 0 ]; then
         return 1
     fi
@@ -232,6 +242,9 @@ installOpPythonLocal() {
     installPyWhlLocal "show_kernel_debug_data-0.1.0-py3-none-any.whl"
     [ $? -ne 0 ] && return 1
 
+    installPyWhlLocal "msopgen-1.0.0-py3-none-any.whl"
+    [ $? -ne 0 ] && return 1
+
     log $LEVEL_INFO "Install opeator python package succeed."
     return 0
 }
@@ -241,6 +254,9 @@ installAllPythonLocal() {
     installPyWhlLocal "msobjdump-0.1.0-py3-none-any.whl"
     [ $? -ne 0 ] && return 1
     installPyWhlLocal "show_kernel_debug_data-0.1.0-py3-none-any.whl"
+    [ $? -ne 0 ] && return 1
+
+    installPyWhlLocal "msopgen-1.0.0-py3-none-any.whl"
     [ $? -ne 0 ] && return 1
 
     log $LEVEL_INFO "Install all module python package succeed."
@@ -322,5 +338,7 @@ init
 
 installPython
 [ $? -ne 0 ] && exit 1
+
+createSoftLink "${install_path}/python/site-packages/bin" "${install_path}/${PLT_ARCH}-linux/bin/" "msopgen"
 
 exit 0

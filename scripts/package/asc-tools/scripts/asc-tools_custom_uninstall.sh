@@ -141,7 +141,7 @@ uninstallOpPython() {
     [ $? -ne 0 ] && return 1
 
     # remove op generator
-    whlUninstallPackage op_gen ${install_path}/python/site-packages
+    whlUninstallPackage msopgen ${install_path}/python/site-packages
     [ $? -ne 0 ] && return 1
 
     module_arr_=(msopgen)
@@ -165,7 +165,7 @@ uninstallAllPython() {
     [ $? -ne 0 ] && return 1
 
     # remove op generator
-    whlUninstallPackage op_gen ${install_path}/python/site-packages
+    whlUninstallPackage msopgen ${install_path}/python/site-packages
     [ $? -ne 0 ] && return 1
 
     module_arr_=(msopgen)
@@ -270,5 +270,7 @@ init
 
 uninstallPython
 [ $? -ne 0 ] && exit 1
+
+removeSoftLink "${install_path}/${PLT_ARCH}-linux/bin/" "msopgen"
 
 exit 0
