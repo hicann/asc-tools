@@ -22,4 +22,7 @@
     <file_info value="op_project_templates" copy_type="delivery" src_path="lib/host/" dst_path="tools/" install_path="tools/" install_mod="750">
         <file value="op_project_templates"/>
     </file_info>
+    <file_info value="msopst_whl" copy_type="delivery" src_path="lib/host" dst_path="tools/" install_path="tools/" install_mod="440" feature="stress_detect">
+        <file value="msopst-1.0.0-py3-none-any.whl" file_type="whl"/>
+    </file_info>
 </block>

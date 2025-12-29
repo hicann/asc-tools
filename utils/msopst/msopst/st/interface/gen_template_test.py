@@ -1,0 +1,118 @@
+#!/usr/bin/env python
+# coding=utf-8
+"""
+Function:
+GenTemplateTest class.
+This class mainly implements template op src python code generation.
+# -------------------------------------------------------------------------
+# This file is part of the MindStudio project.
+# Copyright (c) 2025 Huawei Technologies Co.,Ltd.
+#
+# MindStudio is licensed under Mulan PSL v2.
+# You can use this software according to the terms and conditions of the Mulan PSL v2.
+# You may obtain a copy of Mulan PSL v2 at:
+#
+#          http://license.coscl.org.cn/MulanPSL2
+#
+# THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
+# EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
+# MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+# See the Mulan PSL v2 for more details.
+# -------------------------------------------------------------------------
+
+Change History: 2020-07-11 file Created
+"""
+
+import os
+from msopst.st.interface import utils
+from msopst.st.interface.const_manager import ConstManager
+
+
+class GenTemplateTest:
+    """
+    Class for generating template python test code.
+    """
+
+    def __init__(self, testcase_list, path_and_device_id, machine_type,
+                 report):
+        self.testcase_list = testcase_list
+        self.machine_type = machine_type
+        self.output_path = utils.check_output_path(
+            path_and_device_id[0], testcase_list, self.machine_type)
+        self.report = report
+        self.device_id = path_and_device_id[1]
+
+    @staticmethod
+    def append_content_to_file(content, file_path):
+        try:
+            with os.fdopen(os.open(file_path, ConstManager.WRITE_FLAGS,
+                                   ConstManager.WRITE_MODES),
+                           'a+') as file_object:
+                file_object.write(content)
+        except OSError as err:
+            utils.print_error_log("Unable to write file(%s): %s." % (file_path, str(err)))
+            raise utils.OpTestGenException(
+                ConstManager.OP_TEST_GEN_WRITE_FILE_ERROR) from err
+        finally:
+            pass
+        utils.print_info_log(
+            "Content appended to %s successfully." % file_path)
+
+    def generate(self):
+        """
+        Function Description:
+        generate template op python files containing operator information of testcases
+        :return:
+        """
+        self._mkdir_output_dir()
+        self._rewrite_files_for_output_dir()
+        utils.print_info_log("Operator test code files for specified"
+                             " test cases generated successfully.")
+
+    def get_device_id(self):
+        """
+        Function Description: get device id
+        :return:
+        """
+        return self.device_id
+
+    def get_path(self):
+        """
+        get template path
+        """
+        return self.output_path + ConstManager.TESTCASE_PY_RELATIVE_PATH.format(
+            op_name=self._get_op_name()[1])
+
+    def _mkdir_output_dir(self):
+        run_dir = os.path.join(self.output_path, 'run', 'out', 'test_data')
+        utils.make_dirs(run_dir)
+        src_dir = os.path.join(self.output_path, 'src')
+        utils.make_dirs(src_dir)
+
+    def _mkdir_input_data_path(self, testcase_struct):
+        input_paths = []
+        testcase_name = testcase_struct['case_name']
+        input_count = 0
+        for _ in testcase_struct['input_desc']:
+            input_data_name = '{}_input_{}'.format(
+                testcase_struct['case_name'], str(input_count))
+            input_data_path = os.path.join("test_data/data/",
+                                           input_data_name)
+            input_paths.append(input_data_path)
+            input_count += 1
+
+        # deal with report
+        path_name = os.path.split(self.output_path)[1]
+        input_data_abs_paths_tuple = (os.path.join(path_name, 'run', 'out', x + ".bin") for x in input_paths)
+        input_data_abs_paths = list(input_data_abs_paths_tuple)
+        case_report = self.report.get_case_report(testcase_name)
+        case_report.trace_detail.st_case_info.planned_output_data_paths = input_data_abs_paths
+        return input_data_abs_paths
+
+    def _get_op_name(self):
+        op_name = self.testcase_list[0].get('op')
+        op_name_lower = utils.fix_name_lower_with_under(op_name)
+        return op_name, op_name_lower
+
+    def _rewrite_files_for_output_dir(self):
+        pass
