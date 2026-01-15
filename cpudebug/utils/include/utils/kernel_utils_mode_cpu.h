@@ -264,7 +264,7 @@ public:
         { TPosition::C1, Hardware::L1 },      { TPosition::C2, Hardware::BIAS },  { TPosition::CO1, Hardware::L0C },
         { TPosition::CO2, Hardware::GM },
     };
-#elif defined(__NPU_ARCH__) && ((__NPU_ARCH__ == 3113))
+#elif defined(__NPU_ARCH__) && ((__NPU_ARCH__ == 3113) || (__NPU_ARCH__ == 3003))
     const std::map<TPosition, Hardware> positionHardMap = {
         { TPosition::GM, Hardware::GM },      { TPosition::A1, Hardware::L1 },    { TPosition::B1, Hardware::L1 },
         { TPosition::TSCM, Hardware::L1 },    { TPosition::VECIN, Hardware::UB }, { TPosition::VECOUT, Hardware::UB },
