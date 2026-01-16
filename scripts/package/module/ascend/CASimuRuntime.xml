@@ -23,23 +23,15 @@
         <path value="$(TARGET_ENV)/simulator/Ascend910ProB" chip="Ascend910"/>
         <path value="$(TARGET_ENV)/simulator/Ascend910ProB/lib" chip="Ascend910"/>
         <path value="$(TARGET_ENV)/simulator/Ascend910ProB/conf" chip="Ascend910"/>
-        <path value="$(TARGET_ENV)/simulator/Ascend610" chip="Ascend610"/>
-        <path value="$(TARGET_ENV)/simulator/Ascend610/lib" chip="Ascend610"/>
-        <path value="$(TARGET_ENV)/simulator/Ascend610/conf" chip="Ascend610"/>
-        <path value="$(TARGET_ENV)/simulator/BS9SX1AA" chip="BS9SX1AA"/>
-        <path value="$(TARGET_ENV)/simulator/BS9SX1AA/lib" chip="BS9SX1AA"/>
-        <path value="$(TARGET_ENV)/simulator/BS9SX1AA/conf" chip="BS9SX1AA"/>
-        <path value="$(TARGET_ENV)/simulator/Ascend610Lite" chip="Ascend610Lite" install_softlink="$(TARGET_ENV)/simulator/BS9SX2AA;$(TARGET_ENV)/simulator/BS9SX2AB;$(TARGET_ENV)/simulator/MC61AM21AA;$(TARGET_ENV)/simulator/MC61AM21AB"/><path value="$(TARGET_ENV)/simulator/Ascend610Lite" chip="Ascend610Lite"/>
-        <path value="$(TARGET_ENV)/simulator/Ascend610Lite/lib" chip="Ascend610Lite"/>
         <path value="$(TARGET_ENV)/simulator/Ascend310P1" chip="Ascend310P" install_softlink="$(TARGET_ENV)/simulator/Ascend310P2;$(TARGET_ENV)/simulator/Ascend310P3;$(TARGET_ENV)/simulator/Ascend310P4;$(TARGET_ENV)/simulator/Ascend310P5;$(TARGET_ENV)/simulator/Ascend310P7"/>
         <path value="$(TARGET_ENV)/simulator/Ascend310P1/lib" chip="Ascend310P"/>
         <path value="$(TARGET_ENV)/simulator/Ascend310P1/conf" chip="Ascend310P"/>
         <path value="$(TARGET_ENV)/simulator/Ascend920A" chip="Ascend920A"/>
         <path value="$(TARGET_ENV)/simulator/Ascend920A/lib" chip="Ascend920A"/>
         <path value="$(TARGET_ENV)/simulator/Ascend920A/conf" chip="Ascend920A"/>
-        <path value="$(TARGET_ENV)/simulator/Ascend310B1" chip="Ascend310B;AS31XM1" install_softlink="$(TARGET_ENV)/simulator/AS31XM1;$(TARGET_ENV)/simulator/Ascend310B2;$(TARGET_ENV)/simulator/Ascend310B3;$(TARGET_ENV)/simulator/Ascend310B4"/>
-        <path value="$(TARGET_ENV)/simulator/Ascend310B1/lib" chip="Ascend310B;AS31XM1"/>
-        <path value="$(TARGET_ENV)/simulator/Ascend310B1/conf" chip="Ascend310B;AS31XM1"/>
+        <path value="$(TARGET_ENV)/simulator/Ascend310B1" chip="Ascend310B" install_softlink="$(TARGET_ENV)/simulator/Ascend310B2;$(TARGET_ENV)/simulator/Ascend310B3;$(TARGET_ENV)/simulator/Ascend310B4"/>
+        <path value="$(TARGET_ENV)/simulator/Ascend310B1/lib" chip="Ascend310B"/>
+        <path value="$(TARGET_ENV)/simulator/Ascend310B1/conf" chip="Ascend310B"/>
         <path value="$(TARGET_ENV)/simulator/Ascend910B1" chip="Ascend910B;Ascend910_93" install_softlink="$(TARGET_ENV)/simulator/Ascend910B2;$(TARGET_ENV)/simulator/Ascend910B2C;$(TARGET_ENV)/simulator/Ascend910B3;$(TARGET_ENV)/simulator/Ascend910B4;$(TARGET_ENV)/simulator/Ascend910_9391;$(TARGET_ENV)/simulator/Ascend910_9392;$(TARGET_ENV)/simulator/Ascend910_9381;$(TARGET_ENV)/simulator/Ascend910_9382;$(TARGET_ENV)/simulator/Ascend910_9372;$(TARGET_ENV)/simulator/Ascend910_9362"/>
         <path value="$(TARGET_ENV)/simulator/Ascend910B1/lib" chip="Ascend910B;Ascend910_93"/>
         <path value="$(TARGET_ENV)/simulator/Ascend910B1/conf" chip="Ascend910B;Ascend910_93"/>
@@ -67,62 +59,6 @@
         <file value="config_pv_aicore_model.toml"/>
         <file value="config.toml"/>
         <file value="release_config.json" dst_path="tools/simulator/lib64/Ascend310/conf" install_path="$(TARGET_ENV)/simulator/Ascend310/conf"/>
-    </file_info>
-    <file_info value="ascend610_simulator" chip="Ascend610" copy_type="delivery" src_path="lib/host" install_mod="440" dst_path="tools/simulator/lib64/Ascend610/lib" install_path="$(TARGET_ENV)/simulator/Ascend610/lib">
-        <file value="libcamodel.so" file_type="shared"/>
-        <file value="lib_pvmodel.so" file_type="shared"/>
-        <file value="libtsch.so" file_type="shared"/>
-        <file value="libtsch_camodel.so" file_type="shared"/>
-        <file value="libnpu_drv_pvmodel.so" file_type="shared"/>
-        <file value="libnpu_drv_camodel.so" file_type="shared"/>
-        <file value="libruntime_cmodel.so" file_type="shared"/>
-        <file value="libruntime_camodel.so" file_type="shared"/>
-        <file value="libtik_profiling.so" file_type="shared"/>
-        <file value="libtik_run_ops.so" file_type="shared"/>
-        <file value="libtik_run_pvmodel.so" file_type="shared"/>
-        <file value="run_kernel"/>
-        <file value="davinci_mini.spec"/>
-        <file value="davinci_vec_core.spec"/>
-        <file value="common.spec"/>
-        <file value="config_pv_aicore_model.toml"/>
-        <file value="config_pv_aicore_model_vec.toml"/>
-        <file value="config_aicore_trace.toml"/>
-        <file value="config.toml"/>
-        <file value="release_config.json" dst_path="tools/simulator/lib64/Ascend610/conf" install_path="$(TARGET_ENV)/simulator/Ascend610/conf"/>
-    </file_info>
-    <file_info value="ascend610Lite_simulator" chip="Ascend610Lite" copy_type="delivery" src_path="lib/host" install_mod="440" dst_path="tools/simulator/lib64/Ascend610Lite/lib" install_path="$(TARGET_ENV)/simulator/Ascend610Lite/lib">
-        <file value="libpem_davinci.so" file_type="shared"/>
-        <file value="Ascend610Lite_config.toml"/>
-        <file value="Ascend610lite_hwts.toml"/>
-        <file value="Ascend610lite_model.toml"/>
-        <file value="Ascend610lite_sim.toml"/>
-        <file value="libtsch_camodel.so" file_type="shared"/>
-        <file value="libmodel_top.so" file_type="shared"/>
-        <file value="libstars.so" file_type="shared"/>
-        <file value="libruntime_cmodel.so" file_type="shared"/>
-        <file value="libruntime_camodel.so" file_type="shared"/>
-        <file value="libnpu_drv_camodel.so" file_type="shared"/>
-        <file value="libtik_profiling.so" file_type="shared"/>
-    </file_info>
-    <file_info value="BS9SX1A_simulator" chip="BS9SX1AA" copy_type="delivery" src_path="lib/host" install_mod="440" dst_path="tools/simulator/lib64/BS9SX1AA/lib" install_path="$(TARGET_ENV)/simulator/BS9SX1AA/lib">
-        <file value="libcamodel.so" file_type="shared"/>
-        <file value="lib_pvmodel.so" file_type="shared"/>
-        <file value="libtsch.so" file_type="shared"/>
-        <file value="libtsch_camodel.so" file_type="shared"/>
-        <file value="libnpu_drv_pvmodel.so" file_type="shared"/>
-        <file value="libnpu_drv_camodel.so" file_type="shared"/>
-        <file value="libruntime_cmodel.so" file_type="shared"/>
-        <file value="libruntime_camodel.so" file_type="shared"/>
-        <file value="libtik_profiling.so" file_type="shared"/>
-        <file value="run_kernel"/>
-        <file value="davinci_mini.spec"/>
-        <file value="davinci_vec_core.spec"/>
-        <file value="common.spec"/>
-        <file value="config_pv_aicore_model.toml"/>
-        <file value="config_pv_aicore_model_vec.toml"/>
-        <file value="config_aicore_trace.toml"/>
-        <file value="config.toml"/>
-        <file value="release_config.json" dst_path="tools/simulator/lib64/BS9SX1AA/conf" install_path="$(TARGET_ENV)/simulator/BS9SX1AA/conf"/>
     </file_info>
     <file_info value="ascend310p_simulator" chip="Ascend310P" copy_type="delivery" src_path="lib/host" install_mod="440" dst_path="tools/simulator/lib64/Ascend310P1/lib" install_path="$(TARGET_ENV)/simulator/Ascend310P1/lib">
         <file value="libcamodel.so" file_type="shared"/>
@@ -248,7 +184,7 @@
     <file_info value="ascend920_simulator_a" chip="Ascend920A" copy_type="delivery" src_path="lib/host" install_mod="440" dst_path="tools/simulator/lib64/Ascend920A/lib" install_path="$(TARGET_ENV)/simulator/Ascend920A/lib">
         <file value="libruntime_camodel.so" file_type="shared"/>
     </file_info>
-    <file_info value="ascend310B_simulator" chip="Ascend310B;AS31XM1" copy_type="delivery" src_path="lib/host" install_mod="440" dst_path="tools/simulator/lib64/Ascend310B1/lib" install_path="$(TARGET_ENV)/simulator/Ascend310B1/lib">
+    <file_info value="ascend310B_simulator" chip="Ascend310B" copy_type="delivery" src_path="lib/host" install_mod="440" dst_path="tools/simulator/lib64/Ascend310B1/lib" install_path="$(TARGET_ENV)/simulator/Ascend310B1/lib">
         <file value="libruntime_camodel.so" file_type="shared"/>
         <file value="libtik_profiling.so" file_type="shared" release_type="debug" optional="true"/>
         <file value="libtik_run_pvmodel.so" file_type="shared" release_type="debug" optional="true"/>

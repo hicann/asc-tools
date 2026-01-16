@@ -30,7 +30,7 @@ if(BUILD_OPEN_PROJECT)
 
 endif()
 
-set(PRODUCT_TYPE_LIST ascend610 ascend910 ascend310p ascend910B1 ascend310B1 ascend610Lite bs9sx2aa mc61am21aa)
+set(PRODUCT_TYPE_LIST ascend910 ascend310p ascend910B1 ascend310B1)
 set(CPULIB_SRC_DIR ${CMAKE_CURRENT_SOURCE_DIR})
 
 include(cmake/fun.cmake)
@@ -69,13 +69,9 @@ foreach(product_type ${PRODUCT_TYPE_LIST})
     ASCENDC_CPU_DEBUG=1
     ASCENDC_DEBUG=1
     $<$<STREQUAL:${product_type},ascend910>:__CCE_AICORE__=100;__DAV_C100__;__NPU_ARCH__=1001>
-    $<$<STREQUAL:${product_type},ascend610>:__CCE_AICORE__=200;__DAV_M200__;__NPU_ARCH__=2002>
     $<$<STREQUAL:${product_type},ascend310p>:__CCE_AICORE__=200;__DAV_M200__;__NPU_ARCH__=2002>
     $<$<STREQUAL:${product_type},ascend910B1>:__CCE_AICORE__=220;__DAV_C220__;__NPU_ARCH__=2201>
     $<$<STREQUAL:${product_type},ascend310B1>:__CCE_AICORE__=300;__DAV_M300__;__NPU_ARCH__=3002>
-    $<$<STREQUAL:${product_type},ascend610Lite>:__CCE_AICORE__=310;__DAV_M310__;__NPU_ARCH__=3102>
-    $<$<STREQUAL:${product_type},bs9sx2aa>:__CCE_AICORE__=310;__DAV_M310__;__NPU_ARCH__=3102>
-    $<$<STREQUAL:${product_type},mc61am21aa>:__CCE_AICORE__=310;__DAV_M310__;__NPU_ARCH__=3102>
   )
   target_compile_options(cpudebug_${product_type} PRIVATE
     -DCMAKE_C_COMPILER_LAUNCHER=${CCACHE_PROGRAM}
@@ -95,9 +91,6 @@ foreach(product_type ${PRODUCT_TYPE_LIST})
   target_compile_definitions(cpudebug_${product_type} PRIVATE
     $<$<STREQUAL:${product_type},ascend910B1>:NO_COSIM>
     $<$<STREQUAL:${product_type},ascend310B1>:NO_COSIM>
-    $<$<STREQUAL:${product_type},ascend610Lite>:NO_COSIM>
-    $<$<STREQUAL:${product_type},bs9sx2aa>:NO_COSIM>
-    $<$<STREQUAL:${product_type},mc61am21aa>:NO_COSIM>
   )
   target_link_libraries(cpudebug_${product_type} PRIVATE
     $<BUILD_INTERFACE:intf_pub>

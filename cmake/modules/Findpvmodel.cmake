@@ -16,7 +16,7 @@ endif()
 set(_cmake_targets_defined "")
 set(_cmake_targets_not_defined "")
 set(_cmake_expected_targets "")
-foreach(_cmake_expected_target IN ITEMS pvmodel_ascend910 pvmodel_ascend310p pvmodel_ascend610 pem_davinci_ascend910B1 pem_davinci_ascend310B pem_davinci_ascend610Lite)
+foreach(_cmake_expected_target IN ITEMS pvmodel_ascend910 pvmodel_ascend310p pem_davinci_ascend910B1 pem_davinci_ascend310B)
     list(APPEND _cmake_expected_targets "${_cmake_expected_target}")
     if(TARGET "${_cmake_expected_target}")
         list(APPEND _cmake_targets_defined "${_cmake_expected_target}")
@@ -56,12 +56,6 @@ find_library(ascend310p_LIBRARY
     NO_CMAKE_SYSTEM_PATH
     NO_CMAKE_FIND_ROOT_PATH)
 
-find_library(ascend610_LIBRARY
-    NAMES lib_pvmodel.so
-    PATHS ${PVMODEL_PATH}/lib64/Ascend610/lib
-    NO_CMAKE_SYSTEM_PATH
-    NO_CMAKE_FIND_ROOT_PATH)
-
 find_library(ascend910B1_LIBRARY
     NAMES libpem_davinci.so
     PATHS ${PVMODEL_PATH}/lib64/Ascend910B1/lib
@@ -71,12 +65,6 @@ find_library(ascend910B1_LIBRARY
 find_library(ascend310B1_LIBRARY
     NAMES libpem_davinci.so
     PATHS ${PVMODEL_PATH}/lib64/Ascend310B1/lib
-    NO_CMAKE_SYSTEM_PATH
-    NO_CMAKE_FIND_ROOT_PATH)
-
-find_library(ascend610Lite_LIBRARY
-    NAMES libpem_davinci.so
-    PATHS ${PVMODEL_PATH}/lib64/Ascend610Lite/lib
     NO_CMAKE_SYSTEM_PATH
     NO_CMAKE_FIND_ROOT_PATH)
 
@@ -92,10 +80,8 @@ if(pvmodel_ascend910_FOUND)
     message(STATUS "Variables in pvmodel module:")
     cmake_print_variables(ascend910_LIBRARY)
     cmake_print_variables(ascend310p_LIBRARY)
-    cmake_print_variables(ascend610_LIBRARY)
     cmake_print_variables(ascend910B1_LIBRARY)
     cmake_print_variables(ascend310B1_LIBRARY)
-    cmake_print_variables(ascend610Lite_LIBRARY)
 
     add_library(pvmodel_ascend910 SHARED IMPORTED)
     set_target_properties(pvmodel_ascend910 PROPERTIES
@@ -107,11 +93,6 @@ if(pvmodel_ascend910_FOUND)
         IMPORTED_LOCATION "${ascend310p_LIBRARY}"
     )
 
-    add_library(pvmodel_ascend610 SHARED IMPORTED)
-    set_target_properties(pvmodel_ascend610 PROPERTIES
-        IMPORTED_LOCATION "${ascend610_LIBRARY}"
-    )
-
     add_library(pem_davinci_ascend910B1 SHARED IMPORTED)
     set_target_properties(pem_davinci_ascend910B1 PROPERTIES
         IMPORTED_LOCATION "${ascend910B1_LIBRARY}"
@@ -121,17 +102,10 @@ if(pvmodel_ascend910_FOUND)
     set_target_properties(pem_davinci_ascend310B PROPERTIES
         IMPORTED_LOCATION "${ascend310B1_LIBRARY}"
     )
-
-    add_library(pem_davinci_ascend610Lite SHARED IMPORTED)
-    set_target_properties(pem_davinci_ascend610Lite PROPERTIES
-        IMPORTED_LOCATION "${ascend610Lite_LIBRARY}"
-    )
 endif()
 
 # Cleanup temporary variables.
 set(ascend910_LIBRARY)
 set(ascend310p_LIBRARY)
-set(ascend610_LIBRARY)
 set(ascend910B1_LIBRARY)
 set(ascend310B1_LIBRARY)
-set(ascend610Lite_LIBRARY)
