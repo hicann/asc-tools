@@ -157,8 +157,11 @@ configure_package_config_file(cmake/tikicpulib-config.cmake.in
 
 install(FILES
   ${CMAKE_CURRENT_BINARY_DIR}/tikicpulib-config.cmake
-  ${CMAKE_SOURCE_DIR}/libraries/lib/cmake/targets-tikicpulib.cmake
-  ${CMAKE_SOURCE_DIR}/libraries/lib/cmake/targets-tikicpulib-debug.cmake
+  DESTINATION ${_install_path}/cmake OPTIONAL
+)
+
+install(DIRECTORY
+  ${CMAKE_SOURCE_DIR}/libraries/lib/cmake/
   DESTINATION ${_install_path}/cmake OPTIONAL
 )
 

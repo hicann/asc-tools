@@ -191,15 +191,17 @@ foreach(product_type ${TIKCPP_PRODUCT_TYPE_LIST})
     )
 endforeach()
 
-set(src_file ${ASCENDC_TOOLS_ROOT_DIR}/libraries/lib/include/stub_fun.h)
+set(src_file ${ASCENDC_TOOLS_ROOT_DIR}/libraries/lib/include/stub_fun_ut.h)
+set(dst_file ${CMAKE_CURRENT_BINARY_DIR}/stub/stub_fun.h)
 add_custom_command(
-    OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/stub/stub_fun.h
-    COMMAND ${LOCAL_DIR}/../cmake/tools/prepare.sh ${src_file} ${CMAKE_CURRENT_BINARY_DIR}/stub
+    OUTPUT ${dst_file}
+    COMMAND mkdir -p ${CMAKE_CURRENT_BINARY_DIR}/stub
+    COMMAND cp ${src_file} ${dst_file}
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
 )
 
 add_custom_target(prepare_target_ut ALL
-    DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/stub/stub_fun.h
+    DEPENDS ${dst_file}
 )
 
 ####################################################################

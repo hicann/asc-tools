@@ -13,7 +13,7 @@ set -e
 
 SUPPORTED_SHORT_OPTS=("h" "j" "t" "p")
 SUPPORTED_LONG_OPTS=(
-  "help" "cov" "cache" "pkg" "asan" "make_clean" "cann_3rd_lib_path" "test" "cann_path"
+  "help" "cov" "cache" "pkg" "asan" "make_clean" "cann_3rd_lib_path" "test" "cann_path" "build-type"
 )
 
 CURRENT_DIR=$(dirname $(readlink -f ${BASH_SOURCE[0]}))
@@ -22,9 +22,10 @@ OUTPUT_DIR=${CURRENT_DIR}/build_out
 USER_ID=$(id -u)
 CPU_NUM=$(($(cat /proc/cpuinfo | grep "^processor" | wc -l)))
 THREAD_NUM=16
-CUSTOM_OPTION="-DCMAKE_INSTALL_PREFIX=${OUTPUT_DIR} -DBUILD_OPEN_PROJECT=ON -DCMAKE_BUILD_TYPE=Debug"
+CUSTOM_OPTION="-DCMAKE_INSTALL_PREFIX=${OUTPUT_DIR} -DBUILD_OPEN_PROJECT=ON"
 CANN_3RD_LIB_PATH=${CURRENT_DIR}/third_party
 DEPS_FILE_PATH=${CURRENT_DIR}/third_party
+BUILD_TYPE="Release"
 
 dotted_line="----------------------------------------------------------------"
 
@@ -88,6 +89,8 @@ usage() {
   echo "    --cov                Enable code coverage for unit tests"
   echo "    --asan               Enable ASAN (address Sanitizer)"
   echo "    --make_clean         Clean build artifacts"
+  echo "    --build-type=<TYPE>"
+  echo "                         Specify build type (TYPE options: Release/Debug), Default:Release"
 }
 
 function log() {
@@ -289,6 +292,10 @@ check_param_test_pkg() {
     log "[ERROR] --pkg cannot be used with test(-t, --test)."
     exit 1
   fi
+  if [[ "$TEST" == "all" && "$IS_BUILD" == "true" ]]; then
+    log "[ERROR] --build-type cannot be used with test(-t, --test)."
+    exit 1
+  fi
 }
 
 check_param_cov() {
@@ -366,6 +373,18 @@ set_options() {
       check_param_j
       shift 2
       ;;
+    --build-type=*)
+      IS_BUILD="true"
+      BUILD_TYPE="${1#*=}"
+      check_param_test_pkg
+      shift
+      ;;
+    --build-type)
+      IS_BUILD="true"
+      BUILD_TYPE="$2"
+      check_param_test_pkg
+      shift 2
+      ;;
     *)
       log "[ERROR] Undefined option: $1"
       usage
@@ -386,6 +405,7 @@ main() {
 
   if [ -n "${TEST}" ];then
     CUSTOM_OPTION="${CUSTOM_OPTION} -DENABLE_TEST=ON"
+    BUILD_TYPE="Debug"
   fi
 
   if [ "${ASAN}" == "true" ];then
@@ -400,7 +420,7 @@ main() {
     CUSTOM_OPTION="${CUSTOM_OPTION} -DPACKAGE_OPEN_PROJECT=ON"
   fi
 
-  CUSTOM_OPTION="${CUSTOM_OPTION} -DASCEND_CANN_PACKAGE_PATH=${ASCEND_CANN_PACKAGE_PATH} -DCANN_3RD_LIB_PATH=${CANN_3RD_LIB_PATH}  -DDEPS_FILE_PATH=${DEPS_FILE_PATH}"
+  CUSTOM_OPTION="${CUSTOM_OPTION} -DASCEND_CANN_PACKAGE_PATH=${ASCEND_CANN_PACKAGE_PATH} -DCANN_3RD_LIB_PATH=${CANN_3RD_LIB_PATH}  -DDEPS_FILE_PATH=${DEPS_FILE_PATH} -DCMAKE_BUILD_TYPE=${BUILD_TYPE}"
 
   if [[ ! -d "${BUILD_DIR}" ]]; then
     mkdir -p "${BUILD_DIR}"

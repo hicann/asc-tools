@@ -70,11 +70,8 @@
         <file value="include/tikicpulib.h" />
     </file_info>
     <!-- tikcpp simulator cmake -->
-    <file_info value="tikcpp_simulator_cmake" copy_type="delivery" src_path="lib/host" dst_path="lib/cmake" install_path="tools/tikicpulib/lib/cmake">
-        <file value="cmake/targets-tikicpulib.cmake" />
-        <file value="cmake/targets-tikicpulib-debug.cmake" release_type="debug"/>
-        <!-- <file value="cmake/targets-tikicpulib-release.cmake" release_type="release"/> -->
-        <file value="cmake/tikicpulib-config.cmake" />
+    <file_info value="tikcpp_simulator_cmake" copy_type="delivery" src_path="lib/host" dst_path="lib" install_path="tools/tikicpulib/lib">
+        <file value="cmake" />
     </file_info>
     <file_info value="ascendc_scripts" copy_type="delivery" src_path="lib/host/" dst_path="tools/ascendc_tools" install_path="tools/ascendc_tools" install_mod="550" feature="ascendc">
         <file value="ascendc_npuchk_report.py"/>
