@@ -14,7 +14,7 @@
     <dir_info value="asc_tools_version" install_mod="550">
         <path value="compiler" install_mod="750"/>
         <path value="compiler/conf" install_mod="750"/>
-        <path value="share"/>
+        <path value="share" install_mod="750"/>
         <path value="share/info" install_mod="750"/>
         <path value="share/info/asc-tools" install_mod="750"/>
         <path value="$(TARGET_ENV)/include/version"/>
