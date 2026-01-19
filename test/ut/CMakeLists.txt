@@ -10,9 +10,9 @@
 cmake_minimum_required(VERSION 3.16.0)
 project(ascendc_ut)
 
-set(TIKCPP_PRODUCT_TYPE_LIST ascend910 ascend610 ascend310p ascend910B1_AIC ascend910B1_AIV ascend310B1 ascend610Lite)
+set(TIKCPP_PRODUCT_TYPE_LIST ascend910 ascend310p ascend910B1_AIC ascend910B1_AIV ascend310B1)
 
-set(TIKICPULIB_PRODUCT_TYPE_LIST ascend910 ascend610 ascend310p ascend910B1_AIC ascend910B1_AIV)
+set(TIKICPULIB_PRODUCT_TYPE_LIST ascend910 ascend310p ascend910B1_AIC ascend910B1_AIV)
 
 add_compile_definitions(ASCENDC_CPU_DEBUG=1 ASCENDC_DUMP=0)
 
@@ -72,18 +72,15 @@ foreach(product_type ${TIKCPP_PRODUCT_TYPE_LIST})
         ${LOCAL_DIR}/main_global.cpp
         ${ASCENDC_TEST_COMMON_SRC_FILES}
         $<$<STREQUAL:${product_type},ascend910>:${ASCENDC_TEST_COMMON_CASE_SRC_FILES};${ASCENDC_API_CHECK_CASE_SRC_FILES}>
-        $<$<STREQUAL:${product_type},ascend610>:${ASCENDC_TEST_COMMON_CASE_SRC_FILES};${ASCENDC_API_CHECK_CASE_SRC_FILES}>
         $<$<STREQUAL:${product_type},ascend310p>:${ASCENDC_TEST_COMMON_CASE_SRC_FILES};${ASCENDC_API_CHECK_CASE_SRC_FILES}>
         $<$<STREQUAL:${product_type},ascend910B1_AIC>:${ASCENDC_API_CHECK_CASE_SRC_FILES}>
         $<$<STREQUAL:${product_type},ascend910B1_AIV>:${ASCENDC_API_CHECK_CASE_SRC_FILES}>
         ${LOCAL_DIR}/common/dlog_stub.cpp
         $<$<STREQUAL:${product_type},ascend910>:${LOCAL_DIR}/common/tik_pv_wrapper.cpp;${LOCAL_DIR}/common/alog_stub.cpp>
-        $<$<STREQUAL:${product_type},ascend610>:${LOCAL_DIR}/common/tik_pv_wrapper.cpp;${LOCAL_DIR}/common/alog_stub.cpp>
         $<$<STREQUAL:${product_type},ascend310p>:${LOCAL_DIR}/common/tik_pv_wrapper.cpp;${LOCAL_DIR}/common/alog_stub.cpp>
         $<$<STREQUAL:${product_type},ascend910B1_AIC>:${LOCAL_DIR}/common/k3_pvwrap.cpp>
         $<$<STREQUAL:${product_type},ascend910B1_AIV>:${LOCAL_DIR}/common/k3_pvwrap.cpp>
         $<$<STREQUAL:${product_type},ascend310B1>:${LOCAL_DIR}/common/k3_pvwrap.cpp>
-        $<$<STREQUAL:${product_type},ascend610Lite>:${LOCAL_DIR}/common/k3_pvwrap.cpp>
         ${ASCENDC_TEST_${product_type}_CASE_SRC_FILES}
     )
 
@@ -191,15 +188,17 @@ foreach(product_type ${TIKCPP_PRODUCT_TYPE_LIST})
     )
 endforeach()
 
-set(src_file ${ASCENDC_TOOLS_ROOT_DIR}/libraries/lib/include/stub_fun.h)
+set(src_file ${ASCENDC_TOOLS_ROOT_DIR}/libraries/lib/include/stub_fun_ut.h)
+set(dst_file ${CMAKE_CURRENT_BINARY_DIR}/stub/stub_fun.h)
 add_custom_command(
-    OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/stub/stub_fun.h
-    COMMAND ${LOCAL_DIR}/../cmake/tools/prepare.sh ${src_file} ${CMAKE_CURRENT_BINARY_DIR}/stub
+    OUTPUT ${dst_file}
+    COMMAND mkdir -p ${CMAKE_CURRENT_BINARY_DIR}/stub
+    COMMAND cp ${src_file} ${dst_file}
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
 )
 
 add_custom_target(prepare_target_ut ALL
-    DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/stub/stub_fun.h
+    DEPENDS ${dst_file}
 )
 
 ####################################################################

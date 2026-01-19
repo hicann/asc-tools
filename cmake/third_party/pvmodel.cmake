@@ -8,7 +8,7 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 # ----------------------------------------------------------------------------------------------------------
 
-if(pvmodel_FOUND AND NOT FORCE_REBUILD_CANN_3RD)
+if(pvmodel_ascend910_FOUND)
     message(STATUS "pvmodel found in ${PVMODEL_PATH}")
 else()
     set(PVMODEL_NAME "pvmodel")
@@ -37,6 +37,9 @@ else()
     FetchContent_MakeAvailable(${PVMODEL_NAME})
 
     find_package(pvmodel MODULE)
+    if (NOT pvmodel_ascend910_FOUND)
+        message(FATAL_ERROR "pvmodel not found, please check if the simulator is complete.")
+    endif()
 endif()
 
 install(DIRECTORY ${PVMODEL_PATH}

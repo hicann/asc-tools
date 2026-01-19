@@ -9,6 +9,7 @@
 # ----------------------------------------------------------------------------------------------------------
 
 set(PKG_NAME "cpudebug_deps")
+string(TOLOWER "${CMAKE_BUILD_TYPE}" BUILD_TYPE_LOWER)
 
 if (CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64")
     message(STATUS "Detected architecture: x86_64")
@@ -20,11 +21,18 @@ else ()
     message(WARNING "Unknown architecture: ${CMAKE_SYSTEM_PROCESSOR}")
 endif ()
 
+if (IS_DIRECTORY ${CMAKE_SOURCE_DIR}/libraries/lib AND NOT EXISTS ${CMAKE_SOURCE_DIR}/libraries/lib/cmake/targets-tikicpulib-${BUILD_TYPE_LOWER}.cmake)
+    execute_process(
+        COMMAND ${CMAKE_COMMAND} -E rm -rf ${CMAKE_SOURCE_DIR}/libraries/lib
+        COMMENT "Removing ${CMAKE_SOURCE_DIR}/libraries/lib directory..." 
+    )
+endif()
+
 if (NOT EXISTS ${CMAKE_SOURCE_DIR}/libraries/lib/include/stub_fun.h)
-  set(CPUDEBUG_PKG_NAME cann-asc-tools-cpudebug-deps-lib_8.5.0_linux-${CMAKE_SYSTEM_PROCESSOR}.tar.gz)
+  set(CPUDEBUG_PKG_NAME cann-asc-tools-cpudebug-deps-lib_${BUILD_TYPE_LOWER}_8.5.0_linux-${CMAKE_SYSTEM_PROCESSOR}.tar.gz)
   set(CPUDEBUG_PKG_PATH ${DEPS_FILE_PATH}/${CPUDEBUG_PKG_NAME})
   if (NOT EXISTS ${CPUDEBUG_PKG_PATH})
-      set(CPUDEBUG_PKG_URL "https://container-obsfs-filesystem.obs.cn-north-4.myhuaweicloud.com/package/cann/asc-tools-dev/version_compile/master/202512/20251218/ubuntu_${TAR_ARCH}/${CPUDEBUG_PKG_NAME}")
+      set(CPUDEBUG_PKG_URL "https://container-obsfs-filesystem.obs.cn-north-4.myhuaweicloud.com/package/cann/asc-tools-dev/version_compile/master/202601/20260116/ubuntu_${TAR_ARCH}/${CPUDEBUG_PKG_NAME}")
       message(STATUS "${PKG_NAME} pkg not found in ${DEPS_FILE_PATH}, downloading from ${CPUDEBUG_PKG_URL}")
   else()
       set(CPUDEBUG_PKG_URL ${CPUDEBUG_PKG_PATH})
