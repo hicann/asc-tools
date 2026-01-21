@@ -301,6 +301,12 @@ public:
         { Hardware::L0A, 1024 * 64 },  { Hardware::L0B, 1024 * 64 },   { Hardware::L0C, 1024 * 128 },
         { Hardware::BIAS, 1024 * 1 },  { Hardware::FIXBUF, 1024 * 7 },
     };
+#elif (__NPU_ARCH__ == 3003)
+    const std::map<Hardware, uint32_t> bufferInitLen = {
+        { Hardware::GM, 1024 * 1024 }, { Hardware::UB, TOTAL_UB_SIZE },   { Hardware::L1, TOTAL_L1_SIZE },
+        { Hardware::L0A, 1024 * 64 },  { Hardware::L0B, 1024 * 64 },   { Hardware::L0C, 1024 * 128 },
+        { Hardware::BIAS, 1024 * 1 },  { Hardware::FIXBUF, 1024 * 6 },
+    };
 #elif (__NPU_ARCH__ == 3102)
     const std::map<Hardware, uint32_t> bufferInitLen = {
         { Hardware::GM, 1024 * 1024 }, { Hardware::UB, 1024 * 256 },   { Hardware::L1, 1024 * 1024 },

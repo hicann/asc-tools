@@ -31,6 +31,10 @@ if(BUILD_OPEN_PROJECT)
 endif()
 
 set(PRODUCT_TYPE_LIST ascend910 ascend310p ascend910B1 ascend310B1)
+if (CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64")
+  list(APPEND PRODUCT_TYPE_LIST kirinx90 kirin9030)
+endif()
+
 set(CPULIB_SRC_DIR ${CMAKE_CURRENT_SOURCE_DIR})
 
 include(cmake/fun.cmake)
@@ -72,6 +76,8 @@ foreach(product_type ${PRODUCT_TYPE_LIST})
     $<$<STREQUAL:${product_type},ascend310p>:__CCE_AICORE__=200;__DAV_M200__;__NPU_ARCH__=2002>
     $<$<STREQUAL:${product_type},ascend910B1>:__CCE_AICORE__=220;__DAV_C220__;__NPU_ARCH__=2201>
     $<$<STREQUAL:${product_type},ascend310B1>:__CCE_AICORE__=300;__DAV_M300__;__NPU_ARCH__=3002>
+    $<$<STREQUAL:${product_type},kirinx90>:__CCE_AICORE__=300;__DAV_L300__;__NPU_ARCH__=3003>
+    $<$<STREQUAL:${product_type},kirin9030>:__CCE_AICORE__=311;__DAV_L311__;__NPU_ARCH__=3113>
   )
   target_compile_options(cpudebug_${product_type} PRIVATE
     -DCMAKE_C_COMPILER_LAUNCHER=${CCACHE_PROGRAM}
@@ -91,6 +97,8 @@ foreach(product_type ${PRODUCT_TYPE_LIST})
   target_compile_definitions(cpudebug_${product_type} PRIVATE
     $<$<STREQUAL:${product_type},ascend910B1>:NO_COSIM>
     $<$<STREQUAL:${product_type},ascend310B1>:NO_COSIM>
+    $<$<STREQUAL:${product_type},kirinx90>:NO_COSIM>
+    $<$<STREQUAL:${product_type},kirin9030>:NO_COSIM>
   )
   target_link_libraries(cpudebug_${product_type} PRIVATE
     $<BUILD_INTERFACE:intf_pub>

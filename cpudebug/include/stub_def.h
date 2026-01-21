@@ -71,6 +71,12 @@ constexpr uint16_t b32EleSize = 64;
 constexpr uint16_t b64EleSize = 32;
 }
 
+// kirin symbol dependency
+#if defined(__NPU_ARCH__) && ((__NPU_ARCH__ == 3003) || (__NPU_ARCH__ == 3113))
+typedef float float32_t;
+typedef half float16_t;
+#endif
+
 using vector_u8 = std::array<uint8_t, ConstantsInternal::b8EleSize>;
 using vector_u16 = std::array<uint16_t, ConstantsInternal::b16EleSize>;
 using vector_u32 = std::array<uint32_t, ConstantsInternal::b32EleSize>;

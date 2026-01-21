@@ -12,6 +12,8 @@
         <path value="tools/tikicpulib/lib/Ascend310P1" chip="Ascend310P" install_softlink="tools/tikicpulib/lib/Ascend310P3"/>
         <path value="tools/tikicpulib/lib/Ascend910B1" chip="Ascend910B" install_softlink="tools/tikicpulib/lib/Ascend910B2;tools/tikicpulib/lib/Ascend910B2C;tools/tikicpulib/lib/Ascend910B3;tools/tikicpulib/lib/Ascend910B4;tools/tikicpulib/lib/Ascend910_9391;tools/tikicpulib/lib/Ascend910_9392;tools/tikicpulib/lib/Ascend910_9381;tools/tikicpulib/lib/Ascend910_9382;tools/tikicpulib/lib/Ascend910_9372;tools/tikicpulib/lib/Ascend910_9361"/>
         <path value="tools/tikicpulib/lib/Ascend310B1" chip="Ascend310B" install_softlink="tools/tikicpulib/lib/Ascend310B2;tools/tikicpulib/lib/Ascend310B3;tools/tikicpulib/lib/Ascend310B4"/>
+        <path value="tools/tikicpulib/lib/KirinX90" chip="KirinX90" />
+        <path value="tools/tikicpulib/lib/Kirin9030" chip="Kirin9030" />
     </dir_info>
     <!-- tikcpp simulator -->
     <file_info value="tikcpp_simulator_ascend910" chip="Ascend910" copy_type="delivery" src_path="lib/host" dst_path="lib/Ascend910A" install_path="tools/tikicpulib/lib/Ascend910A">
@@ -26,6 +28,12 @@
     </file_info>
     <file_info value="tikcpp_simulator_ascend310B1" chip="Ascend310B" copy_type="delivery" src_path="lib/host" dst_path="lib/Ascend310B1" install_path="tools/tikicpulib/lib/Ascend310B1">
         <file value="ascend310B1/libcpudebug.so" file_type="shared" install_mod="555" install_softlink="tools/tikicpulib/lib/Ascend310B1/libtikcpp_debug.so"/>
+    </file_info>
+    <file_info value="tikcpp_simulator_kirinx90" chip="KirinX90" copy_type="delivery" src_path="lib/host" dst_path="lib/KirinX90" install_path="tools/tikicpulib/lib/KirinX90">
+        <file value="kirinx90/libcpudebug.so" file_type="shared" install_mod="555" install_softlink="tools/tikicpulib/lib/KirinX90/libtikcpp_debug.so" optional="true"/>
+    </file_info>
+    <file_info value="tikcpp_simulator_kirin9030" chip="Kirin9030" copy_type="delivery" src_path="lib/host" dst_path="lib/Kirin9030" install_path="tools/tikicpulib/lib/Kirin9030">
+        <file value="kirin9030/libcpudebug.so" file_type="shared" install_mod="555" install_softlink="tools/tikicpulib/lib/Kirin9030/libtikcpp_debug.so" optional="true"/>
     </file_info>
     <!-- tikcpp simulator libs -->
     <file_info value="tikcpp_simulator_libs" copy_type="delivery" src_path="lib/host" dst_path="lib" install_path="tools/tikicpulib/lib/">
