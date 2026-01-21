@@ -45,7 +45,7 @@ generate_coverage() {
     mk_dir "${_path_to_gen}"
   fi
   lcov -c -d "${_source_dir}" -o "${_coverage_file}"
-  lcov -r "${_coverage_file}" "${_cann_pkg_path}/*" "/home/jenkins/opensource/*" "${_src}/build/*" "${_src}/build_out/*" "${_src}/output/*" "${_src}/test/*" -o "${_coverage_file}"
+  lcov -r "${_coverage_file}" "${_cann_pkg_path}/*" "/home/jenkins/opensource/*" "${_src}/build/*" "${_src}/build_out/*" "${_src}/output/*" "${_src}/tests/*" -o "${_coverage_file}"
   logging "generated coverage file ${_coverage_file}"
 }
 

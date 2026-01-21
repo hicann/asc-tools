@@ -7,10 +7,10 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # ----------------------------------------------------------------------------------------------------------
-set(GENERATE_CPP_COV ${ASCENDC_TOOLS_ROOT_DIR}/test/cmake/tools/generate_cpp_cov.sh)
+set(GENERATE_CPP_COV ${ASCENDC_TOOLS_ROOT_DIR}/tests/cmake/tools/generate_cpp_cov.sh)
 
 set(third_party_TEM_DIR ${ASCENDC_TOOLS_ROOT_DIR}/build/tmp)
 
-include(${ASCENDC_TOOLS_ROOT_DIR}/test/third_party/gtest.cmake)
-include(${ASCENDC_TOOLS_ROOT_DIR}/test/third_party/boost.cmake)
-include(${ASCENDC_TOOLS_ROOT_DIR}/test/third_party/mockcpp.cmake)
+include(${ASCENDC_TOOLS_ROOT_DIR}/tests/third_party/gtest.cmake)
+include(${ASCENDC_TOOLS_ROOT_DIR}/tests/third_party/boost.cmake)
+include(${ASCENDC_TOOLS_ROOT_DIR}/tests/third_party/mockcpp.cmake)

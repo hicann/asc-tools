@@ -9,7 +9,7 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 # ----------------------------------------------------------------------------------------------------------
 if (NOT EXISTS "${CMAKE_INSTALL_PREFIX}/mockcpp/lib/libmockcpp.a")
-    set(mockcpp_SRC_DIR ${ASCENDC_TOOLS_ROOT_DIR}/test/third_party/mockcpp_src)
+    set(mockcpp_SRC_DIR ${ASCENDC_TOOLS_ROOT_DIR}/tests/third_party/mockcpp_src)
 
     if (CMAKE_HOST_SYSTEM_PROCESSOR  STREQUAL "aarch64")
         set(mockcpp_CXXFLAGS "-fPIC")
@@ -28,7 +28,7 @@ if (NOT EXISTS "${CMAKE_INSTALL_PREFIX}/mockcpp/lib/libmockcpp.a")
         set(mockcpp_FLAGS "${mockcpp_FLAGS} -D_GLIBCXX_USE_CXX11_ABI=0")
     endif()
 
-    set(BUILD_WRAPPER ${ASCENDC_TOOLS_ROOT_DIR}/test/cmake/tools/build_ext.sh)
+    set(BUILD_WRAPPER ${ASCENDC_TOOLS_ROOT_DIR}/tests/cmake/tools/build_ext.sh)
     set(BUILD_TYPE "DEBUG")
 
     if (CMAKE_GENERATOR MATCHES "Unix Makefiles")
