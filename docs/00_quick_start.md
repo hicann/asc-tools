@@ -124,7 +124,7 @@
     - \$\{arch\}：表示CPU架构，如aarch64、x86_64。
     - \$\{install\_path\}：表示指定安装路径。
     - 缺省--install-path时， 则使用默认路径安装。
-    若使用root用户安装，安装完成后相关软件存储在“/usr/local/Ascend/latest”路径下；若使用非root用户安装，安装完成后相关软件存储在“$HOME/Ascend/latest”路径下。
+    若使用root用户安装，安装完成后相关软件存储在“/usr/local/Ascend”路径下；若使用非root用户安装，安装完成后相关软件存储在“$HOME/Ascend”路径下。
 
 2. **安装社区版CANN ops包（运行态依赖）**
 
@@ -139,10 +139,10 @@
     # 确保安装包具有可执行权限
     chmod +x Ascend-cann-${soc_name}-ops_8.5.0-beta.1_linux-${arch}.run
     # 安装命令
-    ./Ascend-cann-${soc_name}-ops_8.5.0-beta.1_linux-${arch}.run --full --install-path=${install_path}
+    ./Ascend-cann-${soc_name}-ops_8.5.0-beta.1_linux-${arch}.run --install --install-path=${install_path}
     ```
     - \$\{soc\_name\}：表示AI处理器型号（910B对于910b，910C对应A3）。
-    - \$\{install\_path\}：表示指定安装路径，需要与toolkit包安装在相同路径，默认安装在`/usr/local/Ascend`目录。
+    - \$\{install\_path\}：表示指定安装路径，需要与toolkit包安装在相同路径，root用户默认安装在`/usr/local/Ascend`目录，非root用户默认安装在`$HOME/Ascend`目录。
 
 3. **配置环境变量**
 
