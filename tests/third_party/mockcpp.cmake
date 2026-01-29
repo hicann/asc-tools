@@ -39,36 +39,50 @@ if (NOT EXISTS "${CMAKE_INSTALL_PREFIX}/mockcpp/lib/libmockcpp.a")
     endif()
 
     set(PATCH_FILE ${third_party_TEM_DIR}/mockcpp-2.7_py3.patch)
-    if (NOT EXISTS ${PATCH_FILE})
-        file(DOWNLOAD
-            "https://gitcode.com/cann-src-third-party/mockcpp/releases/download/v2.7-h3/mockcpp-2.7_py3-h3.patch"
-            ${PATCH_FILE}
-            TIMEOUT 60
-            EXPECTED_HASH SHA256=30f78d8173d50fa9af36efbc683aee82bcd5afc7acdc4dbef7381b92a1b4c800
+    set(REQ_URL "https://gitcode.com/cann-src-third-party/mockcpp/releases/download/v2.7-h2/mockcpp-2.7.tar.gz")
+    set(MOCKCPP_SRC_PATH "${CANN_3RD_LIB_PATH}/../llt/third_party/mockcpp_src")
+    set(MOCKCPP_OPTS
+        -DCMAKE_CXX_FLAGS=${mockcpp_CXXFLAGS}
+        -DCMAKE_C_FLAGS=${mockcpp_FLAGS}
+        -DBOOST_INCLUDE_DIRS=${BOOST_PATH}
+        -DCMAKE_SHARED_LINKER_FLAGS=${mockcpp_LINKER_FLAGS}
+        -DCMAKE_EXE_LINKER_FLAGS=${mockcpp_LINKER_FLAGS}
+        -DBUILD_32_BIT_TARGET_BY_64_BIT_COMPILER=OFF
+        -DCMAKE_INSTALL_PREFIX=${CMAKE_INSTALL_PREFIX}/mockcpp
+        -DCMAKE_C_COMPILER_LAUNCHER=${CMAKE_C_COMPILER_LAUNCHER}
+        -DCMAKE_CXX_COMPILER_LAUNCHER=${CMAKE_CXX_COMPILER_LAUNCHER}
+    )
+    include(ExternalProject)
+    if(EXISTS ${MOCKCPP_SRC_PATH})
+        message("Found local mockcpp source: ${MOCKCPP_SRC_PATH}")
+        file(COPY ${MOCKCPP_SRC_PATH}/ DESTINATION "${mockcpp_SRC_DIR}/")
+        ExternalProject_Add(mockcpp
+            SOURCE_DIR ${mockcpp_SRC_DIR}
+            CONFIGURE_COMMAND ${CMAKE_COMMAND} -G ${CMAKE_GENERATOR} ${MOCKCPP_OPTS} <SOURCE_DIR>
+            BUILD_COMMAND ${BUILD_WRAPPER} default ${${BUILD_TYPE}} $<$<BOOL:${IS_MAKE}>:$(MAKE)>
+        )
+    else()
+        message("No local mockcpp source, downloading from ${REQ_URL}")
+        if (NOT EXISTS ${PATCH_FILE})
+            set(PATCH_URL "https://gitcode.com/cann-src-third-party/mockcpp/releases/download/v2.7-h3/mockcpp-2.7_py3-h3.patch")
+            file(DOWNLOAD
+                ${PATCH_URL}
+                ${PATCH_FILE}
+                TIMEOUT 60
+                EXPECTED_HASH SHA256=30f78d8173d50fa9af36efbc683aee82bcd5afc7acdc4dbef7381b92a1b4c800
+            )
+        endif()
+        ExternalProject_Add(mockcpp
+            URL ${REQ_URL}
+            URL_HASH SHA256=73ab0a8b6d1052361c2cebd85e022c0396f928d2e077bf132790ae3be766f603
+            DOWNLOAD_DIR ${third_party_TEM_DIR}
+            SOURCE_DIR ${mockcpp_SRC_DIR}
+            TLS_VERIFY OFF
+            PATCH_COMMAND git init && git apply ${PATCH_FILE} && sed -i "1i cmake_minimum_required(VERSION 3.16.0)" CMakeLists.txt && rm -rf .git
+            CONFIGURE_COMMAND ${CMAKE_COMMAND} -G ${CMAKE_GENERATOR} ${MOCKCPP_OPTS} <SOURCE_DIR>
+            BUILD_COMMAND ${BUILD_WRAPPER} default ${${BUILD_TYPE}} $<$<BOOL:${IS_MAKE}>:$(MAKE)>
         )
     endif()
-    include(ExternalProject)
-    ExternalProject_Add(mockcpp
-        URL "https://gitcode.com/cann-src-third-party/mockcpp/releases/download/v2.7-h2/mockcpp-2.7.tar.gz"
-        URL_HASH SHA256=73ab0a8b6d1052361c2cebd85e022c0396f928d2e077bf132790ae3be766f603
-        DOWNLOAD_DIR ${third_party_TEM_DIR}
-        SOURCE_DIR ${mockcpp_SRC_DIR}
-        TLS_VERIFY OFF
-        PATCH_COMMAND git init && git apply ${PATCH_FILE} && sed -i "1i cmake_minimum_required(VERSION 3.16.0)" CMakeLists.txt && rm -rf .git
-
-        CONFIGURE_COMMAND ${CMAKE_COMMAND} -G ${CMAKE_GENERATOR}
-            -DCMAKE_CXX_FLAGS=${mockcpp_CXXFLAGS}
-            -DCMAKE_C_FLAGS=${mockcpp_FLAGS}
-            -DBOOST_INCLUDE_DIRS=${BOOST_PATH}
-            -DCMAKE_SHARED_LINKER_FLAGS=${mockcpp_LINKER_FLAGS}
-            -DCMAKE_EXE_LINKER_FLAGS=${mockcpp_LINKER_FLAGS}
-            -DBUILD_32_BIT_TARGET_BY_64_BIT_COMPILER=OFF
-            -DCMAKE_INSTALL_PREFIX=${CMAKE_INSTALL_PREFIX}/mockcpp
-            -DCMAKE_C_COMPILER_LAUNCHER=${CMAKE_C_COMPILER_LAUNCHER}
-            -DCMAKE_CXX_COMPILER_LAUNCHER=${CMAKE_CXX_COMPILER_LAUNCHER}
-            <SOURCE_DIR>
-        BUILD_COMMAND ${BUILD_WRAPPER} default ${${BUILD_TYPE}} $<$<BOOL:${IS_MAKE}>:$(MAKE)>
-    )
 endif()
 
 message("cmake install prefix is ${CMAKE_INSTALL_PREFIX}")

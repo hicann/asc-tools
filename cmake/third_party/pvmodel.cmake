@@ -18,7 +18,7 @@ else()
     )
 
     if(NOT EXISTS ${SIMULATOR_PKG})
-        set(SIMULATOR_FILE simulator_8.5.0.alpha001_linux-${CMAKE_SYSTEM_PROCESSOR}.tar.gz)
+        set(SIMULATOR_FILE simulator_8.5.0_linux-${CMAKE_SYSTEM_PROCESSOR}.tar.gz)
         set(SIMULATOR_URL "https://mirrors.huaweicloud.com/artifactory/cann-run/8.5.0.alpha001/try/${CMAKE_SYSTEM_PROCESSOR}/${SIMULATOR_FILE}")
         message(STATUS "Pvmodel pkg not found in ${DEPS_FILE_PATH}, downloading pvmodel from ${SIMULATOR_URL}")
     else()

@@ -18,7 +18,7 @@
 #include "stub_def.h"
 #include "stub_fun.h"
 
-#define INTRI_FUN_NUM 6829
+#define INTRI_FUN_NUM 7264
 
 typedef enum {
     INTRI_TYPE_CPU = 0,

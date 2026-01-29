@@ -41,5 +41,10 @@ public:
     float ToFloat() const;
 };
 } // namespace float8_e8m0
+#if defined (__NPU_ARCH__) && ((__NPU_ARCH__ == 3101) || (__NPU_ARCH__ == 5102))
+namespace AscendC {
+using fp8_e8m0_t = float8_e8m0::Fp8e8m0T;
+}
+#endif
 using fp8_e8m0_t = float8_e8m0::Fp8e8m0T;
 #endif // ASCENDC_FP8_E8M0_H

@@ -11,7 +11,7 @@ project(cpudebug_acl_stub)
 
 add_library(cpudebug_acl_stub SHARED
   ascendc_acl_stub.cpp
-  ${CMAKE_CURRENT_SOURCE_DIR}/../../model/cpulib/kernel_fp16.cpp
+  kernel_fp16.cpp
 )
 
 if(BUILD_OPEN_PROJECT)
@@ -30,6 +30,10 @@ endif()
 
 target_compile_definitions(cpudebug_acl_stub PRIVATE
   ASCENDC_CPU_DEBUG=1
+)
+
+target_link_directories(cpudebug_acl_stub PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/../../../libraries/lib/
 )
 
 target_link_libraries(cpudebug_acl_stub PRIVATE

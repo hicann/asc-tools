@@ -16,6 +16,7 @@ import unittest
 import subprocess
 
 from unittest.mock import MagicMock, patch
+from io import StringIO
 
 THIS_FILE_NAME = __file__
 FILE_PATH = os.path.dirname(os.path.realpath(THIS_FILE_NAME))
@@ -281,6 +282,22 @@ class TestMsObjdump(unittest.TestCase):
         else:
             print("test run dump elf without exception")
             self.assertTrue(True)
+
+    def test_show_ascend_meta_tlv_block_num(self):
+        content = b'\xff\xff\xff\xff'
+        t = 15
+        l = 4
+        index = 0
+
+        captured_output = StringIO()
+        sys.stdout = captured_output
+
+        msobjdump_main.ObjDump._show_ascend_meta_tlv(content, t, l, index)
+
+        sys.stdout = sys.__stdout__
+        output = captured_output.getvalue().strip()
+
+        self.assertEqual(output, "BLOCK_NUM: 0xFFFFFFFF")
 
 
 if __name__ == "__main__":

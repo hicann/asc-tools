@@ -39,6 +39,8 @@ set(CPULIB_SRC_DIR ${CMAKE_CURRENT_SOURCE_DIR})
 
 include(cmake/fun.cmake)
 
+add_subdirectory(src/acl_stub)
+
 file(GLOB ASCENDC_CHECK_SRC
     ${CMAKE_CURRENT_SOURCE_DIR}/src/api_check/*.cpp
 )
@@ -141,6 +143,7 @@ install(FILES
   include/kernel_bf16.h
   include/kernel_fp8_e4m3.h
   include/kernel_fp8_e5m2.h
+  include/kernel_fp8_e8m0.h
   include/kernel_fp4_e2m1.h
   include/kernel_fp4_e1m2.h
   include/kernel_hif8.h
