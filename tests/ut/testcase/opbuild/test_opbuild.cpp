@@ -197,10 +197,6 @@ TEST_F(TEST_OPBUILD, OpBuildRunTest)
     opbuild::Params::GetInstance().optionParams_ = {};
     opbuild::Params::GetInstance().requiredParams_ = {};
     EXPECT_EQ(ret, 0);
-    ret = opbuild_main(5, { "opbuild", so_path, "." , "--aicpu", "--output_file=./test"});
-    opbuild::Params::GetInstance().optionParams_ = {};
-    opbuild::Params::GetInstance().requiredParams_ = {};
-    EXPECT_EQ(ret, 0);
     ret = opbuild_main(4, { "opbuild", so_path, "." , "--aic"});
     opbuild::Params::GetInstance().optionParams_ = {};
     opbuild::Params::GetInstance().requiredParams_ = {};

@@ -107,9 +107,9 @@ void CPUCfgGenerator::GenParamInfo(std::ofstream& outfile, std::vector<OpParamDe
         outfile << (isDynamic ? "dynamic_" : "") << type << ind << ".name=" << def.GetParamName().GetString() << std::endl;
         if (def.GetDataTypes().size() > 0) {
             GetParamDataTypes(def.GetDataTypes(), tpstr);
-            outfile << type << ind << ".type=" << tpstr << std::endl;
+            outfile << (isDynamic ? "dynamic_" : "") << type << ind << ".type=" << tpstr << std::endl;
         }
-
+        
         if (def.GetFormats().size() > 0) {
             GetParamFormats(def.GetFormats(), fmtstr);
             outfile << type << ind << ".format=" << fmtstr << std::endl;

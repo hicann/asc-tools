@@ -399,6 +399,7 @@ add_executable(tikcpp_utest_opbuild
     ${ASCENDC_TOOLS_ROOT_DIR}/utils/opbuild/op_generator.cpp
     ${ASCENDC_TOOLS_ROOT_DIR}/utils/opbuild/op_generator_factory.cpp
     ${ASCENDC_TOOLS_ROOT_DIR}/utils/opbuild/op_cfg_generator.cpp
+    ${ASCENDC_TOOLS_ROOT_DIR}/utils/opbuild/op_cpu_cfg_generator.cpp
     ${ASCENDC_TOOLS_ROOT_DIR}/utils/opbuild/op_proto_generator.cpp
     ${ASCENDC_TOOLS_ROOT_DIR}/utils/opbuild/op_aclnn_generator.cpp
     ${ASCENDC_TOOLS_ROOT_DIR}/utils/opbuild/op_custom_registry_generator.cpp
