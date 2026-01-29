@@ -13,24 +13,19 @@ project(opbuild)
 
 add_executable(op_build op_build.cpp op_generator.cpp op_generator_factory.cpp op_cfg_generator.cpp
   op_proto_generator.cpp op_aclnn_generator.cpp op_custom_registry_generator.cpp op_aclnn_fallback_generator.cpp
+  op_cpu_cfg_generator.cpp
   op_build_params.cpp
 )
 
-target_compile_options(op_build PRIVATE
-  -Wextra -Wfloat-equal -fno-common -fpie
-  -DCMAKE_C_COMPILER_LAUNCHER=${CCACHE_PROGRAM}
-  -DCMAKE_CXX_COMPILER_LAUNCHER=${CCACHE_PROGRAM}
-)
+target_compile_options(op_build PRIVATE -Wextra -Wfloat-equal -fno-common -fpie -Werror)
 
 if(BUILD_OPEN_PROJECT)
   target_include_directories(op_build PRIVATE
     ${ASCEND_CANN_PACKAGE_PATH}/${CMAKE_SYSTEM_PROCESSOR}-linux/pkg_inc/base
     ${ASCEND_CANN_PACKAGE_PATH}/include
-    ${ASCEND_CANN_PACKAGE_PATH}/include/experiment
     ${ASCEND_CANN_PACKAGE_PATH}/include/base
     ${ASCEND_CANN_PACKAGE_PATH}/pkg_inc/base
     ${ASCEND_CANN_PACKAGE_PATH}/include/ge
-    ${ASCEND_CANN_PACKAGE_PATH}/include/experiment/metadef
     ${CMAKE_CURRENT_SOURCE_DIR}/common
   )
 else()
@@ -50,7 +45,7 @@ target_link_libraries(op_build PRIVATE
   graph_base
   register
   dl
-  alog
+  unified_dlog
   mmpa
   error_manager
 )

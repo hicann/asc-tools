@@ -25,7 +25,6 @@ if [ ! $ASCEND_HOME_DIR ]; then
         export ASCEND_HOME_DIR=/usr/local/Ascend/ascend-toolkit/latest
     fi
 fi
-
 set +e
 source $ASCEND_HOME_DIR/bin/setenv.bash
 set -e

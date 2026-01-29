@@ -71,7 +71,7 @@ bool TikcppVecTransposeCheck::CheckAllLowLevel()
         "check dst tensor buffersize failed"));
     ASCENDC_CHECK(CheckBufferSizeOverFlow(param_.srcSize, GlobalParams::Instance().bufferSizeMap.at(param_.srcPos),
         "check src tensor buffersize failed"));
-#if defined (__NPU_ARCH__) && ((__NPU_ARCH__ != 3003) && (__NPU_ARCH__ != 3113))
+#if defined (__NPU_ARCH__) && ((__NPU_ARCH__ != 3003) && (__NPU_ARCH__ != 3103) && (__NPU_ARCH__ != 3113))
     uint64_t expectedSize = 0;
     if (apiName == "Transpose") {
 #if defined (__NPU_ARCH__) && ((__NPU_ARCH__ == 2201) || (__NPU_ARCH__ == 3002) ||                       \

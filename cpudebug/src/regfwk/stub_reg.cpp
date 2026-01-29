@@ -62,7 +62,7 @@ void StubInit(void)
             PfIntriFun fun = (PfIntriFun)dlsym(RTLD_DEFAULT, buf);
             IntriFunAdd(i, static_cast<IntriTypeT>(s), fun);
             dprintf(logfd, "%s: [%s] -> %p\n", stub, buf, fun);
-#if defined (__NPU_ARCH__) && ((__NPU_ARCH__ == 3003) || (__NPU_ARCH__ == 3113))
+#if defined (__NPU_ARCH__) && ((__NPU_ARCH__ == 3003) || (__NPU_ARCH__ == 3103) || (__NPU_ARCH__ == 3113))
             memset_s(buf, SYM_LEN_MAX + 1, '\0', SYM_LEN_MAX + 1);
 #endif
         }

@@ -16,26 +16,20 @@
 #include "graph/operator_reg.h"
 #include "register/op_lib_register.h"
 #include "register/op_impl_registry.h"
-#include "base/alog_pub.h"
+#include "../pkg_inc/base/dlog_pub.h"
 
 #define ASCENDC_MODULE_NAME static_cast<int32_t>(ASCENDCKERNEL)
 #define LOG_ERROR(format, ...)                                                                                                   \
     do {                                                                                                                         \
-        if (AlogCheckDebugLevel(ASCENDC_MODULE_NAME, DLOG_ERROR) == 1) {                                                         \
-            AlogRecord(ASCENDC_MODULE_NAME, DLOG_TYPE_DEBUG, DLOG_ERROR, "[%s] " format "\n", __FUNCTION__, ##__VA_ARGS__);      \
-        }                                                                                                                        \
+        dlog_error(ASCENDC_MODULE_NAME, "[%s] " format "\n", __FUNCTION__, ##__VA_ARGS__);      \
     } while (0)
 #define LOG_WARN(format, ...)                                                                                                    \
     do {                                                                                                                         \
-        if (AlogCheckDebugLevel(ASCENDC_MODULE_NAME, DLOG_WARN) == 1) {                                                          \
-            AlogRecord(ASCENDC_MODULE_NAME, DLOG_TYPE_DEBUG, DLOG_WARN, "[%s] " format "\n", __FUNCTION__, ##__VA_ARGS__);       \
-        }                                                                                                                        \
+        dlog_warn(ASCENDC_MODULE_NAME, "[%s] " format "\n", __FUNCTION__, ##__VA_ARGS__);       \
     } while (0)
 #define LOG_INFO(format, ...)                                                                                                    \
     do {                                                                                                                         \
-        if (AlogCheckDebugLevel(ASCENDC_MODULE_NAME, DLOG_INFO) == 1) {                                                          \
-            AlogRecord(ASCENDC_MODULE_NAME, DLOG_TYPE_DEBUG, DLOG_INFO, "[%s] " format "\n", __FUNCTION__, ##__VA_ARGS__);       \
-        }                                                                                                                        \
+        dlog_info(ASCENDC_MODULE_NAME, "[%s] " format "\n", __FUNCTION__, ##__VA_ARGS__);       \
     } while (0)
 char basePathChar[PATH_MAX];
 

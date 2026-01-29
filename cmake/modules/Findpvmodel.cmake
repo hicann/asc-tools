@@ -16,7 +16,7 @@ endif()
 set(_cmake_targets_defined "")
 set(_cmake_targets_not_defined "")
 set(_cmake_expected_targets "")
-foreach(_cmake_expected_target IN ITEMS pvmodel_ascend910 pvmodel_ascend310p pem_davinci_ascend910B1 pem_davinci_ascend310B)
+foreach(_cmake_expected_target IN ITEMS pvmodel_ascend910 pvmodel_ascend310p pem_davinci_ascend910B1 pem_davinci_ascend310B pem_davinci_ascend910_9599 pem_davinci_kirinx90 pem_davinci_kirin9030)
     list(APPEND _cmake_expected_targets "${_cmake_expected_target}")
     if(TARGET "${_cmake_expected_target}")
         list(APPEND _cmake_targets_defined "${_cmake_expected_target}")
@@ -68,6 +68,24 @@ find_library(ascend310B1_LIBRARY
     NO_CMAKE_SYSTEM_PATH
     NO_CMAKE_FIND_ROOT_PATH)
 
+find_library(ascend910_9599_LIBRARY
+    NAMES libpem_davinci.so
+    PATHS ${PVMODEL_PATH}/lib64/Ascend910_9599/lib
+    NO_CMAKE_SYSTEM_PATH
+    NO_CMAKE_FIND_ROOT_PATH)
+
+find_library(kirinx90_LIBRARY
+    NAMES libpem_davinci.so
+    PATHS ${PVMODEL_PATH}/lib64/KirinX90/lib
+    NO_CMAKE_SYSTEM_PATH
+    NO_CMAKE_FIND_ROOT_PATH)
+
+find_library(kirin9030_LIBRARY
+    NAMES libpem_davinci.so
+    PATHS ${PVMODEL_PATH}/lib64/Kirin9030/lib
+    NO_CMAKE_SYSTEM_PATH
+    NO_CMAKE_FIND_ROOT_PATH)
+
 include(FindPackageHandleStandardArgs)
 find_package_handle_standard_args(pvmodel_ascend910
     FOUND_VAR
@@ -82,6 +100,9 @@ if(pvmodel_ascend910_FOUND)
     cmake_print_variables(ascend310p_LIBRARY)
     cmake_print_variables(ascend910B1_LIBRARY)
     cmake_print_variables(ascend310B1_LIBRARY)
+    cmake_print_variables(ascend910_9599_LIBRARY)
+    cmake_print_variables(kirinx90_LIBRARY)
+    cmake_print_variables(kirin9030_LIBRARY)
 
     add_library(pvmodel_ascend910 SHARED IMPORTED)
     set_target_properties(pvmodel_ascend910 PROPERTIES
@@ -102,6 +123,23 @@ if(pvmodel_ascend910_FOUND)
     set_target_properties(pem_davinci_ascend310B PROPERTIES
         IMPORTED_LOCATION "${ascend310B1_LIBRARY}"
     )
+
+    add_library(pem_davinci_ascend910_9599 SHARED IMPORTED)
+    set_target_properties(pem_davinci_ascend910_9599 PROPERTIES
+        IMPORTED_LOCATION "${ascend910_9599_LIBRARY}"
+    )
+
+    if (KIRIN_BUILD_CPU_DEBUG)
+        add_library(pem_davinci_kirinx90 SHARED IMPORTED)
+        set_target_properties(pem_davinci_kirinx90 PROPERTIES
+            IMPORTED_LOCATION "${kirinx90_LIBRARY}"
+        )
+
+        add_library(pem_davinci_kirin9030 SHARED IMPORTED)
+        set_target_properties(pem_davinci_kirin9030 PROPERTIES
+            IMPORTED_LOCATION "${kirin9030_LIBRARY}"
+        )
+    endif()
 endif()
 
 # Cleanup temporary variables.
@@ -109,3 +147,6 @@ set(ascend910_LIBRARY)
 set(ascend310p_LIBRARY)
 set(ascend910B1_LIBRARY)
 set(ascend310B1_LIBRARY)
+set(ascend910_9599_LIBRARY)
+set(kirinx90_LIBRARY)
+set(kirin9030_LIBRARY)

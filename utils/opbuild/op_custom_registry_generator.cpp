@@ -369,33 +369,21 @@ void OpCustomGenerator::OpCustomGenMacro(std::ofstream& outfile) const
     outfile
         << "    do {                                                                                                                         \\\n";
     outfile
-        << "        if (AlogCheckDebugLevel(ASCENDC_MODULE_NAME, DLOG_ERROR) == 1) {                                                         \\\n";
-    outfile
-        << "            AlogRecord(ASCENDC_MODULE_NAME, DLOG_TYPE_DEBUG, DLOG_ERROR, \"[%s] \" format \"\\n\", __FUNCTION__, ##__VA_ARGS__);      \\\n";
-    outfile
-        << "        }                                                                                                                        \\\n";
+        << "        dlog_error(ASCENDC_MODULE_NAME, \"[%s] \" format \"\\n\", __FUNCTION__, ##__VA_ARGS__);      \\\n";
     outfile << "    } while (0)\n";
     outfile
         << "#define LOG_WARN(format, ...)                                                                                                    \\\n";
     outfile
         << "    do {                                                                                                                         \\\n";
     outfile
-        << "        if (AlogCheckDebugLevel(ASCENDC_MODULE_NAME, DLOG_WARN) == 1) {                                                          \\\n";
-    outfile
-        << "            AlogRecord(ASCENDC_MODULE_NAME, DLOG_TYPE_DEBUG, DLOG_WARN, \"[%s] \" format \"\\n\", __FUNCTION__, ##__VA_ARGS__);       \\\n";
-    outfile
-        << "        }                                                                                                                        \\\n";
+        << "        dlog_warn(ASCENDC_MODULE_NAME, \"[%s] \" format \"\\n\", __FUNCTION__, ##__VA_ARGS__);       \\\n";
     outfile << "    } while (0)\n";
     outfile
         << "#define LOG_INFO(format, ...)                                                                                                    \\\n";
     outfile
         << "    do {                                                                                                                         \\\n";
     outfile
-        << "        if (AlogCheckDebugLevel(ASCENDC_MODULE_NAME, DLOG_INFO) == 1) {                                                          \\\n";
-    outfile
-        << "            AlogRecord(ASCENDC_MODULE_NAME, DLOG_TYPE_DEBUG, DLOG_INFO, \"[%s] \" format \"\\n\", __FUNCTION__, ##__VA_ARGS__);       \\\n";
-    outfile
-        << "        }                                                                                                                        \\\n";
+        << "        dlog_info(ASCENDC_MODULE_NAME, \"[%s] \" format \"\\n\", __FUNCTION__, ##__VA_ARGS__);       \\\n";
     outfile << "    } while (0)\n";
 }
 
@@ -419,7 +407,7 @@ void OpCustomGenerator::OpCustomGenHead(std::ofstream& outfile) const
     outfile << "#include \"graph/operator_reg.h\"\n";
     outfile << "#include \"register/op_lib_register.h\"\n";
     outfile << "#include \"register/op_impl_registry.h\"\n";
-    outfile << "#include \"base/alog_pub.h\"\n\n";
+    outfile << "#include \"../pkg_inc/base/dlog_pub.h\"\n\n";
 }
 
 opbuild::Status OpCustomGenerator::GenerateCode(void)

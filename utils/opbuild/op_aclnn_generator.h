@@ -18,6 +18,7 @@
 
 #include <fstream>
 #include <cstring>
+#include <unordered_set>
 #include "op_generator.h"
 #include "op_generator_factory.h"
 #include "register/op_def.h"
@@ -57,6 +58,7 @@ const std::map<std::string, int32_t> ACLNN_OP_ATTR_TYPE_MAP = {
 const std::map<enum HcclServerType, std::string> HCCL_SERVER_TYPE_MAP = {
     { HcclServerType::AICPU, "NNOPBASE_HCCL_SERVER_TYPE_AICPU" },
     { HcclServerType::AICORE, "NNOPBASE_HCCL_SERVER_TYPE_MTE" },
+    { HcclServerType::CCU, "NNOPBASE_HCCL_SERVER_TYPE_CCU" },
     { HcclServerType::MAX, "NNOPBASE_HCCL_SERVER_TYPE_END" },
 };
 
@@ -172,6 +174,17 @@ const std::map<int, std::string> FORMAT_SUPPORT_MAP = {
     { ge::FORMAT_NCL, "ge::FORMAT_NCL" }
 };
 
+const std::unordered_set<ge::DataType> VALUE_DEPEND_SUPPORT_DTYPES = {
+    ge::DT_FLOAT, ge::DT_BOOL, ge::DT_INT64, ge::DT_UINT64, ge::DT_INT32,
+    ge::DT_UINT32, ge::DT_INT16, ge::DT_UINT16, ge::DT_INT8, ge::DT_UINT8
+};
+
+const std::unordered_set<ge::DataType> VALUE_DEPEND_SUPPORT_INT_DTYPES = {
+    ge::DT_INT64, ge::DT_UINT64, ge::DT_INT32,ge::DT_UINT32, 
+    ge::DT_INT16, ge::DT_UINT16, ge::DT_INT8, ge::DT_UINT8
+};
+
+
 struct OpDefName {
     std::vector<std::string> originInputName; // op_host配置的输入名称，scalar输入跟随指定参数做类型转换
     std::vector<std::string> inputsName; // 转换后的输入名称
@@ -195,32 +208,32 @@ public:
     void AclnnOpGenHeaderFileDel(std::string& name, std::ofstream& outfile, bool isStart) const;
     std::ofstream AclnnOpGenHeaderFileStart(std::string& fileName, std::string& macroNmae, uint32_t version) const;
     bool AclnnOpGenFunProtoValueDependParam(
-        OpParamDef &input, std::string &name, std::ofstream &outfile, const std::string opType) const;
+        OpParamDef& input, std::string& name, std::ofstream& outfile, const std::string opType) const;
     bool AclnnIsRefParam(const std::string& inputName) const;
-    void AclnnOpGenFunProtoInputParams(OpDef &opDef, OpDefName &opdefName, std::ofstream &outfile, const uint32_t version,
+    void AclnnOpGenFunProtoInputParams(OpDef& opDef, OpDefName& opdefName, std::ofstream& outfile, const uint32_t version,
         const bool valDependApi) const;
-    void AclnnOpGenFunProtoOutputParams(OpDef &opDef, OpDefName &opdefName, std::ofstream &outfile, const uint32_t version, 
+    void AclnnOpGenFunProtoOutputParams(OpDef& opDef, OpDefName& opdefName, std::ofstream& outfile, const uint32_t version, 
         const bool valDependApi) const;
     void AclnnOpGenFunProtoAttrParamsImpl(
-        OpAttrDef &attr, std::ofstream &outfile, std::string &name, const std::string opType) const;
+        OpAttrDef& attr, std::ofstream& outfile, std::string& name, const std::string opType) const;
     void AclnnOpGenFunProtoAttrParams(
-        OpDef &opDef, std::vector<std::string> &paramNames, std::ofstream &outfile, uint32_t version) const;
+        OpDef& opDef, std::vector<std::string>& paramNames, std::ofstream& outfile, uint32_t version) const;
     void AclnnOpGenValueDependInput(OpParamDef& input, std::string& name, size_t index, std::ofstream& outfile) const;
     bool AclOpGenScalarInput(OpParamDef& input, size_t index,
         OpDefName& opdefName, std::ofstream& outfile, std::string funcName) const;
     void AclnnOpGenCodeAddInputTensors(OpDef& opDef, OpDefName& opdefName, std::ofstream& outfile, bool valueDependApi) const;
     void AclnnOpGenCodeAddOutputShapeDependTensors(
-        std::vector<OpParamDef> &outputs, std::vector<std::string> &name, std::ofstream &outfile) const;
-    void AclnnOpGenCodeAddOutputTensors(std::vector<OpParamDef> &outputs, std::vector<std::string> &name,
-        bool hasOutputShapeDepend, std::ofstream &outfile) const;
+        std::vector<OpParamDef>& outputs, std::vector<std::string>& name, std::ofstream& outfile) const;
+    void AclnnOpGenCodeAddOutputTensors(std::vector<OpParamDef>& outputs, std::vector<std::string>& name,
+        bool hasOutputShapeDepend, std::ofstream& outfile) const;
     void AclnnoOpGenCodeAttrValue(OpAttrDef& attr, size_t* len, std::ofstream& outfile) const;
     void AclnnOpGenCodeOptionalStrAttr(OpAttrDef& attr, std::string& name, size_t index, std::ofstream& outfile) const;
     void AclnnOpGenCodeOptionalBoolAttr(OpAttrDef& attr, std::string& name, size_t index, std::ofstream& outfile) const;
     void AclnnOpGenCodeOptionalFloatAttr(
-        OpAttrDef &attr, std::string &name, size_t index, std::ofstream &outfile) const;
+        OpAttrDef& attr, std::string& name, size_t index, std::ofstream& outfile) const;
     void AclnnOpGenCodeOptionalIntAttr(OpAttrDef& attr, std::string& name, size_t index, std::ofstream& outfile) const;
-    void AclnnOpGenCodeAttrParams(OpDef &opDef, std::vector<std::string> &name, std::ofstream &outfile,
-        std::vector<int32_t> &attrTypes) const;
+    void AclnnOpGenCodeAttrParams(OpDef& opDef, std::vector<std::string>& name, std::ofstream& outfile,
+        std::vector<int32_t>& attrTypes) const;
     void AclnnOpGenCodeFunIoTypeCommentImpl(const int32_t type, std::string& name, std::ofstream& outfile) const;
     void AclnnOpGenCodeFunInputComment(std::vector<OpParamDef>& inputs, std::vector<OpParamDef>& outputs,
         OpDefName& opdefName, std::ofstream& outfile, uint32_t version) const;
@@ -232,7 +245,7 @@ public:
         std::ofstream& outfile, uint32_t version) const;
     void AclnnOpGenCodeRunWithWSFunComment(std::string& prefixName, std::ofstream& outfile) const;
     void AclnnOpGenCodeRunForWSFunProto(
-        OpDef &opDef, OpDefName &opdefName, std::ofstream &outfile, uint32_t version) const;
+        OpDef& opDef, OpDefName& opdefName, std::ofstream& outfile, uint32_t version) const;
     void AclnnOpGenCodeTensorRunForWSFunProto(
         OpDef& opDef, OpDefName& opdefName, ofstream& outfile, uint32_t version) const;
     void AclnnOpGenCodeRunWithWSFunProto(std::string& prefixName, std::ofstream& outfile) const;
@@ -242,7 +255,7 @@ public:
         OpDefName& opdefName, std::ofstream& outfile) const;
     void AclnnGenCodeCommFunDelcare(std::ofstream& outfile) const;
     void AclnnOpGenCodeWorkspaceDelcare(
-        OpDef &opDef, OpDefName &opdefName, std::ofstream &outfile, uint32_t version) const;
+        OpDef& opDef, OpDefName& opdefName, std::ofstream& outfile, uint32_t version) const;
     void AclnnOpGenCodeIoParamDesc(std::vector<OpParamDef>& params, const std::string& desc,
         std::ofstream& outfile, uint32_t version) const;
     void AclnnOpGenCodeParamDesc(OpDef& opDef, std::ofstream& outfile, uint32_t version) const;
@@ -251,11 +264,11 @@ public:
     void AclnnOpGenHcclServerTypeList(OpDef& opDef, ofstream& outfile) const;
     void AclnnOpGenHcclServerType(OpDef& opDef, ofstream& outfile) const;
     void AclnnOpGenIoTensorDesc(
-        size_t i, std::vector<OpParamDef> &params, std::ofstream &outfile, const std::string opType) const;
+        size_t i, std::vector<OpParamDef>& params, std::ofstream& outfile, const std::string opType) const;
     void AclnnOpGenTensorDesc(size_t index, std::vector<OpParamDef>& inputs, std::vector<OpParamDef>& outputs,
         std::ofstream& outfile, const std::string opType) const;
-    void AclnnOpGenOpSupportList(size_t index, std::vector<OpParamDef> &inputs, std::vector<OpParamDef> &outputs,
-        std::ofstream &outfile, const std::string opType) const;
+    void AclnnOpGenOpSupportList(size_t index, std::vector<OpParamDef>& inputs, std::vector<OpParamDef>& outputs,
+        std::ofstream& outfile, const std::string opType) const;
     void AclnnOpGenOpSupportListAll(OpDef& opDef, std::ofstream& outfile) const;
     void AclnnGenOpTypeId(OpDef& opDef, std::ofstream& outfile) const;
     void AclnnGenNameSpaceInfo(std::ofstream& outfile, OpDef& opDef) const;
@@ -275,7 +288,7 @@ public:
         std::vector<std::string>& paramName, std::ofstream& outfile) const;
     void AclnnOpGenDefaultArrayAttr(OpAttrDef& attr, std::string attrsName,
         std::vector<std::string>& defaultAttrsName, int32_t type, std::ofstream& outfile) const;
-    void AclnnOpGenDefaultAttr(OpDef &opdef, OpDefName &opdefName, uint32_t version, std::ofstream &outfile) const;
+    void AclnnOpGenDefaultAttr(OpDef& opdef, OpDefName& opdefName, uint32_t version, std::ofstream& outfile) const;
     void AclnnOpGenCodeRunForWorkspaceVersionImpl(
         OpDef& opDef, OpDefName& opdefName, uint32_t version, uint32_t maxVersion, std::ofstream& outfile) const;
     void AclnnOpGenCodeRunForWorkspaceImpl(
@@ -287,21 +300,21 @@ public:
     bool GetInputConfigVerion(OpDef& opDef, std::set<uint32_t>& versions, uint32_t& maxVersion) const;
     bool GetAttrConfigVerion(OpDef& opDef, std::set<uint32_t>& versions, uint32_t& maxVersion) const;
     bool GetConfigVerion(OpDef& opDef, std::set<uint32_t>& versions, uint32_t& maxVersion) const;
-    void AclopGenVersionCode(OpDef &opDef, OpDefName &opdefName, std::string prefixName, std::set<uint32_t> versions,
+    void AclopGenVersionCode(OpDef& opDef, OpDefName& opdefName, std::string prefixName, std::set<uint32_t> versions,
         uint32_t maxVersion) const;
     void AclnnOpGenCodeAttrParamDesc(std::vector<OpAttrDef>& attrs, const std::string& desc,
         std::ofstream& outfile, uint32_t version) const;
     std::string ToLower(std::string str) const;
     bool IsSupportProduct(OpDef& opDef) const;
     std::vector<std::string> Spilt(const std::string& str, const char delim) const;
-    void AclnnGenMc2Declaration(OpDef &opDef, std::ofstream &outfile) const;
+    void AclnnGenMc2Declaration(OpDef& opDef, std::ofstream& outfile) const;
     bool AclnnOpCheckMC2Groups(
-        std::vector<std::string> &name, std::set<ge::AscendString> &groups, const std::string &opType) const;
-    void AclnnGenOutEmptyLaunchDeclaration(OpDef &opDef, ofstream &outfile) const;
-    void AclnnOpGenCodeAttrParamsImpl(std::vector<OpAttrDef> &attrs, std::vector<std::string> &name, size_t index,
-        int32_t type, std::ofstream &outfile) const;
+        std::vector<std::string>& name, std::set<ge::AscendString>& groups, const std::string& opType) const;
+    void AclnnGenOutEmptyLaunchDeclaration(OpDef& opDef, ofstream& outfile) const;
+    void AclnnOpGenCodeAttrParamsImpl(std::vector<OpAttrDef>& attrs, std::vector<std::string>& name, size_t index,
+        int32_t type, std::ofstream& outfile) const;
     void AclnnOpGenCodeHcclGroup(
-        OpDef &opDef, std::vector<std::string> &name, std::vector<int32_t> attrTypes, std::ofstream &outfile) const;
+        OpDef& opDef, std::vector<std::string>& name, std::vector<int32_t> attrTypes, std::ofstream& outfile) const;
     void AclnnOpGenAddParamName(OpDef& opDef, const OpDefName& opdefName, std::ofstream& outfile) const;
     void AclnnAddDisableInputIndex(OpDef& opDef, uint32_t version, std::ofstream& outfile) const;
 
@@ -311,7 +324,7 @@ public:
     void AclopGenCodeRefContiguous(OpDef& opDef, OpDefName& opdefName, std::ofstream& outfile) const;
     void AclnnOpGenCodeRunRefUnContWithWorkspaceImpl(OpDef& opDef, OpDefName& opDefName, std::ofstream& outfile) const;
     opbuild::Status GenerateCode(void) override;
-    void AclnnGenExternFunc(std::ofstream &outfile) const;
+    void AclnnGenExternFunc(std::ofstream& outfile) const;
     void AclnnOpGenFormatMode(OpDef& opDef, std::ofstream& outfile) const;
     bool IsBaseTypeOfAttr(const char *type) const;
     bool IsOpValueDepend(OpDef& opDef) const;

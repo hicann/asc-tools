@@ -117,6 +117,7 @@ foreach(product_type ${TIKCPP_PRODUCT_TYPE_LIST})
             __NPU_ARCH__=2201
             __DAV_C220__
             __DAV_C220_CUBE__
+            __DAV_CUBE__
         )
     elseif(${product_type} STREQUAL "ascend910B1_AIV")
         target_compile_definitions(tikcpp_utest_${product_type} PRIVATE
@@ -151,7 +152,7 @@ foreach(product_type ${TIKCPP_PRODUCT_TYPE_LIST})
     target_include_directories(tikcpp_utest_${product_type} PRIVATE
         ${ASCENDC_TEST_HEADER_FILES}
         ${ASCENDC_SYS_DIR}/include/base/
-        ${ASCENDC_SYS_DIR}/include/experiment/metadef/
+        ${ASCENDC_SYS_DIR}/pkg_inc/base/
         mmpa_headers
         slog_headers
     )
@@ -159,8 +160,8 @@ foreach(product_type ${TIKCPP_PRODUCT_TYPE_LIST})
     target_compile_options(tikcpp_utest_${product_type} PRIVATE
         -g
         -fno-access-control
-        -DCMAKE_C_COMPILER_LAUNCHER=${CCACHE_PROGRAM}
-        -DCMAKE_CXX_COMPILER_LAUNCHER=${CCACHE_PROGRAM}
+        -Werror
+        -Wno-unused-function
     )
 
     target_link_directories(tikcpp_utest_${product_type} PRIVATE
@@ -290,6 +291,7 @@ foreach(product_type ${TIKICPULIB_PRODUCT_TYPE_LIST})
             __NPU_ARCH__=2201
             __DAV_C220__
             __DAV_C220_CUBE__
+            __DAV_CUBE__
         )
     elseif(${product_type} STREQUAL "ascend910B1_AIV")
         target_compile_definitions(tikicpulib_utest_${product_type} PRIVATE
@@ -322,7 +324,7 @@ foreach(product_type ${TIKICPULIB_PRODUCT_TYPE_LIST})
     target_include_directories(tikicpulib_utest_${product_type} PRIVATE
         ${TIKICPULIB_TEST_HEADER_FILES}
         ${ASCENDC_SYS_DIR}/include/base/
-        ${ASCENDC_SYS_DIR}/include/experiment/metadef/
+        ${ASCENDC_SYS_DIR}/pkg_inc/base/
         mmpa_headers
         slog_headers
     )
@@ -330,8 +332,8 @@ foreach(product_type ${TIKICPULIB_PRODUCT_TYPE_LIST})
     target_compile_options(tikicpulib_utest_${product_type} PRIVATE
         -g
         -fno-access-control
-        -DCMAKE_C_COMPILER_LAUNCHER=${CCACHE_PROGRAM}
-        -DCMAKE_CXX_COMPILER_LAUNCHER=${CCACHE_PROGRAM}
+        -Werror
+        -Wno-unused-function
     )
 
     target_link_directories(tikicpulib_utest_${product_type} PRIVATE
@@ -366,9 +368,8 @@ add_library(ops_utest SHARED ${LOCAL_DIR}/testcase/opbuild/test_ops.cpp)
 target_include_directories(ops_utest PRIVATE
     ${ASCENDC_SYS_DIR}/include
     ${ASCENDC_TEST_HEADER_FILES}
+    ${ASCENDC_SYS_DIR}/pkg_inc/base/
     ${ASCENDC_SYS_DIR}/include/base/
-    ${ASCENDC_SYS_DIR}/include/experiment/metadef/
-    ${ASCENDC_SYS_DIR}/include/experiment/
     ${ASCENDC_TOOLS_ROOT_DIR}/utils/opbuild/common/
     ${ASCEND_HOME_PATH}/tools/msopgen/template/custom_operator_sample/DSL/Onnx/metadef/inc
     mmpa_headers
@@ -380,7 +381,6 @@ target_link_directories(ops_utest PRIVATE
 )
 
 target_link_libraries(ops_utest PRIVATE
-    # $<BUILD_INTERFACE:metadef_headers>
     -Wl,--no-as-needed
     c_sec graph graph_base register
     -Wl,--as-needed
@@ -414,6 +414,7 @@ target_compile_definitions(tikcpp_utest_opbuild PRIVATE
 target_compile_options(tikcpp_utest_opbuild PRIVATE
     -g
     -Werror
+    -Wno-unused-function
 )
 
 target_include_directories(tikcpp_utest_opbuild PRIVATE
@@ -421,8 +422,7 @@ target_include_directories(tikcpp_utest_opbuild PRIVATE
     ${ASCENDC_TOOLS_ROOT_DIR}/utils/opbuild/common/
     ${ASCENDC_TEST_HEADER_FILES}
     ${ASCENDC_SYS_DIR}/include/base/
-    ${ASCENDC_SYS_DIR}/include/experiment/metadef/
-    ${ASCENDC_SYS_DIR}/include/experiment/
+    ${ASCENDC_SYS_DIR}/pkg_inc/base/
     ${ASCENDC_SYS_DIR}/include
     mmpa_headers
     slog_headers
@@ -435,7 +435,6 @@ target_link_directories(tikcpp_utest_opbuild PRIVATE
 
 target_link_libraries(tikcpp_utest_opbuild PRIVATE
     $<BUILD_INTERFACE:intf_llt_pub>
-    # $<BUILD_INTERFACE:metadef_headers>
     -Wl,--no-as-needed
     c_sec graph graph_base register dl
     -Wl,--as-needed

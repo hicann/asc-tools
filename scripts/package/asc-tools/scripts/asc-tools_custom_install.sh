@@ -172,6 +172,7 @@ installAllPython() {
     fi
 
     installWhlPackage "${install_path}/tools/msopst-1.0.0-py3-none-any.whl"
+    installWhlPackage "${install_path}/tools/simulator/bin/cannsim-0.1.0-py3-none-any.whl"
     if [ $? -ne 0 ]; then
         return 1
     fi
@@ -257,7 +258,10 @@ installOpPythonLocal() {
 
     installPyWhlLocal "msopst-1.0.0-py3-none-any.whl"
     [ $? -ne 0 ] && return 1
- 	 
+
+    installPyWhlLocal "simulator/bin/cannsim-0.1.0-py3-none-any.whl"
+    [ $? -ne 0 ] && return 1
+
     log $LEVEL_INFO "Install opeator python package succeed."
     return 0
 }
@@ -355,5 +359,7 @@ installPython
 [ $? -ne 0 ] && exit 1
 
 createSoftLink "${install_path}/python/site-packages/bin" "${install_path}/${PLT_ARCH}-linux/bin/" "msopgen"
+createSoftLink "${install_path}/python/site-packages/bin" "${install_path}/${PLT_ARCH}-linux/bin/" "msopst"
+createSoftLink "${install_path}/python/site-packages/bin" "${install_path}/${PLT_ARCH}-linux/bin/" "cannsim"
 
 exit 0

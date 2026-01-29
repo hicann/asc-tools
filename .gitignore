@@ -1,0 +1,7 @@
+.vscode/
+build/
+build_out/
+__pycache__/
+output/
+libraries
+third_party

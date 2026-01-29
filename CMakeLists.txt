@@ -11,6 +11,17 @@
 cmake_minimum_required(VERSION 3.16.0)
 project(asc-tools)
 
+add_compile_options(-Werror)
+
+if(PROJECT_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
+  message(STATUS "compile project asc-tools with library")
+  option(BUILD_WITH_INSTALLED_DEPENDENCY_CANN_PKG "Build asc-tools with cann pkg" ON)
+else()
+  message(STATUS "compile project asc-tools with src")
+  option(BUILD_WITH_INSTALLED_DEPENDENCY_CANN_PKG "Build asc-tools with cann source" OFF)
+endif()
+
+set(KIRIN_BUILD_CPU_DEBUG OFF)
 set(CMAKE_C_FLAGS_RELEASE "")
 set(CMAKE_CXX_FLAGS_RELEASE "")
 

@@ -36,23 +36,5 @@ struct MrgSort4Info {
     uint16_t validBit = 0;
     uint8_t repeatTimes = 1;
 };
-
-template <typename T> struct MrgSortSrcList {
-    __aicore__ MrgSortSrcList() {}
-
-    __aicore__ MrgSortSrcList(const LocalTensor<T>& src1In, const LocalTensor<T>& src2In, const LocalTensor<T>& src3In,
-        const LocalTensor<T>& src4In)
-    {
-        src1 = src1In[0];
-        src2 = src2In[0];
-        src3 = src3In[0];
-        src4 = src4In[0];
-    }
-
-    LocalTensor<T> src1;
-    LocalTensor<T> src2;
-    LocalTensor<T> src3;
-    LocalTensor<T> src4;
-};
 } // namespace AscendC
 #endif // ASCENDC_MODULE_STRUCT_PROPOSAL_H

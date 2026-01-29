@@ -55,13 +55,20 @@ uint32_t socSupportListLen = 1;
 
 TensorDesc inputDesc0_0[3] =
     {{ge::DT_FLOAT, ge::FORMAT_ND},
-     {ge::DT_INT64, ge::FORMAT_ND},
+     {ge::DT_UINT64, ge::FORMAT_ND},
+     {ge::DT_BOOL, ge::FORMAT_ND}};
+TensorDesc inputDesc0_1[3] =
+    {{ge::DT_FLOAT, ge::FORMAT_ND},
+     {ge::DT_INT32, ge::FORMAT_ND},
      {ge::DT_BOOL, ge::FORMAT_ND}};
 TensorDesc outputDesc0_0[1] =
     {{ge::DT_FLOAT, ge::FORMAT_ND}};
+TensorDesc outputDesc0_1[1] =
+    {{ge::DT_FLOAT, ge::FORMAT_ND}};
 SupportInfo list0_0 = {inputDesc0_0, 3, outputDesc0_0, 1};
-SupportInfo supportInfo0[1] = {list0_0};
-OpSocSupportInfo socSupportInfo0= {supportInfo0, 1};
+SupportInfo list0_1 = {inputDesc0_1, 3, outputDesc0_1, 1};
+SupportInfo supportInfo0[2] = {list0_0, list0_1};
+OpSocSupportInfo socSupportInfo0= {supportInfo0, 2};
 
 OpSocSupportInfo opSocSupportList[1] = {socSupportInfo0};
 OpSupportList supportList = {opSocSupportList, 1};

@@ -10,7 +10,7 @@
 # ----------------------------------------------------------------------------------------------------------
 if (NOT EXISTS "${CMAKE_INSTALL_PREFIX}/mockcpp/lib/libmockcpp.a")
     set(mockcpp_SRC_DIR ${ASCENDC_TOOLS_ROOT_DIR}/tests/third_party/mockcpp_src)
-
+    set(mockcpp_SOURCE_DIR ${mockcpp_SRC_DIR}/mockcpp)
     if (CMAKE_HOST_SYSTEM_PROCESSOR  STREQUAL "aarch64")
         set(mockcpp_CXXFLAGS "-fPIC")
     else()

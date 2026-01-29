@@ -15,11 +15,14 @@
 #ifndef ASCENDC_MODULE_UTILS_STRUCT_NORM_SORT_H
 #define ASCENDC_MODULE_UTILS_STRUCT_NORM_SORT_H
 
+#include <cstdint>
+
 namespace AscendC {
 template <typename T> class LocalTensor;
 template <typename T> class GlobalTensor;
 
-#if defined(__NPU_ARCH__) && ((__NPU_ARCH__ == 3003) || (__NPU_ARCH__ == 3113))
+#if defined(__NPU_ARCH__) && ((__NPU_ARCH__ == 2103) || (__NPU_ARCH__ == 3003) || \
+    (__NPU_ARCH__ == 3103) || (__NPU_ARCH__ == 3113))
 
 // redefine these to support other platform.
 enum class pre_quant_t {

@@ -93,6 +93,7 @@ foreach(product_type ${PRODUCT_TYPE_LIST})
     ${CMAKE_CURRENT_SOURCE_DIR}/utils/include/utils
     ${ASCEND_CANN_PACKAGE_PATH}/include
     ${ASCEND_CANN_PACKAGE_PATH}/include/base
+    ${ASCEND_CANN_PACKAGE_PATH}/pkg_inc/base
   )
   target_compile_definitions(cpudebug_${product_type} PRIVATE
     $<$<STREQUAL:${product_type},ascend910B1>:NO_COSIM>
@@ -101,7 +102,7 @@ foreach(product_type ${PRODUCT_TYPE_LIST})
     $<$<STREQUAL:${product_type},kirin9030>:NO_COSIM>
   )
   target_link_libraries(cpudebug_${product_type} PRIVATE
-    $<BUILD_INTERFACE:intf_pub>
+    $<BUILD_INTERFACE:intf_pub_cxx17>
     $<BUILD_INTERFACE:tikcfw_headers>
     $<BUILD_INTERFACE:mmpa_headers>
     c_sec

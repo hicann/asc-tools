@@ -12,8 +12,9 @@
         <path value="tools/tikicpulib/lib/Ascend310P1" chip="Ascend310P" install_softlink="tools/tikicpulib/lib/Ascend310P3"/>
         <path value="tools/tikicpulib/lib/Ascend910B1" chip="Ascend910B" install_softlink="tools/tikicpulib/lib/Ascend910B2;tools/tikicpulib/lib/Ascend910B2C;tools/tikicpulib/lib/Ascend910B3;tools/tikicpulib/lib/Ascend910B4;tools/tikicpulib/lib/Ascend910_9391;tools/tikicpulib/lib/Ascend910_9392;tools/tikicpulib/lib/Ascend910_9381;tools/tikicpulib/lib/Ascend910_9382;tools/tikicpulib/lib/Ascend910_9372;tools/tikicpulib/lib/Ascend910_9361"/>
         <path value="tools/tikicpulib/lib/Ascend310B1" chip="Ascend310B" install_softlink="tools/tikicpulib/lib/Ascend310B2;tools/tikicpulib/lib/Ascend310B3;tools/tikicpulib/lib/Ascend310B4"/>
-        <path value="tools/tikicpulib/lib/KirinX90" chip="KirinX90" />
-        <path value="tools/tikicpulib/lib/Kirin9030" chip="Kirin9030" />
+        <path value="tools/tikicpulib/lib/Ascend910_9599" chip="Ascend910_95" install_softlink="tools/tikicpulib/lib/Ascend910_950x;tools/tikicpulib/lib/Ascend910_950y;tools/tikicpulib/lib/Ascend910_950z;tools/tikicpulib/lib/Ascend910_957b;tools/tikicpulib/lib/Ascend910_957c;tools/tikicpulib/lib/Ascend910_957d;tools/tikicpulib/lib/Ascend910_9589;tools/tikicpulib/lib/Ascend910_958a;tools/tikicpulib/lib/Ascend910_958b;tools/tikicpulib/lib/Ascend910_9591;tools/tikicpulib/lib/Ascend910_9592;tools/tikicpulib/lib/Ascend910_9595;tools/tikicpulib/lib/Ascend910_9596;tools/tikicpulib/lib/Ascend910_9581;tools/tikicpulib/lib/Ascend910_9582;tools/tikicpulib/lib/Ascend910_9583;tools/tikicpulib/lib/Ascend910_9584;tools/tikicpulib/lib/Ascend910_9585;tools/tikicpulib/lib/Ascend910_9586;tools/tikicpulib/lib/Ascend910_9587;tools/tikicpulib/lib/Ascend910_9588;tools/tikicpulib/lib/Ascend910_9571;tools/tikicpulib/lib/Ascend910_9572;tools/tikicpulib/lib/Ascend910_9573;tools/tikicpulib/lib/Ascend910_9574;tools/tikicpulib/lib/Ascend910_9575;tools/tikicpulib/lib/Ascend910_9576;tools/tikicpulib/lib/Ascend910_9577;tools/tikicpulib/lib/Ascend910_9578;tools/tikicpulib/lib/Ascend910_95A1;tools/tikicpulib/lib/Ascend910_95A2"/>
+        <path value="tools/tikicpulib/lib/KirinX90" chip="KirinX90"/>
+        <path value="tools/tikicpulib/lib/Kirin9030" chip="Kirin9030"/>
     </dir_info>
     <!-- tikcpp simulator -->
     <file_info value="tikcpp_simulator_ascend910" chip="Ascend910" copy_type="delivery" src_path="lib/host" dst_path="lib/Ascend910A" install_path="tools/tikicpulib/lib/Ascend910A">
@@ -22,7 +23,6 @@
     <file_info value="tikcpp_simulator_ascend310p" chip="Ascend310P" copy_type="delivery" src_path="lib/host" dst_path="lib/Ascend310P1" install_path="tools/tikicpulib/lib/Ascend310P1">
         <file value="ascend310p/libcpudebug.so" file_type="shared" install_mod="555" install_softlink="tools/tikicpulib/lib/Ascend310P1/libtikcpp_debug.so"/>
     </file_info>
-
     <file_info value="tikcpp_simulator_ascend910B1" chip="Ascend910B" copy_type="delivery" src_path="lib/host" dst_path="lib/Ascend910B1" install_path="tools/tikicpulib/lib/Ascend910B1">
         <file value="ascend910B1/libcpudebug.so" file_type="shared" install_mod="555" install_softlink="tools/tikicpulib/lib/Ascend910B1/libtikcpp_debug.so"/>
     </file_info>
@@ -55,6 +55,7 @@
         <file value="include/kernel_vectorized.h" />
         <file value="include/kernel_fp8_e5m2.h" />
         <file value="include/kernel_fp8_e4m3.h" />
+        <file value="include/kernel_fp8_e8m0.h" />
         <file value="include/kernel_fp4_e2m1.h" />
         <file value="include/kernel_fp4_e1m2.h" />
         <file value="include/kernel_hif8.h" />
@@ -70,6 +71,9 @@
         <file value="ascendc_npuchk_report.py"/>
     </file_info>
     <file_info value="op_build" copy_type="delivery" src_path="lib/host/" dst_path="lib" install_path="tools/opbuild" install_mod="555" feature="ascendc">
-        <file value="op_build" file_type= "executable" />
+        <file value="op_build" file_type= "executable"/>
+    </file_info>
+    <file_info value="ascendc_acl_stub" copy_type="delivery" src_path="lib/host/" dst_path="lib" install_path="tools/tikicpulib/lib" install_mod="440" feature="ascendc">
+        <file value="libcpudebug_acl_stub.so" file_type="shared" install_mod="555" install_softlink="tools/tikicpulib/lib/libascendc_acl_stub.so"/>
     </file_info>
 </block>

@@ -71,6 +71,25 @@ use the PascalCase format.", opType.c_str());
         return 1;
     }
     (void)ops::GeneratorFactory::SetCPUMode("--aicore");
+    auto cpuMode = opbuild::Params::GetInstance().Optional("cpu_mode");
+    if (cpuMode != "") {
+        opbuild::Status resultCPUMode = ops::GeneratorFactory::SetCPUMode(cpuMode);
+        if (resultCPUMode == opbuild::OPBUILD_FAILED) {
+            dlclose(handle);
+            ASCENDLOGE("set cpu mode failed!");
+            return 1;
+        }
+    }
+
+    auto outputFile = opbuild::Params::GetInstance().Optional("output_file");
+    if (outputFile != "") {
+        opbuild::Status resultOut = ops::GeneratorFactory::SetGenPath(outputFile);
+        if (resultOut == opbuild::OPBUILD_FAILED) {
+            dlclose(handle);
+            ASCENDLOGE("set output file path faield!");
+            return 1;
+        }
+    }
     result = ops::GeneratorFactory::Build(stdOps);
     if (result == opbuild::OPBUILD_FAILED) {
         dlclose(handle);

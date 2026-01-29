@@ -13,7 +13,7 @@ set -e
 
 SUPPORTED_SHORT_OPTS=("h" "j" "t" "p")
 SUPPORTED_LONG_OPTS=(
-  "help" "cov" "cache" "pkg" "asan" "make_clean" "cann_3rd_lib_path" "test" "cann_path" "build-type"
+  "help" "cov" "cache" "pkg" "asan" "make_clean" "cann_3rd_lib_path" "test" "cann_path" "build-type" "cpp_utest" "python_utest"
 )
 
 CURRENT_DIR=$(dirname $(readlink -f ${BASH_SOURCE[0]}))
@@ -21,7 +21,7 @@ BUILD_DIR=${CURRENT_DIR}/build
 OUTPUT_DIR=${CURRENT_DIR}/build_out
 USER_ID=$(id -u)
 CPU_NUM=$(($(cat /proc/cpuinfo | grep "^processor" | wc -l)))
-THREAD_NUM=16
+THREAD_NUM=${CPU_NUM}
 CUSTOM_OPTION="-DCMAKE_INSTALL_PREFIX=${OUTPUT_DIR} -DBUILD_OPEN_PROJECT=ON"
 CANN_3RD_LIB_PATH=${CURRENT_DIR}/third_party
 DEPS_FILE_PATH=${CURRENT_DIR}/third_party
@@ -54,6 +54,8 @@ usage() {
         echo "    -t, --test           Build and run all unit tests"
         echo "    -p, --cann_path      Set the cann package installation directory, eg: /usr/local/Ascend/latest"
         echo "    -j                   Compile thread nums, default is 16, eg: -j 8"
+        echo "    --cpp_utest             Build and run the cpp part of unit tests"
+        echo "    --python_utest          Build and run the python part of unit tests"
         echo "    --cann_3rd_lib_path  Set the path for third-party library dependencies, eg: ./build"
         echo "    --cov                Enable code coverage for unit tests"
         echo "    --asan               Enable ASAN (address Sanitizer)"
@@ -75,7 +77,7 @@ usage() {
     esac
   fi
 
-  echo "build script for asc-devkit repository"
+  echo "build script for asc-tools repository"
   echo "Usage: bash build.sh [OPTION]..."
   echo ""
   echo "    The following are all supported arguments:"
@@ -84,6 +86,8 @@ usage() {
   echo "    -j                   Compile thread nums, default is 16, eg: -j 8"
   echo "    -t, --test           Build and run all unit tests"
   echo "    -p, --cann_path      Set the cann package installation directory, eg: /usr/local/Ascend/latest"
+  echo "    --cpp_utest           Build and run the cpp part of unit tests"
+  echo "    --python_utest        Build and run the python part of unit tests"
   echo "    --pkg                Compile run package"
   echo "    --cann_3rd_lib_path  Set the path for third-party library dependencies, eg: ./build"
   echo "    --cov                Enable code coverage for unit tests"
@@ -157,6 +161,8 @@ check_help_combinations() {
   for arg in "${arg[@]}"; do
     case "$arg" in
       -t|--test) has_test=true ;;
+      --cpp_utest) test_part="cpp_utest" ;;
+      --python_utest) test_part="python_utest" ;;
       --cov) has_cov=true ;;
       --pkg) has_pkg=true ;;
       -h|--help) ;;
@@ -207,6 +213,8 @@ check_param_with_help() {
         case "$prev_arg" in
           --pkg) SHOW_HELP="package" ;;
           -t|--test) SHOW_HELP="test" ;;
+          --cpp_utest) SHOW_HELP="utest" ;;
+          --python_utest) SHOW_HELP="utest" ;;
           --make_clean) SHOW_HELP="clean" ;;
         esac
       done
@@ -221,7 +229,7 @@ function cmake_config()
 {
   local extra_option="$1"
   log "Info: cmake config ${CUSTOM_OPTION} ${extra_option} ."
-  cmake ..  ${CUSTOM_OPTION} ${extra_option}
+  cmake .. ${CUSTOM_OPTION} ${extra_option}
 }
 
 function build()
@@ -394,6 +402,16 @@ set_options() {
   done
 }
 
+function build_test_part() {
+  if [[ "$TEST_PART" == "cpp_utest" ]]; then
+    CUSTOM_OPTION="${CUSTOM_OPTION} -DTEST_MOD=cpp"
+  elif [[ "$TEST_PART" == "python_utest" ]]; then
+    CUSTOM_OPTION="${CUSTOM_OPTION} -DTEST_MOD=python"
+  fi
+  build_test
+  return 0
+}
+
 main() {
   check_param_with_help "$@"
   set_options "$@"
@@ -404,6 +422,11 @@ main() {
   clean
 
   if [ -n "${TEST}" ];then
+    CUSTOM_OPTION="${CUSTOM_OPTION} -DENABLE_TEST=ON -DTEST_MOD=all"
+    BUILD_TYPE="Debug"
+  fi
+
+  if [ -n "${TEST_PART}" ]; then
     CUSTOM_OPTION="${CUSTOM_OPTION} -DENABLE_TEST=ON"
     BUILD_TYPE="Debug"
   fi
@@ -431,8 +454,10 @@ main() {
 
   cd ${BUILD_DIR}
 
-  if [ -n "${TEST}" ];then
+  if [ -n "${TEST}" ]; then
     build_test
+  elif [ -n "$TEST_PART" ]; then
+    build_test_part
   else
     build_package
   fi

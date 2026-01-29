@@ -49,15 +49,11 @@ constexpr int8_t HIF8_BIT_LEN = 8;
 constexpr uint32_t FP32_NAN = 0x7FFFFFFF;
 constexpr uint32_t FP32_EXP_BIAS = 127;
 
-#define HIF8_MAX (0x6E)
-#define HIF8_NEG_MAX (0xEE)
-
 #define FP32_MAX_MAN (0x7FFFFF)
 #define FP32_POS_INF (0x7F800000)
 #define FP32_NEG_INF (0xff800000)
 constexpr uint32_t FP32_SIGN_INDEX = 31;
 constexpr uint32_t FP32_MAN_LEN = 23;
-constexpr uint32_t BIT_WIDTH = 22;
 
 // FP8 (E5M2) -> Fp32
 #define FP8_SIGN_INDEX (7)
@@ -70,19 +66,14 @@ constexpr uint32_t FP8E5M2_MAN_LEN = 2;
 constexpr uint32_t FP8E5M2_EXP_BIAS = 15;
 
 #define FP8E5M2_MAN_HIDE_BIT (0x4)
-#define FP8E5M2_T_MAX (0x7B)
 #define FP8E5M2_MAX_EXP (0x1F)
 #define FP8E5M2_MAX_MAN (0x3)
 #define FP8E5M2_INF (0X7C)
-#define FP8E5M2_ABS_MAKS (0X7F)
 
 // FP8 (E4M3) -> Fp32
 #define FP8_SIGN_INDEX (7)
-#define FP8_T_MAX (0x7E)
-#define FP8_T_NEG_MAX (0x8E)
 #define FP8_T_NAN (0x7F)
 constexpr uint32_t FP8E4M3_EXP_BIAS = 7;
-constexpr uint32_t FP8E4M3_EXP_LEN = 4;
 constexpr uint32_t FP8E4M3_MAN_LEN = 3;
 #define FP8_MAX_EXP (0xF)
 #define FP8_MAX_MAN (0x7)
@@ -124,59 +115,6 @@ public:
     {
         ASCENDC_ASSERT((dtypeSize != 0), { KERNEL_LOG(KERNEL_ERROR, "dtypeSize can not be 0"); });
         return GetC0Size() / dtypeSize;
-    }
-
-    template <typename T, bool isSetMask = true>
-    __aicore__ static inline void SetMask(const uint64_t& maskHigh, const uint64_t& maskLow)
-    {
-        if constexpr (!isSetMask) {
-            return;
-        }
-
-#if defined(__NPU_ARCH__) && ((__NPU_ARCH__ == 3101) || (__NPU_ARCH__ == 5102))
-#if defined(ASCENDC_CPU_DEBUG) && ASCENDC_CPU_DEBUG == 1
-        if (sizeof(T) >= sizeof(int32_t)) {
-            ASCENDC_ASSERT((maskHigh == 0ULL),
-                           { KERNEL_LOG(KERNEL_ERROR, "maskHigh must be 0 for type b32 and b64"); });
-        }
-        ASCENDC_ASSERT(((maskLow != 0ULL) || (maskHigh != 0ULL)),
-                       { KERNEL_LOG(KERNEL_ERROR, "maskLow and maskHigh can not be zero at the same time"); });
-#endif
-#endif
-        if ASCEND_IS_NOT_AIC {
-            set_vector_mask(maskHigh, maskLow);
-        }
-    }
-
-    template <typename T, bool isSetMask = true> __aicore__ static inline void SetMask(int32_t len)
-    {
-        if constexpr (!isSetMask) {
-            return;
-        }
-
-        int32_t typeLen = 0;
-        if constexpr (IsSameType<T, int4b_t>::value) {
-            typeLen = DEFAULT_BLOCK_SIZE * INT4_TWO;
-#if (__NPU_ARCH__ == 5102)
-        } else if constexpr (IsSameType<T, int2b_t>::value) {
-            typeLen = DEFAULT_BLOCK_SIZE * INT2_FOUR;
-#endif
-        } else {
-            typeLen = DEFAULT_BLOCK_SIZE / sizeof(T);
-        }
-        constexpr int32_t halfTypeLen = 64;  // 1 register -> 64 bits -> 64 elements
-        constexpr int32_t lenCoeff = 2;      // 2 registers for masks
-        if (len == halfTypeLen) {
-            SetMask<T>(0, FULL_MASK);
-            return;
-        } else if (len == typeLen || len >= halfTypeLen * lenCoeff) { // len = max ele per repeat / len >= 128
-            SetMask<T>(FULL_MASK, FULL_MASK);
-            return;
-        }
-        SetMask<T>(static_cast<uint64_t>(
-            (len > halfTypeLen) ? (((static_cast<uint64_t>(1)) << static_cast<uint32_t>(len - halfTypeLen)) - 1) : 0),
-            static_cast<uint64_t>(
-            (len > halfTypeLen) ? FULL_MASK : (((static_cast<uint64_t>(1)) << static_cast<uint32_t>(len)) - 1)));
     }
 };
 

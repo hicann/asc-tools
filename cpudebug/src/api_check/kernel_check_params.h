@@ -16,7 +16,7 @@
 #ifndef ASCENDC_CHECK_PARAMS_H
 #define ASCENDC_CHECK_PARAMS_H
 #include <map>
-#include "alog_pub.h"
+#include "dlog_pub.h"
 #include "kernel_utils.h"
 #ifdef __DAV_M200__
 #include "ascend610_ini.h"
@@ -26,8 +26,12 @@
 #include "ascend910B1_ini.h"
 #elif defined __DAV_M300__ || (defined (__NPU_ARCH__) && (__NPU_ARCH__ == 3003))
 #include "ascend310B1_ini.h"
-#elif defined (__NPU_ARCH__) && (__NPU_ARCH__ == 3102 || __NPU_ARCH__ == 3113)
+#elif defined (__NPU_ARCH__) && (__NPU_ARCH__ == 3102 || __NPU_ARCH__ == 3103 || __NPU_ARCH__ == 3113)
 #include "ascend610Lite_ini.h"
+#elif defined (__NPU_ARCH__) && (__NPU_ARCH__ == 3101)
+#include "ascend910_9599_ini.h"
+#elif defined (__NPU_ARCH__) && (__NPU_ARCH__ == 5102)
+#include "mc62cm12aa_ini.h"
 #endif
 
 namespace AscendC {
@@ -49,33 +53,25 @@ namespace check {
 
 #define ASCENDC_MODULE_NAME static_cast<int32_t>(ASCENDCKERNEL)
 
-#define CHECK_LOG_DEBUG(format, ...)                                                                                   \
-    do {                                                                                                               \
-        if (AlogCheckDebugLevel(ASCENDC_MODULE_NAME, DLOG_DEBUG) == 1) {                                               \
-            AlogRecord(ASCENDC_MODULE_NAME, DLOG_TYPE_DEBUG, DLOG_DEBUG, format "\n", ##__VA_ARGS__);  \
-        }                                                                                                              \
+#define CHECK_LOG_DEBUG(format, ...)                                  \
+    do {                                                              \
+        dlog_debug(ASCENDC_MODULE_NAME, format "\n", ##__VA_ARGS__);  \
     } while (0)
 
-#define CHECK_LOG_INFO(format, ...)                                                                                    \
-    do {                                                                                                               \
-        if (AlogCheckDebugLevel(ASCENDC_MODULE_NAME, DLOG_INFO) == 1) {                                                \
-            AlogRecord(ASCENDC_MODULE_NAME, DLOG_TYPE_DEBUG, DLOG_INFO, format "\n", ##__VA_ARGS__);   \
-        }                                                                                                              \
+#define CHECK_LOG_INFO(format, ...)                                   \
+    do {                                                              \
+        dlog_info(ASCENDC_MODULE_NAME, format "\n", ##__VA_ARGS__);   \
     } while (0)
 
-#define CHECK_LOG_WARNING(format, ...)                                                                                 \
-    do {                                                                                                               \
-        if (AlogCheckDebugLevel(ASCENDC_MODULE_NAME, DLOG_WARN) == 1) {                                                \
-            AlogRecord(ASCENDC_MODULE_NAME, DLOG_TYPE_DEBUG, DLOG_WARN, format "\n", ##__VA_ARGS__);   \
-        }                                                                                                              \
+#define CHECK_LOG_WARNING(format, ...)                                \
+    do {                                                              \
+        dlog_warn(ASCENDC_MODULE_NAME, format "\n", ##__VA_ARGS__);   \
     } while (0)
 
-#define CHECK_LOG_ERROR(format, ...)                                                                                   \
-    do {                                                                                                               \
-        printf("[ERROR]" format "\n", ##__VA_ARGS__);                                                                  \
-        if (AlogCheckDebugLevel(ASCENDC_MODULE_NAME, DLOG_ERROR) == 1) {                                               \
-            AlogRecord(ASCENDC_MODULE_NAME, DLOG_TYPE_DEBUG, DLOG_ERROR, format "\n", ##__VA_ARGS__);  \
-        }                                                                                                              \
+#define CHECK_LOG_ERROR(format, ...)                                  \
+    do {                                                              \
+        printf("[ERROR]" format "\n", ##__VA_ARGS__);                 \
+        dlog_error(ASCENDC_MODULE_NAME, format "\n", ##__VA_ARGS__);  \
     } while (0)
 
 enum class HardWareIndex {

@@ -16,41 +16,33 @@
 #include <inttypes.h>
 #include "mmpa/mmpa_api.h"
 #include "external/ge_common/ge_api_error_codes.h"
-#include "alog_pub.h"
+#include "dlog_pub.h"
 
 #define ASCENDC_MODULE_NAME static_cast<int32_t>(ASCENDCKERNEL)
 
 #if !(defined(UT_TEST) || defined(ST_TEST))
-#define ASCENDLOGE(format, ...)                                                                                        \
-    do {                                                                                                               \
-        if (AlogCheckDebugLevel(ASCENDC_MODULE_NAME, DLOG_ERROR) == 1) {                                               \
-            AlogRecord(ASCENDC_MODULE_NAME, DLOG_TYPE_DEBUG, DLOG_ERROR, "  %d [%s:%d][%s]" format "\n", mmGetTid(),         \
-                       __FILE__, __LINE__, __FUNCTION__, ##__VA_ARGS__);               \
-        }                                                                                                              \
+#define ASCENDLOGE(format, ...)                                                       \
+    do {                                                                              \
+        dlog_error(ASCENDC_MODULE_NAME, "  %d [%s:%d][%s]" format "\n", mmGetTid(),   \
+                       __FILE__, __LINE__, __FUNCTION__, ##__VA_ARGS__);              \
     } while (0)
 
-#define ASCENDLOGW(format, ...)                                                                                        \
-    do {                                                                                                               \
-        if (AlogCheckDebugLevel(ASCENDC_MODULE_NAME, DLOG_WARN) == 1) {                                                \
-            AlogRecord(ASCENDC_MODULE_NAME, DLOG_TYPE_DEBUG, DLOG_WARN, "  %d [%s:%d][%s]" format "\n", mmGetTid(),          \
+#define ASCENDLOGW(format, ...)                                                        \
+    do {                                                                               \
+        dlog_warn(ASCENDC_MODULE_NAME, "  %d [%s:%d][%s]" format "\n", mmGetTid(),    \
                        __FILE__, __LINE__, __FUNCTION__, ##__VA_ARGS__);               \
-        }                                                                                                              \
     } while (0)
 
-#define ASCENDLOGI(format, ...)                                                                                        \
-    do {                                                                                                               \
-        if (AlogCheckDebugLevel(ASCENDC_MODULE_NAME, DLOG_INFO) == 1) {                                                \
-            AlogRecord(ASCENDC_MODULE_NAME, DLOG_TYPE_DEBUG, DLOG_INFO, "  %d [%s:%d][%s]" format "\n", mmGetTid(),          \
+#define ASCENDLOGI(format, ...)                                                        \
+    do {                                                                               \
+        dlog_info(ASCENDC_MODULE_NAME, "  %d [%s:%d][%s]" format "\n", mmGetTid(),    \
                        __FILE__, __LINE__, __FUNCTION__, ##__VA_ARGS__);               \
-        }                                                                                                              \
     } while (0)
 
-#define ASCENDLOGD(format, ...)                                                                                        \
-    do {                                                                                                               \
-        if (AlogCheckDebugLevel(ASCENDC_MODULE_NAME, DLOG_DEBUG) == 1) {                                               \
-            AlogRecord(ASCENDC_MODULE_NAME, DLOG_TYPE_DEBUG, DLOG_DEBUG, " %d [%s:%d][%s]" format "\n", mmGetTid(),          \
+#define ASCENDLOGD(format, ...)                                                        \
+    do {                                                                               \
+        dlog_debug(ASCENDC_MODULE_NAME, " %d [%s:%d][%s]" format "\n", mmGetTid(),     \
                        __FILE__, __LINE__, __FUNCTION__, ##__VA_ARGS__);               \
-        }                                                                                                              \
     } while (0)
 #else
 #define ASCENDLOGE

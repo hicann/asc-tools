@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<block name="AscendCProjectTemplate" copy_type="delivery" src_path="lib/host" dst_path="" install_path="" install_own="$username:$usergroup" install_mod="550" install_type="run;devel">
+    <dir_info value="msopgen_template" install_mod="550">
+        <path value="tools/msopgen"/>
+        <path value="tools/msopgen/template"/>
+    </dir_info>
+    <file_info copy_type="source" src_path="lib/host" dst_path="tools/" install_path="tools/" install_mod="750" feature="ascendc">
+        <file value="op_project_templates"/>
+    </file_info>
+    <file_info copy_type="delivery" src_path="lib/host" dst_path="tools/msopgen/template" install_path="tools/msopgen/template" feature="ascendc">
+        <file value="Ascend_IR_Template.xlsx" install_mod="550"/>
+    </file_info>
+</block>

@@ -43,13 +43,15 @@
 #endif // ASCENDC_CPU_DEBUG
 
 #if defined(__NPU_ARCH__) && ((__NPU_ARCH__ == 5102) ||                             \
-	(__NPU_ARCH__ == 3003) || (__NPU_ARCH__ == 3113) || (__NPU_ARCH__ == 3101))
+	(__NPU_ARCH__ == 2103) || (__NPU_ARCH__ == 3003) || (__NPU_ARCH__ == 3103) ||   \
+	(__NPU_ARCH__ == 3113) || (__NPU_ARCH__ == 3101))
 
 #if !defined(ASCENDC_CPU_DEBUG)
 using fp4x2_e2m1_t = float4_e2m1x2_t;
 using fp4x2_e1m2_t = float4_e1m2x2_t;
 using fp8_e5m2_t = float8_e5m2_t;
 using fp8_e4m3fn_t = float8_e4m3_t;
+using fp8_e8m0_t = float8_e8m0_t;
 #endif
 #endif
 

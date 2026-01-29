@@ -29,3 +29,18 @@ run_python_llt_test(
         PRE_TEST_COMMAND
         COVERAGERC_DIR
 )
+
+if(NOT DEFINED PYTHON_PYVERSION)
+    set(PYTHON_PYVERSION python3)
+endif()
+
+add_custom_target(
+    python_llt_coverage
+    ALL
+    COMMAND echo "Start generating the LLT coverage rate for Python."
+    COMMAND ${PYTHON_PYVERSION} -m coverage combine .coverage.tikcpp_utest_show_kernel_debug_data .coverage.tikcpp_utest_msobjdump
+    COMMAND ${PYTHON_PYVERSION} -m coverage html --data-file=".coverage"
+    DEPENDS tikcpp_utest_msobjdump tikcpp_utest_show_kernel_debug_data
+    WORKING_DIRECTORY ${ASCENDC_TOOLS_ROOT_DIR}/build_out/coverage_result/
+    COMMENT "Succeed to generating the LLT coverage rate for Python."
+)

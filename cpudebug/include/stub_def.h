@@ -27,6 +27,7 @@
 #include "kernel_vectorized.h"
 #include "kernel_fp8_e4m3.h"
 #include "kernel_fp8_e5m2.h"
+#include "kernel_fp8_e8m0.h"
 #include "kernel_fp4_e2m1.h"
 #include "kernel_fp4_e1m2.h"
 #include "kernel_hif8.h"
@@ -60,15 +61,24 @@
 #define __simd_callee__
 #define __simd_vf__
 #define __no_simd_vf_fusion__
+#define __disable_kernel_type_autoinfer__
 #define LAUNCH_BOUND(x)
 #define ASCENDC_HOST_AICORE
 
 namespace ConstantsInternal {
+#if defined (__NPU_ARCH__) && (__NPU_ARCH__ == 3103)
+constexpr uint16_t b4EleSize = 256;
+constexpr uint16_t b8EleSize = 128;
+constexpr uint16_t b16EleSize = 64;
+constexpr uint16_t b32EleSize = 32;
+constexpr uint16_t b64EleSize = 32;
+#else
 constexpr uint16_t b4EleSize = 512;
 constexpr uint16_t b8EleSize = 256;
 constexpr uint16_t b16EleSize = 128;
 constexpr uint16_t b32EleSize = 64;
 constexpr uint16_t b64EleSize = 32;
+#endif
 }
 
 // kirin symbol dependency
@@ -92,6 +102,7 @@ using vector_f16 = std::array<half, ConstantsInternal::b16EleSize>;
 using vector_f32 = std::array<float, ConstantsInternal::b32EleSize>;
 using vector_f8e5m2 = std::array<fp8_e5m2_t, ConstantsInternal::b8EleSize>;
 using vector_f8e4m3 = std::array<fp8_e4m3fn_t, ConstantsInternal::b8EleSize>;
+using vector_f8e8m0 = std::array<fp8_e8m0_t, ConstantsInternal::b8EleSize>;
 using vector_hif8 = std::array<hifloat8_t, ConstantsInternal::b8EleSize>;
 using vector_f4e2m1x2 = std::array<fp4x2_e2m1_t, ConstantsInternal::b8EleSize>;
 using vector_f4e1m2x2 = std::array<fp4x2_e1m2_t, ConstantsInternal::b8EleSize>;

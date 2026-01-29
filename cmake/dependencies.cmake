@@ -23,7 +23,7 @@ endif ()
 
 set(PVMODEL_PATH ${PROJECT_SOURCE_DIR}/libraries/simulator)
 
-find_package(alog MODULE REQUIRED)
+find_package(unified_dlog MODULE REQUIRED)
 find_package(securec MODULE REQUIRED)
 find_package(mmpa MODULE REQUIRED)
 find_package(metadef MODULE REQUIRED)

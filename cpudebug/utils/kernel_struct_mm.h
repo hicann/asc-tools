@@ -19,7 +19,8 @@
 namespace AscendC {
 // MM intr params
 using LoadData2dParams = struct LoadData2DParams;
-#if defined(__NPU_ARCH__) && ((__NPU_ARCH__ == 3003) || (__NPU_ARCH__ == 3113))
+#if defined(__NPU_ARCH__) && ((__NPU_ARCH__ == 2103) || (__NPU_ARCH__ == 3003) || (__NPU_ARCH__ == 3103) || \
+    (__NPU_ARCH__ == 3113))
 struct LoadData2DParams {
     __aicore__ LoadData2DParams() {}
 
@@ -138,12 +139,18 @@ struct LoadData2DParams {
 };
 #endif
 
-#if defined(__NPU_ARCH__) && ((__NPU_ARCH__ == 3113))
+#if defined(__NPU_ARCH__) && ((__NPU_ARCH__ == 3113) && defined(__DAV_L311__))
+using LoadData2DParamsV2 = struct LoadData2DParamsV311Gen;
+using LoadData2dTransposeParams = struct LoadData2dTransposeParamsV311Gen;
+#elif defined(__NPU_ARCH__) && ((__NPU_ARCH__ == 3103) && defined(__DAV_L310__))
 using LoadData2DParamsV2 = struct LoadData2DParamsV311Gen;
 using LoadData2dTransposeParams = struct LoadData2dTransposeParamsV311Gen;
 #elif defined(__NPU_ARCH__) && (__NPU_ARCH__ == 3003)
 using LoadData2DParamsV2 = struct LoadData2DParamsV311Gen;
 using LoadData2dTransposeParams = struct LoadData2dTransposeParamsV300;
+#elif defined(__NPU_ARCH__) && (__NPU_ARCH__ == 2103)
+using LoadData2DParamsV2 = struct LoadData2DParamsV311Gen;
+using LoadData2dTransposeParams = struct LoadData2dTransposeParamsV210;
 #else // Turing versions
 struct LoadData2DParamsV2 {
     __aicore__ LoadData2DParamsV2() {}
@@ -202,7 +209,123 @@ struct LoadData2dTransposeParams {
 };
 #endif
 
-#if defined(__NPU_ARCH__) && ((__NPU_ARCH__ == 3003) || (__NPU_ARCH__ == 3113))
+#if defined(__NPU_ARCH__) && ((__NPU_ARCH__ == 2103) || (__NPU_ARCH__ == 3003) || (__NPU_ARCH__ == 3103) || \
+    (__NPU_ARCH__ == 3113))
+struct LoadData2dTransposeParamsV210 {
+    __aicore__ LoadData2dTransposeParamsV210()
+    {
+        startIndex = 0;
+        repeatTimes = 0;
+        srcStride = 0;
+        dstGap = 0;
+        dstFracGap = 0;
+        addrMode = 0;
+    }
+
+    __aicore__ LoadData2dTransposeParamsV210(const uint16_t startIndexIn, const uint8_t repeatTimesIn,
+        const uint16_t srcStrideIn, const uint16_t dstGapIn, const uint16_t dstfracGapIn, const uint8_t addrModeIn)
+    {
+        startIndex = startIndexIn;
+        repeatTimes = repeatTimesIn;
+        srcStride = srcStrideIn;
+        dstGap = dstGapIn;
+        dstFracGap = dstfracGapIn;
+        addrMode = addrModeIn;
+    }
+
+    __aicore__ LoadData2dTransposeParamsV210(const uint16_t startIndexIn, const uint8_t repeatTimesIn,
+        const uint16_t srcStrideIn, const uint16_t dstGapIn, const uint16_t dstfracGapIn)
+    {
+        startIndex = startIndexIn;
+        repeatTimes = repeatTimesIn;
+        srcStride = srcStrideIn;
+        dstGap = dstGapIn;
+        dstFracGap = dstfracGapIn;
+    }
+
+    __aicore__ inline void SetStartIndex(uint16_t startIndex_)
+    {
+        startIndex = startIndex_;
+    }
+
+    __aicore__ inline void SetRepeatTimes(uint8_t repeatTimes_)
+    {
+        repeatTimes = repeatTimes_;
+    }
+
+    __aicore__ inline void SetSrcStride(uint16_t srcStride_)
+    {
+        srcStride = srcStride_;
+    }
+
+    __aicore__ inline void SetDstGap(uint16_t dstGap_)
+    {
+        dstGap = dstGap_;
+    }
+
+    __aicore__ inline void SetDstFracGap(uint16_t dstFracGap_)
+    {
+        dstFracGap = dstFracGap_;
+    }
+
+    __aicore__ inline void SetAddrMode(uint8_t addrMode_)
+    {
+        addrMode = addrMode_;
+    }
+
+    __aicore__ inline void SetMStartPosition(uint32_t mStartPosition_)
+    {
+        (void)mStartPosition_;
+    }
+
+    __aicore__ inline void SetKStartPosition(uint32_t kStartPosition_)
+    {
+        (void)kStartPosition_;
+    }
+
+    __aicore__ inline void SetMStep(uint16_t mStep_)
+    {
+        (void)mStep_;
+    }
+
+    __aicore__ inline void SetKStep(uint16_t kStep_)
+    {
+        (void)kStep_;
+    }
+
+    __aicore__ inline void SetSrcStride(int32_t srcStride_)
+    {
+        (void)srcStride_;
+    }
+
+    __aicore__ inline void SetDstStride(uint16_t dstStride_)
+    {
+        (void)dstStride_;
+    }
+
+    __aicore__ inline void SetIfTranspose(bool ifTranspose_)
+    {
+        (void)ifTranspose_;
+    }
+
+    __aicore__ inline void SetSid(uint8_t sid_)
+    {
+        (void)sid_;
+    }
+
+    __aicore__ inline void SetQmode(uint8_t qmode_)
+    {
+        (void)qmode_;
+    }
+
+    uint16_t startIndex = 0;
+    uint8_t repeatTimes = 0;
+    uint16_t srcStride = 0;
+    uint16_t dstGap = 0;
+    uint16_t dstFracGap = 0;
+    uint8_t addrMode = 0;
+};
+
 struct LoadData2dTransposeParamsV300 {
     __aicore__ LoadData2dTransposeParamsV300()
     {
@@ -618,7 +741,8 @@ struct LoadData3DParamsV2 {
         for (int32_t i = 0; i < PAD_SIZE; ++i) {
             padList[i] = 0;
         }
-#if defined(__NPU_ARCH__) && ((__NPU_ARCH__ == 3003) || (__NPU_ARCH__ == 3113))
+#if defined(__NPU_ARCH__) && ((__NPU_ARCH__ == 2103) || (__NPU_ARCH__ == 3003) || (__NPU_ARCH__ == 3103) || \
+    (__NPU_ARCH__ == 3113))
         enDualSrc = BM_DISABLE;
 #endif
     }
@@ -702,7 +826,8 @@ struct LoadData3DParamsV2 {
     bool filterSizeW = false;
     bool filterSizeH = false;
     bool fMatrixCtrl = false;
-#if defined(__NPU_ARCH__) && ((__NPU_ARCH__ == 3003) || (__NPU_ARCH__ == 3113))
+#if defined(__NPU_ARCH__) && ((__NPU_ARCH__ == 2103) || (__NPU_ARCH__ == 3003) || (__NPU_ARCH__ == 3103) || \
+    (__NPU_ARCH__ == 3113))
     bm_t enDualSrc = BM_DISABLE;
 #endif
 };

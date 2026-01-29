@@ -17,12 +17,11 @@ add_library(intf_pub INTERFACE)
 target_compile_options(intf_pub INTERFACE
   -Wall
   -fPIC
+  -Werror
   $<IF:$<VERSION_GREATER:${CMAKE_C_COMPILER_VERSION},4.8.5>,-fstack-protector-strong,-fstack-protector-all>
-  $<$<COMPILE_LANGUAGE:CXX>:-std=c++17>
+  $<$<COMPILE_LANGUAGE:CXX>:-std=c++14>
   $<$<BOOL:${ENABLE_GCOV}>:-fprofile-arcs -ftest-coverage>
   $<$<BOOL:${ENABLE_ASAN}>:-fsanitize=address -fsanitize=leak -fsanitize-recover=address,all -fno-stack-protector -fno-omit-frame-pointer -g>
-  -DCMAKE_C_COMPILER_LAUNCHER=${CCACHE_PROGRAM}
-  -DCMAKE_CXX_COMPILER_LAUNCHER=${CCACHE_PROGRAM}
 )
 target_compile_definitions(intf_pub INTERFACE
   _GLIBCXX_USE_CXX11_ABI=0
@@ -49,10 +48,9 @@ add_library(intf_pub_cxx14 INTERFACE)
 target_compile_options(intf_pub_cxx14 INTERFACE
   -Wall
   -fPIC
+  -Werror
   $<IF:$<VERSION_GREATER:${CMAKE_C_COMPILER_VERSION},4.8.5>,-fstack-protector-strong,-fstack-protector-all>
   $<$<COMPILE_LANGUAGE:CXX>:-std=c++14>
-  -DCMAKE_C_COMPILER_LAUNCHER=${CCACHE_PROGRAM}
-  -DCMAKE_CXX_COMPILER_LAUNCHER=${CCACHE_PROGRAM}
 )
 target_compile_definitions(intf_pub_cxx14 INTERFACE
   _GLIBCXX_USE_CXX11_ABI=0
@@ -77,10 +75,9 @@ add_library(intf_pub_cxx17 INTERFACE)
 target_compile_options(intf_pub_cxx17 INTERFACE
     -Wall
     -fPIC
+    -Werror
     $<IF:$<VERSION_GREATER:${CMAKE_C_COMPILER_VERSION},4.8.5>,-fstack-protector-strong,-fstack-protector-all>
     $<$<COMPILE_LANGUAGE:CXX>:-std=c++17>
-    -DCMAKE_C_COMPILER_LAUNCHER=${CCACHE_PROGRAM}
-    -DCMAKE_CXX_COMPILER_LAUNCHER=${CCACHE_PROGRAM}
 )
 target_compile_definitions(intf_pub_cxx17 INTERFACE
     _GLIBCXX_USE_CXX11_ABI=0
@@ -102,10 +99,9 @@ add_library(intf_pub_aicpu INTERFACE)
 target_compile_options(intf_pub_aicpu INTERFACE
   -Wall
   -fPIC
+  -Werror
   $<IF:$<VERSION_GREATER:${CMAKE_C_COMPILER_VERSION},4.8.5>,-fstack-protector-strong,-fstack-protector-all>
   $<$<COMPILE_LANGUAGE:CXX>:-std=c++11>
-  -DCMAKE_C_COMPILER_LAUNCHER=${CCACHE_PROGRAM}
-  -DCMAKE_CXX_COMPILER_LAUNCHER=${CCACHE_PROGRAM}
 )
 target_compile_definitions(intf_pub_aicpu INTERFACE
   $<$<NOT:$<STREQUAL:${PRODUCT_SIDE},device>>:_GLIBCXX_USE_CXX11_ABI=0>

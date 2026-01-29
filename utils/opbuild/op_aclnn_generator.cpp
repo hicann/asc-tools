@@ -53,6 +53,26 @@ void Split(const std::string& str, const char delimiter, std::vector<std::string
     }
 }
 
+bool AreAllInputDataTypesSame(const std::vector<ge::DataType>& inputDataTypes)
+{
+    for (size_t i = 1U; i < inputDataTypes.size(); ++i) {
+        if (inputDataTypes[i] != inputDataTypes[0]) {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool AreInputDataTypesSupported(const std::unordered_set<ge::DataType>& supportDateTypeSet, const std::vector<ge::DataType>& inputDataTypes)
+{
+    for (size_t i = 0U; i < inputDataTypes.size(); ++i) {
+        if (supportDateTypeSet.find(inputDataTypes[i]) == supportDateTypeSet.cend()) {
+            return false;
+        }
+    }
+    return true;
+}
+
 } // Anonymous Namespace
 
 namespace ops {
@@ -103,26 +123,31 @@ bool AclnnOpGenerator::AclnnOpGenFunProtoValueDependParam(
     OpParamDef& input, std::string& name, ofstream& outfile, const std::string opType) const
 {
     std::vector<ge::DataType> dataTypes = input.GetDataTypes();
-    if (dataTypes.size() > 0U) {
-        for (size_t i = 1U; i < dataTypes.size(); i++) {
-            if (dataTypes[i] != dataTypes[0]) {
-                Generator::SetErrorMessage(
-                    "ValueDepend input dtype of op " + opType + " must be the same and must be float, int64, or bool.");
-                return false;
-            }
-        }
-        if (dataTypes[0] == ge::DT_FLOAT) {
-            outfile << "    const aclFloatArray *" << name << ",\n";
-        } else if (dataTypes[0] == ge::DT_INT64) {
-            outfile << "    const aclIntArray *" << name << ",\n";
-        } else if (dataTypes[0] == ge::DT_BOOL) {
-            outfile << "    const aclBoolArray *" << name << ",\n";
-        } else {
-            Generator::SetErrorMessage("ValueDepend input dtype of op " + opType + " must be float, int64 or bool.");
-            return false;
-        }
+    if (dataTypes.empty()) {
+        return true;
     }
 
+    ge::DataType firstType = dataTypes[0];
+    if (VALUE_DEPEND_SUPPORT_DTYPES.find(firstType) == VALUE_DEPEND_SUPPORT_DTYPES.cend()) {
+        std::string str = "ValueDepend input dtypes of op " + opType +  " must be [float, bool, "
+                            + "int64, uint64, int32, uint32, int16, uint16, int8, uint8].";
+        Generator::SetErrorMessage(str);
+        return false;
+    }
+    std::string errMsg = "ValueDepend input dtypes of op " + opType +  " must satisfy one of the following conditions:\n"
+                       " 1. All input dtypes are float.\n"
+                       " 2. All input dtypes are bool.\n"
+                       " 3. All input dtypes are integers or unsigned integers form the supported set: [int64, uint64, int32, uint32, int16, uint16, int8, uint8].";
+    if (firstType == ge::DT_FLOAT && AreAllInputDataTypesSame(dataTypes)) {
+        outfile << "    const aclFloatArray *" << name << ",\n";
+    } else if (firstType == ge::DT_BOOL && AreAllInputDataTypesSame(dataTypes)) {
+        outfile << "    const aclBoolArray *" << name << ",\n";
+    } else if (AreInputDataTypesSupported(VALUE_DEPEND_SUPPORT_INT_DTYPES, dataTypes)) {
+        outfile << "    const aclIntArray *" << name << ",\n";
+    } else {
+        Generator::SetErrorMessage(errMsg);
+        return false;
+    }
     return true;
 }
 
@@ -136,7 +161,7 @@ bool AclnnOpGenerator::AclnnIsRefParam(const std::string& inputName) const
 }
 
 void AclnnOpGenerator::AclnnOpGenFunProtoInputParams(
-    OpDef &opDef, OpDefName& opdefName, ofstream &outfile, const uint32_t version, const bool valDependApi) const
+    OpDef& opDef, OpDefName& opdefName, ofstream& outfile, const uint32_t version, const bool valDependApi) const
 {
     std::vector<OpParamDef>& param = opDef.GetInputs();
     std::vector<std::string>& paramNames = opdefName.inputsName;
@@ -177,7 +202,7 @@ void AclnnOpGenerator::AclnnOpGenFunProtoInputParams(
 }
 
 void AclnnOpGenerator::AclnnOpGenFunProtoOutputParams(
-    OpDef &opDef, OpDefName& opdefName, ofstream &outfile, const uint32_t version, const bool valDependApi) const
+    OpDef& opDef, OpDefName& opdefName, ofstream& outfile, const uint32_t version, const bool valDependApi) const
 {
     std::vector<OpParamDef>& param = opDef.GetOutputs();
     std::vector<std::string>& paramNames = opdefName.outputsName;
@@ -220,7 +245,7 @@ void AclnnOpGenerator::AclnnOpGenFunProtoOutputParams(
 }
 
 void AclnnOpGenerator::AclnnOpGenFunProtoAttrParamsImpl(
-    OpAttrDef &attr, ofstream &outfile, std::string &name, const std::string opType) const
+    OpAttrDef& attr, ofstream& outfile, std::string& name, const std::string opType) const
 {
     auto iter = ACLNN_OP_ATTR_TYPE_MAP.find(attr.GetCfgDataType().GetString());
     if (iter == ACLNN_OP_ATTR_TYPE_MAP.end()) {
@@ -284,11 +309,11 @@ void AclnnOpGenerator::AclnnOpGenValueDependInput(
     if (dataType == ge::DT_FLOAT) {
         outfile << "    NNOPBASE_ASSERT_OK_RETVAL(NnopbaseAddFloatArrayInput(*executor, " << name << ", " << index <<
                    "));\n";
-    } else if (dataType == ge::DT_INT64) {
-        outfile << "    NNOPBASE_ASSERT_OK_RETVAL(NnopbaseAddIntArrayInput(*executor, " << name << ", " << index <<
+    } else if (dataType == ge::DT_BOOL) {
+        outfile << "    NNOPBASE_ASSERT_OK_RETVAL(NnopbaseAddBoolArrayInput(*executor, " << name << ", " << index <<
                    "));\n";
     } else {
-        outfile << "    NNOPBASE_ASSERT_OK_RETVAL(NnopbaseAddBoolArrayInput(*executor, " << name << ", " << index <<
+        outfile << "    NNOPBASE_ASSERT_OK_RETVAL(NnopbaseAddIntArrayInput(*executor, " << name << ", " << index <<
                    "));\n";
     }
 }
@@ -361,7 +386,7 @@ void AclnnOpGenerator::AclnnOpGenCodeAddInputTensors(OpDef& opDef, OpDefName& op
 }
 
 void AclnnOpGenerator::AclnnOpGenCodeAddOutputShapeDependTensors(
-    std::vector<OpParamDef> &outputs, std::vector<std::string> &name, ofstream &outfile) const
+    std::vector<OpParamDef>& outputs, std::vector<std::string>& name, ofstream& outfile) const
 {
     outfile << "    if (NnopbaseAddOutputShapeDependTensor != NULL) {\n";
     for (size_t i = 0; i < outputs.size(); i++) {
@@ -382,8 +407,8 @@ void AclnnOpGenerator::AclnnOpGenCodeAddOutputShapeDependTensors(
     outfile << "    }\n";
 }
 
-void AclnnOpGenerator::AclnnOpGenCodeAddOutputTensors(std::vector<OpParamDef> &outputs, std::vector<std::string> &name,
-    bool hasOutputShapeDepend, ofstream &outfile) const
+void AclnnOpGenerator::AclnnOpGenCodeAddOutputTensors(std::vector<OpParamDef>& outputs, std::vector<std::string>& name,
+    bool hasOutputShapeDepend, ofstream& outfile) const
 {
     if (hasOutputShapeDepend) {
         AclnnOpGenCodeAddOutputShapeDependTensors(outputs, name, outfile);
@@ -499,7 +524,7 @@ void AclnnOpGenerator::AclnnOpGenCodeOptionalIntAttr(
 }
 
 void AclnnOpGenerator::AclnnOpGenCodeAttrParamsImpl(
-    std::vector<OpAttrDef> &attrs, std::vector<std::string> &name, size_t index, int32_t type, ofstream &outfile) const
+    std::vector<OpAttrDef>& attrs, std::vector<std::string>& name, size_t index, int32_t type, ofstream& outfile) const
 {
     switch (type) {
         case OP_ACLNN_ATTR_TYPE_FLOAT: {
@@ -541,10 +566,10 @@ void AclnnOpGenerator::AclnnOpGenCodeAttrParamsImpl(
 }
 
 void AclnnOpGenerator::AclnnOpGenCodeAttrParams(
-    OpDef &opDef, std::vector<std::string> &name, ofstream &outfile, std::vector<int32_t> &attrTypes) const
+    OpDef& opDef, std::vector<std::string>& name, ofstream& outfile, std::vector<int32_t>& attrTypes) const
 {
     const std::string opType = opDef.GetOpType().GetString();
-    std::vector<OpAttrDef> &attrs = opDef.GetAttrs();
+    std::vector<OpAttrDef>& attrs = opDef.GetAttrs();
     for (size_t i = 0; i < attrs.size(); i++) {
         auto iter = ACLNN_OP_ATTR_TYPE_MAP.find(attrs[i].GetCfgDataType().GetString());
         if (iter == ACLNN_OP_ATTR_TYPE_MAP.end()) {
@@ -856,7 +881,7 @@ bool AclnnOpGenerator::IsSupportProduct(OpDef& opDef) const
         const auto& products = Spilt(productStr, ';');
         const auto& map = opDef.AICore().GetAICoreConfigs();
         for (const auto& it : map) {
-            const std::string &socVer = it.first.GetString();
+            const std::string& socVer = it.first.GetString();
             for (const auto& product : products) {
                 if (socVer == product) {
                     return true;
@@ -984,7 +1009,7 @@ void AclnnOpGenerator::AclnnOpGenHcclServerTypeList(OpDef& opDef, ofstream& outf
 }
 
 void AclnnOpGenerator::AclnnOpGenIoTensorDesc(
-    size_t i, std::vector<OpParamDef> &params, ofstream &outfile, const std::string opType) const
+    size_t i, std::vector<OpParamDef>& params, ofstream& outfile, const std::string opType) const
 {
     for (size_t j = 0U; j < params.size(); j++) {
         std::vector<ge::DataType> dataTypes = params[j].GetDataTypes();
@@ -1013,8 +1038,8 @@ void AclnnOpGenerator::AclnnOpGenIoTensorDesc(
         }
     }
 }
-void AclnnOpGenerator::AclnnOpGenTensorDesc(size_t index, std::vector<OpParamDef> &inputs,
-    std::vector<OpParamDef> &outputs, ofstream &outfile, const std::string opType) const
+void AclnnOpGenerator::AclnnOpGenTensorDesc(size_t index, std::vector<OpParamDef>& inputs,
+    std::vector<OpParamDef>& outputs, ofstream& outfile, const std::string opType) const
 {
     if (inputs.size() > 0) {
         for (size_t i = 0U; i < inputs[0].GetDataTypes().size(); i++) {
@@ -1034,13 +1059,13 @@ void AclnnOpGenerator::AclnnOpGenTensorDesc(size_t index, std::vector<OpParamDef
 
     if (inputs.size() == 0) {
         for (size_t i = 0U; i < outputs[0].GetDataTypes().size(); i++) {
-            outfile << "SupportInfo list" << index << "_" << i << " = {outputDesc" << index << "_" << i << ", " <<
+            outfile << "SupportInfo list" << index << "_" << i << " = {nullptr, 0, outputDesc" << index << "_" << i << ", " <<
                 outputs.size() << "};\n";
         }
     } else if (outputs.size() == 0) {
         for (size_t i = 0U; i < inputs[0].GetDataTypes().size(); i++) {
             outfile << "SupportInfo list" << index << "_" << i << " = {inputDesc" << index << "_" << i << ", " <<
-                inputs.size() << "};\n";
+                inputs.size() << ", nullptr, 0};\n";
         }
     } else {
         for (size_t i = 0U; i < inputs[0].GetDataTypes().size(); i++) {
@@ -1050,8 +1075,8 @@ void AclnnOpGenerator::AclnnOpGenTensorDesc(size_t index, std::vector<OpParamDef
     }
 }
 
-void AclnnOpGenerator::AclnnOpGenOpSupportList(size_t index, std::vector<OpParamDef> &inputs,
-    std::vector<OpParamDef> &outputs, ofstream &outfile, const std::string opType) const
+void AclnnOpGenerator::AclnnOpGenOpSupportList(size_t index, std::vector<OpParamDef>& inputs,
+    std::vector<OpParamDef>& outputs, ofstream& outfile, const std::string opType) const
 {
     AclnnOpGenTensorDesc(index, inputs, outputs, outfile, opType);
     size_t size = 0U;
@@ -1244,7 +1269,7 @@ void AclnnOpGenerator::AclnnGenUncontDeclaration(OpDef& opDef, ofstream& outfile
     }
 }
 
-void AclnnOpGenerator::AclnnGenMc2Declaration(OpDef &opDef, ofstream &outfile) const
+void AclnnOpGenerator::AclnnGenMc2Declaration(OpDef& opDef, ofstream& outfile) const
 {
     if (opDef.MC2().GetHcclGroups().size() > 0U) {
         outfile << "extern aclnnStatus NnopbaseSetMc2(void *const executor);\n";
@@ -1263,11 +1288,10 @@ void AclnnOpGenerator::AclnnGenCodeDecImpl(string& declFile, ofstream& outfile) 
     outfile << "#include \"" << declFile << ".h\"\n";
 }
 
-void AclnnOpGenerator::AclnnGenExternFunc(ofstream &outfile) const
+void AclnnOpGenerator::AclnnGenExternFunc(ofstream& outfile) const
 {
     outfile << "extern void NnopbaseOpLogE(const aclnnStatus code, const char *const expr);\n\n";
-    const char *str =
-        "#ifdef __cplusplus\n"
+    const char *str = "#ifdef __cplusplus\n"
         "extern \"C\" {\n"
         "#endif\n\n"
         "extern aclnnStatus NnopbaseCreateExecutorSpace(void **space);\n"
@@ -1316,7 +1340,7 @@ void AclnnOpGenerator::AclnnGenExternFunc(ofstream &outfile) const
     outfile << str;
 }
 
-void AclnnOpGenerator::AclnnGenOutEmptyLaunchDeclaration(OpDef &opDef, ofstream &outfile) const
+void AclnnOpGenerator::AclnnGenOutEmptyLaunchDeclaration(OpDef& opDef, ofstream& outfile) const
 {
     if (opDef.AICore().GetZeroEleOutputLaunchFlag()) {
         outfile << "extern void NnopbaseSetZeroEleOutputLaunchFlag(void *executor);\n";
@@ -1324,12 +1348,12 @@ void AclnnOpGenerator::AclnnGenOutEmptyLaunchDeclaration(OpDef &opDef, ofstream 
 }
 
 void AclnnOpGenerator::AclnnGenCodeImplStart(
-    string &declFile, bool hasOutputShapeDepend, ofstream &outfile, OpDef &opDef) const
+    string& declFile, bool hasOutputShapeDepend, ofstream& outfile, OpDef& opDef) const
 {
     AclnnGenCodeDecImpl(declFile, outfile);
     outfile << "\n";
     if (IsSupportProduct(opDef)) {
-        const std::string &opType = opDef.GetOpType().GetString();
+        const std::string& opType = opDef.GetOpType().GetString();
         outfile << "#ifdef ACLNN_WITH_BINARY\n";
         outfile << "#include <vector>\n";
         outfile << "#include <tuple>\n";
@@ -1392,7 +1416,7 @@ void AclnnOpGenerator::AclopGenDfxInfo(OpDef& opDef, string& opName, string& pre
     outfile << "\n{\n";
     outfile << "    uint64_t timeStamp = NnopbaseMsprofSysTime();\n";
     if (IsSupportProduct(opDef)) {
-        const std::string &opType = opDef.GetOpType().GetString();
+        const std::string& opType = opDef.GetOpType().GetString();
         outfile << "#ifdef ACLNN_WITH_BINARY" << "\n";
         outfile << "    static uint32_t " << opType << "OpTypeId = op::GenOpTypeId(\"" << opType << "\", " <<
                    opType  << "_RESOURCES);\n";
@@ -1425,12 +1449,12 @@ void AclnnOpGenerator::AclnnOpGenCodeSetUnContInfo(OpDef& opDef, ofstream& outfi
 }
 
 void AclnnOpGenerator::AclnnOpGenCodeHcclGroup(
-    OpDef &opDef, std::vector<std::string> &name, std::vector<int32_t> attrTypes, ofstream &outfile) const
+    OpDef& opDef, std::vector<std::string>& name, std::vector<int32_t> attrTypes, ofstream& outfile) const
 {
-    std::vector<ge::AscendString> &groups = opDef.MC2().GetHcclGroups();
+    std::vector<ge::AscendString>& groups = opDef.MC2().GetHcclGroups();
     std::vector<OpAttrDef> attrs = opDef.GetAttrs();
     const std::string opType = opDef.GetOpType().GetString();
-    for (const auto &group : groups) {
+    for (const auto& group : groups) {
         int32_t index = -1;
         for (size_t i = 0U; i < attrs.size(); i++) {
             if (group == attrs[i].GetName()) {

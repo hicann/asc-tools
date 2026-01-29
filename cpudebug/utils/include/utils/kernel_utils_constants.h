@@ -44,7 +44,8 @@ constexpr uint32_t INT2_BIT_NUM = 2;
 constexpr uint32_t INT1_BIT_NUM = 1;
 #endif
 
-#if defined(__NPU_ARCH__) && ((__NPU_ARCH__ == 3003) || (__NPU_ARCH__ == 3113))
+#if defined(__NPU_ARCH__) && ((__NPU_ARCH__ == 2103) || (__NPU_ARCH__ == 3003) || \
+    (__NPU_ARCH__ == 3103) || (__NPU_ARCH__ == 3113))
 // int3b_t param
 constexpr uint32_t INT3_BIT_NUM = 3;
 // int2b_t param
@@ -83,6 +84,14 @@ const uint32_t TOTAL_UB_SIZE = 256 * 1024;
 const uint32_t TMP_UB_OFFSET = 248 * 1024;
 const uint32_t TOTAL_L1_SIZE = 1024 * 1024;
 const uint32_t TOTAL_L0C_SIZE = 256 * 1024;
+#elif defined(__NPU_ARCH__) && (__NPU_ARCH__ == 2103)
+const int32_t TOTAL_VEC_LOCAL_SIZE = 112 * 1024;
+const uint32_t TOTAL_UB_SIZE = 120 * 1024;
+const uint32_t TMP_UB_OFFSET = 112 * 1024;
+const uint32_t TOTAL_L1_SIZE = 1024 * 1024;
+const uint32_t VECTOR_REG_WIDTH = 128;
+const uint32_t ONE_BLOCK_SIZE = 32;
+const uint32_t TOTAL_L0C_SIZE = 64 * 1024;
 #elif (__NPU_ARCH__ == 2201)
 const int32_t TOTAL_VEC_LOCAL_SIZE = 184 * 1024;
 const uint32_t TOTAL_UB_SIZE = 192 * 1024;
@@ -192,7 +201,11 @@ const uint16_t AIV_CORE_NUM = 72;
 const uint16_t AIV_CORE_NUM = 50;
 #endif
 const uint16_t DUMP_MSG_HEAD_SIZE = 24;
+#if defined(__NPU_ARCH__) && (__NPU_ARCH__ == 3103)
+const int32_t ONE_REPEAT_BYTE_SIZE = 128;
+#else
 const int32_t ONE_REPEAT_BYTE_SIZE = 256;
+#endif
 const int32_t FULL_MASK_LEN = 128;
 const int32_t HLAF_MASK_LEN = 64;
 const int32_t DEFAULT_REDUCE_DST_REP_SRIDE = 1;
@@ -202,8 +215,13 @@ const uint8_t B16_BYTE_SIZE = 2;
 const uint8_t B8_BYTE_SIZE = 1;
 const uint8_t B32_DATA_NUM_PER_BLOCK = 8;
 const uint8_t B16_DATA_NUM_PER_BLOCK = 16;
+#if defined(__NPU_ARCH__) && (__NPU_ARCH__ == 3103)
+const int32_t B16_DATA_NUM_PER_REPEAT = 64;
+const int32_t B32_DATA_NUM_PER_REPEAT = 32;
+#else
 const int32_t B16_DATA_NUM_PER_REPEAT = 128;
 const int32_t B32_DATA_NUM_PER_REPEAT = 64;
+#endif
 
 #if defined(__NPU_ARCH__) && ((__NPU_ARCH__ == 3101) || (__NPU_ARCH__ == 5102))
 const uint32_t B64_DATA_NUM_PER_REPEAT = 32;
@@ -232,9 +250,11 @@ constexpr size_t RESERVED_WORKSPACE = 16 * 1024 * 1024;
 constexpr size_t RESERVED_WORKSPACE = 16 * 1024 * 1024;
 #elif defined(__NPU_ARCH__) && ((__NPU_ARCH__ == 3101) || (__NPU_ARCH__ == 5102))
 constexpr size_t RESERVED_WORKSPACE = 16 * 1024 * 1024;
+#elif defined(__NPU_ARCH__) && (__NPU_ARCH__ == 2103)
+constexpr size_t RESERVED_WORKSPACE = 16 * 1024 * 1024;
 #elif defined(__NPU_ARCH__) && (__NPU_ARCH__ == 3003)
 constexpr size_t RESERVED_WORKSPACE = 0;
-#elif defined(__NPU_ARCH__) && (__NPU_ARCH__ == 3113)
+#elif defined(__NPU_ARCH__) && ((__NPU_ARCH__ == 3103) || (__NPU_ARCH__ == 3113))
 constexpr size_t RESERVED_WORKSPACE = 0;
 #endif
 
@@ -433,6 +453,10 @@ template <> struct GetPadValueType<fp8_e4m3fn_t> {
     using Type = uint8_t;
 };
 
+template <> struct GetPadValueType<fp8_e8m0_t> {
+    using Type = uint8_t;
+};
+
 template <> struct GetPadValueType<hifloat8_t> {
     using Type = uint8_t;
 };
@@ -534,6 +558,7 @@ using int2b_t = IntegerSubType<INT2_BIT_NUM, true>;
 #if defined(__NPU_ARCH__) && ((__NPU_ARCH__ == 3101) || (__NPU_ARCH__ == 5102))
 using mx_fp8_e5m2_t = struct {};
 using mx_fp8_e4m3_t = struct {};
+using mx_fp8_e8m0_t = struct {};
 
 template <typename T>
 struct GetDstType {
@@ -546,6 +571,10 @@ template <> struct GetDstType<mx_fp8_e5m2_t> {
 
 template <> struct GetDstType<mx_fp8_e4m3_t> {
     using Type = fp8_e4m3fn_t;
+};
+
+template <> struct GetDstType<mx_fp8_e8m0_t> {
+    using Type = fp8_e8m0_t;
 };
 #endif
 

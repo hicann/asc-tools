@@ -41,6 +41,11 @@
 #ifndef __host_aicore__
 #define __host_aicore__ [host, aicore]
 #endif // __host_aicore__
+
+#ifndef __disable_kernel_type_autoinfer__
+#define __disable_kernel_type_autoinfer__
+#endif // __disable_kernel_type_autoinfer__
+
 #endif
 
 #if (__CCE__)
@@ -48,13 +53,7 @@
 #endif
 
 #if (_ASCENDC_HAS_BISHENG_COMPILER)
-#define ASCENDC_HOST __host__
 #define ASCENDC_AICORE __aicore__
-#define ASCENDC_HOST_AICORE __host_aicore__
-#else
-#define ASCENDC_HOST
-#define ASCENDC_AICORE
-#define ASCENDC_HOST_AICORE
 #endif
 
 #if __NPU_ARCH__ == 2002
@@ -84,23 +83,8 @@
 #define QBUFPOOL_MAX_LEN 16
 #endif
 
-#ifndef MAX_MSG_COUNT
-#define MAX_MSG_COUNT 64
-#endif
-
-#ifndef QBUF_L0A_RESERVED_LEN
-#define QBUF_L0A_RESERVED_LEN 2
-#endif
-
-#ifndef QBUF_L0B_RESERVED_LEN
-#define QBUF_L0B_RESERVED_LEN 2
-#endif
 #ifndef QBUF_TOTAL_RESERVED_LEN
 #define QBUF_TOTAL_RESERVED_LEN 4
-#endif
-
-#ifndef TPIPE_MAX_TYPE
-#define TPIPE_MAX_TYPE 4
 #endif
 
 #if defined(__DAV_C220_CUBE__)  || defined(__DAV_C310_CUBE__) || defined(__DAV_310R6_CUBE__)
@@ -126,16 +110,11 @@
 namespace AscendC {
 #if defined(__NPU_ARCH__) && ((__NPU_ARCH__ == 2002) || (__NPU_ARCH__ == 2201) ||           \
     (__NPU_ARCH__ == 3002) || (__NPU_ARCH__ == 3102) || (__NPU_ARCH__ == 3101) ||           \
-    (__NPU_ARCH__ == 5102)) // Available for V200
+    (__NPU_ARCH__ == 5102)) // Available for V200 and V210
 constexpr int32_t QUE_MAX_EVENT = 8;
 #else
 constexpr int32_t QUE_MAX_EVENT = 4;
 #endif
-constexpr int32_t HF32_MODE_BIT = 46;
-constexpr int32_t HF32_TRANS_MODE_BIT = 47;
-constexpr int32_t MM_LAYOUT_MODE_BIT = 51;
-constexpr int32_t LEAKY_RELU_MODE_BIT = 50;
-constexpr int32_t CAST_MODE_BIT = 59;
 
 constexpr int32_t MIX = 0;
 constexpr int32_t AIC = 1;

@@ -20,6 +20,7 @@
 #include "kernel_vectorized.h"
 #include "kernel_fp8_e5m2.h"
 #include "kernel_fp8_e4m3.h"
+#include "kernel_fp8_e8m0.h"
 #include "kernel_fp4_e2m1.h"
 #include "kernel_fp4_e1m2.h"
 #include "kernel_hif8.h"

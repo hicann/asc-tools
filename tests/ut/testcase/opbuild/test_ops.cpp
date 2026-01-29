@@ -168,10 +168,10 @@ class ValueDependTest : public OpDef {
 public:
     ValueDependTest(const char* name) : OpDef(name)
     {
-        this->Input("x1").DataType({ ge::DT_FLOAT }).ValueDepend(REQUIRED);
-        this->Input("x2").DataType({ ge::DT_INT64 }).ValueDepend(REQUIRED);
-        this->Input("x3").DataType({ ge::DT_BOOL }).ParamType(OPTIONAL).ValueDepend(OPTIONAL);
-        this->Output("y").DataType({ ge::DT_FLOAT });
+        this->Input("x1").DataType({ ge::DT_FLOAT, ge::DT_FLOAT}).ValueDepend(REQUIRED);
+        this->Input("x2").DataType({ ge::DT_UINT64, ge::DT_INT32}).ValueDepend(REQUIRED);
+        this->Input("x3").DataType({ ge::DT_BOOL, ge::DT_BOOL}).ParamType(OPTIONAL).ValueDepend(OPTIONAL);
+        this->Output("y").DataType({ ge::DT_FLOAT, ge::DT_FLOAT});
         OpAICoreConfig aicConfig;
         this->AICore().AddConfig("ascend910", aicConfig);
     }
@@ -313,6 +313,7 @@ public:
         OpAICoreConfig aicConfig;
         this->AICore().AddConfig("ascend910_95", aicConfig);
         this->MC2().HcclGroup({"group2", "group1"});
+        this->MC2().HcclServerType(HcclServerType::CCU, "ascend910_95");
         this->EnableFallBack();
     }
 };
@@ -323,10 +324,10 @@ class ValueDependScopeTest : public OpDef {
 public:
     ValueDependScopeTest(const char* name) : OpDef(name)
     {
-        this->Input("x1").DataType({ ge::DT_FLOAT }).ValueDepend(REQUIRED, DependScope::TILING);
-        this->Input("x2").DataType({ ge::DT_INT64 }).ValueDepend(OPTIONAL, DependScope::TILING);
-        this->Input("x3").DataType({ ge::DT_BOOL }).ParamType(OPTIONAL).ValueDepend(OPTIONAL);
-        this->Output("y").DataType({ ge::DT_FLOAT });
+        this->Input("x1").DataType({ ge::DT_FLOAT, ge::DT_FLOAT}).ValueDepend(REQUIRED, DependScope::TILING);
+        this->Input("x2").DataType({ ge::DT_UINT64, ge::DT_INT32}).ValueDepend(OPTIONAL, DependScope::TILING);
+        this->Input("x3").DataType({ ge::DT_BOOL, ge::DT_BOOL}).ParamType(OPTIONAL).ValueDepend(OPTIONAL);
+        this->Output("y").DataType({ ge::DT_FLOAT, ge::DT_FLOAT});
         OpAICoreConfig aicConfig;
         this->AICore().AddConfig("ascend910", aicConfig);
     }

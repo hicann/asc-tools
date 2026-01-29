@@ -68,4 +68,37 @@ using half2 = Vectorized::VectorizedType2<half>;
 using half1 = Vectorized::VectorizedType1<half>;
 
 using bhalf2 = Vectorized::VectorizedType2<bfloat16_t>;
+
+using uchar4 = Vectorized::VectorizedType4<unsigned char>;
+using uchar3 = Vectorized::VectorizedType3<unsigned char>;
+using uchar2 = Vectorized::VectorizedType2<unsigned char>;
+using uchar1 = Vectorized::VectorizedType1<unsigned char>;
+
+using char4 = Vectorized::VectorizedType4<signed char>;
+using char3 = Vectorized::VectorizedType3<signed char>;
+using char2 = Vectorized::VectorizedType2<signed char>;
+using char1 = Vectorized::VectorizedType1<signed char>;
+
+using ushort4 = Vectorized::VectorizedType4<unsigned short>;
+using ushort3 = Vectorized::VectorizedType3<unsigned short>;
+using ushort2 = Vectorized::VectorizedType2<unsigned short>;
+using ushort1 = Vectorized::VectorizedType1<unsigned short>;
+
+using short4 = Vectorized::VectorizedType4<short>;
+using short3 = Vectorized::VectorizedType3<short>;
+using short2 = Vectorized::VectorizedType2<short>;
+using short1 = Vectorized::VectorizedType1<short>;
+
+using ulonglong4 = Vectorized::VectorizedType4<unsigned long long int>;
+using ulonglong3 = Vectorized::VectorizedType3<unsigned long long int>;
+using ulonglong2 = Vectorized::VectorizedType2<unsigned long long int>;
+using ulonglong1 = Vectorized::VectorizedType1<unsigned long long int>;
+
+using longlong4 = Vectorized::VectorizedType4<long long int>;
+using longlong3 = Vectorized::VectorizedType3<long long int>;
+using longlong2 = Vectorized::VectorizedType2<long long int>;
+using longlong1 = Vectorized::VectorizedType1<long long int>;
+
+using bfloat16x2_t = Vectorized::VectorizedType2<bfloat16_t>;
+
 #endif  // ASCENDC_VECTORIZED_H

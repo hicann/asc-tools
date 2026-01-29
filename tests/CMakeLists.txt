@@ -22,5 +22,10 @@ include(cmake/config.cmake)
 include(cmake/intf.cmake)
 include(cmake/func.cmake)
 
-add_subdirectory(ut)
-add_subdirectory(py_ut)
+if (${TEST_MOD} STREQUAL "all" OR ${TEST_MOD} STREQUAL "cpp")
+  add_subdirectory(ut)
+endif ()
+
+if (${TEST_MOD} STREQUAL "all" OR ${TEST_MOD} STREQUAL "python")
+  add_subdirectory(py_ut)
+endif ()
