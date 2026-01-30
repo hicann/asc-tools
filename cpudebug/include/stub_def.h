@@ -271,5 +271,10 @@ typedef struct {
     char fileName[256];
 } ShmMemT;
 
+#ifndef SIMT_WARP_SIZE
+#define SIMT_WARP_SIZE
+constexpr int32_t warpSize = 32;
+#endif
+
 } // namespace AscendC
 #endif // ASCENDC_STUB_DEF_H

@@ -50,10 +50,10 @@ public:
     T WarpOp(T val, Func action)
     {
         // Shared memory in a warp to guarrent data exchange/modification without data race at warp level.
-        constexpr uint32_t MOD = 2;
         std::unique_lock<std::mutex> lck(mtx_);
         auto currGeneration = syncGeneration;
-        T &dataToUpdate = *reinterpret_cast<T *>(&data[currGeneration % MEMORY_PIECE]);
+        void* temp = reinterpret_cast<void *>(&data[currGeneration % MEMORY_PIECE]);
+        T &dataToUpdate = *reinterpret_cast<T *>(temp);
         activeThreads--;
         if (activeThreads == 0) {
             syncGeneration++;
@@ -85,7 +85,8 @@ public:
         std::unique_lock<std::mutex> lck(mtx_);
 
         auto currGeneration = syncGeneration;
-        T &dataToUpdate = *reinterpret_cast<T *>(&shulffleData[laneToWrite][currGeneration % MEMORY_PIECE]);
+        void* temp = reinterpret_cast<void *>(&shulffleData[laneToWrite][currGeneration % MEMORY_PIECE]);
+        T &dataToUpdate = *reinterpret_cast<T *>(temp);
         dataToUpdate = val;
         activeThreads--;
         if (activeThreads == 0) {
@@ -102,7 +103,8 @@ public:
             }
         }
 
-        return *reinterpret_cast<T *>(&shulffleData[laneToRead][currGeneration % MEMORY_PIECE]);
+        void* temp2 = reinterpret_cast<void *>(&shulffleData[laneToRead][currGeneration % MEMORY_PIECE]);
+        return *reinterpret_cast<T *>(temp2);
     }
 
 private:

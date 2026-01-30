@@ -151,6 +151,7 @@ install(FILES
   include/kern_fwk.h
   include/tikicpulib.h
   include/kernel_raise_signal.h
+  include/simt_stub.h
   DESTINATION lib/include OPTIONAL
 )
 

@@ -62,6 +62,7 @@
         <file value="include/kernel_print_lock.h" />
         <file value="include/kern_fwk.h" />
         <file value="include/tikicpulib.h" />
+        <file value="include/simt_stub.h" />
     </file_info>
     <!-- tikcpp simulator cmake -->
     <file_info value="tikcpp_simulator_cmake" copy_type="delivery" src_path="lib/host" dst_path="lib" install_path="tools/tikicpulib/lib">
