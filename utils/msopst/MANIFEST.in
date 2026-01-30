@@ -1,5 +1,0 @@
-# MANIFEST.in
-recursive-include msopst *
-recursive-include msopst/template *
-recursive-include msopst/scripts *
-recursive-include msopst/st *

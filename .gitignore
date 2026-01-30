@@ -4,4 +4,6 @@ build_out/
 __pycache__/
 output/
 libraries
-third_party
+third_party/*.tar.gz
+third_party/makeself
+third_party/msot

@@ -141,7 +141,7 @@
     # 安装命令
     ./Ascend-cann-${soc_name}-ops_8.5.0-beta.1_linux-${arch}.run --install --install-path=${install_path}
     ```
-    - \$\{soc\_name\}：表示AI处理器型号（910B对于910b，910C对应A3）。
+    - \$\{soc\_name\}：表示AI处理器型号（910B对应910b，910C对应A3）。
     - \$\{install\_path\}：表示指定安装路径，需要与toolkit包安装在相同路径，root用户默认安装在`/usr/local/Ascend`目录，非root用户默认安装在`$HOME/Ascend`目录。
 
 3. **配置环境变量**
