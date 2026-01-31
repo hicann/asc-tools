@@ -30,12 +30,12 @@
         <path value="$(TARGET_ENV)/simulator/ascend035" chip="Ascend035"/>
         <path value="$(TARGET_ENV)/simulator/ascend035/lib" chip="Ascend035"/>
         <path value="$(TARGET_ENV)/simulator/ascend035/conf" chip="Ascend035"/>
-        <path value="$(TARGET_ENV)/simulator/dav_3510" chip="Ascend910_9599" install_softlink="$(TARGET_ENV)/simulator/Ascend910_9599;$(TARGET_ENV)/simulator/Ascend910_950x;$(TARGET_ENV)/simulator/Ascend910_950y;$(TARGET_ENV)/simulator/Ascend910_950z;$(TARGET_ENV)/simulator/Ascend910_957b;$(TARGET_ENV)/simulator/Ascend910_957c;$(TARGET_ENV)/simulator/Ascend910_957d;$(TARGET_ENV)/simulator/Ascend910_9589;$(TARGET_ENV)/simulator/Ascend910_958a;$(TARGET_ENV)/simulator/Ascend910_958b;$(TARGET_ENV)/simulator/Ascend910_9591;$(TARGET_ENV)/simulator/Ascend910_9592;$(TARGET_ENV)/simulator/Ascend910_9595;$(TARGET_ENV)/simulator/Ascend910_9596;$(TARGET_ENV)/simulator/Ascend910_9581;$(TARGET_ENV)/simulator/Ascend910_9582;$(TARGET_ENV)/simulator/Ascend910_9583;$(TARGET_ENV)/simulator/Ascend910_9584;$(TARGET_ENV)/simulator/Ascend910_9585;$(TARGET_ENV)/simulator/Ascend910_9586;$(TARGET_ENV)/simulator/Ascend910_9587;$(TARGET_ENV)/simulator/Ascend910_9588;$(TARGET_ENV)/simulator/Ascend910_9571;$(TARGET_ENV)/simulator/Ascend910_9572;$(TARGET_ENV)/simulator/Ascend910_9573;$(TARGET_ENV)/simulator/Ascend910_9574;$(TARGET_ENV)/simulator/Ascend910_9575;$(TARGET_ENV)/simulator/Ascend910_9576;$(TARGET_ENV)/simulator/Ascend910_9577;$(TARGET_ENV)/simulator/Ascend910_9578;$(TARGET_ENV)/simulator/Ascend910_95A1;$(TARGET_ENV)/simulator/Ascend910_95A2"/>
-        <path value="$(TARGET_ENV)/simulator/dav_3510/lib" chip="Ascend910_9599"/>
-        <path value="$(TARGET_ENV)/simulator/dav_3510/conf" chip="Ascend910_9599"/>
-        <path value="$(TARGET_ENV)/simulator/dav_3510/camodel" chip="Ascend910_9599"/>
-        <path value="$(TARGET_ENV)/simulator/dav_3510/camodel/log" chip="Ascend910_9599"/>
-        <path value="$(TARGET_ENV)/simulator/dav_3510/camodel/log/ub_log" chip="Ascend910_9599"/>
+        <path value="$(TARGET_ENV)/simulator/dav_3510" chip="Ascend950pr_9599" install_softlink="$(TARGET_ENV)/simulator/Ascend950PR_9599"/>
+        <path value="$(TARGET_ENV)/simulator/dav_3510/lib" chip="Ascend950pr_9599"/>
+        <path value="$(TARGET_ENV)/simulator/dav_3510/conf" chip="Ascend950pr_9599"/>
+        <path value="$(TARGET_ENV)/simulator/dav_3510/camodel" chip="Ascend950pr_9599"/>
+        <path value="$(TARGET_ENV)/simulator/dav_3510/camodel/log" chip="Ascend950pr_9599"/>
+        <path value="$(TARGET_ENV)/simulator/dav_3510/camodel/log/ub_log" chip="Ascend950pr_9599"/>
         <path value="$(TARGET_ENV)/simulator/KirinX90" chip="KirinX90"/>
         <path value="$(TARGET_ENV)/simulator/KirinX90/lib" chip="KirinX90"/>
         <path value="$(TARGET_ENV)/simulator/Kirin9030" chip="Kirin9030"/>
@@ -166,7 +166,7 @@
     <file_info value="ascend035_simulator" chip="Ascend035" copy_type="delivery" src_path="lib/host" install_mod="440" dst_path="tools/simulator/lib64/ascend035/lib" install_path="$(TARGET_ENV)/simulator/ascend035/lib">
         <file value="libpem_davinci.so" file_type="shared"/>
     </file_info>
-    <file_info value="ascend910_9599_simulator" chip="Ascend910_9599" copy_type="delivery" src_path="lib/host" install_mod="440" dst_path="tools/simulator/lib64/Ascend910_9599/lib" install_path="$(TARGET_ENV)/simulator/dav_3510/lib" feature="op">
+    <file_info value="ascend950pr_9599_simulator" chip="Ascend950pr_9599" copy_type="delivery" src_path="lib/host" install_mod="440" dst_path="tools/simulator/lib64/Ascend950pr_9599/lib" install_path="$(TARGET_ENV)/simulator/dav_3510/lib" feature="op">
         <file value="libruntime_camodel.so" file_type="shared"/>
         <file value="libruntime_cmodel.so" file_type="shared"/>
         <file value="libpem_davinci.so" file_type="shared"/>
@@ -185,18 +185,18 @@
         <file value="libmcu_loop.so" file_type="shared"/>
         <file value="libffts_model.so" file_type="shared"/>
         <file value="libesl_top_wrapper.so" file_type="shared"/>
-        <file value="Ascend910_9599_ffts.toml"/>
-        <file value="Ascend910_9599_ffts_plus.toml"/>
-        <file value="Ascend910_9599_model.toml"/>
-        <file value="Ascend910_9599_sim.toml"/>
-        <file value="Ascend910_9599_sim_ffts_plus.toml"/>
-        <file value="Ascend910_9599_stars.toml"/>
-        <file value="Ascend910_9599_stars_ffts_plus.toml"/>
+        <file value="Ascend950pr_9599_ffts.toml" optional="true"/>
+        <file value="Ascend950pr_9599_ffts_plus.toml" optional="true"/>
+        <file value="Ascend950pr_9599_model.toml" optional="true"/>
+        <file value="Ascend950pr_9599_sim.toml" optional="true"/>
+        <file value="Ascend950pr_9599_sim_ffts_plus.toml" optional="true"/>
+        <file value="Ascend950pr_9599_stars.toml" optional="true"/>
+        <file value="Ascend950pr_9599_stars_ffts_plus.toml" optional="true"/>
         <file value="mcu_latency.toml"/>
     </file_info>
 
     <!-- camodel v100 simulator -->
-    <file_info value="ascend910_9599_simulator_camodel" chip="Ascend910_9599" copy_type="delivery" src_path="lib/host/ascend910_9599" dst_path="tools/simulator/lib64/Ascend910_9599/camodel" install_path="$(TARGET_ENV)/simulator/dav_3510/camodel" install_mod="440">
+    <file_info value="ascend950pr_9599_simulator_camodel" chip="Ascend950pr_9599" copy_type="delivery" src_path="lib/host/Ascend950pr_9599" dst_path="tools/simulator/lib64/Ascend950pr_9599/camodel" install_path="$(TARGET_ENV)/simulator/dav_3510/camodel" install_mod="440">
         <file value="libAA.so" install_mod="440" file_type="shared"/>
         <file value="libAfifo.so" install_mod="440" file_type="shared"/>
         <file value="libaicpu.so" install_mod="440" file_type="shared"/>
@@ -257,7 +257,7 @@
     <!-- <file_info value="ascend910_9599_cannsim" chip="Ascend910_9599" copy_type="delivery" src_path="lib/host/bin" dst_path="tools/simulator/bin" install_path="$(TARGET_ENV)/simulator/bin" install_mod="755">
         <file value="cannsim" install_softlink="$(TARGET_ENV)/bin/cannsim"/>
     </file_info> -->
-    <file_info value="ascend910_9599_cannsim" chip="Ascend910_9599" copy_type="delivery" src_path="lib/host/bin" dst_path="tools/simulator/bin" install_path="$(TARGET_ENV)/simulator/bin" install_mod="755">
+    <file_info value="ascend950pr_9599cannsim" chip="Ascend950pr_9599" copy_type="delivery" src_path="lib/host/bin" dst_path="tools/simulator/bin" install_path="$(TARGET_ENV)/simulator/bin" install_mod="755">
         <file value="cannsim-0.1.0-py3-none-any.whl"/>
     </file_info>
 

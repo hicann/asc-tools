@@ -34,6 +34,52 @@ constexpr const char* OP_ACLNN_ATTR_INT = "int";
 constexpr const char* OP_ACLNN_ATTR_LISTBOOL = "listBool";
 constexpr const char* OP_ACLNN_ATTR_LISTFLOAT = "listFloat";
 constexpr const char* OP_ACLNN_ATTR_LISTINT = "listInt";
+constexpr const char* OP_ACLNN_STRUCT_INFO = "typedef struct {\n"
+ 	         "    uint32_t id;\n"
+ 	         "    const char *funcName;\n"
+ 	         "    bool hasReg;\n"
+ 	         "} NnopbaseDfxId;\n"
+ 	         "typedef struct {\n"
+ 	         "    ge::DataType dtype;\n"
+ 	         "    ge::Format format;\n"
+ 	         "} TensorDesc;\n"
+ 	         "typedef struct {\n"
+ 	         "    TensorDesc *inputsDesc;\n"
+ 	         "    size_t inputsNum;\n"
+ 	         "    TensorDesc *outputsDesc;\n"
+ 	         "    size_t outputsNum;\n"
+ 	         "} SupportInfo;\n"
+ 	         "typedef struct {\n"
+ 	         "    SupportInfo *supportInfo;\n"
+ 	         "    size_t num;\n"
+ 	         "} OpSocSupportInfo;\n"
+ 	         "typedef struct {\n"
+ 	         "    OpSocSupportInfo *socSupportInfo;\n"
+ 	         "    size_t num;\n"
+ 	         "} OpSupportList;\n";
+ 	 constexpr const char* OP_ACLNN_SOC_INFO = "enum SocType {\n"
+ 	         "    SOC_VERSION_ASCEND910A = 1,\n"
+ 	         "    SOC_VERSION_ASCEND910B = 2,\n"
+ 	         "    SOC_VERSION_ASCEND910_93 = 3,\n"
+ 	         "    SOC_VERSION_ASCEND950 = 4,\n"
+ 	         "    SOC_VERSION_ASCEND310P = 5,\n"
+ 	         "    SOC_VERSION_ASCEND310B = 6,\n"
+ 	         "    SOC_VERSION_BS9SX1A = 7,\n"
+ 	         "    SOC_VERSION_ASCEND610Lite = 8,\n"
+ 	         "    SOC_VERSION_MC61AM21A = 10, // 9 is deprecated\n"
+ 	         "    SOC_VERSION_MC62CM12A = 11,\n"
+ 	         "    SOC_VERSION_BS9SX2A = 12,\n"
+ 	         "    SOC_VERSION_ASCEND910_96 = 13,\n"
+ 	         "    SOC_VERSION_KIRINX90 = 14,\n"
+ 	         "    SOC_VERSION_KIRIN9030 = 15\n"
+ 	         "};\n";// NOTE: Always add new SOC versions at the end of this enum.
+ 	 constexpr const char* OP_ACLNN_NNOPBASE_ATTR_DTYPE_INFO = "enum NnopbaseAttrDtype {\n"
+ 	         "    kNnopbaseBool = 0U,\n"
+ 	         "    kNnopbaseFloat,\n"
+ 	         "    kNnopbaseInt,\n"
+ 	         "    kNnopbaseString,\n"
+ 	         "    kNnopbaseAttrEnd\n"
+ 	         "};\n";
 
 constexpr const int32_t OP_ACLNN_ATTR_TYPE_STR = 0;
 constexpr const int32_t OP_ACLNN_ATTR_TYPE_BOOL = 1;
@@ -66,7 +112,7 @@ const std::map<std::string, std::string> SOC_SUPPORT_MAP = {
     { "ascend910", "SOC_VERSION_ASCEND910A" },
     { "ascend910b", "SOC_VERSION_ASCEND910B" },
     { "ascend910_93", "SOC_VERSION_ASCEND910_93" },
-    { "ascend910_95", "SOC_VERSION_ASCEND910_95" },
+    { "ascend950", "SOC_VERSION_ASCEND950" },
     { "ascend310p", "SOC_VERSION_ASCEND310P" },
     { "ascend310b", "SOC_VERSION_ASCEND310B" },
     { "bs9sx1a", "SOC_VERSION_BS9SX1A" },

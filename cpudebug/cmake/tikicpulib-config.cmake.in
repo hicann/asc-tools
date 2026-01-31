@@ -3,10 +3,15 @@ set(PRODUCT_TYPE_LIST_V100_ ascend910;Ascend910A;Ascend910B;Ascend910PremiumA;As
 set(PRODUCT_TYPE_LIST_V200_ ascend610;ascend310p;Ascend310P1;Ascend310P3;Ascend310P5;Ascend310P7)
 set(PRODUCT_TYPE_LIST_V220_ ascend910B1;Ascend910B1;Ascend910B2;Ascend910B2C;Ascend910B3;Ascend910B4;Ascend910B4-1;Ascend910_9391;Ascend910_9381;Ascend910_9392;Ascend910_9382;Ascend910_9372;Ascend910_9362)
 set(PRODUCT_TYPE_LIST_M300_ ascend310B1;Ascend310B1;Ascend310B2;Ascend310B3;Ascend310B4)
-set(PRODUCT_TYPE_LIST_C310_ ascend910_9599;Ascend910_9599;Ascend910_9589;Ascend910_9579;Ascend910_957b;Ascend910_957c;Ascend910_950z;Ascend910_958b;Ascend910_958a;Ascend910_957d;
-                            ascend910_95a1;ascend910_95a2;ascend910_9591;ascend910_9592;ascend910_9595;ascend910_9596;ascend910_9581;ascend910_9582;ascend910_9583;ascend910_9584;
-                            ascend910_9585;ascend910_9586;ascend910_9587;ascend910_9588;ascend910_9571;ascend910_9572;ascend910_9573;ascend910_9574;ascend910_9575;ascend910_9576;
-                            ascend910_9577;ascend910_9578;Ascend910_950x;Ascend910_950y)
+set(PRODUCT_TYPE_LIST_C310_ ascend950pr_9599;ascend950pr_958a;ascend950pr_9589;ascend950pr_958b;
+                            ascend950pr_9579;ascend950pr_957b;ascend950pr_957c;ascend950pr_957d;
+                            ascend950pr_950z;ascend950dt_950x;ascend950dt_950y;ascend950dt_95a1;
+                            ascend950dt_95a2;ascend950dt_9591;ascend950dt_9592;ascend950dt_9595;
+                            ascend950dt_9596;ascend950dt_9581;ascend950dt_9582;ascend950dt_9583;
+                            ascend950dt_9584;ascend950dt_9585;ascend950dt_9586;ascend950dt_9587;
+                            ascend950dt_9588;ascend950dt_9571;ascend950dt_9572;ascend950dt_9573;
+                            ascend950dt_9574;ascend950dt_9575;ascend950dt_9576;ascend950dt_9577;
+                            ascend950dt_9578)
 set(PRODUCT_TYPE_LIST_KIRINX90_ kirinx90;KirinX90)
 set(PRODUCT_TYPE_LIST_KIRIN9030_ kirin9030;Kirin9030)
 
@@ -20,7 +25,7 @@ function(product_map str newstr)
   elseif("${str}" IN_LIST PRODUCT_TYPE_LIST_M300_)
     set(${newstr} "ascend310B1" PARENT_SCOPE)
   elseif("${str}" IN_LIST PRODUCT_TYPE_LIST_C310_)
-    set(${newstr} "ascend910_9599" PARENT_SCOPE)
+    set(${newstr} "ascend950pr_9599" PARENT_SCOPE)
   elseif("${str}" IN_LIST PRODUCT_TYPE_LIST_KIRINX90_)
     set(${newstr} "kirinx90" PARENT_SCOPE)
   elseif("${str}" IN_LIST PRODUCT_TYPE_LIST_KIRIN9030_)

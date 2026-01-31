@@ -1673,7 +1673,7 @@ TEST_F(TEST_OPBUILD, GenerateCodeForComputeUnits)
     EXPECT_EQ(res, opbuild::OPBUILD_FAILED);
     opbuild::Params::GetInstance().optionParams_ = {};
     opbuild::Params::GetInstance().requiredParams_ = {};
-    char* argv2[] = {"opbuild", "--compute_unit=ascend910_95"};
+    char* argv2[] = {"opbuild", "--compute_unit=ascend950"};
     opbuild::Params::GetInstance().Parse(2, argv2);
     res = cfgGen.GenerateCode();
     EXPECT_EQ(res, opbuild::OPBUILD_SUCCESS);

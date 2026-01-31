@@ -16,6 +16,7 @@
 #ifndef STUB_OP_CFG_GENERATOR_H
 #define STUB_OP_CFG_GENERATOR_H
 
+#include <set>
 #include "op_generator.h"
 #include "op_generator_factory.h"
 #include "register/op_def.h"
@@ -23,6 +24,23 @@
 #include "op_build_error_codes.h"
 
 namespace ops {
+const std::set<std::string> VALID_SOC_SET = {
+    "ascend310b",
+    "ascend310p",
+    "ascend610",
+    "ascend610lite",
+    "ascend950",
+    "ascend910_93",
+    "ascend910",
+    "ascend910b",
+    "bs9sx1a",
+    "bs9sx2a",
+    "mc61am21a",
+    "mc62cm12a",
+    "ascend910_96",
+    "kirinx90",
+    "kirin9030",
+};
 class CfgGenerator : public Generator {
 public:
     std::string GetDataTypeName(const ge::DataType& type) const;
@@ -41,6 +59,8 @@ public:
         bool enableFallBack, std::ofstream& outfile) const;
     void GetOutFilePtr(std::string& genPath, std::string& socVer, std::ofstream& outfile,
         const std::string resolvedGenPath, std::map<std::string, std::string>& cfgFileStreams) const;
+    void GenAllOpCfgWithoutComputeUint(const std::vector<std::string>& ops, std::string& genPath, 
+ 	    const std::string resolvedGenPath, std::map<std::string, std::string>& cfgFileStreams) const;
     explicit CfgGenerator(std::vector<std::string>& ops);
     opbuild::Status GenerateCode(void) override;
     ~CfgGenerator() override = default;

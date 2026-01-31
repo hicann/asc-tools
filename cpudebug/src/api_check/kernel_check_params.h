@@ -29,7 +29,7 @@
 #elif defined (__NPU_ARCH__) && (__NPU_ARCH__ == 3102 || __NPU_ARCH__ == 3103 || __NPU_ARCH__ == 3113)
 #include "ascend610Lite_ini.h"
 #elif defined (__NPU_ARCH__) && (__NPU_ARCH__ == 3101)
-#include "ascend910_9599_ini.h"
+#include "ascend950pr_9599_ini.h"
 #elif defined (__NPU_ARCH__) && (__NPU_ARCH__ == 5102)
 #include "mc62cm12aa_ini.h"
 #endif

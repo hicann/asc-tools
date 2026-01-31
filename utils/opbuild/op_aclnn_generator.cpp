@@ -1141,55 +1141,10 @@ void AclnnOpGenerator::AclnnGenOpTypeId(OpDef& opDef, ofstream& outfile) const
 
 void AclnnOpGenerator::AclnnGenNameSpaceInfo(ofstream& outfile, OpDef& opDef) const
 {
-    const char* str = "namespace {\n"
-        "typedef struct {\n"
-        "    uint32_t id;\n"
-        "    const char *funcName;\n"
-        "    bool hasReg;\n"
-        "} NnopbaseDfxId;\n"
-        "typedef struct {\n"
-        "    ge::DataType dtype;\n"
-        "    ge::Format format;\n"
-        "} TensorDesc;\n"
-        "typedef struct {\n"
-        "    TensorDesc *inputsDesc;\n"
-        "    size_t inputsNum;\n"
-        "    TensorDesc *outputsDesc;\n"
-        "    size_t outputsNum;\n"
-        "} SupportInfo;\n"
-        "typedef struct {\n"
-        "    SupportInfo *supportInfo;\n"
-        "    size_t num;\n"
-        "} OpSocSupportInfo;\n"
-        "typedef struct {\n"
-        "    OpSocSupportInfo *socSupportInfo;\n"
-        "    size_t num;\n"
-        "} OpSupportList;\n"
-        "enum SocType {\n"
-        "    SOC_VERSION_ASCEND910A = 1,\n"
-        "    SOC_VERSION_ASCEND910B,\n"
-        "    SOC_VERSION_ASCEND910_93,\n"
-        "    SOC_VERSION_ASCEND910_95,\n"
-        "    SOC_VERSION_ASCEND310P,\n"
-        "    SOC_VERSION_ASCEND310B,\n"
-        "    SOC_VERSION_BS9SX1A,\n"
-        "    SOC_VERSION_ASCEND610Lite,\n"
-        "    SOC_VERSION_ASCEND910_55,\n"
-        "    SOC_VERSION_MC61AM21A,\n"
-        "    SOC_VERSION_MC62CM12A,\n"
-        "    SOC_VERSION_BS9SX2A,\n"
-        "    SOC_VERSION_ASCEND910_96,\n"
-        "    SOC_VERSION_KIRINX90,\n"
-        "    SOC_VERSION_KIRIN9030\n"
-        "};\n"
-        "enum NnopbaseAttrDtype {\n"
-        "    kNnopbaseBool = 0U,\n"
-        "    kNnopbaseFloat,\n"
-        "    kNnopbaseInt,\n"
-        "    kNnopbaseString,\n"
-        "    kNnopbaseAttrEnd\n"
-        "};\n";
-    outfile << str;
+    outfile << "namespace {\n";
+ 	outfile << OP_ACLNN_STRUCT_INFO;
+    outfile << OP_ACLNN_SOC_INFO;
+ 	outfile << OP_ACLNN_NNOPBASE_ATTR_DTYPE_INFO;
     if (opDef.MC2().GetHcclServerType() != HcclServerType::MAX) {
         outfile << "enum NnopbaseHcclServerType {\n";
         outfile << "    NNOPBASE_HCCL_SERVER_TYPE_AICPU = 0,\n";

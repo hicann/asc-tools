@@ -9,11 +9,11 @@
 */
 
 /*!
- * \file ascend910_9599_ini.h
+ * \file ascend950pr_9599_ini.h
  * \brief
  */
-#ifndef ASCEND910_9599_INI_H
-#define ASCEND910_9599_INI_H
+#ifndef ASCEND950PR_9599_INI_H
+#define ASCEND950PR_9599_INI_H
 #include <unordered_set>
 #include <string>
 
@@ -49,7 +49,7 @@ public:
         static SocParams instance;
         return instance;
     }
-    const std::string socVersion = "Ascend910_9599";
+    const std::string socVersion = "Ascend910PR_9599";
     const std::unordered_set<std::string> supportInstrinsic {
         "vrec",
         "vadd",

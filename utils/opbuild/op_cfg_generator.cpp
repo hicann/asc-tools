@@ -18,7 +18,6 @@
 #include <cctype>
 #include <unordered_map>
 #include <limits.h>
-#include <set>
 #include "ascendc_tool_log.h"
 #include "op_cfg_generator.h"
 #include "op_build_params.h"
@@ -437,6 +436,23 @@ void CfgGenerator::GetOutFilePtr(std::string& genPath, std::string& socVer, std:
     }
 }
 
+void CfgGenerator::GenAllOpCfgWithoutComputeUint(const std::vector<std::string>& ops, std::string& genPath, 
+ 	    const std::string resolvedGenPath, std::map<std::string, std::string>& cfgFileStreams) const
+{
+    for (auto op : ops) {
+        OpDef opsDef = OpDefFactory::OpDefCreate(op.c_str());
+        bool enableFallBack = opsDef.IsEnableFallBack();
+        for (auto& aicoreItem : opsDef.AICore().GetAICoreConfigs()) {
+            std::string socVer = aicoreItem.first.GetString();
+            OpAICoreConfig aicoreConfig = aicoreItem.second;
+            std::ofstream outfile;
+            GetOutFilePtr(genPath, socVer, outfile, resolvedGenPath, cfgFileStreams);
+            ParseSingleComputeUnitOfOp(opsDef, op, aicoreConfig, enableFallBack, outfile);
+            outfile.close();
+        }
+    }
+}
+
 opbuild::Status CfgGenerator::GenerateCode(void)
 {
     std::string genPath;
@@ -454,42 +470,13 @@ opbuild::Status CfgGenerator::GenerateCode(void)
     auto computeUnitCfg = opbuild::Params::GetInstance().Optional("compute_unit");
     ASCENDLOGI("Compute unit cfg is %s ", computeUnitCfg.c_str());
     if (computeUnitCfg.size() == 0) {
-        for (auto op : ops) {
-            OpDef opsDef = OpDefFactory::OpDefCreate(op.c_str());
-            bool enableFallBack = opsDef.IsEnableFallBack();
-            for (auto& aicoreItem : opsDef.AICore().GetAICoreConfigs()) {
-                std::string socVer = aicoreItem.first.GetString();
-                OpAICoreConfig aicoreConfig = aicoreItem.second;
-                std::ofstream outfile;
-                GetOutFilePtr(genPath, socVer, outfile, std::string(resolvedGenPath), cfgFileStreams);
-                ParseSingleComputeUnitOfOp(opsDef, op, aicoreConfig, enableFallBack, outfile);
-                outfile.close();
-            }
-        }
+        GenAllOpCfgWithoutComputeUint(ops, genPath, std::string(resolvedGenPath), cfgFileStreams);
         ASCENDLOGI("Cfg GenerateCode end!");
         return opbuild::OPBUILD_SUCCESS;
     }
 
     std::vector<std::string> computeUnits;
     Split(computeUnitCfg, ';', computeUnits);
-    static const std::set<std::string> validSocVer = {
-        "ascend310b",
-        "ascend310p",
-        "ascend610",
-        "ascend610lite",
-        "ascend910_95",
-        "ascend910_93",
-        "ascend910_55",
-        "ascend910",
-        "ascend910b",
-        "bs9sx1a",
-        "bs9sx2a",
-        "mc61am21a",
-        "mc62cm12a",
-        "ascend910_96",
-        "kirinx90",
-        "kirin9030",
-    };
  
     for (auto op : ops) {
         OpDef opsDef = OpDefFactory::OpDefCreate(op.c_str());
@@ -497,7 +484,7 @@ opbuild::Status CfgGenerator::GenerateCode(void)
         auto allAICoreConfig = opsDef.AICore().GetAICoreConfigs();
         for (uint32_t i = 0; i < computeUnits.size(); ++i) {
             auto socVer = computeUnits[i];
-            if (validSocVer.find(socVer) == validSocVer.end()) {
+            if (VALID_SOC_SET.find(socVer) == VALID_SOC_SET.end()) {
                 ASCENDLOGE("Invlid soc version %s\n", socVer.c_str());
                 return opbuild::OPBUILD_FAILED;
             }

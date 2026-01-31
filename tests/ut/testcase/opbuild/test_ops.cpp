@@ -311,9 +311,9 @@ public:
         this->Attr("group1").AttrType(REQUIRED).String();
         this->Attr("group2").AttrType(OPTIONAL).String();
         OpAICoreConfig aicConfig;
-        this->AICore().AddConfig("ascend910_95", aicConfig);
+        this->AICore().AddConfig("ascend950", aicConfig);
         this->MC2().HcclGroup({"group2", "group1"});
-        this->MC2().HcclServerType(HcclServerType::CCU, "ascend910_95");
+        this->MC2().HcclServerType(HcclServerType::CCU, "ascend950");
         this->EnableFallBack();
     }
 };
