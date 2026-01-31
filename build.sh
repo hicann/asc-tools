@@ -107,8 +107,8 @@ function copy_deps_file() {
     cp -r ${BUILD_DIR}/simulator*.tar.gz ${DEPS_FILE_PATH}
   fi
 
-  if ls ${BUILD_DIR}/cpudebug_deps*.tar.gz 1> /dev/null 2>&1; then
-    cp -r ${BUILD_DIR}/cpudebug_deps*.tar.gz ${DEPS_FILE_PATH}
+  if ls ${BUILD_DIR}/cann-asc-tools-cpudebug-deps*.tar.gz 1> /dev/null 2>&1; then
+    cp -r ${BUILD_DIR}/cann-asc-tools-cpudebug-deps*.tar.gz ${DEPS_FILE_PATH}
   fi
 }
 

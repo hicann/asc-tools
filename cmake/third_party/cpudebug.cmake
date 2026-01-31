@@ -29,28 +29,33 @@ if (IS_DIRECTORY ${CMAKE_SOURCE_DIR}/libraries/lib AND NOT EXISTS ${CMAKE_SOURCE
 endif()
 
 if (NOT EXISTS ${CMAKE_SOURCE_DIR}/libraries/lib/include/stub_fun.h)
-  set(CPUDEBUG_PKG_NAME cann-asc-tools-cpudebug-deps-lib_${BUILD_TYPE_LOWER}_8.5.0_linux-${CMAKE_SYSTEM_PROCESSOR}.tar.gz)
-  set(CPUDEBUG_PKG_PATH ${DEPS_FILE_PATH}/${CPUDEBUG_PKG_NAME})
-  if (NOT EXISTS ${CPUDEBUG_PKG_PATH})
-      set(CPUDEBUG_PKG_URL "https://container-obsfs-filesystem.obs.cn-north-4.myhuaweicloud.com/package/cann/asc-tools-dev/version_compile/master/202601/20260116/ubuntu_${TAR_ARCH}/${CPUDEBUG_PKG_NAME}")
-      message(STATUS "${PKG_NAME} pkg not found in ${DEPS_FILE_PATH}, downloading from ${CPUDEBUG_PKG_URL}")
-  else()
-      set(CPUDEBUG_PKG_URL ${CPUDEBUG_PKG_PATH})
-  endif()
+    file(GLOB CPUDEBUG_PKG
+        LIST_DIRECTORIES True
+        ${DEPS_FILE_PATH}/cann-asc-tools-cpudebug-deps*.tar.gz
+    )
 
-  include(FetchContent)
-  FetchContent_Declare(
-      ${PKG_NAME}
-      URL ${CPUDEBUG_PKG_URL}
-      TLS_VERIFY FALSE
-      DOWNLOAD_DIR ${DEPS_FILE_PATH}
-      DOWNLOAD_NO_EXTRACT TRUE
-  )
-  FetchContent_MakeAvailable(${PKG_NAME})
+    set(CPUDEBUG_PKG_NAME cann-asc-tools-cpudebug-deps-lib_${BUILD_TYPE_LOWER}_8.5.0_linux-${CMAKE_SYSTEM_PROCESSOR}.tar.gz)
+    if(NOT EXISTS ${CPUDEBUG_PKG})
+        set(CPUDEBUG_PKG_URL "https://container-obsfs-filesystem.obs.cn-north-4.myhuaweicloud.com/package/cann/asc-tools-dev/version_compile/master/202601/20260116/ubuntu_${TAR_ARCH}/${CPUDEBUG_PKG_NAME}")
+        message(STATUS "cpudebug pkg not found in ${DEPS_FILE_PATH}, downloading from ${CPUDEBUG_PKG_URL}")
+    else()
+        set(CPUDEBUG_PKG_URL ${CPUDEBUG_PKG})
+    endif()
 
-  execute_process(
-    COMMAND tar -xf ${CPUDEBUG_PKG_PATH} -C ${CMAKE_SOURCE_DIR}/libraries --strip-components 1
-    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/libraries
-    RESULT_VARIABLE result
-  )
+    set(CPUDEBUG_PKG ${DEPS_FILE_PATH}/${CPUDEBUG_PKG_NAME})
+    include(FetchContent)
+    FetchContent_Declare(
+        ${PKG_NAME}
+        URL ${CPUDEBUG_PKG_URL}
+        TLS_VERIFY FALSE
+        DOWNLOAD_DIR ${DEPS_FILE_PATH}
+        DOWNLOAD_NO_EXTRACT TRUE
+    )
+    FetchContent_MakeAvailable(${PKG_NAME})
+
+    execute_process(
+        COMMAND tar -xf ${CPUDEBUG_PKG} -C ${CMAKE_SOURCE_DIR}/libraries --strip-components 1
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/libraries
+        RESULT_VARIABLE result
+    )
 endif()
