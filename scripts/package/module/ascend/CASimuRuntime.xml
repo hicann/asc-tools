@@ -215,17 +215,12 @@
         <file value="libHISI_CHI_IF.so" install_mod="440" file_type="shared"/>
         <file value="libL2Buf.so" install_mod="440" file_type="shared"/>
         <file value="liblpddrsim.so" install_mod="440" file_type="shared"/>
-        <file value="libLPDRAMSim.so" install_mod="440" file_type="shared"/>
         <file value="libMATA.so" install_mod="440" file_type="shared"/>
         <file value="libmcu_loop.so" install_mod="440" file_type="shared"/>
         <file value="libmcu_wrapper.so" install_mod="440" file_type="shared"/>
         <file value="libmemsys.so" install_mod="440" file_type="shared"/>
         <file value="libmodel_api.so" install_mod="440" file_type="shared"/>
         <file value="libNcMpi.so" install_mod="440" file_type="shared"/>
-        <file value="libNCTOP.so" install_mod="440" file_type="shared"/>
-        <file value="libNETWORK_ICL.so" install_mod="440" file_type="shared"/>
-        <file value="libNET_FASTMODEL.so" install_mod="440" file_type="shared"/>
-        <file value="libNIC.so" install_mod="440" file_type="shared"/>
         <file value="libnpu_drv.so" install_mod="440" file_type="shared"/>
         <file value="libParallelScheduler.so" install_mod="440" file_type="shared"/>
         <file value="libPCIE.so" install_mod="440" file_type="shared"/>
@@ -233,7 +228,6 @@
         <file value="libPMU.so" install_mod="440" file_type="shared"/>
         <file value="libPowerModel.so" install_mod="440" file_type="shared"/>
         <file value="libqtest_api.so" install_mod="440" file_type="shared"/>
-        <file value="libRDMA.so" install_mod="440" file_type="shared"/>
         <file value="libruntime_cmodel.so" install_mod="440" file_type="shared"/>
         <file value="libSCHE.so" install_mod="440" file_type="shared"/>
         <file value="libSDMAA.so" install_mod="440" file_type="shared"/>
@@ -244,7 +238,6 @@
         <file value="libstars.so" install_mod="440" file_type="shared"/>
         <file value="libstars_wrapper.so" install_mod="440" file_type="shared"/>
         <file value="libTaskSched.so" install_mod="440" file_type="shared"/>
-        <file value="libTDM.so" install_mod="440" file_type="shared"/>
         <file value="libTgWrapper.so" install_mod="440" file_type="shared"/>
         <file value="libUB.so" install_mod="440" file_type="shared"/>
         <file value="libUtility.so" install_mod="440" file_type="shared"/>
