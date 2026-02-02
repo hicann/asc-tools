@@ -51,6 +51,26 @@ bfloat16_t __cvt_bfloat16_t(SRC_TYPE src) {
     }
 }
 
+template<ROUND rnd, RoundingSaturation rst, typename SRC_TYPE>
+int32_t __cvt_int32_t(SRC_TYPE x) {
+    return 0;
+}
+
+template<ROUND rnd, RoundingSaturation rst, typename SRC_TYPE>
+uint32_t __cvt_uint32_t(SRC_TYPE x) {
+    return 0;
+}
+
+template<ROUND rnd, RoundingSaturation rst, typename SRC_TYPE>
+int64_t __cvt_int64_t(SRC_TYPE x) {
+    return 0;
+}
+
+template<ROUND rnd, RoundingSaturation rst, typename SRC_TYPE>
+uint64_t __cvt_uint64_t(SRC_TYPE x) {
+    return 0;
+}
+
 namespace bisheng {
 namespace cce {
 namespace simt {
