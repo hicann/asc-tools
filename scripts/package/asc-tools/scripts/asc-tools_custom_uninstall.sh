@@ -108,6 +108,15 @@ removePythonLocalBin() {
     return 0
 }
 
+remove_package_leftovers() {
+    local _path="$1"
+    if [ -d "${_path}" ]; then
+        prev_path=$(dirname "${_path}")
+        chmod +w "${prev_path}" > /dev/null 2>&1
+        rm -rf "${_path}" > /dev/null 2>&1
+    fi
+}
+
 ### uninstall whl
 whlUninstallPackage() {
     local module_="$1"
@@ -136,7 +145,7 @@ whlUninstallPackage() {
 }
 
 uninstallOpPython() {
-    local module_arr_=(op_ut_run op_ut_helper msopst msopst.ini)
+    local module_arr_=(op_ut_run op_ut_helper msopst cannsim msopst.ini)
     removePythonLocalBin ${install_path}/python/site-packages ${module_arr_[@]}
     [ $? -ne 0 ] && return 1
 
@@ -182,8 +191,17 @@ uninstallAllPython() {
     whlUninstallPackage msobjdump ${install_path}/python/site-packages
     [ $? -ne 0 ] && return 1
 
+    whlUninstallPackage cannsim ${install_path}/python/site-packages
+    [ $? -ne 0 ] && return 1
+
     whlUninstallPackage show_kernel_debug_data ${install_path}/python/site-packages
     [ $? -ne 0 ] && return 1
+
+    remove_package_leftovers ${install_path}/python/site-packages/cannsim
+    remove_package_leftovers ${install_path}/python/site-packages/msobjdump
+    remove_package_leftovers ${install_path}/python/site-packages/msopgen
+    remove_package_leftovers ${install_path}/python/site-packages/show_kernel_debug_data
+
     return 0
 }
 
@@ -275,5 +293,7 @@ uninstallPython
 [ $? -ne 0 ] && exit 1
 
 removeSoftLink "${install_path}/${PLT_ARCH}-linux/bin/" "msopgen"
+removeSoftLink "${install_path}/${PLT_ARCH}-linux/bin/" "msopst"
+removeSoftLink "${install_path}/${PLT_ARCH}-linux/bin/" "cannsim"
 
 exit 0

@@ -141,6 +141,11 @@ installOpPython() {
         return 1
     fi
 
+    installWhlPackage "${install_path}/tools/simulator/bin/cannsim-0.1.0-py3-none-any.whl"
+    if [ $? -ne 0 ]; then
+        return 1
+    fi
+
     return 0
 }
 
@@ -172,6 +177,10 @@ installAllPython() {
     fi
 
     installWhlPackage "${install_path}/tools/msopst-1.0.0-py3-none-any.whl"
+    if [ $? -ne 0 ]; then
+        return 1
+    fi
+
     installWhlPackage "${install_path}/tools/simulator/bin/cannsim-0.1.0-py3-none-any.whl"
     if [ $? -ne 0 ]; then
         return 1
@@ -267,15 +276,19 @@ installOpPythonLocal() {
 }
 
 installAllPythonLocal() {
-
     installPyWhlLocal "msobjdump-0.1.0-py3-none-any.whl"
     [ $? -ne 0 ] && return 1
+
     installPyWhlLocal "show_kernel_debug_data-0.1.0-py3-none-any.whl"
-    [ $? -ne 0 ] && return 1
-    installPyWhlLocal "msopst-1.0.0-py3-none-any.whl"
     [ $? -ne 0 ] && return 1
 
     installPyWhlLocal "msopgen-1.0.0-py3-none-any.whl"
+    [ $? -ne 0 ] && return 1
+
+    installPyWhlLocal "msopst-1.0.0-py3-none-any.whl"
+    [ $? -ne 0 ] && return 1
+
+    installPyWhlLocal "simulator/bin/cannsim-0.1.0-py3-none-any.whl"
     [ $? -ne 0 ] && return 1
 
     log $LEVEL_INFO "Install all module python package succeed."

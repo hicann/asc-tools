@@ -30,7 +30,7 @@ if(BUILD_OPEN_PROJECT)
 
 endif()
 
-set(PRODUCT_TYPE_LIST ascend910 ascend310p ascend910B1 ascend310B1)
+set(PRODUCT_TYPE_LIST ascend910 ascend310p ascend910B1 ascend310B1 ascend950pr_9599)
 if (CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64")
   list(APPEND PRODUCT_TYPE_LIST kirinx90 kirin9030)
 endif()
@@ -78,6 +78,7 @@ foreach(product_type ${PRODUCT_TYPE_LIST})
     $<$<STREQUAL:${product_type},ascend310p>:__CCE_AICORE__=200;__DAV_M200__;__NPU_ARCH__=2002>
     $<$<STREQUAL:${product_type},ascend910B1>:__CCE_AICORE__=220;__DAV_C220__;__NPU_ARCH__=2201>
     $<$<STREQUAL:${product_type},ascend310B1>:__CCE_AICORE__=300;__DAV_M300__;__NPU_ARCH__=3002>
+    $<$<STREQUAL:${product_type},ascend950pr_9599>:__CCE_AICORE__=310;__DAV_C310__;__NPU_ARCH__=3101>
     $<$<STREQUAL:${product_type},kirinx90>:__CCE_AICORE__=300;__DAV_L300__;__NPU_ARCH__=3003>
     $<$<STREQUAL:${product_type},kirin9030>:__CCE_AICORE__=311;__DAV_L311__;__NPU_ARCH__=3113>
   )
