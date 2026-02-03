@@ -303,6 +303,11 @@ BlockIdx blockIdx(block_idx);
 thread_local ThreadIdx threadIdx(g_threadIdxX, g_threadIdxY, g_threadIdxZ);
 GridDim gridDim(block_num);
 
+#ifndef SIMT_WARP_SIZE
+#define SIMT_WARP_SIZE
+constexpr int32_t warpSize = 32;
+#endif
+
 #endif
 #endif
 
