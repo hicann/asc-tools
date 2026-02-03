@@ -51,6 +51,7 @@ class TestAscendump(unittest.TestCase):
         asd_logger = dump_logger.DumpParserLog()
         asd_logger.set_log_file(os.path.join(os.path.abspath(output_path), "test_ascendump_log_file.log"))
         self.assertTrue(os.path.join(os.path.abspath(output_path), "test_ascendump_log_file.log"), asd_logger.get_log_file)
+        self._clean_out_dir(output_path)
 
 
     def test_ascendump_parser_file(self):
@@ -74,6 +75,7 @@ class TestAscendump(unittest.TestCase):
                 patch('sys.exit'), patch('show_kernel_debug_data.dump_parser.parse_dump_bin'):
             dump_parser.execute_parse()
             dump_parser.parse_dump_bin.assert_not_called()
+        self._clean_out_dir(output_path)
 
 
     @patch('show_kernel_debug_data.dump_parser.DumpBinFile.show_print')
@@ -92,6 +94,7 @@ class TestAscendump(unittest.TestCase):
             dump_parser.parse_dump_bin(test_dump_file, data_path)
             show_mock.assert_called_once()
         self.assertTrue(os.path.exists(test_dump_file))
+        self._clean_out_dir(data_path)
 
 
     @patch('show_kernel_debug_data.dump_parser.DumpBinFile.show_print')
@@ -134,6 +137,7 @@ class TestAscendump(unittest.TestCase):
         dump_file = DumpBinFile(test_dump_file)
         self.assertEqual(os.path.basename(dump_file.dump_bin), "test_dump_file.bin")
         run_mock.assert_called_once()
+        self._clean_out_dir(data_path)
 
 
     def test_data_converter_bf16(self):

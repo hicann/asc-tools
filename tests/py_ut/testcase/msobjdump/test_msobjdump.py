@@ -83,6 +83,7 @@ class TestMsObjdump(unittest.TestCase):
         else:
             print("test run dump elf without exception")
             self.assertTrue(True)
+        self._clean_out_dir(out_dir)
 
 
     @patch('msobjdump.msobjdump_main.ObjDump._get_segment_content')
@@ -192,6 +193,7 @@ class TestMsObjdump(unittest.TestCase):
         else:
             print("test run dump elf without exception")
             self.assertTrue(True)
+        self._clean_out_dir(out_dir)
 
     @patch('msobjdump.msobjdump_main.ObjDump._get_segment_content')
     @patch('msobjdump.utils.get_symbols_in_file')
@@ -221,6 +223,7 @@ class TestMsObjdump(unittest.TestCase):
         else:
             print("test run dump elf without exception")
             self.assertTrue(True)
+        self._clean_out_dir(out_dir)
 
     @patch('msobjdump.msobjdump_main.ObjDump._get_segment_content')
     @patch('msobjdump.utils.get_symbols_in_file')
@@ -252,6 +255,7 @@ class TestMsObjdump(unittest.TestCase):
             print("test run dump elf without exception")
             self.assertTrue(True)
         self.assertTrue(os.path.exists(os.path.join(out_dir, 'ascend910b1_ascendc_kernels_npu_0_mix.o')))
+        self._clean_out_dir(out_dir)
 
     @patch('msobjdump.msobjdump_main.ObjDump._get_segment_content')
     @patch('msobjdump.utils.get_symbols_in_file')
@@ -282,6 +286,7 @@ class TestMsObjdump(unittest.TestCase):
         else:
             print("test run dump elf without exception")
             self.assertTrue(True)
+        self._clean_out_dir(out_dir)
 
     def test_show_ascend_meta_tlv_block_num(self):
         content = b'\xff\xff\xff\xff'
