@@ -34,52 +34,55 @@ constexpr const char* OP_ACLNN_ATTR_INT = "int";
 constexpr const char* OP_ACLNN_ATTR_LISTBOOL = "listBool";
 constexpr const char* OP_ACLNN_ATTR_LISTFLOAT = "listFloat";
 constexpr const char* OP_ACLNN_ATTR_LISTINT = "listInt";
-constexpr const char* OP_ACLNN_STRUCT_INFO = "typedef struct {\n"
- 	         "    uint32_t id;\n"
- 	         "    const char *funcName;\n"
- 	         "    bool hasReg;\n"
- 	         "} NnopbaseDfxId;\n"
- 	         "typedef struct {\n"
- 	         "    ge::DataType dtype;\n"
- 	         "    ge::Format format;\n"
- 	         "} TensorDesc;\n"
- 	         "typedef struct {\n"
- 	         "    TensorDesc *inputsDesc;\n"
- 	         "    size_t inputsNum;\n"
- 	         "    TensorDesc *outputsDesc;\n"
- 	         "    size_t outputsNum;\n"
- 	         "} SupportInfo;\n"
- 	         "typedef struct {\n"
- 	         "    SupportInfo *supportInfo;\n"
- 	         "    size_t num;\n"
- 	         "} OpSocSupportInfo;\n"
- 	         "typedef struct {\n"
- 	         "    OpSocSupportInfo *socSupportInfo;\n"
- 	         "    size_t num;\n"
- 	         "} OpSupportList;\n";
- 	 constexpr const char* OP_ACLNN_SOC_INFO = "enum SocType {\n"
- 	         "    SOC_VERSION_ASCEND910A = 1,\n"
- 	         "    SOC_VERSION_ASCEND910B = 2,\n"
- 	         "    SOC_VERSION_ASCEND910_93 = 3,\n"
- 	         "    SOC_VERSION_ASCEND950 = 4,\n"
- 	         "    SOC_VERSION_ASCEND310P = 5,\n"
- 	         "    SOC_VERSION_ASCEND310B = 6,\n"
- 	         "    SOC_VERSION_BS9SX1A = 7,\n"
- 	         "    SOC_VERSION_ASCEND610Lite = 8,\n"
- 	         "    SOC_VERSION_MC61AM21A = 10, // 9 is deprecated\n"
- 	         "    SOC_VERSION_MC62CM12A = 11,\n"
- 	         "    SOC_VERSION_BS9SX2A = 12,\n"
- 	         "    SOC_VERSION_ASCEND910_96 = 13,\n"
- 	         "    SOC_VERSION_KIRINX90 = 14,\n"
- 	         "    SOC_VERSION_KIRIN9030 = 15\n"
- 	         "};\n";// NOTE: Always add new SOC versions at the end of this enum.
- 	 constexpr const char* OP_ACLNN_NNOPBASE_ATTR_DTYPE_INFO = "enum NnopbaseAttrDtype {\n"
- 	         "    kNnopbaseBool = 0U,\n"
- 	         "    kNnopbaseFloat,\n"
- 	         "    kNnopbaseInt,\n"
- 	         "    kNnopbaseString,\n"
- 	         "    kNnopbaseAttrEnd\n"
- 	         "};\n";
+constexpr const char* OP_ACLNN_STRUCT_INFO = 
+    "typedef struct {\n"
+    "    uint32_t id;\n"
+    "    const char *funcName;\n"
+    "    bool hasReg;\n"
+    "} NnopbaseDfxId;\n"
+    "typedef struct {\n"
+    "    ge::DataType dtype;\n"
+    "    ge::Format format;\n"
+    "} TensorDesc;\n"
+    "typedef struct {\n"
+    "    TensorDesc *inputsDesc;\n"
+    "    size_t inputsNum;\n"
+    "    TensorDesc *outputsDesc;\n"
+    "    size_t outputsNum;\n"
+    "} SupportInfo;\n"
+    "typedef struct {\n"
+    "    SupportInfo *supportInfo;\n"
+    "    size_t num;\n"
+    "} OpSocSupportInfo;\n"
+    "typedef struct {\n"
+    "    OpSocSupportInfo *socSupportInfo;\n"
+    "    size_t num;\n"
+    "} OpSupportList;\n";
+constexpr const char* OP_ACLNN_SOC_INFO = 
+    "enum SocType {\n"
+    "    SOC_VERSION_ASCEND910A = 1,\n"
+    "    SOC_VERSION_ASCEND910B = 2,\n"
+    "    SOC_VERSION_ASCEND910_93 = 3,\n"
+    "    SOC_VERSION_ASCEND950 = 4,\n"
+    "    SOC_VERSION_ASCEND310P = 5,\n"
+    "    SOC_VERSION_ASCEND310B = 6,\n"
+    "    SOC_VERSION_BS9SX1A = 7,\n"
+    "    SOC_VERSION_ASCEND610Lite = 8,\n"
+    "    SOC_VERSION_MC61AM21A = 10, // 9 is deprecated\n"
+    "    SOC_VERSION_MC62CM12A = 11,\n"
+    "    SOC_VERSION_BS9SX2A = 12,\n"
+    "    SOC_VERSION_ASCEND910_96 = 13,\n"
+    "    SOC_VERSION_KIRINX90 = 14,\n"
+    "    SOC_VERSION_KIRIN9030 = 15\n"
+    "};\n";// NOTE: Always add new SOC versions at the end of this enum.
+constexpr const char* OP_ACLNN_NNOPBASE_ATTR_DTYPE_INFO = 
+    "enum NnopbaseAttrDtype {\n"
+    "    kNnopbaseBool = 0U,\n"
+    "    kNnopbaseFloat,\n"
+    "    kNnopbaseInt,\n"
+    "    kNnopbaseString,\n"
+    "    kNnopbaseAttrEnd\n"
+    "};\n";
 
 constexpr const int32_t OP_ACLNN_ATTR_TYPE_STR = 0;
 constexpr const int32_t OP_ACLNN_ATTR_TYPE_BOOL = 1;
@@ -254,8 +257,16 @@ public:
     void AclnnOpGenHeaderFileDel(std::string& name, std::ofstream& outfile, bool isStart) const;
     std::ofstream AclnnOpGenHeaderFileStart(std::string& fileName, std::string& macroNmae, uint32_t version) const;
     bool AclnnOpGenFunProtoValueDependParam(
-        OpParamDef& input, std::string& name, std::ofstream& outfile, const std::string opType) const;
+        OpDef& opDef, const OpDefName& opdefName, size_t paramIndex, ofstream& outfile, const std::string& opType) const;
+    std::vector<std::vector<ge::DataType>> AclnnGetInputAndOutputDataTypeList(std::vector<OpParamDef>& inputs, std::vector<OpParamDef>& outputs) const;
+    std::vector<std::string> AclnnGetInputAndOutputNames(const std::vector<OpParamDef>& inputs, const std::vector<OpParamDef>& outputs) const;
+    std::vector<size_t> AclnnGetValueDependIntTypeIndex(std::vector<OpParamDef>& inputs) const;
+    std::string AclnnBuildValueDependDataTypeErrorMessage(const std::vector<std::string>& paramOriginNames, const std::vector<ge::DataType>& originDataTypes, 
+        const std::vector<ge::DataType>& requiredDataTypes, int valueDependIndex, const string& opType) const;
+    bool AclnnCheckForInt64CombinationWithValueDepend(OpDef& opDef, size_t paramIndex, const std::string& opType) const;
+    bool AclnnIsValueDependDataTypeSupport(std::vector<OpParamDef>& inputs, const std::string& opType) const;
     bool AclnnIsRefParam(const std::string& inputName) const;
+    void AclnnOpGenFunProtoParam(const OpParamDef& param, const std::string& paramName, int32_t paramType, bool hasOutputShapeDepend, ofstream& outfile) const;
     void AclnnOpGenFunProtoInputParams(OpDef& opDef, OpDefName& opdefName, std::ofstream& outfile, const uint32_t version,
         const bool valDependApi) const;
     void AclnnOpGenFunProtoOutputParams(OpDef& opDef, OpDefName& opdefName, std::ofstream& outfile, const uint32_t version, 

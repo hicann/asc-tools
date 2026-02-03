@@ -1365,15 +1365,16 @@ bool AclnnGenValudeDependFailedByCase(const std::vector<ge::DataType>& inputData
 {
     std::string fileName = "depend_failed_" + std::to_string(getpid()) + ".txt";
     std::ofstream outfile = std::ofstream(fileName);
-    OpDef opDef("ValudeDependFail");
+    OpDef opDef("ValueDependFail");
     if (isScalar) {
         opDef.Input("x1").DataType(inputDataTypes).ValueDepend(OPTIONAL).Scalar();
     } else {
         opDef.Input("x1").DataType(inputDataTypes).ValueDepend(OPTIONAL);
     }
     opDef.Output("x2").DataType(ouputDataTypes);
+    opDef.AICore().AddConfig("ascend910");
 
-    std::vector<std::string> opsvec({"ValudeDependFail"});
+    std::vector<std::string> opsvec({"ValueDependFail"});
     AclnnOpGenerator opGen(opsvec);
     OpDefName opdefName;
     std::vector<std::string> paramNames = {"x1"};
@@ -1392,9 +1393,9 @@ bool AclnnGenValudeDependFailedByCase(const std::vector<ge::DataType>& inputData
     return hasErrorMessage;
 }
 
-TEST_F(TEST_OPBUILD, AclnnGenValudeDependFailed)
+TEST_F(TEST_OPBUILD, AclnnGenValueDependFailed)
 {
-    std::string errMsg = "ValueDepend input dtypes of op ValudeDependFail must satisfy one of the following conditions:\n"
+    std::string errMsg = "ValueDepend input dtypes of op ValueDependFail must satisfy one of the following conditions:\n"
                        " 1. All input dtypes are float.\n"
                        " 2. All input dtypes are bool.\n"
                        " 3. All input dtypes are integers or unsigned integers form the supported set: [int64, uint64, int32, uint32, int16, uint16, int8, uint8].";
@@ -1402,7 +1403,7 @@ TEST_F(TEST_OPBUILD, AclnnGenValudeDependFailed)
         {
             {ge::DT_FLOAT16},
             {ge::DT_FLOAT16},
-            "ValueDepend input dtypes of op ValudeDependFail must be [float, bool, int64, uint64, int32, uint32, int16, uint16, int8, uint8].",
+            errMsg,
             false
         },
         {
@@ -1424,9 +1425,16 @@ TEST_F(TEST_OPBUILD, AclnnGenValudeDependFailed)
             false
         },
         {
+            {ge::DT_UINT32, ge::DT_INT64},
+            {ge::DT_FLOAT, ge::DT_FLOAT16},
+            "One combination of input and output dtypes of op ValueDependFail is [x1: ge::DT_UINT32, x2: ge::DT_FLOAT], the combinations of input and output dtypes should add [x1: ge::DT_INT64, x2: ge::DT_FLOAT], "
+            "because of the ValueDepend input x1.",
+            false
+        },
+        {
             {ge::DT_FLOAT16},
             {ge::DT_FLOAT16},
-            "Valuedepend and Scalar/ScalarList of op ValudeDependFail cannot be configured at the same time.",
+            "Valuedepend and Scalar/ScalarList of op ValueDependFail cannot be configured at the same time.",
             true
         }
     };
@@ -1437,6 +1445,35 @@ TEST_F(TEST_OPBUILD, AclnnGenValudeDependFailed)
        bool isScalar = std::get<3>(testCase);
        EXPECT_TRUE(AclnnGenValudeDependFailedByCase(inputDataTypes, ouputDataTypes, err, isScalar));
     }
+}
+
+TEST_F(TEST_OPBUILD, AclnnGenValueDependWithOutputFailed)
+{
+    std::string fileName = "depend_with_output_failed" + std::to_string(getpid()) + ".txt";
+    std::ofstream outfile = std::ofstream(fileName);
+    OpDef opDef("ValueDependWithOutputFail");
+    opDef.Input("x1").DataType({ge::DT_INT64}).ValueDepend(OPTIONAL);
+    opDef.Output("x2").DataType({ge::DT_INT64}).ValueDepend(OPTIONAL);
+    opDef.AICore().AddConfig("ascend910");
+
+    std::vector<std::string> opsvec({"ValueDependWithOutputFail"});
+    AclnnOpGenerator opGen(opsvec);
+    OpDefName opdefName;
+    std::vector<std::string> paramNames = {"x1"};
+    opdefName.outputsName = paramNames;
+    opGen.AclnnOpGenFunProtoOutputParams(opDef, opdefName, outfile, 0, false);
+    outfile.close();
+
+    std::vector<std::string> errMessage = Generator::GetErrorMessage();
+    bool hasErrorMessage = false;
+    const std::string err = "Valuedepend does not support output x2 of op ValueDependWithOutputFail.";
+    for (size_t i = 0U; i < errMessage.size(); i++) {
+        if (errMessage[i] == err) {
+            hasErrorMessage = true;
+            break;
+        }
+    }
+    EXPECT_TRUE(hasErrorMessage);
 }
 
 TEST_F(TEST_OPBUILD, AclnnGenScalarFailed02)

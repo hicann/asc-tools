@@ -52,22 +52,40 @@ enum NnopbaseAttrDtype {
 uint32_t socSupportList[] = {SOC_VERSION_ASCEND910A};
 uint32_t socSupportListLen = 1;
 
-TensorDesc inputDesc0_0[3] =
+TensorDesc inputDesc0_0[4] =
+    {{ge::DT_FLOAT16, ge::FORMAT_ND},
+     {ge::DT_FLOAT, ge::FORMAT_ND},
+     {ge::DT_BOOL, ge::FORMAT_ND},
+     {ge::DT_INT32, ge::FORMAT_ND}};
+TensorDesc inputDesc0_1[4] =
     {{ge::DT_FLOAT, ge::FORMAT_ND},
-     {ge::DT_UINT64, ge::FORMAT_ND},
-     {ge::DT_BOOL, ge::FORMAT_ND}};
-TensorDesc inputDesc0_1[3] =
+     {ge::DT_FLOAT, ge::FORMAT_ND},
+     {ge::DT_BOOL, ge::FORMAT_ND},
+     {ge::DT_UINT64, ge::FORMAT_ND}};
+TensorDesc inputDesc0_2[4] =
+    {{ge::DT_FLOAT16, ge::FORMAT_ND},
+     {ge::DT_FLOAT, ge::FORMAT_ND},
+     {ge::DT_BOOL, ge::FORMAT_ND},
+     {ge::DT_INT64, ge::FORMAT_ND}};
+TensorDesc inputDesc0_3[4] =
     {{ge::DT_FLOAT, ge::FORMAT_ND},
-     {ge::DT_INT32, ge::FORMAT_ND},
-     {ge::DT_BOOL, ge::FORMAT_ND}};
+     {ge::DT_FLOAT, ge::FORMAT_ND},
+     {ge::DT_BOOL, ge::FORMAT_ND},
+     {ge::DT_INT64, ge::FORMAT_ND}};
 TensorDesc outputDesc0_0[1] =
-    {{ge::DT_FLOAT, ge::FORMAT_ND}};
+    {{ge::DT_FLOAT16, ge::FORMAT_ND}};
 TensorDesc outputDesc0_1[1] =
     {{ge::DT_FLOAT, ge::FORMAT_ND}};
-SupportInfo list0_0 = {inputDesc0_0, 3, outputDesc0_0, 1};
-SupportInfo list0_1 = {inputDesc0_1, 3, outputDesc0_1, 1};
-SupportInfo supportInfo0[2] = {list0_0, list0_1};
-OpSocSupportInfo socSupportInfo0= {supportInfo0, 2};
+TensorDesc outputDesc0_2[1] =
+    {{ge::DT_FLOAT16, ge::FORMAT_ND}};
+TensorDesc outputDesc0_3[1] =
+    {{ge::DT_FLOAT, ge::FORMAT_ND}};
+SupportInfo list0_0 = {inputDesc0_0, 4, outputDesc0_0, 1};
+SupportInfo list0_1 = {inputDesc0_1, 4, outputDesc0_1, 1};
+SupportInfo list0_2 = {inputDesc0_2, 4, outputDesc0_2, 1};
+SupportInfo list0_3 = {inputDesc0_3, 4, outputDesc0_3, 1};
+SupportInfo supportInfo0[4] = {list0_0, list0_1, list0_2, list0_3};
+OpSocSupportInfo socSupportInfo0= {supportInfo0, 4};
 
 OpSocSupportInfo opSocSupportList[1] = {socSupportInfo0};
 OpSupportList supportList = {opSocSupportList, 1};
@@ -135,9 +153,10 @@ extern bool __attribute__((weak)) NnopbaseMatchArgs(void *executor, uint64_t *wo
     } while (false)
 
 aclnnStatus aclnnValueDependTestGetWorkspaceSize(
+    const aclTensor *x,
     const aclFloatArray *x1,
-    const aclIntArray *x2,
-    const aclBoolArray *x3Optional,
+    const aclBoolArray *x2,
+    const aclIntArray *x3,
     const aclTensor *out,
     uint64_t *workspaceSize,
     aclOpExecutor **executor)
@@ -148,12 +167,14 @@ aclnnStatus aclnnValueDependTestGetWorkspaceSize(
     void *nnopExecutor;
     static void *executorSpace = NULL;
     const char *opType = "ValueDependTest";
-    char inputDesc[] = {1, 1, 0};
+    char inputDesc[] = {1, 1, 1, 1};
     char outputDesc[] = {1};
     char attrDesc[] = {};
 
+    NNOPBASE_ASSERT_NOTNULL_RETVAL(x);
     NNOPBASE_ASSERT_NOTNULL_RETVAL(x1);
     NNOPBASE_ASSERT_NOTNULL_RETVAL(x2);
+    NNOPBASE_ASSERT_NOTNULL_RETVAL(x3);
     NNOPBASE_ASSERT_NOTNULL_RETVAL(out);
 
     if (!executorSpace) {
@@ -168,9 +189,10 @@ aclnnStatus aclnnValueDependTestGetWorkspaceSize(
     if (NnopbaseSetMatchArgsFlag != NULL) {
         NnopbaseSetMatchArgsFlag(*executor);
     }
-    NNOPBASE_ASSERT_OK_RETVAL(NnopbaseAddFloatArrayInput(*executor, x1, 0));
-    NNOPBASE_ASSERT_OK_RETVAL(NnopbaseAddIntArrayInput(*executor, x2, 1));
-    NNOPBASE_ASSERT_OK_RETVAL(NnopbaseAddBoolArrayInput(*executor, x3Optional, 2));
+    NNOPBASE_ASSERT_OK_RETVAL(NnopbaseAddInput(*executor, x, 0));
+    NNOPBASE_ASSERT_OK_RETVAL(NnopbaseAddFloatArrayInput(*executor, x1, 1));
+    NNOPBASE_ASSERT_OK_RETVAL(NnopbaseAddBoolArrayInput(*executor, x2, 2));
+    NNOPBASE_ASSERT_OK_RETVAL(NnopbaseAddIntArrayInput(*executor, x3, 3));
     NNOPBASE_ASSERT_OK_RETVAL(NnopbaseAddOutput(*executor, out, 0));
     if (NnopbaseMatchArgs != NULL) {
         if (NnopbaseMatchArgs(*executor, workspaceSize)) {
@@ -179,9 +201,10 @@ aclnnStatus aclnnValueDependTestGetWorkspaceSize(
         }
     }
     if (NnopbaseAddParamName != NULL) {
-        NNOPBASE_ASSERT_OK_RETVAL(NnopbaseAddParamName(*executor, 0, "x1", true));
-        NNOPBASE_ASSERT_OK_RETVAL(NnopbaseAddParamName(*executor, 1, "x2", true));
-        NNOPBASE_ASSERT_OK_RETVAL(NnopbaseAddParamName(*executor, 2, "x3Optional", true));
+        NNOPBASE_ASSERT_OK_RETVAL(NnopbaseAddParamName(*executor, 0, "x", true));
+        NNOPBASE_ASSERT_OK_RETVAL(NnopbaseAddParamName(*executor, 1, "x1", true));
+        NNOPBASE_ASSERT_OK_RETVAL(NnopbaseAddParamName(*executor, 2, "x2", true));
+        NNOPBASE_ASSERT_OK_RETVAL(NnopbaseAddParamName(*executor, 3, "x3", true));
         NNOPBASE_ASSERT_OK_RETVAL(NnopbaseAddParamName(*executor, 0, "out", false));
     }
     NNOPBASE_ASSERT_OK_RETVAL(NnopbaseAddSupportList(*executor, &supportList, socSupportList, socSupportListLen));
@@ -191,9 +214,10 @@ aclnnStatus aclnnValueDependTestGetWorkspaceSize(
 }
 
 aclnnStatus aclnnValueDependTestTensorGetWorkspaceSize(
+    const aclTensor *x,
     const aclTensor *x1,
     const aclTensor *x2,
-    const aclTensor *x3Optional,
+    const aclTensor *x3,
     const aclTensor *out,
     uint64_t *workspaceSize,
     aclOpExecutor **executor)
@@ -204,12 +228,14 @@ aclnnStatus aclnnValueDependTestTensorGetWorkspaceSize(
     void *nnopExecutor;
     static void *executorSpace = NULL;
     const char *opType = "ValueDependTest";
-    char inputDesc[] = {1, 1, 0};
+    char inputDesc[] = {1, 1, 1, 1};
     char outputDesc[] = {1};
     char attrDesc[] = {};
 
+    NNOPBASE_ASSERT_NOTNULL_RETVAL(x);
     NNOPBASE_ASSERT_NOTNULL_RETVAL(x1);
     NNOPBASE_ASSERT_NOTNULL_RETVAL(x2);
+    NNOPBASE_ASSERT_NOTNULL_RETVAL(x3);
     NNOPBASE_ASSERT_NOTNULL_RETVAL(out);
 
     if (!executorSpace) {
@@ -224,9 +250,10 @@ aclnnStatus aclnnValueDependTestTensorGetWorkspaceSize(
     if (NnopbaseSetMatchArgsFlag != NULL) {
         NnopbaseSetMatchArgsFlag(*executor);
     }
-    NNOPBASE_ASSERT_OK_RETVAL(NnopbaseAddInput(*executor, x1, 0));
-    NNOPBASE_ASSERT_OK_RETVAL(NnopbaseAddInput(*executor, x2, 1));
-    NNOPBASE_ASSERT_OK_RETVAL(NnopbaseAddInput(*executor, x3Optional, 2));
+    NNOPBASE_ASSERT_OK_RETVAL(NnopbaseAddInput(*executor, x, 0));
+    NNOPBASE_ASSERT_OK_RETVAL(NnopbaseAddInput(*executor, x1, 1));
+    NNOPBASE_ASSERT_OK_RETVAL(NnopbaseAddInput(*executor, x2, 2));
+    NNOPBASE_ASSERT_OK_RETVAL(NnopbaseAddInput(*executor, x3, 3));
     NNOPBASE_ASSERT_OK_RETVAL(NnopbaseAddOutput(*executor, out, 0));
     if (NnopbaseMatchArgs != NULL) {
         if (NnopbaseMatchArgs(*executor, workspaceSize)) {
@@ -235,9 +262,10 @@ aclnnStatus aclnnValueDependTestTensorGetWorkspaceSize(
         }
     }
     if (NnopbaseAddParamName != NULL) {
-        NNOPBASE_ASSERT_OK_RETVAL(NnopbaseAddParamName(*executor, 0, "x1", true));
-        NNOPBASE_ASSERT_OK_RETVAL(NnopbaseAddParamName(*executor, 1, "x2", true));
-        NNOPBASE_ASSERT_OK_RETVAL(NnopbaseAddParamName(*executor, 2, "x3Optional", true));
+        NNOPBASE_ASSERT_OK_RETVAL(NnopbaseAddParamName(*executor, 0, "x", true));
+        NNOPBASE_ASSERT_OK_RETVAL(NnopbaseAddParamName(*executor, 1, "x1", true));
+        NNOPBASE_ASSERT_OK_RETVAL(NnopbaseAddParamName(*executor, 2, "x2", true));
+        NNOPBASE_ASSERT_OK_RETVAL(NnopbaseAddParamName(*executor, 3, "x3", true));
         NNOPBASE_ASSERT_OK_RETVAL(NnopbaseAddParamName(*executor, 0, "out", false));
     }
     NNOPBASE_ASSERT_OK_RETVAL(NnopbaseAddSupportList(*executor, &supportList, socSupportList, socSupportListLen));

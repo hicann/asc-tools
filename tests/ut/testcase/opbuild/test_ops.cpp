@@ -105,8 +105,7 @@ public:
             .ParamType(OPTIONAL)
             .DataType({ ge::DT_FLOAT16, ge::DT_FLOAT })
             .Format({ ge::FORMAT_ND, ge::FORMAT_ND })
-            .UnknownShapeFormat({ ge::FORMAT_ND, ge::FORMAT_ND })
-            .ValueDepend(REQUIRED);
+            .UnknownShapeFormat({ ge::FORMAT_ND, ge::FORMAT_ND });
         aicConfig.Input("x2")
             .ParamType(DYNAMIC)
             .DataType({ ge::DT_FLOAT16, ge::DT_FLOAT })
@@ -168,10 +167,29 @@ class ValueDependTest : public OpDef {
 public:
     ValueDependTest(const char* name) : OpDef(name)
     {
-        this->Input("x1").DataType({ ge::DT_FLOAT, ge::DT_FLOAT}).ValueDepend(REQUIRED);
-        this->Input("x2").DataType({ ge::DT_UINT64, ge::DT_INT32}).ValueDepend(REQUIRED);
-        this->Input("x3").DataType({ ge::DT_BOOL, ge::DT_BOOL}).ParamType(OPTIONAL).ValueDepend(OPTIONAL);
-        this->Output("y").DataType({ ge::DT_FLOAT, ge::DT_FLOAT});
+        this->Input("x")
+            .ParamType(REQUIRED)
+            .DataType({ge::DT_FLOAT16, ge::DT_FLOAT, ge::DT_FLOAT16, ge::DT_FLOAT})
+            .Format({ge::FORMAT_ND, ge::FORMAT_ND, ge::FORMAT_ND, ge::FORMAT_ND});
+        this->Input("x1")
+            .ParamType(REQUIRED)
+            .DataTypeList({ge::DT_FLOAT})
+            .Format({ge::FORMAT_ND, ge::FORMAT_ND, ge::FORMAT_ND, ge::FORMAT_ND})
+            .ValueDepend(REQUIRED);
+        this->Input("x2")
+            .ParamType(REQUIRED)
+            .DataTypeList({ge::DT_BOOL})
+            .Format({ge::FORMAT_ND, ge::FORMAT_ND, ge::FORMAT_ND, ge::FORMAT_ND})
+            .ValueDepend(OPTIONAL);
+        this->Input("x3")
+            .ParamType(REQUIRED)
+            .DataType({ge::DT_INT32, ge::DT_UINT64, ge::DT_INT64, ge::DT_INT64})
+            .Format({ge::FORMAT_ND, ge::FORMAT_ND, ge::FORMAT_ND, ge::FORMAT_ND})
+            .ValueDepend(OPTIONAL);
+        this->Output("y")
+            .ParamType(REQUIRED)
+            .DataType({ge::DT_FLOAT16, ge::DT_FLOAT, ge::DT_FLOAT16, ge::DT_FLOAT})
+            .Format({ge::FORMAT_ND, ge::FORMAT_ND, ge::FORMAT_ND, ge::FORMAT_ND});
         OpAICoreConfig aicConfig;
         this->AICore().AddConfig("ascend910", aicConfig);
     }
@@ -325,7 +343,7 @@ public:
     ValueDependScopeTest(const char* name) : OpDef(name)
     {
         this->Input("x1").DataType({ ge::DT_FLOAT, ge::DT_FLOAT}).ValueDepend(REQUIRED, DependScope::TILING);
-        this->Input("x2").DataType({ ge::DT_UINT64, ge::DT_INT32}).ValueDepend(OPTIONAL, DependScope::TILING);
+        this->Input("x2").DataType({ ge::DT_UINT64, ge::DT_INT64}).ValueDepend(OPTIONAL, DependScope::TILING);
         this->Input("x3").DataType({ ge::DT_BOOL, ge::DT_BOOL}).ParamType(OPTIONAL).ValueDepend(OPTIONAL);
         this->Output("y").DataType({ ge::DT_FLOAT, ge::DT_FLOAT});
         OpAICoreConfig aicConfig;

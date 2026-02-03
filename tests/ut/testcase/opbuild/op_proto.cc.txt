@@ -1,7 +1,7 @@
 #include "op_proto.h"
 namespace ge {
 
-IMPL_OP(ValueDependTest).InputsDataDependency({0, 1, 2});
+IMPL_OP(ValueDependTest).InputsDataDependency({1, 2, 3});
 IMPL_OP(ValueDependScopeTest).InputsDataDependency({2})
                              .TilingInputsDataDependency({0, 1});
 IMPL_OP(OutShapeDepOnCompute).InputsDataDependency({0, 1})

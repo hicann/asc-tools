@@ -72,7 +72,6 @@ bool AreInputDataTypesSupported(const std::unordered_set<ge::DataType>& supportD
     }
     return true;
 }
-
 } // Anonymous Namespace
 
 namespace ops {
@@ -120,33 +119,176 @@ ofstream AclnnOpGenerator::AclnnOpGenHeaderFileStart(string& fileName, string& m
 }
 
 bool AclnnOpGenerator::AclnnOpGenFunProtoValueDependParam(
-    OpParamDef& input, std::string& name, ofstream& outfile, const std::string opType) const
+    OpDef& opDef, const OpDefName& opdefName, size_t paramIndex, ofstream& outfile, const std::string& opType) const
 {
-    std::vector<ge::DataType> dataTypes = input.GetDataTypes();
+    std::vector<OpParamDef>& inputs = opDef.GetInputs();
+    const std::vector<std::string>& paramNames = opdefName.inputsName;
+    OpParamDef& valueDependInput = inputs[paramIndex];
+    const std::string& valueDependParamName = paramNames[paramIndex];
+    std::vector<ge::DataType> dataTypes = valueDependInput.GetDataTypes();
     if (dataTypes.empty()) {
         return true;
     }
-
     ge::DataType firstType = dataTypes[0];
-    if (VALUE_DEPEND_SUPPORT_DTYPES.find(firstType) == VALUE_DEPEND_SUPPORT_DTYPES.cend()) {
-        std::string str = "ValueDepend input dtypes of op " + opType +  " must be [float, bool, "
-                            + "int64, uint64, int32, uint32, int16, uint16, int8, uint8].";
-        Generator::SetErrorMessage(str);
-        return false;
-    }
     std::string errMsg = "ValueDepend input dtypes of op " + opType +  " must satisfy one of the following conditions:\n"
                        " 1. All input dtypes are float.\n"
                        " 2. All input dtypes are bool.\n"
                        " 3. All input dtypes are integers or unsigned integers form the supported set: [int64, uint64, int32, uint32, int16, uint16, int8, uint8].";
     if (firstType == ge::DT_FLOAT && AreAllInputDataTypesSame(dataTypes)) {
-        outfile << "    const aclFloatArray *" << name << ",\n";
+        outfile << "    const aclFloatArray *" << valueDependParamName << ",\n";
     } else if (firstType == ge::DT_BOOL && AreAllInputDataTypesSame(dataTypes)) {
-        outfile << "    const aclBoolArray *" << name << ",\n";
+        outfile << "    const aclBoolArray *" << valueDependParamName << ",\n";
+    } else if (firstType == ge::DT_INT64 && AreAllInputDataTypesSame(dataTypes)) {
+         outfile << "    const aclIntArray *" << valueDependParamName << ",\n";
     } else if (AreInputDataTypesSupported(VALUE_DEPEND_SUPPORT_INT_DTYPES, dataTypes)) {
-        outfile << "    const aclIntArray *" << name << ",\n";
+        if (AclnnCheckForInt64CombinationWithValueDepend(opDef, paramIndex, opType)) {
+            outfile << "    const aclIntArray *" << valueDependParamName << ",\n";
+        } else {
+            return false;
+        }
     } else {
         Generator::SetErrorMessage(errMsg);
         return false;
+    }
+    return true;
+}
+
+std::vector<std::vector<ge::DataType>> AclnnOpGenerator::AclnnGetInputAndOutputDataTypeList(std::vector<OpParamDef>& inputs, std::vector<OpParamDef>& outputs) const
+{
+    std::vector<std::vector<ge::DataType>> paramDataTypeList;
+    size_t dataTypeNum = inputs[0].GetDataTypes().size();
+    for (size_t i = 0U; i < dataTypeNum; ++i) {
+        std::vector<ge::DataType> paramDataTypes;
+        for (size_t j = 0U; j < inputs.size(); ++j) {
+            paramDataTypes.emplace_back((inputs[j].GetDataTypes())[i]);
+        }
+        for (size_t j = 0U; j < outputs.size(); ++j) {
+            paramDataTypes.emplace_back((outputs[j].GetDataTypes())[i]);
+        }
+        paramDataTypeList.emplace_back(paramDataTypes);
+    }
+    return paramDataTypeList;
+}
+
+std::vector<std::string> AclnnOpGenerator::AclnnGetInputAndOutputNames(
+    const std::vector<OpParamDef>& inputs, const std::vector<OpParamDef>& outputs) const
+{
+    std::vector<std::string> paramOriginNames;
+    for (const auto& input : inputs) {
+        paramOriginNames.emplace_back(std::string(input.GetParamName().GetString()));
+    }
+    for (const auto& output : outputs) {
+        paramOriginNames.emplace_back(std::string(output.GetParamName().GetString()));
+    }
+    return paramOriginNames;
+}
+
+std::vector<size_t> AclnnOpGenerator::AclnnGetValueDependIntTypeIndex(std::vector<OpParamDef>& inputs) const
+{
+    std::vector<size_t> valueDependIndex;
+    for (size_t i = 0; i < inputs.size(); ++i) {
+        if (!inputs[i].IsValueDepend()) {
+            continue;
+        }
+        if (AreInputDataTypesSupported(VALUE_DEPEND_SUPPORT_INT_DTYPES, inputs[i].GetDataTypes())) {
+            valueDependIndex.emplace_back(i);
+        }
+    }
+    return valueDependIndex;
+}
+
+std::string AclnnOpGenerator::AclnnBuildValueDependDataTypeErrorMessage(const std::vector<std::string>& paramOriginNames, const std::vector<ge::DataType>& originDataTypes, 
+    const std::vector<ge::DataType>& requiredDataTypes, int valueDependIndex, const string& opType) const
+{
+    std::string errMsg = "One combination of input and output dtypes of op " + opType +" is [";
+    for (size_t j = 0U; j < paramOriginNames.size(); ++j) {
+        errMsg = errMsg + paramOriginNames[j] + ": " + DTYPE_SUPPORT_MAP.at(originDataTypes[j]);
+        if (j != paramOriginNames.size() - 1) {
+            errMsg += ", ";
+        }
+    }
+    errMsg += "], the combinations of input and output dtypes should add [";
+    for (size_t j = 0U; j < paramOriginNames.size(); ++j) {
+        errMsg = errMsg + paramOriginNames[j] + ": " + DTYPE_SUPPORT_MAP.at(requiredDataTypes[j]);
+        if (j != paramOriginNames.size() - 1) {
+            errMsg += ", ";
+        }
+    }
+    errMsg += "], because of the ValueDepend input " + paramOriginNames[valueDependIndex] + ".";
+    return errMsg;
+}
+
+bool AclnnOpGenerator::AclnnCheckForInt64CombinationWithValueDepend(OpDef& opDef, size_t paramIndex, const std::string& opType) const
+{
+    for (auto& aicoreItem : opDef.AICore().GetAICoreConfigs()) {
+        std::string socVer = aicoreItem.first.GetString();
+        OpAICoreConfig aicoreConfig = aicoreItem.second;
+        std::vector<OpParamDef> inputs = opDef.GetMergeInputs(aicoreConfig);
+        std::vector<OpParamDef> outputs = opDef.GetMergeOutputs(aicoreConfig);
+        std::vector<ge::DataType> valueDependDataTypes = inputs[paramIndex].GetDataTypes();
+        std::vector<std::vector<ge::DataType>> paramDataTypeList = AclnnGetInputAndOutputDataTypeList(inputs, outputs);
+        std::vector<std::string> paramOriginNames = AclnnGetInputAndOutputNames(inputs, outputs);
+        std::vector<size_t> valueDependIndexList = AclnnGetValueDependIntTypeIndex(inputs);
+
+        for (size_t i = 0U; i < valueDependDataTypes.size(); ++i) {
+            if (valueDependDataTypes[i] == ge::DT_INT64) {
+                continue;
+            }
+            auto inputDataTypes = paramDataTypeList[i];
+            for (const auto valueDependIntIndex : valueDependIndexList) {
+                inputDataTypes[valueDependIntIndex] = ge::DT_INT64;
+            }
+            bool hasInt64Combination = false;
+            for (const auto& baseInputDataTypes : paramDataTypeList) {
+                if (inputDataTypes == baseInputDataTypes) {
+                    hasInt64Combination = true;
+                    break;
+                }
+            }
+            if (hasInt64Combination) {
+                continue;
+            }
+            
+            std::string errMsg = AclnnBuildValueDependDataTypeErrorMessage(paramOriginNames, paramDataTypeList[i], inputDataTypes, paramIndex, opType);
+            Generator::SetErrorMessage(errMsg);
+            return false;
+        }
+    }
+    return true;
+}
+
+bool AclnnOpGenerator::AclnnIsValueDependDataTypeSupport(std::vector<OpParamDef>& inputs, const std::string& opType) const
+{
+    for (auto& input : inputs) {
+        if (!input.IsValueDepend()) {
+            continue;
+        }
+        std::vector<ge::DataType> dataTypes = input.GetDataTypes();
+        if (dataTypes.empty()) {
+            return false;
+        }
+
+        ge::DataType firstType = dataTypes[0];
+        if (VALUE_DEPEND_SUPPORT_DTYPES.find(firstType) == VALUE_DEPEND_SUPPORT_DTYPES.cend()) {
+            std::string str = "ValueDepend input dtypes of op " + opType +  " must be [float, bool, "
+                                + "int64, uint64, int32, uint32, int16, uint16, int8, uint8].";
+            Generator::SetErrorMessage(str);
+            return false;
+        }
+        std::string errMsg = "ValueDepend input dtypes of op " + opType +  " must satisfy one of the following conditions:\n"
+                        " 1. All input dtypes are float.\n"
+                        " 2. All input dtypes are bool.\n"
+                        " 3. All input dtypes are integers or unsigned integers form the supported set: [int64, uint64, int32, uint32, int16, uint16, int8, uint8].";
+        if (firstType == ge::DT_FLOAT && AreAllInputDataTypesSame(dataTypes)) {
+            continue;
+        } else if (firstType == ge::DT_BOOL && AreAllInputDataTypesSame(dataTypes)) {
+            continue;
+        } else if (AreInputDataTypesSupported(VALUE_DEPEND_SUPPORT_INT_DTYPES, dataTypes)) {
+            continue;
+        } else {
+            Generator::SetErrorMessage(errMsg);
+            return false;
+        }
     }
     return true;
 }
@@ -160,43 +302,51 @@ bool AclnnOpGenerator::AclnnIsRefParam(const std::string& inputName) const
     return false;
 }
 
+void AclnnOpGenerator::AclnnOpGenFunProtoParam(const OpParamDef& param, const std::string& paramName,
+    int32_t paramType, bool hasOutputShapeDepend, ofstream& outfile) const
+{
+    if (param.IsScalar()) {
+        outfile << "    const aclScalar *" << paramName << ",\n";
+    } else if (param.IsScalarList()) {
+        outfile << "    const aclScalarList *" << paramName << ",\n";
+    } else if (paramType != DYNAMIC) {
+        if ((AclnnIsRefParam(paramName)) || (hasOutputShapeDepend)) {
+            outfile << "    aclTensor *" << paramName << ",\n";
+        } else {
+            outfile << "    const aclTensor *" << paramName << ",\n";
+        }
+    } else {
+        if (AclnnIsRefParam(paramName)) {
+            outfile << "    aclTensorList *" << paramName << ",\n";
+        } else {
+            outfile << "    const aclTensorList *" << paramName << ",\n";
+        }
+    }
+}
+
 void AclnnOpGenerator::AclnnOpGenFunProtoInputParams(
     OpDef& opDef, OpDefName& opdefName, ofstream& outfile, const uint32_t version, const bool valDependApi) const
 {
-    std::vector<OpParamDef>& param = opDef.GetInputs();
+    std::vector<OpParamDef>& params = opDef.GetInputs();
     std::vector<std::string>& paramNames = opdefName.inputsName;
     const std::string opType = opDef.GetOpType().GetString();
-    for (size_t i = 0; i < param.size(); i++) {
-        if (param[i].GetVersion() > version) {
+    for (size_t i = 0; i < params.size(); i++) {
+        if (params[i].GetVersion() > version) {
             continue;
         }
-        int32_t type = param[i].GetParamType();
-        const char* const valueDepend = param[i].GetValueDepend().GetString();
+        int32_t type = params[i].GetParamType();
+        const char* const valueDepend = params[i].GetValueDepend().GetString();
         if (!valDependApi && ((std::string(valueDepend) == "required") || (std::string(valueDepend) == "optional"))) {
-            if ((param[i].IsScalar() || (param[i].IsScalarList()))) {
+            if ((params[i].IsScalar() || (params[i].IsScalarList()))) {
                 Generator::SetErrorMessage(
                     "Valuedepend and Scalar/ScalarList of op " + opType + " cannot be configured at the same time.");
                 return;
             }
-            if (!AclnnOpGenFunProtoValueDependParam(param[i], paramNames[i], outfile, opType)) {
+            if (!AclnnOpGenFunProtoValueDependParam(opDef, opdefName, i, outfile, opType)) {
                 return;
             }
-        } else if (param[i].IsScalar()) {
-            outfile << "    const aclScalar *" << paramNames[i] << ",\n";
-        } else if (param[i].IsScalarList()) {
-            outfile << "    const aclScalarList *" << paramNames[i] << ",\n";
-        } else if (type != DYNAMIC) {
-            if ((AclnnIsRefParam(paramNames[i])) || (opdefName.hasOutputShapeDepend)) {
-                outfile << "    aclTensor *" << paramNames[i] << ",\n";
-            } else {
-                outfile << "    const aclTensor *" << paramNames[i] << ",\n";
-            }
-        } else {
-            if (AclnnIsRefParam(paramNames[i])) {
-                outfile << "    aclTensorList *" << paramNames[i] << ",\n";
-            } else {
-                outfile << "    const aclTensorList *" << paramNames[i] << ",\n";
-            }
+        }else {
+            AclnnOpGenFunProtoParam(params[i], paramNames[i], type, opdefName.hasOutputShapeDepend, outfile);
         }
     }
 }
@@ -204,42 +354,23 @@ void AclnnOpGenerator::AclnnOpGenFunProtoInputParams(
 void AclnnOpGenerator::AclnnOpGenFunProtoOutputParams(
     OpDef& opDef, OpDefName& opdefName, ofstream& outfile, const uint32_t version, const bool valDependApi) const
 {
-    std::vector<OpParamDef>& param = opDef.GetOutputs();
+    std::vector<OpParamDef>& params = opDef.GetOutputs();
     std::vector<std::string>& paramNames = opdefName.outputsName;
     const std::string opType = opDef.GetOpType().GetString();
-    for (size_t i = 0; i < param.size(); i++) {
-        if (param[i].GetVersion() > version) {
+    for (size_t i = 0; i < params.size(); i++) {
+        if (params[i].GetVersion() > version) {
             continue;
         }
-        int32_t type = param[i].GetParamType();
-        const char* const valueDepend = param[i].GetValueDepend().GetString();
+        int32_t type = params[i].GetParamType();
+        const char* const valueDepend = params[i].GetValueDepend().GetString();
         if (AclnnIsRefParam(paramNames[i])) {
             continue;
         } else if (!valDependApi && ((std::string(valueDepend) == "required") || (std::string(valueDepend) == "optional"))) {
-            if ((param[i].IsScalar() || (param[i].IsScalarList()))) {
-                Generator::SetErrorMessage(
-                    "Valuedepend and Scalar/ScalarList of op " + opType + " cannot be configured at the same time.");
-                return;
-            }
-            if (!AclnnOpGenFunProtoValueDependParam(param[i], paramNames[i], outfile, opType)) {
-                return;
-            }
-        } else if (param[i].IsScalar()) {
-            outfile << "    const aclScalar *" << paramNames[i] << ",\n";
-        } else if (param[i].IsScalarList()) {
-            outfile << "    const aclScalarList *" << paramNames[i] << ",\n";
-        } else if (type != DYNAMIC) {
-            if ((AclnnIsRefParam(paramNames[i])) || (opdefName.hasOutputShapeDepend)) {
-                outfile << "    aclTensor *" << paramNames[i] << ",\n";
-            } else {
-                outfile << "    const aclTensor *" << paramNames[i] << ",\n";
-            }
+            Generator::SetErrorMessage(
+                    "Valuedepend does not support output " + std::string(params[i].GetParamName().GetString()) + " of op " + opType + ".");
+            return;
         } else {
-            if (AclnnIsRefParam(paramNames[i])) {
-                outfile << "    aclTensorList *" << paramNames[i] << ",\n";
-            } else {
-                outfile << "    const aclTensorList *" << paramNames[i] << ",\n";
-            }
+            AclnnOpGenFunProtoParam(params[i], paramNames[i], type, opdefName.hasOutputShapeDepend, outfile);
         }
     }
 }
@@ -1114,6 +1245,9 @@ void AclnnOpGenerator::AclnnOpGenOpSupportListAll(OpDef& opDef, ofstream& outfil
         std::vector<OpParamDef> inputs = opDef.GetMergeInputs(aicoreConfig);
         std::vector<OpParamDef> outputs = opDef.GetMergeOutputs(aicoreConfig);
         AclnnOpGenOpSupportList(i, inputs, outputs, outfile, opType);
+        if (!AclnnIsValueDependDataTypeSupport(inputs, opType)) {
+            return;
+        }
         i++;
     }
     size_t socSize = opDef.AICore().GetAICoreConfigs().size();

@@ -58,7 +58,7 @@ TensorDesc inputDesc0_0[3] =
      {ge::DT_BOOL, ge::FORMAT_ND}};
 TensorDesc inputDesc0_1[3] =
     {{ge::DT_FLOAT, ge::FORMAT_ND},
-     {ge::DT_INT32, ge::FORMAT_ND},
+     {ge::DT_INT64, ge::FORMAT_ND},
      {ge::DT_BOOL, ge::FORMAT_ND}};
 TensorDesc outputDesc0_0[1] =
     {{ge::DT_FLOAT, ge::FORMAT_ND}};

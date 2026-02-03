@@ -38,9 +38,10 @@ REG_OP(OutputTest)
     .OP_END_FACTORY_REG(OutputTest);
 
 REG_OP(ValueDependTest)
+    .INPUT(x, ge::TensorType::ALL())
     .INPUT(x1, ge::TensorType::ALL())
     .INPUT(x2, ge::TensorType::ALL())
-    .OPTIONAL_INPUT(x3, ge::TensorType::ALL())
+    .INPUT(x3, ge::TensorType::ALL())
     .OUTPUT(y, ge::TensorType::ALL())
     .OP_END_FACTORY_REG(ValueDependTest);
 

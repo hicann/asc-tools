@@ -5,7 +5,6 @@ input0.format=ND,ND
 input0.unknownshape_format=ND,ND
 input0.shape=all
 input0.paramType=optional
-input0.valueDepend=required
 input1.name=x2
 input1.dtype=float16,float32
 input1.format=ND,NCHW
