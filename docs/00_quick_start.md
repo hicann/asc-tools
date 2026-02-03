@@ -79,7 +79,7 @@
      yum install lcov
      ```
 
-   - pytest >= 5.4.2（可选，仅执行UT时依赖）
+   - pytest >= 8.3.2（可选，仅执行UT时依赖）
 
      执行以下命令安装：
      ```bash
@@ -199,7 +199,7 @@
    bash build.sh --pkg
    ```
 
-   编译完成后会在`out`目录下生成cann-asc-tools_*<cann_version>*_linux-*<arch>*.run软件包。
+   编译完成后会在`build_out`目录下生成cann-asc-tools_*<cann_version>*_linux-*<arch>*.run软件包。
 2. 安装
 
    在开源仓根目录下执行下列命令，根据设置的环境变量路径，将编译生成的run包安装到CANN包的装包路径，同时会覆盖原CANN包中的Ascend C内容。
