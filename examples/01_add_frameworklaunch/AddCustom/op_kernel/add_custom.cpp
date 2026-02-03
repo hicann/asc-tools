@@ -105,9 +105,9 @@ extern "C" __global__ __aicore__ void add_custom(GM_ADDR x, GM_ADDR y, GM_ADDR z
 
 #ifndef ASCENDC_CPU_DEBUG
 // call of kernel function
-void add_custom_do(uint32_t blockDim, void *l2ctrl, void *stream, uint8_t *x, uint8_t *y, uint8_t *z,
+void add_custom_do(uint32_t numBlocks, void *l2ctrl, void *stream, uint8_t *x, uint8_t *y, uint8_t *z,
                    uint8_t *workspace, uint8_t *tiling)
 {
-    add_custom<<<blockDim, l2ctrl, stream>>>(x, y, z, workspace, tiling);
+    add_custom<<<numBlocks, l2ctrl, stream>>>(x, y, z, workspace, tiling);
 }
 #endif

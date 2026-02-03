@@ -35,9 +35,9 @@ int32_t main(int32_t argc, char *argv[])
     uint8_t *tilingBuf = (uint8_t *)malloc(tilingFileSize);
     GenerateTiling(socVersion, tilingBuf);
 #ifdef CUSTOM_ASCEND310P
-    uint32_t blockDim = reinterpret_cast<TCubeTiling *>(tilingBuf)->usedCoreNum;
+    uint32_t numBlocks = reinterpret_cast<TCubeTiling *>(tilingBuf)->usedCoreNum;
 #else
-    uint32_t blockDim = (reinterpret_cast<TCubeTiling *>(tilingBuf)->usedCoreNum + 1) / 2;
+    uint32_t numBlocks = (reinterpret_cast<TCubeTiling *>(tilingBuf)->usedCoreNum + 1) / 2;
 #endif
 
 #ifdef ASCENDC_CPU_DEBUG
@@ -51,7 +51,7 @@ int32_t main(int32_t argc, char *argv[])
     ReadFile("../input/x2_gm.bin", bFileSize, b, bFileSize);
     memcpy_s(tiling, tilingFileSize, tilingBuf, tilingFileSize);
 
-    ICPU_RUN_KF(matmul_custom, blockDim, a, b, c, workspace, tiling);
+    ICPU_RUN_KF(matmul_custom, numBlocks, a, b, c, workspace, tiling);
 
     WriteFile("../output/output.bin", c, cFileSize);
 
@@ -97,7 +97,7 @@ int32_t main(int32_t argc, char *argv[])
     CHECK_ACL(aclrtMalloc((void **)&cDevice, cFileSize, ACL_MEM_MALLOC_HUGE_FIRST));
 
     ACLRT_LAUNCH_KERNEL(matmul_custom)
-    (blockDim, stream, aDevice, bDevice, cDevice, workspaceDevice, tilingDevice);
+    (numBlocks, stream, aDevice, bDevice, cDevice, workspaceDevice, tilingDevice);
     CHECK_ACL(aclrtSynchronizeStream(stream));
 
     CHECK_ACL(aclrtMemcpy(cHost, cFileSize, cDevice, cFileSize, ACL_MEMCPY_DEVICE_TO_HOST));
