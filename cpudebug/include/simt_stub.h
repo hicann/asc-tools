@@ -258,6 +258,51 @@ void __stg(__gm__ T* address, T val)
 {
     *address = val;
 }
+
+struct BlockDim {
+    uint32_t &x;
+    uint32_t &y;
+    uint32_t &z;
+    BlockDim(uint32_t &x_, uint32_t &y_, uint32_t &z_)
+        : x(x_), y(y_), z(z_)
+    {}
+};
+
+struct BlockIdx {
+    int64_t &x;
+    int64_t y;
+    int64_t z;
+    BlockIdx(int64_t &x_)
+        : x(x_)
+    {}
+};
+
+struct ThreadIdx {
+    uint32_t &x;
+    uint32_t &y;
+    uint32_t &z;
+    ThreadIdx(uint32_t &x_, uint32_t &y_, uint32_t &z_)
+        : x(x_), y(y_), z(z_)
+    {}
+};
+
+struct GridDim {
+    int64_t &x;
+    int64_t y;
+    int64_t z;
+    GridDim(int64_t &x_)
+        : x(x_)
+    {
+        y = 1;
+        z = 1;
+    }
+};
+
+BlockDim blockDim(g_threadDimX, g_threadDimY, g_threadDimZ);
+BlockIdx blockIdx(block_idx);
+thread_local ThreadIdx threadIdx(g_threadIdxX, g_threadIdxY, g_threadIdxZ);
+GridDim gridDim(block_num);
+
 #endif
 #endif
 
