@@ -300,10 +300,10 @@ struct GridDim {
     }
 };
 
-BlockDim blockDim(g_threadDimX, g_threadDimY, g_threadDimZ);
-BlockIdx blockIdx(block_idx);
-thread_local ThreadIdx threadIdx(g_threadIdxX, g_threadIdxY, g_threadIdxZ);
-GridDim gridDim(block_num);
+inline BlockDim blockDim(g_threadDimX, g_threadDimY, g_threadDimZ);
+inline BlockIdx blockIdx(block_idx);
+inline thread_local ThreadIdx threadIdx(g_threadIdxX, g_threadIdxY, g_threadIdxZ);
+inline GridDim gridDim(block_num);
 
 #ifndef SIMT_WARP_SIZE
 #define SIMT_WARP_SIZE
