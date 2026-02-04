@@ -103,6 +103,7 @@ foreach(product_type ${PRODUCT_TYPE_LIST})
     $<$<STREQUAL:${product_type},ascend310B1>:NO_COSIM>
     $<$<STREQUAL:${product_type},kirinx90>:NO_COSIM>
     $<$<STREQUAL:${product_type},kirin9030>:NO_COSIM>
+    $<$<STREQUAL:${product_type},ascend950pr_9599>:NO_COSIM>
   )
   target_link_libraries(cpudebug_${product_type} PRIVATE
     $<BUILD_INTERFACE:intf_pub_cxx17>
@@ -110,6 +111,11 @@ foreach(product_type ${PRODUCT_TYPE_LIST})
     $<BUILD_INTERFACE:mmpa_headers>
     c_sec
     dl
+    -Wl,--no-as-needed
+    mmpa
+    unified_dlog
+    pthread
+    -Wl,--as-needed
   )
   set_target_properties(cpudebug_${product_type} PROPERTIES
     OUTPUT_NAME cpudebug
