@@ -27,6 +27,8 @@
 #define Z CAST_TRUNC
 #define O CAST_ODD
 
+#define __launch_bounds__(x)
+
 template <ROUND rnd = ROUND::R, RoundingSaturation sat = RoundingSaturation::RS_DISABLE_VALUE, typename SRC_TYPE>
 float __cvt_float(SRC_TYPE src) {
     if (std::is_same<SRC_TYPE, half>::value) {
