@@ -18,7 +18,7 @@
 #include "stub_def.h"
 #include "stub_fun.h"
 
-#define INTRI_FMT_NUM 7264
+#define INTRI_FMT_NUM 7265
 
 struct IntriFmt {
     int32_t fid;

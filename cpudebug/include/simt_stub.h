@@ -73,6 +73,24 @@ uint64_t __cvt_uint64_t(SRC_TYPE x) {
     return 0;
 }
 
+template<ROUND rnd, RoundingSaturation rst, typename SRC_TYPE>
+float2 __cvt_float2(SRC_TYPE x) {
+    float2 tmp;
+    return tmp;
+}
+
+template<ROUND rnd, RoundingSaturation rst, typename SRC_TYPE>
+bfloat16x2_t __cvt_bfloat16x2_t(SRC_TYPE x) {
+    bfloat16x2_t tmp;
+    return tmp;
+}
+
+template<ROUND rnd, RoundingSaturation rst, typename SRC_TYPE>
+half2 __cvt_half2(SRC_TYPE x) {
+    half2 tmp;
+    return tmp;
+}
+
 namespace bisheng {
 namespace cce {
 namespace simt {
