@@ -147,7 +147,7 @@ class ObjDump:
             debugBufSize, debugOptions = struct.unpack("II", content[index:index + 8])
             print(f"DEBUG: debugBufSize={debugBufSize}, debugOptions={debugOptions}")
         elif t == 2:
-            dynamicParamMode, = struct.unpack("H", content[index:index + 2])
+            dynamicParamMode, = struct.unpack("H", content[index + 2:index + 4])
             print(f"DYNAMIC_PARAM: dynamicParamMode={dynamicParamMode}")
         elif t == 3:
             optionalInputMode, optionalOutputMode = struct.unpack("HH", content[index:index + 4])
