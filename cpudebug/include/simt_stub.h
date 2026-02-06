@@ -65,6 +65,7 @@ float __cvt_float(SRC_TYPE src) {
             return src;
         }
     }
+    return 0;
 }
 
 template <ROUND rnd = ROUND::R, RoundingSaturation sat = RoundingSaturation::RS_DISABLE_VALUE, typename SRC_TYPE>
@@ -72,6 +73,7 @@ half __cvt_half(SRC_TYPE src) {
     if (std::is_same<SRC_TYPE, float>::value) {
         return half(src);
     }
+    return half(0);
 }
 
 template <ROUND rnd = ROUND::R, RoundingSaturation sat = RoundingSaturation::RS_DISABLE_VALUE, typename SRC_TYPE>
@@ -79,6 +81,7 @@ bfloat16_t __cvt_bfloat16_t(SRC_TYPE src) {
     if (std::is_same<SRC_TYPE, float>::value) {
         return bfloat16_t(src);
     }
+    return bfloat16_t(0);
 }
 
 template<ROUND rnd, RoundingSaturation rst, typename SRC_TYPE>
