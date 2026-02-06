@@ -189,6 +189,24 @@ half2 __cvt_half2(SRC_TYPE x) {
     return tmp;
 }
 
+template<ROUND rnd, RoundingSaturation rst, typename SRC_TYPE>
+hifloat8x2_t __cvt_hifloat8x2_t(SRC_TYPE x) {
+    hifloat8x2_t tmp;
+    return tmp;
+}
+
+template<ROUND rnd, RoundingSaturation rst, typename SRC_TYPE>
+float8_e4m3x2_t __cvt_float8_e4m3x2_t(SRC_TYPE x) {
+    float8_e4m3x2_t tmp;
+    return tmp;
+}
+
+template<ROUND rnd, RoundingSaturation rst, typename SRC_TYPE>
+float8_e5m2x2_t __cvt_float8_e5m2x2_t(SRC_TYPE x) {
+    float8_e5m2x2_t tmp;
+    return tmp;
+}
+
 namespace bisheng {
 namespace cce {
 namespace simt {

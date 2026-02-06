@@ -16,6 +16,9 @@
 #define ASCENDC_VECTORIZED_H
 #include "kernel_fp16.h"
 #include "kernel_bf16.h"
+#include "kernel_hif8.h"
+#include "kernel_fp8_e4m3.h"
+#include "kernel_fp8_e5m2.h"
 
 namespace Vectorized {
 
@@ -100,5 +103,10 @@ using longlong2 = Vectorized::VectorizedType2<long long int>;
 using longlong1 = Vectorized::VectorizedType1<long long int>;
 
 using bfloat16x2_t = Vectorized::VectorizedType2<bfloat16_t>;
+
+using hifloat8x2_t = Vectorized::VectorizedType2<hifloat8_t>;
+
+using float8_e4m3x2_t = Vectorized::VectorizedType2<fp8_e4m3fn_t>;
+using float8_e5m2x2_t = Vectorized::VectorizedType2<fp8_e5m2_t>;
 
 #endif  // ASCENDC_VECTORIZED_H
