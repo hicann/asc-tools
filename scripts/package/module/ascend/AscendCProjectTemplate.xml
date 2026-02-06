@@ -6,4 +6,7 @@
     <file_info copy_type="source" src_path="lib/host" dst_path="tools/" install_path="tools/" install_mod="750" feature="ascendc">
         <file value="op_project_templates"/>
     </file_info>
+    <file_info copy_type="source" src_path="lib/host" dst_path="tools/" install_path="tools/" install_mod="750" feature="ascendc">
+        <file value="new_op_project_template"/>
+    </file_info>
 </block>
