@@ -18,7 +18,7 @@
 #if defined(ASCENDC_CPU_DEBUG)
 #if defined (__NPU_ARCH__) && ((__NPU_ARCH__ == 3101) || (__NPU_ARCH__ == 5102))
 #include "stub_fun.h"
-#include "simt_api/dav_c310/kernel_simt_cpu.h"
+#include "kernel_simt_cpu.h"
 
 #define R CAST_RINT
 #define A CAST_ROUND

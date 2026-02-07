@@ -159,6 +159,7 @@ install(FILES
   include/tikicpulib.h
   include/kernel_raise_signal.h
   include/simt_stub.h
+  include/kernel_simt_cpu.h
   DESTINATION lib/include OPTIONAL
 )
 

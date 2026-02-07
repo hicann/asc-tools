@@ -1,5 +1,5 @@
 /**
-* Copyright (c) 2025 Huawei Technologies Co., Ltd.
+* Copyright (c) 2026 Huawei Technologies Co., Ltd.
 * This program is free software, you can redistribute it and/or modify it under the terms and conditions of
 * CANN Open Software License Agreement Version 2.0 (the "License").
 * Please refer to the License for details. You may not use this file except in compliance with the License.
@@ -24,7 +24,7 @@
 namespace AscendC {
 namespace Simt {
 constexpr uint32_t THREAD_PER_WARP = 32;
-// 2 piece interleave Shared memory in a warp to guarrent data exchange/modification without data race at warp level.
+// 2 piece interleave Shared memory in a warp to guarantee data exchange/modification without data race at warp level.
 constexpr uint32_t MEMORY_PIECE = 2;
 template <typename Func>
 void FuncWrapper(Func func, uint32_t warpId, uint32_t threadIdx);
@@ -49,7 +49,7 @@ public:
     template <typename T, typename Func>
     T WarpOp(T val, Func action)
     {
-        // Shared memory in a warp to guarrent data exchange/modification without data race at warp level.
+        // Shared memory in a warp to guarentee data exchange/modification without data race at warp level.
         std::unique_lock<std::mutex> lck(mtx_);
         auto currGeneration = syncGeneration;
         void* temp = reinterpret_cast<void *>(&data[currGeneration % MEMORY_PIECE]);
@@ -85,7 +85,7 @@ public:
         std::unique_lock<std::mutex> lck(mtx_);
 
         auto currGeneration = syncGeneration;
-        void* temp = reinterpret_cast<void *>(&shulffleData[laneToWrite][currGeneration % MEMORY_PIECE]);
+        void* temp = reinterpret_cast<void *>(&shuffleData[laneToWrite][currGeneration % MEMORY_PIECE]);
         T &dataToUpdate = *reinterpret_cast<T *>(temp);
         dataToUpdate = val;
         activeThreads--;
@@ -103,7 +103,7 @@ public:
             }
         }
 
-        void* temp2 = reinterpret_cast<void *>(&shulffleData[laneToRead][currGeneration % MEMORY_PIECE]);
+        void* temp2 = reinterpret_cast<void *>(&shuffleData[laneToRead][currGeneration % MEMORY_PIECE]);
         return *reinterpret_cast<T *>(temp2);
     }
 
@@ -111,7 +111,7 @@ private:
     uint32_t activeThreads{THREAD_PER_WARP};
     uint32_t syncGeneration{0};
     bool isReset{false};
-    uint32_t shulffleData[THREAD_PER_WARP][MEMORY_PIECE];
+    uint32_t shuffleData[THREAD_PER_WARP][MEMORY_PIECE];
     uint64_t data[MEMORY_PIECE]{0};
 
     std::mutex mtx_;
