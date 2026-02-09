@@ -21,7 +21,8 @@ if (NOT CMAKE_BUILD_TYPE)
     FORCE)
 endif ()
 
-set(PVMODEL_PATH ${PROJECT_SOURCE_DIR}/libraries/simulator)
+# 变量PVMODEL_PATH在pvmodel.cmake中进行设置，适配simulator的tar包和run包两种形式
+message(STATUS "the PVMODEL_PATH is :${PVMODEL_PATH}")
 
 find_package(unified_dlog MODULE REQUIRED)
 find_package(securec MODULE REQUIRED)

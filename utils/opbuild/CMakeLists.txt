@@ -22,6 +22,7 @@ target_compile_options(op_build PRIVATE -Wextra -Wfloat-equal -fno-common -fpie 
 if(BUILD_OPEN_PROJECT)
   target_include_directories(op_build PRIVATE
     ${ASCEND_CANN_PACKAGE_PATH}/${CMAKE_SYSTEM_PROCESSOR}-linux/pkg_inc/base
+    ${ASCEND_CANN_PACKAGE_PATH}/${CMAKE_SYSTEM_PROCESSOR}-linux/include
     ${ASCEND_CANN_PACKAGE_PATH}/include
     ${ASCEND_CANN_PACKAGE_PATH}/include/base
     ${ASCEND_CANN_PACKAGE_PATH}/pkg_inc/base

@@ -16,12 +16,12 @@ endif()
 include(FindPackageHandleStandardArgs)
 
 set(METADEF_HEAD_SEARCH_PATHS
-  ${ASCEND_DIR}/${SYSTEM_PREFIX}/include
+  ${ASCEND_CANN_PACKAGE_PATH}/${CMAKE_SYSTEM_PROCESSOR}-linux/include
   ${TOP_DIR}/metadef/inc/external/
 )
-
+ 
 set(METADEF_LIB_SEARCH_PATHS
-  ${ASCEND_DIR}/${SYSTEM_PREFIX}
+  ${ASCEND_CANN_PACKAGE_PATH}/${CMAKE_SYSTEM_PROCESSOR}-linux
 )
 
 find_library(REGISTER_LIB_DIR

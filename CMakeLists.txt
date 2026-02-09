@@ -36,9 +36,9 @@ if(BUILD_OPEN_PROJECT)
     set(HI_PYTHON ${Python3_EXECUTABLE})
     set(PYTHON ${Python3_EXECUTABLE})
 
-    include(cmake/dependencies.cmake)
+    include(cmake/third_party/pvmodel.cmake) # 对simulator包依赖的设置，设置依赖路径PVMODEL_PATH
+    include(cmake/dependencies.cmake) # 其中会根据PVMODEL_PATH作为pvmodel相关依赖路径
     include(cmake/intf_pub_linux.cmake)
-    include(cmake/third_party/pvmodel.cmake)
     include(cmake/third_party/cpudebug.cmake)
     include(cmake/package.cmake)
 endif()
