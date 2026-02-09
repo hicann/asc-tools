@@ -14,24 +14,24 @@ else()
     set(PVMODEL_NAME "pvmodel")
     file(GLOB SIMULATOR_PKG
         LIST_DIRECTORIES True
-        ${DEPS_FILE_PATH}/simulator*.tar.gz
+        ${CANN_3RD_LIB_PATH}/simulator*.tar.gz
     )
 
     if(NOT EXISTS ${SIMULATOR_PKG})
         set(SIMULATOR_FILE simulator_9.0.0_linux-${CMAKE_SYSTEM_PROCESSOR}.tar.gz)
         set(SIMULATOR_URL "https://mirrors.huaweicloud.com/artifactory/cann-run/9.0.0/try/${CMAKE_SYSTEM_PROCESSOR}/${SIMULATOR_FILE}")
-        message(STATUS "Pvmodel pkg not found in ${DEPS_FILE_PATH}, downloading pvmodel from ${SIMULATOR_URL}")
+        message(STATUS "Pvmodel pkg not found in ${CANN_3RD_LIB_PATH}, downloading pvmodel from ${SIMULATOR_URL}")
     else()
         set(SIMULATOR_URL ${SIMULATOR_PKG})
     endif()
 
-    set(SIMULATOR_DIR ${DEPS_FILE_PATH}/${SIMULATOR_FILE})
+    set(SIMULATOR_DIR ${CANN_3RD_LIB_PATH}/${SIMULATOR_FILE})
     include(FetchContent)
     FetchContent_Declare(
         ${PVMODEL_NAME}
         URL ${SIMULATOR_URL}
         TLS_VERIFY FALSE
-        DOWNLOAD_DIR ${DEPS_FILE_PATH}
+        DOWNLOAD_DIR ${CANN_3RD_LIB_PATH}
         SOURCE_DIR ${PVMODEL_PATH}
     )
     FetchContent_MakeAvailable(${PVMODEL_NAME})

@@ -38,8 +38,27 @@ if (NOT EXISTS "${CMAKE_INSTALL_PREFIX}/mockcpp/lib/libmockcpp.a")
         set(IS_MAKE False)
     endif()
 
+    file(GLOB MOCKCPP_PKG
+        LIST_DIRECTORIES True
+        ${CANN_3RD_LIB_PATH}/mockcpp*.tar.gz
+    )
+    if(NOT EXISTS ${MOCKCPP_PKG})
+        set(REQ_URL "https://gitcode.com/cann-src-third-party/mockcpp/releases/download/v2.7-h2/mockcpp-2.7.tar.gz")
+    else()
+        set(REQ_URL ${MOCKCPP_PKG})
+    endif()
+
+    file(GLOB MOCKCPP_PATH
+        LIST_DIRECTORIES True
+        ${CANN_3RD_LIB_PATH}/mockcpp*.patch
+    )
+    if(NOT EXISTS ${MOCKCPP_PATH})
+        set(PATCH_URL "https://gitcode.com/cann-src-third-party/mockcpp/releases/download/v2.7-h3/mockcpp-2.7_py3-h3.patch")
+    else()
+        set(PATCH_URL ${MOCKCPP_PATH})
+    endif()
+
     set(PATCH_FILE ${third_party_TEM_DIR}/mockcpp-2.7_py3.patch)
-    set(REQ_URL "https://gitcode.com/cann-src-third-party/mockcpp/releases/download/v2.7-h2/mockcpp-2.7.tar.gz")
     set(MOCKCPP_SRC_PATH "${CANN_3RD_LIB_PATH}/../llt/third_party/mockcpp_src")
     set(MOCKCPP_OPTS
         -DCMAKE_CXX_FLAGS=${mockcpp_CXXFLAGS}
@@ -64,7 +83,6 @@ if (NOT EXISTS "${CMAKE_INSTALL_PREFIX}/mockcpp/lib/libmockcpp.a")
     else()
         message("No local mockcpp source, downloading from ${REQ_URL}")
         if (NOT EXISTS ${PATCH_FILE})
-            set(PATCH_URL "https://gitcode.com/cann-src-third-party/mockcpp/releases/download/v2.7-h3/mockcpp-2.7_py3-h3.patch")
             file(DOWNLOAD
                 ${PATCH_URL}
                 ${PATCH_FILE}

@@ -24,7 +24,6 @@ CPU_NUM=$(($(cat /proc/cpuinfo | grep "^processor" | wc -l)))
 THREAD_NUM=${CPU_NUM}
 CUSTOM_OPTION="-DCMAKE_INSTALL_PREFIX=${OUTPUT_DIR} -DBUILD_OPEN_PROJECT=ON"
 CANN_3RD_LIB_PATH=${CURRENT_DIR}/third_party
-DEPS_FILE_PATH=${CURRENT_DIR}/third_party
 BUILD_TYPE="Release"
 
 dotted_line="----------------------------------------------------------------"
@@ -104,11 +103,11 @@ function log() {
 
 function copy_deps_file() {
   if ls ${BUILD_DIR}/simulator*.tar.gz 1> /dev/null 2>&1; then
-    cp -r ${BUILD_DIR}/simulator*.tar.gz ${DEPS_FILE_PATH}
+    cp -r ${BUILD_DIR}/simulator*.tar.gz ${CANN_3RD_LIB_PATH}
   fi
 
   if ls ${BUILD_DIR}/cann-asc-tools-cpudebug-deps*.tar.gz 1> /dev/null 2>&1; then
-    cp -r ${BUILD_DIR}/cann-asc-tools-cpudebug-deps*.tar.gz ${DEPS_FILE_PATH}
+    cp -r ${BUILD_DIR}/cann-asc-tools-cpudebug-deps*.tar.gz ${CANN_3RD_LIB_PATH}
   fi
 }
 
@@ -306,6 +305,10 @@ check_param_test_pkg() {
   fi
 }
 
+get_absolute_path() {
+  CANN_3RD_LIB_PATH=$(cd ${CANN_3RD_LIB_PATH} && pwd -P)
+}
+
 check_param_cov() {
   if [[ "$COV" == "true" && "$TEST" != "all" ]]; then
     log "[ERROR] --cov must be used with test(-t, --test)."
@@ -354,10 +357,12 @@ set_options() {
       ;;
     --cann_3rd_lib_path=*)
       CANN_3RD_LIB_PATH="${1#*=}"
+      get_absolute_path
       shift
       ;;
     --cann_3rd_lib_path)
       CANN_3RD_LIB_PATH="$2"
+      get_absolute_path
       shift 2
       ;;
     --make_clean)
@@ -443,7 +448,7 @@ main() {
     CUSTOM_OPTION="${CUSTOM_OPTION} -DPACKAGE_OPEN_PROJECT=ON"
   fi
 
-  CUSTOM_OPTION="${CUSTOM_OPTION} -DASCEND_CANN_PACKAGE_PATH=${ASCEND_CANN_PACKAGE_PATH} -DCANN_3RD_LIB_PATH=${CANN_3RD_LIB_PATH}  -DDEPS_FILE_PATH=${DEPS_FILE_PATH} -DCMAKE_BUILD_TYPE=${BUILD_TYPE}"
+  CUSTOM_OPTION="${CUSTOM_OPTION} -DASCEND_CANN_PACKAGE_PATH=${ASCEND_CANN_PACKAGE_PATH} -DCANN_3RD_LIB_PATH=${CANN_3RD_LIB_PATH} -DCMAKE_BUILD_TYPE=${BUILD_TYPE}"
 
   if [[ ! -d "${BUILD_DIR}" ]]; then
     mkdir -p "${BUILD_DIR}"

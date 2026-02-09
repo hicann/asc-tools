@@ -34,7 +34,43 @@ if(_ms_root)
 else()
     message(STATUS "No reusable msot found, fetching into repo third_party...")
     set(_ms_root "${CMAKE_CURRENT_LIST_DIR}")
-    if(NOT EXISTS "${_ms_root}/msot/cmake/module/msopgen.cmake")
+
+    set(SUB_ZIP_PREFIXES "mskl" "mskpp" "mssanitizer" "msopgen" "msdebug" "msopprof")
+    set(ZIP_PREFIXES "msot" ${SUB_ZIP_PREFIXES})
+    set(ALL_ZIP_EXIST TRUE)
+    foreach(PREFIX ${ZIP_PREFIXES})
+        set(ZIP_FILE "${CANN_3RD_LIB_PATH}/${PREFIX}-master.zip")
+        if(NOT EXISTS ${ZIP_FILE})
+            message(STATUS "${ZIP_FILE} does not exist.")
+            set(ALL_ZIP_EXIST FALSE)
+        endif()
+    endforeach()
+
+    if(ALL_ZIP_EXIST)
+        foreach(PREFIX ${ZIP_PREFIXES})
+            set(ZIP_FILE "${CANN_3RD_LIB_PATH}/${PREFIX}-master.zip")
+            execute_process(
+                COMMAND unzip -q ${ZIP_FILE} -d ${_ms_root}
+                WORKING_DIRECTORY ${_ms_root}
+            )
+        endforeach()
+        if(EXISTS ${_ms_root}/msot)
+            file(REMOVE_RECURSE ${_ms_root}/msot)
+        endif()
+        execute_process(
+            COMMAND mv ${_ms_root}/msot-master ${_ms_root}/msot
+            WORKING_DIRECTORY ${_ms_root}
+        )
+        foreach(PREFIX ${SUB_ZIP_PREFIXES})
+            if(EXISTS ${_ms_root}/msot/${PREFIX})
+                file(REMOVE_RECURSE ${_ms_root}/msot/${PREFIX})
+            endif()
+            execute_process(
+                COMMAND mv ${_ms_root}/${PREFIX}-master ${_ms_root}/msot/${PREFIX}
+                WORKING_DIRECTORY ${_ms_root}
+            )
+        endforeach()
+    elseif(NOT EXISTS "${_ms_root}/msot/cmake/module/msopgen.cmake")
         include(FetchContent)
         FetchContent_Declare(
             third_party_msot

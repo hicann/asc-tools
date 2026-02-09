@@ -12,9 +12,17 @@ set(BOOST_PATH "${CANN_3RD_LIB_PATH}/${BOOST_NAME}")
 message(STATUS, "boost cache path: ${BOOST_PATH}")
 # 默认配置的boost不存在则下载
 if (NOT EXISTS "${BOOST_PATH}/boost/config.hpp")
-    message(STATUS, "download boost, not use cache")
-    set(BOOST_URL "https://gitcode.com/cann-src-third-party/boost/releases/download/v1.87.0/boost_1_87_0.tar.gz")
-    message(STATUS "Downloading ${BOOST_NAME} from ${BOOST_URL}")
+    file(GLOB BOOST_PKG
+        LIST_DIRECTORIES True
+        ${CANN_3RD_LIB_PATH}/boost*.tar.gz
+    )
+    if(NOT EXISTS ${BOOST_PKG})
+        message(STATUS, "download boost, not use cache")
+        set(BOOST_URL "https://gitcode.com/cann-src-third-party/boost/releases/download/v1.87.0/boost_1_87_0.tar.gz")
+        message(STATUS "Downloading ${BOOST_NAME} from ${BOOST_URL}")
+    else()
+        set(BOOST_URL ${BOOST_PKG})
+    endif()
 
     include(FetchContent)
     FetchContent_Declare(

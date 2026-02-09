@@ -177,41 +177,64 @@
   ```bash
   git checkout v0.5.0
   ```
-- 压缩包方式下载（下载时间较短，但步骤稍微复杂）。
+- 若您的编译环境无法访问网络，可以通过压缩包方式下载（下载时间较短，但步骤稍微复杂）。
 
   **注：如果需要下载其它版本代码，请先请根据前置条件说明进行asc-tools仓分支切换。下载压缩包命名跟tag/branch相关，此处以master分支为例，下载的名字将会是asc-tools-master.zip**
   ```bash
-  # 1. asc-tools仓右上角选择 【克隆/下载】 下拉框并选择 【下载ZIP】。
+  # 1. asc-tools仓右上角选择 【下载ZIP】。
   # 2. 将ZIP包上传到开发环境中的普通用户某个目录中，【例如：${git_clone_path}/asc-tools-master.zip】。
   # 3. 开发环境中，执行以下命令，解压zip包。
   cd ${git_clone_path}
   unzip asc-tools-master.zip
   ```
+  并且，需要同样操作下载依赖的[msot](https://gitcode.com/Ascend/msot.git)、[mssanitizer](https://gitcode.com/Ascend/mssanitizer.git)、[msopprof](https://gitcode.com/Ascend/msopprof.git)、[msopgen](https://gitcode.com/Ascend/msopgen.git)、[mskpp](https://gitcode.com/Ascend/mskpp.git)、[mskl](https://gitcode.com/Ascend/mskl.git)、[msdebug](https://gitcode.com/Ascend/msdebug.git)代码仓的master分支的压缩包，即点击各仓链接，右上角选择【下载ZIP】。
+
+  同时，需要根据实际环境，下载对应闭源压缩包：simulator包（[simulator x86_64包](https://mirrors.huaweicloud.com/artifactory/cann-run/9.0.0/try/x86_64/simulator_9.0.0_linux-x86_64.tar.gz)、[simulator aarch64包](https://mirrors.huaweicloud.com/artifactory/cann-run/9.0.0/try/aarch64/simulator_9.0.0_linux-aarch64.tar.gz)）和cpudebug包（[cpudebug x86_64包](https://container-obsfs-filesystem.obs.cn-north-4.myhuaweicloud.com/package/cann/asc-toolkit-dev/version_compile/master/202601/20260131_174635_/ubuntu_x86/cann-asc-tools-cpudebug-deps-lib_release_9.0.0_linux-x86_64.tar.gz)、[cpudebug aarch64包](https://container-obsfs-filesystem.obs.cn-north-4.myhuaweicloud.com/package/cann/asc-toolkit-dev/version_compile/master/202601/20260131_174635_/ubuntu_aarch64/cann-asc-tools-cpudebug-deps-lib_release_9.0.0_linux-aarch64.tar.gz)），以及开源第三方软件依赖，列表如下：
+
+  | 开源软件 | 版本 | 下载地址 |
+  |---|---|---|
+  | makeself | 2.5.0 | [makeself-2.5.0.tar.gz](https://gitcode.com/cann-src-third-party/makeself/releases/download/release-2.5.0-patch1.0/makeself-release-2.5.0-patch1.tar.gz) |
+  | boost | 1.87.0 | [boost-1_87_0.tar.gz](https://gitcode.com/cann-src-third-party/boost/releases/download/v1.87.0/boost_1_87_0.tar.gz) |
+  | googletest | 1.14.0 | [googletest-1.14.0.tar.gz](https://gitcode.com/cann-src-third-party/googletest/releases/download/v1.14.0/googletest-1.14.0.tar.gz) |
+  | mockcpp | 2.7 | [mockcpp-2.7.tar.gz](https://gitcode.com/cann-src-third-party/mockcpp/releases/download/v2.7-h2/mockcpp-2.7.tar.gz) |
+  | mockcpp_patch | 2.7 | [mockcpp-2.7.patch](https://gitcode.com/cann-src-third-party/mockcpp/releases/download/v2.7-h3/mockcpp-2.7_py3-h3.patch) |
 
 ## 编译安装<a name="compile&install"></a>
 
 1. 编译
 
-   本开源仓提供一键式编译安装能力，进入本开源仓代码根目录，执行如下命令：
+  本开源仓提供一键式编译安装能力，进入本开源仓代码根目录，执行如下命令：
 
-   ```bash
-   cd asc-tools
-   bash build.sh --pkg
-   ```
+  ```bash
+  cd asc-tools
+  bash build.sh --pkg
+  ```
+  若您的编译环境无法访问网络，您需要在联网环境中下载上述依赖代码仓的压缩包、闭源压缩包及开源软件压缩包，并手动上传至您的编译环境中。
 
-   编译完成后会在`build_out`目录下生成cann-asc-tools_*<cann_version>*_linux-*<arch>*.run软件包。
+  您需要在编译环境中新建一个`{your_3rd_party_path}`目录来存放依赖代码仓、闭源及第三方开源软件的压缩包。
+
+  ```bash
+  mkdir -p {your_3rd_party_path}
+  ```
+
+  创建好目录后，将下载好的所依赖的压缩包上传至目录`{your_3rd_party_path}`后，可以使用如下命令进行编译：
+  ```bash
+  bash build.sh --pkg --cann_3rd_lib_path={your_3rd_party_path}
+  ```
+
+  编译完成后会在`build_out`目录下生成cann-asc-tools_*<cann_version>*_linux-*<arch>*.run软件包。
 2. 安装
 
-   在开源仓根目录下执行下列命令，根据设置的环境变量路径，将编译生成的run包安装到CANN包的装包路径，同时会覆盖原CANN包中的Ascend C内容。
+  在开源仓根目录下执行下列命令，根据设置的环境变量路径，将编译生成的run包安装到CANN包的装包路径，同时会覆盖原CANN包中的Ascend C内容。
 
-   ```bash
-   # 切换到run包生成路径下
-   cd build_out
-   # 默认路径安装run包
-   ./cann-asc-tools_<cann_version>_linux-<arch>.run --full
-   # 指定路径安装run包
-   ./cann-asc-tools_<cann_version>_linux-<arch>.run --full --install-path=${install_path}
-   ```
+  ```bash
+  # 切换到run包生成路径下
+  cd build_out
+  # 默认路径安装run包
+  ./cann-asc-tools_<cann_version>_linux-<arch>.run --full
+  # 指定路径安装run包
+  ./cann-asc-tools_<cann_version>_linux-<arch>.run --full --install-path=${install_path}
+  ```
 
 ## UT测试（可选）
 
