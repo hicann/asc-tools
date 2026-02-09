@@ -174,6 +174,42 @@ uint64_t __cvt_uint64_t(SRC_TYPE x) {
     }
 }
 
+template<ROUND rnd, RoundingSaturation rst>
+half __cvt_half(int32_t x) {
+    float temp = __cvt_float<rnd, rst>(x);
+    return __cvt_half<rnd, rst>(temp);
+}
+
+template<ROUND rnd, RoundingSaturation rst>
+half __cvt_half(uint32_t x) {
+    float temp = __cvt_float<rnd, rst>(x);
+    return __cvt_half<rnd, rst>(temp);
+}
+
+template<ROUND rnd, RoundingSaturation rst>
+half __cvt_half(bfloat16_t x) {
+    float temp = __cvt_float<rnd, rst>(x);
+    return __cvt_half<rnd, rst>(temp);
+}
+
+template<ROUND rnd, RoundingSaturation rst>
+bfloat16_t __cvt_bfloat16_t(int32_t x) {
+    float temp = __cvt_float<rnd, rst>(x);
+    return __cvt_bfloat16_t<rnd, rst>(temp);
+}
+
+template<ROUND rnd, RoundingSaturation rst>
+bfloat16_t __cvt_bfloat16_t(uint32_t x) {
+    float temp = __cvt_float<rnd, rst>(x);
+    return __cvt_bfloat16_t<rnd, rst>(temp);
+}
+
+template<ROUND rnd, RoundingSaturation rst>
+bfloat16_t __cvt_bfloat16_t(half x) {
+    float temp = __cvt_float<rnd, rst>(x);
+    return __cvt_bfloat16_t<rnd, rst>(temp);
+}
+
 template<ROUND rnd = ROUND::R, RoundingSaturation rst = RoundingSaturation::RS_DISABLE_VALUE, typename SRC_TYPE>
 float2 __cvt_float2(SRC_TYPE a) {
     float2 tmp;
