@@ -17,8 +17,13 @@
 
 #if defined(ASCENDC_CPU_DEBUG)
 #if defined (__NPU_ARCH__) && ((__NPU_ARCH__ == 3101) || (__NPU_ARCH__ == 5102))
+#include <cmath>
+#include <cfenv>
 #include "stub_fun.h"
 #include "kernel_simt_cpu.h"
+#include "kernel_fp16.h"
+#include "kernel_bf16.h"
+#include "kernel_vectorized.h"
 
 #define R CAST_RINT
 #define A CAST_ROUND
@@ -28,6 +33,130 @@
 #define O CAST_ODD
 
 #define __launch_bounds__(x)
+
+namespace {
+    constexpr int16_t HALF_MAX_EXP = 31;
+    const float HALF_SUBNORMAL_THRESHOLD = std::pow(2, -14);
+}
+
+template<typename T, typename U>
+constexpr uint32_t GetRoundBitNum()
+{
+    if constexpr (std::is_same<T, half>::value && std::is_same<U, float>::value) {
+        return bfloat16::FP32_MAN_LEN - static_cast<uint32_t>(Fp16BasicParam::K_FP16_MAN_LEN);
+    } else if constexpr (std::is_same<T, bfloat16_t>::value && std::is_same<U, float>::value) {
+        return bfloat16::FP32_MAN_LEN - bfloat16::BF16_MAN_LEN;
+    }
+    return 0;
+}
+
+template<typename T>
+constexpr uint32_t GetMantissaLen()
+{
+    if constexpr (std::is_same<T, half>::value) {
+        return static_cast<uint32_t>(Fp16BasicParam::K_FP16_MAN_LEN);
+    } else if constexpr (std::is_same<T, bfloat16_t>::value) {
+        return bfloat16::BF16_MAN_LEN;
+    }
+    return 0;
+}
+
+template<typename T, typename U, ROUND rnd>
+void HandleRound(uint32_t sign, int16_t& exp, uint32_t& mantissa, uint32_t round_part)
+{
+    constexpr uint32_t round_bit_num = GetRoundBitNum<T, U>();
+    constexpr uint32_t round_carry = 1U << round_bit_num;
+    constexpr uint32_t round_bit_map = round_carry - 1;
+    constexpr uint32_t round_first_bit = 1U << (round_bit_num - 1);
+    constexpr uint32_t round_left_bit = round_first_bit - 1;
+
+    if constexpr (rnd == ROUND::R) {
+        if ((round_part & round_first_bit) != 0) {
+            if ((round_part & round_left_bit) != 0) {
+                mantissa += 1;
+            } else if ((mantissa & 1) == 1) {
+                mantissa += 1;
+            }
+        }
+    } else if constexpr (rnd == ROUND::F) {
+        if ((sign == 1) && (round_part != 0)) {
+            mantissa += 1;
+        }
+    } else if constexpr (rnd == ROUND::C) {
+        if ((sign == 0) && (round_part != 0)) {
+            mantissa += 1;
+        }
+    } else if constexpr (rnd == ROUND::A) {
+        if ((round_part & round_first_bit) != 0) {
+            mantissa += 1;
+        }
+    } else if constexpr (rnd == ROUND::O) {
+        if ((round_part != 0) && ((mantissa & 1) == 0)) {
+            mantissa += 1;
+        }
+    }
+
+    if ((mantissa & (1U << GetMantissaLen<T>())) != 0) {
+        exp += 1;
+    }
+}
+
+template <ROUND rnd = ROUND::R, RoundingSaturation sat = RoundingSaturation::RS_DISABLE_VALUE, typename SRC_TYPE>
+float CastIntegralToFloat(SRC_TYPE src)
+{
+    if constexpr (rnd == ROUND::R || rnd == ROUND::F || rnd == ROUND::C || rnd == ROUND::Z) {
+        fenv_t env;
+        std::fegetenv(&env);
+        constexpr int32_t round = [] {
+            if constexpr (rnd == ROUND::R) {
+                return FE_TONEAREST;
+            } else if constexpr (rnd == ROUND::F) {
+                return FE_DOWNWARD;
+            } else if constexpr (rnd == ROUND::C) {
+                return FE_UPWARD;
+            } else if constexpr (rnd == ROUND::Z) {
+                return FE_TOWARDZERO;
+            }
+        }();
+        std::fesetround(round);
+        float res = static_cast<float>(src);
+        std::fesetenv(&env);
+        return res;
+    }
+
+    float f = static_cast<float>(src);
+    SRC_TYPE tmp = static_cast<SRC_TYPE>(f);
+    if (src == tmp) {
+        return f;
+    }
+
+    float f_up = 0;
+    float f_down = 0;
+    if (src < tmp) {
+        f_up = f;
+        f_down = std::nextafter(f, -INFINITY);
+    } else {
+        f_up = std::nextafter(f, INFINITY);
+        f_down = f;
+    }
+
+    if constexpr (rnd == ROUND::A) {
+        SRC_TYPE src_up = static_cast<SRC_TYPE>(f_up);
+        SRC_TYPE src_down = static_cast<SRC_TYPE>(f_down);
+        if (src_up - src == src - src_down) {
+            return src > 0 ? f_up : f_down;
+        } else if (src_up - src < src - src_down) {
+            return f_up;
+        } else {
+            return f_down;
+        }
+    } else if constexpr (rnd == ROUND::O) {
+        uint32_t f_bits = *reinterpret_cast<uint32_t*>(&f_up);
+        return (f_bits & 1) == 0 ? f_up : f_down;
+    }
+
+    return static_cast<float>(src);
+}
 
 template <ROUND rnd = ROUND::R, RoundingSaturation sat = RoundingSaturation::RS_DISABLE_VALUE, typename SRC_TYPE>
 float __cvt_float(SRC_TYPE src) {
@@ -65,7 +194,113 @@ float __cvt_float(SRC_TYPE src) {
             return src;
         }
     }
-    return 0;
+    if constexpr (std::is_integral<SRC_TYPE>::value) {
+        return CastIntegralToFloat<rnd, sat>(src);
+    }
+    return 0.0f;
+}
+
+template<RoundingSaturation rst, typename T, typename U>
+bool HandleOverflow(uint16_t sign, int32_t exp, U& res)
+{
+    if constexpr (std::is_same_v<T, half>) {
+        if (exp < 0) {                      // underflow
+            res = sign << static_cast<uint16_t>(Fp16BasicParam::K_FP16_SIGN_INDEX);
+        } else if (exp >= HALF_MAX_EXP) {   // overflow
+            if constexpr (rst == RoundingSaturation::RS_DISABLE_VALUE) {
+                res = (sign << static_cast<uint16_t>(Fp16BasicParam::K_FP16_SIGN_INDEX)) | static_cast<uint16_t>(Fp16BasicParam::K_FP16_EXP_MASK);
+            } else {
+                res = (sign << static_cast<uint16_t>(Fp16BasicParam::K_FP16_SIGN_INDEX)) | static_cast<uint16_t>(Fp16BasicParam::K_FP16_MAX);
+            }
+        } else {
+            return false;
+        }
+        return true;
+    } else if constexpr (std::is_same_v<T, bfloat16_t>) {
+        if (exp == static_cast<int32_t>(Fp32BasicParam::K_FP32_MAX_EXP)) {
+            if (rst == RoundingSaturation::RS_DISABLE_VALUE) {
+                res = (sign << bfloat16::BF16_SIGN_INDEX) | bfloat16::BF16_INFINITY;
+            } else {
+                res = (sign << bfloat16::BF16_SIGN_INDEX) | bfloat16::BF16_ABS_MAX;
+            }
+            return true;
+        }
+        return false;
+    }
+    return false;
+}
+
+template<ROUND rnd, RoundingSaturation rst>
+half __cvt_half(float x)
+{
+    float conform_flag = 0;
+    if ((x > 0) && x < HALF_SUBNORMAL_THRESHOLD) {
+        x += HALF_SUBNORMAL_THRESHOLD;
+        conform_flag = -1;
+    }
+    if ((x < 0) && (x > (-1 * HALF_SUBNORMAL_THRESHOLD))) {
+        x -= HALF_SUBNORMAL_THRESHOLD;
+        conform_flag = 1;
+    }
+
+    uint32_t f_bits = *reinterpret_cast<uint32_t*>(&x);
+    uint16_t sign = bfloat16::Fp32ExtracSign(f_bits);
+    uint32_t exp = bfloat16::Fp32ExtracExp(f_bits);
+    uint32_t mantissa = f_bits & FP32_MAN_MASK;
+    uint16_t res = 0;
+    // handle INF / NaN
+    if (exp == static_cast<uint32_t>(Fp32BasicParam::K_FP32_MAX_EXP)) {
+        res = (sign << static_cast<uint32_t>(Fp16BasicParam::K_FP16_SIGN_INDEX)) | (mantissa ? static_cast<uint16_t>(Fp16BasicParam::K_FP16_ABS_MAX) : static_cast<uint16_t>(Fp16BasicParam::K_FP16_EXP_MASK));
+        return *reinterpret_cast<half*>(&res);
+    }
+
+    int16_t half_exp = static_cast<int16_t>(exp) - (bfloat16::FP32_EXP_BIAS - static_cast<uint16_t>(Fp16BasicParam::K_FP16_EXP_BIAS));
+    if (HandleOverflow<rst, half>(sign, half_exp, res)) {
+        return *reinterpret_cast<half*>(&res);
+    }
+
+    uint32_t round_bit_num = bfloat16::FP32_MAN_LEN - static_cast<uint32_t>(Fp16BasicParam::K_FP16_MAN_LEN);
+    uint32_t half_mantissa = mantissa >> round_bit_num;
+    uint32_t round_part = mantissa & ((1 << round_bit_num) - 1);
+
+    HandleRound<half, float, rnd>(sign, half_exp, half_mantissa, round_part);
+    res = (sign << static_cast<uint16_t>(Fp16BasicParam::K_FP16_EXP_BIAS)) | (half_exp << static_cast<uint16_t>(Fp16BasicParam::K_FP16_MAN_LEN)) | (half_mantissa & static_cast<uint32_t>(Fp16BasicParam::K_FP16_MAN_MASK));
+    if (HandleOverflow<rst, half>(sign, half_exp, res)) {
+        return *reinterpret_cast<half*>(&res);
+    }
+    half tmp = *reinterpret_cast<half*>(&res);
+    tmp += half(conform_flag * HALF_SUBNORMAL_THRESHOLD);
+    return tmp;
+}
+
+template<ROUND rnd, RoundingSaturation rst>
+bfloat16_t __cvt_bfloat16_t(float x) {
+    uint32_t f_bits = *reinterpret_cast<uint32_t*>(&x);
+    uint16_t sign = bfloat16::Fp32ExtracSign(f_bits);
+    uint32_t exp = bfloat16::Fp32ExtracExp(f_bits);
+    uint32_t mantissa = f_bits & FP32_MAN_MASK;
+    uint16_t res = 0;
+
+    // handle INF / NaN
+    if (exp == static_cast<int32_t>(Fp32BasicParam::K_FP32_MAX_EXP)) {
+        res = mantissa == 0 ? ((sign << bfloat16::BF16_SIGN_INDEX) | bfloat16::BF16_EXP_MASK) : bfloat16::BF16_NAN;
+        return *reinterpret_cast<bfloat16_t*>(&res);
+    }
+    if (exp == 0 && mantissa == 0) {
+        res = sign << bfloat16::BF16_SIGN_INDEX;
+        return *reinterpret_cast<bfloat16_t*>(&res);
+    }
+
+    int16_t bf16_exp = static_cast<int16_t>(exp);
+    uint32_t round_bit_num = bfloat16::FP32_MAN_LEN - bfloat16::BF16_MAN_LEN;
+    uint32_t bf16_mantissa = mantissa >> round_bit_num;
+    uint32_t round_part = mantissa & ((1 << round_bit_num) - 1);
+
+    HandleRound<bfloat16_t, float, rnd>(sign, bf16_exp, bf16_mantissa, round_part);
+    res = (sign << bfloat16::BF16_SIGN_INDEX) | (bf16_exp << bfloat16::BF16_MAN_LEN) | (bf16_mantissa & bfloat16::BF16_MAN_MASK);
+    (void)HandleOverflow<rst, bfloat16_t>(sign, bf16_exp, res);
+
+    return *reinterpret_cast<bfloat16_t*>(&res);
 }
 
 template <ROUND rnd = ROUND::R, RoundingSaturation sat = RoundingSaturation::RS_DISABLE_VALUE, typename SRC_TYPE>
