@@ -174,30 +174,29 @@ uint64_t __cvt_uint64_t(SRC_TYPE x) {
     }
 }
 
-template<ROUND rnd, RoundingSaturation rst, typename SRC_TYPE>
- float2 __cvt_float2(SRC_TYPE a) {
-     float2 tmp;
-     tmp.x = __cvt_float<rnd, rst>(a.x);
-     tmp.y = __cvt_float<rnd, rst>(a.y);
-     return tmp;
- }
+template<ROUND rnd = ROUND::R, RoundingSaturation rst = RoundingSaturation::RS_DISABLE_VALUE, typename SRC_TYPE>
+float2 __cvt_float2(SRC_TYPE a) {
+    float2 tmp;
+    tmp.x = __cvt_float<rnd, rst>(a.x);
+    tmp.y = __cvt_float<rnd, rst>(a.y);
+    return tmp;
+}
 
- template<ROUND rnd, RoundingSaturation rst, typename SRC_TYPE>
- bfloat16x2_t __cvt_bfloat16x2_t(SRC_TYPE a) {
-     bfloat16x2_t tmp;
-     tmp.x = __cvt_bfloat16_t<rnd, rst>(a.x);
-     tmp.y = __cvt_bfloat16_t<rnd, rst>(a.y);
-     return tmp;
- }
+template<ROUND rnd = ROUND::R, RoundingSaturation rst = RoundingSaturation::RS_DISABLE_VALUE, typename SRC_TYPE>
+bfloat16x2_t __cvt_bfloat16x2_t(SRC_TYPE a) {
+    bfloat16x2_t tmp;
+    tmp.x = __cvt_bfloat16_t<rnd, rst>(a.x);
+    tmp.y = __cvt_bfloat16_t<rnd, rst>(a.y);
+    return tmp;
+}
 
- template<ROUND rnd, RoundingSaturation rst, typename SRC_TYPE>
- half2 __cvt_half2(SRC_TYPE a) {
-
-     half2 tmp;
-     tmp.x = __cvt_half<rnd, rst>(a.x);
-     tmp.y = __cvt_half<rnd, rst>(a.y);
-     return tmp;
- }
+template<ROUND rnd = ROUND::R, RoundingSaturation rst = RoundingSaturation::RS_DISABLE_VALUE, typename SRC_TYPE>
+half2 __cvt_half2(SRC_TYPE a) {
+    half2 tmp;
+    tmp.x = __cvt_half<rnd, rst>(a.x);
+    tmp.y = __cvt_half<rnd, rst>(a.y);
+    return tmp;
+}
 
 template<ROUND rnd, RoundingSaturation rst, typename SRC_TYPE>
 hifloat8x2_t __cvt_hifloat8x2_t(SRC_TYPE x) {
