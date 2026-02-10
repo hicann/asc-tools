@@ -222,6 +222,9 @@ bool AclnnOpGenerator::AclnnCheckForInt64CombinationWithValueDepend(OpDef& opDef
 {
     for (auto& aicoreItem : opDef.AICore().GetAICoreConfigs()) {
         std::string socVer = aicoreItem.first.GetString();
+        if (SOC_SUPPORT_MAP.find(socVer) == SOC_SUPPORT_MAP.end()) {
+            continue;
+        }
         OpAICoreConfig aicoreConfig = aicoreItem.second;
         std::vector<OpParamDef> inputs = opDef.GetMergeInputs(aicoreConfig);
         std::vector<OpParamDef> outputs = opDef.GetMergeOutputs(aicoreConfig);
@@ -1064,8 +1067,8 @@ void AclnnOpGenerator::AclnnOpGenSocSupportList(OpDef& opDef, ofstream& outfile)
             soc.append(socVer);
             soc += " of op " + opType +
                 ", please check whether AddConfig are correctly configured in Opdef.";
-            Generator::SetErrorMessage(soc);
-            return;
+            ASCENDLOGW("%s\n", soc.c_str());
+ 	        continue;
         }
         if ((it->first).find("kirin") == 0) {
             continue;
@@ -1087,16 +1090,22 @@ void AclnnOpGenerator::AclnnOpGenSocSupportList(OpDef& opDef, ofstream& outfile)
             if (it == SOC_SUPPORT_MAP.end()) {
                 std::string soc = "Invalid socVersion ";
                 soc.append(socVer);
-                soc += " of op " + opType;
-                Generator::SetErrorMessage(soc);
-                return;
+                soc += " of op " + opType + ", please check whether ASCEND_COMPUTE_UNIT is correctly configured.";
+                ASCENDLOGW("%s\n", soc.c_str());
+                continue;
             }
             if ((socSupportSet.find(it->second) == socSupportSet.end()) && ((it->first).find("kirin") != 0)) {
-                str.append(",");
+                if (!str.empty()) {
+                    str.append(",");
+                }
                 str.append(it->second);
                 socSupportListLen++;
             }
         }
+    }
+    if (str.empty()) {
+        std::string warnMsg = "Invalid socVersion of op " + opType + " in OpDef and ASCEND_COMPUTE_UNIT, please make sure at least one is correct.";
+        ASCENDLOGW("%s\n", warnMsg.c_str());
     }
     outfile << str;
     outfile << "};\n";
@@ -1112,8 +1121,9 @@ void AclnnOpGenerator::AclnnOpGenHcclServerTypeList(OpDef& opDef, ofstream& outf
         std::string socVer = iter->first.GetString();
         auto it = SOC_SUPPORT_MAP.find(socVer);
         if (it == SOC_SUPPORT_MAP.end()) {
-            // error has been writtern by AclnnOpGenSocSupportList
-            return;
+            std::string warnMsg = "Invalid socVersion" + socVer + "of op " + opType + " when setting HcclServerType.";
+            ASCENDLOGW("%s\n", warnMsg.c_str());
+            continue;
         }
         auto type = opDef.MC2().GetHcclServerType(iter->first);
         if (type == HcclServerType::MAX) {
@@ -1241,6 +1251,9 @@ void AclnnOpGenerator::AclnnOpGenOpSupportListAll(OpDef& opDef, ofstream& outfil
     const std::string opType = opDef.GetOpType().GetString();
     for (auto& aicoreItem : opDef.AICore().GetAICoreConfigs()) {
         std::string socVer = aicoreItem.first.GetString();
+        if (SOC_SUPPORT_MAP.find(socVer) == SOC_SUPPORT_MAP.end()) {
+            continue;
+        }
         OpAICoreConfig aicoreConfig = aicoreItem.second;
         std::vector<OpParamDef> inputs = opDef.GetMergeInputs(aicoreConfig);
         std::vector<OpParamDef> outputs = opDef.GetMergeOutputs(aicoreConfig);
@@ -1250,8 +1263,7 @@ void AclnnOpGenerator::AclnnOpGenOpSupportListAll(OpDef& opDef, ofstream& outfil
         }
         i++;
     }
-    size_t socSize = opDef.AICore().GetAICoreConfigs().size();
-    if (socSize == 0U) {
+    if (i == 0U) {
         std::string localopType = opDef.GetOpType().GetString();
         Generator::SetErrorMessage(
             "The soc version of op " + localopType + 
@@ -1260,12 +1272,12 @@ void AclnnOpGenerator::AclnnOpGenOpSupportListAll(OpDef& opDef, ofstream& outfil
             " definition in the host implementation(Opdef, through AddConfig).");
         return;
     }
-    outfile << "OpSocSupportInfo opSocSupportList[" << socSize << "] = {";
-    for (size_t index = 0U; index < socSize - 1; index++) {
+    outfile << "OpSocSupportInfo opSocSupportList[" << i << "] = {";
+    for (size_t index = 0U; index < i - 1; index++) {
         outfile << "socSupportInfo" << index << ", ";
     }
-    outfile << "socSupportInfo" << (socSize - 1U) << "};\n";
-    outfile << "OpSupportList supportList = {opSocSupportList, " << socSize << "};\n";
+    outfile << "socSupportInfo" << (i - 1U) << "};\n";
+    outfile << "OpSupportList supportList = {opSocSupportList, " << i << "};\n";
 }
 
 void AclnnOpGenerator::AclnnGenOpTypeId(OpDef& opDef, ofstream& outfile) const
@@ -1380,53 +1392,7 @@ void AclnnOpGenerator::AclnnGenCodeDecImpl(string& declFile, ofstream& outfile) 
 void AclnnOpGenerator::AclnnGenExternFunc(ofstream& outfile) const
 {
     outfile << "extern void NnopbaseOpLogE(const aclnnStatus code, const char *const expr);\n\n";
-    const char *str = "#ifdef __cplusplus\n"
-        "extern \"C\" {\n"
-        "#endif\n\n"
-        "extern aclnnStatus NnopbaseCreateExecutorSpace(void **space);\n"
-        "extern void *NnopbaseGetExecutor(void *space, const char *opType, char *inputsDesc, uint32_t inputNum,\n"
-        "                                 char *outputsDesc, uint32_t outputNum, char *attrsDesc, uint32_t attrsNum);\n"
-        "extern aclnnStatus NnopbaseAddInput(void *executor, const aclTensor *tensor, const uint32_t index);\n"
-        "extern aclnnStatus NnopbaseAddIgnoreContinuesInput(void *executor,\n"
-        "                                                   const aclTensor *tensor, const uint32_t index);\n"
-        "extern aclnnStatus NnopbaseAddIntArrayInput(void *executor, const aclIntArray *array, const uint32_t index);\n"
-        "extern aclnnStatus NnopbaseAddBoolArrayInput(void *executor, const aclBoolArray *array, "
-        "const uint32_t index);\n"
-        "extern aclnnStatus NnopbaseAddFloatArrayInput(void *executor, const aclFloatArray *array, "
-        "const uint32_t index);\n"
-        "extern aclnnStatus NnopbaseAddOutput(void *executor, const aclTensor *tensor, const uint32_t index);\n"
-        "extern aclnnStatus NnopbaseAddDynamicInput(void *executor, const aclTensorList *tensor_list, "
-        "const uint32_t index);\n"
-        "extern aclnnStatus NnopbaseAddDynamicOutput(void *executor, const aclTensorList *tensor_list, "
-        "const uint32_t index);\n"
-        "extern aclnnStatus NnopbaseAddAttrWithDtype(void *executor, void *attrAddr, size_t attrLen, "
-        "const size_t index, const NnopbaseAttrDtype dtype);\n"
-        "extern aclnnStatus NnopbaseAddIntArrayAttr(void *executor, const aclIntArray* array, const size_t index);\n"
-        "extern aclnnStatus NnopbaseAddFloatArrayAttr(void *executor, const aclFloatArray* array, "
-        "const size_t index);\n"
-        "extern aclnnStatus NnopbaseAddBoolArrayAttr(void *executor, const aclBoolArray* array, const size_t index);\n"
-        "extern aclnnStatus NnopbaseAddArrayAttrWithDtype(void *executor, void *array, const size_t len, "
-        "const size_t elementSize, const size_t index, const NnopbaseAttrDtype dtype);\n"
-        "extern uint64_t NnopbaseMsprofSysTime();\n"
-        "extern aclnnStatus NnopbaseAddTilingId(void *executor, NnopbaseDfxId *tilingId);\n"
-        "extern void NnopbaseReportApiInfo(const uint64_t beginTime, NnopbaseDfxId &dfxId);\n"
-        "extern aclnnStatus NnopbaseRunForWorkspace(void *executor, uint64_t *workspaceLen);\n"
-        "extern aclnnStatus NnopbaseRunWithWorkspace(void *executor, aclrtStream stream, void *workspace, "
-        "uint64_t workspaceSize);\n"
-        "extern aclnnStatus NnopbaseAddSupportList(void *executor, OpSupportList *list, "
-        "uint32_t *socSupportList, size_t socSupportListLen);\n"
-        "extern aclnnStatus NnopbaseAddScalarInput(void *executor, const aclScalar *scalar, const uint32_t index, "
-        "const int32_t srcIndex, const ge::DataType dtype);\n"
-        "extern aclnnStatus NnopbaseAddScalarListInput(void *executor, const aclScalarList *scalarList, "
-        "const uint32_t index, const int32_t srcIndex, const ge::DataType dtype);\n"
-        "extern void NnopbaseAddOpTypeId(void *executor, const uint32_t opTypeId);\n"
-        "extern aclnnStatus __attribute__((weak)) NnopbaseAddParamName(void *executor, const uint32_t index, "
-        "const char *name, const bool isInput);\n"
-        "extern aclnnStatus __attribute__((weak)) NnopbaseSetFormatMatchMode(void *executor, const uint32_t mode);\n"
-        "extern aclnnStatus NnopbaseSetRef(void *executor, const size_t inputIrIdx, const size_t outputIrIdx);\n"
-        "extern void __attribute__((weak)) NnopbaseSetMatchArgsFlag(void *executor);\n"
-        "extern bool __attribute__((weak)) NnopbaseMatchArgs(void *executor, uint64_t *workspaceLen);\n";
-    outfile << str;
+    outfile << OP_ACLNN_EXTERN_FUNC;
 }
 
 void AclnnOpGenerator::AclnnGenOutEmptyLaunchDeclaration(OpDef& opDef, ofstream& outfile) const
