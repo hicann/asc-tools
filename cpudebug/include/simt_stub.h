@@ -446,45 +446,69 @@ bfloat16_t __cvt_bfloat16_t(half x) {
 }
 
 template<ROUND rnd = ROUND::R, RoundingSaturation rst = RoundingSaturation::RS_DISABLE_VALUE, typename SRC_TYPE>
-float2 __cvt_float2(SRC_TYPE a) {
-    float2 tmp;
-    tmp.x = __cvt_float<rnd, rst>(a.x);
-    tmp.y = __cvt_float<rnd, rst>(a.y);
-    return tmp;
+float2 __cvt_float2(SRC_TYPE src) {
+    static_assert(std::is_same_v<SRC_TYPE, half2> || std::is_same_v<SRC_TYPE, bfloat16x2_t> ||
+                  std::is_same_v<SRC_TYPE, float8_e4m3x2_t> || std::is_same_v<SRC_TYPE, float8_e5m2x2_t>,
+                  "src type can only be half2/bfloat16x2_t/float8_e4m3x2_t/float8_e5m2x2_t");
+    static_assert((rnd == ROUND::R) || (rnd == ROUND::A) || (rnd == ROUND::F) || (rnd == ROUND::C) || (rnd == ROUND::Z),
+                  "rnd type can only be: ROUND_R, ROUND_A, ROUND_F, ROUND_C,ROUND_Z");
+    float2 res = {src.x.ToFloat(), src.y.ToFloat()};
+    if constexpr (std::is_same_v<SRC_TYPE, half2> || std::is_same_v<SRC_TYPE, bfloat16x2_t>) {
+        res = {__cvt_float(src.x), __cvt_float(src.y)};
+    }
+    return res;
 }
 
 template<ROUND rnd = ROUND::R, RoundingSaturation rst = RoundingSaturation::RS_DISABLE_VALUE, typename SRC_TYPE>
-bfloat16x2_t __cvt_bfloat16x2_t(SRC_TYPE a) {
+bfloat16x2_t __cvt_bfloat16x2_t(SRC_TYPE src) {
+    static_assert(std::is_same_v<SRC_TYPE, float2>, "stc type can only be float2");
+    static_assert((rnd == ROUND::R) || (rnd == ROUND::A) || (rnd == ROUND::F) || (rnd == ROUND::C) || (rnd == ROUND::Z),
+                  "rnd type can only be: ROUND_R, ROUND_A, ROUND_F, ROUND_C,ROUND_Z");
     bfloat16x2_t tmp;
-    tmp.x = __cvt_bfloat16_t<rnd, rst>(a.x);
-    tmp.y = __cvt_bfloat16_t<rnd, rst>(a.y);
+    tmp.x = __cvt_bfloat16_t<rnd, rst>(src.x);
+    tmp.y = __cvt_bfloat16_t<rnd, rst>(src.y);
     return tmp;
 }
 
 template<ROUND rnd = ROUND::R, RoundingSaturation rst = RoundingSaturation::RS_DISABLE_VALUE, typename SRC_TYPE>
-half2 __cvt_half2(SRC_TYPE a) {
-    half2 tmp;
-    tmp.x = __cvt_half<rnd, rst>(a.x);
-    tmp.y = __cvt_half<rnd, rst>(a.y);
-    return tmp;
+half2 __cvt_half2(SRC_TYPE src) {
+    half2 res;
+    if constexpr (std::is_same_v<SRC_TYPE, hifloat8x2_t>) {
+        res = {half(src.x.ToFloat()), half(src.y.ToFloat())};
+    } else {
+        res = {__cvt_half<rnd, rst>(src.x), __cvt_half<rnd, rst>(src.y)};
+    }
+    return res;
 }
 
 template<ROUND rnd, RoundingSaturation rst, typename SRC_TYPE>
-hifloat8x2_t __cvt_hifloat8x2_t(SRC_TYPE x) {
-    hifloat8x2_t tmp;
-    return tmp;
+hifloat8x2_t __cvt_hifloat8x2_t(SRC_TYPE src) {
+    static_assert(std::is_same_v<SRC_TYPE, float2> || std::is_same_v<SRC_TYPE, half2>, "stc type can only be float2/half2");
+    static_assert(rnd == ROUND::A, "rnd type can only be: ROUND_A, ROUND_H");
+    hifloat8x2_t res{0.0, 0.0};
+    if constexpr (std::is_same_v<SRC_TYPE, float2>) {
+        res = {hifloat8_t(src.x), hifloat8_t(src.y)};
+    } else if constexpr (std::is_same_v<SRC_TYPE, half2>) {
+        float2 tmp{src.x.ToFloat(), src.y.ToFloat()};
+        res = {hifloat8_t(tmp.x), hifloat8_t(tmp.y)};
+    }
+    return res;
 }
 
 template<ROUND rnd, RoundingSaturation rst, typename SRC_TYPE>
-float8_e4m3x2_t __cvt_float8_e4m3x2_t(SRC_TYPE x) {
-    float8_e4m3x2_t tmp;
-    return tmp;
+float8_e4m3x2_t __cvt_float8_e4m3x2_t(SRC_TYPE src) {
+    static_assert(std::is_same_v<SRC_TYPE, float2>, "stc type can only be float2");
+    static_assert(rnd == ROUND::R, "rnd type can only be: ROUND_R");
+    float8_e4m3x2_t res{fp8_e4m3fn_t(src.x), fp8_e4m3fn_t(src.y)};
+    return res;
 }
 
 template<ROUND rnd, RoundingSaturation rst, typename SRC_TYPE>
-float8_e5m2x2_t __cvt_float8_e5m2x2_t(SRC_TYPE x) {
-    float8_e5m2x2_t tmp;
-    return tmp;
+float8_e5m2x2_t __cvt_float8_e5m2x2_t(SRC_TYPE src) {
+    static_assert(std::is_same_v<SRC_TYPE, float2>, "stc type can only be float2");
+    static_assert(rnd == ROUND::R, "rnd type can only be: ROUND_R");
+    float8_e5m2x2_t res{fp8_e5m2_t(src.x), fp8_e5m2_t(src.y)};
+    return res;
 }
 
 namespace bisheng {
