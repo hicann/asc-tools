@@ -199,6 +199,11 @@
   | mockcpp | 2.7 | [mockcpp-2.7.tar.gz](https://gitcode.com/cann-src-third-party/mockcpp/releases/download/v2.7-h2/mockcpp-2.7.tar.gz) |
   | mockcpp_patch | 2.7 | [mockcpp-2.7.patch](https://gitcode.com/cann-src-third-party/mockcpp/releases/download/v2.7-h3/mockcpp-2.7_py3-h3.patch) |
 
+  其中，对于依赖的开源第三方软件，提供一键式下载脚本`install_dep_tar.py`，用户可以通过执行如下命令，下载所有开源第三方软件依赖。
+  ```bash
+  python3 install_dep_tar.py --dest_dir=${your_3rd_party_path} # 其中，${your_3rd_party_path}为下载开源第三方软件的存放路径
+  ```
+
 ## 编译安装<a name="compile&install"></a>
 
 1. 编译
@@ -223,6 +228,7 @@
   ```
 
   编译完成后会在`build_out`目录下生成cann-asc-tools_*<cann_version>*_linux-*<arch>*.run软件包。
+
 2. 安装
 
   在开源仓根目录下执行下列命令，根据设置的环境变量路径，将编译生成的run包安装到CANN包的装包路径，同时会覆盖原CANN包中的Ascend C内容。
