@@ -46,45 +46,52 @@ unset(_cmake_expected_targets)
 
 find_library(ascend910_LIBRARY
     NAMES lib_pvmodel.so
-    PATHS ${PVMODEL_PATH}/lib64/Ascend910A/lib
+    PATHS ${PVMODEL_PATH}/Ascend910A/lib
     NO_CMAKE_SYSTEM_PATH
     NO_CMAKE_FIND_ROOT_PATH)
+message(STATUS "find lib for ascend910_LIBRARY: ${ascend910_LIBRARY}")
 
 find_library(ascend310p_LIBRARY
     NAMES lib_pvmodel.so
-    PATHS ${PVMODEL_PATH}/lib64/Ascend310P1/lib
+    PATHS ${PVMODEL_PATH}/Ascend310P1/lib
     NO_CMAKE_SYSTEM_PATH
     NO_CMAKE_FIND_ROOT_PATH)
+message(STATUS "find lib for ascend310p_LIBRARY: ${ascend310p_LIBRARY}")
 
 find_library(ascend910B1_LIBRARY
     NAMES libpem_davinci.so
-    PATHS ${PVMODEL_PATH}/lib64/Ascend910B1/lib
+    PATHS ${PVMODEL_PATH}/Ascend910B1/lib
     NO_CMAKE_SYSTEM_PATH
     NO_CMAKE_FIND_ROOT_PATH)
+message(STATUS "find lib for ascend910B1_LIBRARY: ${ascend910B1_LIBRARY}")
 
 find_library(ascend310B1_LIBRARY
     NAMES libpem_davinci.so
-    PATHS ${PVMODEL_PATH}/lib64/Ascend310B1/lib
+    PATHS ${PVMODEL_PATH}/Ascend310B1/lib
     NO_CMAKE_SYSTEM_PATH
     NO_CMAKE_FIND_ROOT_PATH)
+message(STATUS "find lib for ascend310B1_LIBRARY: ${ascend310B1_LIBRARY}")
 
 find_library(ascend950pr_9599_LIBRARY
     NAMES libpem_davinci.so
-    PATHS ${PVMODEL_PATH}/lib64/Ascend950pr_9599/lib
+    PATHS ${PVMODEL_PATH}/Ascend950PR_9599/lib
     NO_CMAKE_SYSTEM_PATH
     NO_CMAKE_FIND_ROOT_PATH)
+message(STATUS "find lib for ascend950pr_9599_LIBRARY: ${ascend950pr_9599_LIBRARY}")
 
 find_library(kirinx90_LIBRARY
     NAMES libpem_davinci.so
-    PATHS ${PVMODEL_PATH}/lib64/KirinX90/lib
+    PATHS ${PVMODEL_KIRIN_PATH}/lib64/KirinX90/lib
     NO_CMAKE_SYSTEM_PATH
     NO_CMAKE_FIND_ROOT_PATH)
+message(STATUS "find lib for kirinx90_LIBRARY: ${kirinx90_LIBRARY}")
 
 find_library(kirin9030_LIBRARY
     NAMES libpem_davinci.so
-    PATHS ${PVMODEL_PATH}/lib64/Kirin9030/lib
+    PATHS ${PVMODEL_KIRIN_PATH}/lib64/Kirin9030/lib
     NO_CMAKE_SYSTEM_PATH
     NO_CMAKE_FIND_ROOT_PATH)
+message(STATUS "find lib for kirin9030_LIBRARY: ${kirin9030_LIBRARY}")
 
 include(FindPackageHandleStandardArgs)
 find_package_handle_standard_args(pvmodel_ascend910
