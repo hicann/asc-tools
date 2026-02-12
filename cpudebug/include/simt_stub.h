@@ -445,6 +445,14 @@ bfloat16_t __cvt_bfloat16_t(half x) {
     return __cvt_bfloat16_t<rnd, rst>(temp);
 }
 
+template<ROUND rnd = ROUND::A, RoundingSaturation rst = RoundingSaturation::RS_DISABLE_VALUE>
+float2 __cvt_float2(hifloat8x2_t src) {
+    static_assert((rnd == ROUND::R) || (rnd == ROUND::A) || (rnd == ROUND::F) || (rnd == ROUND::C) || (rnd == ROUND::Z),
+                  "rnd type can only be: ROUND_R, ROUND_A, ROUND_F, ROUND_C,ROUND_Z");
+    float2 res{src.x.ToFloat(), src.y.ToFloat()};
+    return res;
+}
+
 template<ROUND rnd = ROUND::R, RoundingSaturation rst = RoundingSaturation::RS_DISABLE_VALUE, typename SRC_TYPE>
 float2 __cvt_float2(SRC_TYPE src) {
     static_assert(std::is_same_v<SRC_TYPE, half2> || std::is_same_v<SRC_TYPE, bfloat16x2_t> ||
@@ -484,7 +492,7 @@ half2 __cvt_half2(SRC_TYPE src) {
 template<ROUND rnd, RoundingSaturation rst, typename SRC_TYPE>
 hifloat8x2_t __cvt_hifloat8x2_t(SRC_TYPE src) {
     static_assert(std::is_same_v<SRC_TYPE, float2> || std::is_same_v<SRC_TYPE, half2>, "stc type can only be float2/half2");
-    static_assert(rnd == ROUND::A, "rnd type can only be: ROUND_A, ROUND_H");
+    static_assert((rnd == ROUND::A) || (rnd == ROUND::CAST_HYBRID), "rnd type can only be: ROUND_A, ROUND_H");
     hifloat8x2_t res{0.0, 0.0};
     if constexpr (std::is_same_v<SRC_TYPE, float2>) {
         res = {hifloat8_t(src.x), hifloat8_t(src.y)};
