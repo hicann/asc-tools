@@ -172,10 +172,7 @@ check_help_combinations() {
     log "[ERROR] --pkg cannot be used with test(-t, --test)."
     return 1
   fi
-  if [[ "$has_cov" == "true" && ("$has_test" == "true") ]]; then
-    log "[ERROR] --cov must be used with test(-t, --test)."
-    return 1
-  fi
+
   return 0
 }
 
@@ -309,9 +306,9 @@ get_absolute_path() {
   CANN_3RD_LIB_PATH=$(cd ${CANN_3RD_LIB_PATH} && pwd -P)
 }
 
-check_param_cov() {
-  if [[ "$COV" == "true" && "$TEST" != "all" ]]; then
-    log "[ERROR] --cov must be used with test(-t, --test)."
+check_param_test_part() {
+  if [[ "$TEST" == "all" && -n "$TEST_PART" ]]; then
+    log "[ERROR] --$TEST_PART cannot be used with test(-t, --test)."
     exit 1
   fi
 }
@@ -341,13 +338,22 @@ set_options() {
       check_param_test_pkg
       shift
       ;;
+    --cpp_utest)
+      TEST_PART="cpp_utest"
+      check_param_test_part
+      shift
+      ;;
+    --python_utest)
+      TEST_PART="python_utest"
+      check_param_test_part
+      shift
+      ;;
     --asan)
       ASAN="true"
       shift
       ;;
     --cov)
       COV="true"
-      check_param_cov
       shift
       ;;
     --pkg)
