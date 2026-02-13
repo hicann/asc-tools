@@ -144,6 +144,7 @@ public:
         OpAICoreConfig aicConfig;
         this->AICore().AddConfig("ascend310p", aicConfig);
         this->AICore().AddConfig("ascend910", aicConfig);
+        this->AICore().AddConfig("ascendxxx", aicConfig);
     }
 };
 
