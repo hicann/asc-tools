@@ -498,8 +498,8 @@ opbuild::Status CfgGenerator::GenerateCode(void)
         for (uint32_t i = 0; i < computeUnits.size(); ++i) {
             auto socVer = computeUnits[i];
             if (validSocVer.find(socVer) == validSocVer.end()) {
-                ASCENDLOGE("Invlid soc version %s\n", socVer.c_str());
-                return opbuild::OPBUILD_FAILED;
+                ASCENDLOGW("Invalid soc version %s of ASCEND_COMPUTE_UNIT\n", socVer.c_str());
+                continue;
             }
             ge::AscendString curCompUnit(socVer.c_str());
             auto cfgIter = allAICoreConfig.find(curCompUnit);

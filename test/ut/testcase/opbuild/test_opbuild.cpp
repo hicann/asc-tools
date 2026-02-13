@@ -1482,33 +1482,6 @@ TEST_F(TEST_OPBUILD, AclnnGenAttrFailed01)
     EXPECT_TRUE(hasErrorMessage);
 }
 
-TEST_F(TEST_OPBUILD, AclnnInvalidsocVersion)
-{
-    std::string fileName = "invalid_soc_" + std::to_string(getpid()) + ".txt";
-    std::ofstream outfile = std::ofstream(fileName);
-    OpDef opDef("ErrorSoc");
-    opDef.Input("x1").DataType({ge::DT_FLOAT16});
-    opDef.Output("x2").DataType({ge::DT_FLOAT16});
-    opDef.AICore().AddConfig("ascend510");
-
-    std::vector<std::string> opsvec({"ErrorSoc"});
-    AclnnOpGenerator opGen(opsvec);
-    opGen.AclnnOpGenSocSupportList(opDef, outfile);
-    outfile.close();
-
-    std::vector<std::string> errMessage = Generator::GetErrorMessage();
-    bool hasErrorMessage = false;
-    const std::string err = "Invalid socVersion ascend510 of op ErrorSoc, "
-                            "please check whether AddConfig are correctly configured in Opdef.";
-    for (size_t i = 0U; i < errMessage.size(); i++) {
-        if (errMessage[i] == err) {
-            hasErrorMessage = true;
-            break;
-        }
-    }
-    EXPECT_TRUE(hasErrorMessage);
-}
-
 TEST_F(TEST_OPBUILD, AclnnKirinX90socVersion)
 {
     std::string fileName = "kirinx90_soc_" + std::to_string(getpid()) + ".txt";
@@ -1659,7 +1632,7 @@ TEST_F(TEST_OPBUILD, GenerateCodeForComputeUnits)
     char* argv1[] = {"opbuild", "--compute_unit=ascend910x"};
     opbuild::Params::GetInstance().Parse(2, argv1);
     res = cfgGen.GenerateCode();
-    EXPECT_EQ(res, opbuild::OPBUILD_FAILED);
+    EXPECT_EQ(res, opbuild::OPBUILD_SUCCESS);
     opbuild::Params::GetInstance().optionParams_ = {};
     opbuild::Params::GetInstance().requiredParams_ = {};
     char* argv2[] = {"opbuild", "--compute_unit=ascend910_95"};

@@ -908,8 +908,8 @@ void AclnnOpGenerator::AclnnOpGenSocSupportList(OpDef& opDef, ofstream& outfile)
             soc.append(socVer);
             soc += " of op " + opType +
                 ", please check whether AddConfig are correctly configured in Opdef.";
-            Generator::SetErrorMessage(soc);
-            return;
+            ASCENDLOGW("%s\n", soc.c_str());
+            continue;
         }
         if ((it->first).find("kirin") == 0) {
             continue;
@@ -931,16 +931,22 @@ void AclnnOpGenerator::AclnnOpGenSocSupportList(OpDef& opDef, ofstream& outfile)
             if (it == SOC_SUPPORT_MAP.end()) {
                 std::string soc = "Invalid socVersion ";
                 soc.append(socVer);
-                soc += " of op " + opType;
-                Generator::SetErrorMessage(soc);
-                return;
+                soc += " of op " + opType + ", please check whether ASCEND_COMPUTE_UNIT is correctly configured.";
+                ASCENDLOGW("%s\n", soc.c_str());
+                continue;
             }
             if ((socSupportSet.find(it->second) == socSupportSet.end()) && ((it->first).find("kirin") != 0)) {
-                str.append(",");
+                if (!str.empty()) {
+                    str.append(",");
+                }
                 str.append(it->second);
                 socSupportListLen++;
             }
         }
+    }
+    if (str.empty()) {
+        std::string warnMsg = "Invalid socVersion of op " + opType + " in OpDef and ASCEND_COMPUTE_UNIT, please make sure at least one is correct.";
+        ASCENDLOGW("%s\n", warnMsg.c_str());
     }
     outfile << str;
     outfile << "};\n";
@@ -956,8 +962,9 @@ void AclnnOpGenerator::AclnnOpGenHcclServerTypeList(OpDef& opDef, ofstream& outf
         std::string socVer = iter->first.GetString();
         auto it = SOC_SUPPORT_MAP.find(socVer);
         if (it == SOC_SUPPORT_MAP.end()) {
-            // error has been writtern by AclnnOpGenSocSupportList
-            return;
+            std::string warnMsg = "Invalid socVersion" + socVer + "of op " + opType + " when setting HcclServerType.";
+            ASCENDLOGW("%s\n", warnMsg.c_str());
+            continue;
         }
         auto type = opDef.MC2().GetHcclServerType(iter->first);
         if (type == HcclServerType::MAX) {
@@ -1085,14 +1092,16 @@ void AclnnOpGenerator::AclnnOpGenOpSupportListAll(OpDef& opDef, ofstream& outfil
     const std::string opType = opDef.GetOpType().GetString();
     for (auto& aicoreItem : opDef.AICore().GetAICoreConfigs()) {
         std::string socVer = aicoreItem.first.GetString();
+        if (SOC_SUPPORT_MAP.find(socVer) == SOC_SUPPORT_MAP.end()) {
+            continue;
+        }
         OpAICoreConfig aicoreConfig = aicoreItem.second;
         std::vector<OpParamDef> inputs = opDef.GetMergeInputs(aicoreConfig);
         std::vector<OpParamDef> outputs = opDef.GetMergeOutputs(aicoreConfig);
         AclnnOpGenOpSupportList(i, inputs, outputs, outfile, opType);
         i++;
     }
-    size_t socSize = opDef.AICore().GetAICoreConfigs().size();
-    if (socSize == 0U) {
+    if (i == 0U) {
         std::string localopType = opDef.GetOpType().GetString();
         Generator::SetErrorMessage(
             "The soc version of op " + localopType + 
@@ -1101,12 +1110,12 @@ void AclnnOpGenerator::AclnnOpGenOpSupportListAll(OpDef& opDef, ofstream& outfil
             " definition in the host implementation(Opdef, through AddConfig).");
         return;
     }
-    outfile << "OpSocSupportInfo opSocSupportList[" << socSize << "] = {";
-    for (size_t index = 0U; index < socSize - 1; index++) {
+    outfile << "OpSocSupportInfo opSocSupportList[" << i << "] = {";
+    for (size_t index = 0U; index < i - 1; index++) {
         outfile << "socSupportInfo" << index << ", ";
     }
-    outfile << "socSupportInfo" << (socSize - 1U) << "};\n";
-    outfile << "OpSupportList supportList = {opSocSupportList, " << socSize << "};\n";
+    outfile << "socSupportInfo" << (i - 1U) << "};\n";
+    outfile << "OpSupportList supportList = {opSocSupportList, " << i << "};\n";
 }
 
 void AclnnOpGenerator::AclnnGenOpTypeId(OpDef& opDef, ofstream& outfile) const
