@@ -113,8 +113,9 @@ function(pack_built_in)
   set(CONF_FILES
       ${CMAKE_SOURCE_DIR}/scripts/package/common/cfg/path.cfg
   )
-  install(FILES ${ASC_TOOLS_VERSION_FILE}
+  install(FILES ${CMAKE_BINARY_DIR}/version.asc-tools.info
       DESTINATION share/info/asc-tools
+      RENAME version.info
   )
   install(FILES ${CMAKE_SOURCE_DIR}/libraries/lib/scripts/compile_options_config.json
       DESTINATION conf
