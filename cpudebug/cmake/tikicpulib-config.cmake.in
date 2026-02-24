@@ -3,15 +3,16 @@ set(PRODUCT_TYPE_LIST_V100_ ascend910;Ascend910A;Ascend910B;Ascend910PremiumA;As
 set(PRODUCT_TYPE_LIST_V200_ ascend610;ascend310p;Ascend310P1;Ascend310P3;Ascend310P5;Ascend310P7)
 set(PRODUCT_TYPE_LIST_V220_ ascend910B1;Ascend910B1;Ascend910B2;Ascend910B2C;Ascend910B3;Ascend910B4;Ascend910B4-1;Ascend910_9391;Ascend910_9381;Ascend910_9392;Ascend910_9382;Ascend910_9372;Ascend910_9362)
 set(PRODUCT_TYPE_LIST_M300_ ascend310B1;Ascend310B1;Ascend310B2;Ascend310B3;Ascend310B4)
-set(PRODUCT_TYPE_LIST_C310_ ascend950pr_9599;ascend950pr_958a;ascend950pr_9589;ascend950pr_958b;
-                            ascend950pr_9579;ascend950pr_957b;ascend950pr_957c;ascend950pr_957d;
-                            ascend950pr_950z;ascend950dt_950x;ascend950dt_950y;ascend950dt_95a1;
-                            ascend950dt_95a2;ascend950dt_9591;ascend950dt_9592;ascend950dt_9595;
-                            ascend950dt_9596;ascend950dt_9581;ascend950dt_9582;ascend950dt_9583;
-                            ascend950dt_9584;ascend950dt_9585;ascend950dt_9586;ascend950dt_9587;
-                            ascend950dt_9588;ascend950dt_9571;ascend950dt_9572;ascend950dt_9573;
-                            ascend950dt_9574;ascend950dt_9575;ascend950dt_9576;ascend950dt_9577;
-                            ascend950dt_9578)
+set(PRODUCT_TYPE_LIST_C310_ ascend950pr_9599;
+                            Ascend950PR_9599;Ascend950PR_958a;Ascend950PR_9589;Ascend950PR_958b;
+                            Ascend950PR_9579;Ascend950PR_957b;Ascend950PR_957c;Ascend950PR_957d;
+                            Ascend950PR_950z;Ascend950DT_950x;Ascend950DT_950y;Ascend950DT_95A1;
+                            Ascend950DT_95A2;Ascend950DT_9591;Ascend950DT_9592;Ascend950DT_9595;
+                            Ascend950DT_9596;Ascend950DT_9581;Ascend950DT_9582;Ascend950DT_9583;
+                            Ascend950DT_9584;Ascend950DT_9585;Ascend950DT_9586;Ascend950DT_9587;
+                            Ascend950DT_9588;Ascend950DT_9571;Ascend950DT_9572;Ascend950DT_9573;
+                            Ascend950DT_9574;Ascend950DT_9575;Ascend950DT_9576;Ascend950DT_9577;
+                            Ascend950DT_9578)
 set(PRODUCT_TYPE_LIST_KIRINX90_ kirinx90;KirinX90)
 set(PRODUCT_TYPE_LIST_KIRIN9030_ kirin9030;Kirin9030)
 
