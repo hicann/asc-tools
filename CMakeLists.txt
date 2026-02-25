@@ -11,9 +11,6 @@
 cmake_minimum_required(VERSION 3.16.0)
 project(asc-tools)
 
-set(CMAKE_C_FLAGS_RELEASE "")
-set(CMAKE_CXX_FLAGS_RELEASE "")
-
 find_program(CCACHE_PROGRAM ccache)
 if(CCACHE_PROGRAM)
   set(CMAKE_C_COMPILER_LAUNCHER ${CCACHE_PROGRAM})
