@@ -262,7 +262,8 @@ uint64_t GmGetUserSize(uint64_t addr);
 void SetGCoreType(int type);
 void SetArgInfoList(const std::vector<ArgInfoT> &argInfoList);
 void SetKernelMode(KernelMode mode);
-void CheckBlockdimForFfts(uint64_t blkdim);
+void CheckBlockdimForFfts(uint64_t numBlocks);
+void CheckNumBlocksForFfts(uint64_t numBlocks);
 void BacktracePrint(int sig);
 void CheckSyncState();
 typedef struct {

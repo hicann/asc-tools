@@ -285,14 +285,27 @@ void CheckGmValied(int argn, uint64_t* argv)
     }
 }
 
-void CheckBlockdimForFfts(uint64_t blkdim)
+void CheckBlockdimForFfts(uint64_t numBlocks)
 {
-    (void)(blkdim);
+    (void)(numBlocks);
 #if defined(__NPU_ARCH__) && __NPU_ARCH__ == 2201
-    if ((g_kernelMode == KernelMode::MIX_MODE && blkdim > MAX_CORE_NUM_V220) ||
-        (g_kernelMode == KernelMode::AIC_MODE && blkdim > MAX_CORE_NUM_V220) ||
-        (g_kernelMode == KernelMode::AIV_MODE && blkdim > MAX_CORE_NUM_V220 * AIV_IN_GROUP_CORE_NUM)) {
-        std::cout << "The input blkdim " << blkdim << " exceed max core num of ascend910B1!" << std::endl;
+    if ((g_kernelMode == KernelMode::MIX_MODE && numBlocks > MAX_CORE_NUM_V220) ||
+        (g_kernelMode == KernelMode::AIC_MODE && numBlocks > MAX_CORE_NUM_V220) ||
+        (g_kernelMode == KernelMode::AIV_MODE && numBlocks > MAX_CORE_NUM_V220 * AIV_IN_GROUP_CORE_NUM)) {
+        std::cout << "The input numBlocks " << numBlocks << " exceed max core num of ascend910B1!" << std::endl;
+        raise(SIGABRT);
+    }
+#endif
+}
+
+void CheckNumBlocksForFfts(uint64_t numBlocks)
+{
+    (void)(numBlocks);
+#if defined(__NPU_ARCH__) && __NPU_ARCH__ == 2201
+    if ((g_kernelMode == KernelMode::MIX_MODE && numBlocks > MAX_CORE_NUM_V220) ||
+        (g_kernelMode == KernelMode::AIC_MODE && numBlocks > MAX_CORE_NUM_V220) ||
+        (g_kernelMode == KernelMode::AIV_MODE && numBlocks > MAX_CORE_NUM_V220 * AIV_IN_GROUP_CORE_NUM)) {
+        std::cout << "The input numBlocks " << numBlocks << " exceed max core num of ascend910B1!" << std::endl;
         raise(SIGABRT);
     }
 #endif

@@ -122,10 +122,10 @@ inline void Handler(int sig)
     } while (0)
 
 #ifdef ASCENDC_NPUCHK_OFF
-#define ICPU_RUN_KF(func, blkdim, ...)                                                                   \
+#define ICPU_RUN_KF(func, numBlocks, ...)                                                                   \
     do {                                                                                                 \
         g_mainPid = getpid();                                                                            \
-        AscendC::CheckBlockdimForFfts(blkdim);                                                           \
+        AscendC::CheckNumBlocksForFfts(numBlocks);                                                           \
         AscendC::InitSocVersion();                                                                       \
         uint64_t kargs[32];                                                                              \
         constexpr size_t workspaceSize = AscendC::RESERVED_WORKSPACE;                                    \
@@ -140,7 +140,7 @@ inline void Handler(int sig)
         int32_t argn = va_args_num(__VA_ARGS__);                                                         \
         va_args_get(kargs, argn, ##__VA_ARGS__);                                                         \
         AscendC::StubInit();                                                                             \
-        block_num = blkdim;                                                                              \
+        block_num = numBlocks;                                                                              \
         int processNum = get_process_num();                                                              \
         g_processNum = processNum;                                                                       \
         int blks[processNum];                                                                            \
@@ -212,10 +212,10 @@ inline void AscendCNpuCheckEnInterruptExit(void)
 #endif
 }
 
-#define ICPU_RUN_KF(func, blkdim, ...)                                                                   \
+#define ICPU_RUN_KF(func, numBlocks, ...)                                                                   \
     do {                                                                                                 \
         g_mainPid = getpid();                                                                            \
-        AscendC::CheckBlockdimForFfts(blkdim);                                                           \
+        AscendC::CheckNumBlocksForFfts(numBlocks);                                                           \
         AscendC::InitSocVersion();                                                                       \
         uint64_t kargs[32];                                                                              \
         constexpr size_t workspaceSize = AscendC::RESERVED_WORKSPACE;                                    \
@@ -232,7 +232,7 @@ inline void AscendCNpuCheckEnInterruptExit(void)
         AscendC::StubInit();                                                                             \
         AscendCKernelBegin(#func, argn, kargs);                                                          \
         AscendCNpuCheckEnInterruptExit();                                                                \
-        block_num = blkdim;                                                                              \
+        block_num = numBlocks;                                                                              \
         int processNum = get_process_num();                                                              \
         g_processNum = processNum;                                                                       \
         int blks[processNum];                                                                            \

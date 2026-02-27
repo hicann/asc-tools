@@ -39,7 +39,7 @@ extern "C" __global__ __aicore__ void add_custom(GM_ADDR x, GM_ADDR y, GM_ADDR z
 ``` c
 int32_t main(int32_t argc, char* argv[])
 {
-    uint32_t blockDim = 8;
+    uint32_t numBlocks = 8;
     size_t inputByteSize = 8 * 2048 * sizeof(uint16_t);
     size_t outputByteSize = 8 * 2048 * sizeof(uint16_t);
 
@@ -53,7 +53,7 @@ int32_t main(int32_t argc, char* argv[])
     // 矢量算子需要设置内核模式为AIV模式
     AscendC::SetKernelMode(KernelMode::AIV_MODE);
     // 调用ICPU_RUN_KF调测宏，完成核函数CPU侧的调用
-    ICPU_RUN_KF(add_custom, blockDim, x, y, z);
+    ICPU_RUN_KF(add_custom, numBlocks, x, y, z);
     // 输出数据写出
     WriteFile("./output/output_z.bin", z, outputByteSize);
     // 调用GmFree释放申请的内存
