@@ -58,7 +58,7 @@ out
     支持两种打印方式。  
     -   简单打印
         ```
-        msobjdump --dump-elf ${cmake_install_dir}/out/libascendc_kernels_npu.so
+        msobjdump --dump-elf ${cmake_install_dir}/out/lib/libascendc_kernels_npu.so
         ```
         执行上述命令，终端打印基础device信息，示例如下：
 
@@ -74,7 +74,7 @@ out
         ```
     -   全量打印
         ```
-        msobjdump --dump-elf ${cmake_install_dir}/out/libascendc_kernels_npu.so --verbose
+        msobjdump --dump-elf ${cmake_install_dir}/out/lib/libascendc_kernels_npu.so --verbose
         ```  
         执行上述命令，终端打印所有device信息，示例如下：
 
@@ -131,12 +131,12 @@ out
         ```
 -   解压包含device信息的库文件并落盘
     ```
-    msobjdump --extract-elf ${cmake_install_dir}/out/libascendc_kernels_npu.so
+    msobjdump --extract-elf ${cmake_install_dir}/out/lib/libascendc_kernels_npu.so
     ```
     执行上述命令，默认在当前执行路径下落盘ascendxxxb1_ascendc_kernels_npu_0_mix.o文件。
 -   获取包含device信息的库文件列表
     ```
-    msobjdump --list-elf ${cmake_install_dir}/out/libascendc_kernels_npu.so
+    msobjdump --list-elf ${cmake_install_dir}/out/lib/libascendc_kernels_npu.so
     ```
     执行上述命令，终端会打印所有文件，屏显信息形如：
 
