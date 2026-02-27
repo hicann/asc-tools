@@ -21,13 +21,36 @@
 #include "stub_def.h"
 #include "kernel_log.h"
 
+namespace cce {
+struct dim3 {
+    uint32_t x = 1u, y = 1u, z = 1u;
+    dim3(uint32_t x_) { x = x_; }
+    dim3(uint32_t x_, uint32_t y_)
+    {
+        x = x_;
+        y = y_;
+    }
+    dim3(uint32_t x_, uint32_t y_, uint32_t z_)
+    {
+        x = x_;
+        y = y_;
+        z = z_;
+    }
+};
+}  // namespace cce
+
+inline cce::dim3 blockDim(1u, 1u, 1u);
+inline cce::dim3 blockIdx(0u, 0u, 0u);
+inline thread_local cce::dim3 threadIdx(0u, 0u, 0u);
+inline cce::dim3 gridDim(8u, 1u, 1u);
+
 namespace AscendC {
 namespace Simt {
 constexpr uint32_t THREAD_PER_WARP = 32;
 // 2 piece interleave Shared memory in a warp to guarantee data exchange/modification without data race at warp level.
 constexpr uint32_t MEMORY_PIECE = 2;
 template <typename Func>
-void FuncWrapper(Func func, uint32_t warpId, uint32_t threadIdx);
+void FuncWrapper(Func func, uint32_t warpId, uint32_t threadIndex);
 
 class Warp {
 public:
@@ -164,12 +187,15 @@ public:
 };
 
 template <typename Func>
-void FuncWrapper(Func func, uint32_t warpId, uint32_t threadIdx)
+void FuncWrapper(Func func, uint32_t warpId, uint32_t threadIndex)
 {
-    uint32_t overallIdx = warpId * THREAD_PER_WARP + threadIdx;
+    uint32_t overallIdx = warpId * THREAD_PER_WARP + threadIndex;
     g_threadIdxX = overallIdx % g_threadDimX;
     g_threadIdxY = (overallIdx / g_threadDimX) % g_threadDimY;
     g_threadIdxZ = overallIdx / (g_threadDimY * g_threadDimX);
+    threadIdx.x = g_threadIdxX;
+    threadIdx.y = g_threadIdxY;
+    threadIdx.z = g_threadIdxZ;
     func();
     ThreadBlock::GetBlockInstance().ThreadFinished();
 }

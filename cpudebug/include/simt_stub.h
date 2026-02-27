@@ -684,31 +684,22 @@ float __cvt_float(float x) {
 }
 }
 
-#ifndef SIMT_CCE
-#define SIMT_CCE
 namespace cce {
-struct dim3 {
-    uint32_t x = 1u, y = 1u, z = 1u;
-    dim3(uint32_t x_) { x = x_; }
-    dim3(uint32_t x_, uint32_t y_)
-    {
-        x = x_;
-        y = y_;
-    }
-    dim3(uint32_t x_, uint32_t y_, uint32_t z_)
-    {
-        x = x_;
-        y = y_;
-        z = z_;
-    }
-};
-
 template <auto funcPtr, typename... Args>
 void async_invoke(const dim3 &dim, Args &&...args)
 {
     g_threadDimX = dim.x;
     g_threadDimY = dim.y;
     g_threadDimZ = dim.z;
+
+    blockDim.x = g_threadDimX;
+    blockDim.y = g_threadDimY;
+    blockDim.z = g_threadDimZ;
+
+    blockIdx.x = block_idx;
+
+    gridDim.x = block_num;
+
     AscendC::Simt::ThreadBlock &threadBlock = AscendC::Simt::ThreadBlock::GetBlockInstance();
     const uint32_t threadNum = g_threadDimX * g_threadDimY * g_threadDimZ;
     threadBlock.Init(threadNum);
@@ -719,8 +710,6 @@ void async_invoke(const dim3 &dim, Args &&...args)
     threadBlock.FinishJobs();
 }
 }  // namespace cce
-
-#endif
 
 enum L1CacheType : uint32_t { NON_CACHEABLE = 0, CACHEABLE = 1 };
 enum class LD_L2CacheType : uint32_t { L2_CACHE_HINT_NORMAL_FV = 0 };
@@ -739,54 +728,7 @@ void __stg(__gm__ T* address, T val)
     *address = val;
 }
 
-struct BlockDim {
-    uint32_t &x;
-    uint32_t &y;
-    uint32_t &z;
-    BlockDim(uint32_t &x_, uint32_t &y_, uint32_t &z_)
-        : x(x_), y(y_), z(z_)
-    {}
-};
-
-struct BlockIdx {
-    int64_t &x;
-    int64_t y;
-    int64_t z;
-    BlockIdx(int64_t &x_)
-        : x(x_)
-    {}
-};
-
-struct ThreadIdx {
-    uint32_t &x;
-    uint32_t &y;
-    uint32_t &z;
-    ThreadIdx(uint32_t &x_, uint32_t &y_, uint32_t &z_)
-        : x(x_), y(y_), z(z_)
-    {}
-};
-
-struct GridDim {
-    int64_t &x;
-    int64_t y;
-    int64_t z;
-    GridDim(int64_t &x_)
-        : x(x_)
-    {
-        y = 1;
-        z = 1;
-    }
-};
-
-inline BlockDim blockDim(g_threadDimX, g_threadDimY, g_threadDimZ);
-inline BlockIdx blockIdx(block_idx);
-inline thread_local ThreadIdx threadIdx(g_threadIdxX, g_threadIdxY, g_threadIdxZ);
-inline GridDim gridDim(block_num);
-
-#ifndef SIMT_WARP_SIZE
-#define SIMT_WARP_SIZE
 constexpr int32_t warpSize = 32;
-#endif
 
 #endif
 #endif
