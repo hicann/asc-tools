@@ -189,7 +189,7 @@
   ```
   并且，需要同样操作下载依赖的[msot](https://gitcode.com/Ascend/msot.git)、[mssanitizer](https://gitcode.com/Ascend/mssanitizer.git)、[msopprof](https://gitcode.com/Ascend/msopprof.git)、[msopgen](https://gitcode.com/Ascend/msopgen.git)、[mskpp](https://gitcode.com/Ascend/mskpp.git)、[mskl](https://gitcode.com/Ascend/mskl.git)、[msdebug](https://gitcode.com/Ascend/msdebug.git)代码仓的master分支的压缩包，即点击各仓链接，右上角选择【下载ZIP】。
 
-  同时，需要根据实际环境，下载对应闭源cpudebug包（[cpudebug x86_64包](https://container-obsfs-filesystem.obs.cn-north-4.myhuaweicloud.com/package/cann/asc-toolkit-dev/version_compile/master/202601/20260131_174635_/ubuntu_x86/cann-asc-tools-cpudebug-deps-lib_release_9.0.0_linux-x86_64.tar.gz)、[cpudebug aarch64包](https://container-obsfs-filesystem.obs.cn-north-4.myhuaweicloud.com/package/cann/asc-toolkit-dev/version_compile/master/202601/20260131_174635_/ubuntu_aarch64/cann-asc-tools-cpudebug-deps-lib_release_9.0.0_linux-aarch64.tar.gz)），以及开源第三方软件依赖，列表如下：
+  同时，需要根据实际环境，下载对应Release版本的闭源cpudebug包（[cpudebug x86_64包](https://container-obsfs-filesystem.obs.cn-north-4.myhuaweicloud.com/package/cann/asc-toolkit-dev/version_compile/master/202601/20260131_174635_/ubuntu_x86/cann-asc-tools-cpudebug-deps-lib_release_9.0.0_linux-x86_64.tar.gz)、[cpudebug aarch64包](https://container-obsfs-filesystem.obs.cn-north-4.myhuaweicloud.com/package/cann/asc-toolkit-dev/version_compile/master/202601/20260131_174635_/ubuntu_aarch64/cann-asc-tools-cpudebug-deps-lib_release_9.0.0_linux-aarch64.tar.gz)），以及开源第三方软件依赖，列表如下：
 
   | 开源软件 | 版本 | 下载地址 |
   |---|---|---|
@@ -255,6 +255,20 @@ bash build.sh -t
 ```bash
 bash build.sh --test
 ```
+
+若您的环境无法访问网络，您需要在联网环境中下载上述依赖代码仓的压缩包及开源软件压缩包，并手动上传至您的环境中。
+  同时，相比编译，UT不下载Release版本的cpudebug包，而是需要根据实际环境，下载对应Debug版本的闭源cpudebug包（[cpudebug x86_64包](https://container-obsfs-filesystem.obs.cn-north-4.myhuaweicloud.com/package/cann/asc-toolkit-dev/version_compile/master/202601/20260131_174635_/ubuntu_x86/cann-asc-tools-cpudebug-deps-lib_debug_9.0.0_linux-x86_64.tar.gz)、[cpudebug aarch64包](https://container-obsfs-filesystem.obs.cn-north-4.myhuaweicloud.com/package/cann/asc-toolkit-dev/version_compile/master/202601/20260131_174635_/ubuntu_aarch64/cann-asc-tools-cpudebug-deps-lib_debug_9.0.0_linux-aarch64.tar.gz)），Debug版本相比Release版本，方便进行调试。
+
+  您需要在环境中新建一个`{your_3rd_party_path}`目录来存放依赖代码仓、闭源及第三方开源软件的压缩包。
+
+  ```bash
+  mkdir -p {your_3rd_party_path}
+  ```
+
+  创建好目录后，将下载好的所依赖的压缩包上传至目录`{your_3rd_party_path}`后，可以使用如下命令进行UT测试：
+  ```bash
+  bash build.sh --test --cann_3rd_lib_path={your_3rd_party_path}
+  ```
 
 ### UT测试显示覆盖率
 
