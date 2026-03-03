@@ -158,7 +158,7 @@ inline uint32_t Fp32ExtracExp(uint32_t x)
 struct Bf16T {
     uint16_t val;
 public:
-    Bf16T(void) : val(0x0u) {}
+    constexpr Bf16T(void) : val(0x0u) {}
     Bf16T(const Bf16T& bf) : val(bf.val) {}
     Bf16T(const float& fVal) : val(FloatToBf16(fVal)) {}
     uint16_t FloatToBf16(const float& fVal) const;
@@ -221,12 +221,6 @@ public:
     uint16_t Bf16Sub(uint16_t fp1, uint16_t fp2) const;
 };
 } // namespace bfloat16
-#if !defined(__NPU_HOST__) && !defined(__ASCC_HOST__)
 using bfloat16_t = bfloat16::Bf16T;
-
-#else // defined(__NPU_HOST__) || defined(__ASCC_HOST__)
-struct bfloat16_t {
-};
-#endif // !defined(__NPU_HOST__) && !defined(__ASCC_HOST__)
 #endif // ASCENDC_BF16_H
 

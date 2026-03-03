@@ -230,7 +230,7 @@ public:
      * @ingroup half constructor
      * @brief   Constructor without any param(default constructor)
      */
-    __ai_host__ __ai_core__ half(void) : val(0x0u) {}
+    constexpr __ai_host__ __ai_core__ half(void) : val(0x0u) {}
     /* *
      * @ingroup half copy constructor
      * @brief   Constructor with a half object(copy constructor)

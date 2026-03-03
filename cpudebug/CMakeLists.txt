@@ -160,6 +160,8 @@ install(FILES
   include/kernel_raise_signal.h
   include/simt_stub.h
   include/kernel_simt_cpu.h
+  include/cpu_debug_launch.h
+  include/kernel_elf_parser.h
   DESTINATION lib/include OPTIONAL
 )
 

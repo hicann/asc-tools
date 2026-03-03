@@ -34,10 +34,14 @@
 #include "kernel_print_lock.h"
 #include "kernel_raise_signal.h"
 
+#define __host__
 #define __global__
 #define __WORKGROUP_LOCAL__
 #define __BLOCK_LOCAL__
 #define __VEC_SCOPE__
+#define __cube__
+#define __vector__
+#define __mix__
 #define __aicore__
 #define __host_aicore__
 #define __gm__
@@ -62,6 +66,7 @@
 #define __simd_vf__
 #define __no_simd_vf_fusion__
 #define __disable_kernel_type_autoinfer__
+#define __kfc_workspace__
 #define LAUNCH_BOUND(x)
 #define ASCENDC_HOST_AICORE
 #define __vector__

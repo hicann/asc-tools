@@ -14,6 +14,7 @@
 #include <memory>
 #include "acl/acl.h"
 #include "acl/acl_prof.h"
+#include "kernel_elf_parser.h"
 
 #define ASCENDC_CPU_DEBUG
 
@@ -188,4 +189,71 @@ TEST_F(TEST_ACL_STUB, AclrtMemcpy2dAsyncSuccess)
 
     EXPECT_EQ(aclrtMemcpy2dAsync(dst, sizeof(dst), nullptr, sizeof(src), 10, 1, ACL_MEMCPY_HOST_TO_HOST, stream), ACL_ERROR_INVALID_PARAM);
     EXPECT_EQ(aclrtMemcpy2dAsync(dst, 5, src, sizeof(src), 10, 1, ACL_MEMCPY_HOST_TO_HOST, stream), ACL_ERROR_BAD_ALLOC);
+}
+
+TEST_F(TEST_ACL_STUB, AclrtBinaryLoadFromDataSuccess)
+{
+    uint8_t elfData[512] = {0};
+    
+    elfData[EI_MAG0] = 0x7f;
+    elfData[EI_MAG1] = 'E';
+    elfData[EI_MAG2] = 'L';
+    elfData[EI_MAG3] = 'F';
+    elfData[EI_CLASS] = ELFCLASS64;
+    elfData[EI_DATA] = ELFDATA2LSB;
+    
+    elfData[40] = 64; // e_shoff
+    elfData[58] = 64; // e_shentsize
+    elfData[60] = 2; // e_shnum
+    elfData[62] = 1; // e_shstrndx
+    
+    Elf64_Shdr* shdr0 = reinterpret_cast<Elf64_Shdr*>(elfData + 64);
+    shdr0->sh_name = 0;
+    shdr0->sh_type = 0;
+    shdr0->sh_offset = 192;
+    shdr0->sh_size = 64;
+    
+    Elf64_Shdr* shdr1 = reinterpret_cast<Elf64_Shdr*>(elfData + 128);
+    shdr1->sh_name = 1;
+    shdr1->sh_type = 0;
+    shdr1->sh_offset = 256;
+    shdr1->sh_size = 64;
+    
+    const char* strTab = ".ascend.meta.test_kernel\0.shstrtab\n";
+    memcpy(elfData + 256, strTab, strlen(strTab) + 1);
+    
+    uint8_t* metaSection = elfData + 192;
+    AscendC::ElfTlvHead* head = reinterpret_cast<AscendC::ElfTlvHead*>(metaSection);
+    head->type = AscendC::FUNC_META_TYPE_KERNEL_TYPE;
+    head->length = 4;
+    uint32_t kernelType = AscendC::K_TYPE_AIC;
+    memcpy(metaSection + sizeof(AscendC::ElfTlvHead), &kernelType, sizeof(uint32_t));
+    
+    shdr0->sh_size = sizeof(AscendC::ElfTlvHead) + 4;
+    
+    AscendC::KernelModeRegister& reg = AscendC::KernelModeRegister::GetInstance();
+    reg.Clear();
+    
+    EXPECT_EQ(aclrtBinaryLoadFromData(elfData, sizeof(elfData), nullptr, nullptr), ACL_SUCCESS);
+    
+    KernelMode mode = reg.GetKenelMode("test_kernel");
+    EXPECT_EQ(mode, KernelMode::AIC_MODE);
+}
+
+TEST_F(TEST_ACL_STUB, AclrtBinaryLoadFromDataInvalidElf)
+{
+    uint8_t elfData[32] = {0};
+    elfData[EI_MAG0] = 0x7f;
+    elfData[EI_MAG1] = 'E';
+    elfData[EI_MAG2] = 'L';
+    elfData[EI_MAG3] = 'X';
+    
+    aclrtBinHandle binHandle = nullptr;
+    EXPECT_EQ(aclrtBinaryLoadFromData(elfData, sizeof(elfData), nullptr, &binHandle), ACL_ERROR_INVALID_PARAM);
+}
+
+TEST_F(TEST_ACL_STUB, AclrtBinaryLoadFromDataNullPointer)
+{
+    aclrtBinHandle binHandle = nullptr;
+    EXPECT_EQ(aclrtBinaryLoadFromData(nullptr, 512, nullptr, &binHandle), ACL_ERROR_INVALID_PARAM);
 }

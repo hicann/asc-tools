@@ -20,6 +20,7 @@
 #include "acl/acl_prof.h"
 #include "stub_def.h"
 #include "kernel_fp16.h"
+#include "kernel_elf_parser.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -296,6 +297,24 @@ aclError aclrtDestroyContext(aclrtContext context)
     return ACL_SUCCESS;
 }
 
+aclError aclrtBinaryLoadFromData(const void *data, size_t length, const aclrtBinaryLoadOptions *options, aclrtBinHandle *binHandle)
+{
+    (void)options;
+    (void)binHandle;
+    if (data == nullptr || length == 0) {
+        printf("[ERROR] Get invalid elfData or data length.\n");
+        return ACL_ERROR_INVALID_PARAM;
+    }
+
+    try{
+        AscendC::RegisterKernelElf(reinterpret_cast<const uint8_t*>(data), length);
+    } catch(std::invalid_argument &e){
+        printf("[ERROR] Failed to register kernel elf data: %s\n", e.what());
+        return ACL_ERROR_INVALID_PARAM;
+    }
+    return ACL_SUCCESS;
+}
+
 #ifdef __cplusplus
 }
 #endif // __cplusplus
@@ -312,7 +331,7 @@ static int callback(struct dl_phdr_info *info, size_t size, void *data)
         aclrtGetVersion, aclDataTypeSize, aclFloat16ToFloat, aclFloatToFloat16, aclrtSetDevice, aclrtResetDevice,\n\
         aclrtCreateStream, aclrtCreateStreamWithConfig, aclrtDestroyStream, aclrtDestroyStreamForce, aclrtSynchronizeStream,\n\
         aclrtMalloc, aclrtFree, aclrtMallocHost, aclrtFreeHost, aclrtMemset, aclrtMemsetAsync, aclrtMemcpy, aclrtMemcpyAsync,\n\
-        aclrtMemcpy2d, aclrtMemcpy2dAsync, aclrtCreateContext, aclrtDestroyContext]\n");
+        aclrtMemcpy2d, aclrtMemcpy2dAsync, aclrtCreateContext, aclrtDestroyContext, aclrtBinaryLoadFromData]\n");
         abort();
     }
     return 0;

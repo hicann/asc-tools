@@ -37,7 +37,7 @@ normal                           0 ~ 1  0001      -     000 ~ 111   ±1   0     
 struct Hif8T {
     int8_t val;
 public:
-    Hif8T(void) : val(0x0u) {}
+    constexpr Hif8T(void) : val(0x0u) {}
     Hif8T(const Hif8T& fp8) : val(fp8.val) {}
     Hif8T(const float src) : val(FloatToHif8(src)) {}
     Hif8T& operator=(const Hif8T& fp8)

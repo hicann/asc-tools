@@ -26,7 +26,7 @@ namespace float8_e5m2 {
 struct Fp8e5m2T {
     int8_t val;
 public:
-    Fp8e5m2T(void) : val(0x0u) {}
+    constexpr Fp8e5m2T(void) : val(0x0u) {}
     Fp8e5m2T(const Fp8e5m2T& fp8) : val(fp8.val) {}
     Fp8e5m2T(const float src) : val(FloatToFp8e5m2(src)) {}
     Fp8e5m2T& operator=(const Fp8e5m2T& fp8)

@@ -42,7 +42,7 @@ inline uint8_t FP4E1M2_CONSTRUCTOR(uint16_t s, uint16_t e, uint16_t m)
 struct Fp4e1m2T {
     uint8_t val = 0;
 public:
-    Fp4e1m2T(void) : val(0x0u) {}
+    constexpr Fp4e1m2T(void) : val(0x0u) {}
     Fp4e1m2T(const Fp4e1m2T& fp4) : val(fp4.val) {}
     Fp4e1m2T(const bfloat16::Bf16T src) : val(BfloatToFp4e1m2(src.val)) {}
     Fp4e1m2T& operator=(const Fp4e1m2T& fp4)
