@@ -31,6 +31,10 @@ endforeach()
 
 if(_ms_root)
     message(STATUS "Reusing existing msot at: ${_ms_root}")
+    execute_process(
+        WORKING_DIRECTORY ${_ms_root}/msopgen
+        COMMAND git checkout 95ff9e15971ce5e3dacbf7c03ba1ace959beb475
+    )
 else()
     message(STATUS "No reusable msot found, fetching into repo third_party...")
     set(_ms_root "${CMAKE_CURRENT_LIST_DIR}")
