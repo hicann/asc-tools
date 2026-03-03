@@ -86,7 +86,8 @@ class TLV:
 
     @classmethod
     def get_tl_format(cls):
-        return 'ii'
+        # TLV header uses uint32_t type/length.
+        return 'II'
 
     @classmethod
     def get_tl_size(cls):
@@ -139,7 +140,7 @@ class ShapeInfo:
     @classmethod
     def get_size(cls):
         fmt = cls.get_format()
-        return struct.calsize(fmt)
+        return struct.calcsize(fmt)
 
     def unpack(self, buffer):
         fmt = self.get_format()
@@ -202,7 +203,7 @@ class TimeStampInfo:
     @classmethod
     def get_size(cls):
         fmt = cls.get_format()
-        return struct.calsize(fmt)
+        return struct.calcsize(fmt)
 
     def unpack(self, buffer):
         fmt = self.get_format()
@@ -211,6 +212,43 @@ class TimeStampInfo:
         self.rsv = unpacked_data[1]
         self.sys_cycle = unpacked_data[2]
         self.pc_ptr = unpacked_data[3]
+
+    def parse_from(self, tlv: TLV):
+        self.unpack(tlv.value)
+
+
+@dataclass
+class FifoTimeStampInfo:
+    desc_id: int = 0
+    block_idx: int = 0
+    rsv: int = 0
+    sys_cycle: int = 0
+    pc_ptr: int = 0
+    entry: int = 0
+    resv_mem0: int = 0
+    resv_mem1: int = 0
+
+    @classmethod
+    def get_format(cls):
+        # value format of ringbuf TimeStampTlvInfo:
+        return 'IHHQQQII'
+
+    @classmethod
+    def get_size(cls):
+        fmt = cls.get_format()
+        return struct.calcsize(fmt)
+
+    def unpack(self, buffer):
+        fmt = self.get_format()
+        unpacked_data = struct.unpack(fmt, buffer)
+        self.desc_id = unpacked_data[0]
+        self.block_idx = unpacked_data[1]
+        self.rsv = unpacked_data[2]
+        self.sys_cycle = unpacked_data[3]
+        self.pc_ptr = unpacked_data[4]
+        self.entry = unpacked_data[5]
+        self.resv_mem0 = unpacked_data[6]
+        self.resv_mem1 = unpacked_data[7]
 
     def parse_from(self, tlv: TLV):
         self.unpack(tlv.value)
@@ -296,6 +334,42 @@ class DumpTensor:
         else:
             self.dump_value.extend(
                 value[0] for value in struct.iter_unpack(fmt, self.dump_data))
+
+
+@dataclass(repr=False)
+class FifoDumpTensor(DumpTensor):
+    def parse_from(self, tlv):
+        self.tag = tlv.tag
+        self.length = tlv.length
+
+        head_size = struct.calcsize('IIIIHHI8III')
+        if len(tlv.value) < head_size:
+            raise RuntimeError('FifoDumpTensor: invalid TLV value length')
+
+        unpacked = struct.unpack('IIIIHHI8III', tlv.value[:head_size])
+        tensor_addr = unpacked[0]
+        data_type = unpacked[1]
+        desc = unpacked[2]
+        buffer_id = unpacked[3]
+        position = unpacked[4]
+        # unpacked[5] is blockIdx, [6] is dim, [7:15] shape, [15] resv1
+        dump_size = unpacked[16]
+
+        self.dump_header = DumpMessageHeader(
+            addr=tensor_addr,
+            data_type=data_type,
+            desc=desc,
+            buffer_id=buffer_id,
+            position=position,
+            reserved=0
+        )
+
+        data_start = head_size
+        data_end = data_start + dump_size
+        if data_end > len(tlv.value):
+            raise RuntimeError('FifoDumpTensor: dump_size out of range')
+        self.dump_data = tlv.value[data_start:data_end]
+        self._parse_dump_data()
 
 
 @dataclass(repr=False)
@@ -415,6 +489,56 @@ class PrintStruct:
         return s
 
 
+@dataclass(repr=False)
+class FifoPrintStruct(PrintStruct):
+    block_idx: int = 0
+    resv: int = 0
+
+    def parse_from(self, tlv):
+        self.tag = tlv.tag
+        self.length = tlv.length
+
+        if len(tlv.value) < 16:
+            raise RuntimeError('FifoPrintStruct: invalid TLV value length')
+        self.block_idx, self.resv, _fmt_offset = struct.unpack('IIQ', tlv.value[:16])
+
+        # Skip blockIdx/resv (8 bytes) so buffer starts at fmtOffset field.
+        fifo_buffer = tlv.value[8:]
+        args_start, args_end = self._read_fmt(fifo_buffer)    # fmt
+        self._read_args(fifo_buffer, args_start, args_end)    # args
+
+        self.fmt = self.fmt.replace('%p', '0x%x')    # python not support %p
+        self.content = self.fmt % tuple(self.args)
+
+
+@dataclass(repr=False)
+class FifoSimtPrintStruct(PrintStruct):
+    block_idx: List[int] = field(default_factory=lambda: [0, 0, 0])
+    thread_idx: List[int] = field(default_factory=lambda: [0, 0, 0])
+    resv: List[int] = field(default_factory=lambda: [0, 0, 0, 0])
+
+    def parse_from(self, tlv):
+        self.tag = tlv.tag
+        self.length = tlv.length
+
+        header_size = struct.calcsize('3I3I4IQ')
+        if len(tlv.value) < header_size:
+            raise RuntimeError('FifoSimtPrintStruct: invalid TLV value length')
+
+        unpacked = struct.unpack('3I3I4IQ', tlv.value[:header_size])
+        self.block_idx = list(unpacked[0:3])
+        self.thread_idx = list(unpacked[3:6])
+        self.resv = list(unpacked[6:10])
+
+        # Buffer starts from fmtOffset field.
+        simt_buffer = tlv.value[40:]
+        args_start, args_end = self._read_fmt(simt_buffer)    # fmt
+        self._read_args(simt_buffer, args_start, args_end)    # args
+
+        self.fmt = self.fmt.replace('%p', '0x%x')    # python not support %p
+        self.content = self.fmt % tuple(self.args)
+
+
 @dataclass
 class BlockInfo:
     total_size: int = 0
@@ -452,63 +576,59 @@ class BlockInfo:
 
 
 @dataclass
+class FifoBlockInfo:
+    length: int = 0
+    core_id: int = 0
+    block_num: int = 0
+    remain_len: int = 0
+    magic: int = 0
+    flag: int = 0
+    rsv: int = 0
+    dump_addr: int = 0
+    resv: List[int] = field(default_factory=list)
+
+    def __repr__(self):
+        return (
+            f'FifoBlockInfo(length={self.length}, core_id={self.core_id}, block_num={self.block_num}, '
+            f'remain_len={self.remain_len}, magic=0x{self.magic:04X}, flag={self.flag}, rsv={self.rsv}, '
+            f'dump_addr=0x{self.dump_addr:X}, resv={self.resv})'
+        )
+
+    @classmethod
+    def get_format(cls):
+        return 'IIIIHHIQ6I'
+
+    @classmethod
+    def get_size(cls):
+        fmt = cls.get_format()
+        return struct.calcsize(fmt)
+
+    def unpack(self, buffer):
+        fmt = self.get_format()
+        unpacked = struct.unpack(fmt, buffer)
+        self.length = unpacked[0]
+        self.core_id = unpacked[1]
+        self.block_num = unpacked[2]
+        self.remain_len = unpacked[3]
+        self.magic = unpacked[4]
+        self.flag = unpacked[5]
+        self.rsv = unpacked[6]
+        self.dump_addr = unpacked[7]
+        self.resv = list(unpacked[8:14])
+
+    def is_valid(self):
+        return self.magic == 0xAE86
+
+
+@dataclass
 class DumpCoreContent:
     block_info: BlockInfo = None
     dump_tensor_map: Dict[int, List[DumpTensor]] = field(default_factory=dict)
     print_list: List[str] = field(default_factory=list)
+    simt_print_map: Dict[str, List[str]] = field(default_factory=dict)
     time_stamp_list: List[TimeStampInfo] = field(default_factory=list)
     index_dtype_dt = {}
     shape: List[int] = field(default_factory=list)
-
-    def add_tlv_data(self, tlv):
-        if tlv.tag == DumpType.TENSOR_TYPE.value:
-            dump_tensor = DumpTensor()
-            dump_tensor.parse_from(tlv)
-            index = dump_tensor.dump_header.desc
-            data_type = dump_tensor.dump_header.data_type
-            if self.shape:
-                dump_tensor.dump_shape = self.shape.copy()
-            self.shape.clear()
-            self.index_dtype_dt[index] = dtype_to_data_type.get(data_type, '')
-            self._add_dump_tensor(dump_tensor)
-        elif tlv.tag == DumpType.SCALAR_TYPE.value or tlv.tag == DumpType.ASSERT_TYPE.value:
-            print_struct = PrintStruct()
-            print_struct.parse_from(tlv)
-            self.print_list.append(print_struct.content)
-        elif tlv.tag == DumpType.SHAPE_TYPE.value:
-            shape_info = ShapeInfo()
-            shape_info.parse_from(tlv)
-            self.shape = shape_info.shape
-        elif tlv.tag == DumpType.TIME_STAMP.value:
-            time_stamp_info = TimeStampInfo()
-            time_stamp_info.parse_from(tlv)
-            self.time_stamp_list.append(time_stamp_info)
-        elif tlv.tag == DumpType.META_TYPE.value:
-            meta_info = MetaInfo()
-            meta_info.parse_from(tlv)
-            self.print_list.append(meta_info.content)
-        else:
-            DUMP_PARSER_LOG.error(f'Invalid dump Type: {tlv.tag}')
-
-    def _add_dump_tensor(self, dump_tensor):
-        index = dump_tensor.dump_header.desc
-        if index not in self.dump_tensor_map:
-            self.dump_tensor_map[index] = []
-        DUMP_PARSER_LOG.debug(f'Tensor[{index}][{len(self.dump_tensor_map[index])}] = {dump_tensor}')
-        self.dump_tensor_map[index].append(dump_tensor)
-
-    def _write_dump_tensor_by_loop(self, index, index_output_dir):
-        loop_cnt = len(self.dump_tensor_map[index])
-        for loop in range(0, loop_cnt):
-            dump_tensor = self.dump_tensor_map[index][loop]
-            dump_file_name = f'core_{self.block_info.block_id}_index_{index}_loop_{loop}.bin'
-            dump_file_path = os.path.join(index_output_dir, dump_file_name)
-            self._write_dump_tensor_data(dump_tensor, dump_file_path)
-
-            parsed_dump_file_name = f'core_{self.block_info.block_id}_index_{index}_loop_{loop}.txt'
-            parsed_dump_file_path = os.path.join(
-                index_output_dir, parsed_dump_file_name)
-            self._write_dump_tensor_value(dump_tensor, parsed_dump_file_path)
 
     @staticmethod
     def _write_dump_tensor_data(dump_tensor, dump_data_path):
@@ -523,18 +643,30 @@ class DumpCoreContent:
             total_ele_num = 1
             for ele in dump_tensor.dump_shape:
                 total_ele_num = total_ele_num * ele
-        if total_ele_num != 0 and \
-                total_ele_num == len(dump_tensor.dump_value):
-            shape = dump_tensor.dump_shape
+        if total_ele_num != 0:
+            value_len = len(dump_tensor.dump_value)
+            if total_ele_num > value_len:
+                DUMP_PARSER_LOG.warning(
+                    f'tensor shape {dump_tensor.dump_shape} needs {total_ele_num} elements but only '
+                    f'{value_len} dumped, missing values will be shown as "-"')
+            elif total_ele_num < value_len:
+                DUMP_PARSER_LOG.warning(
+                    f'tensor shape {dump_tensor.dump_shape} needs {total_ele_num} elements but '
+                    f'{value_len} dumped, extra dumped values will be ignored')
+
+            shape = dump_tensor.dump_shape.copy()
             write_content = "[" * len(shape)
-            for i in range(len(shape)-2, -1, -1):
+            for i in range(len(shape) - 2, -1, -1):
                 shape[i] *= shape[i + 1]
             for i in range(total_ele_num):
                 cnt = 0
                 for s in shape:
                     if (i + 1) % s == 0:
                         cnt += 1
-                write_content += str(dump_tensor.dump_value[i])
+                if i < value_len:
+                    write_content += str(dump_tensor.dump_value[i])
+                else:
+                    write_content += "-"
                 if cnt:
                     write_content += "]" * cnt
                     if i != total_ele_num - 1:
@@ -542,10 +674,6 @@ class DumpCoreContent:
                         write_content += "[" * cnt
                 elif i != total_ele_num - 1:
                     write_content += ","
-        if total_ele_num != 0 and \
-                total_ele_num != len(dump_tensor.dump_value):
-            DUMP_PARSER_LOG.warning(f'tensor shape {dump_tensor.dump_shape}'
-                'does not match with total length of {len(dump_tensor.dump_value)} will print data in default format.')
         if not write_content:
             line_count = 0
             for value in dump_tensor.dump_value:
@@ -556,6 +684,118 @@ class DumpCoreContent:
                     line_count = 0
         with open(dump_value_path, 'w+') as f:
             f.write(write_content)
+
+    @classmethod
+    def _flow_name(self):
+        return 'legacy'
+
+    @classmethod
+    def _create_dump_tensor(self):
+        return DumpTensor()
+
+    @classmethod
+    def _create_print_struct(self, _tlv_tag=None):
+        return PrintStruct()
+
+    @classmethod
+    def _create_time_stamp_info(self):
+        return TimeStampInfo()
+
+    def add_tlv_data(self, tlv):
+        if tlv.tag == DumpType.TENSOR_TYPE.value:
+            dump_tensor = self._create_dump_tensor()
+            dump_tensor.parse_from(tlv)
+            index = dump_tensor.dump_header.desc
+            data_type = dump_tensor.dump_header.data_type
+            if self.shape:
+                dump_tensor.dump_shape = self.shape.copy()
+            self.shape.clear()
+            self.index_dtype_dt[index] = dtype_to_data_type.get(data_type, '')
+            self._add_dump_tensor(dump_tensor)
+        elif tlv.tag in (
+            DumpType.SCALAR_TYPE.value,
+            DumpType.ASSERT_TYPE.value,
+            DumpType.SIMT_PRINTF_TYPE.value,
+            DumpType.SIMT_ASSERT_TYPE.value
+        ):
+            print_struct = self._create_print_struct(tlv.tag)
+            print_struct.parse_from(tlv)
+            self.print_list.append(print_struct.content)
+            if isinstance(print_struct, FifoSimtPrintStruct):
+                thread_id = '_'.join([str(x) for x in print_struct.thread_idx])
+                if thread_id not in self.simt_print_map:
+                    self.simt_print_map[thread_id] = []
+                self.simt_print_map[thread_id].append(print_struct.content)
+        elif tlv.tag == DumpType.SHAPE_TYPE.value:
+            shape_info = ShapeInfo()
+            shape_info.parse_from(tlv)
+            self.shape = shape_info.shape
+        elif tlv.tag == DumpType.TIME_STAMP.value:
+            time_stamp_info = self._create_time_stamp_info()
+            time_stamp_info.parse_from(tlv)
+            self.time_stamp_list.append(time_stamp_info)
+        elif tlv.tag == DumpType.META_TYPE.value:
+            meta_info = MetaInfo()
+            meta_info.parse_from(tlv)
+            self.print_list.append(meta_info.content)
+        else:
+            DUMP_PARSER_LOG.error(f'Invalid dump Type: {tlv.tag}')
+
+    def get_core_id(self):
+        if self.block_info is None:
+            return 'unknown'
+        if hasattr(self.block_info, 'core_id'):
+            return str(self.block_info.core_id)
+        return str(self.block_info.block_id)
+
+    def write_dump_tensor_data(self, dump_tensor, dump_data_path):
+        self._write_dump_tensor_data(dump_tensor, dump_data_path)
+
+    def write_dump_tensor_value(self, dump_tensor, dump_value_path):
+        self._write_dump_tensor_value(dump_tensor, dump_value_path)
+
+    def write_time_stamp(self, core_output_dir):
+        self._write_time_stamp(core_output_dir)
+
+    def write_to_dir(self, output_dir):
+        core_id = self.get_core_id()
+        core_output_dir = os.path.join(output_dir, str(core_id))
+        os.makedirs(core_output_dir, exist_ok=True)
+        DUMP_PARSER_LOG.info(f'write core {core_id} dump data to dir: {core_output_dir}')
+        if self.dump_tensor_map:
+            self._write_dump_tensor_by_index(core_output_dir)
+        if self.time_stamp_list:
+            self._write_time_stamp(core_output_dir)
+
+    def show_print(self):
+        if len(self.print_list) > 0:
+            core_id = self.get_core_id()
+            print(f"================ block.{core_id} begin ==============")
+            print(''.join(self.print_list), end='', flush=True)
+            print(f"================ block.{core_id} end ================")
+            DUMP_PARSER_LOG.info(f"================ block.{core_id} begin ==============")
+            DUMP_PARSER_LOG.info(''.join(self.print_list))
+            DUMP_PARSER_LOG.info(f"================ block.{core_id} end ================")
+
+    def _add_dump_tensor(self, dump_tensor):
+        index = dump_tensor.dump_header.desc
+        if index not in self.dump_tensor_map:
+            self.dump_tensor_map[index] = []
+        DUMP_PARSER_LOG.debug(f'Tensor[{index}][{len(self.dump_tensor_map[index])}] = {dump_tensor}')
+        self.dump_tensor_map[index].append(dump_tensor)
+
+    def _write_dump_tensor_by_loop(self, index, index_output_dir):
+        loop_cnt = len(self.dump_tensor_map[index])
+        core_id = self.get_core_id()
+        for loop in range(0, loop_cnt):
+            dump_tensor = self.dump_tensor_map[index][loop]
+            dump_file_name = f'core_{core_id}_index_{index}_loop_{loop}.bin'
+            dump_file_path = os.path.join(index_output_dir, dump_file_name)
+            self._write_dump_tensor_data(dump_tensor, dump_file_path)
+
+            parsed_dump_file_name = f'core_{core_id}_index_{index}_loop_{loop}.txt'
+            parsed_dump_file_path = os.path.join(index_output_dir, parsed_dump_file_name)
+            self._write_dump_tensor_value(dump_tensor, parsed_dump_file_path)
 
     def _write_dump_tensor_by_index(self, core_output_dir):
         for index in self.dump_tensor_map.keys():
@@ -568,7 +808,8 @@ class DumpCoreContent:
         import csv
         os.makedirs(core_output_dir, exist_ok=True)
         DUMP_PARSER_LOG.info(f'write time_stamp data to dir: {core_output_dir}')
-        dump_file_name = f'time_stamp_core_{self.block_info.block_id}.csv'
+        core_id = self.get_core_id()
+        dump_file_name = f'time_stamp_core_{core_id}.csv'
         parsed_dump_file_path = os.path.join(core_output_dir, dump_file_name)
         with open(parsed_dump_file_path, 'w', encoding='utf-8-sig', newline="") as f:
             csv_write = csv.writer(f)
@@ -581,24 +822,22 @@ class DumpCoreContent:
                                     )
                 last_cycle = int(time_stamp.sys_cycle)
 
-    def write_to_dir(self, output_dir):
-        core_output_dir = os.path.join(
-            output_dir, str(self.block_info.block_id))
-        os.makedirs(core_output_dir, exist_ok=True)
-        DUMP_PARSER_LOG.info(f'write core {self.block_info.block_id} dump data to dir: {core_output_dir}')
-        if self.dump_tensor_map:
-            self._write_dump_tensor_by_index(core_output_dir)
-        if self.time_stamp_list:
-            self._write_time_stamp(core_output_dir)
 
-    def show_print(self):
-        if len(self.print_list) > 0:
-            print(f"================ block.{self.block_info.block_id} begin ==============")
-            print(''.join(self.print_list), end='', flush=True)
-            print(f"================ block.{self.block_info.block_id} end ================")
-            DUMP_PARSER_LOG.info(f"================ block.{self.block_info.block_id} begin ==============")
-            DUMP_PARSER_LOG.info(''.join(self.print_list))
-            DUMP_PARSER_LOG.info(f"================ block.{self.block_info.block_id} end ================")
+@dataclass
+class FifoDumpCoreContent(DumpCoreContent):
+    def _flow_name(self):
+        return 'fifo'
+
+    def _create_dump_tensor(self):
+        return FifoDumpTensor()
+
+    def _create_print_struct(self, tlv_tag=None):
+        if tlv_tag in (DumpType.SIMT_PRINTF_TYPE.value, DumpType.SIMT_ASSERT_TYPE.value):
+            return FifoSimtPrintStruct()
+        return FifoPrintStruct()
+
+    def _create_time_stamp_info(self):
+        return FifoTimeStampInfo()
 
 
 class DumpType(Enum):
@@ -609,6 +848,8 @@ class DumpType(Enum):
     ASSERT_TYPE = 4
     META_TYPE = 5
     TIME_STAMP = 6
+    SIMT_PRINTF_TYPE = 0xF0E00F0E
+    SIMT_ASSERT_TYPE = 0xF0F00F0F
 
 
 class DumpBinFile:
@@ -701,11 +942,7 @@ class DumpBinFile:
             return ''
 
         parse_output_dir = os.path.join(output_dir, 'dump_data')
-        if os.path.isdir(parse_output_dir):
-            import shutil
-            shutil.rmtree(parse_output_dir)
         DUMP_PARSER_LOG.info(f'write dump workspace result: {parse_output_dir}')
-        print(f'write dump workspace result: {parse_output_dir}')
         os.makedirs(parse_output_dir, exist_ok=True)
         for core_content in self.dump_core_contents:
             core_content.write_to_dir(parse_output_dir)
@@ -732,16 +969,185 @@ def get_install_path() -> str:
     return ascend_home
 
 
-def parse_dump_bin(bin_file_path, output_path):
-    dump_bin = os.path.abspath(bin_file_path)
-    output_dir = os.path.abspath(output_path)
+class FifoDumpBinFile:
+    def __init__(self, dump_bin, core_type, core_id):
+        self.dump_bin = dump_bin
+        self.core_type = core_type
+        self.core_id = core_id
+        self.dump_core_contents = []
+        self.index_dtype_dt = {}
+
+    @staticmethod
+    def _iter_core_tensors(core_content):
+        for index, tensors in core_content.dump_tensor_map.items():
+            for loop, dump_tensor in enumerate(tensors):
+                yield index, loop, dump_tensor
+
+    def parse(self):
+        file_size = os.path.getsize(self.dump_bin)
+        core_content = FifoDumpCoreContent()
+
+        with open(self.dump_bin, 'rb') as bin_file:
+            block_info_size = FifoBlockInfo.get_size()
+            block_info_buffer = bin_file.read(block_info_size)
+            if len(block_info_buffer) < block_info_size:
+                raise RuntimeError('FifoDumpBinFile: incomplete BlockInfo header')
+            block_info = FifoBlockInfo()
+            block_info.unpack(block_info_buffer)
+            if not block_info.is_valid():
+                raise RuntimeError('FifoDumpBinFile: invalid BlockInfo magic')
+            core_content.block_info = block_info
+            while True:
+                tl_head = bin_file.read(TLV.get_tl_size())
+                if not tl_head:
+                    break
+                if len(tl_head) < TLV.get_tl_size():
+                    raise RuntimeError('FifoDumpBinFile: incomplete TLV header')
+                tlv = TLV()
+                tlv.tag, tlv.length = struct.unpack(tlv.get_tl_format(), tl_head)
+                if tlv.length > file_size:
+                    raise RuntimeError(f'FifoDumpBinFile: TLV length overflow, length={tlv.length}')
+                remain_size = file_size - bin_file.tell()
+                if tlv.length > remain_size:
+                    raise RuntimeError(
+                        f'FifoDumpBinFile: TLV length overflow, length={tlv.length}, remain={remain_size}'
+                    )
+                tlv.value = bin_file.read(tlv.length)
+                if len(tlv.value) < tlv.length:
+                    raise RuntimeError('FifoDumpBinFile: incomplete TLV value')
+
+                if tlv.tag in (
+                    DumpType.TENSOR_TYPE.value,
+                    DumpType.SCALAR_TYPE.value,
+                    DumpType.ASSERT_TYPE.value,
+                    DumpType.SIMT_PRINTF_TYPE.value,
+                    DumpType.SIMT_ASSERT_TYPE.value,
+                    DumpType.TIME_STAMP.value,
+                    DumpType.SHAPE_TYPE.value
+                ):
+                    core_content.add_tlv_data(tlv)
+                    self.index_dtype_dt.update(core_content.index_dtype_dt)
+        self.dump_core_contents.append(core_content)
+
+    def write_result(self, output_dir):
+        if len(self.dump_core_contents) == 0:
+            DUMP_PARSER_LOG.debug('no dump data, exit...')
+            return ''
+
+        parse_output_dir = os.path.join(output_dir, 'dump_data')
+        DUMP_PARSER_LOG.info(f'write dump workspace result: {parse_output_dir}')
+        os.makedirs(parse_output_dir, exist_ok=True)
+        for core_content in self.dump_core_contents:
+            core_output_dir = os.path.join(parse_output_dir, str(core_content.get_core_id()))
+            os.makedirs(core_output_dir, exist_ok=True)
+            for index, loop, dump_tensor in self._iter_core_tensors(core_content):
+                name_prefix = f'asc_kernel_data_{self.core_type}_{self.core_id}_index_{index}_loop_{loop}'
+                dump_file_path = os.path.join(core_output_dir, f'{name_prefix}.bin')
+                core_content.write_dump_tensor_data(dump_tensor, dump_file_path)
+
+                parsed_dump_file_path = os.path.join(core_output_dir, f'{name_prefix}.txt')
+                core_content.write_dump_tensor_value(dump_tensor, parsed_dump_file_path)
+            if self.core_type == 'simt' and core_content.simt_print_map:
+                self._write_simt_print_by_thread(core_content, core_output_dir)
+            if core_content.time_stamp_list:
+                core_content.write_time_stamp(core_output_dir)
+        return parse_output_dir
+
+    def write_index_dtype(self, output_dir):
+        if len(self.index_dtype_dt) == 0:
+            DUMP_PARSER_LOG.debug('no dump index, exit...')
+            return
+        json_path = os.path.join(output_dir, 'dump_data', 'index_dtype.json')
+        with os.fdopen(os.open(json_path, FILE_FLAG, FILE_MODE_640), 'w') as f:
+            json.dump(self.index_dtype_dt, f, indent=4)
+
+    def show_print(self):
+        for core_content in self.dump_core_contents:
+            core_content.show_print()
+
+    def _write_simt_print_by_thread(self, core_content, parse_output_dir):
+        for thread_id, print_list in core_content.simt_print_map.items():
+            name_prefix = f'asc_kernel_data_{self.core_type}_{self.core_id}_thread_{thread_id}'
+            parsed_dump_file_path = os.path.join(parse_output_dir, f'{name_prefix}.txt')
+            with open(parsed_dump_file_path, 'w+') as f:
+                f.write(''.join(print_list))
+
+
+def _make_parser_output_dir(output_path):
     from datetime import datetime, timezone
+    output_dir = os.path.abspath(output_path)
     cur_time_str = datetime.now(tz=timezone.utc).strftime('%Y%m%d%H%M%S%f')
     output_dir = os.path.join(output_dir, f"PARSER_{cur_time_str}")
-    DUMP_PARSER_LOG.set_log_file(os.path.join(output_dir, "parser.log"))
-    DUMP_PARSER_LOG.set_log_level(os.environ.get('ASCEND_GLOBAL_LOG_LEVEL', '3'))
+    os.makedirs(output_dir, exist_ok=True)
+    return output_dir
+
+
+def _core_type_from_fifo_flag(flag):
+    flag_to_core_type = {
+        0: 'aic',
+        1: 'aiv',
+        2: 'simt'
+    }
+    return flag_to_core_type.get(flag, 'fifo')
+
+
+def _read_block_magic_core_id_and_flag(dump_bin):
+    raw_magic = None
+    fifo_core_id = None
+    fifo_flag = None
+    with open(dump_bin, 'rb') as bin_file:
+        header = bin_file.read(FifoBlockInfo.get_size())
+        if len(header) >= 20:
+            raw_magic = struct.unpack('I', header[16:20])[0]
+            unpacked = struct.unpack(FifoBlockInfo.get_format(), header)
+            fifo_core_id = unpacked[1]
+            fifo_flag = unpacked[5]
+    return raw_magic, fifo_core_id, fifo_flag
+
+
+def _collect_bin_files(input_path):
+    input_path = os.path.abspath(input_path)
+    if os.path.isfile(input_path):
+        return [input_path]
+    if os.path.isdir(input_path):
+        search_re = os.path.join(input_path, '**', '*.bin')
+        return sorted([bin_file for bin_file in glob.glob(search_re, recursive=True) if os.path.isfile(bin_file)])
+    return []
+
+
+def parse_dump_bin(bin_file_path, output_path, parse_output_dir=None, init_logger=True):
+    dump_bin = os.path.abspath(bin_file_path)
+    output_dir = parse_output_dir if parse_output_dir else _make_parser_output_dir(output_path)
+    output_dir = os.path.abspath(output_dir)
+    os.makedirs(output_dir, exist_ok=True)
+    if init_logger:
+        DUMP_PARSER_LOG.set_log_file(os.path.join(output_dir, "parser.log"))
+        DUMP_PARSER_LOG.set_log_level(os.environ.get('ASCEND_GLOBAL_LOG_LEVEL', '3'))
     try:
-        dump_file = DumpBinFile(dump_bin)
+        name_no_ext, ext = os.path.splitext(os.path.basename(dump_bin))
+        parts = name_no_ext.split('_')
+        is_asc_kernel_data = (
+            ext == '.bin'
+            and len(parts) == 5
+            and parts[0] == 'asc'
+            and parts[1] == 'kernel'
+            and parts[2] == 'data'
+        )
+        raw_magic, fifo_core_id, fifo_flag = _read_block_magic_core_id_and_flag(dump_bin)
+
+        if raw_magic is not None and (raw_magic & 0xFFFF) == 0xAE86:
+            if is_asc_kernel_data:
+                core_type = parts[3]
+                core_id = parts[4]
+            else:
+                core_type = _core_type_from_fifo_flag(fifo_flag)
+                core_id = str(fifo_core_id) if fifo_core_id is not None else 'unknown'
+            dump_file = FifoDumpBinFile(dump_bin, core_type, core_id)
+        elif raw_magic is None or raw_magic == 0x5aa5bccd:
+            dump_file = DumpBinFile(dump_bin)
+        else:
+            raise RuntimeError(f'unknown block magic: 0x{raw_magic:08X}')
+
         dump_file.parse()
         dump_file.write_result(output_dir)
         dump_file.write_index_dtype(output_dir)
@@ -758,7 +1164,7 @@ def execute_parse():
     bin_file_path = ''
     output_path = os.getcwd()
     help_info = "show_kernel_debug_data is a tool that parses dump binary data from AscendC debug API.\n"\
-            "It takes two inputs:\n   First mandatory param is binary file\n"\
+            "It takes two inputs:\n   First mandatory param is binary file or directory\n"\
             "   Second optional param is output path that stores result file," \
             " by default saving path is current directory.\n"\
             "   ex: show_kernel_debug_data ./dump.bin ./output_dir"
@@ -772,9 +1178,32 @@ def execute_parse():
     else:
         print(help_info)
         raise RuntimeError("parameters invalid, please check tool introduction.")
-    if not bin_file_path or not os.path.isfile(bin_file_path) or not os.path.exists(bin_file_path):
+    if not bin_file_path or not os.path.exists(bin_file_path):
         raise RuntimeError(f'({bin_file_path}) file does not exist or permission denied!!!')
 
-    if not output_path or not os.path.isdir(output_path) or not os.path.exists(output_path):
+    if not output_path:
         raise RuntimeError(f'({output_path}) directory does not exist or permission denied!!!')
-    parse_dump_bin(bin_file_path, output_path)
+    if os.path.exists(output_path):
+        if not os.path.isdir(output_path):
+            raise RuntimeError(f'({output_path}) is not a directory!!!')
+    else:
+        try:
+            os.makedirs(output_path, exist_ok=True)
+        except OSError as err:
+            raise RuntimeError(f'({output_path}) directory does not exist or permission denied!!!') from err
+
+    if not os.path.isfile(bin_file_path) and not os.path.isdir(bin_file_path):
+        raise RuntimeError(f'({bin_file_path}) is neither a file nor a directory!!!')
+
+    dump_bins = _collect_bin_files(bin_file_path)
+    if not dump_bins:
+        raise RuntimeError(f'({bin_file_path}) does not contain any .bin file!!!')
+
+    if os.path.isdir(bin_file_path):
+        parser_output_dir = _make_parser_output_dir(output_path)
+        DUMP_PARSER_LOG.set_log_file(os.path.join(parser_output_dir, "parser.log"))
+        DUMP_PARSER_LOG.set_log_level(os.environ.get('ASCEND_GLOBAL_LOG_LEVEL', '3'))
+        for dump_bin in dump_bins:
+            parse_dump_bin(dump_bin, output_path, parse_output_dir=parser_output_dir, init_logger=False)
+    else:
+        parse_dump_bin(dump_bins[0], output_path)
