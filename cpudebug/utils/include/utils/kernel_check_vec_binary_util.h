@@ -141,7 +141,7 @@ struct VecBinaryScalarApiParams {
         calCount = count;
     }
 
-#if defined(__NPU_ARCH__) && ((__NPU_ARCH__ == 3101) || (__NPU_ARCH__ == 5102))
+#if defined(__NPU_ARCH__) && ((__NPU_ARCH__ == 3510) || (__NPU_ARCH__ == 5102))
     VecBinaryScalarApiParams(uint64_t dstAddrIn, uint64_t src0AddrIn, uint8_t repeatIn, uint16_t dstBlockStrideIn,
         uint16_t src0BlockStrideIn, uint16_t dstRepeatStrideIn, uint16_t src0RepeatStrideIn, uint32_t dstDtypeBytesIn,
         uint32_t src0DtypeBytesIn, uint64_t dstSizeIn, uint64_t src0SizeIn, uint8_t dstPosIn, uint8_t src0PosIn, uint8_t scalarPosIn)
@@ -202,7 +202,7 @@ struct VecBinaryScalarApiParams {
     uint8_t src0LogicPos = 0;
     uint32_t calCount = 0;
 
-#if defined(__NPU_ARCH__) && ((__NPU_ARCH__ == 3101) || (__NPU_ARCH__ == 5102))
+#if defined(__NPU_ARCH__) && ((__NPU_ARCH__ == 3510) || (__NPU_ARCH__ == 5102))
     uint8_t scalarPos = 1;
     uint8_t enableFlexibleScalar = 0;
 #endif

@@ -45,7 +45,7 @@ bool TikcppVecCompareScalarCheck::CheckAllHighLevel()
         param_.dstSize,
         static_cast<uint32_t>(std::ceil(param_.calCount / static_cast<float>(TypeBitLen::K_B8_BITS))),
         "dstLocal"));
-#if defined (__NPU_ARCH__) && ((__NPU_ARCH__ == 3101) || (__NPU_ARCH__ == 5102))
+#if defined (__NPU_ARCH__) && ((__NPU_ARCH__ == 3510) || (__NPU_ARCH__ == 5102))
     if (param_.enableFlexibleScalar != 0) {
         if (param_.scalarPos == 1) {
             ASCENDC_CHECK(CheckTensorOverflowHigh(param_.src0DtypeBytes, param_.src0Size, param_.calCount, "src0"));

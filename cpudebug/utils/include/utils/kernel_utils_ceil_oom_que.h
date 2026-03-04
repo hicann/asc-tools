@@ -17,7 +17,7 @@
 
 #define USE_ISA_INS 1
 #define GM_ADDR __gm__ uint8_t*
-#if defined(__NPU_ARCH__) && ((__NPU_ARCH__ == 3101) || (__NPU_ARCH__ == 5102))
+#if defined(__NPU_ARCH__) && ((__NPU_ARCH__ == 3510) || (__NPU_ARCH__ == 5102))
 #define UB_ADDR __ubuf__ uint8_t*
 #define SSBUF_ADDR __ssbuf__ uint32_t*
 #endif
@@ -44,7 +44,7 @@
 
 #if defined(__NPU_ARCH__) && ((__NPU_ARCH__ == 5102) ||                             \
 	(__NPU_ARCH__ == 2103) || (__NPU_ARCH__ == 3003) || (__NPU_ARCH__ == 3103) ||   \
-	(__NPU_ARCH__ == 3113) || (__NPU_ARCH__ == 3101))
+	(__NPU_ARCH__ == 3113) || (__NPU_ARCH__ == 3510))
 
 #if !defined(ASCENDC_CPU_DEBUG)
 using fp4x2_e2m1_t = float4_e2m1x2_t;

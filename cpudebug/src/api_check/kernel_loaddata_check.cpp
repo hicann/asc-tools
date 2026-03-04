@@ -65,7 +65,7 @@ bool TikcppLoaddata2dCheck::CheckAllHighLevel()
 
 bool TikcppLoaddata2dv2Check::CheckAllHighLevel() const
 {
-#if defined (__NPU_ARCH__) && (__NPU_ARCH__ == 3102 || (__NPU_ARCH__ == 3101) || (__NPU_ARCH__ == 5102))
+#if defined (__NPU_ARCH__) && (__NPU_ARCH__ == 3102 || (__NPU_ARCH__ == 3510) || (__NPU_ARCH__ == 5102))
     if ((param_.srcPos == static_cast<uint8_t>(HardWareIndex::L1)) &&
         ((param_.dstPos != static_cast<uint8_t>(HardWareIndex::L0A)) &&
         (param_.dstPos != static_cast<uint8_t>(HardWareIndex::L0B)))) {
@@ -108,7 +108,7 @@ bool TikcppLoaddata2dv2Check::CheckAllHighLevel() const
 bool TikcppLoaddata3dv1Check::CheckAllHighLevel() const
 {
 #if defined (__NPU_ARCH__) && ((__NPU_ARCH__ == 2201) || (__NPU_ARCH__ == 3002) ||                       \
-     (__NPU_ARCH__ == 3102) || (__NPU_ARCH__ == 3101) || (__NPU_ARCH__ == 5102))
+     (__NPU_ARCH__ == 3102) || (__NPU_ARCH__ == 3510) || (__NPU_ARCH__ == 5102))
     CHECK_LOG_ERROR("unsupport Loaddata3dv1");
     return false;
 #else
@@ -147,7 +147,7 @@ bool TikcppLoaddata3dv1Check::CheckAllHighLevel() const
 bool TikcppLoaddata3dv2Check::CheckAllHighLevel()
 {
 #if defined (__NPU_ARCH__) && ((__NPU_ARCH__ == 2201) || (__NPU_ARCH__ == 3002) ||                       \
-     (__NPU_ARCH__ == 3102) || (__NPU_ARCH__ == 3101) || (__NPU_ARCH__ == 5102))
+     (__NPU_ARCH__ == 3102) || (__NPU_ARCH__ == 3510) || (__NPU_ARCH__ == 5102))
     if ((param_.srcPos == static_cast<uint8_t>(HardWareIndex::L1)) &&
         ((param_.dstPos != static_cast<uint8_t>(HardWareIndex::L0A)) &&
         (param_.dstPos != static_cast<uint8_t>(HardWareIndex::L0B)))) {
@@ -157,7 +157,7 @@ bool TikcppLoaddata3dv2Check::CheckAllHighLevel()
     }
 #elif defined (__NPU_ARCH__) && ((__NPU_ARCH__ == 2002) || (__NPU_ARCH__ == 2201) ||                     \
        (__NPU_ARCH__ == 3002) || (__NPU_ARCH__ == 3102) ||                     \
-       (__NPU_ARCH__ == 3101) || (__NPU_ARCH__ == 5102))
+       (__NPU_ARCH__ == 3510) || (__NPU_ARCH__ == 5102))
     if ((param_.srcPos == static_cast<uint8_t>(HardWareIndex::L1)) &&
         ((param_.dstPos != static_cast<uint8_t>(HardWareIndex::L0A)) &&
         (param_.dstPos != static_cast<uint8_t>(HardWareIndex::L0B)) &&
@@ -182,7 +182,7 @@ bool TikcppLoaddata3dv2Check::CheckAllHighLevel()
 bool TikcppLoaddata3dv2ProCheck::CheckAllHighLevel()
 {
 #if defined (__NPU_ARCH__) && ((__NPU_ARCH__ == 2201) || (__NPU_ARCH__ == 3002) ||                       \
-     (__NPU_ARCH__ == 3102) || (__NPU_ARCH__ == 3101) || (__NPU_ARCH__ == 5102))
+     (__NPU_ARCH__ == 3102) || (__NPU_ARCH__ == 3510) || (__NPU_ARCH__ == 5102))
     if ((param_.srcPos == static_cast<uint8_t>(HardWareIndex::L1)) &&
         ((param_.dstPos != static_cast<uint8_t>(HardWareIndex::L0A)) &&
         (param_.dstPos != static_cast<uint8_t>(HardWareIndex::L0B)))) {
@@ -192,7 +192,7 @@ bool TikcppLoaddata3dv2ProCheck::CheckAllHighLevel()
     }
 #elif defined (__NPU_ARCH__) && ((__NPU_ARCH__ == 2002) || (__NPU_ARCH__ == 2201) ||                     \
        (__NPU_ARCH__ == 3002) || (__NPU_ARCH__ == 3102) ||                     \
-       (__NPU_ARCH__ == 3101))
+       (__NPU_ARCH__ == 3510))
     if ((param_.srcPos == static_cast<uint8_t>(HardWareIndex::L1)) &&
         ((param_.dstPos != static_cast<uint8_t>(HardWareIndex::L0A)) &&
         (param_.dstPos != static_cast<uint8_t>(HardWareIndex::L0B)) &&
@@ -216,7 +216,7 @@ bool TikcppLoaddata3dv2ProCheck::CheckAllHighLevel()
 
 bool TikcppLoadImageToLocalCheck::CheckAllHighLevel()
 {
-#if defined(__NPU_ARCH__) && ((__NPU_ARCH__ != 3101) || (__NPU_ARCH__ == 5102))
+#if defined(__NPU_ARCH__) && ((__NPU_ARCH__ != 3510) || (__NPU_ARCH__ == 5102))
     ASCENDC_CHECK(CheckTensorScope(param_.dstLogicPos, static_cast<uint8_t>(HardWareIndex::L1), "dstLocal", "A1 / B1"));
 #endif
     ASCENDC_CHECK(CheckTensorAddrAlign(param_.dstAddr, param_.dstPos, ONE_BLK_SIZE, "dst"));

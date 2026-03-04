@@ -73,7 +73,7 @@ bool TikcppVecSortCheck::CheckAllHighLevel()
     ASCENDC_CHECK(CheckTensorAddrAlign(param_.tmpAddr, param_.tmpPos, ONE_BLK_SIZE, "tmpLocal"));
 
 #if defined (__NPU_ARCH__) && ((__NPU_ARCH__ == 2201) || (__NPU_ARCH__ == 3002) ||                       \
-     (__NPU_ARCH__ == 3102) || (__NPU_ARCH__ == 3101) || (__NPU_ARCH__ == 5102))
+     (__NPU_ARCH__ == 3102) || (__NPU_ARCH__ == 3510) || (__NPU_ARCH__ == 5102))
     ASCENDC_CHECK(Sort32Check());
 #elif defined (__NPU_ARCH__) && ((__NPU_ARCH__ == 1001) || (__NPU_ARCH__ == 2002))
     ASCENDC_CHECK(RpSort16Check());

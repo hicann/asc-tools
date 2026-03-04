@@ -205,7 +205,7 @@ extern const int AIV_TYPE;
 extern const int PAGE_SIZE;
 extern const uint64_t ONE_GIGABYTE;
 extern bool g_isVdeq;
-#if defined (__NPU_ARCH__) && ((__NPU_ARCH__ == 3101) || (__NPU_ARCH__ == 5102))
+#if defined (__NPU_ARCH__) && ((__NPU_ARCH__ == 3510) || (__NPU_ARCH__ == 5102))
 constexpr int32_t FLAG_NUM = 32;
 #else
 constexpr int32_t FLAG_NUM = 16;
@@ -250,7 +250,7 @@ inline void InitSocVersion()
 }
 
 inline constexpr int32_t GetMaxCoreNum() {
-#if defined(__NPU_ARCH__) && (__NPU_ARCH__ == 3101)
+#if defined(__NPU_ARCH__) && (__NPU_ARCH__ == 3510)
     return MAX_CORE_NUM_V310;
 #else
     return MAX_CORE_NUM_V220;

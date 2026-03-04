@@ -264,7 +264,7 @@ bool CheckTensorOverflowLowNorm(std::vector<uint64_t>& maskArray, const TensorOv
 
 // in counter mode, check whether the data calculated in cmd exceed the tensor size for GatherMask
 #if defined (__NPU_ARCH__) && ((__NPU_ARCH__ == 2201) || (__NPU_ARCH__ == 3002) ||                       \
-     (__NPU_ARCH__ == 3102) || (__NPU_ARCH__ == 3101) || (__NPU_ARCH__ == 5102))
+     (__NPU_ARCH__ == 3102) || (__NPU_ARCH__ == 3510) || (__NPU_ARCH__ == 5102))
 bool CheckTensorOverflowLowCounterGatherMask(std::vector<uint64_t>& maskArray, const TensorOverflowParams& params,
     const std::string& tensorName)
 {
@@ -299,7 +299,7 @@ bool TikcppBaseCheck::CheckTensorOverflowLowGathermask(std::vector<uint64_t>& ma
 {
     if (params.isCounter) { // counter mode
 #if defined (__NPU_ARCH__) && ((__NPU_ARCH__ == 2201) || (__NPU_ARCH__ == 3002) ||                       \
-     (__NPU_ARCH__ == 3102) || (__NPU_ARCH__ == 3101) || (__NPU_ARCH__ == 5102))
+     (__NPU_ARCH__ == 3102) || (__NPU_ARCH__ == 3510) || (__NPU_ARCH__ == 5102))
         return CheckTensorOverflowLowCounterGatherMask(maskArray, params, tensorName);
 #else
         return CheckTensorOverflowLowCounter(maskArray, params, tensorName, apiName);

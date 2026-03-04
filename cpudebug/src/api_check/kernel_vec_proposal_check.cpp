@@ -185,7 +185,7 @@ bool TikcppVecProposalCheck::ConcatCheck() const
     uint32_t base = param_.repeatTimes * ONE_REPEAT_CAL_NUM;
     ASCENDC_CHECK(CheckTensorOverflowHigh(param_.src0DtypeBytes, param_.src0Size, base, "srcLocal"));
 #if defined (__NPU_ARCH__) && ((__NPU_ARCH__ == 2201) || (__NPU_ARCH__ == 3002) ||                       \
-     (__NPU_ARCH__ == 3102) || (__NPU_ARCH__ == 3101) || (__NPU_ARCH__ == 5102))
+     (__NPU_ARCH__ == 3102) || (__NPU_ARCH__ == 3510) || (__NPU_ARCH__ == 5102))
     // tmpLocal is not used
     ASCENDC_CHECK(CheckTensorOverflowHigh(param_.dstDtypeBytes, param_.dstSize, base, "concatLocal"));
 #elif defined (__NPU_ARCH__) && ((__NPU_ARCH__ == 1001) || (__NPU_ARCH__ == 2002))
@@ -199,7 +199,7 @@ bool TikcppVecProposalCheck::ExtractCheck() const
 {
     // In extract: dst -> dstValueLocal, src1 -> dstIndexLocal, src0 -> sortedLocal
 #if defined (__NPU_ARCH__) && ((__NPU_ARCH__ == 2201) || (__NPU_ARCH__ == 3002) ||                       \
-     (__NPU_ARCH__ == 3102) || (__NPU_ARCH__ == 3101) || (__NPU_ARCH__ == 5102))
+     (__NPU_ARCH__ == 3102) || (__NPU_ARCH__ == 3510) || (__NPU_ARCH__ == 5102))
     // 1 repeat:  32 groups of (score + index)   sortedLocal: 256B      dst: 32 elements
     uint64_t groupNumPerRep = 32;   // 1 sort result is 8 Bytes, thus 1 repeat = 32 groups
     uint64_t totalEleNum = groupNumPerRep * param_.repeatTimes;

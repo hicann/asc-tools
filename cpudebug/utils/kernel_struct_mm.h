@@ -638,7 +638,7 @@ struct LoadData2dTransposeParamsV311Gen {
 
 #endif // Kirin versions
 
-#if (__NPU_ARCH__ == 3101) || (__NPU_ARCH__ == 5102)
+#if (__NPU_ARCH__ == 3510) || (__NPU_ARCH__ == 5102)
 struct LoadData2DMxParams {
     __aicore__ LoadData2DMxParams() {}
 
@@ -662,7 +662,7 @@ struct LoadData2DMxParams {
 };
 #endif
 
-#if (__NPU_ARCH__ == 3101) || (__NPU_ARCH__ == 5102)
+#if (__NPU_ARCH__ == 3510) || (__NPU_ARCH__ == 5102)
 template <typename TYPE>
 struct LoadData3DParamsV1 {
     using T = typename GetPadValueType<TYPE>::Type;
@@ -728,7 +728,7 @@ struct LoadData3DParamsV1 {
     int16_t leftTopH = 0;
 };
 
-#if (__NPU_ARCH__ == 3101) || (__NPU_ARCH__ == 5102)
+#if (__NPU_ARCH__ == 3510) || (__NPU_ARCH__ == 5102)
 template <typename TYPE>
 struct LoadData3DParamsV2 {
     using T = typename GetPadValueType<TYPE>::Type;

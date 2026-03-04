@@ -53,7 +53,7 @@ constexpr uint32_t INT2_FOUR = 4;
 constexpr uint32_t INT2_BIT_NUM = 2;
 #endif
 
-#if defined(__NPU_ARCH__) && ((__NPU_ARCH__ == 3101) || (__NPU_ARCH__ == 5102))
+#if defined(__NPU_ARCH__) && ((__NPU_ARCH__ == 3510) || (__NPU_ARCH__ == 5102))
 namespace ConstantsInternal {
 constexpr uint32_t ASCENDC_B4_TWO = 2;
 constexpr uint32_t ASCENDC_B4_BIT_NUM = 4;
@@ -129,7 +129,7 @@ const uint32_t SINGLE_MSG_SIZE = 64;
 const uint32_t CACHE_LINE_SIZE = 64;
 const uint32_t TOTAL_L0C_SIZE = 128 * 1024;
 const uint32_t VECTOR_REG_WIDTH = 256;
-#elif (__NPU_ARCH__ == 3101)
+#elif (__NPU_ARCH__ == 3510)
 const int32_t TOTAL_VEC_LOCAL_SIZE = 248 * 1024;
 const uint32_t TOTAL_UB_SIZE = 248 * 1024;
 const uint32_t TMP_UB_OFFSET = 248 * 1024;
@@ -195,7 +195,7 @@ const int32_t SRC_GAP_SIZE_BYTE = 32;
 const int32_t DST_BURST_LEN_SIZE_ELE = 256;
 const int32_t VREDUCE_PER_REP_OUTPUT = 2;
 const uint16_t ONE_PARAM_SIZE = 8;
-#if defined(__NPU_ARCH__) && ((__NPU_ARCH__ == 3101) || (__NPU_ARCH__ == 5102))
+#if defined(__NPU_ARCH__) && ((__NPU_ARCH__ == 3510) || (__NPU_ARCH__ == 5102))
 const uint16_t AIV_CORE_NUM = 72;
 #else
 const uint16_t AIV_CORE_NUM = 50;
@@ -223,7 +223,7 @@ const int32_t B16_DATA_NUM_PER_REPEAT = 128;
 const int32_t B32_DATA_NUM_PER_REPEAT = 64;
 #endif
 
-#if defined(__NPU_ARCH__) && ((__NPU_ARCH__ == 3101) || (__NPU_ARCH__ == 5102))
+#if defined(__NPU_ARCH__) && ((__NPU_ARCH__ == 3510) || (__NPU_ARCH__ == 5102))
 const uint32_t B64_DATA_NUM_PER_REPEAT = 32;
 const uint32_t B4_BYTE_SIZE_PER_REPEAT = 64;
 const uint32_t L1_DUMP_UB_SIZE = TOTAL_UB_SIZE - 32 * 1024;
@@ -248,7 +248,7 @@ constexpr size_t RESERVED_WORKSPACE = 16 * 1024 * 1024;
 constexpr size_t RESERVED_WORKSPACE = 16 * 1024 * 1024;
 #elif (__NPU_ARCH__ == 3102)
 constexpr size_t RESERVED_WORKSPACE = 16 * 1024 * 1024;
-#elif defined(__NPU_ARCH__) && ((__NPU_ARCH__ == 3101) || (__NPU_ARCH__ == 5102))
+#elif defined(__NPU_ARCH__) && ((__NPU_ARCH__ == 3510) || (__NPU_ARCH__ == 5102))
 constexpr size_t RESERVED_WORKSPACE = 16 * 1024 * 1024;
 #elif defined(__NPU_ARCH__) && (__NPU_ARCH__ == 2103)
 constexpr size_t RESERVED_WORKSPACE = 16 * 1024 * 1024;
@@ -278,7 +278,7 @@ const uint32_t MAX_REPEAT_FLOAT_SIZE = ONE_REPEAT_FLOAT_SIZE * MAX_REPEAT_TIMES;
 const uint32_t MAX_REPEAT_HALF_SIZE = ONE_REPEAT_HALF_SIZE * MAX_REPEAT_TIMES;
 const uint32_t ONE_BLK_HALF_NUM = ONE_BLK_SIZE / B16_BYTE_SIZE;
 const uint32_t ONE_BLK_FLOAT_NUM = ONE_BLK_SIZE / B32_BYTE_SIZE;
-#if defined(__NPU_ARCH__) && ((__NPU_ARCH__ == 3101) || (__NPU_ARCH__ == 5102))
+#if defined(__NPU_ARCH__) && ((__NPU_ARCH__ == 3510) || (__NPU_ARCH__ == 5102))
 namespace ConstantsInternal {
 const uint32_t ONE_BLK_FP4_NUM = 64;
 const uint32_t ONE_BLK_B2_NUM = 128;
@@ -319,7 +319,7 @@ const uint64_t LOAD_FILTER_H = 24;
 const uint64_t LOAD_FILTER_W = 16;
 const uint64_t LOAD_STRIDE_H = 8;
 
-#if defined(__NPU_ARCH__) && ((__NPU_ARCH__ == 3101) || (__NPU_ARCH__ == 5102))
+#if defined(__NPU_ARCH__) && ((__NPU_ARCH__ == 3510) || (__NPU_ARCH__ == 5102))
 namespace Internal {
 constexpr int32_t TSCM_CROSS_SYNC_ID_MAX = 11;
 }
@@ -412,7 +412,7 @@ template <> inline std::string ScalarToString(half scalarValue)
     return std::to_string(scalarValue.ToFloat());
 }
 #if defined(__NPU_ARCH__) && ((__NPU_ARCH__ == 2201) || (__NPU_ARCH__ == 3002) ||                      \
-      (__NPU_ARCH__ == 3101) || (__NPU_ARCH__ == 5102))
+      (__NPU_ARCH__ == 3510) || (__NPU_ARCH__ == 5102))
 template <> inline std::string ScalarToString(bfloat16_t scalarValue)
 {
     return std::to_string(scalarValue.ToFloat());
@@ -439,7 +439,7 @@ void SetModelScatterDst0Tensor(uint64_t dst0, const uint32_t length);
 
 #endif // ASCENDC_CPU_DEBUG
 
-#if defined(__NPU_ARCH__) && ((__NPU_ARCH__ == 3101) || (__NPU_ARCH__ == 5102))
+#if defined(__NPU_ARCH__) && ((__NPU_ARCH__ == 3510) || (__NPU_ARCH__ == 5102))
 template <typename T> struct GetPadValueType {
     using Type = T;
 };
@@ -555,7 +555,7 @@ using int4b_t = IntegerSubType<INT4_BIT_NUM, true>;
 using int2b_t = IntegerSubType<INT2_BIT_NUM, true>;
 #endif
 
-#if defined(__NPU_ARCH__) && ((__NPU_ARCH__ == 3101) || (__NPU_ARCH__ == 5102))
+#if defined(__NPU_ARCH__) && ((__NPU_ARCH__ == 3510) || (__NPU_ARCH__ == 5102))
 using mx_fp8_e5m2_t = struct {};
 using mx_fp8_e4m3_t = struct {};
 using mx_fp8_e8m0_t = struct {};

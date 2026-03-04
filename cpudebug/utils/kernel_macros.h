@@ -97,7 +97,7 @@
 #if (defined(__NPU_ARCH__) &&                                               \
      ((__NPU_ARCH__ == 1001) || (__NPU_ARCH__ == 2002) ||                   \
       (__NPU_ARCH__ == 2201) || (__NPU_ARCH__ == 3002) ||                   \
-      (__NPU_ARCH__ == 3101) || (__NPU_ARCH__ == 5102)))
+      (__NPU_ARCH__ == 3510) || (__NPU_ARCH__ == 5102)))
 #ifndef ASCENDC_DUMP
 #define ASCENDC_DUMP 1
 #endif
@@ -109,7 +109,7 @@
 
 namespace AscendC {
 #if defined(__NPU_ARCH__) && ((__NPU_ARCH__ == 2002) || (__NPU_ARCH__ == 2201) ||           \
-    (__NPU_ARCH__ == 3002) || (__NPU_ARCH__ == 3102) || (__NPU_ARCH__ == 3101) ||           \
+    (__NPU_ARCH__ == 3002) || (__NPU_ARCH__ == 3102) || (__NPU_ARCH__ == 3510) ||           \
     (__NPU_ARCH__ == 5102)) // Available for V200 and V210
 constexpr int32_t QUE_MAX_EVENT = 8;
 #else

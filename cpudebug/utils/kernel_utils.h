@@ -25,9 +25,9 @@
 namespace AscendC {
 #if defined(__NPU_ARCH__) &&                                        \
     ((__NPU_ARCH__ == 2201) || (__NPU_ARCH__ == 3002) ||            \
-     (__NPU_ARCH__ == 3101) || (__NPU_ARCH__ == 5102))
+     (__NPU_ARCH__ == 3510) || (__NPU_ARCH__ == 5102))
 
-#if defined(__NPU_ARCH__) && ((__NPU_ARCH__ == 3101) || (__NPU_ARCH__ == 5102))
+#if defined(__NPU_ARCH__) && ((__NPU_ARCH__ == 3510) || (__NPU_ARCH__ == 5102))
 
 namespace FPTranslation {
 // HiFloat8 -> Fp32
