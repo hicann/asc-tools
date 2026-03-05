@@ -1,0 +1,6 @@
+{
+    "dump":{
+        "dump_kernel_data":"all",
+        "dump_path":"../output"
+    }
+}

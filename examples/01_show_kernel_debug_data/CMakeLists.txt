@@ -1,5 +1,3 @@
-#!/usr/bin/python3
-# coding=utf-8
 # ----------------------------------------------------------------------------------------------------------
 # Copyright (c) 2025 Huawei Technologies Co., Ltd.
 # This program is free software, you can redistribute it and/or modify it under the terms and conditions of
@@ -10,29 +8,16 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 # ----------------------------------------------------------------------------------------------------------
 
+cmake_minimum_required(VERSION 3.16)
 
-import torch
-import torch_npu
-from torch_npu.testing.testcase import TestCase, run_tests
+find_package(ASC REQUIRED)
 
-torch.npu.config.allow_internal_format = False
+project(add_frameworklaunch_xasc LANGUAGES ASC CXX)
 
+add_executable(add
+    add.asc
+)
 
-class TestCustomAdd(TestCase):
-
-    def test_add_custom(self):
-        length = [8, 2048]
-        x = torch.rand(length, device='cpu', dtype=torch.float16)
-        y = torch.rand(length, device='cpu', dtype=torch.float16)
-        print(x, '\n', y)
-
-        torch.npu.synchronize()
-        output = torch_npu.npu_add_custom(x.npu(), y.npu()).cpu()
-        torch.npu.synchronize()
-
-        print(output)
-        self.assertRtolEqual(output, x + y)
-
-
-if __name__ == "__main__":
-    run_tests()
+target_compile_options(add PRIVATE
+    $<$<COMPILE_LANGUAGE:ASC>:--npu-arch=dav-2201>
+)

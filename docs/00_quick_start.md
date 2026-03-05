@@ -108,19 +108,20 @@
 
    运行算子时必须安装驱动与固件，若仅编译算子，可跳过本操作，安装指导详见《[CANN 软件安装指南](https://www.hiascend.com/document/redirect/CannCommunityInstSoftware)》。
 
-## 环境准备
+## 环境准备<a name="prepare&install"></a>
 本项目支持由源码编译，进行源码编译前，请根据如下步骤完成相关环境准备。
 
 1. **安装社区尝鲜版CANN toolkit包**
 
-    根据实际环境，下载对应`Ascend-cann-toolkit_8.5.0-beta.1_linux-${arch}.run`包，下载链接为[toolkit x86_64包](https://ascend.devcloud.huaweicloud.com/cann/run/software/8.5.0-beta.1/x86_64/Ascend-cann-toolkit_8.5.0-beta.1_linux-x86_64.run)、[toolkit aarch64包](https://ascend.devcloud.huaweicloud.com/cann/run/software/8.5.0-beta.1/aarch64/Ascend-cann-toolkit_8.5.0-beta.1_linux-aarch64.run)。
+    根据实际环境，下载对应`Ascend-cann-toolkit_${cann_version}_linux-${arch}.run`包，下载链接为[toolkit x86_64包](https://mirror-centralrepo.devcloud.cn-north-4.huaweicloud.com/artifactory/cann-run-release/software/master/20260211182015/x86_64/Ascend-cann-toolkit_9.0.0_linux-x86_64.run)、[toolkit aarch64包](https://mirror-centralrepo.devcloud.cn-north-4.huaweicloud.com/artifactory/cann-run-release/software/master/20260211182015/aarch64/Ascend-cann-toolkit_9.0.0_linux-aarch64.run)。
 
     ```bash
     # 确保安装包具有可执行权限
-    chmod +x Ascend-cann-toolkit_8.5.0-beta.1_linux-${arch}.run
+    chmod +x Ascend-cann-toolkit_${cann_version}_linux-${arch}.run
     # 安装命令
-    ./Ascend-cann-toolkit_8.5.0-beta.1_linux-${arch}.run --full --force --install-path=${install_path}
+    ./Ascend-cann-toolkit_${cann_version}_linux-${arch}.run --full --force --install-path=${install_path}
     ```
+    - \$\{cann\_version\}：表示CANN包版本号。
     - \$\{arch\}：表示CPU架构，如aarch64、x86_64。
     - \$\{install\_path\}：表示指定安装路径。
     - 缺省--install-path时， 则使用默认路径安装。
@@ -128,20 +129,22 @@
 
 2. **安装社区版CANN ops包（运行态依赖）**
 
-    NPU方式运行样例前必须安装本包。
+    运行算子前必须安装本包，若仅编译算子，可跳过本操作。
 
-    根据产品型号和环境架构，下载对应`Ascend-cann-${soc_name}-ops_8.5.0-beta.1_linux-${arch}.run`包，下载链接如下：
+    根据产品型号和环境架构，下载对应`Ascend-cann-${soc_name}-ops_9.0.0_linux-${arch}.run`包，下载链接如下：
 
-    - Ascend 910B：[ops x86_64包](https://ascend.devcloud.huaweicloud.com/cann/run/software/8.5.0-beta.1/x86_64/Ascend-cann-910b-ops_8.5.0-beta.1_linux-x86_64.run)、[ops aarch64包](https://ascend.devcloud.huaweicloud.com/cann/run/software/8.5.0-beta.1/aarch64/Ascend-cann-910b-ops_8.5.0-beta.1_linux-aarch64.run)。
-    - Ascend 910C：[ops x86_64包](https://ascend.devcloud.huaweicloud.com/cann/run/software/8.5.0-beta.1/x86_64/Ascend-cann-A3-ops_8.5.0-beta.1_linux-x86_64.run)、[ops aarch64包](https://ascend.devcloud.huaweicloud.com/cann/run/software/8.5.0-beta.1/aarch64/Ascend-cann-A3-ops_8.5.0-beta.1_linux-aarch64.run)。
+    - Atlas A2 训练系列产品/Atlas A2 推理系列产品：[ops x86_64包](https://mirror-centralrepo.devcloud.cn-north-4.huaweicloud.com/artifactory/cann-run-release/software/master/20260211182015/x86_64/Ascend-cann-910b-ops_9.0.0_linux-x86_64.run)、[ops aarch64包](https://mirror-centralrepo.devcloud.cn-north-4.huaweicloud.com/artifactory/cann-run-release/software/master/20260211182015/aarch64/Ascend-cann-910b-ops_9.0.0_linux-aarch64.run)。
+    - Atlas A3 训练系列产品/Atlas A3 推理系列产品：[ops x86_64包](https://mirror-centralrepo.devcloud.cn-north-4.huaweicloud.com/artifactory/cann-run-release/software/master/20260211182015/x86_64/Ascend-cann-A3-ops_9.0.0_linux-x86_64.run)、[ops aarch64包](https://mirror-centralrepo.devcloud.cn-north-4.huaweicloud.com/artifactory/cann-run-release/software/master/20260211182015/aarch64/Ascend-cann-A3-ops_9.0.0_linux-aarch64.run)。
+    - Ascend 950PR/Ascend 950DT：[ops x86_64包](https://ascend.devcloud.huaweicloud.com/artifactory/cann-run-release/software/master/20260213000325157/x86_64/Ascend-cann-950-ops_9.0.0_linux-x86_64.run)、[ops aarch64包](https://ascend.devcloud.huaweicloud.com/artifactory/cann-run-release/software/master/20260213000325157/aarch64/Ascend-cann-950-ops_9.0.0_linux-aarch64.run)。
 
     ```bash
     # 确保安装包具有可执行权限
-    chmod +x Ascend-cann-${soc_name}-ops_8.5.0-beta.1_linux-${arch}.run
+    chmod +x Ascend-cann-${soc_name}-ops_9.0.0_linux-${arch}.run
     # 安装命令
-    ./Ascend-cann-${soc_name}-ops_8.5.0-beta.1_linux-${arch}.run --install --install-path=${install_path}
+    ./Ascend-cann-${soc_name}-ops_9.0.0_linux-${arch}.run --install --install-path=${install_path}
     ```
-    - \$\{soc\_name\}：表示AI处理器型号（910B对应910b，910C对应A3）。
+    - \$\{soc\_name\}：表示NPU型号名称。
+    - \$\{arch\}：表示CPU架构，如aarch64、x86_64。
     - \$\{install\_path\}：表示指定安装路径，需要与toolkit包安装在相同路径，root用户默认安装在`/usr/local/Ascend`目录，非root用户默认安装在`$HOME/Ascend`目录。
 
 3. **配置环境变量**

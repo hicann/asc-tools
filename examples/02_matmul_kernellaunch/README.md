@@ -2,15 +2,24 @@
 # Matmul算子样例  
 
 ## 概述
-本样例介绍Matmul算子的核函数直调方法。
+
+本样例介绍Matmul算子的核函数直调实现，通过最大化利用昇腾AI处理器的并行计算能力，显著提升算子执行效率。该实现方式适用于高性能推理与训练场景。
+
+## 支持的产品
+
+- Ascend 950PR/Ascend 950DT
+- Atlas A3 训练系列产品/Atlas A3 推理系列产品
+- Atlas A2 训练系列产品/Atlas A2 推理系列产品
 
 ## 目录结构介绍
+
 ```
 └── 02_matmul_kernellaunch          // 使用核函数直调的方式调用Matmul自定义算子。
     └── MatmulInvocationNeo         // Kernel Launch方式调用核函数样例。
 ```
 
 ## 算子描述
+
 Matmul高阶API实现了快速的Matmul矩阵乘法的运算操作。
 
 Matmul的计算公式为：
@@ -23,6 +32,7 @@ C = A * B
 - C为目的操作数，存放矩阵乘结果的矩阵，形状为\[M, N]。
 
 ## 算子规格描述
+
 在核函数直调样例中，算子实现支持的shape为：M = 512, N = 1024, K = 512。
 <table>
 <tr><td rowspan="1" align="center">算子类型(OpType)</td><td colspan="4" align="center">Matmul</td></tr>
@@ -36,14 +46,6 @@ C = A * B
 <tr><td rowspan="1" align="center">核函数名</td><td colspan="4" align="center">matmul_custom</td></tr>
 </table>
 
-## 支持的AI处理器
-- Ascend 910C
-- Ascend 910B
-
 ## 编译运行样例算子
-详细操作请参考[MatmulInvocationNeo样例运行](./MatmulInvocationNeo/README.md)。
 
-## 更新说明
-| 时间       | 更新事项                 |
-| ---------- | ------------------------ |
-| 2025/11/11 | 新增readme               |
+详细操作请参考[MatmulInvocationNeo样例运行](./MatmulInvocationNeo/README.md)。
