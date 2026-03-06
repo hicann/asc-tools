@@ -44,18 +44,18 @@ int32_t main(int32_t argc, char* argv[])
     size_t outputByteSize = 8 * 2048 * sizeof(uint16_t);
 
     // 使用GmAlloc分配共享内存，并进行数据初始化
-    uint8_t* x = (uint8_t*)AscendC::GmAlloc(inputByteSize);
-    uint8_t* y = (uint8_t*)AscendC::GmAlloc(inputByteSize);
-    uint8_t* z = (uint8_t*)AscendC::GmAlloc(outputByteSize);
+    uint8_t* x = (uint8_t *)AscendC::GmAlloc(inputByteSize);
+    uint8_t* y = (uint8_t *)AscendC::GmAlloc(inputByteSize);
+    uint8_t* z = (uint8_t *)AscendC::GmAlloc(outputByteSize);
 
-    ReadFile("./input/input_x.bin", inputByteSize, x, inputByteSize);
-    ReadFile("./input/input_y.bin", inputByteSize, x, inputByteSize);
+    ReadFile("./input_x.bin", inputByteSize, x, inputByteSize);
+    ReadFile("./input_y.bin", inputByteSize, x, inputByteSize);
     // 矢量算子需要设置内核模式为AIV模式
     AscendC::SetKernelMode(KernelMode::AIV_MODE);
     // 调用ICPU_RUN_KF调测宏，完成核函数CPU侧的调用
     ICPU_RUN_KF(add_custom, numBlocks, x, y, z);
     // 输出数据写出
-    WriteFile("./output/output_z.bin", z, outputByteSize);
+    WriteFile("./output.bin", z, outputByteSize);
     // 调用GmFree释放申请的内存
     AscendC::GmFree((void *)x);
     AscendC::GmFree((void *)y);
@@ -72,7 +72,7 @@ mkdir -p build && cd build;
 cmake .. -DSOC_VERSION=${SOC_VERSION}; make -j
 python3 ../scripts/gen_data.py
 ./add
-python3 ../scripts/verify_result.py output_z.bin golden.bin
+python3 ../scripts/verify_result.py output.bin golden.bin
 ```
 
 **步骤4**：printf命令打印
