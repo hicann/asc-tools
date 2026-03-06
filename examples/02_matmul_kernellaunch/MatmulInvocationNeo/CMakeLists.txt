@@ -59,7 +59,7 @@ target_link_libraries(ascendc_kernels_bbit PRIVATE
     tiling_api
     register
     platform
-    ascendalog
+    unified_dlog
     dl
 )
 

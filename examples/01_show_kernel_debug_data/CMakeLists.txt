@@ -12,12 +12,20 @@ cmake_minimum_required(VERSION 3.16)
 
 find_package(ASC REQUIRED)
 
-project(add_frameworklaunch_xasc LANGUAGES ASC CXX)
+project(kernel_samples LANGUAGES ASC CXX)
 
-add_executable(add
+add_executable(demo
     add.asc
 )
 
-target_compile_options(add PRIVATE
+# ======================================================================================
+# NPU 编译选项配置
+#
+# 说明：
+#   - 需根据实际部署的 NPU 硬件架构选择对应的 `npu-arch` 参数。
+# ======================================================================================
+target_compile_options(demo PRIVATE
     $<$<COMPILE_LANGUAGE:ASC>:--npu-arch=dav-2201>
+    # # 该NPU架构版本号暂未正式发布，后续可能会有变更，请关注正式版本发布信息
+    # $<$<COMPILE_LANGUAGE:ASC>:--npu-arch=dav-3510>
 )
