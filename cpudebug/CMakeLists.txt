@@ -116,6 +116,7 @@ foreach(product_type ${PRODUCT_TYPE_LIST})
     unified_dlog
     pthread
     -Wl,--as-needed
+    $<$<CONFIG:Release>:-s>
   )
   set_target_properties(cpudebug_${product_type} PROPERTIES
     OUTPUT_NAME cpudebug
