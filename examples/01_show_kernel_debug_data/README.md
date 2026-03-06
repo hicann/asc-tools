@@ -13,7 +13,7 @@
 ## 目录结构介绍
 
 ```
-├── 01_add
+├── 01_show_kernel_debug_data
 │   ├── acl.json                // Dump配置文件
 │   ├── add.asc                 // Ascend C算子实现
 │   └── CMakeLists.txt          // 编译工程文件
@@ -44,18 +44,24 @@
   show_kernel_debug_data -h
   ```
 
+- 修改编译选项（Ascend 950PR/Ascend 950DT）  
+  对于Ascend 950PR/Ascend 950DT，执行前需要修改CMakeLists.txt中编译选项--npu-arch，具体修改如下：  
+  ```
+  --npu-arch=dav-3510
+  ```
+
 - 样例执行
   ```bash
   mkdir -p build output && cd build;   # 创建并进入build目录
   cmake ..;make -j;             # 编译工程
   # 在build目录执行以下内容
-  ./add                         # 执行样例
+  ./demo                         # 执行样例
   ```
   执行结果如下，说明精度对比成功。
   ```bash
   [Success] Case accuracy is verification passed.
   ```
-  执行完成后将在当前目录生kernel调试信息bin文件，落在配置的路径下，例如:
+  执行完成后将在当前目录生成kernel调试信息bin文件，落在配置的路径下，例如:
 
     ```
     ${git_clone_path}/examples/01_show_kernel_debug_data/output
@@ -105,22 +111,18 @@
     ${git_clone_path}/examples/01_show_kernel_debug_data/build/dump_info_output
     └── PARSER_20251022074515310995
         ├── dump_data
-        │   ├── 0
-        │   │   ├── core_0_index_0_loop_0.bin
-        │   │   ├── core_0_index_0_loop_0.txt     // core0 desc0 progress0打印信息
+        │   ├── 0                                                // core0解析结果
+        │   │   ├── asc_kernel_data_aiv_0_index_0_loop_0.bin     // core0 desc0 progress0落盘信息
+        │   │   ├── asc_kernel_data_aiv_0_index_0_loop_0.txt     // core0 desc0 progress0解析结果
         ...
-        │   │   ├── core_0_index_2_loop_15.bin
-        │   │   ├── core_0_index_2_loop_15.txt
-        │   │   └── time_stamp_core_0.csv         // 时间戳信息
-        │   ├── 1
-        │   ├── 2
-        │   ├── 3
-        │   ├── 4
-        │   ├── 5
-        │   ├── 6
-        │   ├── 7
-        │   └── index_dtype.json                  // index与数据类型的映射关系
-        └── parser.log                            // 工具解析日志
+        │   │   ├── asc_kernel_data_aiv_0_index_2_loop_15.bin    // core0 desc2 progress15落盘信息
+        │   │   ├── asc_kernel_data_aiv_0_index_2_loop_15.txt    // core0 desc2 progress15落盘信息
+        │   │   └── time_stamp_core_0.csv                        // 时间戳信息
+        │   ├── 1                                                // core1解析结果
+        │   ├── 2                                                // core2解析结果
+        │   ...
+        │   └── index_dtype.json                                 // index与数据类型的映射关系
+        └── parser.log                                           // 工具解析日志
     ```
 
     其中dump_data目录下的0,1,2,...,7为8个核各自的打印信息。\
@@ -132,4 +134,4 @@
     AscendC::DumpTensor(zLocal[64], 2, 16);
     ```
 
-    core_0_index_0_loop_x.*中x的取值是0-15，对应Block1，xLocal切分的每个tileLength大小的数据打印。
+    asc_kernel_data_aiv_0_index_0_loop_x.*中x的取值是0-15，对应Block1，xLocal切分的每个tileLength大小的数据打印。
