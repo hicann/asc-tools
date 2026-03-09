@@ -136,6 +136,10 @@ whlUninstallPackage() {
         unset PYTHONPATH
     fi
     export PIP_BREAK_SYSTEM_PACKAGES=1  # 强制卸载系统包
+    if ! command -v pip3 >/dev/null 2>&1; then
+        log_and_print ${LEVEL_ERROR} "uninstall ${module_} failed, pip3 is not installed."
+        exit 1
+    fi
     pip3 uninstall -y "${module_}" > /dev/null 2>&1
     if [ $? -ne 0 ]; then
         log_and_print ${LEVEL_ERROR} "uninstall ${module_} failed."
