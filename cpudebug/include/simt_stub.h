@@ -25,13 +25,6 @@
 #include "kernel_bf16.h"
 #include "kernel_vectorized.h"
 
-#define R CAST_RINT
-#define A CAST_ROUND
-#define F CAST_FLOOR
-#define C CAST_CEIL
-#define Z CAST_TRUNC
-#define O CAST_ODD
-
 #define __launch_bounds__(x)
 
 namespace {
@@ -70,7 +63,7 @@ void HandleRound(uint32_t sign, int16_t& exp, uint32_t& mantissa, uint32_t round
     constexpr uint32_t round_first_bit = 1U << (round_bit_num - 1);
     constexpr uint32_t round_left_bit = round_first_bit - 1;
 
-    if constexpr (rnd == ROUND::R) {
+    if constexpr (rnd == ROUND::CAST_RINT) {
         if ((round_part & round_first_bit) != 0) {
             if ((round_part & round_left_bit) != 0) {
                 mantissa += 1;
@@ -78,19 +71,19 @@ void HandleRound(uint32_t sign, int16_t& exp, uint32_t& mantissa, uint32_t round
                 mantissa += 1;
             }
         }
-    } else if constexpr (rnd == ROUND::F) {
+    } else if constexpr (rnd == ROUND::CAST_FLOOR) {
         if ((sign == 1) && (round_part != 0)) {
             mantissa += 1;
         }
-    } else if constexpr (rnd == ROUND::C) {
+    } else if constexpr (rnd == ROUND::CAST_CEIL) {
         if ((sign == 0) && (round_part != 0)) {
             mantissa += 1;
         }
-    } else if constexpr (rnd == ROUND::A) {
+    } else if constexpr (rnd == ROUND::CAST_ROUND) {
         if ((round_part & round_first_bit) != 0) {
             mantissa += 1;
         }
-    } else if constexpr (rnd == ROUND::O) {
+    } else if constexpr (rnd == ROUND::CAST_ODD) {
         if ((round_part != 0) && ((mantissa & 1) == 0)) {
             mantissa += 1;
         }
@@ -101,20 +94,20 @@ void HandleRound(uint32_t sign, int16_t& exp, uint32_t& mantissa, uint32_t round
     }
 }
 
-template <ROUND rnd = ROUND::R, RoundingSaturation sat = RoundingSaturation::RS_DISABLE_VALUE, typename SRC_TYPE>
+template <ROUND rnd = ROUND::CAST_RINT, RoundingSaturation sat = RoundingSaturation::RS_DISABLE_VALUE, typename SRC_TYPE>
 float CastIntegralToFloat(SRC_TYPE src)
 {
-    if constexpr (rnd == ROUND::R || rnd == ROUND::F || rnd == ROUND::C || rnd == ROUND::Z) {
+    if constexpr (rnd == ROUND::CAST_RINT || rnd == ROUND::CAST_FLOOR || rnd == ROUND::CAST_CEIL || rnd == ROUND::CAST_TRUNC) {
         fenv_t env;
         std::fegetenv(&env);
         constexpr int32_t round = [] {
-            if constexpr (rnd == ROUND::R) {
+            if constexpr (rnd == ROUND::CAST_RINT) {
                 return FE_TONEAREST;
-            } else if constexpr (rnd == ROUND::F) {
+            } else if constexpr (rnd == ROUND::CAST_FLOOR) {
                 return FE_DOWNWARD;
-            } else if constexpr (rnd == ROUND::C) {
+            } else if constexpr (rnd == ROUND::CAST_CEIL) {
                 return FE_UPWARD;
-            } else if constexpr (rnd == ROUND::Z) {
+            } else if constexpr (rnd == ROUND::CAST_TRUNC) {
                 return FE_TOWARDZERO;
             }
         }();
@@ -140,7 +133,7 @@ float CastIntegralToFloat(SRC_TYPE src)
         f_down = f;
     }
 
-    if constexpr (rnd == ROUND::A) {
+    if constexpr (rnd == ROUND::CAST_ROUND) {
         SRC_TYPE src_up = static_cast<SRC_TYPE>(f_up);
         SRC_TYPE src_down = static_cast<SRC_TYPE>(f_down);
         if (src_up - src == src - src_down) {
@@ -150,7 +143,7 @@ float CastIntegralToFloat(SRC_TYPE src)
         } else {
             return f_down;
         }
-    } else if constexpr (rnd == ROUND::O) {
+    } else if constexpr (rnd == ROUND::CAST_ODD) {
         uint32_t f_bits = *reinterpret_cast<uint32_t*>(&f_up);
         return (f_bits & 1) == 0 ? f_up : f_down;
     }
@@ -158,7 +151,7 @@ float CastIntegralToFloat(SRC_TYPE src)
     return static_cast<float>(src);
 }
 
-template <ROUND rnd = ROUND::R, RoundingSaturation sat = RoundingSaturation::RS_DISABLE_VALUE, typename SRC_TYPE>
+template <ROUND rnd = ROUND::CAST_RINT, RoundingSaturation sat = RoundingSaturation::RS_DISABLE_VALUE, typename SRC_TYPE>
 float __cvt_float(SRC_TYPE src) {
     static_assert(std::is_same_v<SRC_TYPE, int32_t> ||
                   std::is_same_v<SRC_TYPE, uint32_t> ||
@@ -168,7 +161,7 @@ float __cvt_float(SRC_TYPE src) {
                   std::is_same_v<SRC_TYPE, float> ||
                   std::is_same_v<SRC_TYPE, bfloat16_t>,
                   "src type can only be int32_t/uint32_t/int64_t/uint64_t and half/float/bfloat_t");
-    static_assert((rnd == ROUND::R) || (rnd == ROUND::A) || (rnd == ROUND::F) || (rnd == ROUND::C) || (rnd == ROUND::Z),
+    static_assert((rnd == ROUND::CAST_RINT) || (rnd == ROUND::CAST_ROUND) || (rnd == ROUND::CAST_FLOOR) || (rnd == ROUND::CAST_CEIL) || (rnd == ROUND::CAST_TRUNC),
                   "rnd type can only be: ROUND_R, ROUND_A, ROUND_F, ROUND_C,ROUND_Z");
 
     if constexpr (std::is_same_v<SRC_TYPE, half> || std::is_same_v<SRC_TYPE, bfloat16_t>) {
@@ -180,15 +173,15 @@ float __cvt_float(SRC_TYPE src) {
         }
         return src.ToFloat();
     } else if constexpr (std::is_same_v<SRC_TYPE, float>) {
-        if constexpr (rnd == ROUND::R) {
+        if constexpr (rnd == ROUND::CAST_RINT) {
             return rintf(src);
-        } else if constexpr (rnd == ROUND::A) {
+        } else if constexpr (rnd == ROUND::CAST_ROUND) {
             return roundf(src);
-        } else if constexpr (rnd == ROUND::F) {
+        } else if constexpr (rnd == ROUND::CAST_FLOOR) {
             return floorf(src);
-        } else if constexpr (rnd == ROUND::C) {
+        } else if constexpr (rnd == ROUND::CAST_CEIL) {
             return ceilf(src);
-        } else if constexpr (rnd == ROUND::Z) {
+        } else if constexpr (rnd == ROUND::CAST_TRUNC) {
             return truncf(src);
         } else {
             return src;
@@ -303,7 +296,7 @@ bfloat16_t __cvt_bfloat16_t(float x) {
     return *reinterpret_cast<bfloat16_t*>(&res);
 }
 
-template <ROUND rnd = ROUND::R, RoundingSaturation rst = RoundingSaturation::RS_DISABLE_VALUE, typename SRC_TYPE>
+template <ROUND rnd = ROUND::CAST_RINT, RoundingSaturation rst = RoundingSaturation::RS_DISABLE_VALUE, typename SRC_TYPE>
 half __cvt_half(SRC_TYPE src) {
     if (__isnan(src)) {
         uint16_t half_nan = static_cast<uint16_t>(Fp16BasicParam::K_FP16_ABS_MAX);
@@ -327,7 +320,7 @@ half __cvt_half(SRC_TYPE src) {
     return half(0);
 }
 
-template <ROUND rnd = ROUND::R, RoundingSaturation rst = RoundingSaturation::RS_DISABLE_VALUE, typename SRC_TYPE>
+template <ROUND rnd = ROUND::CAST_RINT, RoundingSaturation rst = RoundingSaturation::RS_DISABLE_VALUE, typename SRC_TYPE>
 bfloat16_t __cvt_bfloat16_t(SRC_TYPE src) {
     if (__isnan(src)) {
         uint16_t bf16_nan = bfloat16::BF16_NAN;
@@ -355,7 +348,7 @@ int32_t __cvt_int32_t(SRC_TYPE x) {
         std::is_same_v<SRC_TYPE,half> || std::is_same_v<SRC_TYPE, float> || std::is_same_v<SRC_TYPE,bfloat16_t>,
         "src type can only be half/float/bfloat_t");
 
-    static_assert((rnd == ROUND::R) || (rnd == ROUND::A) || (rnd == ROUND::F) || (rnd == ROUND::C) || (rnd == ROUND::Z),
+    static_assert((rnd == ROUND::CAST_RINT) || (rnd == ROUND::CAST_ROUND) || (rnd == ROUND::CAST_FLOOR) || (rnd == ROUND::CAST_CEIL) || (rnd == ROUND::CAST_TRUNC),
                   "rnd type can only be: ROUND_R, ROUND_A, ROUND_F, ROUND_C,ROUND_Z");
 
     static_assert(rst == RoundingSaturation::RS_ENABLE_VALUE, "sat type can only be: RS_ENABLE");
@@ -383,7 +376,7 @@ uint32_t __cvt_uint32_t(SRC_TYPE x) {
         std::is_same_v<SRC_TYPE,half> || std::is_same_v<SRC_TYPE, float> || std::is_same_v<SRC_TYPE,bfloat16_t>,
         "src type can only be half/float/bfloat_t");
 
-    static_assert((rnd == ROUND::R) || (rnd == ROUND::A) || (rnd == ROUND::F) || (rnd == ROUND::C) || (rnd == ROUND::Z),
+    static_assert((rnd == ROUND::CAST_RINT) || (rnd == ROUND::CAST_ROUND) || (rnd == ROUND::CAST_FLOOR) || (rnd == ROUND::CAST_CEIL) || (rnd == ROUND::CAST_TRUNC),
                   "rnd type can only be: ROUND_R, ROUND_A, ROUND_F, ROUND_C,ROUND_Z");
 
     static_assert(rst == RoundingSaturation::RS_ENABLE_VALUE, "sat type can only be: RS_ENABLE");
@@ -404,7 +397,7 @@ uint32_t __cvt_uint32_t(SRC_TYPE x) {
 template<ROUND rnd, RoundingSaturation rst, typename SRC_TYPE>
 int64_t __cvt_int64_t(SRC_TYPE x) {
     static_assert(std::is_same_v<SRC_TYPE, float>, "src type can only be float");
-    static_assert((rnd == ROUND::R) || (rnd == ROUND::A) || (rnd == ROUND::F) || (rnd == ROUND::C) || (rnd == ROUND::Z),
+    static_assert((rnd == ROUND::CAST_RINT) || (rnd == ROUND::CAST_ROUND) || (rnd == ROUND::CAST_FLOOR) || (rnd == ROUND::CAST_CEIL) || (rnd == ROUND::CAST_TRUNC),
                   "rnd type can only be: ROUND_R, ROUND_A, ROUND_F, ROUND_C,ROUND_Z");
     static_assert(rst == RoundingSaturation::RS_ENABLE_VALUE, "sat type can only be: RS_ENABLE");
     if (__isnan(x)) {
@@ -425,7 +418,7 @@ int64_t __cvt_int64_t(SRC_TYPE x) {
 template<ROUND rnd, RoundingSaturation rst, typename SRC_TYPE>
 uint64_t __cvt_uint64_t(SRC_TYPE x) {
     static_assert(std::is_same_v<SRC_TYPE, float>, "src type can only be float");
-    static_assert((rnd == ROUND::R) || (rnd == ROUND::A) || (rnd == ROUND::F) || (rnd == ROUND::C) || (rnd == ROUND::Z),
+    static_assert((rnd == ROUND::CAST_RINT) || (rnd == ROUND::CAST_ROUND) || (rnd == ROUND::CAST_FLOOR) || (rnd == ROUND::CAST_CEIL) || (rnd == ROUND::CAST_TRUNC),
                   "rnd type can only be: ROUND_R, ROUND_A, ROUND_F, ROUND_C,ROUND_Z");
     static_assert(rst == RoundingSaturation::RS_ENABLE_VALUE, "sat type can only be: RS_ENABLE");
     if constexpr (std::is_same_v<SRC_TYPE, float>) {
@@ -463,20 +456,20 @@ bfloat16_t __cvt_bfloat16_t(uint32_t x) {
     return __cvt_bfloat16_t<rnd, rst>(temp);
 }
 
-template<ROUND rnd = ROUND::A, RoundingSaturation rst = RoundingSaturation::RS_DISABLE_VALUE>
+template<ROUND rnd = ROUND::CAST_ROUND, RoundingSaturation rst = RoundingSaturation::RS_DISABLE_VALUE>
 float2 __cvt_float2(hifloat8x2_t src) {
-    static_assert((rnd == ROUND::R) || (rnd == ROUND::A) || (rnd == ROUND::F) || (rnd == ROUND::C) || (rnd == ROUND::Z),
+    static_assert((rnd == ROUND::CAST_RINT) || (rnd == ROUND::CAST_ROUND) || (rnd == ROUND::CAST_FLOOR) || (rnd == ROUND::CAST_CEIL) || (rnd == ROUND::CAST_TRUNC),
                   "rnd type can only be: ROUND_R, ROUND_A, ROUND_F, ROUND_C,ROUND_Z");
     float2 res{src.x.ToFloat(), src.y.ToFloat()};
     return res;
 }
 
-template<ROUND rnd = ROUND::R, RoundingSaturation rst = RoundingSaturation::RS_DISABLE_VALUE, typename SRC_TYPE>
+template<ROUND rnd = ROUND::CAST_RINT, RoundingSaturation rst = RoundingSaturation::RS_DISABLE_VALUE, typename SRC_TYPE>
 float2 __cvt_float2(SRC_TYPE src) {
     static_assert(std::is_same_v<SRC_TYPE, half2> || std::is_same_v<SRC_TYPE, bfloat16x2_t> ||
                   std::is_same_v<SRC_TYPE, float8_e4m3x2_t> || std::is_same_v<SRC_TYPE, float8_e5m2x2_t>,
                   "src type can only be half2/bfloat16x2_t/float8_e4m3x2_t/float8_e5m2x2_t");
-    static_assert((rnd == ROUND::R) || (rnd == ROUND::A) || (rnd == ROUND::F) || (rnd == ROUND::C) || (rnd == ROUND::Z),
+    static_assert((rnd == ROUND::CAST_RINT) || (rnd == ROUND::CAST_ROUND) || (rnd == ROUND::CAST_FLOOR) || (rnd == ROUND::CAST_CEIL) || (rnd == ROUND::CAST_TRUNC),
                   "rnd type can only be: ROUND_R, ROUND_A, ROUND_F, ROUND_C,ROUND_Z");
     float2 res = {src.x.ToFloat(), src.y.ToFloat()};
     if constexpr (std::is_same_v<SRC_TYPE, half2> || std::is_same_v<SRC_TYPE, bfloat16x2_t>) {
@@ -485,10 +478,10 @@ float2 __cvt_float2(SRC_TYPE src) {
     return res;
 }
 
-template<ROUND rnd = ROUND::R, RoundingSaturation rst = RoundingSaturation::RS_DISABLE_VALUE, typename SRC_TYPE>
+template<ROUND rnd = ROUND::CAST_RINT, RoundingSaturation rst = RoundingSaturation::RS_DISABLE_VALUE, typename SRC_TYPE>
 bfloat16x2_t __cvt_bfloat16x2_t(SRC_TYPE src) {
     static_assert(std::is_same_v<SRC_TYPE, float2>, "stc type can only be float2");
-    static_assert((rnd == ROUND::R) || (rnd == ROUND::A) || (rnd == ROUND::F) || (rnd == ROUND::C) || (rnd == ROUND::Z),
+    static_assert((rnd == ROUND::CAST_RINT) || (rnd == ROUND::CAST_ROUND) || (rnd == ROUND::CAST_FLOOR) || (rnd == ROUND::CAST_CEIL) || (rnd == ROUND::CAST_TRUNC),
                   "rnd type can only be: ROUND_R, ROUND_A, ROUND_F, ROUND_C,ROUND_Z");
     bfloat16x2_t tmp;
     tmp.x = __cvt_bfloat16_t<rnd, rst>(src.x);
@@ -496,7 +489,7 @@ bfloat16x2_t __cvt_bfloat16x2_t(SRC_TYPE src) {
     return tmp;
 }
 
-template<ROUND rnd = ROUND::R, RoundingSaturation rst = RoundingSaturation::RS_DISABLE_VALUE, typename SRC_TYPE>
+template<ROUND rnd = ROUND::CAST_RINT, RoundingSaturation rst = RoundingSaturation::RS_DISABLE_VALUE, typename SRC_TYPE>
 half2 __cvt_half2(SRC_TYPE src) {
     half2 res;
     if constexpr (std::is_same_v<SRC_TYPE, hifloat8x2_t>) {
@@ -510,7 +503,7 @@ half2 __cvt_half2(SRC_TYPE src) {
 template<ROUND rnd, RoundingSaturation rst, typename SRC_TYPE>
 hifloat8x2_t __cvt_hifloat8x2_t(SRC_TYPE src) {
     static_assert(std::is_same_v<SRC_TYPE, float2> || std::is_same_v<SRC_TYPE, half2>, "stc type can only be float2/half2");
-    static_assert((rnd == ROUND::A) || (rnd == ROUND::CAST_HYBRID), "rnd type can only be: ROUND_A, ROUND_H");
+    static_assert((rnd == ROUND::CAST_ROUND) || (rnd == ROUND::CAST_HYBRID), "rnd type can only be: ROUND_A, ROUND_H");
     hifloat8x2_t res{0.0, 0.0};
     if constexpr (std::is_same_v<SRC_TYPE, float2>) {
         res = {hifloat8_t(src.x), hifloat8_t(src.y)};
@@ -524,7 +517,7 @@ hifloat8x2_t __cvt_hifloat8x2_t(SRC_TYPE src) {
 template<ROUND rnd, RoundingSaturation rst, typename SRC_TYPE>
 float8_e4m3x2_t __cvt_float8_e4m3x2_t(SRC_TYPE src) {
     static_assert(std::is_same_v<SRC_TYPE, float2>, "stc type can only be float2");
-    static_assert(rnd == ROUND::R, "rnd type can only be: ROUND_R");
+    static_assert(rnd == ROUND::CAST_RINT, "rnd type can only be: ROUND_R");
     float8_e4m3x2_t res{fp8_e4m3fn_t(src.x), fp8_e4m3fn_t(src.y)};
     return res;
 }
@@ -532,7 +525,7 @@ float8_e4m3x2_t __cvt_float8_e4m3x2_t(SRC_TYPE src) {
 template<ROUND rnd, RoundingSaturation rst, typename SRC_TYPE>
 float8_e5m2x2_t __cvt_float8_e5m2x2_t(SRC_TYPE src) {
     static_assert(std::is_same_v<SRC_TYPE, float2>, "stc type can only be float2");
-    static_assert(rnd == ROUND::R, "rnd type can only be: ROUND_R");
+    static_assert(rnd == ROUND::CAST_RINT, "rnd type can only be: ROUND_R");
     float8_e5m2x2_t res{fp8_e5m2_t(src.x), fp8_e5m2_t(src.y)};
     return res;
 }
