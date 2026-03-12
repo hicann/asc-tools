@@ -41,7 +41,7 @@ enum class pre_quant_t {
 
 typedef ReluMode_t pre_relu_t;
 
-#if !defined(__CCE_KT_TEST__)
+#if !defined(ASCENDC_CPU_DEBUG)
 enum class eltwise_op_t {
     No_Eltwise = 0,
     Add,
