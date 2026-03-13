@@ -131,12 +131,12 @@ installOpPython() {
         return 1
     fi
 
-    installWhlPackage "${install_path}/tools/msopgen-1.0.0-py3-none-any.whl"
+    installWhlPackage "${install_path}/tools/mindstudio_opgen-1.0.0-py3-none-any.whl"
     if [ $? -ne 0 ]; then
         return 1
     fi
 
-    installWhlPackage "${install_path}/tools/msopst-1.0.0-py3-none-any.whl"
+    installWhlPackage "${install_path}/tools/mindstudio_opst-1.0.0-py3-none-any.whl"
     if [ $? -ne 0 ]; then
         return 1
     fi
@@ -166,12 +166,12 @@ installAllPython() {
         return 1
     fi
 
-    installWhlPackage "${install_path}/tools/msopgen-1.0.0-py3-none-any.whl"
+    installWhlPackage "${install_path}/tools/mindstudio_opgen-1.0.0-py3-none-any.whl"
     if [ $? -ne 0 ]; then
         return 1
     fi
 
-    installWhlPackage "${install_path}/tools/msopst-1.0.0-py3-none-any.whl"
+    installWhlPackage "${install_path}/tools/mindstudio_opst-1.0.0-py3-none-any.whl"
     if [ $? -ne 0 ]; then
         return 1
     fi
@@ -252,10 +252,10 @@ installOpPythonLocal() {
     installPyWhlLocal "show_kernel_debug_data-0.1.0-py3-none-any.whl"
     [ $? -ne 0 ] && return 1
 
-    installPyWhlLocal "msopgen-1.0.0-py3-none-any.whl"
+    installPyWhlLocal "mindstudio_opgen-1.0.0-py3-none-any.whl"
     [ $? -ne 0 ] && return 1
 
-    installPyWhlLocal "msopst-1.0.0-py3-none-any.whl"
+    installPyWhlLocal "mindstudio_opst-1.0.0-py3-none-any.whl"
     [ $? -ne 0 ] && return 1
 
     log $LEVEL_INFO "Install opeator python package succeed."
@@ -269,10 +269,10 @@ installAllPythonLocal() {
     installPyWhlLocal "show_kernel_debug_data-0.1.0-py3-none-any.whl"
     [ $? -ne 0 ] && return 1
 
-    installPyWhlLocal "msopgen-1.0.0-py3-none-any.whl"
+    installPyWhlLocal "mindstudio_opgen-1.0.0-py3-none-any.whl"
     [ $? -ne 0 ] && return 1
 
-    installPyWhlLocal "msopst-1.0.0-py3-none-any.whl"
+    installPyWhlLocal "mindstudio_opst-1.0.0-py3-none-any.whl"
     [ $? -ne 0 ] && return 1
 
     log $LEVEL_INFO "Install all module python package succeed."

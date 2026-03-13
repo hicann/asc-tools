@@ -11,8 +11,8 @@
 cmake_minimum_required(VERSION 3.16.0)
 project(tools_third_party)
 
-set(MSOPGEN_WHEEL_IMAGE msopgen-1.0.0-py3-none-any.whl)
-set(MSOPST_WHEEL_IMAGE msopst-1.0.0-py3-none-any.whl)
+set(MSOPGEN_WHEEL_IMAGE mindstudio_opgen-1.0.0-py3-none-any.whl)
+set(MSOPST_WHEEL_IMAGE mindstudio_opst-1.0.0-py3-none-any.whl)
 
 # Try hard to reuse an existing msot checkout before downloading.
 set(_ms_root "")
