@@ -11,8 +11,8 @@
 cmake_minimum_required(VERSION 3.16.0)
 project(tools_third_party)
 
-set(MSOPGEN_WHEEL_IMAGE msopgen-1.0.0-py3-none-any.whl)
-set(MSOPST_WHEEL_IMAGE msopst-1.0.0-py3-none-any.whl)
+set(MSOPGEN_WHEEL_IMAGE mindstudio_opgen-1.0.0-py3-none-any.whl)
+set(MSOPST_WHEEL_IMAGE mindstudio_opst-1.0.0-py3-none-any.whl)
 
 # Try hard to reuse an existing msot checkout before downloading.
 set(_ms_root "")
@@ -31,10 +31,13 @@ endforeach()
 
 if(_ms_root)
     message(STATUS "Reusing existing msot at: ${_ms_root}")
-    execute_process(
-        WORKING_DIRECTORY ${_ms_root}/msopgen
-        COMMAND git checkout 95ff9e15971ce5e3dacbf7c03ba1ace959beb475
-    )
+    set(_ms_template_dst "${_ms_root}/msopgen/thirdparty/asc-tools/utils/templates/new_op_project_template")
+    set(_ms_template_src "${CMAKE_CURRENT_LIST_DIR}/../utils/templates/new_op_project_template")
+    if(NOT EXISTS "${_ms_template_dst}")
+        execute_process(
+            COMMAND ${CMAKE_COMMAND} -E copy_directory ${_ms_template_src} ${_ms_template_dst}
+        )
+    endif()
 else()
     message(STATUS "No reusable msot found, fetching into repo third_party...")
     set(_ms_root "${CMAKE_CURRENT_LIST_DIR}")
