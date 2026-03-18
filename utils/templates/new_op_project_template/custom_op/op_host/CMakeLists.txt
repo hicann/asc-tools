@@ -45,7 +45,7 @@ npu_op_library(cust_optiling TILING
     ${ops_srcs}
     ${fallback_src}
 )
-target_compile_options(cust_op_proto PRIVATE
+target_compile_options(cust_optiling PRIVATE
     -fvisibility=hidden
 )
 
