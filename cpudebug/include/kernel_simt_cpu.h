@@ -57,10 +57,6 @@ public:
     Warp() {}
     ~Warp();
 
-    Warp &operator=(Warp &&other) = default;
-
-    Warp(Warp &&) {}
-
     template <typename Func>
     void Schedule(Func func, uint32_t warpId, uint32_t idx)
     {
