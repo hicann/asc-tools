@@ -16,6 +16,8 @@
 
 namespace {
 constexpr uint16_t K_MAN_BIT_LENGTH = 11;
+constexpr uint32_t HFEXP_NUM = 31;
+constexpr uint32_t ERET_NUM = 255;
 }
 
 // namespace float16 {
@@ -105,6 +107,17 @@ static float Fp16ToFloat(const uint16_t& fpVal)
     uint32_t eRet;
     uint32_t mRet;
     uint32_t sRet = hfSign;
+
+    if (hfExp == HFEXP_NUM) {
+        eRet = ERET_NUM;
+        mRet = hfMan << (static_cast<uint32_t>(Fp32BasicParam::K_FP32_MAN_LEN) -
+                         static_cast<uint32_t>(Fp16BasicParam::K_FP16_MAN_LEN));
+        uint32_t fVal = FP32_CONSTRUCTOR(sRet, eRet, mRet);
+        auto pRetV = reinterpret_cast<float*>(&fVal);
+
+        return *pRetV;
+    }
+
     if (hfMan == 0) {
         eRet = 0;
         mRet = 0;

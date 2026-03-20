@@ -52,6 +52,10 @@ file(GLOB ASCENDC_TEST_COMMON_CASE_SRC_FILES
     ${LOCAL_DIR}/testcase/tikcpp_case_common/*.cpp
 )
 
+file(GLOB FP16_SRC_FILES
+    ${LOCAL_DIR}/testcase/common/*.cpp
+)
+
 file(GLOB ASCENDC_SRC_FILES
     ${ASCENDC_TOOLS_ROOT_DIR}/cpudebug/src/api_check/*.cpp
 )
@@ -244,9 +248,9 @@ foreach(product_type ${TIKICPULIB_PRODUCT_TYPE_LIST})
         ${LOCAL_DIR}/main_global.cpp
         ${TEST_TIKICPULIB_CASE_FILES}
         ${ASCENDC_TEST_COMMON_SRC_FILES}
-        $<$<STREQUAL:${product_type},ascend910>:${ASCENDC_TEST_COMMON_CASE_SRC_FILES}>
-        $<$<STREQUAL:${product_type},ascend610>:${ASCENDC_TEST_COMMON_CASE_SRC_FILES}>
-        $<$<STREQUAL:${product_type},ascend310p>:${ASCENDC_TEST_COMMON_CASE_SRC_FILES}>
+        $<$<STREQUAL:${product_type},ascend910>:${ASCENDC_TEST_COMMON_CASE_SRC_FILES};${FP16_SRC_FILES}>
+        $<$<STREQUAL:${product_type},ascend610>:${ASCENDC_TEST_COMMON_CASE_SRC_FILES};${FP16_SRC_FILES}>
+        $<$<STREQUAL:${product_type},ascend310p>:${ASCENDC_TEST_COMMON_CASE_SRC_FILES};${FP16_SRC_FILES}>
         ${LOCAL_DIR}/common/dlog_stub.cpp
         $<$<STREQUAL:${product_type},ascend910>:${LOCAL_DIR}/common/tik_pv_wrapper.cpp;${LOCAL_DIR}/common/alog_stub.cpp>
         $<$<STREQUAL:${product_type},ascend610>:${LOCAL_DIR}/common/tik_pv_wrapper.cpp;${LOCAL_DIR}/common/alog_stub.cpp>
