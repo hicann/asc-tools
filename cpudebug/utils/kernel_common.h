@@ -17,7 +17,7 @@
 
 #include "kernel_utils.h"
 #include "kernel_process_lock.h"
-#include "kernel_struct_mm.h"
+#include "utils/kernel_utils_constants.h"
 #include "kernel_process_lock.h"
 #include "kernel_event.h"
 
