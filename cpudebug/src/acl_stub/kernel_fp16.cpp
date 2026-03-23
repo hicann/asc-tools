@@ -16,7 +16,7 @@
 
 namespace {
 constexpr uint16_t K_MAN_BIT_LENGTH = 11;
-constexpr uint32_t HFEXP_NUM = 31;
+constexpr int16_t HFEXP_NUM = 31;
 constexpr uint32_t ERET_NUM = 255;
 }
 
