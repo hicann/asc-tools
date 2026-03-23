@@ -41,7 +41,7 @@
 #define __VEC_SCOPE__
 #define __cube__
 #define __vector__
-#define __mix__
+#define __mix__(...)
 #define __aicore__
 #define __host_aicore__
 #define __gm__
