@@ -65,6 +65,7 @@ const std::map<std::string, std::string> SOC_SUPPORT_MAP = {
     { "ascend910b", "SOC_VERSION_ASCEND910B" },
     { "ascend910_93", "SOC_VERSION_ASCEND910_93" },
     { "ascend910_95", "SOC_VERSION_ASCEND910_95" },
+    { "ascend950", "SOC_VERSION_ASCEND910_95" },
     { "ascend310p", "SOC_VERSION_ASCEND310P" },
     { "ascend310b", "SOC_VERSION_ASCEND310B" },
     { "bs9sx1a", "SOC_VERSION_BS9SX1A" },
