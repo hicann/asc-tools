@@ -87,6 +87,9 @@ removeToolSoftLink()
     if [ -d "$install_path/$latest_dir/tools/tikicpulib" ]; then
         rm -f "$install_path/$latest_dir/tools/tikicpulib"
     fi
+    if [ -d "$install_path/$latest_dir/tools/cpudebug" ]; then
+        rm -f "$install_path/$latest_dir/tools/cpudebug"
+    fi
 }
 
 removeCanndevSoftLink() {

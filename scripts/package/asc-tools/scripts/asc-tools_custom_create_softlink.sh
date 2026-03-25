@@ -121,6 +121,9 @@ createToolSoftLink()
         if [ ! -d "$install_path/$latest_dir/tools/show_kernel_debug_data" ]; then
             ln -sr "$install_path/$version_dir/tools/show_kernel_debug_data" "$install_path/$latest_dir/tools/show_kernel_debug_data"
         fi
+        if [ ! -d "$install_path/$latest_dir/tools/cpudebug" ]; then
+            ln -sr "$install_path/$version_dir/tools/cpudebug" "$install_path/$latest_dir/tools/cpudebug"
+        fi
         if [ ! -d "$install_path/$latest_dir/tools/tikicpulib" ]; then
             ln -sr "$install_path/$version_dir/tools/tikicpulib" "$install_path/$latest_dir/tools/tikicpulib"
         fi
