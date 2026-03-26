@@ -2,7 +2,7 @@
 
 ## 概述
 
-本样例基于Add算子，演示kernel侧算子调试信息的获取并通过[show_kernel_debug_data工具](../../docs/04_show_kernel_debug_data.md)解析。算子相关描述请参考：[Add算子直调样例](https://gitcode.com/cann/asc-devkit/tree/master/examples/00_introduction/01_add/basic_api_tque_add).
+本样例基于Add算子，演示kernel侧算子调试信息的获取并通过[show_kernel_debug_data工具](../../docs/04_show_kernel_debug_data.md)解析。算子相关描述请参考：[Add算子直调样例](https://gitcode.com/cann/asc-devkit/blob/master/examples/01_simd_cpp_api/00_introduction/01_add/basic_api_tque_add/README.md).
 
 ## 支持的产品
 

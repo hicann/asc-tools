@@ -18,7 +18,7 @@
 
 ## 使用示例
 
-下面以[add](https://gitcode.com/cann/asc-devkit/blob/master/examples/01_utilities/03_cpudebug/add.cpp)为示例，介绍如何调用CPU调测API并使用gdb/printf对算子核函数进行调试，开发者可以基于用例所包含的一键式脚本适配自定义算子用例进行编译、执行。
+下面以[add](https://gitcode.com/cann/asc-devkit/blob/master/examples/01_simd_cpp_api/01_utilities/03_cpudebug/add.cpp)为示例，介绍如何调用CPU调测API并使用gdb/printf对算子核函数进行调试，开发者可以基于用例所包含的一键式脚本适配自定义算子用例进行编译、执行。
 
 **步骤1**：头文件适配
 
@@ -65,7 +65,7 @@ int32_t main(int32_t argc, char* argv[])
 
 **步骤3**：编译CPU调试程序
 
-参考[CPU Debug直调样例说明](https://gitcode.com/cann/asc-devkit/blob/master/examples/01_utilities/03_cpudebug/README.md)，配置环境变量后执行以下命令编译生成CPU域的算子可执行文件。
+参考[CPU Debug直调样例说明](https://gitcode.com/cann/asc-devkit/blob/master/examples/01_simd_cpp_api/01_utilities/03_cpudebug/README.md)，配置环境变量后执行以下命令编译生成CPU域的算子可执行文件。
 
 ```bash
 mkdir -p build && cd build;
