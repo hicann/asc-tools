@@ -30,6 +30,7 @@ BUILD_DIR="build_out"
 HOST_NATIVE_DIR="host_native_tiling"
 mkdir -p build_out
 rm -rf build_out/*
+opts=$(python3 $ASCEND_HOME_PATH/tools/tikcpp/ascendc_kernel_cmake/fwk_modules/util/preset_parse.py $script_path/CMakePresets.json)
 
 ENABLE_CROSS="-DENABLE_CROSS_COMPILE=True"
 ENABLE_BINARY="-DENABLE_BINARY_PACKAGE=True"
@@ -39,6 +40,10 @@ cmake_version=$(cmake --version | grep "cmake version" | awk '{print $3}')
 target=package
 if [ "$1"x != ""x ]; then target=$1; fi
 
-cmake -S . -B "$BUILD_DIR" --preset=default
+if [ "$cmake_version" \< "3.19.0" ] ; then
+    cmake -S . -B "$BUILD_DIR" $opts
+else
+    cmake -S . -B "$BUILD_DIR" --preset=default
+fi
 cmake --build "$BUILD_DIR" --target binary -j$(nproc)
 cmake --build "$BUILD_DIR" --target $target -j$(nproc)
