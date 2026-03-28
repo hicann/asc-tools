@@ -1,3 +1,4 @@
+#!/bin/bash
 # ----------------------------------------------------------------------------------------------------------
 # Copyright (c) 2025 Huawei Technologies Co., Ltd.
 # This program is free software, you can redistribute it and/or modify it under the terms and conditions of
@@ -8,7 +9,6 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 # ----------------------------------------------------------------------------------------------------------
 
-#!/bin/bash
 if [ -z "$BASE_LIBS_PATH" ]; then
     if [ -z "$ASCEND_HOME_PATH" ]; then
         if [ -z "$ASCEND_AICPU_PATH" ]; then
@@ -27,24 +27,14 @@ echo "using ASCEND_HOME_PATH: $ASCEND_HOME_PATH"
 script_path=$(realpath $(dirname $0))
 
 BUILD_DIR="build_out"
-HOST_NATIVE_DIR="host_native_tiling"
 mkdir -p build_out
 rm -rf build_out/*
 opts=$(python3 $ASCEND_HOME_PATH/tools/tikcpp/ascendc_kernel_cmake/fwk_modules/util/preset_parse.py $script_path/CMakePresets.json)
-
-ENABLE_CROSS="-DENABLE_CROSS_COMPILE=True"
-ENABLE_BINARY="-DENABLE_BINARY_PACKAGE=True"
-ENABLE_LIBRARY="-DASCEND_PACK_SHARED_LIBRARY=True"
 cmake_version=$(cmake --version | grep "cmake version" | awk '{print $3}')
-
-target=package
-if [ "$1"x != ""x ]; then target=$1; fi
 
 if [ "$cmake_version" \< "3.19.0" ] ; then
     cmake -S . -B "$BUILD_DIR" $opts
 else
     cmake -S . -B "$BUILD_DIR" --preset=default
 fi
-cmake -S . -B "$BUILD_DIR" --preset=default
-cmake --build "$BUILD_DIR" --target binary -j$(nproc)
-cmake --build "$BUILD_DIR" --target $target -j$(nproc)
+cmake --build "$BUILD_DIR" --target binary package -j$(nproc)
