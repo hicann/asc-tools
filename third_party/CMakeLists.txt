@@ -11,8 +11,8 @@
 cmake_minimum_required(VERSION 3.16.0)
 project(tools_third_party)
 
-set(MSOPGEN_WHEEL_IMAGE mindstudio_opgen-1.0.0-py3-none-any.whl)
-set(MSOPST_WHEEL_IMAGE mindstudio_opst-1.0.0-py3-none-any.whl)
+set(MSOPGEN_WHEEL_IMAGE mindstudio_opgen-26.0.0-py3-none-any.whl)
+set(MSOPST_WHEEL_IMAGE mindstudio_opst-26.0.0-py3-none-any.whl)
 
 # Try hard to reuse an existing msot checkout before downloading.
 set(_ms_root "")
@@ -82,7 +82,7 @@ else()
         FetchContent_Declare(
             third_party_msot
             GIT_REPOSITORY https://gitcode.com/Ascend/msot.git
-            GIT_TAG        3bc33761478c28c0cb53303e3ccd9da5b6239975
+            GIT_TAG        26.0.0
             GIT_SUBMODULES msopgen
             GIT_PROGRESS   TRUE
             SOURCE_DIR "${_ms_root}/msot"

@@ -17,9 +17,9 @@
         <file value="show_kernel_debug_data-0.1.0-py3-none-any.whl" file_type="whl"/>
     </file_info>
     <file_info value="op_gen_whl" copy_type="delivery" src_path="lib/host" dst_path="tools/" install_path="tools/" install_mod="440">
-        <file value="mindstudio_opgen-1.0.0-py3-none-any.whl" file_type="whl"/>
+        <file value="mindstudio_opgen-26.0.0-py3-none-any.whl" file_type="whl"/>
     </file_info>
     <file_info value="op_test_frame_whl" copy_type="delivery" src_path="lib/host" dst_path="tools/" install_path="tools/" install_mod="440">
-        <file value="mindstudio_opst-1.0.0-py3-none-any.whl" file_type="whl"/>
+        <file value="mindstudio_opst-26.0.0-py3-none-any.whl" file_type="whl"/>
     </file_info>
 </block>
