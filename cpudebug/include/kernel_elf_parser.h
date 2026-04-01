@@ -50,21 +50,25 @@ struct ElfKernelInfo {
 
 class KernelModeRegister{
 public:
-    static KernelModeRegister& GetInstance() {
+    static KernelModeRegister& GetInstance()
+    {
         static KernelModeRegister instance;
         return instance;
     }
 
-    void Register(const std::string& kernelName, KernelMode kernelMode) {
+    void Register(const std::string& kernelName, KernelMode kernelMode)
+    {
         kernelModeMap[kernelName] = kernelMode;
     }
 
-    void Clear() {
+    void Clear()
+    {
         kernelModeMap.clear();
     }
 
-    KernelMode GetKenelMode(const std::string& kernelName) {
-        std:: string searchKernelName = KERNEL_SECTION_NAME_PREFIX + kernelName;
+    KernelMode GetKenelMode(const char* kernelName)
+    {
+        std::string searchKernelName = KERNEL_SECTION_NAME_PREFIX + std::string(kernelName);
         auto it = kernelModeMap.find(searchKernelName + KERNEL_MIX_AIV_POSTFIX);
         if (it != kernelModeMap.end()) {
             return it->second;
@@ -77,7 +81,7 @@ public:
         if (it != kernelModeMap.end()) {
             return it->second;
         }
-        throw std::invalid_argument("Kernel mode not found for kernel: " + kernelName);
+        throw std::invalid_argument("Kernel mode not found for kernel: " + std::string(kernelName));
     }
 private:
     std::unordered_map<std::string, KernelMode> kernelModeMap;
@@ -183,7 +187,8 @@ inline uint64_t ByteGetLittleEndian(const uint8_t field[], const int32_t size)
 
 thread_local static uint64_t (*GetByte)(const uint8_t [], const int32_t) = nullptr;
 
-inline Elf64_Ehdr ParseElfHeader(const uint8_t* const elfData, size_t dataSize) {
+inline Elf64_Ehdr ParseElfHeader(const uint8_t* const elfData, size_t dataSize)
+{
     if (dataSize < sizeof(Elf64_Ehdr)) {
         throw std::invalid_argument("Input data size is too small for 64-bit ELF header, get input dataSize: " + std::to_string(dataSize) + 
             ", requires at least: " + std::to_string(sizeof(Elf64_Ehdr)));
@@ -229,7 +234,8 @@ inline Elf64_Ehdr ParseElfHeader(const uint8_t* const elfData, size_t dataSize) 
     return header;
 };
 
-inline Elf64_Shdr GetSectionHeader(const uint8_t* const elfData, size_t dataSize, Elf64_Ehdr header, uint16_t index) {
+inline Elf64_Shdr GetSectionHeader(const uint8_t* const elfData, size_t dataSize, Elf64_Ehdr header, uint16_t index)
+{
     if (index >= header.e_shnum) {
         throw std::invalid_argument("Invalid section index, get index: " + std::to_string(index) + 
             ", but section number is: " + std::to_string(header.e_shnum));
@@ -293,7 +299,8 @@ inline ElfKernelInfo GetKernelInfo(const uint8_t* const elfData, size_t dataSize
     return kernelInfo;
 }
 
-inline KernelMode ToKernelMode(ElfKernelInfo kernelInfo) {
+inline KernelMode ToKernelMode(ElfKernelInfo kernelInfo)
+{
     if (kernelInfo.kernelType == K_TYPE_INVALID) {
         throw std::invalid_argument("get invalid kernel type");
     }
@@ -315,7 +322,9 @@ inline KernelMode ToKernelMode(ElfKernelInfo kernelInfo) {
     return KernelMode::MIX_MODE;
 }
 
-inline void ParseKernelSections(const uint8_t* const elfData, size_t dataSize, Elf64_Ehdr header, Elf64_Shdr shStrTabHdr) {
+inline void ParseKernelSections(const uint8_t* const elfData, size_t dataSize, Elf64_Ehdr header,
+    Elf64_Shdr shStrTabHdr)
+{
     const uint8_t* shStrTab = elfData + shStrTabHdr.sh_offset;
     if (shStrTabHdr.sh_offset + shStrTabHdr.sh_size > dataSize) {
         throw std::invalid_argument("Data size is to small for parse section header string table");
@@ -337,7 +346,8 @@ inline void ParseKernelSections(const uint8_t* const elfData, size_t dataSize, E
     }
 }
 
-inline void RegisterKernelElf(const uint8_t* const elfData, size_t dataSize) {
+inline void RegisterKernelElf(const uint8_t* const elfData, size_t dataSize)
+{
     Elf64_Ehdr header = ParseElfHeader(elfData, dataSize);
     Elf64_Shdr shStrTabHdr = GetSectionHeader(elfData, dataSize, header, header.e_shstrndx);
     ParseKernelSections(elfData, dataSize, header, shStrTabHdr);
