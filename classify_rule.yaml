@@ -6,9 +6,6 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 
-
-
-
 asc-tools:
   commiter:
     "chenyiyuan"
@@ -18,6 +15,36 @@ asc-tools:
       - cpudebug
       - npuchk
       - utils
+    unrelease:
+      - cpudebug/src/regfwk/stub_backtrace.cpp
+      - cpudebug/src/regfwk/stub_base.cpp
+      - utils/opbuild/op_aclnn_generator.cpp
+  llt:
+    ut_check: true
+    st_check: false
+
+python@asc-tools:
+  commiter:
+    "chenyiyuan"
+  team: "asc-tools"
+  src:
+    release:
+      - npuchk
+      - utils/msobjdump
+      - utils/show_kernel_debug_data
+      - utils/templates
+  llt:
+    ut_check: true
+    st_check: false
+
+cpp@asc-tools:
+  commiter:
+    "chenyiyuan"
+  team: "asc-tools"
+  src:
+    release:
+      - cpudebug
+      - utils/opbuild
     unrelease:
       - cpudebug/src/regfwk/stub_backtrace.cpp
       - cpudebug/src/regfwk/stub_base.cpp
