@@ -717,6 +717,70 @@ TEST_F(TEST_OPBUILD, AclnnSupportVersionUt)
     }
 }
 
+TEST_F(TEST_OPBUILD, AclnnRmsNormGradRunSuccess)
+{
+    char buf[1024];
+    char *cur_path = getcwd(buf, 1023);
+    char *src_path = getenv("OPS_SRC_FILE_PATH");
+    EXPECT_TRUE(nullptr != src_path);
+    std::string src_file, gen_file;
+    std::ifstream src_if, gen_if;
+    std::stringstream src_ss, gen_ss;
+    std::vector<std::string> src_files = {"/aclnn_rms_norm_grad_test.cpp.txt",
+        "/aclnn_rms_norm_grad_test.h.txt"};
+    std::vector<std::string> gen_files = {"/aclnn_rms_norm_grad_test.cpp",
+        "/aclnn_rms_norm_grad_test.h"};
+    for (size_t i = 0U; i < src_files.size(); i++) {
+        src_file = std::string(src_path) + src_files[i];
+        gen_file = std::string(cur_path) + gen_files[i];
+        std::cout << "compare " << src_file << " and " << gen_file << std::endl;
+        src_if.open(src_file);
+        EXPECT_TRUE(src_if.is_open());
+        src_ss << src_if.rdbuf();
+        gen_if.open(gen_file);
+        EXPECT_TRUE(gen_if.is_open());
+        gen_ss << gen_if.rdbuf();
+        EXPECT_EQ(src_ss.str(), gen_ss.str());
+        src_if.close();
+        gen_if.close();
+        src_ss.str("");
+        gen_ss.str("");
+        system(("rm -rf " + gen_file).c_str());
+    }
+}
+
+TEST_F(TEST_OPBUILD, AclnnSocVersionTest1RunSuccess)
+{
+    char buf[1024];
+    char *cur_path = getcwd(buf, 1023);
+    char *src_path = getenv("OPS_SRC_FILE_PATH");
+    EXPECT_TRUE(nullptr != src_path);
+    std::string src_file, gen_file;
+    std::ifstream src_if, gen_if;
+    std::stringstream src_ss, gen_ss;
+    std::vector<std::string> src_files = {"/aclnn_soc_version_test1.cpp.txt",
+        "/aclnn_soc_version_test1.h.txt"};
+    std::vector<std::string> gen_files = {"/aclnn_soc_version_test1.cpp",
+        "/aclnn_soc_version_test1.h"};
+    for (size_t i = 0U; i < src_files.size(); i++) {
+        src_file = std::string(src_path) + src_files[i];
+        gen_file = std::string(cur_path) + gen_files[i];
+        std::cout << "compare " << src_file << " and " << gen_file << std::endl;
+        src_if.open(src_file);
+        EXPECT_TRUE(src_if.is_open());
+        src_ss << src_if.rdbuf();
+        gen_if.open(gen_file);
+        EXPECT_TRUE(gen_if.is_open());
+        gen_ss << gen_if.rdbuf();
+        EXPECT_EQ(src_ss.str(), gen_ss.str());
+        src_if.close();
+        gen_if.close();
+        src_ss.str("");
+        gen_ss.str("");
+        system(("rm -rf " + gen_file).c_str());
+    }
+}
+
 TEST_F(TEST_OPBUILD, AclnnMC2RunSuccess)
 {
     char buf[1024];
@@ -1489,7 +1553,7 @@ TEST_F(TEST_OPBUILD, AclnnGenScalarFailed02)
     OpDefName paramNames;
     paramNames.inputsName = {"x1", "x2"};
     paramNames.originInputName = {"x1", "x2"};
-    opGen.AclnnOpGenCodeAddInputTensors(opDef, paramNames, outfile, false);
+    opGen.AclnnOpGenCodeAddInputTensors(opDef, paramNames, outfile, false, false);
     outfile.close();
 
     std::vector<std::string> errMessage = Generator::GetErrorMessage();
@@ -1687,6 +1751,75 @@ TEST_F(TEST_OPBUILD, GenerateCodeForComputeUnits)
     opbuild::Params::GetInstance().Parse(2, argv2);
     res = cfgGen.GenerateCode();
     EXPECT_EQ(res, opbuild::OPBUILD_SUCCESS);
+}
+
+void setContiguousConflictErrorMessage(bool &hasErrorMessage, std::vector<std::string> errMessage,
+                                        const std::string& expectedErr)
+{
+    for (size_t i = 0U; i < errMessage.size(); i++) {
+        if (errMessage[i].find(expectedErr) != std::string::npos) {
+            hasErrorMessage = true;
+            break;
+        }
+    }
+}
+
+// STC-CONT-001: 默认配置同时设置AutoContiguous和IgnoreContiguous（冲突检测）
+TEST_F(TEST_OPBUILD, AclnnContiguousConflictBase)
+{
+    std::string fileName = "contiguous_conflict_base_" + std::to_string(getpid()) + ".txt";
+    std::ofstream outfile = std::ofstream(fileName);
+    OpDef opDef("ContiguousConflictBase");
+    opDef.Input("x1").ParamType(REQUIRED).DataType({ ge::DT_INT64 }).AutoContiguous().IgnoreContiguous();
+    opDef.Input("x2").ParamType(REQUIRED).DataType({ ge::DT_INT64 });
+    opDef.Output("y1").ParamType(REQUIRED).DataType({ ge::DT_INT64 });
+    opDef.AICore().AddConfig("ascend910b");
+
+    std::vector<std::string> opsvec({"ContiguousConflictBase"});
+    AclnnOpGenerator opGen(opsvec);
+    OpDefName opdefName;
+    opdefName.inputsName = {"x1", "x2"};
+    opdefName.originInputName = {"x1", "x2"};
+    opGen.AclnnOpGenCodeAddInputTensors(opDef, opdefName, outfile, false, false);
+    outfile.close();
+
+    std::vector<std::string> errMessage = Generator::GetErrorMessage();
+    bool hasErrorMessage = false;
+    std::string expectedErr = "Input 'x1' of op ContiguousConflictBase has both AutoContiguous and IgnoreContiguous configured, which is conflicting.";
+    setContiguousConflictErrorMessage(hasErrorMessage, errMessage, expectedErr);
+    EXPECT_EQ(hasErrorMessage, true);
+}
+
+// STC-CONT-002: 特定SOC配置同时设置AutoContiguous和IgnoreContiguous（冲突检测）
+TEST_F(TEST_OPBUILD, AclnnContiguousConflictSoc)
+{
+    std::string fileName = "contiguous_conflict_soc_" + std::to_string(getpid()) + ".txt";
+    std::ofstream outfile = std::ofstream(fileName);
+    OpDef opDef("ContiguousConflictSoc");
+    opDef.Input("x1").ParamType(REQUIRED).DataType({ ge::DT_INT64 });
+    opDef.Input("x2").ParamType(REQUIRED).DataType({ ge::DT_INT64 });
+    opDef.Output("y1").ParamType(REQUIRED).DataType({ ge::DT_INT64 });
+    opDef.AICore().AddConfig("ascend910");
+
+    OpAICoreConfig configConflict;
+    configConflict.Input("x1").ParamType(REQUIRED).DataType({ ge::DT_INT64 }).AutoContiguous().IgnoreContiguous();
+    configConflict.Input("x2").ParamType(REQUIRED).DataType({ ge::DT_INT64 });
+    configConflict.Output("y1").ParamType(REQUIRED).DataType({ ge::DT_INT64 });
+    opDef.AICore().AddConfig("ascend910b", configConflict);
+
+    std::vector<std::string> opsvec({"ContiguousConflictSoc"});
+    AclnnOpGenerator opGen(opsvec);
+    OpDefName opdefName;
+    opdefName.inputsName = {"x1", "x2"};
+    opdefName.originInputName = {"x1", "x2"};
+    opGen.AclnnOpGenCodeAddInputTensors(opDef, opdefName, outfile, false, false);
+    outfile.close();
+
+    std::vector<std::string> errMessage = Generator::GetErrorMessage();
+    bool hasErrorMessage = false;
+    std::string expectedErr = "Input 'x1' of op ContiguousConflictSoc has both AutoContiguous and IgnoreContiguous configured on SOC ascend910b, which is conflicting.";
+    setContiguousConflictErrorMessage(hasErrorMessage, errMessage, expectedErr);
+    EXPECT_EQ(hasErrorMessage, true);
 }
 
 } // namespace ops

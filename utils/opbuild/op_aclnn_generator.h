@@ -73,7 +73,8 @@ constexpr const char* OP_ACLNN_SOC_INFO =
     "    SOC_VERSION_BS9SX2A = 12,\n"
     "    SOC_VERSION_ASCEND910_96 = 13,\n"
     "    SOC_VERSION_KIRINX90 = 14,\n"
-    "    SOC_VERSION_KIRIN9030 = 15\n"
+    "    SOC_VERSION_KIRIN9030 = 15,\n"
+    "    SOC_VERSION_INVALID = 99\n"
     "};\n";// NOTE: Always add new SOC versions at the end of this enum.
 constexpr const char* OP_ACLNN_NNOPBASE_ATTR_DTYPE_INFO = 
     "enum NnopbaseAttrDtype {\n"
@@ -112,6 +113,7 @@ constexpr const char *OP_ACLNN_EXTERN_FUNC =
     "extern aclnnStatus NnopbaseAddArrayAttrWithDtype(void *executor, void *array, const size_t len, "
     "const size_t elementSize, const size_t index, const NnopbaseAttrDtype dtype);\n"
     "extern uint64_t NnopbaseMsprofSysTime();\n"
+    "extern uint32_t __attribute__((weak)) NnopbaseGetSocEnum();\n"
     "extern aclnnStatus NnopbaseAddTilingId(void *executor, NnopbaseDfxId *tilingId);\n"
     "extern void NnopbaseReportApiInfo(const uint64_t beginTime, NnopbaseDfxId &dfxId);\n"
     "extern aclnnStatus NnopbaseRunForWorkspace(void *executor, uint64_t *workspaceLen);\n"
@@ -304,6 +306,33 @@ struct OpDefName {
     bool hasOutputShapeDepend;
 };
 
+// 辅助结构：存储每个输入在不同 Soc 上的 Contiguous 配置
+enum class ContiguousType : int32_t {
+    Default = 0,           // 默认(无特殊配置)
+    IgnoreContiguous = 1,  // 忽略连续性检查
+    AutoContiguous = 2     // 自动转换为连续tensor
+};
+
+struct InputContiguousConfig {
+    std::string inputName;
+    int32_t inputIndex = -1;
+    std::map<std::string, ContiguousType> socContiguousType;
+};
+
+struct OpDefIoDesc {
+    OpParamDef input;
+    std::string inputName;
+    size_t index = 0U;
+    std::string opType;
+};
+
+struct OpCodeGenConfig {
+    bool valueDependApi = false;
+    bool needSocCheck = false;
+    bool useBaseConfig = false;
+    std::string indent;
+};
+
 class AclnnOpGenerator : public Generator {
 public:
     explicit AclnnOpGenerator(std::vector<std::string>& ops);
@@ -329,10 +358,10 @@ public:
         OpAttrDef& attr, std::ofstream& outfile, std::string& name, const std::string opType) const;
     void AclnnOpGenFunProtoAttrParams(
         OpDef& opDef, std::vector<std::string>& paramNames, std::ofstream& outfile, uint32_t version) const;
-    void AclnnOpGenValueDependInput(OpParamDef& input, std::string& name, size_t index, std::ofstream& outfile) const;
-    bool AclOpGenScalarInput(OpParamDef& input, size_t index,
-        OpDefName& opdefName, std::ofstream& outfile, std::string funcName) const;
-    void AclnnOpGenCodeAddInputTensors(OpDef& opDef, OpDefName& opdefName, std::ofstream& outfile, bool valueDependApi) const;
+    void AclnnOpGenValueDependInput(OpParamDef& input, std::string& name, size_t index, std::ofstream& outfile, const std::string& indent = "") const;
+    bool AclOpGenScalarInputWithIndent(OpDefIoDesc& opDefIoDesc,
+        OpDefName& opdefName, std::ofstream& outfile, std::string funcName, const std::string& indent) const;
+    void AclnnOpGenCodeAddInputTensors(OpDef& opDef, OpDefName& opdefName, std::ofstream& outfile, bool valueDependApi, bool needSocCheck) const;
     void AclnnOpGenCodeAddOutputShapeDependTensors(
         std::vector<OpParamDef>& outputs, std::vector<std::string>& name, std::ofstream& outfile) const;
     void AclnnOpGenCodeAddOutputTensors(std::vector<OpParamDef>& outputs, std::vector<std::string>& name,
@@ -385,13 +414,34 @@ public:
     void AclnnGenNameSpaceInfo(std::ofstream& outfile, OpDef& opDef) const;
     void AclnnGenCheckInfo(std::ofstream& outfile) const;
     bool IsSupportAutoContiguous(std::vector<OpParamDef>& inputs) const;
+    // 获取每个输入在不同Soc上的Contiguous配置
+    std::vector<InputContiguousConfig> GetInputContiguousConfigs(OpDef& opDef) const;
+    // 检查是否有Soc配置了AutoContiguous
+    std::map<std::string, bool> GetSocAutoContiguousMap(OpDef& opDef) const;
+    // 检查是否需要SOC判断（用于Input的IgnoreContiguous差异或AutoContiguous差异）
+    bool NeedSocCheckForContiguous(OpDef& opDef) const;
+    // 校验同一个输入在同一个SOC上是否同时配置了AutoContiguous和IgnoreContiguous（两者冲突）
+    bool ValidateInputContiguousConflict(OpDef& opDef) const;
+    // 检查AutoContiguous配置并打印WARNING日志
+    void CheckAutoContiguousWarning(OpDef& opDef) const;
     void AclnnGenUncontDeclaration(OpDef& opDef, std::ofstream& outfile) const;
     void AclnnGenCodeDecImpl(std::string& declFile, std::ofstream& outfile) const;
     void AclnnGenCodeImplStart(std::string& declFile, bool hasOutputShapeDepend, std::ofstream& outfile, OpDef& opDef) const;
     void AclnnGenCodeImplEnd(std::ofstream& outfile) const;
-    std::string AclnnOpGetIoSize(std::vector<OpParamDef>& params, std::ofstream& outfile) const;
     void AclopGenDfxInfo(OpDef& opDef, std::string& opName, std::string& prefixName, std::ofstream& outfile) const;
-    void AclnnOpGenCodeSetUnContInfo(OpDef& opDef, std::ofstream& outfile) const;
+    // ========== SOC条件判断辅助函数 ==========
+    void AnalyzeSocAutoContiguousSupport(OpDef& opDef, bool& allSupport, bool& noneSupport,
+        std::vector<std::string>& autoContSocs) const;
+    bool HasDefaultAutoContiguous(std::vector<OpParamDef>& inputs) const;
+    void GenerateSocConditionCode(const std::vector<std::string>& socNames, std::ofstream& outfile,
+        bool withNullCheck, const std::string& indent = "    ") const;
+    void GenerateCurrentSocDeclaration(std::ofstream& outfile, const std::string& indent = "    ") const;
+    void GenerateViewDeclaration(std::ofstream& outfile, const std::string& indent = "    ") const;
+    void GetIgnoreContSocsForInput(const std::vector<InputContiguousConfig>& contConfigs, size_t idx,
+        bool& hasIgnoreCont, std::vector<std::string>& ignoreContSocs) const;
+    void GenSingleInputCode(OpDefIoDesc& opDefIoDesc,
+        OpDefName& opdefName, std::ofstream& outfile, const OpCodeGenConfig& genConfig, const std::vector<InputContiguousConfig>& contConfigs) const;
+    void AclnnOpGenCodeSetUnContInfo(OpDef& opDef, std::ofstream& outfile, bool needSocCheck) const;
     void AclopGenCodeCommon(OpDef& opDef, OpDefName& opdefName, std::ofstream& outfile, uint32_t version, bool valueDependApi) const;
     void AclnnOpGenIoParam(std::vector<OpParamDef>& params, std::vector<std::string>& paramName,
         uint32_t version, const bool isInput, std::ofstream& outfile) const;
@@ -419,8 +469,6 @@ public:
     bool IsSupportProduct(OpDef& opDef) const;
     std::vector<std::string> Spilt(const std::string& str, const char delim) const;
     void AclnnGenMc2Declaration(OpDef& opDef, std::ofstream& outfile) const;
-    bool AclnnOpCheckMC2Groups(
-        std::vector<std::string>& name, std::set<ge::AscendString>& groups, const std::string& opType) const;
     void AclnnGenOutEmptyLaunchDeclaration(OpDef& opDef, ofstream& outfile) const;
     void AclnnOpGenCodeAttrParamsImpl(std::vector<OpAttrDef>& attrs, std::vector<std::string>& name, size_t index,
         int32_t type, std::ofstream& outfile) const;

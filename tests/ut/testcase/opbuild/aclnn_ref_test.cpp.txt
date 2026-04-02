@@ -40,7 +40,8 @@ enum SocType {
     SOC_VERSION_BS9SX2A = 12,
     SOC_VERSION_ASCEND910_96 = 13,
     SOC_VERSION_KIRINX90 = 14,
-    SOC_VERSION_KIRIN9030 = 15
+    SOC_VERSION_KIRIN9030 = 15,
+    SOC_VERSION_INVALID = 99
 };
 enum NnopbaseAttrDtype {
     kNnopbaseBool = 0U,
@@ -91,6 +92,7 @@ extern aclnnStatus NnopbaseAddFloatArrayAttr(void *executor, const aclFloatArray
 extern aclnnStatus NnopbaseAddBoolArrayAttr(void *executor, const aclBoolArray* array, const size_t index);
 extern aclnnStatus NnopbaseAddArrayAttrWithDtype(void *executor, void *array, const size_t len, const size_t elementSize, const size_t index, const NnopbaseAttrDtype dtype);
 extern uint64_t NnopbaseMsprofSysTime();
+extern uint32_t __attribute__((weak)) NnopbaseGetSocEnum();
 extern aclnnStatus NnopbaseAddTilingId(void *executor, NnopbaseDfxId *tilingId);
 extern void NnopbaseReportApiInfo(const uint64_t beginTime, NnopbaseDfxId &dfxId);
 extern aclnnStatus NnopbaseRunForWorkspace(void *executor, uint64_t *workspaceLen);

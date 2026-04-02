@@ -126,6 +126,22 @@ REG_OP(OutShapeDepOnCompute)
     .DYNAMIC_OUTPUT(y3, ge::TensorType::ALL())
     .OP_END_FACTORY_REG(OutShapeDepOnCompute);
 
+REG_OP(SocVersionTest1)
+    .INPUT(x1, ge::TensorType::ALL())
+    .INPUT(x2, ge::TensorType::ALL())
+    .INPUT(x3, ge::TensorType::ALL())
+    .OUTPUT(y1, ge::TensorType::ALL())
+    .OP_END_FACTORY_REG(SocVersionTest1);
+
+REG_OP(RmsNormGradTest)
+    .INPUT(dy, ge::TensorType::ALL())
+    .INPUT(x, ge::TensorType::ALL())
+    .INPUT(rstd, ge::TensorType::ALL())
+    .INPUT(gamma, ge::TensorType::ALL())
+    .OUTPUT(dx, ge::TensorType::ALL())
+    .OUTPUT(dgamma, ge::TensorType::ALL())
+    .OP_END_FACTORY_REG(RmsNormGradTest);
+
 }
 
 #endif

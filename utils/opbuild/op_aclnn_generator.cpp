@@ -437,29 +437,31 @@ void AclnnOpGenerator::AclnnOpGenFunProtoAttrParams(
 }
 
 void AclnnOpGenerator::AclnnOpGenValueDependInput(
-    OpParamDef& input, std::string& name, size_t index, ofstream& outfile) const
+    OpParamDef& input, std::string& name, size_t index, ofstream& outfile, const std::string& indent) const
 {
     ge::DataType dataType = input.GetDataTypes()[0];
     if (dataType == ge::DT_FLOAT) {
-        outfile << "    NNOPBASE_ASSERT_OK_RETVAL(NnopbaseAddFloatArrayInput(*executor, " << name << ", " << index <<
+        outfile << indent << "NNOPBASE_ASSERT_OK_RETVAL(NnopbaseAddFloatArrayInput(*executor, " << name << ", " << index <<
                    "));\n";
     } else if (dataType == ge::DT_BOOL) {
-        outfile << "    NNOPBASE_ASSERT_OK_RETVAL(NnopbaseAddBoolArrayInput(*executor, " << name << ", " << index <<
+        outfile << indent << "NNOPBASE_ASSERT_OK_RETVAL(NnopbaseAddBoolArrayInput(*executor, " << name << ", " << index <<
                    "));\n";
     } else {
-        outfile << "    NNOPBASE_ASSERT_OK_RETVAL(NnopbaseAddIntArrayInput(*executor, " << name << ", " << index <<
+        outfile << indent << "NNOPBASE_ASSERT_OK_RETVAL(NnopbaseAddIntArrayInput(*executor, " << name << ", " << index <<
                    "));\n";
     }
 }
 
-bool AclnnOpGenerator::AclOpGenScalarInput(OpParamDef& input, size_t index,
-    OpDefName& opdefName, ofstream& outfile, string funcName) const
+bool AclnnOpGenerator::AclOpGenScalarInputWithIndent(OpDefIoDesc& opDefIoDesc,
+    OpDefName& opdefName, ofstream& outfile, string funcName, const std::string& indent) const
 {
+    auto& index = opDefIoDesc.index;
+    auto& input = opDefIoDesc.input;
     const char* const srcName = input.GetScalarName().GetString();
     if (!std::string(srcName).empty()) {
         for (size_t j = 0U; j < opdefName.originInputName.size(); j++) {
             if (std::string(srcName) == opdefName.originInputName[j]) {
-                outfile << "    NNOPBASE_ASSERT_OK_RETVAL(" << funcName << "(*executor, "
+                outfile << indent << "NNOPBASE_ASSERT_OK_RETVAL(" << funcName << "(*executor, "
                         << opdefName.inputsName[index] << ", " << index << ", " << j << ", ge::DT_UNDEFINED));\n";
                 return true;
             }
@@ -469,52 +471,59 @@ bool AclnnOpGenerator::AclOpGenScalarInput(OpParamDef& input, size_t index,
         if (dtype == DTYPE_SUPPORT_MAP.end()) {
             return false;
         }
-        outfile << "    NNOPBASE_ASSERT_OK_RETVAL(" << funcName << "(*executor, " << opdefName.inputsName[index]
+        outfile << indent << "NNOPBASE_ASSERT_OK_RETVAL(" << funcName << "(*executor, " << opdefName.inputsName[index]
                 << ", " << index << ", -1, " << dtype->second << "));\n";
     } else {
-        outfile << "    NNOPBASE_ASSERT_OK_RETVAL(" << funcName << "(*executor, " << opdefName.inputsName[index]
+        outfile << indent << "NNOPBASE_ASSERT_OK_RETVAL(" << funcName << "(*executor, " << opdefName.inputsName[index]
                 << ", " << index << ", -1, ge::DT_UNDEFINED));\n";
     }
     return true;
 }
 
-void AclnnOpGenerator::AclnnOpGenCodeAddInputTensors(OpDef& opDef, OpDefName& opdefName, ofstream& outfile, bool valueDependApi) const
+void AclnnOpGenerator::AclnnOpGenCodeAddInputTensors(OpDef& opDef, OpDefName& opdefName, ofstream& outfile, bool valueDependApi, bool needSocCheck)
+const
 {
     std::vector<OpParamDef>& inputs = opDef.GetInputs();
     const std::string opType = opDef.GetOpType().GetString();
-    for (size_t i = 0U; i < inputs.size(); i++) {
-        if (inputs[i].IsOutputShapeDependOnCompute()) {
-            std::string str = "Input " + std::string(inputs[i].GetParamName().GetString()) +
-                              " of " + opType + " does not support OutputShapeDependOnCompute.";
-            Generator::SetErrorMessage(str);
-            return;
+    if (!ValidateInputContiguousConflict(opDef)) {
+        return;
+    }
+    std::vector<InputContiguousConfig> contConfigs = GetInputContiguousConfigs(opDef);
+    if (needSocCheck) {
+        outfile << "    uint32_t currentSoc = SOC_VERSION_INVALID;\n";
+        outfile << "    if (NnopbaseGetSocEnum != NULL) {\n";
+        outfile << "        currentSoc = NnopbaseGetSocEnum();\n";
+        outfile << "        if (currentSoc == SOC_VERSION_INVALID) {\n";
+        outfile << "            NnopbaseOpLogE(ACLNN_ERR_PARAM_INVALID, \"Aclnn does not support current socVersion!\");\n";
+        outfile << "            return ACLNN_ERR_PARAM_INVALID;\n";
+        outfile << "        }\n";
+        for (size_t i = 0U; i < inputs.size(); i++) {
+            OpDefIoDesc opDefIoDesc {inputs[i], opdefName.inputsName[i], i, opType};
+            if (inputs[i].IsOutputShapeDependOnCompute()) {
+                Generator::SetErrorMessage("Input " + std::string(inputs[i].GetParamName().GetString()) +
+                    " of " + opType + " does not support OutputShapeDependOnCompute.");
+                return;
+            }
+            GenSingleInputCode(opDefIoDesc, opdefName, outfile, {valueDependApi, false, false, "        "}, 
+                contConfigs);
         }
-        int32_t type = inputs[i].GetParamType();
-        const char* const valueDepend = inputs[i].GetValueDepend().GetString();
-        if (!valueDependApi && !std::string(valueDepend).empty()) {
-            AclnnOpGenValueDependInput(inputs[i], opdefName.inputsName[i], i, outfile);
-        } else if (inputs[i].IsScalar()) {
-            if (!AclOpGenScalarInput(inputs[i], i, opdefName, outfile, "NnopbaseAddScalarInput")) {
-                std::string str = "Dtype of input " + std::string(inputs[i].GetParamName().GetString());
-                AclnnSetErrorMessage(str, opType);
+        outfile << "    } else {\n";
+        for (size_t i = 0U; i < inputs.size(); i++) {
+            OpDefIoDesc opDefIoDesc {inputs[i], opdefName.inputsName[i], i, opType};
+            GenSingleInputCode(opDefIoDesc, opdefName, outfile, {valueDependApi, false, true, "        "},
+                contConfigs);
+        }
+        outfile << "    }\n";
+    } else {
+        for (size_t i = 0U; i < inputs.size(); i++) {
+            if (inputs[i].IsOutputShapeDependOnCompute()) {
+                Generator::SetErrorMessage("Input " + std::string(inputs[i].GetParamName().GetString()) +
+                    " of " + opType + " does not support OutputShapeDependOnCompute.");
+                return;
             }
-        } else if (inputs[i].IsScalarList()) {
-            if (!AclOpGenScalarInput(inputs[i], i, opdefName, outfile, "NnopbaseAddScalarListInput")) {
-                std::string str = "Dtype of input " + std::string(inputs[i].GetParamName().GetString());
-                AclnnSetErrorMessage(str, opType);
-            }
-        } else if (type == DYNAMIC) {
-            outfile << "    NNOPBASE_ASSERT_OK_RETVAL(NnopbaseAddDynamicInput(*executor, " << opdefName.inputsName[i]
-                    << ", " << i << "));\n";
-        } else {
-            bool ignoreCont = inputs[i].GetIgnoreContiguous();
-            if (ignoreCont) {
-                outfile << "    NNOPBASE_ASSERT_OK_RETVAL(NnopbaseAddIgnoreContinuesInput(*executor, "
-                        << opdefName.inputsName[i] << ", " << i << "));\n";
-            } else {
-                outfile << "    NNOPBASE_ASSERT_OK_RETVAL(NnopbaseAddInput(*executor, " << opdefName.inputsName[i]
-                        << ", " << i << "));\n";
-            }
+            OpDefIoDesc opDefIoDesc {inputs[i], opdefName.inputsName[i], i, opType};
+            GenSingleInputCode(opDefIoDesc, opdefName, outfile, {valueDependApi, false, false, "    "},
+                contConfigs);
         }
     }
 }
@@ -1346,9 +1355,348 @@ bool AclnnOpGenerator::IsSupportAutoContiguous(std::vector<OpParamDef>& inputs) 
     return false;
 }
 
+void AclnnOpGenerator::AnalyzeSocAutoContiguousSupport(OpDef& opDef, bool& allSupport, bool& noneSupport,
+    std::vector<std::string>& autoContSocs) const
+{
+    std::map<std::string, bool> socAutoContMap = GetSocAutoContiguousMap(opDef);
+    allSupport = true;
+    noneSupport = true;
+    
+    for (auto& pair : socAutoContMap) {
+        if (pair.second) {
+            noneSupport = false;
+            autoContSocs.push_back(pair.first);
+        } else {
+            allSupport = false;
+        }
+    }
+}
+
+bool AclnnOpGenerator::HasDefaultAutoContiguous(std::vector<OpParamDef>& inputs) const
+{
+    for (auto& input : inputs) {
+        if (input.GetAutoContiguous()) {
+            return true;
+        }
+    }
+    return false;
+}
+
+void AclnnOpGenerator::GenerateSocConditionCode(const std::vector<std::string>& socNames, std::ofstream& outfile,
+    bool withNullCheck, const std::string& indent) const
+{
+    if (withNullCheck) {
+        outfile << indent << "if (NnopbaseGetSocEnum == NULL || (currentSoc == ";
+        for (size_t i = 0; i < socNames.size(); i++) {
+            auto socIt = SOC_SUPPORT_MAP.find(socNames[i]);
+            if (socIt != SOC_SUPPORT_MAP.end()) {
+                if (i > 0) {
+                    outfile << " || currentSoc == ";
+                }
+                outfile << socIt->second;
+            }
+        }
+        outfile << ")) {\n";
+    } else {
+        outfile << indent << "if (";
+        for (size_t i = 0; i < socNames.size(); i++) {
+            auto socIt = SOC_SUPPORT_MAP.find(socNames[i]);
+            if (socIt != SOC_SUPPORT_MAP.end()) {
+                if (i > 0) {
+                    outfile << " || ";
+                }
+                outfile << "currentSoc == " << socIt->second;
+            }
+        }
+        outfile << ") {\n";
+    }
+}
+
+void AclnnOpGenerator::GenerateCurrentSocDeclaration(std::ofstream& outfile, const std::string& indent) const
+{
+    outfile << indent << "uint32_t currentSoc = SOC_VERSION_INVALID;\n";
+    outfile << indent << "if (NnopbaseGetSocEnum != NULL) {\n";
+    outfile << indent << "    currentSoc = NnopbaseGetSocEnum();\n";
+    outfile << indent << "}\n";
+}
+
+void AclnnOpGenerator::GetIgnoreContSocsForInput(const std::vector<InputContiguousConfig>& contConfigs, size_t idx,
+    bool& hasIgnoreCont, std::vector<std::string>& ignoreContSocs) const
+{
+    hasIgnoreCont = false;
+    ignoreContSocs.clear();
+    if (idx < contConfigs.size()) {
+        for (auto& pair : contConfigs[idx].socContiguousType) {
+            if (pair.second == ContiguousType::IgnoreContiguous) {
+                hasIgnoreCont = true;
+                ignoreContSocs.push_back(pair.first);
+            }
+        }
+    }
+}
+
+void AclnnOpGenerator::GenSingleInputCode(OpDefIoDesc& opDefIoDesc,
+    OpDefName& opdefName, std::ofstream& outfile, const OpCodeGenConfig& genConfig, const std::vector<InputContiguousConfig>& contConfigs) const
+{
+    const char* const valueDepend = opDefIoDesc.input.GetValueDepend().GetString();
+    if (!genConfig.valueDependApi && !std::string(valueDepend).empty()) {
+        AclnnOpGenValueDependInput(opDefIoDesc.input, opDefIoDesc.inputName, opDefIoDesc.index, outfile, genConfig.indent);
+    } else if (opDefIoDesc.input.IsScalar()) {
+        if (!AclOpGenScalarInputWithIndent(opDefIoDesc, opdefName, outfile, "NnopbaseAddScalarInput", genConfig.indent)) {
+            std::string str = "Dtype of input " + std::string(opDefIoDesc.input.GetParamName().GetString());
+            AclnnSetErrorMessage(str, opDefIoDesc.opType);
+        }
+    } else if (opDefIoDesc.input.IsScalarList()) {
+        if (!AclOpGenScalarInputWithIndent(opDefIoDesc, opdefName, outfile, "NnopbaseAddScalarListInput", genConfig.indent)) {
+            std::string str = "Dtype of input " + std::string(opDefIoDesc.input.GetParamName().GetString());
+            AclnnSetErrorMessage(str, opDefIoDesc.opType);
+        }
+    } else if (opDefIoDesc.input.GetParamType() == DYNAMIC) {
+        outfile << genConfig.indent << "NNOPBASE_ASSERT_OK_RETVAL(NnopbaseAddDynamicInput(*executor, " << opDefIoDesc.inputName
+                << ", " << opDefIoDesc.index << "));\n";
+    } else if (genConfig.useBaseConfig) {
+        if (opDefIoDesc.input.GetIgnoreContiguous()) {
+            outfile << genConfig.indent << "NNOPBASE_ASSERT_OK_RETVAL(NnopbaseAddIgnoreContinuesInput(*executor, "
+                    << opDefIoDesc.inputName << ", " << opDefIoDesc.index << "));\n";
+        } else {
+            outfile << genConfig.indent << "NNOPBASE_ASSERT_OK_RETVAL(NnopbaseAddInput(*executor, "
+                    << opDefIoDesc.inputName << ", " << opDefIoDesc.index << "));\n";
+        }
+    } else {
+        bool hasIgnoreCont = false;
+        std::vector<std::string> ignoreContSocs;
+        GetIgnoreContSocsForInput(contConfigs, opDefIoDesc.index, hasIgnoreCont, ignoreContSocs);
+        if (hasIgnoreCont && ignoreContSocs.size() < contConfigs[opDefIoDesc.index].socContiguousType.size()) {
+            GenerateSocConditionCode(ignoreContSocs, outfile, false, genConfig.indent);
+            outfile << genConfig.indent << "    NNOPBASE_ASSERT_OK_RETVAL(NnopbaseAddIgnoreContinuesInput(*executor, "
+                    << opDefIoDesc.inputName << ", " << opDefIoDesc.index << "));\n";
+            outfile << genConfig.indent << "} else {\n";
+            outfile << genConfig.indent << "    NNOPBASE_ASSERT_OK_RETVAL(NnopbaseAddInput(*executor, "
+                    << opDefIoDesc.inputName << ", " << opDefIoDesc.index << "));\n";
+            outfile << genConfig.indent << "}\n";
+        } else if (hasIgnoreCont) {
+            outfile << genConfig.indent << "NNOPBASE_ASSERT_OK_RETVAL(NnopbaseAddIgnoreContinuesInput(*executor, "
+                    << opDefIoDesc.inputName << ", " << opDefIoDesc.index << "));\n";
+        } else {
+            outfile << genConfig.indent << "NNOPBASE_ASSERT_OK_RETVAL(NnopbaseAddInput(*executor, "
+                    << opDefIoDesc.inputName << ", " << opDefIoDesc.index << "));\n";
+        }
+    }
+}
+
+bool AclnnOpGenerator::ValidateInputContiguousConflict(OpDef& opDef) const
+{
+    const std::string opType = opDef.GetOpType().GetString();
+    
+    // 检查baseInputs（默认配置）是否有冲突
+    std::vector<OpParamDef>& baseInputs = opDef.GetInputs();
+    for (auto& input : baseInputs) {
+        if (input.GetIgnoreContiguous() && input.GetAutoContiguous()) {
+            std::string errMsg = "Input '" + std::string(input.GetParamName().GetString()) +
+                "' of op " + opType + 
+                " has both AutoContiguous and IgnoreContiguous configured, which is conflicting.";
+            Generator::SetErrorMessage(errMsg);
+            return false;
+        }
+    }
+    
+    // 检查每个SOC配置是否有冲突
+    for (auto& aicoreItem : opDef.AICore().GetAICoreConfigs()) {
+        std::string socVer = aicoreItem.first.GetString();
+        if (SOC_SUPPORT_MAP.find(socVer) == SOC_SUPPORT_MAP.end()) {
+            continue;
+        }
+        OpAICoreConfig aicoreConfig = aicoreItem.second;
+        std::vector<OpParamDef> mergedInputs = opDef.GetMergeInputs(aicoreConfig);
+        
+        for (auto& input : mergedInputs) {
+            if (input.GetIgnoreContiguous() && input.GetAutoContiguous()) {
+                std::string errMsg = "Input '" + std::string(input.GetParamName().GetString()) +
+                    "' of op " + opType + 
+                    " has both AutoContiguous and IgnoreContiguous configured on SOC " + socVer +
+                    ", which is conflicting.";
+                Generator::SetErrorMessage(errMsg);
+                return false;
+            }
+        }
+    }
+    // 检查AutoContiguous配置并打印警告
+    CheckAutoContiguousWarning(opDef);
+    return true;
+}
+
+void AclnnOpGenerator::CheckAutoContiguousWarning(OpDef& opDef) const
+{
+    const std::string opType = opDef.GetOpType().GetString();
+    std::vector<InputContiguousConfig> contConfigs = GetInputContiguousConfigs(opDef);
+    
+    // 收集所有SOC版本
+    std::set<std::string> allSocs;
+    for (const auto& config : contConfigs) {
+        for (const auto& pair : config.socContiguousType) {
+            allSocs.insert(pair.first);
+        }
+    }
+    
+    // 辅助函数：将输入名称列表拼接为逗号分隔的字符串
+    auto joinInputs = [](const std::vector<std::string>& inputs) -> std::string {
+        std::string result;
+        for (size_t i = 0; i < inputs.size(); i++) {
+            if (i > 0) result += ", ";
+            result += inputs[i];
+        }
+        return result;
+    };
+    
+    // 遍历每个SOC，检查AutoContiguous配置
+    for (const std::string& socVer : allSocs) {
+        std::vector<std::string> autoContInputs;  // 配置了AutoContiguous的输入
+        std::vector<std::string> defaultInputs;   // 既没有AutoContiguous也没有IgnoreContiguous的输入
+        
+        for (const auto& config : contConfigs) {
+            auto it = config.socContiguousType.find(socVer);
+            if (it != config.socContiguousType.end()) {
+                if (it->second == ContiguousType::AutoContiguous) {
+                    autoContInputs.push_back(config.inputName);
+                } else if (it->second == ContiguousType::Default) {
+                    defaultInputs.push_back(config.inputName);
+                }
+            }
+        }
+        
+        // 如果有AutoContiguous输入，且有默认输入，打印WARNING
+        if (!autoContInputs.empty() && !defaultInputs.empty()) {
+            ASCENDLOGW("In %s, op %s has inputs [%s] configured with AutoContiguous, "
+                "but inputs [%s] have no AutoContiguous or IgnoreContiguous configured. "
+                "During aclnn execution, these inputs will also transform from non-contiguous to contiguous tensor.\n",
+                socVer.c_str(), opType.c_str(),
+                joinInputs(autoContInputs).c_str(), joinInputs(defaultInputs).c_str());
+        }
+    }
+}
+
+std::vector<InputContiguousConfig> AclnnOpGenerator::GetInputContiguousConfigs(OpDef& opDef) const
+{
+    std::vector<InputContiguousConfig> configs;
+    std::vector<OpParamDef>& baseInputs = opDef.GetInputs();
+    
+    // 初始化每个输入的配置
+    for (size_t i = 0; i < baseInputs.size(); i++) {
+        InputContiguousConfig config;
+        config.inputName = baseInputs[i].GetParamName().GetString();
+        config.inputIndex = static_cast<int32_t>(i);
+        configs.push_back(config);
+    }
+    
+    // 遍历每个Soc配置，收集每个输入的contiguous类型
+    for (auto& aicoreItem : opDef.AICore().GetAICoreConfigs()) {
+        std::string socVer = aicoreItem.first.GetString();
+        if (SOC_SUPPORT_MAP.find(socVer) == SOC_SUPPORT_MAP.end()) {
+            continue;
+        }
+        OpAICoreConfig aicoreConfig = aicoreItem.second;
+        std::vector<OpParamDef> mergedInputs = opDef.GetMergeInputs(aicoreConfig);
+        
+        for (size_t i = 0; i < mergedInputs.size() && i < configs.size(); i++) {
+            ContiguousType contType = ContiguousType::Default;
+            if (mergedInputs[i].GetIgnoreContiguous()) {
+                contType = ContiguousType::IgnoreContiguous;
+            } else if (mergedInputs[i].GetAutoContiguous()) {
+                contType = ContiguousType::AutoContiguous;
+            }
+            configs[i].socContiguousType[socVer] = contType;
+        }
+    }
+    
+    return configs;
+}
+
+std::map<std::string, bool> AclnnOpGenerator::GetSocAutoContiguousMap(OpDef& opDef) const
+{
+    std::map<std::string, bool> socAutoContMap;
+    
+    for (auto& aicoreItem : opDef.AICore().GetAICoreConfigs()) {
+        std::string socVer = aicoreItem.first.GetString();
+        if (SOC_SUPPORT_MAP.find(socVer) == SOC_SUPPORT_MAP.end()) {
+            continue;
+        }
+        OpAICoreConfig aicoreConfig = aicoreItem.second;
+        std::vector<OpParamDef> mergedInputs = opDef.GetMergeInputs(aicoreConfig);
+        
+        bool hasAutoCont = false;
+        for (auto& input : mergedInputs) {
+            if (input.GetAutoContiguous()) {
+                hasAutoCont = true;
+                break;
+            }
+        }
+        socAutoContMap[socVer] = hasAutoCont;
+    }
+    
+    return socAutoContMap;
+}
+
+bool AclnnOpGenerator::NeedSocCheckForContiguous(OpDef& opDef) const
+{
+    // 先校验AutoContiguous和IgnoreContiguous配置是否冲突
+    if (!ValidateInputContiguousConflict(opDef)) {
+        return false;
+    }
+    
+    // 检查Input的IgnoreContiguous配置是否有SOC差异
+    std::vector<InputContiguousConfig> contConfigs = GetInputContiguousConfigs(opDef);
+    for (auto& config : contConfigs) {
+        bool hasIgnoreCont = false;
+        bool hasNotIgnoreCont = false;
+        for (auto& pair : config.socContiguousType) {
+            if (pair.second == ContiguousType::IgnoreContiguous) {
+                hasIgnoreCont = true;
+            } else {
+                hasNotIgnoreCont = true;
+            }
+        }
+        // 如果部分SOC配置了IgnoreContiguous，部分没有，则需要SOC判断
+        if (hasIgnoreCont && hasNotIgnoreCont) {
+            return true;
+        }
+    }
+    
+    // 检查AutoContiguous配置是否有SOC差异
+    std::map<std::string, bool> socAutoContMap = GetSocAutoContiguousMap(opDef);
+    bool hasAutoCont = false;
+    bool hasNotAutoCont = false;
+    for (auto& pair : socAutoContMap) {
+        if (pair.second) {
+            hasAutoCont = true;
+        } else {
+            hasNotAutoCont = true;
+        }
+    }
+    // 如果部分SOC支持AutoContiguous，部分不支持，则需要SOC判断
+    if (hasAutoCont && hasNotAutoCont) {
+        return true;
+    }
+    
+    return false;
+}
+
 void AclnnOpGenerator::AclnnGenUncontDeclaration(OpDef& opDef, ofstream& outfile) const
 {
-    if (IsSupportAutoContiguous(opDef.GetInputs())) {
+    // 检查默认配置是否有AutoContiguous
+    bool hasAutoCont = IsSupportAutoContiguous(opDef.GetInputs());
+    
+    // 如果默认配置没有，再检查所有SOC配置
+    if (!hasAutoCont) {
+        std::map<std::string, bool> socAutoContMap = GetSocAutoContiguousMap(opDef);
+        for (auto& pair : socAutoContMap) {
+            if (pair.second) {
+                hasAutoCont = true;
+                break;
+            }
+        }
+    }
+    
+    if (hasAutoCont) {
         outfile << "extern aclnnStatus NnopbaseGetUnContiguousTensors(void *executor, "
                    "const aclTensorList **inTensors);\n";
         outfile << "extern aclnnStatus NnopbaseSetUnContExecutor(void *executor, aclOpExecutor *inExe, "
@@ -1452,20 +1800,6 @@ void AclnnOpGenerator::AclnnGenCodeImplEnd(ofstream& outfile) const
     outfile << str;
 }
 
-std::string AclnnOpGenerator::AclnnOpGetIoSize(std::vector<OpParamDef>& params, ofstream& outfile) const
-{
-    (void)(outfile);
-    std::string result;
-    size_t ioNum = 0U;
-    for (size_t i = 0U; i < params.size(); i++) {
-        if (params[i].GetParamType() != DYNAMIC) {
-            ioNum++;
-        }
-    }
-    result.append(std::to_string(ioNum));
-    return result;
-}
-
 void AclnnOpGenerator::AclopGenDfxInfo(OpDef& opDef, string& opName, string& prefixName, ofstream& outfile) const
 {
     outfile << "\n{\n";
@@ -1484,22 +1818,53 @@ void AclnnOpGenerator::AclopGenDfxInfo(OpDef& opDef, string& opName, string& pre
     outfile << "    const char *opType = \"" << opName << "\";\n";
 }
 
-void AclnnOpGenerator::AclnnOpGenCodeSetUnContInfo(OpDef& opDef, ofstream& outfile) const
+void AclnnOpGenerator::AclnnOpGenCodeSetUnContInfo(OpDef& opDef, ofstream& outfile, bool needSocCheck) const
 {
-    if (IsSupportAutoContiguous(opDef.GetInputs())) {
+    std::vector<OpParamDef>& baseInputs = opDef.GetInputs();
+    std::vector<OpParamDef>& outputs = opDef.GetOutputs();
+    bool allSupport = false, noneSupport = false;
+    std::vector<std::string> autoContSocs;
+    AnalyzeSocAutoContiguousSupport(opDef, allSupport, noneSupport, autoContSocs);
+    if (noneSupport) { return; }
+    bool hasRef = false;
+    for (auto& input : baseInputs) {
+        for (auto& output : outputs) {
+            if (input.GetParamName() == output.GetParamName()) { hasRef = true; break; }
+        }
+        if (hasRef) break;
+    }
+    outfile << "\n    uint64_t inContWorkspaceSize = 0U;\n";
+    outfile << "    const aclTensorList *inUnContTensors = nullptr;\n";
+    bool hasDefaultAutoCont = HasDefaultAutoContiguous(baseInputs);
+    auto genContiguousCode = [&](const std::string& indent, bool setExecutorInsideIf) {
+        if (hasRef) {
+            outfile << indent << "NnopbaseGetUnContiguousTensors(*executor, &inUnContTensors);\n"
+                    << indent << "aclOpExecutor *aclInExecutor = nullptr;\n";
+        } else {
+            outfile << indent << "aclOpExecutor *aclInExecutor = nullptr;\n"
+                    << indent << "NnopbaseGetUnContiguousTensors(*executor, &inUnContTensors);\n";
+        }
+        outfile << indent << "if (inUnContTensors != nullptr) {\n"
+                << indent << "    static AclnnContiguousGetWorkspaceSizeFunc aclnnContiguousGetWorkspaceSize = "
+                   "(AclnnContiguousGetWorkspaceSizeFunc)NnopbaseGetApiFunc(\"aclnnContiguousGetWorkspaceSize\");\n"
+                << indent << "    NNOPBASE_ASSERT_NOTNULL_RETVAL(aclnnContiguousGetWorkspaceSize);\n"
+                << indent << "    NNOPBASE_ASSERT_OK_RETVAL(aclnnContiguousGetWorkspaceSize(inUnContTensors, "
+                << "&inContWorkspaceSize, &aclInExecutor));\n";
+        if (setExecutorInsideIf) {
+            outfile << indent << "    NnopbaseSetUnContExecutor(*executor, aclInExecutor, inContWorkspaceSize);\n";
+        }
+        outfile << indent << "}\n";
+        if (!setExecutorInsideIf) {
+            outfile << indent << "NnopbaseSetUnContExecutor(*executor, aclInExecutor, inContWorkspaceSize);\n";
+        }
+    };
+    if (needSocCheck && !allSupport) {
+        GenerateSocConditionCode(autoContSocs, outfile, hasDefaultAutoCont);
+        genContiguousCode("        ", !hasRef);
+        outfile << "    }\n\n";
+    } else {
+        genContiguousCode("    ", !hasRef);
         outfile << "\n";
-        outfile << "    const aclTensorList *inUnContTensors = nullptr;\n";
-        outfile << "    NnopbaseGetUnContiguousTensors(*executor, &inUnContTensors);\n";
-        outfile << "    aclOpExecutor *aclInExecutor = nullptr;\n";
-        outfile << "    uint64_t inContWorkspaceSize = 0U;\n";
-        outfile << "    if (inUnContTensors != nullptr) {\n";
-        outfile << "        static AclnnContiguousGetWorkspaceSizeFunc aclnnContiguousGetWorkspaceSize = "
-                   "(AclnnContiguousGetWorkspaceSizeFunc)NnopbaseGetApiFunc(\"aclnnContiguousGetWorkspaceSize\");\n";
-        outfile << "        NNOPBASE_ASSERT_NOTNULL_RETVAL(aclnnContiguousGetWorkspaceSize);\n";
-        outfile << "        NNOPBASE_ASSERT_OK_RETVAL(aclnnContiguousGetWorkspaceSize(inUnContTensors, "
-                "&inContWorkspaceSize, &aclInExecutor));\n";
-        outfile << "    }\n";
-        outfile << "    NnopbaseSetUnContExecutor(*executor, aclInExecutor, inContWorkspaceSize);\n\n";
     }
 }
 
@@ -1592,9 +1957,14 @@ void AclnnOpGenerator::AclopGenCodeCommon(
             "socSupportList, socSupportListLen);\n";
     }
     
+    // 检查是否需要SOC判断
+    bool needSocCheck = NeedSocCheckForContiguous(opDef);
+    // 标记是否需要SOC判断，传递给后续函数使用
+    // 不再在此处声明currentSoc，而是在AclnnOpGenCodeAddInputTensors中处理
+    
     AclnnOpGenFormatMode(opDef, outfile);
     AclnnOpGenCodeSetRef(opDef.GetInputs(), outputs, outfile);
-    AclnnOpGenCodeAddInputTensors(opDef, opdefName, outfile, valueDependApi);
+    AclnnOpGenCodeAddInputTensors(opDef, opdefName, outfile, valueDependApi, needSocCheck);
     std::vector<int32_t> attrTypes;
     AclnnOpGenCodeAttrParams(opDef, opdefName.attrsName, outfile, attrTypes);
     AclnnOpGenCodeAddOutputTensors(outputs, opdefName.outputsName, opdefName.hasOutputShapeDepend, outfile);
@@ -1613,7 +1983,7 @@ void AclnnOpGenerator::AclopGenCodeCommon(
         outfile << "    NNOPBASE_ASSERT_OK_RETVAL(NnopbaseAddSupportList(*executor, &supportList, socSupportList" <<
                    ", socSupportListLen));\n";
     }
-    AclnnOpGenCodeSetUnContInfo(opDef, outfile);
+    AclnnOpGenCodeSetUnContInfo(opDef, outfile, needSocCheck);
 }
 
 void AclnnOpGenerator::AclnnOpGenIoParam(
@@ -1780,28 +2150,42 @@ bool AclnnOpGenerator::HasRef(std::vector<std::string>& names) const
 
 void AclnnOpGenerator::AclopGenCodeRefContiguous(OpDef& opDef, OpDefName& opdefName, ofstream& outfile) const
 {
-    if (IsSupportAutoContiguous(opDef.GetInputs()) && HasRef(opdefName.inputsName)) {
-        outfile << "\n";
-        outfile << "    aclOpExecutor *viewcopyExecutor = nullptr;\n";
-        outfile << "    uint64_t viewcopyWsSize = 0U;\n";
-        outfile << "    if (inUnContTensors != nullptr) {\n";
-        outfile << "        const aclTensorList *unContTensors = nullptr;\n";
-        outfile << "        const aclTensorList *contTensors = nullptr;\n";
-        outfile << "        NNOPBASE_ASSERT_OK_RETVAL(NnopbaseGetRefUnContiguousTensors(*executor, &unContTensors, "
-                   "&contTensors));\n";
-        outfile << "        if (unContTensors != nullptr) {\n";
-        outfile << "            static AclnnViewCopyGetWorkspaceSizeFunc aclnnViewCopyGetWorkspaceSize = "
-                   "(AclnnViewCopyGetWorkspaceSizeFunc)NnopbaseGetApiFunc(\"aclnnViewCopyGetWorkspaceSize\");\n";
-        outfile << "            NNOPBASE_ASSERT_NOTNULL_RETVAL(aclnnViewCopyGetWorkspaceSize);\n";
-        outfile << "            NNOPBASE_ASSERT_OK_RETVAL(aclnnViewCopyGetWorkspaceSize(contTensors, unContTensors, "
-                   "&viewcopyWsSize, &viewcopyExecutor));\n";
-        outfile << "            NNOPBASE_ASSERT_OK_RETVAL(NnopbaseSetViewCopyExecutor(*executor, viewcopyExecutor));\n";
-        outfile << "        }\n";
-        outfile << "    }\n";
-        outfile << "    if (viewcopyWsSize > *workspaceSize) {\n";
-        outfile << "        *workspaceSize = viewcopyWsSize;\n";
-        outfile << "    }\n";
+    // 获取每个Soc的AutoContiguous支持情况
+    std::map<std::string, bool> socAutoContMap = GetSocAutoContiguousMap(opDef);
+    
+    // 检查是否有任何Soc支持AutoContiguous
+    bool anySupport = false;
+    for (auto& pair : socAutoContMap) {
+        if (pair.second) {
+            anySupport = true;
+            break;
+        }
     }
+    
+    if (!anySupport || !HasRef(opdefName.inputsName)) {
+        return;
+    }
+    
+    outfile << "\n";
+    outfile << "    aclOpExecutor *viewcopyExecutor = nullptr;\n";
+    outfile << "    uint64_t viewcopyWsSize = 0U;\n";
+    outfile << "    if (inUnContTensors != nullptr) {\n";
+    outfile << "        const aclTensorList *unContTensors = nullptr;\n";
+    outfile << "        const aclTensorList *contTensors = nullptr;\n";
+    outfile << "        NNOPBASE_ASSERT_OK_RETVAL(NnopbaseGetRefUnContiguousTensors(*executor, &unContTensors, "
+               "&contTensors));\n";
+    outfile << "        if (unContTensors != nullptr) {\n";
+    outfile << "            static AclnnViewCopyGetWorkspaceSizeFunc aclnnViewCopyGetWorkspaceSize = "
+               "(AclnnViewCopyGetWorkspaceSizeFunc)NnopbaseGetApiFunc(\"aclnnViewCopyGetWorkspaceSize\");\n";
+    outfile << "            NNOPBASE_ASSERT_NOTNULL_RETVAL(aclnnViewCopyGetWorkspaceSize);\n";
+    outfile << "            NNOPBASE_ASSERT_OK_RETVAL(aclnnViewCopyGetWorkspaceSize(contTensors, unContTensors, "
+               "&viewcopyWsSize, &viewcopyExecutor));\n";
+    outfile << "            NNOPBASE_ASSERT_OK_RETVAL(NnopbaseSetViewCopyExecutor(*executor, viewcopyExecutor));\n";
+    outfile << "        }\n";
+    outfile << "    }\n";
+    outfile << "    if (viewcopyWsSize > *workspaceSize) {\n";
+    outfile << "        *workspaceSize = viewcopyWsSize;\n";
+    outfile << "    }\n";
 }
 
 // 就这个需要写成 workspace
@@ -1820,7 +2204,19 @@ void AclnnOpGenerator::AclnnOpGenCodeRunForWorkspaceImpl(
     }
     outfile << "    NNOPBASE_ASSERT_OK_RETVAL(NnopbaseRunForWorkspace(*executor, workspaceSize));\n";
     AclopGenCodeRefContiguous(opDef, opdefName, outfile);
-    if (IsSupportAutoContiguous(opDef.GetInputs())) {
+    // 检查是否有任何Soc支持AutoContiguous
+    std::map<std::string, bool> socAutoContMap = GetSocAutoContiguousMap(opDef);
+    bool noneSupport = true;
+    
+    for (auto& pair : socAutoContMap) {
+        if (pair.second) {
+            noneSupport = false;
+            break;
+        }
+    }
+    
+    // inContWorkspaceSize默认值是0，对于不支持AutoContiguous的soc，+= 0没有影响
+    if (!noneSupport) {
         outfile << "    *workspaceSize += inContWorkspaceSize;\n";
     }
     outfile << "    NnopbaseReportApiInfo(timeStamp, dfxId);\n";
@@ -1831,46 +2227,114 @@ void AclnnOpGenerator::AclnnOpGenCodeRunForWorkspaceImpl(
 void AclnnOpGenerator::AclnnOpGenCodeRunUnContWithWorkspaceImpl(OpDef& opDef, OpDefName& opDefName,
                                                                 ofstream& outfile) const
 {
-    if (IsSupportAutoContiguous(opDef.GetInputs())) {
-        outfile << "    aclOpExecutor *aclInExecutor = nullptr;\n";
-        outfile << "    uint64_t inContWorkspaceSize = 0U;\n";
-        outfile << "    NnopbaseGetUnContExecutor(executor, &aclInExecutor, &inContWorkspaceSize);\n";
-        // workspaceSize一定大于inContWorkspaceSize
-        outfile << "    if (workspaceSize < inContWorkspaceSize) {\n";
-        outfile << "        NnopbaseOpLogE(ACLNN_ERR_PARAM_INVALID, \"input workspaceSize must be larger than "
-                   "contiguous size!\");\n";
-        outfile << "        return ACLNN_ERR_PARAM_INVALID;\n";
-        outfile << "    }\n";
-        outfile << "    workspaceSize -= inContWorkspaceSize;\n";
-        outfile << "    void *inWorkspace = (char *)workspace + workspaceSize;\n";
-        outfile << "    if (aclInExecutor != nullptr) {\n";
-        outfile << "        static AclnnFunc aclnnContiguous = (AclnnFunc)NnopbaseGetApiFunc(\"aclnnContiguous\");\n";
-        outfile << "        NNOPBASE_ASSERT_NOTNULL_RETVAL(aclnnContiguous);\n";
-        outfile << "        NNOPBASE_ASSERT_OK_RETVAL(aclnnContiguous(inWorkspace, inContWorkspaceSize, aclInExecutor,"
-                   " stream));\n";
-        outfile << "    }\n";
+    std::vector<OpParamDef>& baseInputs = opDef.GetInputs();
+    bool allSupport = false, noneSupport = false;
+    std::vector<std::string> autoContSocs;
+    AnalyzeSocAutoContiguousSupport(opDef, allSupport, noneSupport, autoContSocs);
+    if (noneSupport) return;
+    bool needSocCheck = NeedSocCheckForContiguous(opDef);
+    bool hasDefaultAutoCont = HasDefaultAutoContiguous(baseInputs);
+    outfile << "    uint64_t inContWorkspaceSize = 0U;\n";
+    outfile << "    aclOpExecutor *aclInExecutor = nullptr;\n";
+    outfile << "    void *inWorkspace = nullptr;\n";
+    if (HasRef(opDefName.inputsName)) {
+        outfile << "    aclOpExecutor *viewcopyExecutor = nullptr;\n"
+            << "    const aclTensorList *viewcopyTensors = nullptr;\n";
+    }
+    auto genContiguousCode = [&](const std::string& indent) {
+        outfile << indent << "NnopbaseGetUnContExecutor(executor, &aclInExecutor, &inContWorkspaceSize);\n"
+                << indent << "if (workspaceSize < inContWorkspaceSize) {\n"
+                << indent << "    NnopbaseOpLogE(ACLNN_ERR_PARAM_INVALID, \"input workspaceSize must be larger than "
+                   "contiguous size!\");\n"
+                << indent << "    return ACLNN_ERR_PARAM_INVALID;\n" << indent << "}\n"
+                << indent << "workspaceSize -= inContWorkspaceSize;\n"
+                << indent << "inWorkspace = (char *)workspace + workspaceSize;\n"
+                << indent << "if (aclInExecutor != nullptr) {\n"
+                << indent << "    static AclnnFunc aclnnContiguous = (AclnnFunc)NnopbaseGetApiFunc(\"aclnnContiguous\");\n"
+                << indent << "    NNOPBASE_ASSERT_NOTNULL_RETVAL(aclnnContiguous);\n"
+                << indent << "    NNOPBASE_ASSERT_OK_RETVAL(aclnnContiguous(inWorkspace, inContWorkspaceSize, "
+                   "aclInExecutor, stream));\n" << indent << "}\n";
         if (HasRef(opDefName.inputsName)) {
-            outfile << "    aclOpExecutor *viewcopyExecutor = nullptr;\n";
-            outfile << "    NNOPBASE_ASSERT_OK_RETVAL(NnopbaseGetViewCopyExecutor(executor, &viewcopyExecutor));\n";
-            outfile << "    const aclTensorList *viewcopyTensors = nullptr;\n";
-            outfile << "    NNOPBASE_ASSERT_OK_RETVAL(NnopbaseReleaseRefContiguousTensors(executor, "
+            outfile << indent << "NNOPBASE_ASSERT_OK_RETVAL(NnopbaseGetViewCopyExecutor(executor, &viewcopyExecutor));\n"
+                    << indent << "NNOPBASE_ASSERT_OK_RETVAL(NnopbaseReleaseRefContiguousTensors(executor, "
                        "&viewcopyTensors));\n";
         }
+    };
+    
+    if (allSupport || !needSocCheck) { genContiguousCode("    "); }
+    else if (hasDefaultAutoCont) {
+        GenerateCurrentSocDeclaration(outfile);
+        GenerateSocConditionCode(autoContSocs, outfile, true);
+        genContiguousCode("        "); outfile << "    }\n";
+    } else {
+        GenerateCurrentSocDeclaration(outfile);
+        GenerateSocConditionCode(autoContSocs, outfile, false);
+        genContiguousCode("        "); outfile << "    }\n";
     }
 }
+
+void AclnnOpGenerator::GenerateViewDeclaration(std::ofstream& outfile, const std::string& indent) const
+{
+    outfile << indent << "if (viewcopyExecutor != nullptr) {\n";
+    outfile << indent << "    static AclnnFunc aclnnViewCopy = (AclnnFunc)NnopbaseGetApiFunc(\"aclnnViewCopy\");\n";
+    outfile << indent << "    NNOPBASE_ASSERT_NOTNULL_RETVAL(aclnnViewCopy);\n";
+    outfile << indent << "    NNOPBASE_ASSERT_OK_RETVAL(aclnnViewCopy(inWorkspace, inContWorkspaceSize, viewcopyExecutor,"
+                " stream));\n";
+    outfile << indent << "    if (viewcopyTensors != nullptr) {\n";      
+    outfile << indent << "        NNOPBASE_ASSERT_OK_RETVAL(aclDestroyTensorList(viewcopyTensors));\n";
+    outfile << indent << "    }\n";
+    outfile << indent << "}\n";
+}
+
 
 void AclnnOpGenerator::AclnnOpGenCodeRunRefUnContWithWorkspaceImpl(OpDef& opDef, OpDefName& opDefName,
                                                                    ofstream& outfile) const
 {
-    if (IsSupportAutoContiguous(opDef.GetInputs()) && HasRef(opDefName.inputsName)) {
-        outfile << "    if (viewcopyExecutor != nullptr) {\n";
-        outfile << "        static AclnnFunc aclnnViewCopy = (AclnnFunc)NnopbaseGetApiFunc(\"aclnnViewCopy\");\n";
-        outfile << "        NNOPBASE_ASSERT_NOTNULL_RETVAL(aclnnViewCopy);\n";
-        outfile << "        NNOPBASE_ASSERT_OK_RETVAL(aclnnViewCopy(inWorkspace, inContWorkspaceSize, viewcopyExecutor,"
-                   " stream));\n";
-        outfile << "        if (viewcopyTensors != nullptr) {\n";      
-        outfile << "            NNOPBASE_ASSERT_OK_RETVAL(aclDestroyTensorList(viewcopyTensors));\n";
-        outfile << "        }\n";
+    std::vector<OpParamDef>& baseInputs = opDef.GetInputs();
+    std::vector<std::string> autoContSocs;
+    bool allSupport = true;
+    bool noneSupport = true;
+    AnalyzeSocAutoContiguousSupport(opDef, allSupport, noneSupport, autoContSocs);
+    if (noneSupport || !HasRef(opDefName.inputsName)) {
+        return;
+    }
+    bool needSocCheck = NeedSocCheckForContiguous(opDef);
+    bool hasDefaultAutoCont = false;
+    for (auto& input : baseInputs) {
+        if (input.GetAutoContiguous()) {
+            hasDefaultAutoCont = true;
+            break;
+        }
+    }
+    if (allSupport || !needSocCheck) {
+        GenerateViewDeclaration(outfile, "    ");
+    } else if (hasDefaultAutoCont) {
+        outfile << "    if (NnopbaseGetSocEnum == NULL || (currentSoc == ";
+        for (size_t i = 0; i < autoContSocs.size(); i++) {
+            auto socIt = SOC_SUPPORT_MAP.find(autoContSocs[i]);
+            if (socIt != SOC_SUPPORT_MAP.end()) {
+                if (i > 0) {
+                    outfile << " || currentSoc == ";
+                }
+                outfile << socIt->second;
+            }
+        }
+        outfile << ")) {\n";
+        GenerateViewDeclaration(outfile, "        ");
+        outfile << "    }\n";
+    } else {
+        outfile << "    if (";
+        for (size_t i = 0; i < autoContSocs.size(); i++) {
+            auto socIt = SOC_SUPPORT_MAP.find(autoContSocs[i]);
+            if (socIt != SOC_SUPPORT_MAP.end()) {
+                if (i > 0) {
+                    outfile << " || currentSoc == ";
+                }
+                outfile << "currentSoc == " << socIt->second;
+            }
+        }
+        outfile << ") {\n";
+        GenerateViewDeclaration(outfile, "        ");
         outfile << "    }\n";
     }
 }
@@ -1891,6 +2355,9 @@ void AclnnOpGenerator::AclnnOpGenCodeRunWithWorkspaceImpl(OpDef& opDef, OpDefNam
     outfile << "\n{\n";
     outfile << "    uint64_t timeStamp = NnopbaseMsprofSysTime();\n";
     outfile << "    static NnopbaseDfxId dfxId = {0x60000, __func__, false};\n";
+    
+    // SOC判断逻辑已在AclnnOpGenCodeRunUnContWithWorkspaceImpl中处理
+    
     AclnnOpGenCodeRunUnContWithWorkspaceImpl(opDef, opDefName, outfile);
     outfile << "    NNOPBASE_ASSERT_OK_RETVAL(NnopbaseRunWithWorkspace(executor, stream, workspace, workspaceSize));\n";
     AclnnOpGenCodeRunRefUnContWithWorkspaceImpl(opDef, opDefName, outfile);

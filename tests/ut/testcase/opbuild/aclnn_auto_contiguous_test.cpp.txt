@@ -40,7 +40,8 @@ enum SocType {
     SOC_VERSION_BS9SX2A = 12,
     SOC_VERSION_ASCEND910_96 = 13,
     SOC_VERSION_KIRINX90 = 14,
-    SOC_VERSION_KIRIN9030 = 15
+    SOC_VERSION_KIRIN9030 = 15,
+    SOC_VERSION_INVALID = 99
 };
 enum NnopbaseAttrDtype {
     kNnopbaseBool = 0U,
@@ -91,6 +92,7 @@ extern aclnnStatus NnopbaseAddFloatArrayAttr(void *executor, const aclFloatArray
 extern aclnnStatus NnopbaseAddBoolArrayAttr(void *executor, const aclBoolArray* array, const size_t index);
 extern aclnnStatus NnopbaseAddArrayAttrWithDtype(void *executor, void *array, const size_t len, const size_t elementSize, const size_t index, const NnopbaseAttrDtype dtype);
 extern uint64_t NnopbaseMsprofSysTime();
+extern uint32_t __attribute__((weak)) NnopbaseGetSocEnum();
 extern aclnnStatus NnopbaseAddTilingId(void *executor, NnopbaseDfxId *tilingId);
 extern void NnopbaseReportApiInfo(const uint64_t beginTime, NnopbaseDfxId &dfxId);
 extern aclnnStatus NnopbaseRunForWorkspace(void *executor, uint64_t *workspaceLen);
@@ -186,16 +188,16 @@ aclnnStatus aclnnAutoContiguousTestGetWorkspaceSize(
     }
     NNOPBASE_ASSERT_OK_RETVAL(NnopbaseAddSupportList(*executor, &supportList, socSupportList, socSupportListLen));
 
-    const aclTensorList *inUnContTensors = nullptr;
-    NnopbaseGetUnContiguousTensors(*executor, &inUnContTensors);
-    aclOpExecutor *aclInExecutor = nullptr;
     uint64_t inContWorkspaceSize = 0U;
+    const aclTensorList *inUnContTensors = nullptr;
+    aclOpExecutor *aclInExecutor = nullptr;
+    NnopbaseGetUnContiguousTensors(*executor, &inUnContTensors);
     if (inUnContTensors != nullptr) {
         static AclnnContiguousGetWorkspaceSizeFunc aclnnContiguousGetWorkspaceSize = (AclnnContiguousGetWorkspaceSizeFunc)NnopbaseGetApiFunc("aclnnContiguousGetWorkspaceSize");
         NNOPBASE_ASSERT_NOTNULL_RETVAL(aclnnContiguousGetWorkspaceSize);
         NNOPBASE_ASSERT_OK_RETVAL(aclnnContiguousGetWorkspaceSize(inUnContTensors, &inContWorkspaceSize, &aclInExecutor));
+        NnopbaseSetUnContExecutor(*executor, aclInExecutor, inContWorkspaceSize);
     }
-    NnopbaseSetUnContExecutor(*executor, aclInExecutor, inContWorkspaceSize);
 
     NNOPBASE_ASSERT_OK_RETVAL(NnopbaseRunForWorkspace(*executor, workspaceSize));
     *workspaceSize += inContWorkspaceSize;
@@ -211,15 +213,16 @@ aclnnStatus aclnnAutoContiguousTest(
 {
     uint64_t timeStamp = NnopbaseMsprofSysTime();
     static NnopbaseDfxId dfxId = {0x60000, __func__, false};
-    aclOpExecutor *aclInExecutor = nullptr;
     uint64_t inContWorkspaceSize = 0U;
+    aclOpExecutor *aclInExecutor = nullptr;
+    void *inWorkspace = nullptr;
     NnopbaseGetUnContExecutor(executor, &aclInExecutor, &inContWorkspaceSize);
     if (workspaceSize < inContWorkspaceSize) {
         NnopbaseOpLogE(ACLNN_ERR_PARAM_INVALID, "input workspaceSize must be larger than contiguous size!");
         return ACLNN_ERR_PARAM_INVALID;
     }
     workspaceSize -= inContWorkspaceSize;
-    void *inWorkspace = (char *)workspace + workspaceSize;
+    inWorkspace = (char *)workspace + workspaceSize;
     if (aclInExecutor != nullptr) {
         static AclnnFunc aclnnContiguous = (AclnnFunc)NnopbaseGetApiFunc("aclnnContiguous");
         NNOPBASE_ASSERT_NOTNULL_RETVAL(aclnnContiguous);
