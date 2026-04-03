@@ -2,99 +2,91 @@
 
 ## 概述
 
-在算子部署到NPU上之前，cpu debug工具帮助用户在CPU上进行功能和精度的基本验证。基本方案如下：开发者通过调用Ascend C编程语言编写算子Kernel侧源码，Kernel侧源码通过通用的GCC编译器进行编译，编译生成通用的CPU域的二进制，可以通过gdb/printf等调试手段进行调试。
+在算子部署到NPU上之前，CPU Debug工具帮助用户在CPU上进行功能和精度的基本验证。开发者使用Ascend C编写算子Kernel侧源码，通过bisheng编译器编译生成CPU域的可执行程序，即可使用gdb等常规调试手段对算子进行调试。
 
 ## 环境准备
 
-请参考[快速入门](00_quick_start.md)完成环境准备。
+请参考[快速入门](00_quick_start.md#环境准备)完成环境准备。
+
 
 ## 使用方法
 
-- 使用CPU调测API编写程序。
+以[cpudebug](../examples/02_cpudebug/)样例为例，只需以下两步即可开始CPU调试。
 
-- 编译CPU调试程序，基于CPU调试库完成算子的编译。
+### 步骤1：添加头文件引用
 
-- 使用gbd、printf打印等方法进行CPU侧调试。
-
-## 使用示例
-
-下面以[add](https://gitcode.com/cann/asc-devkit/blob/master/examples/01_simd_cpp_api/01_utilities/03_cpudebug/add.cpp)为示例，介绍如何调用CPU调测API并使用gdb/printf对算子核函数进行调试，开发者可以基于用例所包含的一键式脚本适配自定义算子用例进行编译、执行。
-
-**步骤1**：头文件适配
-
-分别包含cpu侧和npu侧所需要的头文件，通过ASCENDC_CPU_DEBUG宏区分CPU和NPU侧的头文件。
-``` c
-#include "data_utils.h"
-#ifndef ASCENDC_CPU_DEBUG
-#include "acl/acl.h"
-#else
-#include "tikicpulib.h"
-extern "C" __global__ __aicore__ void add_custom(GM_ADDR x, GM_ADDR y, GM_ADDR z); // 核函数声明
-#endif
-```
-
-**步骤2**：接口适配
-
-使用CPU调测API GmAlloc、ICPU_RUN_KF、GmFree（接口说明请参考[Ascend C API中的调试接口](https://hiascend.com/document/redirect/CannCommunityAscendCApi)）编写调试程序。
-``` c
-int32_t main(int32_t argc, char* argv[])
-{
-    uint32_t numBlocks = 8;
-    size_t inputByteSize = 8 * 2048 * sizeof(uint16_t);
-    size_t outputByteSize = 8 * 2048 * sizeof(uint16_t);
-
-    // 使用GmAlloc分配共享内存，并进行数据初始化
-    uint8_t* x = (uint8_t *)AscendC::GmAlloc(inputByteSize);
-    uint8_t* y = (uint8_t *)AscendC::GmAlloc(inputByteSize);
-    uint8_t* z = (uint8_t *)AscendC::GmAlloc(outputByteSize);
-
-    ReadFile("./input_x.bin", inputByteSize, x, inputByteSize);
-    ReadFile("./input_y.bin", inputByteSize, x, inputByteSize);
-    // 矢量算子需要设置内核模式为AIV模式
-    AscendC::SetKernelMode(KernelMode::AIV_MODE);
-    // 调用ICPU_RUN_KF调测宏，完成核函数CPU侧的调用
-    ICPU_RUN_KF(add_custom, numBlocks, x, y, z);
-    // 输出数据写出
-    WriteFile("./output.bin", z, outputByteSize);
-    // 调用GmFree释放申请的内存
-    AscendC::GmFree((void *)x);
-    AscendC::GmFree((void *)y);
-    AscendC::GmFree((void *)z);
-}
-```
-
-**步骤3**：编译CPU调试程序
-
-参考[CPU Debug直调样例说明](https://gitcode.com/cann/asc-devkit/blob/master/examples/01_simd_cpp_api/01_utilities/03_cpudebug/README.md)，配置环境变量后执行以下命令编译生成CPU域的算子可执行文件。
-
-```bash
-mkdir -p build && cd build;
-cmake .. -DSOC_VERSION=${SOC_VERSION}; make -j
-python3 ../scripts/gen_data.py
-./add
-python3 ../scripts/verify_result.py output.bin golden.bin
-```
-
-**步骤4**：printf命令打印
-
-在代码中直接编写printf(...)来观察数值的输出。样例代码如下：
+在通过`<<<>>>`调用核函数的源文件中，添加如下代码：
 
 ```c
-printf("xLocal size: %d\n", xLocal.GetSize())
-printf("tileLength: %d\n", tileLength)
+#ifdef ASCENDC_CPU_DEBUG
+#include "cpu_debug_launch.h"
+#endif
+```
+bisheng编译器在CPU调试模式下会通过该头文件对`<<<>>>`形式的核函数调用进行转义，从而在CPU上执行核函数，该修改不会影响代码在NPU模式下的编译运行。
+
+### 步骤2：编译并运行
+
+以dav-2201架构的NPU（如Ascend910B1）为例：
+
+```bash
+cmake -B build -DCMAKE_ASC_RUN_MODE=cpu -DCMAKE_ASC_ARCHITECTURES=dav-2201;
+cmake --build build;
+./build/add
 ```
 
-示例中在Compute函数加入打印代码如下，执行指令后即可输出xLocal与yLocal的值。
-```cpp
-AscendC::LocalTensor<half> xLocal = inQueueX.DeQue<half>();
-AscendC::LocalTensor<half> yLocal = inQueueY.DeQue<half>();
-//加入打印操作
-printf("xLocal[0]: %f \n", static_cast<float>(xLocal(0)));
-printf("yLocal[0]: %f \n", static_cast<float>(yLocal(0)));
-//其余代码保持不变
-AscendC::LocalTensor<half> zLocal = outQueueZ.AllocTensor<half>();
-AscendC::Add(zLocal, xLocal, yLocal, TILE_LENGTH);
-outQueueZ.EnQue<half>(zLocal);
-inQueueX.FreeTensor(xLocal);
-inQueueY.FreeTensor(yLocal);
+- 编译选项说明
+
+    | 选项 | 说明 |
+    |------|------|
+    | `CMAKE_ASC_RUN_MODE` | 指定为`cpu`, 开启CPU域编译 |
+    | `CMAKE_ASC_ARCHITECTURES` | 指定NPU架构版本号，CMake会根据该值配置对应的CPU调试依赖库。<br>`dav-2201` 对应 Atlas A2/A3 系列，`dav-3510` 对应 Ascend 950PR/Ascend 950DT |
+
+## 调试方法
+
+编译生成的CPU域可执行程序支持通过gdb进行调试。gdb支持设置断点、查看寄存器和内存状态、单步执行、查看调用栈等常用调试操作。
+
+CPU Debug通过为每个核函数启动单独的子进程来模拟NPU的执行逻辑，因此使用gdb调试时，需要设置`follow-fork-mode`让gdb跟踪子进程，才能在核函数内部断点调试。
+
+基本用法如下：
+
+```bash
+gdb ./build/add
+```
+
+进入gdb后，先设置跟踪子进程模式：
+
+```text
+(gdb) set follow-fork-mode child
+```
+
+然后按需进行调试，常用操作：
+
+```text
+# 在核函数入口处设置断点
+(gdb) break Compute
+
+# 运行程序
+(gdb) run
+
+# 单步执行
+(gdb) next
+
+# 打印变量值
+(gdb) print xLocal.GetValue(0)
+
+# 继续执行到下一个断点
+(gdb) continue
+```
+
+> **说明**：`set follow-fork-mode child` 告诉gdb在fork创建子进程时切换到子进程进行调试。如果不设置该选项，gdb默认跟踪父进程，将无法进入核函数内部。
+
+## 切回NPU模式
+
+CPU调试完成后，清除build目录并重新配置cmake即可切回NPU模式运行。步骤1中添加的`#ifdef`代码无需移除，在NPU模式下不会产生任何影响。
+
+```bash
+rm -r build;
+cmake -B build -DCMAKE_ASC_ARCHITECTURES=dav-2201;
+cmake --build build;
+./build/add
 ```
