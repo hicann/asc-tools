@@ -1,0 +1,58 @@
+/**
+* Copyright (c) 2026 Huawei Technologies Co., Ltd.
+* This program is free software, you can redistribute it and/or modify it under the terms and conditions of
+* CANN Open Software License Agreement Version 2.0 (the "License").
+* Please refer to the License for details. You may not use this file except in compliance with the License.
+* THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
+* INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
+* See LICENSE in the root of the software repository for the full text of the License.
+*/
+
+#include "../op_kernel/add_custom_tiling.h"
+#include "register/op_def_registry.h"
+#include "tiling/tiling_api.h"
+
+namespace optiling {
+const uint32_t BLOCK_DIM = 8;
+const uint32_t TILE_NUM = 8;
+static ge::graphStatus TilingFunc(gert::TilingContext *context)
+{
+    AddCustomTilingData *tiling = context->GetTilingData<AddCustomTilingData>();
+    uint32_t totalLength = context->GetInputShape(0)->GetOriginShape().GetShapeSize();
+    context->SetBlockDim(BLOCK_DIM);
+    tiling->totalLength = totalLength;
+    tiling->tileNum = TILE_NUM;
+    return ge::GRAPH_SUCCESS;
+}
+} // namespace optiling
+
+
+namespace ops {
+class AddCustom : public OpDef {
+public:
+    explicit AddCustom(const char *name) : OpDef(name)
+    {
+        this->Input("x")
+            .ParamType(REQUIRED)
+            .DataType({ge::DT_FLOAT16})
+            .Format({ge::FORMAT_ND});
+        this->Input("y")
+            .ParamType(REQUIRED)
+            .DataType({ge::DT_FLOAT16})
+            .Format({ge::FORMAT_ND});
+        this->Output("z")
+            .ParamType(REQUIRED)
+            .DataType({ge::DT_FLOAT16})
+            .Format({ge::FORMAT_ND});
+
+        this->AICore()
+            .SetTiling(optiling::TilingFunc)
+            .AddConfig("ascend910")
+            .AddConfig("ascend310p")
+            .AddConfig("ascend310b")
+            .AddConfig("ascend910b")
+            .AddConfig("ascend950");
+    }
+};
+OP_ADD(AddCustom);
+} // namespace ops
