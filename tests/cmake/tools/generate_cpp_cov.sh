@@ -53,7 +53,7 @@ generate_coverage() {
   # 版本比较，>=2.0，加参数忽略编译和运行行号不一致导致的lcov执行失败
   if [ -n "$LCOV_MAJOR" ] && [ "$LCOV_MAJOR" -ge 2 ]; then
     REMOVE_ARGS="--ignore-errors unused"
-    EXTRA_ARGS="--ignore-errors mismatch --ignore-errors source"
+    EXTRA_ARGS="--rc geninfo_unexecuted_blocks=1 --ignore-errors mismatch,empty,inconsistent --ignore-errors source"
   fi
 
   lcov -c -d "${_source_dir}" -o "${_coverage_file}" $EXTRA_ARGS 2>/dev/null
