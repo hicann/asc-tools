@@ -24,6 +24,7 @@
 #include "kernel_fp16.h"
 #include "kernel_bf16.h"
 #include "kernel_vectorized.h"
+#include "kernel_operator_common_intf.h"
 
 #define __launch_bounds__(x)
 
@@ -196,14 +197,24 @@ float __cvt_float(SRC_TYPE src) {
 template<RoundingSaturation rst, typename T, typename U>
 bool HandleOverflow(uint16_t sign, int32_t exp, U& res)
 {
+    int64_t ctrl48 = AscendC::GetCtrlSpr<48, 48>();
+    int64_t ctrl60 = AscendC::GetCtrlSpr<60, 60>();
     if constexpr (std::is_same_v<T, half>) {
         if (exp < 0) {                      // underflow
             res = sign << static_cast<uint16_t>(Fp16BasicParam::K_FP16_SIGN_INDEX);
         } else if (exp >= HALF_MAX_EXP) {   // overflow
-            if constexpr (rst == RoundingSaturation::RS_DISABLE_VALUE) {
-                res = (sign << static_cast<uint16_t>(Fp16BasicParam::K_FP16_SIGN_INDEX)) | static_cast<uint16_t>(Fp16BasicParam::K_FP16_EXP_MASK);
-            } else {
-                res = (sign << static_cast<uint16_t>(Fp16BasicParam::K_FP16_SIGN_INDEX)) | static_cast<uint16_t>(Fp16BasicParam::K_FP16_MAX);
+            if (ctrl60 == 0) {
+                if constexpr (rst == RoundingSaturation::RS_DISABLE_VALUE) {
+                    res = (sign << static_cast<uint16_t>(Fp16BasicParam::K_FP16_SIGN_INDEX)) | static_cast<uint16_t>(Fp16BasicParam::K_FP16_EXP_MASK);
+                } else {
+                    res = (sign << static_cast<uint16_t>(Fp16BasicParam::K_FP16_SIGN_INDEX)) | static_cast<uint16_t>(Fp16BasicParam::K_FP16_MAX);
+                }
+            } else if (ctrl60 == 1) {
+                if (ctrl48 == 1) {
+                    res = (sign << static_cast<uint16_t>(Fp16BasicParam::K_FP16_SIGN_INDEX)) | static_cast<uint16_t>(Fp16BasicParam::K_FP16_EXP_MASK);
+                } else {
+                    res = (sign << static_cast<uint16_t>(Fp16BasicParam::K_FP16_SIGN_INDEX)) | static_cast<uint16_t>(Fp16BasicParam::K_FP16_MAX);
+                }
             }
         } else {
             return false;
@@ -211,7 +222,7 @@ bool HandleOverflow(uint16_t sign, int32_t exp, U& res)
         return true;
     } else if constexpr (std::is_same_v<T, bfloat16_t>) {
         if (exp == static_cast<int32_t>(Fp32BasicParam::K_FP32_MAX_EXP)) {
-            if (rst == RoundingSaturation::RS_DISABLE_VALUE) {
+            if (ctrl48 == 1) {
                 res = (sign << bfloat16::BF16_SIGN_INDEX) | bfloat16::BF16_INFINITY;
             } else {
                 res = (sign << bfloat16::BF16_SIGN_INDEX) | bfloat16::BF16_ABS_MAX;
@@ -221,6 +232,14 @@ bool HandleOverflow(uint16_t sign, int32_t exp, U& res)
         return false;
     }
     return false;
+}
+
+template<RoundingSaturation rst>
+bool use_saturation()
+{
+    int64_t ctrl60 = AscendC::GetCtrlSpr<60, 60>();
+    if (ctrl60 == 0) return (rst == RoundingSaturation::RS_ENABLE_VALUE);
+    return (AscendC::GetCtrlSpr<48, 48>()) == 0;
 }
 
 template<ROUND rnd, RoundingSaturation rst>
@@ -243,8 +262,19 @@ half __cvt_half(float x)
     uint16_t res = 0;
     // handle INF / NaN
     if (exp == static_cast<uint32_t>(Fp32BasicParam::K_FP32_MAX_EXP)) {
-        res = (sign << static_cast<uint32_t>(Fp16BasicParam::K_FP16_SIGN_INDEX)) | (mantissa ? static_cast<uint16_t>(Fp16BasicParam::K_FP16_ABS_MAX) : static_cast<uint16_t>(Fp16BasicParam::K_FP16_EXP_MASK));
-        return *reinterpret_cast<half*>(&res);
+        if (use_saturation<rst>()) {
+            if (mantissa != 0) {
+                return half(0);
+            } else {
+                // Inf/-Inf
+                uint16_t half_max = static_cast<uint16_t>(Fp16BasicParam::K_FP16_MAX);
+                half tmp = *reinterpret_cast<half*>(&half_max);
+                return (sign == 0) ? tmp : (half)0-tmp;
+            }
+        } else {
+            res = (sign << static_cast<uint32_t>(Fp16BasicParam::K_FP16_SIGN_INDEX)) | (mantissa ? static_cast<uint16_t>(Fp16BasicParam::K_FP16_ABS_MAX) : static_cast<uint16_t>(Fp16BasicParam::K_FP16_EXP_MASK));
+            return *reinterpret_cast<half*>(&res);
+        }
     }
 
     int16_t half_exp = static_cast<int16_t>(exp) - (bfloat16::FP32_EXP_BIAS - static_cast<uint16_t>(Fp16BasicParam::K_FP16_EXP_BIAS));
@@ -273,11 +303,29 @@ bfloat16_t __cvt_bfloat16_t(float x) {
     uint32_t exp = bfloat16::Fp32ExtracExp(f_bits);
     uint32_t mantissa = f_bits & FP32_MAN_MASK;
     uint16_t res = 0;
-
     // handle INF / NaN
     if (exp == static_cast<int32_t>(Fp32BasicParam::K_FP32_MAX_EXP)) {
-        res = mantissa == 0 ? ((sign << bfloat16::BF16_SIGN_INDEX) | bfloat16::BF16_EXP_MASK) : bfloat16::BF16_NAN;
-        return *reinterpret_cast<bfloat16_t*>(&res);
+        bool use_saturation = false;
+        int64_t ctrl60 = AscendC::GetCtrlSpr<60, 60>();
+        if (ctrl60 == 0) {
+            use_saturation = (rst == RoundingSaturation::RS_ENABLE_VALUE);
+        } else {
+            int64_t ctrl48 = AscendC::GetCtrlSpr<48, 48>();
+            use_saturation = (ctrl48 == 0);
+        }
+        if (use_saturation) { // NaN→0，Inf→max
+            if (mantissa != 0) {
+                return bfloat16_t(0);
+            } else {
+                // Inf/-Inf
+                uint16_t bf16_max = static_cast<uint16_t>(0x7F7F);
+                bfloat16_t tmp = *reinterpret_cast<bfloat16_t*>(&bf16_max);
+                return (sign == 0) ? tmp : (bfloat16_t)0-tmp;
+            }
+        } else {
+            res = mantissa == 0 ? ((sign << bfloat16::BF16_SIGN_INDEX) | bfloat16::BF16_EXP_MASK) : bfloat16::BF16_NAN;
+            return *reinterpret_cast<bfloat16_t*>(&res);
+        }
     }
     if (exp == 0 && mantissa == 0) {
         res = sign << bfloat16::BF16_SIGN_INDEX;
@@ -298,47 +346,74 @@ bfloat16_t __cvt_bfloat16_t(float x) {
 
 template <ROUND rnd = ROUND::CAST_RINT, RoundingSaturation rst = RoundingSaturation::RS_DISABLE_VALUE, typename SRC_TYPE>
 half __cvt_half(SRC_TYPE src) {
-    if (__isnan(src)) {
-        uint16_t half_nan = static_cast<uint16_t>(Fp16BasicParam::K_FP16_ABS_MAX);
-        if constexpr (rst == RoundingSaturation::RS_DISABLE_VALUE) {
-            return *reinterpret_cast<half*>(&half_nan);
-        } else {
-            return half(0);
-        }
-    }
+    int64_t ctrl48 = AscendC::GetCtrlSpr<48, 48>();
+    int64_t ctrl60 = AscendC::GetCtrlSpr<60, 60>();
 
-    if constexpr (std::is_same_v<SRC_TYPE, bfloat16_t>) {
-        float temp = __cvt_float<rnd, rst>(src);
-        return __cvt_half<rnd, rst>(temp);
-    }
+    auto make_half = [](uint16_t bits) { return *reinterpret_cast<half*>(&bits); };
 
     if constexpr (std::is_same_v<SRC_TYPE, half>) {
+        if (__isnan(src)) {
+            return ctrl48 == 1 ? make_half(static_cast<uint16_t>(Fp16BasicParam::K_FP16_ABS_MAX)) : half(0);
+        }
+        if (__isinf(src)) {
+            if (ctrl48 == 1) {
+                return src > (half)0 ? make_half(static_cast<uint16_t>(Fp16BasicParam::K_FP16_EXP_MASK)) : make_half(0xFC00);
+            }
+            half tmp = make_half(static_cast<uint16_t>(Fp16BasicParam::K_FP16_MAX));
+            return src > (half)0 ? tmp : (half)0 - tmp;
+        }
         float tmp = __cvt_float<rnd, rst>(src);
         tmp = __cvt_float<rnd, rst>(tmp);
         return __cvt_half<rnd, rst>(tmp);
     }
+
+    if constexpr (std::is_same_v<SRC_TYPE, bfloat16_t>) {
+        if (__isnan(src)) {
+            uint16_t half_nan = static_cast<uint16_t>(Fp16BasicParam::K_FP16_ABS_MAX);
+            if (ctrl60 == 0) {
+                return rst == RoundingSaturation::RS_DISABLE_VALUE ? make_half(half_nan) : half(0);
+            }
+            return ctrl48 == 1 ? make_half(half_nan) : half(0);
+        }
+        float temp = __cvt_float<rnd, rst>(src);
+        return __cvt_half<rnd, rst>(temp);
+    }
+
     return half(0);
 }
 
 template <ROUND rnd = ROUND::CAST_RINT, RoundingSaturation rst = RoundingSaturation::RS_DISABLE_VALUE, typename SRC_TYPE>
 bfloat16_t __cvt_bfloat16_t(SRC_TYPE src) {
+    int64_t ctrl48 = AscendC::GetCtrlSpr<48, 48>();
+    auto make_bf16 = [](uint16_t bits) { return *reinterpret_cast<bfloat16_t*>(&bits); };
+
     if (__isnan(src)) {
-        uint16_t bf16_nan = bfloat16::BF16_NAN;
-        if constexpr (rst == RoundingSaturation::RS_DISABLE_VALUE) {
-            return *reinterpret_cast<bfloat16_t*>(&bf16_nan);
-        } else {
-            return bfloat16_t(0);
+        if constexpr (std::is_same_v<SRC_TYPE, bfloat16_t> || std::is_same_v<SRC_TYPE, half>) {
+            return ctrl48 == 1 ? make_bf16(bfloat16::BF16_NAN) : bfloat16_t(0);
         }
     }
+
+    auto handle_inf = [&](auto zero_val) {
+        if (ctrl48 == 1) {
+            return src > zero_val ? make_bf16(static_cast<uint16_t>(bfloat16::BF16_EXP_MASK)) : make_bf16(0xFF80);
+        }
+        bfloat16_t tmp = make_bf16(0x7F7F);
+        return src > zero_val ? tmp : (bfloat16_t)0 - tmp;
+    };
+
     if constexpr (std::is_same_v<SRC_TYPE, half>) {
+        if (__isinf(src)) return handle_inf((half)0);
         float temp = __cvt_float<rnd, rst>(src);
         return __cvt_bfloat16_t<rnd, rst>(temp);
     }
+
     if constexpr (std::is_same_v<SRC_TYPE, bfloat16_t>) {
+        if (__isinf(src)) return handle_inf((bfloat16_t)0);
         float temp = __cvt_float<rnd, rst>(src);
         temp = __cvt_float<rnd, rst>(temp);
         return __cvt_bfloat16_t<rnd, rst>(temp);
     }
+
     return bfloat16_t(0);
 }
 
@@ -491,9 +566,51 @@ bfloat16x2_t __cvt_bfloat16x2_t(SRC_TYPE src) {
 
 template<ROUND rnd = ROUND::CAST_RINT, RoundingSaturation rst = RoundingSaturation::RS_DISABLE_VALUE, typename SRC_TYPE>
 half2 __cvt_half2(SRC_TYPE src) {
+    int64_t ctrl48 = AscendC::GetCtrlSpr<48, 48>();
     half2 res;
     if constexpr (std::is_same_v<SRC_TYPE, hifloat8x2_t>) {
-        res = {half(src.x.ToFloat()), half(src.y.ToFloat())};
+        if (ctrl48 == 1) {
+            auto ConvertHif8ToHalf = [](hifloat8_t hif8) -> half {
+                uint8_t hif8_bits = *reinterpret_cast<uint8_t*>(&hif8);
+                // hifloat8 nan: 0x80 -> half nan: 0x7FFF
+                if (hif8_bits == 0x80) {
+                    uint16_t half_nan = 0x7FFF;
+                    return *reinterpret_cast<half*>(&half_nan);
+                }
+                // hifloat8 inf: 0x6F -> half inf: 0x7C00
+                if (hif8_bits == 0x6F) {
+                    uint16_t half_inf = 0x7C00;
+                    return *reinterpret_cast<half*>(&half_inf);
+                }
+                // hifloat8 -inf: 0xEF -> half -inf: 0xFC00
+                if (hif8_bits == 0xEF) {
+                    uint16_t half_neg_inf = 0xFC00;
+                    return *reinterpret_cast<half*>(&half_neg_inf);
+                }
+                return half(hif8.ToFloat());
+            };
+            res = {ConvertHif8ToHalf(src.x), ConvertHif8ToHalf(src.y)};
+        } else {
+            auto ConvertHif8ToHalfSat = [](hifloat8_t hif8) -> half {
+                uint8_t hif8_bits = *reinterpret_cast<uint8_t*>(&hif8);
+                // hifloat8 nan: 0x80 -> half 0
+                if (hif8_bits == 0x80) {
+                    return half(0);
+                }
+                // hifloat8 inf: 0x6F -> half max: 0x7BFF
+                if (hif8_bits == 0x6F) {
+                    uint16_t half_max = 0x7BFF;
+                    return *reinterpret_cast<half*>(&half_max);
+                }
+                // hifloat8 -inf: 0xEF -> half min: 0xFBFF
+                if (hif8_bits == 0xEF) {
+                    uint16_t half_min = 0xFBFF;
+                    return *reinterpret_cast<half*>(&half_min);
+                }
+                return half(hif8.ToFloat());
+            };
+            res = {ConvertHif8ToHalfSat(src.x), ConvertHif8ToHalfSat(src.y)};
+        }
     } else {
         res = {__cvt_half<rnd, rst>(src.x), __cvt_half<rnd, rst>(src.y)};
     }
@@ -501,33 +618,101 @@ half2 __cvt_half2(SRC_TYPE src) {
 }
 
 template<ROUND rnd, RoundingSaturation rst, typename SRC_TYPE>
-hifloat8x2_t __cvt_hifloat8x2_t(SRC_TYPE src) {
-    static_assert(std::is_same_v<SRC_TYPE, float2> || std::is_same_v<SRC_TYPE, half2>, "stc type can only be float2/half2");
+hifloat8x2_t __cvt_hifloat8x2_t(SRC_TYPE src)
+{
+    static_assert(std::is_same_v<SRC_TYPE, float2> || std::is_same_v<SRC_TYPE, half2>, "src type can only be float2/half2");
     static_assert((rnd == ROUND::CAST_ROUND) || (rnd == ROUND::CAST_HYBRID), "rnd type can only be: ROUND_A, ROUND_H");
-    hifloat8x2_t res{0.0, 0.0};
+
+    auto make_hif8 = [](uint8_t bits) { return *reinterpret_cast<hifloat8_t*>(&bits); };
+
+    auto ConvertFloatToHiF8 = [&](float f) -> hifloat8_t {
+        uint32_t f_bits = *reinterpret_cast<uint32_t*>(&f);
+        uint16_t sign = (f_bits >> 31) & 0x1;
+        bool is_overflow = (sign == 0 && f_bits >= 0x47200000) || (sign == 1 && f_bits >= 0xC7200000);
+
+        if ((f_bits >= 0x47000000) && (f_bits < 0x47200000)) return make_hif8(0x6E);
+        if ((f_bits >= 0xC7000000) && (f_bits < 0xC7200000)) return make_hif8(0xEE);
+
+        if (__isnan(f) || __isinf(f) || is_overflow) {
+            if (use_saturation<rst>()) {
+                if (__isnan(f)) return hifloat8_t(0.0f);
+                return make_hif8(sign == 1 ? 0xEE : 0x6E);
+            }
+            if (__isnan(f)) return make_hif8(0x80);
+            return make_hif8(sign == 1 ? 0xEF : 0x6F);
+        }
+        return hifloat8_t(f);
+    };
+
     if constexpr (std::is_same_v<SRC_TYPE, float2>) {
-        res = {hifloat8_t(src.x), hifloat8_t(src.y)};
-    } else if constexpr (std::is_same_v<SRC_TYPE, half2>) {
+        return {ConvertFloatToHiF8(src.x), ConvertFloatToHiF8(src.y)};
+    } else {
         float2 tmp{src.x.ToFloat(), src.y.ToFloat()};
-        res = {hifloat8_t(tmp.x), hifloat8_t(tmp.y)};
+        return {ConvertFloatToHiF8(tmp.x), ConvertFloatToHiF8(tmp.y)};
     }
-    return res;
 }
 
 template<ROUND rnd, RoundingSaturation rst, typename SRC_TYPE>
-float8_e4m3x2_t __cvt_float8_e4m3x2_t(SRC_TYPE src) {
-    static_assert(std::is_same_v<SRC_TYPE, float2>, "stc type can only be float2");
+float8_e4m3x2_t __cvt_float8_e4m3x2_t(SRC_TYPE src)
+{
+    static_assert(std::is_same_v<SRC_TYPE, float2>, "src type can only be float2");
     static_assert(rnd == ROUND::CAST_RINT, "rnd type can only be: ROUND_R");
-    float8_e4m3x2_t res{fp8_e4m3fn_t(src.x), fp8_e4m3fn_t(src.y)};
-    return res;
+
+    auto make_fp8 = [](uint8_t bits) { return *reinterpret_cast<fp8_e4m3fn_t*>(&bits); };
+
+    auto ConvertFloatToFp8E4M3 = [&](float f) -> fp8_e4m3fn_t {
+        uint32_t f_bits = *reinterpret_cast<uint32_t*>(&f);
+        uint16_t exp = (f_bits >> 23) & 0xFF;
+        uint32_t mantissa = f_bits & 0x7FFFFF;
+        uint16_t sign = (f_bits >> 31) & 0x1;
+        bool is_overflow = (exp > 0x87) || ((exp == 0x87) && (mantissa > 0x680000));
+
+        if (__isnan(f) || __isinf(f) || is_overflow) {
+            if (use_saturation<rst>()) {
+                if (__isnan(f)) {
+                    int64_t ctrl50 = AscendC::GetCtrlSpr<50, 50>();
+                    return ctrl50 == 0 ? fp8_e4m3fn_t(0.0f) : make_fp8(0x7F);
+                }
+                return make_fp8(sign == 1 ? 0xFE : 0x7E);
+            }
+            return make_fp8(0x7F);
+        }
+        return fp8_e4m3fn_t(f);
+    };
+
+    return {ConvertFloatToFp8E4M3(src.x), ConvertFloatToFp8E4M3(src.y)};
 }
 
 template<ROUND rnd, RoundingSaturation rst, typename SRC_TYPE>
-float8_e5m2x2_t __cvt_float8_e5m2x2_t(SRC_TYPE src) {
-    static_assert(std::is_same_v<SRC_TYPE, float2>, "stc type can only be float2");
+float8_e5m2x2_t __cvt_float8_e5m2x2_t(SRC_TYPE src)
+{
+    static_assert(std::is_same_v<SRC_TYPE, float2>, "src type can only be float2");
     static_assert(rnd == ROUND::CAST_RINT, "rnd type can only be: ROUND_R");
-    float8_e5m2x2_t res{fp8_e5m2_t(src.x), fp8_e5m2_t(src.y)};
-    return res;
+
+    auto make_fp8 = [](uint8_t bits) { return *reinterpret_cast<fp8_e5m2_t*>(&bits); };
+
+    auto ConvertFloatToFp8E5M2 = [&](float f) -> fp8_e5m2_t {
+        uint32_t f_bits = *reinterpret_cast<uint32_t*>(&f);
+        uint16_t exp = (f_bits >> 23) & 0xFF;
+        uint32_t mantissa = f_bits & 0x7FFFFF;
+        uint16_t sign = (f_bits >> 31) & 0x1;
+        bool is_overflow = (exp > 0x8E) || ((exp == 0x8E) && (mantissa >= 0x700000));
+
+        if (__isnan(f) || __isinf(f) || is_overflow) {
+            if (use_saturation<rst>()) {
+                if (__isnan(f)) {
+                    int64_t ctrl50 = AscendC::GetCtrlSpr<50, 50>();
+                    return ctrl50 == 0 ? fp8_e5m2_t(0.0f) : make_fp8(0x7F);
+                }
+                return make_fp8(sign == 1 ? 0xFB : 0x7B);
+            }
+            if (__isnan(f)) return make_fp8(0x7F);
+            return make_fp8(sign == 1 ? 0xFC : 0x7C);
+        }
+        return fp8_e5m2_t(f);
+    };
+
+    return {ConvertFloatToFp8E5M2(src.x), ConvertFloatToFp8E5M2(src.y)};
 }
 
 inline half2 __float22half2_rz(float2 const x) {
