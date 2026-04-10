@@ -1684,7 +1684,6 @@ void AclnnOpGenerator::AclnnGenUncontDeclaration(OpDef& opDef, ofstream& outfile
 {
     // 检查默认配置是否有AutoContiguous
     bool hasAutoCont = IsSupportAutoContiguous(opDef.GetInputs());
-    
     // 如果默认配置没有，再检查所有SOC配置
     if (!hasAutoCont) {
         std::map<std::string, bool> socAutoContMap = GetSocAutoContiguousMap(opDef);
@@ -1695,7 +1694,6 @@ void AclnnOpGenerator::AclnnGenUncontDeclaration(OpDef& opDef, ofstream& outfile
             }
         }
     }
-    
     if (hasAutoCont) {
         outfile << "extern aclnnStatus NnopbaseGetUnContiguousTensors(void *executor, "
                    "const aclTensorList **inTensors);\n";
@@ -1836,7 +1834,7 @@ void AclnnOpGenerator::AclnnOpGenCodeSetUnContInfo(OpDef& opDef, ofstream& outfi
     outfile << "\n    uint64_t inContWorkspaceSize = 0U;\n";
     outfile << "    const aclTensorList *inUnContTensors = nullptr;\n";
     bool hasDefaultAutoCont = HasDefaultAutoContiguous(baseInputs);
-    auto genContiguousCode = [&](const std::string& indent, bool setExecutorInsideIf) {
+    auto genContiguousCode = [&outfile, &hasRef](const std::string& indent, bool setExecutorInsideIf) {
         if (hasRef) {
             outfile << indent << "NnopbaseGetUnContiguousTensors(*executor, &inUnContTensors);\n"
                     << indent << "aclOpExecutor *aclInExecutor = nullptr;\n";
@@ -2237,11 +2235,12 @@ void AclnnOpGenerator::AclnnOpGenCodeRunUnContWithWorkspaceImpl(OpDef& opDef, Op
     outfile << "    uint64_t inContWorkspaceSize = 0U;\n";
     outfile << "    aclOpExecutor *aclInExecutor = nullptr;\n";
     outfile << "    void *inWorkspace = nullptr;\n";
-    if (HasRef(opDefName.inputsName)) {
+    auto hasRef = HasRef(opDefName.inputsName);
+    if (hasRef) {
         outfile << "    aclOpExecutor *viewcopyExecutor = nullptr;\n"
             << "    const aclTensorList *viewcopyTensors = nullptr;\n";
     }
-    auto genContiguousCode = [&](const std::string& indent) {
+    auto genContiguousCode = [&outfile, &opDefName, &hasRef](const std::string& indent) {
         outfile << indent << "NnopbaseGetUnContExecutor(executor, &aclInExecutor, &inContWorkspaceSize);\n"
                 << indent << "if (workspaceSize < inContWorkspaceSize) {\n"
                 << indent << "    NnopbaseOpLogE(ACLNN_ERR_PARAM_INVALID, \"input workspaceSize must be larger than "
@@ -2254,7 +2253,7 @@ void AclnnOpGenerator::AclnnOpGenCodeRunUnContWithWorkspaceImpl(OpDef& opDef, Op
                 << indent << "    NNOPBASE_ASSERT_NOTNULL_RETVAL(aclnnContiguous);\n"
                 << indent << "    NNOPBASE_ASSERT_OK_RETVAL(aclnnContiguous(inWorkspace, inContWorkspaceSize, "
                    "aclInExecutor, stream));\n" << indent << "}\n";
-        if (HasRef(opDefName.inputsName)) {
+        if (hasRef) {
             outfile << indent << "NNOPBASE_ASSERT_OK_RETVAL(NnopbaseGetViewCopyExecutor(executor, &viewcopyExecutor));\n"
                     << indent << "NNOPBASE_ASSERT_OK_RETVAL(NnopbaseReleaseRefContiguousTensors(executor, "
                        "&viewcopyTensors));\n";
