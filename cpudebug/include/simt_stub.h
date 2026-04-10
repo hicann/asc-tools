@@ -239,7 +239,7 @@ bool use_saturation()
 {
     int64_t ctrl60 = AscendC::GetCtrlSpr<60, 60>();
     if (ctrl60 == 0) return (rst == RoundingSaturation::RS_ENABLE_VALUE);
-    return (AscendC::GetCtrlSpr<48, 48>()) == 0;
+    return (AscendC::GetCtrlSpr<48, 48>()) == 0; // 48: ctrl[48]
 }
 
 template<ROUND rnd, RoundingSaturation rst>
