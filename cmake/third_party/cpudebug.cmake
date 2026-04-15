@@ -29,12 +29,12 @@ if (IS_DIRECTORY ${CMAKE_SOURCE_DIR}/libraries/lib AND NOT EXISTS ${CMAKE_SOURCE
 endif()
 
 if (NOT EXISTS ${CMAKE_SOURCE_DIR}/libraries/lib/include/stub_fun.h)
+    set(CPUDEBUG_PKG_NAME cann-asc-tools-cpudebug-deps-lib_${BUILD_TYPE_LOWER}_9.0.0_linux-${CMAKE_SYSTEM_PROCESSOR}.tar.gz)
     file(GLOB CPUDEBUG_PKG
         LIST_DIRECTORIES True
-        ${CANN_3RD_LIB_PATH}/cann-asc-tools-cpudebug-deps*.tar.gz
+        ${CANN_3RD_LIB_PATH}/${CPUDEBUG_PKG_NAME}
     )
 
-    set(CPUDEBUG_PKG_NAME cann-asc-tools-cpudebug-deps-lib_${BUILD_TYPE_LOWER}_9.0.0_linux-${CMAKE_SYSTEM_PROCESSOR}.tar.gz)
     if(NOT EXISTS ${CPUDEBUG_PKG})
         set(CPUDEBUG_PKG_URL "https://container-obsfs-filesystem.obs.cn-north-4.myhuaweicloud.com/package/cann/asc-toolkit-dev/version_compile/master/202603/20260325/ubuntu_${TAR_ARCH}/${CPUDEBUG_PKG_NAME}")
         message(STATUS "cpudebug pkg not found in ${CANN_3RD_LIB_PATH}, downloading from ${CPUDEBUG_PKG_URL}")
