@@ -78,9 +78,7 @@ docker run --name cann_container --device /dev/davinci0 --device /dev/davinci_ma
 
    运行算子时必须安装驱动与固件，若仅编译算子，可跳过本操作，安装指导详见《[CANN 软件安装指南](https://www.hiascend.com/document/redirect/CannCommunityInstSoftware)》。
 
-2. **安装社区尝鲜版CANN toolkit包**
-
-    根据实际环境，下载对应`Ascend-cann-toolkit_${cann_version}_linux-${arch}.run`包，下载链接为[toolkit x86_64包](https://mirror-centralrepo.devcloud.cn-north-4.huaweicloud.com/artifactory/cann-run-release/software/master/20260211182015/x86_64/Ascend-cann-toolkit_9.0.0_linux-x86_64.run)、[toolkit aarch64包](https://mirror-centralrepo.devcloud.cn-north-4.huaweicloud.com/artifactory/cann-run-release/software/master/20260211182015/aarch64/Ascend-cann-toolkit_9.0.0_linux-aarch64.run)。
+2. **安装最新版CANN toolkit包**
 
     ```bash
     # 确保安装包具有可执行权限
@@ -94,15 +92,9 @@ docker run --name cann_container --device /dev/davinci0 --device /dev/davinci_ma
     - 缺省--install-path时， 则使用默认路径安装。
     若使用root用户安装，安装完成后相关软件存储在“/usr/local/Ascend”路径下；若使用非root用户安装，安装完成后相关软件存储在“$HOME/Ascend”路径下。
 
-3. **安装社区版CANN ops包（运行态依赖）**
+3. **安装最新版CANN ops包（运行态依赖）**
 
     运行算子前必须安装本包，若仅编译算子，可跳过本操作。
-
-    根据产品型号和环境架构，下载对应`Ascend-cann-${soc_name}-ops_9.0.0_linux-${arch}.run`包，下载链接如下：
-
-    - Atlas A2 训练系列产品/Atlas A2 推理系列产品：[ops x86_64包](https://mirror-centralrepo.devcloud.cn-north-4.huaweicloud.com/artifactory/cann-run-release/software/master/20260211182015/x86_64/Ascend-cann-910b-ops_9.0.0_linux-x86_64.run)、[ops aarch64包](https://mirror-centralrepo.devcloud.cn-north-4.huaweicloud.com/artifactory/cann-run-release/software/master/20260211182015/aarch64/Ascend-cann-910b-ops_9.0.0_linux-aarch64.run)。
-    - Atlas A3 训练系列产品/Atlas A3 推理系列产品：[ops x86_64包](https://mirror-centralrepo.devcloud.cn-north-4.huaweicloud.com/artifactory/cann-run-release/software/master/20260211182015/x86_64/Ascend-cann-A3-ops_9.0.0_linux-x86_64.run)、[ops aarch64包](https://mirror-centralrepo.devcloud.cn-north-4.huaweicloud.com/artifactory/cann-run-release/software/master/20260211182015/aarch64/Ascend-cann-A3-ops_9.0.0_linux-aarch64.run)。
-    - Ascend 950PR/Ascend 950DT：[ops x86_64包](https://ascend.devcloud.huaweicloud.com/artifactory/cann-run-release/software/master/20260213000325157/x86_64/Ascend-cann-950-ops_9.0.0_linux-x86_64.run)、[ops aarch64包](https://ascend.devcloud.huaweicloud.com/artifactory/cann-run-release/software/master/20260213000325157/aarch64/Ascend-cann-950-ops_9.0.0_linux-aarch64.run)。
 
     ```bash
     # 确保安装包具有可执行权限
@@ -117,6 +109,11 @@ docker run --name cann_container --device /dev/davinci0 --device /dev/davinci_ma
 **场景2：体验已发布版本能力或基于已发布版本进行开发**
 
 如果您想体验**官网正式发布的CANN包**能力，请访问[CANN官网下载中心](https://www.hiascend.com/cann/download)，选择对应版本CANN软件包（仅支持CANN 8.5.0及后续版本）进行安装。
+
+进入官网后，首先点击**版本选择**，定位目标版本。随后，根据您的**产品系列**、**CPU架构**和**操作系统**，选择合适的安装方式。我们提供了多种安装方式，以Ubuntu为例，包括：**在线安装（apt-get）、在线安装（Conda）、离线安装（Runfile）**，您可根据实际需求灵活选择。
+
+  > [!NOTE]
+  > 如果您不清楚设备的具体硬件信息，可使用页面提供的相关命令进行查询。系统将根据查询结果自动匹配对应的**产品系列**。
 
 ## 配置环境变量
 
