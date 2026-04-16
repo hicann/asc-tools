@@ -44,7 +44,6 @@
 
     <block_info dependtree="false" dst_path="" install_path="" block_conf_path="ascend" install_mod="550">
         <block name="TIKCppSim"/>
-        <block name="CASimuRuntime"/>
         <block name="AscendCToolkits" feature="ascendc"/>
         <block name="AscendCProjectTemplate" feature="ascendc"/>
     </block_info>
