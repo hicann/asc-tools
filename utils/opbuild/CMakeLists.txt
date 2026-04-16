@@ -17,7 +17,7 @@ add_executable(op_build op_build.cpp op_generator.cpp op_generator_factory.cpp o
   op_build_params.cpp
 )
 
-target_compile_options(op_build PRIVATE -Wextra -Wfloat-equal -fno-common -fpie -Werror)
+target_compile_options(op_build PRIVATE -Wextra -Wfloat-equal -fno-common -fpie -Werror -DNO_OPERATOR_IMPL)
 
 if(BUILD_OPEN_PROJECT)
   target_include_directories(op_build PRIVATE
@@ -42,9 +42,8 @@ target_link_libraries(op_build PRIVATE
   $<BUILD_INTERFACE:intf_pub>
   $<BUILD_INTERFACE:mmpa_headers>
   metadef_headers
-  graph
-  graph_base
-  register
+  metadef
+  opp_registry
   dl
   unified_dlog
   mmpa
