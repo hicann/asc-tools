@@ -23,6 +23,18 @@ source "${COMMON_SHELL_PATH}"
 username=$(id -un)
 usergroup=$(groups | cut -d" " -f1)
 
+# 查找 whl 文件（支持通配符）
+find_whl_file() {
+    local _dir="$1"
+    local _pattern="$2"
+    local _found=$(ls ${_dir}/${_pattern} 2>/dev/null | head -n 1)
+    if [ -n "$_found" ]; then
+        echo "$_found"
+        return 0
+    fi
+    return 1
+}
+
 log() {
     local content=`echo "$@" | cut -d" " -f2-`
     cur_date=`date +"%Y-%m-%d %H:%M:%S"`
@@ -131,13 +143,25 @@ installOpPython() {
         return 1
     fi
 
-    installWhlPackage "${install_path}/tools/mindstudio_opgen-26.0.0-py3-none-any.whl"
-    if [ $? -ne 0 ]; then
+    local _opgen_whl=$(find_whl_file "${install_path}/tools" "mindstudio_opgen-*-py3-none-any.whl")
+    if [ -n "$_opgen_whl" ]; then
+        installWhlPackage "$_opgen_whl"
+        if [ $? -ne 0 ]; then
+            return 1
+        fi
+    else
+        log_and_print $LEVEL_ERROR "mindstudio_opgen whl file not found"
         return 1
     fi
 
-    installWhlPackage "${install_path}/tools/mindstudio_opst-26.0.0-py3-none-any.whl"
-    if [ $? -ne 0 ]; then
+    local _opst_whl=$(find_whl_file "${install_path}/tools" "mindstudio_opst-*-py3-none-any.whl")
+    if [ -n "$_opst_whl" ]; then
+        installWhlPackage "$_opst_whl"
+        if [ $? -ne 0 ]; then
+            return 1
+        fi
+    else
+        log_and_print $LEVEL_ERROR "mindstudio_opst whl file not found"
         return 1
     fi
 
@@ -166,13 +190,25 @@ installAllPython() {
         return 1
     fi
 
-    installWhlPackage "${install_path}/tools/mindstudio_opgen-26.0.0-py3-none-any.whl"
-    if [ $? -ne 0 ]; then
+    local _opgen_whl=$(find_whl_file "${install_path}/tools" "mindstudio_opgen-*-py3-none-any.whl")
+    if [ -n "$_opgen_whl" ]; then
+        installWhlPackage "$_opgen_whl"
+        if [ $? -ne 0 ]; then
+            return 1
+        fi
+    else
+        log_and_print $LEVEL_ERROR "mindstudio_opgen whl file not found"
         return 1
     fi
 
-    installWhlPackage "${install_path}/tools/mindstudio_opst-26.0.0-py3-none-any.whl"
-    if [ $? -ne 0 ]; then
+    local _opst_whl=$(find_whl_file "${install_path}/tools" "mindstudio_opst-*-py3-none-any.whl")
+    if [ -n "$_opst_whl" ]; then
+        installWhlPackage "$_opst_whl"
+        if [ $? -ne 0 ]; then
+            return 1
+        fi
+    else
+        log_and_print $LEVEL_ERROR "mindstudio_opst whl file not found"
         return 1
     fi
 
@@ -215,8 +251,18 @@ createPythonLocalDir() {
 }
 
 installPyWhlLocal() {
-    local _whl_name="$1"
-    local _py_whl_path="$install_path/tools/$_whl_name"
+    local _whl_pattern="$1"
+    local _py_whl_path
+    # 支持通配符模式查找 whl 文件
+    if [[ "$_whl_pattern" == *"*"* ]]; then
+        _py_whl_path=$(find_whl_file "${install_path}/tools" "$_whl_pattern")
+        if [ -z "$_py_whl_path" ]; then
+            log_and_print ${LEVEL_ERROR} "No whl file found matching pattern: $_whl_pattern"
+            return 1
+        fi
+    else
+        _py_whl_path="$install_path/tools/$_whl_pattern"
+    fi
     local _py_install_path="$install_path/python/site-packages"
 
     local _temp_install_path="$_py_install_path/temp"
@@ -252,10 +298,10 @@ installOpPythonLocal() {
     installPyWhlLocal "show_kernel_debug_data-0.1.0-py3-none-any.whl"
     [ $? -ne 0 ] && return 1
 
-    installPyWhlLocal "mindstudio_opgen-26.0.0-py3-none-any.whl"
+    installPyWhlLocal "mindstudio_opgen-*-py3-none-any.whl"
     [ $? -ne 0 ] && return 1
 
-    installPyWhlLocal "mindstudio_opst-26.0.0-py3-none-any.whl"
+    installPyWhlLocal "mindstudio_opst-*-py3-none-any.whl"
     [ $? -ne 0 ] && return 1
 
     log $LEVEL_INFO "Install opeator python package succeed."
@@ -269,10 +315,10 @@ installAllPythonLocal() {
     installPyWhlLocal "show_kernel_debug_data-0.1.0-py3-none-any.whl"
     [ $? -ne 0 ] && return 1
 
-    installPyWhlLocal "mindstudio_opgen-26.0.0-py3-none-any.whl"
+    installPyWhlLocal "mindstudio_opgen-*-py3-none-any.whl"
     [ $? -ne 0 ] && return 1
 
-    installPyWhlLocal "mindstudio_opst-26.0.0-py3-none-any.whl"
+    installPyWhlLocal "mindstudio_opst-*-py3-none-any.whl"
     [ $? -ne 0 ] && return 1
 
     log $LEVEL_INFO "Install all module python package succeed."

@@ -11,9 +11,6 @@
 cmake_minimum_required(VERSION 3.16.0)
 project(tools_third_party)
 
-set(MSOPGEN_WHEEL_IMAGE mindstudio_opgen-26.0.0-py3-none-any.whl)
-set(MSOPST_WHEEL_IMAGE mindstudio_opst-26.0.0-py3-none-any.whl)
-
 # Try hard to reuse an existing msot checkout before downloading.
 set(_ms_root "")
 set(_ms_candidates
@@ -113,13 +110,27 @@ endif()
 set(ROOT_DIR "${_ms_root}/msot")
 include("${ROOT_DIR}/cmake/module/msopgen.cmake")
 
-install(FILES ${CMAKE_INSTALL_PREFIX}/msopgen/${MSOPGEN_WHEEL_IMAGE}
-    DESTINATION tools/
-    PERMISSIONS OWNER_READ OWNER_EXECUTE GROUP_READ GROUP_EXECUTE
-    COMPONENT asc-tools
-)
-install(FILES ${CMAKE_INSTALL_PREFIX}/msopgen/${MSOPST_WHEEL_IMAGE}
-    DESTINATION tools/
-    PERMISSIONS OWNER_READ OWNER_EXECUTE GROUP_READ GROUP_EXECUTE
-    COMPONENT asc-tools
-)
+# Install whl files with wildcard matching for version flexibility
+# Save the actual build output path at configure time (before CPack changes CMAKE_INSTALL_PREFIX)
+set(MSOPGEN_BUILD_DIR "${CMAKE_INSTALL_PREFIX}/msopgen")
+
+install(CODE "
+    file(GLOB MSOPGEN_WHL \"${MSOPGEN_BUILD_DIR}/mindstudio_opgen-*-py3-none-any.whl\")
+    file(GLOB MSOPST_WHL \"${MSOPGEN_BUILD_DIR}/mindstudio_opst-*-py3-none-any.whl\")
+
+    if(MSOPGEN_WHL)
+        file(INSTALL \${MSOPGEN_WHL} DESTINATION \"\${CMAKE_INSTALL_PREFIX}/tools/\"
+            FILE_PERMISSIONS OWNER_READ OWNER_EXECUTE GROUP_READ GROUP_EXECUTE)
+        message(STATUS \"Installed: \${MSOPGEN_WHL}\")
+    else()
+        message(WARNING \"msopgen whl not found at ${MSOPGEN_BUILD_DIR}\")
+    endif()
+
+    if(MSOPST_WHL)
+        file(INSTALL \${MSOPST_WHL} DESTINATION \"\${CMAKE_INSTALL_PREFIX}/tools/\"
+            FILE_PERMISSIONS OWNER_READ OWNER_EXECUTE GROUP_READ GROUP_EXECUTE)
+        message(STATUS \"Installed: \${MSOPST_WHL}\")
+    else()
+        message(WARNING \"msopst whl not found at ${MSOPGEN_BUILD_DIR}\")
+    endif()
+" COMPONENT asc-tools)

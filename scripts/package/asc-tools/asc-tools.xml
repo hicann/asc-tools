@@ -9,6 +9,7 @@
         <version>package/asc-tools/version.xml</version>
         <cleanup>share/info/asc-tools/script/cleanup.sh</cleanup>
         <parallel>true</parallel>
+        <expand_asterisk>true</expand_asterisk>
     </package_info>
 
     <dir_info value="asc_tools_version" install_mod="550">
