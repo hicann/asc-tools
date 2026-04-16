@@ -21,12 +21,14 @@ if(BUILD_OPEN_PROJECT)
         COMMAND echo "show_kernel_debug_data-0.1.0-py3-none-any.whl is ok!"
     )
     install(FILES ${CMAKE_INSTALL_PREFIX}/lib/show_kernel_debug_data
-        OPTIONAL DESTINATION tools/show_kernel_debug_data/
+        ${INSTALL_OPTIONAL} DESTINATION tools/show_kernel_debug_data/
         PERMISSIONS OWNER_READ OWNER_EXECUTE GROUP_READ GROUP_EXECUTE
+        COMPONENT asc-tools
     )
     install(FILES ${CMAKE_INSTALL_PREFIX}/lib/show_kernel_debug_data-0.1.0-py3-none-any.whl
-        OPTIONAL DESTINATION tools/
+        ${INSTALL_OPTIONAL} DESTINATION tools/
         PERMISSIONS OWNER_READ OWNER_EXECUTE GROUP_READ GROUP_EXECUTE
+        COMPONENT asc-tools
     )
 else()
     add_custom_target(show_kernel_debug_data-0.1.0-py3-none-any.whl
@@ -39,7 +41,8 @@ else()
 
 
     install(FILES ${CMAKE_INSTALL_PREFIX}/lib/show_kernel_debug_data
-        OPTIONAL DESTINATION lib
+        ${INSTALL_OPTIONAL} DESTINATION lib
         PERMISSIONS OWNER_READ OWNER_EXECUTE GROUP_READ GROUP_EXECUTE
+        COMPONENT asc-tools
     )
 endif()

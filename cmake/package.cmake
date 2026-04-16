@@ -77,6 +77,7 @@ function(pack_built_in)
       OWNER_READ OWNER_WRITE OWNER_EXECUTE  # 目录权限
       GROUP_READ GROUP_EXECUTE
       WORLD_READ WORLD_EXECUTE
+      COMPONENT asc-tools
   )
 
   set(SCRIPTS_FILES
@@ -91,6 +92,7 @@ function(pack_built_in)
 
   install(FILES ${SCRIPTS_FILES}
       DESTINATION share/info/asc-tools/script
+      COMPONENT asc-tools
   )
   set(COMMON_FILES
       ${CMAKE_SOURCE_DIR}/scripts/package/common/sh/install_common_parser.sh
@@ -116,12 +118,15 @@ function(pack_built_in)
   install(FILES ${CMAKE_BINARY_DIR}/version.asc-tools.info
       DESTINATION share/info/asc-tools
       RENAME version.info
+      COMPONENT asc-tools
   )
   install(FILES ${CMAKE_SOURCE_DIR}/libraries/lib/scripts/compile_options_config.json
       DESTINATION conf
+      COMPONENT asc-tools
   )
   install(FILES ${CONF_FILES}
       DESTINATION asc-tools/conf
+      COMPONENT asc-tools
   )
   install(FILES ${PACKAGE_FILES}
       DESTINATION share/info/asc-tools/script
@@ -129,6 +134,7 @@ function(pack_built_in)
       OWNER_READ OWNER_WRITE OWNER_EXECUTE  # 文件权限
       GROUP_READ GROUP_EXECUTE
       WORLD_READ WORLD_EXECUTE
+      COMPONENT asc-tools
   )
   install(FILES ${LATEST_MANGER_FILES}
       DESTINATION latest_manager
@@ -136,15 +142,18 @@ function(pack_built_in)
       OWNER_READ OWNER_WRITE OWNER_EXECUTE  # 文件权限
       GROUP_READ GROUP_EXECUTE
       WORLD_READ WORLD_EXECUTE
+      COMPONENT asc-tools
   )
   install(DIRECTORY ${CMAKE_SOURCE_DIR}/scripts/package/latest_manager/scripts/
       DESTINATION latest_manager
+      COMPONENT asc-tools
   )
   set(CONF_FILES 
     ${CMAKE_SOURCE_DIR}/scripts/package/common/cfg/path.cfg
   )
   install(FILES ${CONF_FILES}
     DESTINATION asc-tools/conf
+    COMPONENT asc-tools
   )
   string(FIND "${ASCEND_COMPUTE_UNIT}" ";" SEMICOLON_INDEX)
   if (SEMICOLON_INDEX GREATER -1)

@@ -57,7 +57,8 @@ target_link_options(op_build PRIVATE
 )
 
 install(TARGETS op_build
-  RUNTIME DESTINATION lib OPTIONAL
+  RUNTIME DESTINATION lib ${INSTALL_OPTIONAL}
+  COMPONENT asc-tools
 )
 
 if(NOT BUILD_OPEN_PROJECT)

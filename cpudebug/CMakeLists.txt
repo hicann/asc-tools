@@ -125,11 +125,13 @@ foreach(product_type ${PRODUCT_TYPE_LIST})
   product_dir(${product_type} Product_cap)
   if(BUILD_OPEN_PROJECT)
     install(TARGETS cpudebug_${product_type}
-      LIBRARY DESTINATION lib/${Product_cap} OPTIONAL
+      LIBRARY DESTINATION lib/${Product_cap} ${INSTALL_OPTIONAL}
+      COMPONENT asc-tools
     )
   else()
     install(TARGETS cpudebug_${product_type}
-      LIBRARY DESTINATION ${INSTALL_LIBRARY_DIR}/${product_type} OPTIONAL
+      LIBRARY DESTINATION ${INSTALL_LIBRARY_DIR}/${product_type} ${INSTALL_OPTIONAL}
+      COMPONENT asc-tools
     )
   endif()
 endforeach()
@@ -163,7 +165,8 @@ install(FILES
   include/kernel_simt_cpu.h
   include/cpu_debug_launch.h
   include/kernel_elf_parser.h
-  DESTINATION lib/include OPTIONAL
+  DESTINATION lib/include ${INSTALL_OPTIONAL}
+  COMPONENT asc-tools
 )
 
 include(CMakePackageConfigHelpers)
@@ -174,17 +177,20 @@ configure_package_config_file(cmake/tikicpulib-config.cmake.in
 
 install(FILES
   ${CMAKE_CURRENT_BINARY_DIR}/tikicpulib-config.cmake
-  DESTINATION ${_install_path}/cmake OPTIONAL
+  DESTINATION ${_install_path}/cmake ${INSTALL_OPTIONAL}
+  COMPONENT asc-tools
 )
 
 install(DIRECTORY
   ${CMAKE_SOURCE_DIR}/libraries/lib/cmake/
-  DESTINATION ${_install_path}/cmake OPTIONAL
+  DESTINATION ${_install_path}/cmake ${INSTALL_OPTIONAL}
+  COMPONENT asc-tools
 )
 
 install(FILES
   ${CMAKE_SOURCE_DIR}/libraries/lib/libcpudebug_cceprint.so
   ${CMAKE_SOURCE_DIR}/libraries/lib/libcpudebug_npuchk.so
   ${CMAKE_SOURCE_DIR}/libraries/lib/libcpudebug_stubreg.so
-  DESTINATION ${_install_path} OPTIONAL
+  DESTINATION ${_install_path} ${INSTALL_OPTIONAL}
+  COMPONENT asc-tools
 )

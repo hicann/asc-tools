@@ -9,10 +9,12 @@
 # ----------------------------------------------------------------------------------------------------------
 if(BUILD_OPEN_PROJECT)
   install(FILES ascendc_npuchk_report.py
-    DESTINATION tools/ascendc_tools OPTIONAL
+    DESTINATION tools/ascendc_tools ${INSTALL_OPTIONAL}
+    COMPONENT asc-tools
   )
 else()
   install(FILES ascendc_npuchk_report.py
-    DESTINATION ${INSTALL_LIBRARY_DIR} OPTIONAL
+    DESTINATION ${INSTALL_LIBRARY_DIR} ${INSTALL_OPTIONAL}
+    COMPONENT asc-tools
   )
 endif()

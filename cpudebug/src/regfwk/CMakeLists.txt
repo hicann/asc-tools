@@ -65,8 +65,10 @@ target_link_options(cpudebug_stubreg PRIVATE
 
 if(BUILD_OPEN_PROJECT)
   install(TARGETS cpudebug_stubreg EXPORT targets-tikicpulib
-    LIBRARY DESTINATION lib OPTIONAL)
+    LIBRARY DESTINATION lib ${INSTALL_OPTIONAL}
+    COMPONENT asc-tools)
 else()
   install(TARGETS cpudebug_stubreg EXPORT targets-tikicpulib
-    LIBRARY DESTINATION lib OPTIONAL)
+    LIBRARY DESTINATION lib ${INSTALL_OPTIONAL}
+    COMPONENT asc-tools)
 endif()

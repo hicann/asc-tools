@@ -21,12 +21,14 @@ if(BUILD_OPEN_PROJECT)
     )
 
     install(FILES ${CMAKE_INSTALL_PREFIX}/lib/msobjdump
-        OPTIONAL DESTINATION tools/msobjdump/
+        ${INSTALL_OPTIONAL} DESTINATION tools/msobjdump/
         PERMISSIONS OWNER_READ OWNER_EXECUTE GROUP_READ GROUP_EXECUTE
+        COMPONENT asc-tools
     )
     install(FILES ${CMAKE_INSTALL_PREFIX}/lib/msobjdump-0.1.0-py3-none-any.whl
-        OPTIONAL DESTINATION tools/
+        ${INSTALL_OPTIONAL} DESTINATION tools/
         PERMISSIONS OWNER_READ OWNER_EXECUTE GROUP_READ GROUP_EXECUTE
+        COMPONENT asc-tools
     )
 else()
     add_custom_target(msobjdump-0.1.0-py3-none-any.whl
@@ -39,7 +41,8 @@ else()
 
 
     install(FILES ${CMAKE_INSTALL_PREFIX}/lib/msobjdump
-        OPTIONAL DESTINATION lib
+        ${INSTALL_OPTIONAL} DESTINATION lib
         PERMISSIONS OWNER_READ OWNER_EXECUTE GROUP_READ GROUP_EXECUTE
+        COMPONENT asc-tools
     )
 endif()
