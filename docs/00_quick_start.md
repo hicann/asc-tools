@@ -177,6 +177,7 @@ docker run --name cann_container --device /dev/davinci0 --device /dev/davinci_ma
   | googletest | 1.14.0 | [googletest-1.14.0.tar.gz](https://gitcode.com/cann-src-third-party/googletest/releases/download/v1.14.0/googletest-1.14.0.tar.gz) |
   | mockcpp | 2.7 | [mockcpp-2.7.tar.gz](https://gitcode.com/cann-src-third-party/mockcpp/releases/download/v2.7-h2/mockcpp-2.7.tar.gz) |
   | mockcpp_patch | 2.7 | [mockcpp-2.7.patch](https://gitcode.com/cann-src-third-party/mockcpp/releases/download/v2.7-h3/mockcpp-2.7_py3-h3.patch) |
+  | cann-cmake | 1.0.0 | [cann-cmake-1.0.0.tar.gz](https://cann-3rd.obs.cn-north-4.myhuaweicloud.com/cmake/cmake-master-001.tar.gz) |
 
   其中，对于依赖的开源第三方软件，提供一键式下载脚本`install_dep_tar.py`，用户可以通过执行如下命令，下载所有开源第三方软件依赖。
   ```bash

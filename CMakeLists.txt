@@ -9,7 +9,10 @@
 # ----------------------------------------------------------------------------------------------------------
 
 cmake_minimum_required(VERSION 3.16.0)
+include(cmake/fetch_cann_cmake.cmake)
 project(asc-tools)
+
+init_cann_project()
 
 add_compile_options(-Werror)
 
@@ -25,12 +28,6 @@ set(KIRIN_BUILD_CPU_DEBUG OFF)
 set(CMAKE_C_FLAGS_RELEASE "")
 set(CMAKE_CXX_FLAGS_RELEASE "")
 
-find_program(CCACHE_PROGRAM ccache)
-if(CCACHE_PROGRAM)
-  set(CMAKE_C_COMPILER_LAUNCHER ${CCACHE_PROGRAM})
-  set(CMAKE_CXX_COMPILER_LAUNCHER ${CCACHE_PROGRAM})
-endif()
-
 if(BUILD_OPEN_PROJECT)
     find_package(Python3 COMPONENTS Interpreter)
     set(HI_PYTHON ${Python3_EXECUTABLE})
@@ -41,13 +38,14 @@ if(BUILD_OPEN_PROJECT)
     include(cmake/dependencies.cmake) # 其中会根据PVMODEL_PATH作为pvmodel相关依赖路径
     include(cmake/intf_pub_linux.cmake)
     include(cmake/third_party/cpudebug.cmake)
-    include(cmake/func.cmake)
-    include(version.cmake)
     include(cmake/package.cmake)
-
-    check_pkg_build_deps("asc-tools")
-    add_version_info_targets()
 endif()
+
+set(ASCEND_INSTALL_PATH "${ASCEND_CANN_PACKAGE_PATH}")
+
+include(version.cmake)
+check_cann_pkg_build_deps("asc-tools")
+add_cann_version_info_targets()
 
 add_subdirectory(cpudebug)
 add_subdirectory(npuchk)
