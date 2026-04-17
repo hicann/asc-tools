@@ -125,9 +125,18 @@ foreach(product_type ${PRODUCT_TYPE_LIST})
   product_dir(${product_type} Product_cap)
   if(BUILD_OPEN_PROJECT)
     install(TARGETS cpudebug_${product_type}
-      LIBRARY DESTINATION lib/${Product_cap} ${INSTALL_OPTIONAL}
+      LIBRARY DESTINATION tools/cpudebug/lib/${Product_cap} ${INSTALL_OPTIONAL}
       COMPONENT asc-tools
     )
+    install(CODE
+      "execute_process(
+          COMMAND ${CMAKE_COMMAND} -E create_symlink
+          libcpudebug.so
+          libtikcpp_debug.so
+          WORKING_DIRECTORY \"\${CMAKE_INSTALL_PREFIX}/tools/cpudebug/lib/${Product_cap}\"
+      )"
+      COMPONENT asc-tools
+  )
   else()
     install(TARGETS cpudebug_${product_type}
       LIBRARY DESTINATION ${INSTALL_LIBRARY_DIR}/${product_type} ${INSTALL_OPTIONAL}
@@ -137,7 +146,7 @@ foreach(product_type ${PRODUCT_TYPE_LIST})
 endforeach()
 
 if(BUILD_OPEN_PROJECT)
-  set(_install_path lib)
+  set(_install_path tools/cpudebug/lib)
 else()
   set(_install_path ${INSTALL_LIBRARY_DIR})
 endif()
@@ -165,7 +174,7 @@ install(FILES
   include/kernel_simt_cpu.h
   include/cpu_debug_launch.h
   include/kernel_elf_parser.h
-  DESTINATION lib/include ${INSTALL_OPTIONAL}
+  DESTINATION tools/cpudebug/lib/include ${INSTALL_OPTIONAL}
   COMPONENT asc-tools
 )
 
@@ -192,5 +201,35 @@ install(FILES
   ${CMAKE_SOURCE_DIR}/libraries/lib/libcpudebug_npuchk.so
   ${CMAKE_SOURCE_DIR}/libraries/lib/libcpudebug_stubreg.so
   DESTINATION ${_install_path} ${INSTALL_OPTIONAL}
+  COMPONENT asc-tools
+)
+
+install(CODE
+  "execute_process(
+      COMMAND ${CMAKE_COMMAND} -E create_symlink
+      libcpudebug_cceprint.so
+      libtikicpulib_cceprint.so
+      WORKING_DIRECTORY \"\${CMAKE_INSTALL_PREFIX}/${_install_path}\"
+  )"
+  COMPONENT asc-tools
+)
+
+install(CODE
+  "execute_process(
+      COMMAND ${CMAKE_COMMAND} -E create_symlink
+      libcpudebug_npuchk.so
+      libtikicpulib_npuchk.so
+      WORKING_DIRECTORY \"\${CMAKE_INSTALL_PREFIX}/${_install_path}\"
+  )"
+  COMPONENT asc-tools
+)
+
+install(CODE
+  "execute_process(
+      COMMAND ${CMAKE_COMMAND} -E create_symlink
+      libcpudebug_stubreg.so
+      libtikicpulib_stubreg.so
+      WORKING_DIRECTORY \"\${CMAKE_INSTALL_PREFIX}/${_install_path}\"
+  )"
   COMPONENT asc-tools
 )

@@ -10,6 +10,7 @@
         <cleanup>share/info/asc-tools/script/cleanup.sh</cleanup>
         <parallel>true</parallel>
         <expand_asterisk>true</expand_asterisk>
+        <copy_all>true</copy_all>
     </package_info>
 
     <dir_info value="asc_tools_version" install_mod="550">
@@ -39,7 +40,7 @@
         <file value="script" entity="true"/>
         <file value="version.info"/>
     </file_info>
-    <file_info value="conf" copy_type="source" src_path="" dst_path="conf" install_path="$(TARGET_ENV)/conf" install_type="devel" install_mod="440">
+    <file_info value="conf" copy_type="source" src_path="" dst_path="$(TARGET_ENV)/conf" install_path="$(TARGET_ENV)/conf" install_type="devel" install_mod="440">
         <file value="compile_options_config.json" install_softlink="compiler/conf/compile_options_config.json"/>
     </file_info>
 

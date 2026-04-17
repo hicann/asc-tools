@@ -59,10 +59,10 @@ configure_file(
     ${STAGING_DIR}/share/info/asc-tools/
     COPYONLY
 )
-configure_file(
+
+file(RENAME
     ${CSV_OUTPUT}
-    ${STAGING_DIR}/share/info/asc-tools/script/
-    COPYONLY
+    ${STAGING_DIR}/share/info/asc-tools/script/filelist.csv
 )
 
 # makeself打包

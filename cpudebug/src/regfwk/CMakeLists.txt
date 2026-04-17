@@ -67,6 +67,15 @@ if(BUILD_OPEN_PROJECT)
   install(TARGETS cpudebug_stubreg EXPORT targets-tikicpulib
     LIBRARY DESTINATION lib ${INSTALL_OPTIONAL}
     COMPONENT asc-tools)
+  install(CODE
+    "execute_process(
+        COMMAND ${CMAKE_COMMAND} -E create_symlink
+        libcpudebug_stubreg.so
+        libtikicpulib_stubreg.so
+        WORKING_DIRECTORY \"\${CMAKE_INSTALL_PREFIX}/lib\"
+    )"
+    COMPONENT asc-tools
+  )
 else()
   install(TARGETS cpudebug_stubreg EXPORT targets-tikicpulib
     LIBRARY DESTINATION lib ${INSTALL_OPTIONAL}

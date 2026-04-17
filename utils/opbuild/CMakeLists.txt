@@ -56,7 +56,7 @@ target_link_options(op_build PRIVATE
 )
 
 install(TARGETS op_build
-  RUNTIME DESTINATION lib ${INSTALL_OPTIONAL}
+  RUNTIME DESTINATION tools/opbuild ${INSTALL_OPTIONAL}
   COMPONENT asc-tools
 )
 

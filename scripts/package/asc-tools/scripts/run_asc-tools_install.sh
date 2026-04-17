@@ -148,7 +148,7 @@ installTool()
     if [ -d "$install_dir/tools/ascendc_tools" ];then
         chmod 755 "$install_dir/tools/ascendc_tools"
     fi
-    "$INSTALL_COMMON_PARSER_PATH" --install ${shell_options_} ${custom_options_} --feature=$feature_type --use-share-info --chip=$chip_type\
+    "$INSTALL_COMMON_PARSER_PATH" --copy_all --install ${shell_options_} ${custom_options_} --feature=$feature_type --use-share-info --chip=$chip_type\
         "${install_type}" "${input_install_path}" "${FILELIST_PATH}"
     if [ -d "$install_dir/tools/ascendc_tools" ];then
         chmod 550 "$install_dir/tools/ascendc_tools"

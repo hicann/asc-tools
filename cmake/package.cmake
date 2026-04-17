@@ -121,11 +121,29 @@ function(pack_built_in)
       COMPONENT asc-tools
   )
   install(FILES ${CMAKE_SOURCE_DIR}/libraries/lib/scripts/compile_options_config.json
-      DESTINATION conf
+      DESTINATION ${CMAKE_SYSTEM_PROCESSOR}-linux/conf
       COMPONENT asc-tools
   )
+
+  install(CODE
+    "execute_process(
+        COMMAND mkdir -p \${CMAKE_INSTALL_PREFIX}/compiler/conf/
+    )"
+    COMPONENT asc-tools
+  )
+
+  install(CODE
+    "execute_process(
+        COMMAND ${CMAKE_COMMAND} -E create_symlink
+        ../../${CMAKE_SYSTEM_PROCESSOR}-linux/conf/compile_options_config.json
+        compile_options_config.json
+        WORKING_DIRECTORY \"\${CMAKE_INSTALL_PREFIX}/compiler/conf/\"
+    )"
+    COMPONENT asc-tools
+  )
+
   install(FILES ${CONF_FILES}
-      DESTINATION asc-tools/conf
+      DESTINATION ${CMAKE_SYSTEM_PROCESSOR}-linux/conf
       COMPONENT asc-tools
   )
   install(FILES ${PACKAGE_FILES}
@@ -136,25 +154,7 @@ function(pack_built_in)
       WORLD_READ WORLD_EXECUTE
       COMPONENT asc-tools
   )
-  install(FILES ${LATEST_MANGER_FILES}
-      DESTINATION latest_manager
-      PERMISSIONS
-      OWNER_READ OWNER_WRITE OWNER_EXECUTE  # 文件权限
-      GROUP_READ GROUP_EXECUTE
-      WORLD_READ WORLD_EXECUTE
-      COMPONENT asc-tools
-  )
-  install(DIRECTORY ${CMAKE_SOURCE_DIR}/scripts/package/latest_manager/scripts/
-      DESTINATION latest_manager
-      COMPONENT asc-tools
-  )
-  set(CONF_FILES 
-    ${CMAKE_SOURCE_DIR}/scripts/package/common/cfg/path.cfg
-  )
-  install(FILES ${CONF_FILES}
-    DESTINATION asc-tools/conf
-    COMPONENT asc-tools
-  )
+
   string(FIND "${ASCEND_COMPUTE_UNIT}" ";" SEMICOLON_INDEX)
   if (SEMICOLON_INDEX GREATER -1)
       # 截取分号前的字串
