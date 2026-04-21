@@ -3,7 +3,6 @@
     <dir_info value="TIKCppSim" install_mod="550">
         <path value="tools"/>
         <path value="tools/ascendc_tools"/>
-        <path value="tools/opbuild"/>
         <path value="tools/cpudebug" install_softlink="tools/tikicpulib"/>
         <path value="tools/cpudebug/lib"/>
         <path value="tools/cpudebug/lib/cmake" />
@@ -76,9 +75,6 @@
     </file_info>
     <file_info value="ascendc_scripts" copy_type="delivery" src_path="lib/host/" dst_path="tools/ascendc_tools" install_path="tools/ascendc_tools" install_mod="550" feature="ascendc">
         <file value="ascendc_npuchk_report.py"/>
-    </file_info>
-    <file_info value="op_build" copy_type="delivery" src_path="lib/host/" dst_path="tools/opbuild" install_path="tools/opbuild" install_mod="555" feature="ascendc">
-        <file value="op_build" file_type= "executable"/>
     </file_info>
     <file_info value="ascendc_acl_stub" copy_type="delivery" src_path="lib/host/" dst_path="tools/cpudebug/lib" install_path="tools/cpudebug/lib" install_mod="440" feature="ascendc">
         <file value="libcpudebug_acl_stub.so" file_type="shared" install_mod="555" install_softlink="tools/cpudebug/lib/libascendc_acl_stub.so"/>

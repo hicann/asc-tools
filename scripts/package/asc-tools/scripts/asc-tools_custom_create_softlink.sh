@@ -115,9 +115,6 @@ createToolSoftLink()
         if [ ! -d "$install_path/$latest_dir/tools/msobjdump" ]; then
             ln -sr "$install_path/$version_dir/tools/msobjdump" "$install_path/$latest_dir/tools/msobjdump"
         fi
-        if [ ! -d "$install_path/$latest_dir/tools/opbuild" ]; then
-            ln -sr "$install_path/$version_dir/tools/opbuild" "$install_path/$latest_dir/tools/opbuild"
-        fi
         if [ ! -d "$install_path/$latest_dir/tools/show_kernel_debug_data" ]; then
             ln -sr "$install_path/$version_dir/tools/show_kernel_debug_data" "$install_path/$latest_dir/tools/show_kernel_debug_data"
         fi

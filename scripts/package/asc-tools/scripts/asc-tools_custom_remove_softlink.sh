@@ -78,9 +78,6 @@ removeToolSoftLink()
     if [ -d "$install_path/$latest_dir/tools/msobjdump" ]; then
         rm -f "$install_path/$latest_dir/tools/msobjdump"
     fi
-    if [ -d "$install_path/$latest_dir/tools/opbuild" ]; then
-        rm -f "$install_path/$latest_dir/tools/opbuild"
-    fi
     if [ -d "$install_path/$latest_dir/tools/show_kernel_debug_data" ]; then
         rm -f "$install_path/$latest_dir/tools/show_kernel_debug_data"
     fi

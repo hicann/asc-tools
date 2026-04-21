@@ -1,5 +1,0 @@
-#include "scalar_test_proto.h"
-namespace ge {
-
-}
-

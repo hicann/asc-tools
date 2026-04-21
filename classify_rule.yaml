@@ -18,7 +18,6 @@ asc-tools:
     unrelease:
       - cpudebug/src/regfwk/stub_backtrace.cpp
       - cpudebug/src/regfwk/stub_base.cpp
-      - utils/opbuild/op_aclnn_generator.cpp
   llt:
     ut_check: true
     st_check: false

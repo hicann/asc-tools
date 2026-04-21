@@ -1,5 +1,0 @@
-#include "version_test_proto.h"
-namespace ge {
-
-}
-

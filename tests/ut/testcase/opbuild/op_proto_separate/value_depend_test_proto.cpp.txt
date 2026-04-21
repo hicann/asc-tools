@@ -1,6 +1,0 @@
-#include "value_depend_test_proto.h"
-namespace ge {
-
-IMPL_OP(ValueDependTest).InputsDataDependency({1, 2, 3});
-}
-

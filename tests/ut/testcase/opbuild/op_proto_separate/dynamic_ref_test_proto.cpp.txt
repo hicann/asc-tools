@@ -1,5 +1,0 @@
-#include "dynamic_ref_test_proto.h"
-namespace ge {
-
-}
-
