@@ -4,48 +4,48 @@
         <path value="tools"/>
         <path value="tools/ascendc_tools"/>
         <path value="tools/cpudebug" install_softlink="tools/tikicpulib"/>
-        <path value="tools/cpudebug/lib"/>
-        <path value="tools/cpudebug/lib/cmake" />
-        <path value="tools/cpudebug/lib/include" />
-        <path value="tools/cpudebug/lib/Ascend910A" chip="Ascend910" install_softlink="tools/cpudebug/lib/Ascend910B;tools/cpudebug/lib/Ascend910PremiumA;tools/cpudebug/lib/Ascend910ProA;tools/cpudebug/lib/Ascend910ProB"/>
-        <path value="tools/cpudebug/lib/Ascend310P1" chip="Ascend310P" install_softlink="tools/cpudebug/lib/Ascend310P3"/>
-        <path value="tools/cpudebug/lib/Ascend910B1" chip="Ascend910B" install_softlink="tools/cpudebug/lib/Ascend910B2;tools/cpudebug/lib/Ascend910B2C;tools/cpudebug/lib/Ascend910B3;tools/cpudebug/lib/Ascend910B4;tools/cpudebug/lib/Ascend910_9391;tools/cpudebug/lib/Ascend910_9392;tools/cpudebug/lib/Ascend910_9381;tools/cpudebug/lib/Ascend910_9382;tools/cpudebug/lib/Ascend910_9372;tools/cpudebug/lib/Ascend910_9361"/>
-        <path value="tools/cpudebug/lib/Ascend310B1" chip="Ascend310B" install_softlink="tools/cpudebug/lib/Ascend310B2;tools/cpudebug/lib/Ascend310B3;tools/cpudebug/lib/Ascend310B4"/>
-        <path value="tools/cpudebug/lib/Ascend950PR_9599" chip="Ascend950"/>
-        <path value="tools/cpudebug/lib/KirinX90" chip="KirinX90"/>
-        <path value="tools/cpudebug/lib/Kirin9030" chip="Kirin9030"/>
+        <path value="tools/cpudebug/lib64" install_softlink="tools/cpudebug/lib"/>
+        <path value="tools/cpudebug/cmake" install_softlink="tools/cpudebug/lib64/cmake"/>
+        <path value="tools/cpudebug/include" install_softlink="tools/cpudebug/lib64/include"/>
+        <path value="tools/cpudebug/lib64/Ascend910A" chip="Ascend910" install_softlink="tools/cpudebug/lib64/Ascend910B;tools/cpudebug/lib64/Ascend910PremiumA;tools/cpudebug/lib64/Ascend910ProA;tools/cpudebug/lib64/Ascend910ProB"/>
+        <path value="tools/cpudebug/lib64/Ascend310P1" chip="Ascend310P" install_softlink="tools/cpudebug/lib64/Ascend310P3"/>
+        <path value="tools/cpudebug/lib64/Ascend910B1" chip="Ascend910B" install_softlink="tools/cpudebug/lib64/Ascend910B2;tools/cpudebug/lib64/Ascend910B2C;tools/cpudebug/lib64/Ascend910B3;tools/cpudebug/lib64/Ascend910B4;tools/cpudebug/lib64/Ascend910_9391;tools/cpudebug/lib64/Ascend910_9392;tools/cpudebug/lib64/Ascend910_9381;tools/cpudebug/lib64/Ascend910_9382;tools/cpudebug/lib64/Ascend910_9372;tools/cpudebug/lib64/Ascend910_9361"/>
+        <path value="tools/cpudebug/lib64/Ascend310B1" chip="Ascend310B" install_softlink="tools/cpudebug/lib64/Ascend310B2;tools/cpudebug/lib64/Ascend310B3;tools/cpudebug/lib64/Ascend310B4"/>
+        <path value="tools/cpudebug/lib64/Ascend950PR_9599" chip="Ascend950"/>
+        <path value="tools/cpudebug/lib64/KirinX90" chip="KirinX90"/>
+        <path value="tools/cpudebug/lib64/Kirin9030" chip="Kirin9030"/>
     </dir_info>
     <!-- tikcpp simulator -->
-    <file_info value="tikcpp_simulator_ascend910" chip="Ascend910" copy_type="delivery" src_path="lib/host" dst_path="tools/cpudebug/lib/Ascend910A" install_path="tools/cpudebug/lib/Ascend910A">
-        <file value="ascend910/libcpudebug.so" file_type="shared" install_mod="555" install_softlink="tools/cpudebug/lib/Ascend910A/libtikcpp_debug.so"/>
+    <file_info value="tikcpp_simulator_ascend910" chip="Ascend910" copy_type="delivery" src_path="lib/host" dst_path="tools/cpudebug/lib64/Ascend910A" install_path="tools/cpudebug/lib64/Ascend910A">
+        <file value="ascend910/libcpudebug.so" file_type="shared" install_mod="555" install_softlink="tools/cpudebug/lib64/Ascend910A/libtikcpp_debug.so"/>
     </file_info>
-    <file_info value="tikcpp_simulator_ascend310p" chip="Ascend310P" copy_type="delivery" src_path="lib/host" dst_path="tools/cpudebug/lib/Ascend310P1" install_path="tools/cpudebug/lib/Ascend310P1">
-        <file value="ascend310p/libcpudebug.so" file_type="shared" install_mod="555" install_softlink="tools/cpudebug/lib/Ascend310P1/libtikcpp_debug.so"/>
+    <file_info value="tikcpp_simulator_ascend310p" chip="Ascend310P" copy_type="delivery" src_path="lib/host" dst_path="tools/cpudebug/lib64/Ascend310P1" install_path="tools/cpudebug/lib64/Ascend310P1">
+        <file value="ascend310p/libcpudebug.so" file_type="shared" install_mod="555" install_softlink="tools/cpudebug/lib64/Ascend310P1/libtikcpp_debug.so"/>
     </file_info>
-    <file_info value="tikcpp_simulator_ascend910B1" chip="Ascend910B" copy_type="delivery" src_path="lib/host" dst_path="tools/cpudebug/lib/Ascend910B1" install_path="tools/cpudebug/lib/Ascend910B1">
-        <file value="ascend910B1/libcpudebug.so" file_type="shared" install_mod="555" install_softlink="tools/cpudebug/lib/Ascend910B1/libtikcpp_debug.so"/>
+    <file_info value="tikcpp_simulator_ascend910B1" chip="Ascend910B" copy_type="delivery" src_path="lib/host" dst_path="tools/cpudebug/lib64/Ascend910B1" install_path="tools/cpudebug/lib64/Ascend910B1">
+        <file value="ascend910B1/libcpudebug.so" file_type="shared" install_mod="555" install_softlink="tools/cpudebug/lib64/Ascend910B1/libtikcpp_debug.so"/>
     </file_info>
-    <file_info value="tikcpp_simulator_ascend310B1" chip="Ascend310B" copy_type="delivery" src_path="lib/host" dst_path="tools/cpudebug/lib/Ascend310B1" install_path="tools/cpudebug/lib/Ascend310B1">
-        <file value="ascend310B1/libcpudebug.so" file_type="shared" install_mod="555" install_softlink="tools/cpudebug/lib/Ascend310B1/libtikcpp_debug.so"/>
+    <file_info value="tikcpp_simulator_ascend310B1" chip="Ascend310B" copy_type="delivery" src_path="lib/host" dst_path="tools/cpudebug/lib64/Ascend310B1" install_path="tools/cpudebug/lib64/Ascend310B1">
+        <file value="ascend310B1/libcpudebug.so" file_type="shared" install_mod="555" install_softlink="tools/cpudebug/lib64/Ascend310B1/libtikcpp_debug.so"/>
     </file_info>
-    <file_info value="tikcpp_simulator_ascend950pr_9599" chip="Ascend950" copy_type="delivery" src_path="lib/host" dst_path="tools/cpudebug/lib/Ascend950PR_9599" install_path="tools/cpudebug/lib/Ascend950PR_9599">
-        <file value="ascend950pr_9599/libcpudebug.so" file_type="shared" install_mod="555" install_softlink="tools/cpudebug/lib/Ascend950PR_9599/libtikcpp_debug.so"/>
+    <file_info value="tikcpp_simulator_ascend950pr_9599" chip="Ascend950" copy_type="delivery" src_path="lib/host" dst_path="tools/cpudebug/lib64/Ascend950PR_9599" install_path="tools/cpudebug/lib64/Ascend950PR_9599">
+        <file value="ascend950pr_9599/libcpudebug.so" file_type="shared" install_mod="555" install_softlink="tools/cpudebug/lib64/Ascend950PR_9599/libtikcpp_debug.so"/>
     </file_info>
-    <file_info value="tikcpp_simulator_kirinx90" chip="KirinX90" copy_type="delivery" src_path="lib/host" dst_path="tools/cpudebug/lib/KirinX90" install_path="tools/cpudebug/lib/KirinX90">
-        <file value="kirinx90/libcpudebug.so" file_type="shared" install_mod="555" install_softlink="tools/cpudebug/lib/KirinX90/libtikcpp_debug.so" optional="true"/>
+    <file_info value="tikcpp_simulator_kirinx90" chip="KirinX90" copy_type="delivery" src_path="lib/host" dst_path="tools/cpudebug/lib64/KirinX90" install_path="tools/cpudebug/lib64/KirinX90">
+        <file value="kirinx90/libcpudebug.so" file_type="shared" install_mod="555" install_softlink="tools/cpudebug/lib64/KirinX90/libtikcpp_debug.so" optional="true"/>
     </file_info>
-    <file_info value="tikcpp_simulator_kirin9030" chip="Kirin9030" copy_type="delivery" src_path="lib/host" dst_path="tools/cpudebug/lib/Kirin9030" install_path="tools/cpudebug/lib/Kirin9030">
-        <file value="kirin9030/libcpudebug.so" file_type="shared" install_mod="555" install_softlink="tools/cpudebug/lib/Kirin9030/libtikcpp_debug.so" optional="true"/>
+    <file_info value="tikcpp_simulator_kirin9030" chip="Kirin9030" copy_type="delivery" src_path="lib/host" dst_path="tools/cpudebug/lib64/Kirin9030" install_path="tools/cpudebug/lib64/Kirin9030">
+        <file value="kirin9030/libcpudebug.so" file_type="shared" install_mod="555" install_softlink="tools/cpudebug/lib64/Kirin9030/libtikcpp_debug.so" optional="true"/>
     </file_info>
     <!-- tikcpp simulator libs -->
-    <file_info value="tikcpp_simulator_libs" copy_type="delivery" src_path="lib/host" dst_path="tools/cpudebug/lib" install_path="tools/cpudebug/lib/">
-        <file value="libcpudebug_stubreg.so" file_type="shared" install_mod="555" install_softlink="tools/cpudebug/lib/libtikicpulib_stubreg.so"/>
-        <file value="libcpudebug_cceprint.so" file_type="shared" install_mod="555" install_softlink="tools/cpudebug/lib/libtikicpulib_cceprint.so"/>
-        <file value="libcpudebug_npuchk.so" file_type="shared" install_mod="555" install_softlink="tools/cpudebug/lib/libtikicpulib_npuchk.so"/>
+    <file_info value="tikcpp_simulator_libs" copy_type="delivery" src_path="lib/host" dst_path="tools/cpudebug/lib64" install_path="tools/cpudebug/lib64/">
+        <file value="libcpudebug_stubreg.so" file_type="shared" install_mod="555" install_softlink="tools/cpudebug/lib64/libtikicpulib_stubreg.so"/>
+        <file value="libcpudebug_cceprint.so" file_type="shared" install_mod="555" install_softlink="tools/cpudebug/lib64/libtikicpulib_cceprint.so"/>
+        <file value="libcpudebug_npuchk.so" file_type="shared" install_mod="555" install_softlink="tools/cpudebug/lib64/libtikicpulib_npuchk.so"/>
     </file_info>
 
     <!-- tikcpp simulator headers -->
-    <file_info value="tikcpp_simulator_headers" copy_type="delivery" src_path="lib/host" dst_path="tools/cpudebug/lib/include" install_path="tools/cpudebug/lib/include">
+    <file_info value="tikcpp_simulator_headers" copy_type="delivery" src_path="lib/host" dst_path="tools/cpudebug/include" install_path="tools/cpudebug/include">
         <file value="include/stub_fun.h" />
         <file value="include/intri_fun.h" />
         <file value="include/intri_fmt.h" />
@@ -70,13 +70,13 @@
         <file value="include/kernel_elf_parser.h" />
     </file_info>
     <!-- tikcpp simulator cmake -->
-    <file_info value="tikcpp_simulator_cmake" copy_type="delivery" src_path="lib/host" dst_path="tools/cpudebug/lib" install_path="tools/cpudebug/lib">
+    <file_info value="tikcpp_simulator_cmake" copy_type="delivery" src_path="lib/host" dst_path="tools/cpudebug" install_path="tools/cpudebug">
         <file value="cmake" />
     </file_info>
     <file_info value="ascendc_scripts" copy_type="delivery" src_path="lib/host/" dst_path="tools/ascendc_tools" install_path="tools/ascendc_tools" install_mod="550" feature="ascendc">
         <file value="ascendc_npuchk_report.py"/>
     </file_info>
-    <file_info value="ascendc_acl_stub" copy_type="delivery" src_path="lib/host/" dst_path="tools/cpudebug/lib" install_path="tools/cpudebug/lib" install_mod="440" feature="ascendc">
-        <file value="libcpudebug_acl_stub.so" file_type="shared" install_mod="555" install_softlink="tools/cpudebug/lib/libascendc_acl_stub.so"/>
+    <file_info value="ascendc_acl_stub" copy_type="delivery" src_path="lib/host/" dst_path="tools/cpudebug/lib64" install_path="tools/cpudebug/lib64" install_mod="440" feature="ascendc">
+        <file value="libcpudebug_acl_stub.so" file_type="shared" install_mod="555" install_softlink="tools/cpudebug/lib64/libascendc_acl_stub.so"/>
     </file_info>
 </block>

@@ -46,7 +46,7 @@ target_link_options(cpudebug_acl_stub PRIVATE
 )
 
 install(TARGETS cpudebug_acl_stub
-    DESTINATION tools/cpudebug/lib ${INSTALL_OPTIONAL}
+    DESTINATION tools/cpudebug/lib64 ${INSTALL_OPTIONAL}
     COMPONENT asc-tools
 )
 
@@ -55,7 +55,7 @@ install(CODE
       COMMAND ${CMAKE_COMMAND} -E create_symlink
       libcpudebug_acl_stub.so
       libascendc_acl_stub.so
-      WORKING_DIRECTORY \"\${CMAKE_INSTALL_PREFIX}/tools/cpudebug/lib\"
+      WORKING_DIRECTORY \"\${CMAKE_INSTALL_PREFIX}/tools/cpudebug/lib64\"
   )"
   COMPONENT asc-tools
 )

@@ -59,3 +59,17 @@ if (NOT EXISTS ${CMAKE_SOURCE_DIR}/libraries/lib/include/stub_fun.h)
         RESULT_VARIABLE result
     )
 endif()
+
+if(EXISTS ${CMAKE_SOURCE_DIR}/libraries/lib/cmake/targets-tikicpulib.cmake)
+    execute_process(
+        COMMAND mv targets-tikicpulib.cmake targets-cpudebug.cmake
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/libraries/lib/cmake
+    )
+endif()
+
+if(EXISTS ${CMAKE_SOURCE_DIR}/libraries/lib/cmake/targets-tikicpulib-release.cmake)
+    execute_process(
+        COMMAND mv targets-tikicpulib-release.cmake targets-cpudebug-release.cmake
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/libraries/lib/cmake
+    )
+endif()

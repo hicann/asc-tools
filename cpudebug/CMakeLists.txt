@@ -125,7 +125,7 @@ foreach(product_type ${PRODUCT_TYPE_LIST})
   product_dir(${product_type} Product_cap)
   if(BUILD_OPEN_PROJECT)
     install(TARGETS cpudebug_${product_type}
-      LIBRARY DESTINATION tools/cpudebug/lib/${Product_cap} ${INSTALL_OPTIONAL}
+      LIBRARY DESTINATION tools/cpudebug/lib64/${Product_cap} ${INSTALL_OPTIONAL}
       COMPONENT asc-tools
     )
     install(CODE
@@ -133,7 +133,7 @@ foreach(product_type ${PRODUCT_TYPE_LIST})
           COMMAND ${CMAKE_COMMAND} -E create_symlink
           libcpudebug.so
           libtikcpp_debug.so
-          WORKING_DIRECTORY \"\${CMAKE_INSTALL_PREFIX}/tools/cpudebug/lib/${Product_cap}\"
+          WORKING_DIRECTORY \"\${CMAKE_INSTALL_PREFIX}/tools/cpudebug/lib64/${Product_cap}\"
       )"
       COMPONENT asc-tools
   )
@@ -146,7 +146,7 @@ foreach(product_type ${PRODUCT_TYPE_LIST})
 endforeach()
 
 if(BUILD_OPEN_PROJECT)
-  set(_install_path tools/cpudebug/lib)
+  set(_install_path tools/cpudebug/lib64)
 else()
   set(_install_path ${INSTALL_LIBRARY_DIR})
 endif()
@@ -174,18 +174,62 @@ install(FILES
   include/kernel_simt_cpu.h
   include/cpu_debug_launch.h
   include/kernel_elf_parser.h
-  DESTINATION tools/cpudebug/lib/include ${INSTALL_OPTIONAL}
+  DESTINATION tools/cpudebug/include ${INSTALL_OPTIONAL}
   COMPONENT asc-tools
 )
 
 include(CMakePackageConfigHelpers)
 configure_package_config_file(cmake/tikicpulib-config.cmake.in
-  ${CMAKE_CURRENT_BINARY_DIR}/tikicpulib-config.cmake
+  ${CMAKE_CURRENT_BINARY_DIR}/cpudebug-config.cmake
   INSTALL_DESTINATION ${INSTALL_LIBRARY_DIR}/cmake
 )
 
+if(BUILD_OPEN_PROJECT)
 install(FILES
-  ${CMAKE_CURRENT_BINARY_DIR}/tikicpulib-config.cmake
+  ${CMAKE_CURRENT_BINARY_DIR}/cpudebug-config.cmake
+  DESTINATION tools/cpudebug/cmake ${INSTALL_OPTIONAL}
+  COMPONENT asc-tools
+)
+
+install(DIRECTORY
+  ${CMAKE_SOURCE_DIR}/libraries/lib/cmake/
+  DESTINATION tools/cpudebug/cmake ${INSTALL_OPTIONAL}
+  COMPONENT asc-tools
+)
+
+install(CODE
+  "execute_process(
+      COMMAND ${CMAKE_COMMAND} -E create_symlink
+      cpudebug-config.cmake
+      tikicpulib-config.cmake
+      WORKING_DIRECTORY \"\${CMAKE_INSTALL_PREFIX}/tools/cpudebug/cmake/\"
+  )"
+  COMPONENT asc-tools
+)
+
+install(CODE
+  "execute_process(
+      COMMAND ${CMAKE_COMMAND} -E create_symlink
+      targets-cpudebug.cmake
+      targets-tikicpulib.cmake
+      WORKING_DIRECTORY \"\${CMAKE_INSTALL_PREFIX}/tools/cpudebug/cmake/\"
+  )"
+  COMPONENT asc-tools
+)
+
+install(CODE
+  "execute_process(
+      COMMAND ${CMAKE_COMMAND} -E create_symlink
+      targets-cpudebug-release.cmake
+      targets-tikicpulib-release.cmake
+      WORKING_DIRECTORY \"\${CMAKE_INSTALL_PREFIX}/tools/cpudebug/cmake/\"
+  )"
+  COMPONENT asc-tools
+)
+
+else()
+install(FILES
+  ${CMAKE_CURRENT_BINARY_DIR}/cpudebug-config.cmake
   DESTINATION ${_install_path}/cmake ${INSTALL_OPTIONAL}
   COMPONENT asc-tools
 )
@@ -195,6 +239,7 @@ install(DIRECTORY
   DESTINATION ${_install_path}/cmake ${INSTALL_OPTIONAL}
   COMPONENT asc-tools
 )
+endif()
 
 install(FILES
   ${CMAKE_SOURCE_DIR}/libraries/lib/libcpudebug_cceprint.so
