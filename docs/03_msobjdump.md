@@ -1,145 +1,42 @@
-<!--声明：本文使用[Creative Commons License version 4.0](https://creativecommons.org/licenses/by/4.0/legalcode)许可协议，转载、引用或修改等操作请遵循此许可协议。-->
-# msobjdump  
-
+# msobjdump
 
 ## 概述
-本工具主要针对Kernel直调算子开发与工程化算子开发编译生成的算子ELF文件（Executable and Linkable Format）提供解析和解压功能，并将结果信息以可读形式呈现，方便开发者直观获得kernel文件信息。关于本工具的详细介绍请参考《[Ascend C算子开发](https://hiascend.com/document/redirect/CannCommunityOpdevAscendC)》中的“msobjdump工具”。
+本工具主要针对生成的算子ELF文件（Executable and Linkable Format）提供解析和解压功能，并将结果信息以可读形式呈现，方便开发者直观获得kernel文件信息。关于本工具的详细介绍请参考《[Ascend C算子开发](https://hiascend.com/document/redirect/CannCommunityOpdevAscendC)》中的“编程指南 > 附录 > msobjdump工具”。
 
-
-## 工具安装
-
-本工具跟随CANN软件包发布，请参考[环境搭建](00_quick_start.md)进行使用工具前必要的环境准备。  
--  执行如下命令设置环境变量。  
-    ```
-    source ${install_path}/latest/toolkit/bin/setenv.bash
-    ```  
--  执行如下命令，若能正常显示--help或-h信息，则表示工具环境正常，功能可正常使用。
-    ```
-    msobjdump -h
-    ```
+工具调用演示可参考[msobjdump样例](../examples/04_msobjdump/README.md)。
 
 ## 命令格式
 
 -  解析ELF文件的命令
-    ```
+    ```bash
     msobjdump --dump-elf <elf_file> [--verbose]
-    ```  
+    ```
     --dump-elf <elf_file>为必选，表示待解析ELF文件路径。[--verbose]为可选，用于开启ELF文件中全量打印device信息功能。
 
 -  解压ELF文件的命令
-    ```
+    ```bash
     msobjdump --extract-elf <elf_file> [--out-dir <out_path>]
-    ```  
+    ```
     --extract-elf <elf_file>为必选，表示待解析ELF文件路径。[--out-dir <out_path>]为可选，用于设置解压文件的落盘路径。
 
 -  获取ELF文件列表的命令
-    ```
+    ```bash
     msobjdump --list-elf <elf_file>
     ```
     --list-elf <elf_file>为可选，获取ELF文件中包含的device信息文件列表，并打印显示。
 
-## 使用样例（Kernel直调算子工程）
-以[matmul_kernellaunch](../examples/02_matmul_kernellaunch/README.md)算子为例（NPU模式），假设\${cmake_install_dir}为算子Cmake编译产物根目录，目录结构如下。
-
-```
-out
-├── lib
-│   ├── libascendc_kernels_npu.so
-├── include
-│   ├── ascendc_kernels_npu
-│           ├── aclrtlaunch_matmul_custom.h
-│           ├── aclrtlaunch_triple_chevrons_func.h
-├── bin
-│   ├── ascendc_kernels_bbit
-```
- 
-工具对编译生成的库文件（如*.so、*.a等）进行解析和解压，功能实现命令样例如下：
--  解析包含device信息的库文件  
-    支持两种打印方式。  
-    -   简单打印
-        ```
-        msobjdump --dump-elf ${cmake_install_dir}/out/lib/libascendc_kernels_npu.so
-        ```
-        执行上述命令，终端打印基础device信息，示例如下：
-
-        ```
-        ===========================
-        [VERSION]: 1
-        [TYPE COUNT]: 1
-        ===========================
-        [ELF FILE 0]: ascendxxxb1_ascendc_kernels_npu_0_mix.o
-        [KERNEL TYPE]: mix
-        [KERNEL LEN]: 511560
-        [ASCEND META]: None
-        ```
-    -   全量打印
-        ```
-        msobjdump --dump-elf ${cmake_install_dir}/out/lib/libascendc_kernels_npu.so --verbose
-        ```  
-        执行上述命令，终端打印所有device信息，示例如下：
-
-        ```
-        ===========================
-        [VERSION]: 1
-        [TYPE COUNT]: 1
-        ===========================
-        [ELF FILE 0]: ascendxxxb1_ascendc_kernels_npu_0_mix.o
-        [KERNEL TYPE]: mix
-        [KERNEL LEN]: 511560
-        [ASCEND META]: None
-        ====== [elf heard infos] ======
-        ELF Header:
-          Magic:   7f 45 4c 46 02 01 01 00 00 00 00 00 00 00 00 00
-          Class:                             ELF64
-          Data:                              2's complement, little endian
-          Version:                           1 (current)
-          OS/ABI:                            UNIX - System V
-          ABI Version:                       0
-          Type:                              EXEC (Executable file)
-          Machine:                           <unknown>: 0x1029
-          Version:                           0x1
-          Entry point address:               0x0
-          Start of program headers:          64 (bytes into file)
-          Start of section headers:          510280 (bytes into file)
-          Flags:                             0x940000
-          Size of this header:               64 (bytes)
-          Size of program headers:           56 (bytes)
-          Number of program headers:         2
-          Size of section headers:           64 (bytes)
-          Number of section headers:         20
-          Section header string table index: 18
-
-        Section Headers:
-          [Nr] Name              Type            Address          Off    Size   ES Flg Lk Inf Al
-          [ 0]                   NULL            0000000000000000 000000 000000 00      0   0  0
-          [ 1] .text             PROGBITS        0000000000000000 0000b0 010a08 00  AX  0   0  4
-          .....................................................................................
-          [19] .strtab           STRTAB          0000000000000000 071278 00b6cb 00      0   0  1
-        Key to Flags:
-          W (write), A (alloc), X (execute), M (merge), S (strings), I (info),
-          L (link order), O (extra OS processing required), G (group), T (TLS),
-          C (compressed), x (unknown), o (OS specific), E (exclude),
-          D (mbind), p (processor specific)
-
-        There are no section groups in this file.
-
-        Program Headers:
-          Type           Offset   VirtAddr           PhysAddr           FileSiz  MemSiz   Flg Align
-          LOAD           0x0000b0 0x0000000000000000 0x0000000000000000 0x010aa8 0x010aa8 R E 0x1000
-          GNU_STACK      0x000000 0x0000000000000000 0x0000000000000000 0x000000 0x000000 RW  0
-        ......
-        ```
--   解压包含device信息的库文件并落盘
-    ```
-    msobjdump --extract-elf ${cmake_install_dir}/out/lib/libascendc_kernels_npu.so
-    ```
-    执行上述命令，默认在当前执行路径下落盘ascendxxxb1_ascendc_kernels_npu_0_mix.o文件。
--   获取包含device信息的库文件列表
-    ```
-    msobjdump --list-elf ${cmake_install_dir}/out/lib/libascendc_kernels_npu.so
-    ```
-    执行上述命令，终端会打印所有文件，屏显信息形如：
-
-    ```
-    ELF file    0: ascendxxxb1_ascendc_kernels_npu_0_mix.o
-    ```
+  下表为ELF文件中常见字段说明：
+| 字段名 | 含义 | 是否必选 | 打印说明 |
+| ---- | ---- | ---- | ---- |
+| `.ascend.meta. ${id}` | 表示算子kernel函数名称，其中`${id}`表示meta信息的索引值。 | 是 | 不设置`--verbose`，默认打印。 |
+| `VERSION` | 表示版本号。 | 是 | 不设置`--verbose`，默认打印。 |
+| `DEBUG` | 调试相关信息，包含如下两部分内容：<br>`debugBufSize`：调试信息需要的内存空间。<br>`debugOptions`：调试开关状态。取值如下：<br>`0`：调试开关关闭。<br>`1`：通过DumpTensor、printf打印进行调试。<br>`2`：通过assert断言进行调试。<br>`4`：通过时间戳打点功能进行调试。<br>`8`：通过内存越界检测进行调试。 | 否 | 不设置`--verbose`，默认打印。 |
+| `DYNAMIC_PARAM` | 算子kernel函数是否启用动态参数。取值分别为：<br>`0`：关闭动态参数模式。<br>`1`：开启动态参数模式。 | 否 | 不设置`--verbose`，默认打印。 |
+| `OPTIONAL_PARAM` | 可选参数信息，包含如下两部分内容：<br>`optionalInputMode`：可选输入在算子kernel函数中是否需要占位。<br>`0`：可选输入不占位。<br>`1`：可选输入占位。<br>`optionalOutputMode`：可选输出在算子kernel函数中是否需要占位。<br>`0`：可选输出不占位。<br>`1`：可选输出占位。 | 否 | 不设置`--verbose`，默认打印。 |
+| `KERNEL_TYPE` | 表示kernel函数运行时core类型。 | 否 | 不设置`--verbose`，默认打印。 |
+| `CROSS_CORE_SYNC` | 表示硬同步syncall类型。<br>`USE_SYNC`：使用硬同步。<br>`NO_USE_SYNC`：不使用硬同步。 | 否 | 不设置`--verbose`，默认打印。 |
+| `MIX_TASK_RATION` | 表示kernel函数运行时的Cube核/Vector核占比分配类型。 | 否 | 不设置`--verbose`，默认打印。 |
+| `DETERMINISTIC_INFO` | 表示算子是否为确定性计算。<br>`0`：不确定计算。<br>`1`：确定性计算。 | 否 | 不设置`--verbose`，默认打印。 |
+| `BLOCK_NUM` | 表示算子执行核数，该字段当前暂不支持，只打印默认值`0xFFFFFFFF`。 | 否 | 不设置`--verbose`，默认打印。 |
+| `FUNCTION_ENTRY` | 算子TilingKey的值。 | 否 | 不设置`--verbose`，默认打印。 |
+| `elf header infos` | 包括ELF Header、Section Headers、Key to Flags、Program Headers、Symbol表等信息。 | 否 | 设置`--verbose`，开启全量打印。 |

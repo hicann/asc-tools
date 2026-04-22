@@ -29,6 +29,7 @@ from msobjdump import utils
 KEY_ASCEND_META = '.ascend.meta.'
 KEY_ASCEND_META_OP = '.ascend.meta'
 KEY_ASCEND_KERNEL = '.ascend.kernel.'
+KEY_AICORE_BINARY = '.aicore_binary'
 KEY_O_JSON = '_binary_'
 KEY_A_FILE = '.a'
 KEY_O_FILE = '.cpp.o'
@@ -42,21 +43,36 @@ ACLNN_BINARY = ''
 ############### ascend kernel define ####################
 KERNEL_TYPE_MAP = {'0': 'mix', '1': 'aiv', '2': 'aic'}
 
-############### ascend meta define ####################
-TYPE_KTYPE = 1
-TYPE_CROSS_CORE_SYNC = 2
-TYPE_MIX_TASK_RATION = 3
-TYPE_DETERMINISTIC_INFO = 13
-TYPE_FUNCTION_ENTRY = 14
-TYPE_BLOCK_NUM = 15
+############### Function Meta Type ####################
+F_TYPE_KTYPE = 1
+F_TYPE_CROSS_CORE_SYNC = 2
+F_TYPE_MIX_TASK_RATION = 3
+F_TYPE_DETERMINISTIC_INFO = 13
+F_TYPE_FUNCTION_ENTRY = 14
+F_TYPE_BLOCK_NUM = 15
 
 F_TYPE_MAP = {
-    TYPE_KTYPE: "KERNEL_TYPE",
-    TYPE_CROSS_CORE_SYNC: "CROSS_CORE_SYNC",
-    TYPE_MIX_TASK_RATION: "MIX_TASK_RATION",
-    TYPE_DETERMINISTIC_INFO: "DETERMINISTIC_INFO",
-    TYPE_FUNCTION_ENTRY: "FUNCTION_ENTRY",
-    TYPE_BLOCK_NUM: "BLOCK_NUM"
+    F_TYPE_KTYPE: "KERNEL_TYPE",
+    F_TYPE_CROSS_CORE_SYNC: "CROSS_CORE_SYNC",
+    F_TYPE_MIX_TASK_RATION: "MIX_TASK_RATION",
+    F_TYPE_DETERMINISTIC_INFO: "DETERMINISTIC_INFO",
+    F_TYPE_FUNCTION_ENTRY: "FUNCTION_ENTRY",
+    F_TYPE_BLOCK_NUM: "BLOCK_NUM"
+}
+
+############### Binary Meta Type ####################
+B_TYPE_VERSION = 0
+B_TYPE_DEBUG = 1
+B_TYPE_DYNAMIC_PARAM = 2
+B_TYPE_OPTIONAL_PARAM = 3
+B_TYPE_RUNTIME_IMPLICIT_INFO = 4
+
+B_TYPE_MAP = {
+    B_TYPE_VERSION: "VERSION",
+    B_TYPE_DEBUG: "DEBUG",
+    B_TYPE_DYNAMIC_PARAM: "DYNAMIC_PARAM",
+    B_TYPE_OPTIONAL_PARAM: "OPTIONAL_PARAM",
+    B_TYPE_RUNTIME_IMPLICIT_INFO: "RUNTIME_IMPLICIT_INFO"
 }
 
 K_TYPE_MAP = {
@@ -69,12 +85,20 @@ K_TYPE_MAP = {
     "7": "AIV_ROLLBACK"
 }
 C_TYPE_MAP = {"0":"NO_USE_SYNC", "1": "USE_SYNC"}
+RUNTIME_IMPLICIT_INFO_MAP = {
+    1: "SIMD Printf Flag",
+    2: "Hardware Sync Flag",
+    3: "L2Cache Hint Flag",
+    4: "SIMT Printf Flag",
+    5: "SIMD Assert Flag"
+}
 
 
 class ObjType(Enum):
     TYPE_ASCEND_KERNEL = 0
     TYPE_BINARY_O_JSON = 1
     TYPE_ASCEND_META = 2
+    TYPE_AICORE_BINARY = 3
 
 
 class ParseObjMode(Enum):
@@ -107,52 +131,36 @@ class ObjDump:
     '''
     def __init__(self, args):
         self.obj = None # 待解析解压文件
+        self.src_obj = None # 用户原始输入文件
         self.parse_obj_mode = None # ParseObjMode 解析解压类型
         self.obj_type = None # ObjType obj文件场景分类
         self.tmp_dir = None # 存放临时文件 结束后目录会删除
         self.out_dir = args.out_dir # 落盘文件目录，用户未设置时当前路径
+        self._aicore_binary_meta_printed = set()
         self._set_out_dir()
         # preprocess args
         self._set_parse_obj_and_mode(args)
 
-
     @staticmethod
-    def _show_ascend_meta_tlv(content: bytes, t: int, l: int, index: int): 
-        if t == TYPE_MIX_TASK_RATION:
+    def _show_ascend_meta_tlv(content: bytes, t: int, l: int, index: int):
+        if t == F_TYPE_MIX_TASK_RATION:
             v1, v2 = struct.unpack("2H", content[index:index + 4])
             print(f"{F_TYPE_MAP.get(t)}: [{v1}:{v2}]")
-        elif t == TYPE_CROSS_CORE_SYNC :
+        elif t == F_TYPE_CROSS_CORE_SYNC:
             v, = struct.unpack("I", content[index:index + 4])
             print(f"{F_TYPE_MAP.get(t)}: {C_TYPE_MAP.get(str(v))}")
-        elif t == TYPE_KTYPE:
+        elif t == F_TYPE_KTYPE:
             v, = struct.unpack("I", content[index:index + 4])
             print(f"{F_TYPE_MAP.get(t)}: {K_TYPE_MAP.get(str(v))}")
-        elif t == TYPE_DETERMINISTIC_INFO:
+        elif t == F_TYPE_DETERMINISTIC_INFO:
             v, = struct.unpack("I", content[index:index + 4])
             print(f"{F_TYPE_MAP.get(t)}: {v}")
-        elif t == TYPE_FUNCTION_ENTRY:
+        elif t == F_TYPE_FUNCTION_ENTRY:
             v, = struct.unpack("<Q", content[index + 4:index + 12])
             print(f"{F_TYPE_MAP.get(t)}: {v}")
-        elif t == TYPE_BLOCK_NUM:
+        elif t == F_TYPE_BLOCK_NUM:
             v = "0xFFFFFFFF"
             print(f"{F_TYPE_MAP.get(t)}: {v}")
-
-    
-    @staticmethod
-    def _show_ascend_meta_op_tlv(content: bytes, t: int, l: int, index: int):
-        if t == 0:
-            v, = struct.unpack("I", content[index:index + 4])
-            print(f"VERSION: {v}")
-        if t == 1:
-            debugBufSize, debugOptions = struct.unpack("II", content[index:index + 8])
-            print(f"DEBUG: debugBufSize={debugBufSize}, debugOptions={debugOptions}")
-        elif t == 2:
-            dynamicParamMode, = struct.unpack("H", content[index + 2:index + 4])
-            print(f"DYNAMIC_PARAM: dynamicParamMode={dynamicParamMode}")
-        elif t == 3:
-            optionalInputMode, optionalOutputMode = struct.unpack("HH", content[index:index + 4])
-            print(f"OPTIONAL_PARAM: optionalInputMode={optionalInputMode}, optionalOutputMode={optionalOutputMode}")
-
 
     @staticmethod
     def _unpack_buff_content_by_type(content: bytes, start_idx: int, read_len: int, type_str: str):
@@ -169,6 +177,38 @@ class ObjDump:
         self._parse_process()
         self._clean()
         return
+
+    def _show_ascend_meta_op_tlv(self, content: bytes, t: int, l: int, index: int):
+        if t == B_TYPE_VERSION:
+            v, = struct.unpack("I", content[index:index + 4])
+            output = f"{B_TYPE_MAP.get(t)}: {v}"
+            self._print_ascend_meta_op_tlv(output)
+        if t == B_TYPE_DEBUG:
+            debugBufSize, debugOptions = struct.unpack("II", content[index:index + 8])
+            output = f"{B_TYPE_MAP.get(t)}: debugBufSize={debugBufSize}, debugOptions={debugOptions}"
+            self._print_ascend_meta_op_tlv(output)
+        elif t == B_TYPE_DYNAMIC_PARAM:
+            dynamicParamMode, = struct.unpack("H", content[index + 2:index + 4])
+            output = f"{B_TYPE_MAP.get(t)}: dynamicParamMode={dynamicParamMode}"
+            self._print_ascend_meta_op_tlv(output)
+        elif t == B_TYPE_OPTIONAL_PARAM:
+            optionalInputMode, optionalOutputMode = struct.unpack("HH", content[index:index + 4])
+            output = (
+                f"{B_TYPE_MAP.get(t)}: optionalInputMode={optionalInputMode}, "
+                f"optionalOutputMode={optionalOutputMode}"
+            )
+            self._print_ascend_meta_op_tlv(output)
+        elif t == B_TYPE_RUNTIME_IMPLICIT_INFO:
+            v, = struct.unpack("I", content[index:index + 4])
+            output = f"{B_TYPE_MAP.get(t)}: {RUNTIME_IMPLICIT_INFO_MAP.get(v, v)}"
+            self._print_ascend_meta_op_tlv(output)
+
+    def _print_ascend_meta_op_tlv(self, output: str):
+        if self.obj_type == ObjType.TYPE_AICORE_BINARY:
+            if output in self._aicore_binary_meta_printed:
+                return
+            self._aicore_binary_meta_printed.add(output)
+        print(output)
 
     def _set_out_dir(self):
         if not self.out_dir:
@@ -206,7 +246,16 @@ class ObjDump:
             self.obj = args.list_elf
             self.parse_obj_mode = ParseObjMode.MODE_LIST_ELF
 
-        # parse obj type
+        self.src_obj = self.obj
+        self._detect_obj_type()
+        if self.obj_type is not None and self.obj_type != ObjType.TYPE_AICORE_BINARY:
+            return
+
+        if self.obj_type == ObjType.TYPE_AICORE_BINARY:
+            self.obj = self._extract_aicore_binary()
+
+    def _detect_obj_type(self):
+        self.obj_type = None
         output = utils.get_symbols_in_file(self.obj)
 
         if "_o_start" in output or "_json_start" in output:
@@ -217,6 +266,27 @@ class ObjDump:
             self.obj_type = ObjType.TYPE_ASCEND_META
         if KEY_ASCEND_KERNEL in output:
             self.obj_type = ObjType.TYPE_ASCEND_KERNEL
+        if KEY_AICORE_BINARY in output:
+            self.obj_type = ObjType.TYPE_AICORE_BINARY
+
+    def _extract_aicore_binary(self) -> str:
+        src_obj = getattr(self, 'src_obj', None)
+        src_name = os.path.basename(src_obj) if src_obj else 'fusion_aicore_binary'
+        tmp_file = os.path.join(self.tmp_dir, f'{src_name}.aicore.o')
+        if os.path.exists(tmp_file):
+            os.remove(tmp_file)
+        try:
+            result = utils.extract_aicore_binary_from_elf(self.obj, tmp_file)
+        except FileNotFoundError as e:
+            raise RuntimeError('[ERROR]: llvm-objcopy is not available, cannot extract .aicore_binary.') from e
+
+        if result.returncode != 0:
+            err_msg = result.stderr.strip() if result.stderr else 'unknown error'
+            raise RuntimeError(f'[ERROR]: Extract .aicore_binary failed: {err_msg}')
+
+        if not os.path.exists(tmp_file) or os.path.getsize(tmp_file) == 0:
+            raise RuntimeError('[ERROR]: Extracted .aicore_binary file is empty or missing.')
+        return tmp_file
 
     def _parse_process(self):
         if self.parse_obj_mode == ParseObjMode.MODE_DUMP_ELF or self.parse_obj_mode == ParseObjMode.MODE_VERBOSE:
@@ -246,6 +316,11 @@ class ObjDump:
             self._show_elf_ascend_kernel_obj(kernel_obj_infos)
         elif self.obj_type == ObjType.TYPE_ASCEND_META:
             self._show_elf_ascend_meta_obj()
+        elif self.obj_type == ObjType.TYPE_AICORE_BINARY:
+            self._show_elf_ascend_meta_obj()
+            if self.parse_obj_mode == ParseObjMode.MODE_VERBOSE:
+                print(f'====== [elf header infos] ======')
+                print(utils.get_all_section_symbols_in_file(self.obj))
         else:
             print(f'The kernel meta information cannot be found.')
 
@@ -260,6 +335,8 @@ class ObjDump:
             self._move_file_to_outdir_ascend_kernel(kernel_obj_infos)
         elif self.obj_type == ObjType.TYPE_ASCEND_META:
             print('[WARNING]: nothing to extra in single op elf file')
+        elif self.obj_type == ObjType.TYPE_AICORE_BINARY:
+            self._move_extracted_aicore_binary_to_outdir()
 
     def _list_elf(self):
         if self.obj_type == ObjType.TYPE_BINARY_O_JSON:
@@ -270,6 +347,14 @@ class ObjDump:
             self._parse_elf_ascend_kernel_by_type(ascend_kernel_dict, 'list')
         elif self.obj_type == ObjType.TYPE_ASCEND_META:
             print('[WARNING]: nothing to list in single op elf file')
+        elif self.obj_type == ObjType.TYPE_AICORE_BINARY:
+            self._list_extracted_aicore_binary()
+
+    def _list_extracted_aicore_binary(self):
+        print(f'ELF file    0: {os.path.basename(self.obj)}')
+
+    def _move_extracted_aicore_binary_to_outdir(self):
+        utils.copy_file_src_exist(self.obj, os.path.join(self.out_dir, os.path.basename(self.obj)))
 
     def _copy_file_o_json_to_out_dir(self, src_file: str, json_file: str, copy_files: list):
         utils.copy_file_src_exist(src_file, os.path.join(self.out_dir, json_file))
@@ -356,7 +441,7 @@ class ObjDump:
             if file_name.endswith('.json'):
                 continue
             output = utils.get_all_section_symbols_in_file(file_path)
-            print(f'===== [elf heard infos] in {file_name} =====:')
+            print(f'===== [elf header infos] in {file_name} =====:')
             for line in output.split('\n'):
                 print(line)
 
@@ -407,7 +492,7 @@ class ObjDump:
                 print(f'[KERNEL LEN]: {kernel_info.kernel_len}')
                 print(f'[ASCEND META]: {self._show_elf_ascend_meta_obj()}')
                 if self.parse_obj_mode == ParseObjMode.MODE_VERBOSE:
-                    print(f'====== [elf heard infos] ======')
+                    print(f'====== [elf header infos] ======')
                     print(utils.get_all_section_symbols_in_file(kernel_info.kernel_file))
 
 
@@ -431,7 +516,7 @@ class ObjDump:
                 index += 4
                 if (index + l) <= len(content):
                     self._show_ascend_meta_tlv(content, t, l, index)
-                if t == TYPE_FUNCTION_ENTRY:
+                if t == F_TYPE_FUNCTION_ENTRY:
                     index = index + l + 3
                 else:
                     index += l
@@ -439,12 +524,13 @@ class ObjDump:
     def _get_elf_ascend_meta_op_tlv(self, meta_infos: dict):
         meta_name = 'meta'
         if meta_name in meta_infos.keys():
+            self._aicore_binary_meta_printed.clear()
             meta_lists = meta_infos[meta_name]
             content = self._get_segment_content(int(meta_lists[1], HEX_NUM), int(meta_lists[2], HEX_NUM))
             idx = 0
             index = 0
             print(f'{KEY_ASCEND_META_OP} META INFO')
-            while index < len(content) and idx < 4:
+            while index < len(content) and (idx < 4 or self.obj_type == ObjType.TYPE_AICORE_BINARY):
                 if index + 4 > len(content):
                     break
                 t, l = struct.unpack("2H", content[index:index+4])

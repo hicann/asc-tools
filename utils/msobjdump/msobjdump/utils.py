@@ -17,7 +17,7 @@ import subprocess
 
 
 def split_str_with_space(input_str: str) -> list:
-    result = re.split('\s+', input_str)
+    result = re.split(r'\s+', input_str)
     return [element for element in result if element != '']
 
 
@@ -58,3 +58,11 @@ def get_all_section_symbols_in_file(file_name: str) -> str:
 
 def get_o_file_from_a_file(file_path: str, file_name: str) -> str:
     return subprocess.run(['ar', 'x', file_path, file_name], capture_output=True)
+
+
+def extract_aicore_binary_from_elf(input_file: str, output_file: str):
+    return subprocess.run(
+        ['llvm-objcopy', '-O', 'binary', '--only-section=.aicore_binary', input_file, output_file],
+        capture_output=True,
+        text=True
+    )
