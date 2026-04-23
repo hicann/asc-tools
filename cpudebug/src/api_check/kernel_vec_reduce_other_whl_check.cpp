@@ -57,7 +57,7 @@ static bool CheckTensorWhlOverflowLowNorm(const VecReduceWhlApiParams& param, co
 {
     uint32_t needSize = (param.repeatTimes - 1) * param.dstRepeatStride * unit;
     if (param.order == ReduceOrder::ORDER_VALUE_INDEX || param.order == ReduceOrder::ORDER_INDEX_VALUE) {
-        needSize = needSize + param.dstDtypeBytes + sizeof(uint32_t);  // the DtypeBytes of index
+        needSize = needSize + param.dstDtypeBytes * 2;  // the DtypeBytes of index
     } else if (param.order == ReduceOrder::ORDER_ONLY_VALUE) {
         needSize = needSize + param.dstDtypeBytes;
     } else if (param.order == ReduceOrder::ORDER_ONLY_INDEX) {
