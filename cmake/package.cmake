@@ -9,9 +9,6 @@
 # ----------------------------------------------------------------------------------------------------------
 #### CPACK to package run #####
 
-# download makeself package
-include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/third_party/makeself-fetch.cmake)
-
 function(pack_custom)
   message(STATUS "System processor: ${CMAKE_SYSTEM_PROCESSOR}")
   if (CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64")
@@ -81,13 +78,13 @@ function(pack_built_in)
   )
 
   set(SCRIPTS_FILES
-      ${CMAKE_SOURCE_DIR}/scripts/package/common/sh/check_version_required.awk
-      ${CMAKE_SOURCE_DIR}/scripts/package/common/sh/common_func.inc
-      ${CMAKE_SOURCE_DIR}/scripts/package/common/sh/common_interface.bash
-      ${CMAKE_SOURCE_DIR}/scripts/package/common/sh/common_interface.csh
-      ${CMAKE_SOURCE_DIR}/scripts/package/common/sh/common_interface.fish
-      ${CMAKE_SOURCE_DIR}/scripts/package/common/sh/version_compatiable.inc
-      ${CMAKE_SOURCE_DIR}/scripts/package/common/py/merge_binary_info_config.py
+      ${CANN_CMAKE_DIR}/scripts/install/check_version_required.awk
+      ${CANN_CMAKE_DIR}/scripts/install/common_func.inc
+      ${CANN_CMAKE_DIR}/scripts/install/common_interface.sh
+      ${CANN_CMAKE_DIR}/scripts/install/common_interface.csh
+      ${CANN_CMAKE_DIR}/scripts/install/common_interface.fish
+      ${CANN_CMAKE_DIR}/scripts/install/version_compatiable.inc
+      ${CANN_CMAKE_DIR}/scripts/package/merge_binary_info_config.py
   )
 
   install(FILES ${SCRIPTS_FILES}
@@ -95,25 +92,25 @@ function(pack_built_in)
       COMPONENT asc-tools
   )
   set(COMMON_FILES
-      ${CMAKE_SOURCE_DIR}/scripts/package/common/sh/install_common_parser.sh
-      ${CMAKE_SOURCE_DIR}/scripts/package/common/sh/common_func_v2.inc
-      ${CMAKE_SOURCE_DIR}/scripts/package/common/sh/common_installer.inc
-      ${CMAKE_SOURCE_DIR}/scripts/package/common/sh/script_operator.inc
-      ${CMAKE_SOURCE_DIR}/scripts/package/common/sh/version_cfg.inc
+      ${CANN_CMAKE_DIR}/scripts/install/install_common_parser.sh
+      ${CANN_CMAKE_DIR}/scripts/install/common_func_v2.inc
+      ${CANN_CMAKE_DIR}/scripts/install/common_installer.inc
+      ${CANN_CMAKE_DIR}/scripts/install/script_operator.inc
+      ${CANN_CMAKE_DIR}/scripts/install/version_cfg.inc
   )
 
   set(PACKAGE_FILES
       ${COMMON_FILES}
-      ${CMAKE_SOURCE_DIR}/scripts/package/common/sh/multi_version.inc
+      ${CANN_CMAKE_DIR}/scripts/install/multi_version.inc
   )
   set(LATEST_MANGER_FILES
       ${COMMON_FILES}
-      ${CMAKE_SOURCE_DIR}/scripts/package/common/sh/common_func.inc
-      ${CMAKE_SOURCE_DIR}/scripts/package/common/sh/version_compatiable.inc
-      ${CMAKE_SOURCE_DIR}/scripts/package/common/sh/check_version_required.awk
+      ${CANN_CMAKE_DIR}/scripts/install/common_func.inc
+      ${CANN_CMAKE_DIR}/scripts/install/version_compatiable.inc
+      ${CANN_CMAKE_DIR}/scripts/install/check_version_required.awk
   )
   set(CONF_FILES
-      ${CMAKE_SOURCE_DIR}/scripts/package/common/cfg/path.cfg
+      ${CANN_CMAKE_DIR}/scripts/package/cfg/path.cfg
   )
   install(FILES ${CMAKE_BINARY_DIR}/version.asc-tools.info
       DESTINATION share/info/asc-tools
@@ -168,27 +165,8 @@ function(pack_built_in)
   message(STATUS "current compute_unit is: ${compute_unit}")
 
   # ============= CPack =============
-  set(CPACK_PACKAGE_NAME "${PROJECT_NAME}")
-  set(CPACK_PACKAGE_VERSION "${PROJECT_VERSION}")
-  set(CPACK_PACKAGE_FILE_NAME "${CPACK_PACKAGE_NAME}-${CPACK_PACKAGE_VERSION}-${CMAKE_SYSTEM_NAME}")
+  set_cann_cpack_config(asc-tools SHARE_INFO_NAME asc-tools)
 
-  set(CPACK_INSTALL_PREFIX "/")
-
-  set(CPACK_CMAKE_SOURCE_DIR "${CMAKE_SOURCE_DIR}")
-  set(CPACK_CMAKE_BINARY_DIR "${CMAKE_BINARY_DIR}")
-  set(CPACK_CMAKE_INSTALL_PREFIX "${CMAKE_INSTALL_PREFIX}")
-  set(CPACK_CMAKE_CURRENT_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}")
-  set(CPACK_MAKESELF_PATH "${MAKESELF_PATH}")
-  set(CPACK_SOC "${compute_unit}")
-  set(CPACK_ARCH "${ARCH}")
-  set(CPACK_SET_DESTDIR ON)
-  set(CPACK_GENERATOR External)
-  set(CPACK_EXTERNAL_PACKAGE_SCRIPT "${CMAKE_SOURCE_DIR}/cmake/makeself.cmake")
-  set(CPACK_EXTERNAL_ENABLE_STAGING true)
-  set(CPACK_PACKAGE_DIRECTORY "${CMAKE_INSTALL_PREFIX}")
-
-  message(STATUS "CMAKE_INSTALL_PREFIX = ${CMAKE_INSTALL_PREFIX}")
-  include(CPack)
 endfunction()
 
 pack_built_in()

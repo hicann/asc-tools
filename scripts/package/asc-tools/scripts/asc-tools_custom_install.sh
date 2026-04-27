@@ -61,12 +61,12 @@ checkPip() {
     fi
     curpath="$(dirname ${BASH_SOURCE:-$0})"
     install_dir="$(realpath $curpath/..)"
-    common_interface=$(realpath $install_dir/script*/common_interface.bash)
+    common_interface=$(realpath $install_dir/script*/common_interface.sh)
     if [ -f "$common_interface" ]; then
         . "$common_interface"
         py_version_check
     else
-        log_and_print $LEVEL_ERROR "Failed to find common_interface.bash file to check python version."
+        log_and_print $LEVEL_ERROR "Failed to find common_interface.sh file to check python version."
         return 1
     fi
     return 0
