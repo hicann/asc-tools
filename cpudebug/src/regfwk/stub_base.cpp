@@ -300,15 +300,7 @@ void CheckBlockdimForFfts(uint64_t numBlocks)
 
 void CheckNumBlocksForFfts(uint64_t numBlocks)
 {
-    (void)(numBlocks);
-#if defined(__NPU_ARCH__) && __NPU_ARCH__ == 2201
-    if ((g_kernelMode == KernelMode::MIX_MODE && numBlocks > MAX_CORE_NUM_V220) ||
-        (g_kernelMode == KernelMode::AIC_MODE && numBlocks > MAX_CORE_NUM_V220) ||
-        (g_kernelMode == KernelMode::AIV_MODE && numBlocks > MAX_CORE_NUM_V220 * AIV_IN_GROUP_CORE_NUM)) {
-        std::cout << "The input numBlocks " << numBlocks << " exceed max core num of ascend910B1!" << std::endl;
-        raise(SIGABRT);
-    }
-#endif
+    CheckBlockdimForFfts(numBlocks);
 }
 
 void SetGCoreType(int type)

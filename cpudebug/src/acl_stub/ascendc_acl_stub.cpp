@@ -211,18 +211,7 @@ aclError aclrtMemset(void *devPtr, size_t maxCount, int32_t value, size_t count)
 aclError aclrtMemsetAsync(void *devPtr, size_t maxCount, int32_t value, size_t count, aclrtStream stream)
 {
     (void)stream;
-    if (devPtr == nullptr) {
-        printf("[ERROR] The parameter is invalid.\n");
-        return ACL_ERROR_INVALID_PARAM;
-    }
-    if (count > maxCount) {
-        printf("[ERROR] The maxCount is %ld", maxCount);
-    }
-    auto ret = memset_s(devPtr, maxCount, value, count);
-    if (ret != EOK) {
-        return ACL_ERROR_BAD_ALLOC;
-    }
-    return ACL_SUCCESS;
+    return aclrtMemset(devPtr, maxCount, value, count);
 }
 
 aclError aclrtMemcpy(void *dst, size_t destMax, const void *src,
@@ -268,20 +257,8 @@ aclError aclrtMemcpy2d(void *dst, size_t dpitch, const void *src, size_t spitch,
 aclError aclrtMemcpy2dAsync(void *dst, size_t dpitch, const void *src, size_t spitch, 
                             size_t width, size_t height, aclrtMemcpyKind kind, aclrtStream stream)
 {
-    (void)dpitch;
-    (void)spitch;
-    (void)height;
-    (void)kind;
     (void)stream;
-    if (src == nullptr) {
-        printf("[ERROR] The parameter is invalid.\n");
-        return ACL_ERROR_INVALID_PARAM;
-    }
-    auto ret = memcpy_s(dst, dpitch, src, width);
-    if (ret != EOK) {
-        return ACL_ERROR_BAD_ALLOC;
-    }
-    return ACL_SUCCESS;
+    return aclrtMemcpy2d(dst, dpitch, src, spitch, width, height, kind);
 }
 
 aclError aclrtCreateContext(aclrtContext *context, int32_t deviceId)

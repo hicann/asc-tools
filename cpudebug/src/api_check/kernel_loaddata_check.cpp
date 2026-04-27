@@ -87,12 +87,12 @@ bool TikcppLoaddata2dv2Check::CheckAllHighLevel() const
             "the src hardware pos support L1 or GM.");
         return false;
     }
+    ASCENDC_CHECK(CheckBufferSizeOverFlow(param_.dstSize, GlobalParams::Instance().bufferSizeMap.at(param_.dstPos),
+        "check dst tensor buffersize failed"));
     if (param_.srcPos != static_cast<uint8_t>(HardWareIndex::GM)) {
         ASCENDC_CHECK(CheckBufferSizeOverFlow(param_.srcSize, GlobalParams::Instance().bufferSizeMap.at(param_.srcPos),
             "check src tensor buffersize failed"));
     }
-    ASCENDC_CHECK(CheckBufferSizeOverFlow(param_.dstSize, GlobalParams::Instance().bufferSizeMap.at(param_.dstPos),
-        "check dst tensor buffersize failed"));
     // unit element
     if (param_.srcDtypeBytes == 0 || param_.dstDtypeBytes == 0) {
         CHECK_LOG_ERROR("src/dst dtype bytes is zeros");

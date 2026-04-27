@@ -158,9 +158,9 @@ void RunKernelFunctionOnCpu(T kernelFunc, const char* funcName, unsigned numBloc
     act.sa_handler = Handler;
     sigemptyset(&act.sa_mask);
     act.sa_flags = 0;
+    sigaction(SIGFPE, &act, 0);
     sigaction(SIGILL, &act, 0);
     sigaction(SIGBUS, &act, 0);
-    sigaction(SIGFPE, &act, 0);
     sigaction(SIGSEGV, &act, 0);
     sigaction(SIGPIPE, &act, 0);
     sigaction(SIGABRT, &act, 0);
