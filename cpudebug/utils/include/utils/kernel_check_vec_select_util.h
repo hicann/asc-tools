@@ -145,7 +145,7 @@ struct VecGatherApiParams {
         offsetPos = static_cast<uint8_t>(GetPhyType(static_cast<TPosition>(offsetPosIn)));
     }
 
-    VecGatherApiParams(uint64_t dstAddrIn, uint64_t srcAddrIn, uint64_t offsetAddrIn, uint32_t srcBaseAddrIn,
+    VecGatherApiParams(uint64_t dstAddrIn, uint64_t srcAddrIn, uint64_t offsetAddrIn, uint32_t srcBaseOffsetIn,
         uint8_t repeatIn, uint16_t dstBlockStrideIn, uint16_t dstRepeatStrideIn, uint32_t dstDtypeBytesIn,
         uint32_t srcDtypeBytesIn, uint32_t offsetDtypeBytesIn, uint64_t dstSizeIn, uint64_t srcSizeIn,
         uint64_t offsetSizeIn, uint8_t dstPosIn, uint8_t srcPosIn, uint8_t offsetPosIn)
@@ -153,7 +153,7 @@ struct VecGatherApiParams {
         dstAddr = dstAddrIn;
         srcAddr = srcAddrIn;
         offsetAddr = offsetAddrIn;
-        srcBaseAddr = srcBaseAddrIn;
+        srcBaseOffset = srcBaseOffsetIn;
         repeatTimes = repeatIn;
         dstBlockStride = dstBlockStrideIn;
         dstRepeatStride = dstRepeatStrideIn;
@@ -171,7 +171,7 @@ struct VecGatherApiParams {
         offsetPos = static_cast<uint8_t>(GetPhyType(static_cast<TPosition>(offsetPosIn)));
     }
 
-    VecGatherApiParams(uint64_t dstAddrIn, uint64_t srcAddrIn, uint64_t offsetAddrIn, uint32_t srcBaseAddrIn,
+    VecGatherApiParams(uint64_t dstAddrIn, uint64_t srcAddrIn, uint64_t offsetAddrIn, uint32_t srcBaseOffsetIn,
         uint32_t dstDtypeBytesIn, uint32_t srcDtypeBytesIn, uint32_t offsetDtypeBytesIn, uint64_t dstSizeIn,
         uint64_t srcSizeIn, uint64_t offsetSizeIn, uint8_t dstPosIn, uint8_t srcPosIn, uint8_t offsetPosIn,
         uint32_t calCountIn)
@@ -179,7 +179,7 @@ struct VecGatherApiParams {
         dstAddr = dstAddrIn;
         srcAddr = srcAddrIn;
         offsetAddr = offsetAddrIn;
-        srcBaseAddr = srcBaseAddrIn;
+        srcBaseOffset = srcBaseOffsetIn;
         dstDtypeBytes = dstDtypeBytesIn;
         srcDtypeBytes = srcDtypeBytesIn;
         offsetDtypeBytes = offsetDtypeBytesIn;
@@ -198,7 +198,7 @@ struct VecGatherApiParams {
     uint64_t dstAddr = 0;
     uint64_t srcAddr = 0;
     uint64_t offsetAddr = 0;
-    uint32_t srcBaseAddr = 0;
+    uint32_t srcBaseOffset = 0;
     uint8_t repeatTimes = 0;
     uint16_t dstBlockStride = 0;
     uint16_t dstRepeatStride = 0;

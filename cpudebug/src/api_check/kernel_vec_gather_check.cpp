@@ -38,9 +38,9 @@ bool TikcppVecGatherCheck::CommonCheck()
         "check src tensor buffersize failed"));
     ASCENDC_CHECK(CheckBufferSizeOverFlow(param_.offsetSize,
         GlobalParams::Instance().bufferSizeMap.at(param_.offsetPos), "check offset tensor buffersize failed"));
-    // srcLocal tensor size is unknown. Only check srcBaseAddr will not exceed srcLocal size
-    ASCENDC_CHECK_AND_LOG(param_.srcBaseAddr <= param_.srcSize, {CHECK_LOG_ERROR("Failed to check srcBaseAddr value in "
-        "%s, its valid range is 0 ~ %lu, current value is %u", apiName.c_str(), param_.srcSize, param_.srcBaseAddr);});
+    // srcLocal tensor size is unknown. Only check srcBaseOffset will not exceed srcLocal size
+    ASCENDC_CHECK_AND_LOG(param_.srcBaseOffset <= param_.srcSize, {CHECK_LOG_ERROR("Failed to check srcBaseOffset value in "
+        "%s, its valid range is 0 ~ %lu, current value is %u", apiName.c_str(), param_.srcSize, param_.srcBaseOffset);});
     return true;
 }
 
