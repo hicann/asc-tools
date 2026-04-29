@@ -1,151 +1,196 @@
 # 快速入门
 
-## 环境准备<a name="prepare&install"></a>
-本项目支持源码编译，在源码编译前，需要确保已经安装驱动、固件和CANN软件（Ascend-cann-toolkit和Ascend-cann-ops）。
+## 🛠️ 环境准备<a name="prepare&install"></a>
 
-  软件安装方式请根据如下描述进行选择：
+根据**本地是否有NPU设备**和**使用目标**选择对应的环境准备方式：
 
-| 安装方式 | 说明 |使用场景|
-| :--- | :--- | :--- |
-| 使用WebIDE安装 | WebIDE可提供在线直接运行的昇腾环境，当前可提供单机算力，默认安装最新商发版CANN软件包和固件/驱动包。目前仅适用于Atlas A2系列产品，ARM架构。| 适用于没有昇腾设备的开发者。|
-| 使用Docker部署 | Docker镜像是一种CANN高效部署方式，目前仅适用于Atlas A2系列产品，OS仅支持Ubuntu操作系统。|适用有昇腾设备，需要快速搭建环境的开发者。|
-| 手动安装软件包 | - |适用有昇腾设备，想体验手动安装CANN包或体验最新master分支能力的开发者。|
+| 环境情况 | 用于社区体验 / 算子开发（CANN商用/社区版） | 用于生态开发（CANN master） |
+| :---: | :---: | :---: |
+| **无NPU设备** | [云开发环境](#1️⃣-云开发环境) | [云开发环境](#1️⃣-云开发环境) + [手动下载安装CANN master](#📥-下载安装cann包)|
+| **有NPU设备** | [基于CANN镜像的Docker](#2️⃣-基于cann镜像的docker) | [Dev Container](#3️⃣-devcontainer) + [手动下载安装CANN master](#📥-下载安装cann包) |
 
+> [!TIP] 选择建议
+>
+> - 为了保障开发体验环境的质量，推荐用户基于**容器化技术**完成**环境准备**。
+> - 如不希望使用容器，也可在带NPU设备的主机上完成**环境准备**，请参考[CANN软件安装指南 - 在物理机上安装](https://www.hiascend.com/document/redirect/CannCommunityInstWizard)。
+> - 针对仅体验"编译安装本开源仓 + 仿真环境运行算子"的用户，不要求主机带NPU设备，可跳过安装NPU驱动和固件，直接安装CANN包，请参考[下载安装CANN包](#📥-下载安装cann包)。
 
-### 场景一：使用WebIDE安装
+### 1️⃣ 云开发环境
 
-对于无环境的用户，可直接使用WebIDE开发平台，即“**一站式开发平台**”，该平台为您提供在线可直接运行的昇腾环境，环境中已安装必备的软件包，无需手动安装。更多关于开发平台的介绍请参考[LINK](https://gitcode.com/org/cann/discussions/54)。
+对于无NPU设备的用户，可使用**云开发环境**提供的NPU计算资源进行开发体验，**云开发环境**提供了在线直接运行的昇腾ARM架构环境。目前仅适用于Atlas A2系列产品，提供两种接入方式：
 
-1. 进入开源项目，单击“`云开发`”按钮，使用已认证过的华为云账号登录。若未注册或认证，请根据页面提示进行注册和认证。
+- **WebIDE开发平台**，即"**一站式开发平台**"，提供网页版的便携开发体验。
+- **VSCode IDE**，支持远程连接**云开发环境**，提供VSCode强大插件市场的支持。
 
-   <img src="./figures/cloudIDE.png" alt="云平台"  width="750px" height="90px">
+1. 进入开源仓Gitcode页面，单击"`云开发`"按钮，使用已认证过的华为云账号登录。若未注册或认证，请根据页面提示进行注册和认证。
 
-2. 根据页面提示创建并启动云开发环境，单击“`连接 > WebIDE `”进入算子一站式开发平台，开源项目的资源默认在`/mnt/workspace`目录下。
+   <p align="center"><img src="./figures/cloudIDE.png" alt="云平台" width="750px" height="90px"></p>
 
-   <img src="./figures/webIDE.png" alt="云平台"  width="1000px" height="150px">
+2. 根据页面提示创建并启动云开发环境，单击"`连接 > WebIDE 或 Visual Studio Code`"进入云开发环境，开源项目的资源默认在`/mnt/workspace`目录下。
 
+   <p align="center"><img src="./figures/webIDE.png" alt="云平台" width="1000px" height="150px"></p>
 
-### 场景二：使用Docker部署
+> [!NOTE] 使用说明
+>
+> - 环境默认安装了最新的商用版NPU驱动和固件、CANN包，源码下载时注意与软件配套。
+> - 如需下载特定版本的CANN包，请参考[下载安装CANN包](#📥-下载安装cann包)。
+> - 更多关于**WebIDE开发平台**的介绍，请参考[云开发平台介绍](https://gitcode.com/org/cann/discussions/54)。
+> - [Huawei Developer Space插件](https://marketplace.visualstudio.com/items?itemName=HuaweiCloud.developerspace)为VSCode IDE接入**云开发环境**提供技术支持。
 
-**说明：**
-<br>镜像文件比较大，正常网速下，下载时间约为5-10分钟，请您耐心等待。
+### 2️⃣ 基于CANN镜像的Docker
 
-**1.安装固件和驱动**：请参考[CANN软件安装指南](https://www.hiascend.com/document/redirect/CannCommunityInstWizard)。
+对于有NPU设备的用户，可使用此环境进行开发体验。
 
-**2.下载CANN镜像**
+1. 确认主机环境
 
-- 步骤1：以root用户登录宿主机。确保宿主机已安装Docker引擎（版本1.11.2及以上）。
+   - 是否已安装NPU驱动和固件，使用`npu-smi info`能够输出NPU相关信息，如没有安装，请参考[CANN软件安装指南 - 在物理机上安装](https://www.hiascend.com/document/redirect/CannCommunityInstWizard)。
+   - 是否已安装Docker，使用`docker --version`能够输出Docker版本信息，如没有安装，请参考[Docker官方安装指南](https://docs.docker.com/engine/install/)。
 
-- 步骤2：从[昇腾镜像仓库](https://www.hiascend.com/developer/ascendhub/detail/17da20d1c2b6493cb38765adeba85884)拉取已预集成的CANN软件包及所需依赖的镜像。命令如下，根据实际架构选择：
+2. 下载CANN镜像
+
+    通过以下命令从[昇腾镜像仓库](https://www.hiascend.com/developer/ascendhub/detail/17da20d1c2b6493cb38765adeba85884)拉取已预集成CANN镜像：
 
     ```bash
-    # 示例：拉取ARM架构的CANN开发镜像
-    docker pull --platform=arm64 swr.cn-south-1.myhuaweicloud.com/ascendhub/cann:9.0.0-beta.1-910b-ubuntu22.04-py3.11
-    # 示例：拉取X86架构的CANN开发镜像
-    docker pull --platform=amd64 swr.cn-south-1.myhuaweicloud.com/ascendhub/cann:9.0.0-beta.1-910b-ubuntu22.04-py3.11
+    # 命令格式为docker pull <ascend/cann:tag>
+    # 示例：拉取ascend/cann:tag为9.0.0-beta.2的CANN社区包
+    docker pull swr.cn-south-1.myhuaweicloud.com/ascendhub/cann:9.0.0-beta.2-910b-ubuntu22.04-py3.11
     ```
 
-**3.运行Docker**
-<br>拉取镜像后，需要以特定参数启动容器，以便容器内能访问宿主的昇腾设备。
+    > [!NOTE] 使用说明
+    > - 镜像默认安装了对应版本的CANN包，源码下载时注意与软件配套。
+    > - 镜像文件比较大，正常网速下，下载时间约为5～10分钟，请您耐心等待。
+
+3. 运行Docker
+
+    拉取镜像后，需要以特定参数启动，以便容器内能访问宿主机的NPU设备。
+
+    ```bash
+    docker run --name <cann_container> \
+        --ipc=host --net=host --privileged \
+        --device /dev/davinci0 \
+        --device /dev/davinci_manager \
+        --device /dev/devmm_svm \
+        --device /dev/hisi_hdc \
+        -v /usr/local/dcmi:/usr/local/dcmi \
+        -v /usr/local/bin/npu-smi:/usr/local/bin/npu-smi \
+        -v /usr/local/Ascend/driver/lib64/:/usr/local/Ascend/driver/lib64/ \
+        -v /usr/local/Ascend/driver/version.info:/usr/local/Ascend/driver/version.info \
+        -v /etc/ascend_install.info:/etc/ascend_install.info \
+        -v </home/your_host_dir>:</home/your_container_dir> \
+        -it <ascend/cann:tag> bash
+    ```
+
+    | 参数 | 说明 | 注意事项 |
+    | :--- | :--- | :--- |
+    | `--name <cann_container>` | 为容器指定名称，便于管理 | 自定义 |
+    | `--ipc=host` | 与宿主机共享IPC命名空间，NPU进程间通信（共享内存、信号量）所需 | - |
+    | `--net=host` | 使用宿主机网络栈，避免容器网络转发带来的通信延迟 | - |
+    | `--privileged` | 赋予容器完整设备访问权限，NPU驱动正常工作所需 | - |
+    | `--device /dev/davinci0` | 将宿主机的NPU设备卡映射到容器内，可指定映射多张NPU设备卡 | 必须根据实际情况调整：`davinci0`对应系统中的第0张NPU卡。请先在宿主机执行`npu-smi info`命令，根据输出显示的设备号（如`NPU 0`, `NPU 1`）来修改此编号 |
+    | `--device /dev/davinci_manager` | 映射NPU设备管理接口 | - |
+    | `--device /dev/devmm_svm` | 映射设备内存管理接口 | - |
+    | `--device /dev/hisi_hdc` | 映射主机与设备间的通信接口 | - |
+    | `-v /usr/local/dcmi:/usr/local/dcmi` | 挂载设备容器管理接口（DCMI）相关工具和库 | - |
+    | `-v /usr/local/bin/npu-smi:/usr/local/bin/npu-smi` | 挂载`npu-smi`工具 | 使容器内可以直接运行此命令来查询NPU状态和性能信息 |
+    | `-v /usr/local/Ascend/driver/lib64/:/usr/local/Ascend/driver/lib64/` | 将宿主机的NPU驱动库映射到容器内 | - |
+    | `-v /usr/local/Ascend/driver/version.info:/usr/local/Ascend/driver/version.info` | 挂载驱动版本信息文件 | - |
+    | `-v /etc/ascend_install.info:/etc/ascend_install.info` | 挂载CANN软件安装信息文件 | - |
+    | `-v </home/your_host_dir>:</home/your_container_dir>` | 挂载宿主机的一个路径到容器中 | 自定义 |
+    | `-it` | `-i`（交互式）和`-t`（分配伪终端）的组合参数 | - |
+    | `<ascend/cann:tag>` | 指定要运行的Docker镜像 | 请确保此镜像名和标签（tag）与您通过`docker pull`拉取的镜像完全一致 |
+    | `bash` | 容器启动后立即执行的命令 | - |
+
+### 3️⃣ DevContainer
+
+对于有NPU设备的用户，推荐使用此环境进行生态开发者贡献。
+
+DevContainer基于VS Code Dev Containers，通过仓库内`.devcontainer`配置自动构建一致的容器化开发环境，内置`conda`、`Python`等开发工具链。与宿主机的NPU驱动共享设备访问，适合需要编译源码、运行UT、向本仓贡献代码的场景。详细说明请参考[`.devcontainer/README.md`](../.devcontainer/README.md)。
+
+> [!NOTE] 使用说明
+> DevContainer仅挂载宿主机的NPU驱动（只读），**CANN toolkit和ops包需在容器启动后手动安装**，请参考[下载安装CANN包](#📥-下载安装cann包)。
+
+### 📥 下载安装CANN包<a name="cann-install"></a>
+<!-- 待加入AI Agent下载 & 安装CANN包的skill -->
+CANN包分为CANN toolkit包和CANN ops包。
+
+#### 下载CANN包
+
+1. <a name="下载-cann-商用社区版"></a>下载CANN商用/社区版
+
+    如果您想体验**官网正式发布的CANN包**，请访问[CANN安装部署-昇腾社区](https://www.hiascend.com/cann/download)获取对应版本CANN包。
+
+2. <a name="下载-cann-master"></a>下载CANN master
+
+    如果您想体验**CANN master**，请访问[CANN master obs镜像网站](https://ascend.devcloud.huaweicloud.com/artifactory/cann-run-mirror/software/master)，下载**日期最新**的CANN包。
+
+#### 安装CANN包
+
+1. 安装CANN toolkit包 (必选)
+
+    ```bash
+    chmod +x Ascend-cann-toolkit_${cann_version}_linux-$(uname -m).run
+    ./Ascend-cann-toolkit_${cann_version}_linux-$(uname -m).run --install --install-path=${install_path}
+    ```
+
+2. 安装CANN ops包 (可选)
+
+    ```bash
+    chmod +x Ascend-cann-${soc_name}-ops_${cann_version}_linux-$(uname -m).run
+    ./Ascend-cann-${soc_name}-ops_${cann_version}_linux-$(uname -m).run --install --install-path=${install_path}
+    ```
+
+    > [!IMPORTANT] 安装说明
+    > [examples](../examples/)中部分算子样例的编译运行依赖本包，若想完整体验样例编译运行流程，建议安装此包。
+
+| 参数 | 说明 |
+| :--- | :--- |
+| `${cann_version}` | CANN包版本号 |
+| `${soc_name}` | NPU型号，如`910b` |
+| `${install_path}` | 安装路径，toolkit包和ops包需相同。默认：root用户`/usr/local/Ascend`，非root用户`$HOME/Ascend` |
+
+## ✅ 环境验证<a name="cann-verify"></a>
+
+> [!NOTE] 使用前须知
+> 云开发环境和基于CANN镜像的Docker已预装CANN包，可直接执行以下命令验证；DevContainer和手动安装用户请在安装CANN包后执行。
+
+验证环境和驱动是否正常：
+
+- **检查NPU设备**：
+
+    ```bash
+    # 运行npu-smi，若能正常显示设备信息，则驱动正常
+    npu-smi info
+    ```
+
+- **检查CANN包安装**：
+  
+    ```bash
+    # 查看CANN包的version字段提供的版本信息（默认路径安装）。WebIDE场景下，请将/usr/local替换为/home/developer
+    cat /usr/local/Ascend/cann/$(uname -m)-linux/ascend_toolkit_install.info
+    cat /usr/local/Ascend/cann/$(uname -m)-linux/ascend_ops_install.info
+    ```
+
+## ⚙️ 环境变量配置<a name="cann-env-setup"></a>
+
+> [!NOTE] 使用前须知
+> 云开发环境和基于CANN镜像的Docker已自动配置环境变量，可跳过此步骤。
+
+按需选择合适的命令使环境变量生效：
 
 ```bash
-docker run --name cann_container --device /dev/davinci0 --device /dev/davinci_manager --device /dev/devmm_svm --device /dev/hisi_hdc -v /usr/local/dcmi:/usr/local/dcmi -v /usr/local/bin/npu-smi:/usr/local/bin/npu-smi -v /usr/local/Ascend/driver/lib64/:/usr/local/Ascend/driver/lib64/ -v /usr/local/Ascend/driver/version.info:/usr/local/Ascend/driver/version.info -v /etc/ascend_install.info:/etc/ascend_install.info -it swr.cn-south-1.myhuaweicloud.com/ascendhub/cann:9.0.0-beta.1-910b-ubuntu22.04-py3.11 bash
+# 默认路径安装，以root用户为例（非root用户，将/usr/local替换为${HOME}）
+source /usr/local/Ascend/cann/set_env.sh
+# 指定路径安装
+# source ${install_path}/cann/set_env.sh
 ```
-| 参数 | 说明 | 注意事项 |
-| :--- | :--- | :--- |
-| `--name cann_container` | 为容器指定名称，便于管理。 | 可自定义。 |
-| `--device /dev/davinci0` | 核心：将宿主机的NPU设备卡映射到容器内，可指定映射多张NPU设备卡。 | 必须根据实际情况调整：`davinci0`对应系统中的第0张NPU卡。请先在宿主机执行 `npu-smi info`命令，根据输出显示的设备号（如`NPU 0`, `NPU 1`）来修改此编号。|
-| `--device /dev/davinci_manager` | 映射NPU设备管理接口。 | - |
-| `--device /dev/devmm_svm` | 映射设备内存管理接口。 | - |
-| `--device /dev/hisi_hdc` | 映射主机与设备间的通信接口。 | - |
-| `-v /usr/local/dcmi:/usr/local/dcmi` | 挂载设备容器管理接口（DCMI）相关工具和库。 | -|
-| `-v /usr/local/bin/npu-smi:/usr/local/bin/npu-smi` | 挂载`npu-smi`工具。 | 使容器内可以直接运行此命令来查询NPU状态和性能信息。|
-| `-v /usr/local/Ascend/driver/lib64/:/usr/local/Ascend/driver/lib64/` | 关键挂载：将宿主机的NPU驱动库映射到容器内。 | -|
-| `-v /usr/local/Ascend/driver/version.info:/usr/local/Ascend/driver/version.info` | 挂载驱动版本信息文件。 | -|
-| `-v /etc/ascend_install.info:/etc/ascend_install.info` | 挂载CANN软件安装信息文件。 |- |
-| `-v /home/your_dir:/home/your_dir` | 挂载宿主机的一个路径到容器中。 | 可自选使用。 |
-| `-it` | `-i`（交互式）和 `-t`（分配伪终端）的组合参数。 |- |
-| `swr.cn-south-1.myhuaweicloud.com/ascendhub/cann:9.0.0-beta.1-910b-ubuntu22.04-py3.11` | 指定要运行的Docker镜像。 |请确保此镜像名和标签（tag）与你通过`docker pull`拉取的镜像完全一致。 |
-| `bash` | 容器启动后立即执行的命令。 |- |
 
-### 场景三：手动安装软件包
+## 🔨 源码编译步骤
 
-**场景1：体验master版本能力或基于master版本进行开发**
-
-如果您想体验**master分支最新能力**，单击[下载链接](https://ascend.devcloud.huaweicloud.com/artifactory/cann-run-mirror/software/master)获取软件包，按照如下步骤进行安装。更多安装指导请参考[CANN软件安装指南](https://www.hiascend.com/document/redirect/CannCommunityInstWizard)。
-
-1. **安装驱动与固件（运行态依赖）**
-
-   运行算子时必须安装驱动与固件，若仅编译算子，可跳过本操作，安装指导详见《[CANN 软件安装指南](https://www.hiascend.com/document/redirect/CannCommunityInstSoftware)》。
-
-2. **安装最新版CANN toolkit包**
-
-    ```bash
-    # 确保安装包具有可执行权限
-    chmod +x Ascend-cann-toolkit_${cann_version}_linux-${arch}.run
-    # 安装命令
-    ./Ascend-cann-toolkit_${cann_version}_linux-${arch}.run --full --force --install-path=${install_path}
-    ```
-    - \$\{cann\_version\}：表示CANN包版本号。
-    - \$\{arch\}：表示CPU架构，如aarch64、x86_64。
-    - \$\{install\_path\}：表示指定安装路径。
-    - 缺省--install-path时， 则使用默认路径安装。
-    若使用root用户安装，安装完成后相关软件存储在“/usr/local/Ascend”路径下；若使用非root用户安装，安装完成后相关软件存储在“$HOME/Ascend”路径下。
-
-3. **安装最新版CANN ops包（运行态依赖）**
-
-    运行算子前必须安装本包，若仅编译算子，可跳过本操作。
-
-    ```bash
-    # 确保安装包具有可执行权限
-    chmod +x Ascend-cann-${soc_name}-ops_9.0.0_linux-${arch}.run
-    # 安装命令
-    ./Ascend-cann-${soc_name}-ops_9.0.0_linux-${arch}.run --install --install-path=${install_path}
-    ```
-    - \$\{soc\_name\}：表示NPU型号名称。
-    - \$\{arch\}：表示CPU架构，如aarch64、x86_64。
-    - \$\{install\_path\}：表示指定安装路径，需要与toolkit包安装在相同路径，root用户默认安装在`/usr/local/Ascend`目录，非root用户默认安装在`$HOME/Ascend`目录。
-
-**场景2：体验已发布版本能力或基于已发布版本进行开发**
-
-如果您想体验**官网正式发布的CANN包**能力，请访问[CANN官网下载中心](https://www.hiascend.com/cann/download)，选择对应版本CANN软件包（仅支持CANN 8.5.0及后续版本）进行安装。
-
-进入官网后，首先点击**版本选择**，定位目标版本。随后，根据您的**产品系列**、**CPU架构**和**操作系统**，选择合适的安装方式。我们提供了多种安装方式，以Ubuntu为例，包括：**在线安装（apt-get）、在线安装（Conda）、离线安装（Runfile）**，您可根据实际需求灵活选择。
-
-  > [!NOTE]
-  > 如果您不清楚设备的具体硬件信息，可使用页面提供的相关命令进行查询。系统将根据查询结果自动匹配对应的**产品系列**。
-
-## 配置环境变量
-
-### WebIDE场景
-
-  ```bash
-  source /home/developer/Ascend/cann/set_env.sh
-  ```
-
-### 其他场景
-
-- 默认路径，root用户安装
-
-    ```bash
-    source /usr/local/Ascend/cann/set_env.sh
-    ```
-
-- 默认路径，非root用户安装
-    ```bash
-    source $HOME/Ascend/cann/set_env.sh
-    ```
-
-- 指定路径安装
-    ```bash
-    source ${install_path}/cann/set_env.sh
-    ```
-
-## 下载源码
+### 📥 下载源码
 
     可以使用以下两种方式下载，请选择其中一种进行源码准备。
 
-- 命令行方式下载（下载时间较长，但步骤简单）。
+- 若您的编译环境可以访问网络，建议通过以下命令行方式下载（下载时间较长，但步骤简单）。
 
   ```bash
   # 开发环境，非root用户命令行中执行以下命令下载源码仓。git_clone_path为用户自己创建的某个目录。
@@ -186,11 +231,14 @@ docker run --name cann_container --device /dev/davinci0 --device /dev/davinci_ma
 
 ## 安装依赖
 
+> [!NOTE] 使用前须知
+> 如果您使用**容器化技术**，容器中已为您安装好依赖，可跳过此步骤。
+
    以下所列仅为本开源仓源码编译用到的依赖，其中python、gcc、cmake的安装方法请参见配套版本的[用户手册](https://hiascend.com/document/redirect/CannCommunityInstDepend)，选择安装场景后，参见“安装CANN > 安装依赖”章节进行相关依赖的安装。
 
    - python >= 3.7.0
 
-   - gcc >= 7.3.0
+   - gcc >= 7.3.0 / g++ >= 7.3.0 (注意：要求gcc与g++版本一致)
 
    - cmake >= 3.16.0
 
@@ -313,6 +361,11 @@ docker run --name cann_container --device /dev/davinci0 --device /dev/davinci_ma
 
   编译完成后会在`build_out`目录下生成cann-asc-tools_*<cann_version>*_linux-*<arch>*.run软件包。
 
+   > [!CAUTION] 编译报错可能
+   > 本仓依赖其他CANN开源仓，**暂不支持独立升级**，须搭配对应版本的CANN包进行编译：
+   > - master分支 -- 使用**最新的**[CANN master包](#下载-cann-master)
+   > - 特定Tag -- 使用对应版本的[官网正式发布的CANN包](#下载-cann-商用社区版)
+
 2. 安装
 
   在开源仓根目录下执行下列命令，根据设置的环境变量路径，将编译生成的run包安装到CANN包的装包路径，同时会覆盖原CANN包中的Ascend C内容。
@@ -340,8 +393,8 @@ bash build.sh -t
 bash build.sh --test
 ```
 
-若您的环境无法访问网络，您需要在联网环境中下载上述依赖代码仓的压缩包及开源软件压缩包，并手动上传至您的环境中。
-  同时，相比编译，UT不下载Release版本的cpudebug包，而是需要根据实际环境，下载对应Debug版本的闭源cpudebug包（[cpudebug x86_64包](https://container-obsfs-filesystem.obs.cn-north-4.myhuaweicloud.com/package/cann/asc-toolkit-dev/version_compile/master/202601/20260131_174635_/ubuntu_x86/cann-asc-tools-cpudebug-deps-lib_debug_9.0.0_linux-x86_64.tar.gz)、[cpudebug aarch64包](https://container-obsfs-filesystem.obs.cn-north-4.myhuaweicloud.com/package/cann/asc-toolkit-dev/version_compile/master/202601/20260131_174635_/ubuntu_aarch64/cann-asc-tools-cpudebug-deps-lib_debug_9.0.0_linux-aarch64.tar.gz)），Debug版本相比Release版本，方便进行调试。
+若您的编译环境无法访问网络，您需要在联网环境中下载上述依赖代码仓的压缩包及开源软件压缩包，并手动上传至您的环境中。
+  同时，相比于编译，UT不下载Release版本的cpudebug包，而是需要根据实际环境，下载对应Debug版本的闭源cpudebug包（[cpudebug x86_64包](https://container-obsfs-filesystem.obs.cn-north-4.myhuaweicloud.com/package/cann/asc-toolkit-dev/version_compile/master/202601/20260131_174635_/ubuntu_x86/cann-asc-tools-cpudebug-deps-lib_debug_9.0.0_linux-x86_64.tar.gz)、[cpudebug aarch64包](https://container-obsfs-filesystem.obs.cn-north-4.myhuaweicloud.com/package/cann/asc-toolkit-dev/version_compile/master/202601/20260131_174635_/ubuntu_aarch64/cann-asc-tools-cpudebug-deps-lib_debug_9.0.0_linux-aarch64.tar.gz)），Debug版本相比Release版本，更方便进行调试。
 
   您需要在环境中新建一个`{your_3rd_party_path}`目录来存放依赖代码仓、闭源及第三方开源软件的压缩包。
 

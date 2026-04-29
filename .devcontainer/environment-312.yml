@@ -1,0 +1,27 @@
+name: py312
+dependencies:
+  - python=3.12
+  - pip
+  - pip:
+    - setuptools>=75,<80
+    - attrs
+    - decorator
+    - psutil
+    - scipy
+    - absl-py
+    - ml-dtypes
+    - tornado
+    - numpy>=2.2,<2.3
+    - pybind11>=2.13.6,<3.0.0
+    - PyYAML
+    - ruamel.yaml
+    - jinja2
+    - coverage>=4.5.4
+    - pytest>=8.3.2
+    - cloudpickle
+    - build
+    - onnx==1.16.0
+    - protobuf==3.20.3
+    - torch==2.7.1
+    - expecttest
+    - tqdm

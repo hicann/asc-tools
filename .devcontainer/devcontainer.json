@@ -1,0 +1,55 @@
+{
+    "name": "ascendc",
+    "build": {
+        "dockerfile": "./Dockerfile",
+        "options": ["--network=host", "--tag=ascendc:ubuntu24.04"]
+    },
+    "remoteUser": "root",
+
+    // Explicitly list each davinci compute device and the three control devices.
+    "runArgs": [
+        "--ipc=host",
+        "--net=host",
+        "--privileged",
+        "--device=/dev/davinci0",
+        "--device=/dev/davinci1",
+        "--device=/dev/davinci2",
+        "--device=/dev/davinci3",
+        "--device=/dev/davinci4",
+        "--device=/dev/davinci5",
+        "--device=/dev/davinci6",
+        "--device=/dev/davinci7",
+        "--device=/dev/davinci_manager",
+        "--device=/dev/devmm_svm",
+        "--device=/dev/hisi_hdc"
+    ],
+
+    "mounts": [
+        "source=ascendc-ccache,target=/root/.ccache,type=volume",
+        "source=/usr/local/dcmi,target=/usr/local/dcmi,type=bind,readonly",
+        "source=/usr/local/bin/npu-smi,target=/usr/local/bin/npu-smi,type=bind,readonly",
+        "source=/usr/local/Ascend/driver,target=/usr/local/Ascend/driver,type=bind,readonly",
+        "source=/etc/ascend_install.info,target=/etc/ascend_install.info,type=bind,readonly"
+        // Add your own data directory, e.g.: "source=/data,target=/data,type=bind"
+    ],
+
+    "customizations": {
+        "vscode": {
+            "extensions": [
+                "eamodio.gitlens",
+                "ms-python.python",
+                "ms-vscode.cpptools",
+                "ms-vscode.cmake-tools",
+                "llvm-vs-code-extensions.vscode-clangd"
+            ],
+            "settings": {
+                "C_Cpp.default.configurationProvider": "ms-vscode.cmake-tools",
+                "C_Cpp.default.compileCommands": "${workspaceFolder}/build/compile_commands.json",
+                "terminal.integrated.defaultProfile.linux": "zsh",
+                "terminal.integrated.profiles.linux": {
+                    "zsh": { "path": "/bin/zsh" }
+                }
+            }
+        }
+    }
+}
