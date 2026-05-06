@@ -137,27 +137,28 @@ bool PlatFormInfos::GetPlatformResWithLock(const std::string &label, const std::
 #if __CCE_AICORE__ == 300
 void PlatFormInfos::GetLocalMemSize(const LocalMemType &mem_type, uint64_t &size)
 {
+    // Note: The size is constrained by hardware limitations.
     switch(mem_type) {
         case LocalMemType::L0_A:
-            size = 65536;
+            size = 65536; // local memory size for L0A
             break;
         case LocalMemType::L0_B:
-            size = 65536;
+            size = 65536; // local memory size for L0B
             break;
         case LocalMemType::L0_C:
-            size = 131072;
+            size = 131072; // local memory size for L0C
             break;
         case LocalMemType::UB:
-            size = 253952;
+            size = 253952; // local memory size for UB
             break;
         case LocalMemType::L1:
-            size = 1048576;
+            size = 1048576; // local memory size for L1
             break;
         case LocalMemType::L2:
-            size = 4194304;
+            size = 4194304; // local memory size for L2
             break;
         case LocalMemType::HBM:
-            size = 0;
+            size = 0; // local memory size for HBM
             break;
         default:
             size = 0;
@@ -166,12 +167,13 @@ void PlatFormInfos::GetLocalMemSize(const LocalMemType &mem_type, uint64_t &size
 }
 void PlatFormInfos::GetLocalMemBw(const LocalMemType &mem_type, uint64_t &bw_size)
 {
+    // Note: The size is constrained by hardware limitations.
     switch(mem_type) {
         case LocalMemType::L2:
-            bw_size = 256;
+            bw_size = 256; // bandwidth of L2
             break;
         case LocalMemType::HBM:
-            bw_size = 17;
+            bw_size = 17; // bandwidth of HBM
             break;
         default:
             bw_size = 0;
@@ -182,27 +184,28 @@ void PlatFormInfos::GetLocalMemBw(const LocalMemType &mem_type, uint64_t &bw_siz
 #elif __CCE_AICORE__ == 220
 void PlatFormInfos::GetLocalMemSize(const LocalMemType &mem_type, uint64_t &size)
 {
+    // Note: The size is constrained by hardware limitations.
     switch(mem_type) {
         case LocalMemType::L0_A:
-            size = 65536;
+            size = 65536; // local memory size for L0A
             break;
         case LocalMemType::L0_B:
-            size = 65536;
+            size = 65536; // local memory size for L0B 
             break;
         case LocalMemType::L0_C:
-            size = 131072;
+            size = 131072; // local memory size for L0C
             break;
         case LocalMemType::UB:
-            size = 196608;
+            size = 196608; // local memory size for UB
             break;
         case LocalMemType::L1:
-            size = 524288;
+            size = 524288; // local memory size for L1
             break;
         case LocalMemType::L2:
-            size = 201326592;
+            size = 201326592; // local memory size for L2
             break;
         case LocalMemType::HBM:
-            size = 0;
+            size = 0; // local memory size for HBM
             break;
         default:
             size = 0;
@@ -211,12 +214,13 @@ void PlatFormInfos::GetLocalMemSize(const LocalMemType &mem_type, uint64_t &size
 }
 void PlatFormInfos::GetLocalMemBw(const LocalMemType &mem_type, uint64_t &bw_size)
 {
+    // Note: The size is constrained by hardware limitations.
     switch(mem_type) {
         case LocalMemType::L2:
-            bw_size = 110;
+            bw_size = 110; // bandwidth of L2
             break;
         case LocalMemType::HBM:
-            bw_size = 32;
+            bw_size = 32; // bandwidth of HBM
             break;
         default:
             bw_size = 0;
@@ -227,27 +231,28 @@ void PlatFormInfos::GetLocalMemBw(const LocalMemType &mem_type, uint64_t &bw_siz
 #elif __CCE_AICORE__ == 200
 void PlatFormInfos::GetLocalMemSize(const LocalMemType &mem_type, uint64_t &size)
 {
+    // Note: The size is constrained by hardware limitations.
     switch(mem_type) {
         case LocalMemType::L0_A:
-            size = 65536;
+            size = 65536; // local memory size for L0A
             break;
         case LocalMemType::L0_B:
-            size = 65536;
+            size = 65536; // local memory size for L0B
             break;
         case LocalMemType::L0_C:
-            size = 262144;
+            size = 262144; // local memory size for L0C
             break;
         case LocalMemType::UB:
-            size = 262144;
+            size = 262144; // local memory size for UB
             break;
         case LocalMemType::L1:
-            size = 1048576;
+            size = 1048576; // local memory size for L1
             break;
         case LocalMemType::L2:
-            size = 16777216;
+            size = 16777216; // local memory size for L2
             break;
         case LocalMemType::HBM:
-            size = 0;
+            size = 0; // local memory size for HBM
             break;
         default:
             size = 0;
@@ -256,12 +261,13 @@ void PlatFormInfos::GetLocalMemSize(const LocalMemType &mem_type, uint64_t &size
 }
 void PlatFormInfos::GetLocalMemBw(const LocalMemType &mem_type, uint64_t &bw_size)
 {
+    // Note: The size is constrained by hardware limitations.
     switch(mem_type) {
         case LocalMemType::L2:
-            bw_size = 114;
+            bw_size = 114; // bandwidth of L2
             break;
         case LocalMemType::HBM:
-            bw_size = 17;
+            bw_size = 17; // bandwidth of HBM
             break;
         default:
             bw_size = 0;
@@ -272,27 +278,28 @@ void PlatFormInfos::GetLocalMemBw(const LocalMemType &mem_type, uint64_t &bw_siz
 #else
 void PlatFormInfos::GetLocalMemSize(const LocalMemType &mem_type, uint64_t &size)
 {
+    // Note: The size is constrained by hardware limitations.
     switch(mem_type) {
         case LocalMemType::L0_A:
-            size = 65536;
+            size = 65536; // local memory size for L0A
             break;
         case LocalMemType::L0_B:
-            size = 65536;
+            size = 65536; // local memory size for L0B
             break;
         case LocalMemType::L0_C:
-            size = 262144;
+            size = 262144; // local memory size for L0C
             break;
         case LocalMemType::UB:
-            size = 262144;
+            size = 262144; // local memory size for UB
             break;
         case LocalMemType::L1:
-            size = 1048576;
+            size = 1048576; // local memory size for L1
             break;
         case LocalMemType::L2:
-            size = 33554432;
+            size = 33554432; // local memory size for L2
             break;
         case LocalMemType::HBM:
-            size = 0;
+            size = 0; // local memory size for HBM
             break;
         default:
             size = 0;
@@ -301,12 +308,13 @@ void PlatFormInfos::GetLocalMemSize(const LocalMemType &mem_type, uint64_t &size
 }
 void PlatFormInfos::GetLocalMemBw(const LocalMemType &mem_type, uint64_t &bw_size)
 {
+    // Note: The size is constrained by hardware limitations.
     switch(mem_type) {
         case LocalMemType::L2:
-            bw_size = 110;
+            bw_size = 110; // bandwidth of L2
             break;
         case LocalMemType::HBM:
-            bw_size = 32;
+            bw_size = 32; // bandwidth of HBM
             break;
         default:
             bw_size = 0;
