@@ -8,6 +8,8 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 # ----------------------------------------------------------------------------------------------------------
 
+init_cann_project()
+
 set(CMAKE_PREFIX_PATH ${ASCEND_CANN_PACKAGE_PATH}/)
 
 set(CMAKE_MODULE_PATH
@@ -21,9 +23,9 @@ if (NOT CMAKE_BUILD_TYPE)
     FORCE)
 endif ()
 
-find_package(unified_dlog MODULE REQUIRED)
-find_package(securec MODULE REQUIRED)
-find_package(mmpa MODULE REQUIRED)
-find_package(metadef MODULE REQUIRED)
+find_cann_package(unified_dlog MODULE REQUIRED)
+find_cann_package(securec MODULE REQUIRED)
+find_cann_package(mmpa MODULE REQUIRED)
+find_cann_package(metadef MODULE REQUIRED)
 
-find_package(pvmodel MODULE REQUIRED)
+find_cann_package(pvmodel MODULE REQUIRED)
