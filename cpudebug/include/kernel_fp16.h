@@ -228,9 +228,9 @@ struct half {
 public:
     /* *
      * @ingroup half constructor
-     * @brief   Constructor without any param(default constructor)
+     * @brief   Default constructor
      */
-    constexpr __ai_host__ __ai_core__ half(void) : val(0x0u) {}
+    __ai_host__ __ai_core__ half() = default;
     /* *
      * @ingroup half copy constructor
      * @brief   Constructor with a half object(copy constructor)
