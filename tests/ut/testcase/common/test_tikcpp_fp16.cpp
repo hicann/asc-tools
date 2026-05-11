@@ -9,7 +9,7 @@
 */
 #include <gtest/gtest.h>
 #include <cmath>
-#if defined (__NPU_ARCH__) && (__NPU_ARCH__ != 3101)
+#if defined (__NPU_ARCH__) && (__NPU_ARCH__ != 3510)
 #include "kernel_fp16.h"
 #include "kernel_fp4_e2m1.h"
 #include "kernel_fp4_e1m2.h"

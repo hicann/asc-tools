@@ -158,7 +158,7 @@ inline uint32_t Fp32ExtracExp(uint32_t x)
 struct Bf16T {
     uint16_t val;
 public:
-    constexpr Bf16T(void) : val(0x0u) {}
+    Bf16T() = default;
     Bf16T(const Bf16T& bf) : val(bf.val) {}
     Bf16T(const float& fVal) : val(FloatToBf16(fVal)) {}
     uint16_t FloatToBf16(const float& fVal) const;
