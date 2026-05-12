@@ -24,10 +24,22 @@ bool TikcppVecReduceOtherCheck::CheckWholeReduceDtypeBytes(const std::string &er
 {
     uint32_t dstDtypeBytes = param_.dstDtypeBytes;
     uint32_t srcDtypeBytes = param_.src0DtypeBytes;
-    if (dstDtypeBytes != srcDtypeBytes) {
-        CHECK_LOG_ERROR("%s, ""Reduce need dst data type (%u),dst src type (%u), should be same",
-            errMsg.c_str(), dstDtypeBytes, srcDtypeBytes);
-        return false;
+#if defined(__NPU_ARCH__) && ((__NPU_ARCH__ == 3510) || (__NPU_ARCH__ == 5102))
+    // WholeReduceSum 支持类型提升：dst 可为 src 的 2 倍字节数（如 int32_t/int16_t, uint32_t/uint16_t）
+    if (apiName == "WholeReduceSum") {
+        if ((dstDtypeBytes != srcDtypeBytes) && (dstDtypeBytes != srcDtypeBytes * 2)) {
+            CHECK_LOG_ERROR("%s, ""ReduceSum need dst data type (%u) should be same or 2x of src type (%u)",
+                errMsg.c_str(), dstDtypeBytes, srcDtypeBytes);
+            return false;
+        }
+    } else
+#endif
+    {
+        if (dstDtypeBytes != srcDtypeBytes) {
+            CHECK_LOG_ERROR("%s, ""Reduce need dst data type (%u),dst src type (%u), should be same",
+                errMsg.c_str(), dstDtypeBytes, srcDtypeBytes);
+            return false;
+        }
     }
     return true;
 }
