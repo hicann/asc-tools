@@ -447,12 +447,7 @@ getInstallPath() {
         input_install_path=$(getDefaultInstallPath)
     fi
     input_install_path=$(getInstallRealPath ${input_install_path})
-    if is_version_dirpath "$input_install_path"; then
-        pkg_version_dir="$(basename "$input_install_path")"
-        input_install_path="$(dirname "$input_install_path")"
-    else
-        pkg_version_dir="cann"
-    fi
+    pkg_version_dir="cann"
 
     if [ ${docker_flag} = y ]; then
         docker_root_path=$(getInstallRealPath ${docker_root_path})
