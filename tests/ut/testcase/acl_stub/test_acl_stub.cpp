@@ -98,6 +98,11 @@ TEST_F(TEST_ACL_STUB, AclrtDeviceStreamContextSuccess)
     EXPECT_EQ(aclrtDestroyContext(ctx), ACL_SUCCESS);
 }
 
+TEST_F(TEST_ACL_STUB, AclrtSynchronizeDeviceSuccess)
+{
+    EXPECT_EQ(aclrtSynchronizeDevice(), ACL_SUCCESS);
+}
+
 TEST_F(TEST_ACL_STUB, AclrtMallocFreeSuccess)
 {
     void* dev_ptr = nullptr;

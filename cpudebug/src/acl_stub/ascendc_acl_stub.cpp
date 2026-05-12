@@ -292,6 +292,10 @@ aclError aclrtBinaryLoadFromData(const void *data, size_t length, const aclrtBin
     return ACL_SUCCESS;
 }
 
+aclError aclrtSynchronizeDevice()
+{
+    return ACL_SUCCESS;
+}
 #ifdef __cplusplus
 }
 #endif // __cplusplus
@@ -308,7 +312,8 @@ static int callback(struct dl_phdr_info *info, size_t size, void *data)
         aclrtGetVersion, aclDataTypeSize, aclFloat16ToFloat, aclFloatToFloat16, aclrtSetDevice, aclrtResetDevice,\n\
         aclrtCreateStream, aclrtCreateStreamWithConfig, aclrtDestroyStream, aclrtDestroyStreamForce, aclrtSynchronizeStream,\n\
         aclrtMalloc, aclrtFree, aclrtMallocHost, aclrtFreeHost, aclrtMemset, aclrtMemsetAsync, aclrtMemcpy, aclrtMemcpyAsync,\n\
-        aclrtMemcpy2d, aclrtMemcpy2dAsync, aclrtCreateContext, aclrtDestroyContext, aclrtBinaryLoadFromData]\n");
+        aclrtMemcpy2d, aclrtMemcpy2dAsync, aclrtCreateContext, aclrtDestroyContext, aclrtBinaryLoadFromData,\n\
+        aclrtSynchronizeDevice]\n");
         abort();
     }
     return 0;
