@@ -196,6 +196,51 @@ TEST_F(TEST_ACL_STUB, AclrtMemcpy2dAsyncSuccess)
     EXPECT_EQ(aclrtMemcpy2dAsync(dst, 5, src, sizeof(src), 10, 1, ACL_MEMCPY_HOST_TO_HOST, stream), ACL_ERROR_BAD_ALLOC);
 }
 
+TEST_F(TEST_ACL_STUB, AclrtMemcpy2dMultiRowPacked)
+{
+    constexpr size_t rowBytes = 4 * sizeof(float);
+    constexpr size_t height = 3;
+    float src[height * 4] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12};
+    float dst[height * 4] = {0};
+
+    EXPECT_EQ(aclrtMemcpy2d(dst, rowBytes, src, rowBytes, rowBytes, height, ACL_MEMCPY_HOST_TO_HOST), ACL_SUCCESS);
+    for (size_t i = 0; i < height * 4; ++i) {
+        EXPECT_EQ(dst[i], src[i]);
+    }
+}
+
+TEST_F(TEST_ACL_STUB, AclrtMemcpy2dStridedRows)
+{
+    constexpr size_t width = 3 * sizeof(float);
+    constexpr size_t spitch = 5 * sizeof(float);
+    constexpr size_t dpitch = 4 * sizeof(float);
+    constexpr size_t height = 3;
+    float src[5 * height] = {1, 2, 3, 0, 0, 4, 5, 6, 0, 0, 7, 8, 9, 0, 0};
+    float dst[4 * height] = {0};
+
+    EXPECT_EQ(aclrtMemcpy2d(dst, dpitch, src, spitch, width, height, ACL_MEMCPY_HOST_TO_HOST), ACL_SUCCESS);
+    for (size_t row = 0; row < height; ++row) {
+        EXPECT_EQ(dst[row * 4 + 0], src[row * 5 + 0]);
+        EXPECT_EQ(dst[row * 4 + 1], src[row * 5 + 1]);
+        EXPECT_EQ(dst[row * 4 + 2], src[row * 5 + 2]);
+    }
+}
+
+TEST_F(TEST_ACL_STUB, AclrtMemcpy2dAsyncMultiRow)
+{
+    constexpr size_t rowBytes = 4 * sizeof(float);
+    constexpr size_t height = 3;
+    float src[height * 4] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12};
+    float dst[height * 4] = {0};
+    aclrtStream stream = nullptr;
+
+    EXPECT_EQ(aclrtMemcpy2dAsync(dst, rowBytes, src, rowBytes, rowBytes, height, ACL_MEMCPY_HOST_TO_HOST, stream),
+              ACL_SUCCESS);
+    for (size_t i = 0; i < height * 4; ++i) {
+        EXPECT_EQ(dst[i], src[i]);
+    }
+}
+
 TEST_F(TEST_ACL_STUB, AclrtBinaryLoadFromDataSuccess)
 {
     uint8_t elfData[512] = {0};

@@ -240,16 +240,18 @@ aclError aclrtMemcpyAsync(void *dst, size_t destMax, const void *src, size_t cou
 aclError aclrtMemcpy2d(void *dst, size_t dpitch, const void *src, size_t spitch,
                        size_t width, size_t height, aclrtMemcpyKind kind)
 {
-    (void)spitch;
-    (void)height;
     (void)kind;
     if (src == nullptr) {
         printf("[ERROR] The parameter is invalid.\n");
         return ACL_ERROR_INVALID_PARAM;
     }
-    auto ret = memcpy_s(dst, dpitch, src, width);
-    if (ret != EOK) {
-        return ACL_ERROR_BAD_ALLOC;
+    auto *dstBytes = static_cast<char *>(dst);
+    const auto *srcBytes = static_cast<const char *>(src);
+    for (size_t i = 0; i < height; ++i) {
+        auto ret = memcpy_s(dstBytes + i * dpitch, dpitch, srcBytes + i * spitch, width);
+        if (ret != EOK) {
+            return ACL_ERROR_BAD_ALLOC;
+        }
     }
     return ACL_SUCCESS;
 }
