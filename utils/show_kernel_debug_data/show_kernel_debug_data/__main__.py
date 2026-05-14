@@ -16,4 +16,4 @@ from show_kernel_debug_data.dump_parser import execute_parse
 
 
 if __name__ == '__main__':
-    execute_parse()
+    sys.exit(execute_parse())

@@ -655,7 +655,7 @@ class TestAscendump(unittest.TestCase):
             f.write('x')
 
         with patch('sys.argv', ['show_kernel_debug_data', input_dir, self.test_dir]), \
-                patch('show_kernel_debug_data.dump_parser.parse_dump_bin') as parse_dump_bin_mock:
+                patch('show_kernel_debug_data.dump_parser.parse_dump_bin', return_value=0) as parse_dump_bin_mock:
             dump_parser.execute_parse()
             expected_calls = [
                 call(os.path.abspath(file_a), self.test_dir, parse_output_dir=ANY, init_logger=False),
@@ -1201,5 +1201,77 @@ class TestAscendump(unittest.TestCase):
         fifo_dump = FifoDumpBinFile(test_file, 'vec', '0')
         with self.assertRaisesRegex(RuntimeError, 'TLV length overflow'):
             fifo_dump.parse()
+    # ---- Tests for error reporting improvements ----
+
+    def test_parse_dump_bin_return_value(self):
+        """parse_dump_bin returns 0 on success, 255 on failure (e.g. unknown magic)."""
+        # success case
+        content = self._merged_ParseDumpBin__build_fifo_block_info(
+            core_id=0, length=FifoBlockInfo.get_size()
+        )
+        good_file = os.path.join(self.test_dir, 'success.bin')
+        with open(good_file, 'wb') as f:
+            f.write(content)
+        self.assertEqual(dump_parser.parse_dump_bin(good_file, self.test_dir), 0)
+
+        # failure case: unknown magic triggers RuntimeError caught by except
+        bad_content = struct.pack(FifoBlockInfo.get_format(), 64, 1, 1, 0, 65535, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+        bad_file = os.path.join(self.test_dir, 'bad_magic.bin')
+        with open(bad_file, 'wb') as f:
+            f.write(bad_content)
+        self.assertEqual(dump_parser.parse_dump_bin(bad_file, self.test_dir), 255)
+
+        # failure case: file too small to contain a valid block
+        tiny_file = os.path.join(self.test_dir, 'tiny.bin')
+        with open(tiny_file, 'wb') as f:
+            f.write(b'\xFF\xFF\xFF\xFF')
+        self.assertEqual(dump_parser.parse_dump_bin(tiny_file, self.test_dir), 255)
+
+    def test_non_ascii_path_raises_descriptive_error(self):
+        """Non-ASCII paths should raise RuntimeError with a clear hint about encoding issues."""
+        # input path
+        chinese_input = '/tmp/中文目录/dump.bin'
+        with patch('sys.argv', ['show_kernel_debug_data', chinese_input, '/tmp']):
+            with self.assertRaises(RuntimeError) as ctx:
+                dump_parser.execute_parse()
+            self.assertIn('non-ASCII', str(ctx.exception))
+
+        # output path
+        ascii_input = os.path.join(self.test_dir, 'test.bin')
+        with open(ascii_input, 'wb') as f:
+            f.write(b'\x00')
+        chinese_output = '/tmp/输出目录'
+        with patch('sys.argv', ['show_kernel_debug_data', ascii_input, chinese_output]):
+            with self.assertRaises(RuntimeError) as ctx:
+                dump_parser.execute_parse()
+            self.assertIn('non-ASCII', str(ctx.exception))
+
+    def test_help_flag_returns_zero(self):
+        """execute_parse with -h should return 0."""
+        with patch('sys.argv', ['show_kernel_debug_data', '-h']):
+            self.assertEqual(dump_parser.execute_parse(), 0)
+
+    def test_execute_parse_return_value(self):
+        """execute_parse returns 0 on success, 255 when any file fails to parse."""
+        # success case
+        ok_dir = os.path.join(self.test_dir, 'ok_bins')
+        os.makedirs(ok_dir)
+        content = self._merged_ParseDumpBin__build_fifo_block_info(
+            core_id=0, length=FifoBlockInfo.get_size()
+        )
+        with open(os.path.join(ok_dir, 'good.bin'), 'wb') as f:
+            f.write(content)
+        with patch('sys.argv', ['show_kernel_debug_data', ok_dir, self.test_dir]):
+            self.assertEqual(dump_parser.execute_parse(), 0)
+
+        # failure case
+        fail_dir = os.path.join(self.test_dir, 'fail_bins')
+        os.makedirs(fail_dir)
+        with open(os.path.join(fail_dir, 'bad.bin'), 'wb') as f:
+            f.write(b'\xFF\xFF\xFF\xFF')
+        with patch('sys.argv', ['show_kernel_debug_data', fail_dir, self.test_dir]):
+            self.assertEqual(dump_parser.execute_parse(), 255)
+
+
 if __name__ == "__main__":
     unittest.main()

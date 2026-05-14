@@ -868,7 +868,7 @@ class DumpBinFile:
         if not search_result or not os.path.exists(search_result[0]):
             return dump_bin
         msaccucmp_file = os.path.realpath(search_result[0])
-        cmd = f"python3 {msaccucmp_file} convert -d {dump_bin} -t bin -out {temp_dir}"
+        cmd = f'python3 "{msaccucmp_file}" convert -d "{dump_bin}" -t bin -out "{temp_dir}"'
         log_file_tmp = DUMP_PARSER_LOG.get_log_file()
         with open(log_file_tmp, "a+") as f:
             try:
@@ -1144,6 +1144,10 @@ def parse_dump_bin(bin_file_path, output_path, parse_output_dir=None, init_logge
                 core_id = str(fifo_core_id) if fifo_core_id is not None else 'unknown'
             dump_file = FifoDumpBinFile(dump_bin, core_type, core_id)
         elif raw_magic is None or raw_magic == 0x5aa5bccd:
+            if os.path.getsize(dump_bin) < BlockInfo.get_size():
+                raise RuntimeError(
+                    f'file too small ({os.path.getsize(dump_bin)} bytes), '
+                    f'at least {BlockInfo.get_size()} bytes required for a valid workspace dump')
             dump_file = DumpBinFile(dump_bin)
         else:
             raise RuntimeError(f'unknown block magic: 0x{raw_magic:08X}')
@@ -1152,10 +1156,56 @@ def parse_dump_bin(bin_file_path, output_path, parse_output_dir=None, init_logge
         dump_file.write_result(output_dir)
         dump_file.write_index_dtype(output_dir)
         dump_file.show_print()
-    except Exception:
-        print(f"parse dump workspace bin occur exception.")
+        return 0
+    except Exception as e:
+        print(f"parse dump workspace bin occur exception, bin_file: {dump_bin}")
         import traceback
         traceback.print_exc()
+        return 255
+
+
+def _validate_and_prepare(bin_file_path, output_path):
+    """Validate input/output paths and collect bin files.
+    Returns (dump_bins, output_path, parser_output_dir) on success.
+    parser_output_dir is None when bin_file_path points to a single file.
+    """
+    if not bin_file_path or not os.path.exists(bin_file_path):
+        if bin_file_path and not all(ord(c) < 128 for c in bin_file_path):
+            raise RuntimeError(
+                f'({bin_file_path}) path contains non-ASCII characters (e.g. Chinese), '
+                f'which may cause encoding issues. Please use an ASCII-only path.')
+        raise RuntimeError(f'({bin_file_path}) file does not exist or permission denied!!!')
+
+    if not output_path:
+        raise RuntimeError(f'({output_path}) directory does not exist or permission denied!!!')
+    if not all(ord(c) < 128 for c in output_path):
+        raise RuntimeError(
+            f'({output_path}) output path contains non-ASCII characters (e.g. Chinese), '
+            f'which may cause encoding issues. Please use an ASCII-only path.')
+    if os.path.exists(output_path):
+        if not os.path.isdir(output_path):
+            raise RuntimeError(f'({output_path}) is not a directory!!!')
+    else:
+        try:
+            os.makedirs(output_path, exist_ok=True)
+        except OSError as err:
+            raise RuntimeError(
+                f'({output_path}) failed to create directory: {err}') from err
+
+    if not os.path.isfile(bin_file_path) and not os.path.isdir(bin_file_path):
+        raise RuntimeError(f'({bin_file_path}) is neither a file nor a directory!!!')
+
+    dump_bins = _collect_bin_files(bin_file_path)
+    if not dump_bins:
+        raise RuntimeError(f'({bin_file_path}) does not contain any .bin file!!!')
+
+    parser_output_dir = None
+    if os.path.isdir(bin_file_path):
+        parser_output_dir = _make_parser_output_dir(output_path)
+        DUMP_PARSER_LOG.set_log_file(os.path.join(parser_output_dir, "parser.log"))
+        DUMP_PARSER_LOG.set_log_level(os.environ.get('ASCEND_GLOBAL_LOG_LEVEL', '3'))
+
+    return dump_bins, output_path, parser_output_dir
 
 
 def execute_parse():
@@ -1172,38 +1222,22 @@ def execute_parse():
         bin_file_path, output_path = sys.argv[1:]
     elif param_len == 1 and sys.argv[1] in ['-h', '--help']:
         print(help_info)
-        return
+        return 0
     elif param_len == 1:
         bin_file_path = sys.argv[1]
     else:
         print(help_info)
         raise RuntimeError("parameters invalid, please check tool introduction.")
-    if not bin_file_path or not os.path.exists(bin_file_path):
-        raise RuntimeError(f'({bin_file_path}) file does not exist or permission denied!!!')
 
-    if not output_path:
-        raise RuntimeError(f'({output_path}) directory does not exist or permission denied!!!')
-    if os.path.exists(output_path):
-        if not os.path.isdir(output_path):
-            raise RuntimeError(f'({output_path}) is not a directory!!!')
-    else:
-        try:
-            os.makedirs(output_path, exist_ok=True)
-        except OSError as err:
-            raise RuntimeError(f'({output_path}) directory does not exist or permission denied!!!') from err
+    dump_bins, output_path, parser_output_dir = _validate_and_prepare(bin_file_path, output_path)
 
-    if not os.path.isfile(bin_file_path) and not os.path.isdir(bin_file_path):
-        raise RuntimeError(f'({bin_file_path}) is neither a file nor a directory!!!')
-
-    dump_bins = _collect_bin_files(bin_file_path)
-    if not dump_bins:
-        raise RuntimeError(f'({bin_file_path}) does not contain any .bin file!!!')
-
-    if os.path.isdir(bin_file_path):
-        parser_output_dir = _make_parser_output_dir(output_path)
-        DUMP_PARSER_LOG.set_log_file(os.path.join(parser_output_dir, "parser.log"))
-        DUMP_PARSER_LOG.set_log_level(os.environ.get('ASCEND_GLOBAL_LOG_LEVEL', '3'))
+    if parser_output_dir is not None:
         for dump_bin in dump_bins:
-            parse_dump_bin(dump_bin, output_path, parse_output_dir=parser_output_dir, init_logger=False)
+            ret = parse_dump_bin(dump_bin, output_path, parse_output_dir=parser_output_dir, init_logger=False)
+            if ret != 0:
+                return ret
     else:
-        parse_dump_bin(dump_bins[0], output_path)
+        ret = parse_dump_bin(dump_bins[0], output_path)
+        if ret != 0:
+            return ret
+    return 0
