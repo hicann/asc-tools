@@ -143,6 +143,11 @@ installOpPython() {
         return 1
     fi
 
+    installWhlPackage "${install_path}/tools/optype_collector-0.1.0-py3-none-any.whl"
+    if [ $? -ne 0 ]; then
+        return 1
+    fi
+
     local _opgen_whl=$(find_whl_file "${install_path}/tools" "mindstudio_opgen-*-py3-none-any.whl")
     if [ -n "$_opgen_whl" ]; then
         installWhlPackage "$_opgen_whl"
@@ -186,6 +191,11 @@ installAllPython() {
     fi
 
     installWhlPackage "${install_path}/tools/show_kernel_debug_data-0.1.0-py3-none-any.whl"
+    if [ $? -ne 0 ]; then
+        return 1
+    fi
+
+    installWhlPackage "${install_path}/tools/optype_collector-0.1.0-py3-none-any.whl"
     if [ $? -ne 0 ]; then
         return 1
     fi
@@ -298,6 +308,9 @@ installOpPythonLocal() {
     installPyWhlLocal "show_kernel_debug_data-0.1.0-py3-none-any.whl"
     [ $? -ne 0 ] && return 1
 
+    installPyWhlLocal "optype_collector-0.1.0-py3-none-any.whl"
+    [ $? -ne 0 ] && return 1
+
     installPyWhlLocal "mindstudio_opgen-*-py3-none-any.whl"
     [ $? -ne 0 ] && return 1
 
@@ -313,6 +326,9 @@ installAllPythonLocal() {
     [ $? -ne 0 ] && return 1
 
     installPyWhlLocal "show_kernel_debug_data-0.1.0-py3-none-any.whl"
+    [ $? -ne 0 ] && return 1
+
+    installPyWhlLocal "optype_collector-0.1.0-py3-none-any.whl"
     [ $? -ne 0 ] && return 1
 
     installPyWhlLocal "mindstudio_opgen-*-py3-none-any.whl"
@@ -403,5 +419,6 @@ installPython
 
 createSoftLink "${install_path}/python/site-packages/bin" "${install_path}/${PLT_ARCH}-linux/bin/" "msopgen"
 createSoftLink "${install_path}/python/site-packages/bin" "${install_path}/${PLT_ARCH}-linux/bin/" "msopst"
+createSoftLink "${install_path}/python/site-packages/bin" "${install_path}/${PLT_ARCH}-linux/bin/" "optype_collector"
 
 exit 0

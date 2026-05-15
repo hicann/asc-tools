@@ -150,7 +150,7 @@ whlUninstallPackage() {
 }
 
 uninstallOpPython() {
-    local module_arr_=(op_ut_run op_ut_helper msopst msopst.ini)
+    local module_arr_=(op_ut_run op_ut_helper msopst msopst.ini optype_collector)
     removePythonLocalBin ${install_path}/python/site-packages ${module_arr_[@]}
     [ $? -ne 0 ] && return 1
 
@@ -167,6 +167,9 @@ uninstallOpPython() {
 
     whlUninstallPackage show_kernel_debug_data ${install_path}/python/site-packages
     [ $? -ne 0 ] && return 1
+
+    whlUninstallPackage optype_collector ${install_path}/python/site-packages
+    [ $? -ne 0 ] && return 1
     return 0
 }
 
@@ -174,7 +177,7 @@ uninstallAllPython() {
     checkAllFeature ${feature_type}
     [ $? -ne 0 ] && return 0
 
-    local module_arr_=(op_ut_run op_ut_helper msopst msopst.ini)
+    local module_arr_=(op_ut_run op_ut_helper msopst msopst.ini optype_collector)
     removePythonLocalBin ${install_path}/python/site-packages ${module_arr_[@]}
     [ $? -ne 0 ] && return 1
 
@@ -199,10 +202,14 @@ uninstallAllPython() {
     whlUninstallPackage show_kernel_debug_data ${install_path}/python/site-packages
     [ $? -ne 0 ] && return 1
 
+    whlUninstallPackage optype_collector ${install_path}/python/site-packages
+    [ $? -ne 0 ] && return 1
+
     remove_package_leftovers ${install_path}/python/site-packages/msobjdump
     remove_package_leftovers ${install_path}/python/site-packages/msopgen
     remove_package_leftovers ${install_path}/python/site-packages/msopst
     remove_package_leftovers ${install_path}/python/site-packages/show_kernel_debug_data
+    remove_package_leftovers ${install_path}/python/site-packages/optype_collector
 
     # remove .dist-info directories
     for dist_info in "${install_path}/python/site-packages"/mindstudio_opst-*.dist-info \
@@ -305,5 +312,6 @@ uninstallPython
 
 removeSoftLink "${install_path}/${PLT_ARCH}-linux/bin/" "msopgen"
 removeSoftLink "${install_path}/${PLT_ARCH}-linux/bin/" "msopst"
+removeSoftLink "${install_path}/${PLT_ARCH}-linux/bin/" "optype_collector"
 
 exit 0

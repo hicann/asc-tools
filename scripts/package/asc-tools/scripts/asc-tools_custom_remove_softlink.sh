@@ -41,6 +41,8 @@ removePythonSoftLink()
     removeSoftLink "$_dst_dir" "msobjdump-0.1.0.dist-info"
     removeSoftLink "$_dst_dir" "show_kernel_debug_data"
     removeSoftLink "$_dst_dir" "show_kernel_debug_data-0.1.0.dist-info"
+    removeSoftLink "$_dst_dir" "optype_collector"
+    removeSoftLink "$_dst_dir" "optype_collector-0.1.0.dist-info"
 
     isDirEmpty "$_dst_dir"
     if [ $? -eq 0 ]; then
@@ -78,6 +80,9 @@ removeToolSoftLink()
     if [ -d "$install_path/$latest_dir/tools/msobjdump" ]; then
         rm -f "$install_path/$latest_dir/tools/msobjdump"
     fi
+    if [ -d "$install_path/$latest_dir/tools/optype_collector" ]; then
+        rm -f "$install_path/$latest_dir/tools/optype_collector"
+    fi
     if [ -d "$install_path/$latest_dir/tools/show_kernel_debug_data" ]; then
         rm -f "$install_path/$latest_dir/tools/show_kernel_debug_data"
     fi
@@ -98,6 +103,7 @@ removeCanndevSoftLink() {
 
     removeSoftLink "$_dst_dir" "msopgen"
     removeSoftLink "$_dst_dir" "msopst"
+    removeSoftLink "$_dst_dir" "optype_collector"
 }
 
 install_path=""

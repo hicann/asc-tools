@@ -60,6 +60,8 @@ createPythonSoftLink()
     createSoftLink "$_src_dir" "$_dst_dir" "msobjdump-0.1.0.dist-info"
     createSoftLink "$_src_dir" "$_dst_dir" "show_kernel_debug_data"
     createSoftLink "$_src_dir" "$_dst_dir" "show_kernel_debug_data-0.1.0.dist-info"
+    createSoftLink "$_src_dir" "$_dst_dir" "optype_collector"
+    createSoftLink "$_src_dir" "$_dst_dir" "optype_collector-0.1.0.dist-info"
 }
 
 get_arch_name() {
@@ -115,6 +117,9 @@ createToolSoftLink()
         if [ ! -d "$install_path/$latest_dir/tools/msobjdump" ]; then
             ln -sr "$install_path/$version_dir/tools/msobjdump" "$install_path/$latest_dir/tools/msobjdump"
         fi
+        if [ ! -d "$install_path/$latest_dir/tools/optype_collector" ]; then
+            ln -sr "$install_path/$version_dir/tools/optype_collector" "$install_path/$latest_dir/tools/optype_collector"
+        fi
         if [ ! -d "$install_path/$latest_dir/tools/show_kernel_debug_data" ]; then
             ln -sr "$install_path/$version_dir/tools/show_kernel_debug_data" "$install_path/$latest_dir/tools/show_kernel_debug_data"
         fi
@@ -146,8 +151,8 @@ createCanndevSoft() {
 
     createSoftLink "$_src_dir" "$_dst_dir" "msopgen"
     createSoftLink "$_src_dir" "$_dst_dir" "msopst"
+    createSoftLink "$_src_dir" "$_dst_dir" "optype_collector"
 }
-
 
 install_path=""
 version_dir=""

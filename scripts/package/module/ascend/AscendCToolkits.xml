@@ -3,6 +3,7 @@
     <dir_info value="AscTools" install_mod="550">
         <path value="tools/msobjdump"/>
         <path value="tools/show_kernel_debug_data"/>
+        <path value="tools/optype_collector"/>
     </dir_info>
     <file_info value="msobjdump" copy_type="delivery" src_path="lib/host/" dst_path="tools/msobjdump" install_path="tools/msobjdump" install_mod="550">
         <file value="msobjdump"/>
@@ -15,6 +16,12 @@
     </file_info>
     <file_info value="show_kernel_debug_data_whl" copy_type="delivery" src_path="lib/host" dst_path="tools/" install_path="tools/" install_mod="440">
         <file value="show_kernel_debug_data-0.1.0-py3-none-any.whl" file_type="whl"/>
+    </file_info>
+    <file_info value="optype_collector" copy_type="delivery" src_path="lib/host/" dst_path="tools/optype_collector" install_path="tools/optype_collector" install_mod="550">
+        <file value="optype_collector"/>
+    </file_info>
+    <file_info value="optype_collector_whl" copy_type="delivery" src_path="lib/host" dst_path="tools/" install_path="tools/" install_mod="440">
+        <file value="optype_collector-0.1.0-py3-none-any.whl" file_type="whl"/>
     </file_info>
     <file_info value="op_gen_whl" copy_type="delivery" src_path="lib/host" dst_path="tools/" install_path="tools/" install_mod="440">
         <file value="mindstudio_opgen-*-py3-none-any.whl" file_type="whl"/>
