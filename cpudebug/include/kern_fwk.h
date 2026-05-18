@@ -15,8 +15,8 @@
 #ifndef ASCENDC_ICPU_FWK_H
 #define ASCENDC_ICPU_FWK_H
 #include <sys/stat.h>
-#include <stdint.h>
-#include <string.h>
+#include <cstdint>
+#include <cstring>
 #include <unistd.h>
 #include <unordered_map>
 #include <sys/wait.h>

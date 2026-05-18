@@ -15,6 +15,7 @@
 #include <csignal>
 #include <sstream>
 #include <string>
+#include <cstring>
 #include <map>
 #include <unistd.h>
 #include <sys/mman.h>
@@ -180,7 +181,7 @@ int32_t DlCallback(struct dl_phdr_info *info, size_t size, void *data)
     (void)data;
     (void)size;
     static int32_t count = 0;
-    if (strlen(info->dlpi_name) == 0) {
+    if (std::strlen(info->dlpi_name) == 0) {
         // first frame dlpi name is empty, means the main execut obj self
         if (count == 0) {
             BinaryBaseMap().insert(std::make_pair(GetMainExecName(), info->dlpi_addr));

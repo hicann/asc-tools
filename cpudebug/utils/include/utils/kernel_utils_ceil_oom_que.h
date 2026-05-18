@@ -55,7 +55,7 @@ using fp8_e8m0_t = float8_e8m0_t;
 #endif
 #endif
 
-#include <stdint.h>
+#include <cstdint>
 #ifndef TILING_KEY_VAR
 #if defined(ASCENDC_CPU_DEBUG)
 extern uint64_t g_tilingKey;

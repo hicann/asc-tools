@@ -19,6 +19,7 @@
 #include <map>
 #include <csignal>
 #include <cstdio>
+#include <cstdint>
 #include <unistd.h>
 #include "stub_def.h"
 
