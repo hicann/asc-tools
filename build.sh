@@ -490,7 +490,7 @@ function create_msot_submodule_symlinks() {
   local msot_path="$1"
   local mindstudio_path="$2"
   
-  log "Creating submodule symlinks for msot in yellow zone..."
+  log "Creating submodule symlinks for existing msot..."
   
   # 创建子仓软链
   for submodule in "${MSOT_SUBMODULES[@]}"; do
@@ -770,6 +770,18 @@ function build_msot() {
     # 切换到msot目录，使用local模式构建
     cd "${msot_src}"
     python3 build.py local
+
+    # 拷贝产物到asc-tools目录下
+    local msot_output_src="${msot_src}/output"
+    local msot_output_dst="${CURRENT_DIR}/mindstudio/msot/output"
+    if [[ -d "${msot_output_src}" ]]; then
+      log "Copying msot output to ${msot_output_dst}..."
+      mkdir -p "${msot_output_dst}"
+      cp -rf "${msot_output_src}/"*.run "${msot_output_dst}/"
+      log "msot output copied successfully"
+    else
+      log "[WARNING] msot output directory not found: ${msot_output_src}"
+    fi
   else
     # 使用git submodule
     log "Building msot with submodule..."
