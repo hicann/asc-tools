@@ -8,7 +8,8 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 # ----------------------------------------------------------------------------------------------------------
 
-set_cann_package(asc-tools VERSION "9.0.0")
+set(ASC_TOOLS_VERSION "9.1.0")
+set_cann_package(asc-tools VERSION ${ASC_TOOLS_VERSION})
 
 set_cann_build_dependencies(runtime "CUR_MAJOR_MINOR_VER")
 set_cann_build_dependencies(metadef "CUR_MAJOR_MINOR_VER")

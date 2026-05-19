@@ -37,13 +37,15 @@ if(BUILD_OPEN_PROJECT)
 
     include(cmake/dependencies.cmake) # 其中会根据PVMODEL_PATH作为pvmodel相关依赖路径
     include(cmake/intf_pub_linux.cmake)
-    include(cmake/third_party/cpudebug.cmake)
     include(cmake/package.cmake)
 endif()
 
 set(ASCEND_INSTALL_PATH "${ASCEND_CANN_PACKAGE_PATH}")
 
 include(version.cmake)
+if(BUILD_OPEN_PROJECT)
+  include(cmake/third_party/cpudebug.cmake)
+endif()
 check_cann_pkg_build_deps("asc-tools")
 add_cann_version_info_targets()
 
