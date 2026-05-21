@@ -12,7 +12,7 @@ cmake_minimum_required(VERSION 3.16.0)
 include(cmake/fetch_cann_cmake.cmake)
 project(asc-tools)
 
-init_cann_project()
+init_cann_project(PREPEND_MODULE_PATH)
 
 add_compile_options(-Werror)
 

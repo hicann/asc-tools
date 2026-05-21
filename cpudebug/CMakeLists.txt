@@ -94,9 +94,6 @@ foreach(product_type ${PRODUCT_TYPE_LIST})
     ${CMAKE_CURRENT_SOURCE_DIR}/utils
     ${CMAKE_CURRENT_SOURCE_DIR}/utils/include
     ${CMAKE_CURRENT_SOURCE_DIR}/utils/include/utils
-    ${ASCEND_CANN_PACKAGE_PATH}/include
-    ${ASCEND_CANN_PACKAGE_PATH}/include/base
-    ${ASCEND_CANN_PACKAGE_PATH}/pkg_inc/base
   )
   target_compile_definitions(cpudebug_${product_type} PRIVATE
     $<$<STREQUAL:${product_type},ascend910B1>:NO_COSIM>

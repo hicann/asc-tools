@@ -35,9 +35,6 @@ if(BUILD_OPEN_PROJECT)
     ${CPULIB_SRC_DIR}/include
     ${CPULIB_SRC_DIR}/model/cpulib
     ${CPULIB_GEN_DIR}
-    ${ASCEND_CANN_PACKAGE_PATH}/${CMAKE_SYSTEM_PROCESSOR}-linux/pkg_inc/base
-    ${ASCEND_CANN_PACKAGE_PATH}/include
-    ${ASCEND_CANN_PACKAGE_PATH}/include/base
   )
 else()
   target_include_directories(cpudebug_stubreg PRIVATE

@@ -179,7 +179,6 @@ foreach(product_type ${TIKCPP_PRODUCT_TYPE_LIST})
         -Wl,--no-as-needed
         c_sec
         mmpa
-        error_manager
         cpudebug
         cpudebug_cceprint
         cpudebug_npuchk
@@ -351,7 +350,6 @@ foreach(product_type ${TIKICPULIB_PRODUCT_TYPE_LIST})
         -Wl,--no-as-needed
         c_sec
         mmpa
-        error_manager
         cpudebug
         cpudebug_cceprint
         cpudebug_npuchk

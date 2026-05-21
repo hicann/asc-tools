@@ -14,9 +14,6 @@ add_library(cpudebug_acl_stub SHARED
 )
 
 if(BUILD_OPEN_PROJECT)
-  target_include_directories(cpudebug_acl_stub PRIVATE
-    ${ASCEND_CANN_PACKAGE_PATH}/include
-  )
   target_include_directories(cpudebug_acl_stub SYSTEM PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/../../include
   )
