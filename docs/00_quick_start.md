@@ -300,6 +300,13 @@ source /usr/local/Ascend/cann/set_env.sh
         export PATH=/usr/local/ccache/bin:$PATH
         ```
 
+   - setuptools >= 45.2.0
+
+     执行以下命令安装：
+     ```bash
+     pip3 install setuptools
+     ```
+
    - lcov >= 1.13（可选，仅执行UT时依赖）
    
      以Ubuntu系统为例，x86_64环境执行以下命令安装：
