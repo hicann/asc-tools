@@ -10,12 +10,13 @@
 #include <gtest/gtest.h>
 #define private public
 #define protected public
-#include "kernel_operator.h"
+#include "api_check_test_utils.h"
 #include "api_check/kernel_cpu_check.h"
-#include "test_utils.h"
 
 using namespace std;
 using namespace AscendC;
+using AscToolsUt::LogicPos;
+using AscToolsUt::MakeTensor;
 
 struct TestVecTransposeCheckParams {
     uint32_t dataSize;
@@ -37,8 +38,6 @@ protected:
         AscendC::CheckSyncState();
         g_coreType = MIX_TYPE;
     }
-public:
-    TPipe tpipe;
 };
 
 INSTANTIATE_TEST_CASE_P(TEST_VEC_TRANSPOSE_CHECK, TestVecTransposeCheckSuite,
@@ -55,40 +54,23 @@ TEST_P(TestVecTransposeCheckSuite, TestCaseVecTranspose)
     auto param = GetParam();
     uint32_t dataSize = param.dataSize;
 
-    LocalTensor<uint16_t> input0_local;
-    LocalTensor<uint16_t> output_local;
-    if (param.pos == TPosition::VECCALC) {
-        TBuf<TPosition::VECCALC> tbuf;
-        tpipe.InitBuffer(tbuf, ALIGN_ADDR(dataSize * sizeof(uint16_t)));
-        input0_local = tbuf.Get<uint16_t>();
-
-        TBuf<TPosition::VECCALC> tbuf1;
-        tpipe.InitBuffer(tbuf1, ALIGN_ADDR(dataSize * sizeof(uint16_t)));
-        output_local = tbuf1.Get<uint16_t>();
-    } else {
-        TBuf<TPosition::A1> tbuf;
-        tpipe.InitBuffer(tbuf, ALIGN_ADDR(dataSize * sizeof(uint16_t)));
-        input0_local = tbuf.Get<uint16_t>();
-
-        TBuf<TPosition::A1> tbuf1;
-        tpipe.InitBuffer(tbuf1, ALIGN_ADDR(dataSize * sizeof(uint16_t)));
-        output_local = tbuf1.Get<uint16_t>();
-    }
+    auto input0 = MakeTensor(param.pos, ALIGN_ADDR(dataSize * sizeof(uint16_t)));
+    auto output = MakeTensor(param.pos, ALIGN_ADDR(dataSize * sizeof(uint16_t)));
 
     uint16_t srcRepeatStride = param.srcRptStride;
     uint8_t repeatTimes = param.repeat;
     uint8_t dstRepeatStride = param.dstRptStride;
-    check::VecTransposeApiParams chkParams { (uint64_t)output_local.GetPhyAddr(),
-        (uint64_t)input0_local.GetPhyAddr(),
+    check::VecTransposeApiParams chkParams { output.addr,
+        input0.addr,
         repeatTimes,
         (uint16_t)(dstRepeatStride),
         (uint16_t)(srcRepeatStride),
         (uint32_t)(sizeof(uint16_t)),
         (uint32_t)(sizeof(uint16_t)),
-        (uint64_t)(output_local.GetLength()),
-        (uint64_t)(input0_local.GetLength()),
-        (uint8_t)(output_local.GetPosition()),
-        (uint8_t)(input0_local.GetPosition()) };
+        output.length,
+        input0.length,
+        LogicPos(output),
+        LogicPos(input0) };
     chkParams.transposeType = param.transposeType;
     check::TikcppVecTransposeCheck chkIns { "Transpose", chkParams };
     bool flag = chkIns.CheckAllLowLevel();

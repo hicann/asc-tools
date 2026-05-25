@@ -10,12 +10,13 @@
 #include <gtest/gtest.h>
 #define private public
 #define protected public
-#include "kernel_operator.h"
+#include "api_check_test_utils.h"
 #include "api_check/kernel_cpu_check.h"
-#include "test_utils.h"
 
 using namespace std;
 using namespace AscendC;
+using AscToolsUt::LogicPos;
+using AscToolsUt::MakeTensor;
 
 class TestCopyCheck : public testing::Test {
 protected:
@@ -48,8 +49,6 @@ protected:
         g_coreType = MIX_TYPE;
         AscendC::CheckSyncState();
     }
-public:
-    TPipe tpipe;
 };
 
 INSTANTIATE_TEST_CASE_P(TEST_COPY_API_CHECK, TestCopyApiCheckSuite,
@@ -63,43 +62,25 @@ TEST_P(TestCopyApiCheckSuite, CopyApiCheckLowLevel)
     auto param = GetParam();
     uint32_t dataSize = param.dataSize;
 
-    LocalTensor<uint16_t> input;
-    LocalTensor<uint16_t> output;
-    if (param.pos == TPosition::VECCALC) {
-        TBuf<TPosition::VECCALC> tbuf;
-        tpipe.InitBuffer(tbuf, ALIGN_ADDR(dataSize * sizeof(uint16_t)));
-        input = tbuf.Get<uint16_t>();
+    auto input = MakeTensor(param.pos, ALIGN_ADDR(dataSize * sizeof(uint16_t)));
+    auto output = MakeTensor(param.pos, ALIGN_ADDR(dataSize * sizeof(uint16_t)));
 
-        TBuf<TPosition::VECCALC> tbuf1;
-        tpipe.InitBuffer(tbuf1, ALIGN_ADDR(dataSize * sizeof(uint16_t)));
-        output = tbuf1.Get<uint16_t>();
-    } else {
-        TBuf<TPosition::A1> tbuf;
-        tpipe.InitBuffer(tbuf, ALIGN_ADDR(dataSize * sizeof(uint16_t)));
-        input = tbuf.Get<uint16_t>();
-
-        TBuf<TPosition::A1> tbuf1;
-        tpipe.InitBuffer(tbuf1, ALIGN_ADDR(dataSize * sizeof(uint16_t)));
-        output = tbuf1.Get<uint16_t>();
-    }
-
-    CopyRepeatParams repeatParams { param.dstBlkStride, param.srcBlkStride, param.dstRptStride, param.srcRptStride };
     uint8_t repeatTimes = param.repeat;
     uint64_t mask = 128;
     uint64_t maskFull = 0xffffffffffffffff;
-    check::CopyApiParams chkParams { (uint64_t)output.GetPhyAddr(),
-        (uint64_t)input.GetPhyAddr(),
+    check::CopyApiParams chkParams { output.addr,
+        input.addr,
         repeatTimes,
-        (uint16_t)(repeatParams.dstStride),
-        (uint16_t)(repeatParams.srcStride),
-        (uint16_t)(repeatParams.dstRepeatSize),
-        (uint16_t)(repeatParams.srcRepeatSize),
+        param.dstBlkStride,
+        param.srcBlkStride,
+        param.dstRptStride,
+        param.srcRptStride,
         (uint32_t)(sizeof(uint16_t)),
         (uint32_t)(sizeof(uint16_t)),
-        (uint64_t)(output.GetLength()),
-        (uint64_t)(input.GetLength()),
-        (uint8_t)(output.GetPosition()),
-        (uint8_t)(input.GetPosition()) };
+        output.length,
+        input.length,
+        LogicPos(output),
+        LogicPos(input) };
     check::TikcppCopyCheck chkIns { "vcopy", chkParams };
     uint64_t mask2[2] = {maskFull, maskFull};
     MaskSetter::Instance().SetMask(true);

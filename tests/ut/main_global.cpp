@@ -8,28 +8,9 @@
 * See LICENSE in the root of the software repository for the full text of the License.
 */
 #include <gtest/gtest.h>
-#include "kernel_common.h"
-#include "kernel_tpipe_impl.h"
 
 int32_t main(int32_t argc, char** argv)
 {
     testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();
-}
-
-__aicore__ AscendC::TPipe* GetTPipePtr()
-{
-#if __CCE_AICORE__ == 220 || defined(__DAV_C310__)
-#ifdef SPLIT_CORE_CUBE
-    return g_cubeTPipePtr;
-#elif defined(SPLIT_CORE_VEC)
-    return g_vecTPipePtr;
-#else
-    return g_tPipePtr;
-#endif
-#else
-    return g_tPipePtr;
-#endif
-    ASSERT(false && "Only supported ascend910B1, ascend910, ascend310p");
-    return nullptr;
 }

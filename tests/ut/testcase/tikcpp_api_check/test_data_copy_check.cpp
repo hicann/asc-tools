@@ -10,12 +10,13 @@
 #include <gtest/gtest.h>
 #define private public
 #define protected public
-#include "kernel_operator.h"
+#include "api_check_test_utils.h"
 #include "api_check/kernel_cpu_check.h"
-#include "test_utils.h"
 
 using namespace std;
 using namespace AscendC;
+using AscToolsUt::LogicPos;
+using AscToolsUt::MakeTensor;
 
 struct TestDataCopySliceApiCheckParams {
     uint32_t srcdataSize;
@@ -150,7 +151,6 @@ INSTANTIATE_TEST_CASE_P(TEST_DATA_COPY_SLICE_API_CHECK, TestDataCopySliceApiChec
 
 TEST_P(TestDataCopySliceApiCheckSuite, DataCopySliceApiHighLevel)
 {
-    TPipe tpipe;
     auto param = GetParam();
 
     uint32_t hGM = 3;
@@ -162,24 +162,14 @@ TEST_P(TestDataCopySliceApiCheckSuite, DataCopySliceApiHighLevel)
     uint32_t wUB = param.dstdataSize / hUB;
     uint32_t dstShape[2] = {wUB, hUB};
 
-    LocalTensor<uint32_t> inputLocal;
-    if (param.pos == TPosition::VECCALC) {
-        TBuf<TPosition::VECCALC> tbuf;
-        tpipe.InitBuffer(tbuf, param.dstdataSize * sizeof(uint32_t));
-        inputLocal = tbuf.Get<uint32_t>();
-    } else {
-        TBuf<TPosition::A1> tbuf;
-        tpipe.InitBuffer(tbuf, param.dstdataSize * sizeof(uint32_t));
-        inputLocal = tbuf.Get<uint32_t>();
-    }
+    auto input = MakeTensor(param.pos, param.dstdataSize * sizeof(uint32_t));
 
-    check::DataCopySliceApiParams chkParams{ static_cast<uint64_t>(
-        reinterpret_cast<uintptr_t>(inputLocal.GetPhyAddr())),
-        static_cast<uint64_t>(reinterpret_cast<uintptr_t>(inputLocal.GetPhyAddr())),
+    check::DataCopySliceApiParams chkParams{ input.addr,
+        input.addr,
         static_cast<uint32_t>(param.typeSize),
         static_cast<uint32_t>(param.typeSize),
-        static_cast<uint64_t>(inputLocal.GetLength()),
-        static_cast<uint8_t>(inputLocal.GetPosition()),
+        input.length,
+        LogicPos(input),
         dimValue,
         dstShape,
         srcShape,
@@ -219,8 +209,6 @@ protected:
         g_coreType = MIX_TYPE;
         AscendC::CheckSyncState();
     }
-public:
-    TPipe tpipe;
 };
 
 INSTANTIATE_TEST_CASE_P(TEST_DATA_COPY_API_CHECK, TestDataCopyApiCheckSuite,

@@ -11,12 +11,13 @@
 #include <string>
 #define private public
 #define protected public
-#include "kernel_operator.h"
+#include "api_check_test_utils.h"
 #include "api_check/kernel_cpu_check.h"
-#include "test_utils.h"
 
 using namespace std;
 using namespace AscendC;
+using AscToolsUt::LogicPos;
+using AscToolsUt::MakeTensor;
 
 struct ReduceCheckParams {
     TPosition pos;
@@ -40,8 +41,6 @@ protected:
         AscendC::CheckSyncState();
         g_coreType = MIX_TYPE;
     }
-public:
-    TPipe tpipe;
 };
 
 INSTANTIATE_TEST_CASE_P(TEST_VEC_REDUCE_CHECK, TestVecReduceCheckSuite,
@@ -67,17 +66,9 @@ TEST_P(TestVecReduceCheckSuite, TestCaseReduce)
     uint32_t workDataSizeIn = param.workDataSize;
     uint32_t dstDataSizeIn = param.dstDataSize;
 
-    TBuf<TPosition::VECCALC> tbuf;
-    tpipe.InitBuffer(tbuf, ALIGN_ADDR(srcDataSizeIn * sizeof(half)));
-    LocalTensor<half> srcLocal = tbuf.Get<half>();
-
-    TBuf<TPosition::VECCALC> tbuf1;
-    tpipe.InitBuffer(tbuf1, ALIGN_ADDR(workDataSizeIn * sizeof(half)));
-    LocalTensor<half> workLocal = tbuf1.Get<half>();
-
-    TBuf<TPosition::VECCALC> tbuf2;
-    tpipe.InitBuffer(tbuf2, ALIGN_ADDR(dstDataSizeIn * sizeof(half)));
-    LocalTensor<half> dstLocal = tbuf2.Get<half>();
+    auto src = MakeTensor(param.pos, ALIGN_ADDR(srcDataSizeIn * sizeof(half)));
+    auto work = MakeTensor(param.pos, ALIGN_ADDR(workDataSizeIn * sizeof(half)));
+    auto dst = MakeTensor(param.pos, ALIGN_ADDR(dstDataSizeIn * sizeof(half)));
 
     uint16_t srcRepStride = 8;
     int32_t mask = 128;
@@ -87,92 +78,92 @@ TEST_P(TestVecReduceCheckSuite, TestCaseReduce)
     if (param.apiName == "ReduceSum") {
         if (param.level == 0) {
             if (param.isReduce220 == false) {
-                check::VecReduceApiParams chkParams { (uint64_t)dstLocal.GetPhyAddr(),
-                    (uint64_t)srcLocal.GetPhyAddr(),
-                    (uint64_t)workLocal.GetPhyAddr(),
+                check::VecReduceApiParams chkParams { dst.addr,
+                    src.addr,
+                    work.addr,
                     (uint32_t)(param.dtypeSize),
                     (uint32_t)(param.dtypeSize),
                     (uint32_t)(param.dtypeSize),
                     repeatTimes,
-                    (uint64_t)(dstLocal.GetLength()),
-                    (uint64_t)(srcLocal.GetLength()),
-                    (uint64_t)(workLocal.GetLength()),
-                    (uint8_t)(dstLocal.GetPosition()),
-                    (uint8_t)(srcLocal.GetPosition()),
-                    (uint8_t)(workLocal.GetPosition()),
+                    dst.length,
+                    src.length,
+                    work.length,
+                    LogicPos(dst),
+                    LogicPos(src),
+                    LogicPos(work),
                     (uint16_t)(srcRepStride) };
                 check::TikcppVecReduceCheck chkIns { param.apiName, chkParams };
                 bool flag = chkIns.CheckAllLowLevel({ mask });
                 EXPECT_EQ(flag, param.expect);
             } else {
-                check::VecReduceApiParams chkParams { (uint64_t)dstLocal.GetPhyAddr(),
-                    (uint64_t)srcLocal.GetPhyAddr(),
+                check::VecReduceApiParams chkParams { dst.addr,
+                    src.addr,
                     (uint32_t)(param.dtypeSize),
                     4,
                     1,
-                    (uint64_t)(dstLocal.GetLength()),
-                    (uint64_t)(srcLocal.GetLength()),
-                    (uint8_t)(dstLocal.GetPosition()),
-                    (uint8_t)(srcLocal.GetPosition()) };
+                    dst.length,
+                    src.length,
+                    LogicPos(dst),
+                    LogicPos(src) };
                 check::TikcppVecReduceCheck chkIns { param.apiName, chkParams };
                 bool flag = chkIns.CheckAllHighLevelMode2();
                 EXPECT_EQ(flag, param.expect);
             }
         } else {
-            check::VecReduceApiParams chkParams { (uint64_t)dstLocal.GetPhyAddr(),
-                (uint64_t)srcLocal.GetPhyAddr(),
-                (uint64_t)workLocal.GetPhyAddr(),
+            check::VecReduceApiParams chkParams { dst.addr,
+                src.addr,
+                work.addr,
                 (uint32_t)(param.dtypeSize),
                 (uint32_t)(param.dtypeSize),
                 (uint32_t)(param.dtypeSize),
                 repeatTimes,
                 calCount,
-                (uint64_t)(dstLocal.GetLength()),
-                (uint64_t)(srcLocal.GetLength()),
-                (uint64_t)(workLocal.GetLength()),
-                (uint8_t)(dstLocal.GetPosition()),
-                (uint8_t)(srcLocal.GetPosition()),
-                (uint8_t)(workLocal.GetPosition()) };
+                dst.length,
+                src.length,
+                work.length,
+                LogicPos(dst),
+                LogicPos(src),
+                LogicPos(work) };
             check::TikcppVecReduceCheck chkIns { param.apiName, chkParams };
             bool flag = chkIns.CheckAllHighLevel();
             EXPECT_EQ(flag, param.expect);
         }
     } else {
         if (param.level = 0) {
-            check::VecReduceApiParams chkParams { (uint64_t)dstLocal.GetPhyAddr(),
-                (uint64_t)srcLocal.GetPhyAddr(),
-                (uint64_t)workLocal.GetPhyAddr(),
+            check::VecReduceApiParams chkParams { dst.addr,
+                src.addr,
+                work.addr,
                 (uint32_t)(param.dtypeSize),
                 (uint32_t)(param.dtypeSize),
                 (uint32_t)(param.dtypeSize),
                 repeatTimes,
                 calIndex,
-                (uint64_t)(dstLocal.GetLength()),
-                (uint64_t)(srcLocal.GetLength()),
-                (uint64_t)(workLocal.GetLength()),
-                (uint8_t)(dstLocal.GetPosition()),
-                (uint8_t)(srcLocal.GetPosition()),
-                (uint8_t)(workLocal.GetPosition()),
+                dst.length,
+                src.length,
+                work.length,
+                LogicPos(dst),
+                LogicPos(src),
+                LogicPos(work),
                 (uint16_t)(srcRepStride) };
             check::TikcppVecReduceCheck chkIns { param.apiName, chkParams };
             bool flag = chkIns.CheckAllLowLevel({ mask });
             EXPECT_EQ(flag, param.expect);
         } else {
-            check::VecReduceApiParams chkParams { (uint64_t)dstLocal.GetPhyAddr(),
-                (uint64_t)srcLocal.GetPhyAddr(),
-                (uint64_t)workLocal.GetPhyAddr(),
+            check::VecReduceApiParams chkParams { dst.addr,
+                src.addr,
+                work.addr,
                 (uint32_t)(param.dtypeSize),
                 (uint32_t)(param.dtypeSize),
                 (uint32_t)(param.dtypeSize),
                 repeatTimes,
                 512,
                 calIndex,
-                (uint64_t)(dstLocal.GetLength()),
-                (uint64_t)(srcLocal.GetLength()),
-                (uint64_t)(workLocal.GetLength()),
-                (uint8_t)(dstLocal.GetPosition()),
-                (uint8_t)(srcLocal.GetPosition()),
-                (uint8_t)(workLocal.GetPosition()) };
+                dst.length,
+                src.length,
+                work.length,
+                LogicPos(dst),
+                LogicPos(src),
+                LogicPos(work) };
             check::TikcppVecReduceCheck chkIns { param.apiName, chkParams };
             bool flag = chkIns.CheckAllHighLevel();
             EXPECT_EQ(flag, param.expect);

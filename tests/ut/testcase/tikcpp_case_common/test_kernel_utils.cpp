@@ -12,8 +12,8 @@
 #include <fstream>
 #include "stub_def.h"
 #include "stub_fun.h"
+#include "kernel_common.h"
 #include "kernel_utils.h"
-#include "kernel_tensor_impl.h"
 #include <mockcpp/mockcpp.hpp>
 using namespace std;
 using namespace AscendC;
@@ -161,60 +161,6 @@ TEST_F(TEST_UTILS, TEST_WORK_SPACE_PTR)
     EXPECT_EQ(g_sysWorkspaceReserved, nullptr);
 }
 
-TEST_F(TEST_UTILS, TEST_TENSOR_SHAPE)
-{
-    LocalTensor<half> localTensor;
-    localTensor.SetShapeInfo(ShapeInfo(ASCENDC_SHAPE(2, 128, 256)));
-    ShapeInfo newShapeInfo = localTensor.GetShapeInfo();
-    EXPECT_EQ(newShapeInfo.shapeDim, 2);
-    EXPECT_EQ(GetShapeSize(newShapeInfo), 128 * 256);
-    uint32_t* shapeValue = newShapeInfo.shape;
-    int shapeArray[] = {128, 256};
-    for (int index = 0; index < newShapeInfo.shapeDim; ++index) {
-        EXPECT_EQ(shapeValue[index], shapeArray[index]);
-    }
-    localTensor.SetShapeInfo(ShapeInfo(ASCENDC_SHAPE(3, 32, 32, 128), DataFormat::NZ));
-    ShapeInfo newShapeInfo2 = localTensor.GetShapeInfo();
-    EXPECT_EQ(newShapeInfo2.shapeDim, 3);
-    EXPECT_EQ(newShapeInfo2.dataFormat, DataFormat::NZ);
-    EXPECT_EQ(GetShapeSize(newShapeInfo2), 32 * 32 * 128);
-    shapeValue = newShapeInfo2.shape;
-    uint32_t shapeArrayGolden[] = {32, 32, 128};
-    for (int index = 0; index < newShapeInfo2.shapeDim; ++index) {
-        EXPECT_EQ(shapeValue[index], shapeArrayGolden[index]);
-    }
-    localTensor.SetShapeInfo(ShapeInfo(ASCENDC_SHAPE(3, 32, 32, 128), ASCENDC_SHAPE(2, 32, 3840), DataFormat::NZ));
-    ShapeInfo newShapeInfo3 = localTensor.GetShapeInfo();
-    EXPECT_EQ(newShapeInfo3.shapeDim, 3);
-    EXPECT_EQ(newShapeInfo3.dataFormat, DataFormat::NZ);
-    EXPECT_EQ(newShapeInfo3.originalShapeDim, 2);
-    EXPECT_EQ(GetShapeSize(newShapeInfo3), 32 * 32 * 128);
-    shapeValue = newShapeInfo3.originalShape;
-    uint32_t shapeArrayGolden1[] = {32, 3840};
-    for (int index = 0; index < newShapeInfo3.originalShapeDim; ++index) {
-        EXPECT_EQ(shapeValue[index], shapeArrayGolden1[index]);
-    }
-    const uint32_t shapeDim = 3;
-    uint32_t a = 16;
-    uint32_t b = 17;
-    uint32_t c;
-    uint32_t array[] = {a, b, c};
-    localTensor.SetShapeInfo(ShapeInfo(shapeDim, array));
-    ShapeInfo newShapeInfo4 = localTensor.GetShapeInfo();
-    EXPECT_EQ(newShapeInfo4.shapeDim, shapeDim);
-    shapeValue = newShapeInfo4.shape;
-    uint32_t shapeArrayGolden2[] = {a, b, c};
-    EXPECT_EQ(shapeValue[0], shapeArrayGolden2[0]);
-    EXPECT_EQ(shapeValue[1], shapeArrayGolden2[1]);
-    EXPECT_EQ(shapeValue[2], shapeArrayGolden2[2]);
-    // Test global set Shape
-    GlobalTensor<half> globalTensor;
-    globalTensor.SetShapeInfo(ShapeInfo(ASCENDC_SHAPE(3, 128, 128, 24)));
-    ShapeInfo globalShape = globalTensor.GetShapeInfo();
-    EXPECT_EQ(globalShape.shapeDim, 3);
-    EXPECT_EQ(GetShapeSize(globalShape), 128 * 128 * 24);
-}
-
 TEST_F(TEST_UTILS, TEST_SUBINTEGER_INT4)
 {
     int a = 5;
@@ -245,26 +191,6 @@ TEST_F(TEST_UTILS, TEST_SUBINTEGER_INT4)
     EXPECT_EQ(val_neg == (AscendC::int4b_t)-2, true);
 }
 
-TEST_F(TEST_UTILS, TEST_MC2_CONTEXT)
-{
-    __gm__ uint8_t* context1 = new uint8_t[16];
-    __gm__ uint8_t* context2 = new uint8_t[16];
-    SetHcclContext<0>(context1);
-    SetHcclContext<1>(context2);
-    SetHcclContext<2>(context2);
-    auto ret0 = GetHcclContext<0>();
-    auto ret1 = GetHcclContext<1>();
-    auto ret2 = GetHcclContext<2>();
-    EXPECT_TRUE(g_hcclContextReserved[0] == context1);
-    EXPECT_TRUE(g_hcclContextReserved[1] == context2);
-    EXPECT_TRUE(ret0 == context1);
-    EXPECT_TRUE(ret1 == context2);
-    EXPECT_TRUE(ret2 == nullptr);
-
-    delete[] context1;
-    delete[] context2;
-}
-
 namespace AscendC{
 uint64_t get_imm(uint64_t arg0) {
     return 0;
@@ -273,23 +199,4 @@ uint64_t get_imm(uint64_t arg0) {
 int64_t get_status() {
     return 0;
 }
-}
-
-TEST_F(TEST_UTILS, TEST_WriteBackOverflow)
-{
-#if (__CCE_AICORE__ <= 200)
-    MOCKER_CPP(&AscendC::get_status, int64_t()).expects(exactly(2)).will(returnValue(0x520));
-#else
-    MOCKER_CPP(&AscendC::get_status, int64_t()).expects(never()).will(returnValue(0x520));
-#endif
-    uint8_t overflow[8] = {0};
-    uint64_t tmp[4] = {0};
-    MOCKER_CPP(AscendC::get_imm, uint64_t(uint64_t)).stubs().will(returnValue((uint64_t)tmp));
-    MOCKER_CPP(AscendC::copy_ubuf_to_gm, void(void*, void*, unsigned char, unsigned short, unsigned short, unsigned short, unsigned short)).stubs();
-    WriteBackOverflow(overflow);
-
-    uint64_t tmp0[4] = {0, 0, 0x520, 0};
-    MOCKER_CPP(AscendC::get_imm, uint64_t(uint64_t)).stubs().will(returnValue((uint64_t)tmp));
-    WriteBackOverflow(overflow);
-    EXPECT_EQ(tmp[3], 0);
 }

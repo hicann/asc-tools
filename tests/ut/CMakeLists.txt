@@ -29,11 +29,11 @@ set(ASCENDC_SYS_DIR ${ASCEND_CANN_PACKAGE_PATH}/${CMAKE_SYSTEM_PROCESSOR}-linux)
 set(ASCENDC_TEST_HEADER_FILES
     ${LOCAL_DIR}/common/
     ${LOCAL_DIR}/testcase/
-    ${ASCENDC_SYS_DIR}/tikcpp/tikcfw
-    ${ASCENDC_SYS_DIR}/tikcpp/tikcfw/interface
-    ${ASCENDC_SYS_DIR}/tikcpp/tikcfw/impl
     ${ASCENDC_TOOLS_ROOT_DIR}/cpudebug
     ${ASCENDC_TOOLS_ROOT_DIR}/cpudebug/include/
+    ${ASCENDC_TOOLS_ROOT_DIR}/cpudebug/utils
+    ${ASCENDC_TOOLS_ROOT_DIR}/cpudebug/utils/include
+    ${ASCENDC_TOOLS_ROOT_DIR}/cpudebug/utils/include/utils
     ${ASCENDC_TOOLS_ROOT_DIR}/cpudebug/src/
     ${ASCENDC_TOOLS_ROOT_DIR}/cpudebug/src/api_check
     ${ASCENDC_TOOLS_ROOT_DIR}/cpudebug/src/api_check/inc
@@ -210,10 +210,10 @@ add_custom_target(prepare_target_ut ALL
 set(TIKICPULIB_TEST_HEADER_FILES
     ${LOCAL_DIR}/common/
     ${LOCAL_DIR}/testcase/
-    ${ASCENDC_SYS_DIR}/tikcpp/tikcfw
-    ${ASCENDC_SYS_DIR}/tikcpp/tikcfw/interface
-    ${ASCENDC_SYS_DIR}/tikcpp/tikcfw/impl
     ${ASCENDC_TOOLS_ROOT_DIR}/cpudebug/include/
+    ${ASCENDC_TOOLS_ROOT_DIR}/cpudebug/utils
+    ${ASCENDC_TOOLS_ROOT_DIR}/cpudebug/utils/include
+    ${ASCENDC_TOOLS_ROOT_DIR}/cpudebug/utils/include/utils
     ${ASCENDC_TOOLS_ROOT_DIR}/cpudebug/src/
     ${ASCENDC_TOOLS_ROOT_DIR}/cpudebug/src/api_check/
     ${ASCENDC_TOOLS_ROOT_DIR}/cpudebug/src/api_check/inc

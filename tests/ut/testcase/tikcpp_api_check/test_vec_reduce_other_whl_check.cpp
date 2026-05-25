@@ -11,11 +11,12 @@
 
 #define private public
 #define protected public
-#include "kernel_operator.h"
+#include "api_check_test_utils.h"
 #include "api_check/kernel_cpu_check.h"
-#include "test_utils.h"
 
 using namespace AscendC;
+using AscToolsUt::LogicPos;
+using AscToolsUt::MakeTensor;
 
 struct TestReduceOtherWhlApiCheckParams {
     ReduceOrder order;
@@ -35,8 +36,6 @@ protected:
         g_coreType = MIX_TYPE;
     }
 
-public:
-    TPipe tpipe;
 };
 
 namespace {
@@ -69,19 +68,14 @@ TEST_P(TestVecReduceOtherWhlCheckSuite, TestCaseWholeReduceOther)
     constexpr uint16_t srcRepStride = 8;
     constexpr uint64_t mask = 128;
 
-    TBuf<TPosition::VECCALC> srcBuf;
-    tpipe.InitBuffer(srcBuf, ALIGN_ADDR(srcDataSize * srcDtypeSize));
-    LocalTensor<half> srcLocal = srcBuf.Get<half>();
+    auto src = MakeTensor(TPosition::VECCALC, ALIGN_ADDR(srcDataSize * srcDtypeSize));
+    auto dst = MakeTensor(TPosition::VECCALC, ALIGN_ADDR(param.dstDataSize));
 
-    TBuf<TPosition::VECCALC> dstBuf;
-    tpipe.InitBuffer(dstBuf, ALIGN_ADDR(param.dstDataSize));
-    LocalTensor<half> dstLocal = dstBuf.Get<half>();
-
-    auto chkParams = BuildReduceWhlParams(reinterpret_cast<uintptr_t>(dstLocal.GetPhyAddr()),
-        reinterpret_cast<uintptr_t>(srcLocal.GetPhyAddr()), dstDtypeSize, srcDtypeSize, repeatTimes, dstRepStride,
+    auto chkParams = BuildReduceWhlParams(dst.addr,
+        src.addr, dstDtypeSize, srcDtypeSize, repeatTimes, dstRepStride,
         srcBlkStride, srcRepStride, param.order, static_cast<uint64_t>(param.dstDataSize),
-        static_cast<uint64_t>(srcLocal.GetLength()), static_cast<uint8_t>(dstLocal.GetPosition()),
-        static_cast<uint8_t>(srcLocal.GetPosition()));
+        src.length, LogicPos(dst),
+        LogicPos(src));
     EXPECT_EQ(CheckFunReduceOtherWhlImpl(chkParams, mask, "WholeReduceMax"), param.expect);
 }
 
@@ -94,26 +88,20 @@ TEST_F(TestVecReduceOtherWhlCheckSuite, WholeReduceOnlyValueBoundary)
     constexpr uint16_t srcBlkStride = 1;
     constexpr uint16_t srcRepStride = 8;
 
-    TBuf<TPosition::VECCALC> srcBuf;
-    tpipe.InitBuffer(srcBuf, ALIGN_ADDR(srcDataSize * sizeof(half)));
-    LocalTensor<half> srcLocal = srcBuf.Get<half>();
+    auto src = MakeTensor(TPosition::VECCALC, ALIGN_ADDR(srcDataSize * sizeof(half)));
 
-    TBuf<TPosition::VECCALC> dstBufPass;
-    tpipe.InitBuffer(dstBufPass, ALIGN_ADDR(16));
-    LocalTensor<half> dstLocalPass = dstBufPass.Get<half>();
-    auto passParams = BuildReduceWhlParams(reinterpret_cast<uintptr_t>(dstLocalPass.GetPhyAddr()),
-        reinterpret_cast<uintptr_t>(srcLocal.GetPhyAddr()), sizeof(half), sizeof(half), repeatTimes, dstRepStride,
-        srcBlkStride, srcRepStride, ReduceOrder::ORDER_ONLY_VALUE, 16, srcLocal.GetLength(),
-        static_cast<uint8_t>(dstLocalPass.GetPosition()), static_cast<uint8_t>(srcLocal.GetPosition()));
+    auto dstPass = MakeTensor(TPosition::VECCALC, ALIGN_ADDR(16));
+    auto passParams = BuildReduceWhlParams(dstPass.addr,
+        src.addr, sizeof(half), sizeof(half), repeatTimes, dstRepStride,
+        srcBlkStride, srcRepStride, ReduceOrder::ORDER_ONLY_VALUE, 16, src.length,
+        LogicPos(dstPass), LogicPos(src));
     EXPECT_TRUE(CheckFunReduceOtherWhlImpl(passParams, mask, "WholeReduceMax"));
 
-    TBuf<TPosition::VECCALC> dstBufFail;
-    tpipe.InitBuffer(dstBufFail, ALIGN_ADDR(14));
-    LocalTensor<half> dstLocalFail = dstBufFail.Get<half>();
-    auto failParams = BuildReduceWhlParams(reinterpret_cast<uintptr_t>(dstLocalFail.GetPhyAddr()),
-        reinterpret_cast<uintptr_t>(srcLocal.GetPhyAddr()), sizeof(half), sizeof(half), repeatTimes, dstRepStride,
-        srcBlkStride, srcRepStride, ReduceOrder::ORDER_ONLY_VALUE, 14, srcLocal.GetLength(),
-        static_cast<uint8_t>(dstLocalFail.GetPosition()), static_cast<uint8_t>(srcLocal.GetPosition()));
+    auto dstFail = MakeTensor(TPosition::VECCALC, ALIGN_ADDR(14));
+    auto failParams = BuildReduceWhlParams(dstFail.addr,
+        src.addr, sizeof(half), sizeof(half), repeatTimes, dstRepStride,
+        srcBlkStride, srcRepStride, ReduceOrder::ORDER_ONLY_VALUE, 14, src.length,
+        LogicPos(dstFail), LogicPos(src));
     EXPECT_FALSE(CheckFunReduceOtherWhlImpl(failParams, mask, "WholeReduceMax"));
 }
 
@@ -126,26 +114,20 @@ TEST_F(TestVecReduceOtherWhlCheckSuite, WholeReduceOnlyIndexBoundary)
     constexpr uint16_t srcBlkStride = 1;
     constexpr uint16_t srcRepStride = 8;
 
-    TBuf<TPosition::VECCALC> srcBuf;
-    tpipe.InitBuffer(srcBuf, ALIGN_ADDR(srcDataSize * sizeof(half)));
-    LocalTensor<half> srcLocal = srcBuf.Get<half>();
+    auto src = MakeTensor(TPosition::VECCALC, ALIGN_ADDR(srcDataSize * sizeof(half)));
 
-    TBuf<TPosition::VECCALC> dstBufPass;
-    tpipe.InitBuffer(dstBufPass, ALIGN_ADDR(32));
-    LocalTensor<half> dstLocalPass = dstBufPass.Get<half>();
-    auto passParams = BuildReduceWhlParams(reinterpret_cast<uintptr_t>(dstLocalPass.GetPhyAddr()),
-        reinterpret_cast<uintptr_t>(srcLocal.GetPhyAddr()), sizeof(half), sizeof(half), repeatTimes, dstRepStride,
-        srcBlkStride, srcRepStride, ReduceOrder::ORDER_ONLY_INDEX, 32, srcLocal.GetLength(),
-        static_cast<uint8_t>(dstLocalPass.GetPosition()), static_cast<uint8_t>(srcLocal.GetPosition()));
+    auto dstPass = MakeTensor(TPosition::VECCALC, ALIGN_ADDR(32));
+    auto passParams = BuildReduceWhlParams(dstPass.addr,
+        src.addr, sizeof(half), sizeof(half), repeatTimes, dstRepStride,
+        srcBlkStride, srcRepStride, ReduceOrder::ORDER_ONLY_INDEX, 32, src.length,
+        LogicPos(dstPass), LogicPos(src));
     EXPECT_TRUE(CheckFunReduceOtherWhlImpl(passParams, mask, "WholeReduceMax"));
 
-    TBuf<TPosition::VECCALC> dstBufFail;
-    tpipe.InitBuffer(dstBufFail, ALIGN_ADDR(30));
-    LocalTensor<half> dstLocalFail = dstBufFail.Get<half>();
-    auto failParams = BuildReduceWhlParams(reinterpret_cast<uintptr_t>(dstLocalFail.GetPhyAddr()),
-        reinterpret_cast<uintptr_t>(srcLocal.GetPhyAddr()), sizeof(half), sizeof(half), repeatTimes, dstRepStride,
-        srcBlkStride, srcRepStride, ReduceOrder::ORDER_ONLY_INDEX, 30, srcLocal.GetLength(),
-        static_cast<uint8_t>(dstLocalFail.GetPosition()), static_cast<uint8_t>(srcLocal.GetPosition()));
+    auto dstFail = MakeTensor(TPosition::VECCALC, ALIGN_ADDR(30));
+    auto failParams = BuildReduceWhlParams(dstFail.addr,
+        src.addr, sizeof(half), sizeof(half), repeatTimes, dstRepStride,
+        srcBlkStride, srcRepStride, ReduceOrder::ORDER_ONLY_INDEX, 30, src.length,
+        LogicPos(dstFail), LogicPos(src));
     EXPECT_FALSE(CheckFunReduceOtherWhlImpl(failParams, mask, "WholeReduceMax"));
 }
 
@@ -154,18 +136,14 @@ TEST_F(TestVecReduceOtherWhlCheckSuite, WholeReduceDtypeMismatch)
     constexpr uint32_t srcDataSize = 1024;
     constexpr uint64_t mask = 128;
 
-    TBuf<TPosition::VECCALC> srcBuf;
-    tpipe.InitBuffer(srcBuf, ALIGN_ADDR(srcDataSize * sizeof(half)));
-    LocalTensor<half> srcLocal = srcBuf.Get<half>();
+    auto src = MakeTensor(TPosition::VECCALC, ALIGN_ADDR(srcDataSize * sizeof(half)));
 
-    TBuf<TPosition::VECCALC> dstBuf;
-    tpipe.InitBuffer(dstBuf, ALIGN_ADDR(32));
-    LocalTensor<half> dstLocal = dstBuf.Get<half>();
+    auto dst = MakeTensor(TPosition::VECCALC, ALIGN_ADDR(32));
 
-    auto chkParams = BuildReduceWhlParams(reinterpret_cast<uintptr_t>(dstLocal.GetPhyAddr()),
-        reinterpret_cast<uintptr_t>(srcLocal.GetPhyAddr()), sizeof(float), sizeof(half), 8, 1, 1, 8,
-        ReduceOrder::ORDER_VALUE_INDEX, 32, srcLocal.GetLength(), static_cast<uint8_t>(dstLocal.GetPosition()),
-        static_cast<uint8_t>(srcLocal.GetPosition()));
+    auto chkParams = BuildReduceWhlParams(dst.addr,
+        src.addr, sizeof(float), sizeof(half), 8, 1, 1, 8,
+        ReduceOrder::ORDER_VALUE_INDEX, 32, src.length, LogicPos(dst),
+        LogicPos(src));
     EXPECT_FALSE(CheckFunReduceOtherWhlImpl(chkParams, mask, "WholeReduceMax"));
 }
 
@@ -173,42 +151,14 @@ TEST_F(TestVecReduceOtherWhlCheckSuite, WholeReduceAddrAlignCheck)
 {
     constexpr uint32_t srcDataSize = 1024;
 
-    TBuf<TPosition::VECCALC> srcBuf;
-    tpipe.InitBuffer(srcBuf, ALIGN_ADDR(srcDataSize * sizeof(float)));
-    LocalTensor<float> srcLocal = srcBuf.Get<float>();
+    auto src = MakeTensor(TPosition::VECCALC, ALIGN_ADDR(srcDataSize * sizeof(float)));
 
-    TBuf<TPosition::VECCALC> dstBuf;
-    tpipe.InitBuffer(dstBuf, ALIGN_ADDR(32));
-    LocalTensor<float> dstLocal = dstBuf.Get<float>();
+    auto dst = MakeTensor(TPosition::VECCALC, ALIGN_ADDR(32));
 
-    auto chkParams = BuildReduceWhlParams(reinterpret_cast<uintptr_t>(dstLocal.GetPhyAddr()) + 2,
-        reinterpret_cast<uintptr_t>(srcLocal.GetPhyAddr()), sizeof(float), sizeof(float), 8, 1, 1, 8,
-        ReduceOrder::ORDER_ONLY_VALUE, 32, srcLocal.GetLength(), static_cast<uint8_t>(dstLocal.GetPosition()),
-        static_cast<uint8_t>(srcLocal.GetPosition()));
+    auto chkParams = BuildReduceWhlParams(dst.addr + 2,
+        src.addr, sizeof(float), sizeof(float), 8, 1, 1, 8,
+        ReduceOrder::ORDER_ONLY_VALUE, 32, src.length, LogicPos(dst),
+        LogicPos(src));
     check::TikcppVecReduceOtherWhlCheck chkIns("WholeReduceMax", chkParams);
     EXPECT_FALSE(chkIns.CheckAddrAlign());
-}
-
-TEST_F(TestVecReduceOtherWhlCheckSuite, WholeReduceCounterMode)
-{
-    constexpr uint32_t srcDataSize = 1024;
-
-    TBuf<TPosition::VECCALC> srcBuf;
-    tpipe.InitBuffer(srcBuf, ALIGN_ADDR(srcDataSize * sizeof(half)));
-    LocalTensor<half> srcLocal = srcBuf.Get<half>();
-
-    TBuf<TPosition::VECCALC> dstBuf;
-    tpipe.InitBuffer(dstBuf, ALIGN_ADDR(4));
-    LocalTensor<half> dstLocal = dstBuf.Get<half>();
-
-    auto chkParams = BuildReduceWhlParams(reinterpret_cast<uintptr_t>(dstLocal.GetPhyAddr()),
-        reinterpret_cast<uintptr_t>(srcLocal.GetPhyAddr()), sizeof(half), sizeof(half), 8, 1, 1, 8,
-        ReduceOrder::ORDER_ONLY_VALUE, 4, srcLocal.GetLength(), static_cast<uint8_t>(dstLocal.GetPosition()),
-        static_cast<uint8_t>(srcLocal.GetPosition()));
-    check::TikcppVecReduceOtherWhlCheck chkIns("WholeReduceMax", chkParams);
-    std::vector<uint64_t> maskArray = {129};
-
-    AscendCUtils::SetMaskCount<half>();
-    EXPECT_TRUE(chkIns.CheckTensorWhlOverflowLow(maskArray, sizeof(half), "dstLocal"));
-    AscendCUtils::SetMaskNorm<half>();
 }

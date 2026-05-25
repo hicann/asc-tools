@@ -11,12 +11,13 @@
 #include <string>
 #define private public
 #define protected public
-#include "kernel_operator.h"
+#include "api_check_test_utils.h"
 #include "api_check/kernel_cpu_check.h"
-#include "test_utils.h"
 
 using namespace std;
 using namespace AscendC;
+using AscToolsUt::LogicPos;
+using AscToolsUt::MakeTensor;
 
 struct TestVecProposalCheckParams {
     uint32_t dataSize;
@@ -36,8 +37,6 @@ protected:
         AscendC::CheckSyncState();
         g_coreType = MIX_TYPE;
     }
-public:
-    TPipe tpipe;
 };
 
 INSTANTIATE_TEST_CASE_P(TEST_VEC_PROPOSAL_CHECK, TestVecProposalCheckSuite,
@@ -71,76 +70,38 @@ TEST_P(TestVecProposalCheckSuite, TestCaseGatherb)
     auto param = GetParam();
     uint32_t dataSize = param.dataSize;
 
-    LocalTensor<float> input0_local;
-    LocalTensor<int32_t> input1_local;
-    LocalTensor<float> output_local;
-    if (param.pos == TPosition::VECCALC) {
-        TBuf<TPosition::VECCALC> tbuf;
-        tpipe.InitBuffer(tbuf, dataSize * sizeof(float));
-        input0_local = tbuf.Get<float>();
-
-        TBuf<TPosition::VECCALC> tbuf1;
-        tpipe.InitBuffer(tbuf1, dataSize * sizeof(int32_t));
-        input1_local = tbuf1.Get<int32_t>();
-
-        TBuf<TPosition::VECCALC> tbuf2;
-        tpipe.InitBuffer(tbuf2, ALIGN_ADDR(param.dstSize * sizeof(float)));
-        output_local = tbuf2.Get<float>();
-    } else if (param.pos == TPosition::A1) {
-        TBuf<TPosition::A1> tbuf;
-        tpipe.InitBuffer(tbuf, dataSize * sizeof(float));
-        input0_local = tbuf.Get<float>();
-
-        TBuf<TPosition::A1> tbuf1;
-        tpipe.InitBuffer(tbuf1, dataSize * sizeof(int32_t));
-        input1_local = tbuf1.Get<int32_t>();
-
-        TBuf<TPosition::A1> tbuf2;
-        tpipe.InitBuffer(tbuf2, ALIGN_ADDR(param.dstSize * sizeof(float)));
-        output_local = tbuf2.Get<float>();
-    } else {
-        TBuf<TPosition::A2> tbuf;
-        tpipe.InitBuffer(tbuf, dataSize * sizeof(float));
-        input0_local = tbuf.Get<float>();
-
-        TBuf<TPosition::A2> tbuf1;
-        tpipe.InitBuffer(tbuf1, dataSize * sizeof(int32_t));
-        input1_local = tbuf1.Get<int32_t>();
-
-        TBuf<TPosition::A2> tbuf2;
-        tpipe.InitBuffer(tbuf2, ALIGN_ADDR(param.dstSize * sizeof(float)));
-        output_local = tbuf2.Get<float>();
-    }
+    auto input0 = MakeTensor(param.pos, dataSize * sizeof(float));
+    auto input1 = MakeTensor(param.pos, dataSize * sizeof(int32_t));
+    auto output = MakeTensor(param.pos, ALIGN_ADDR(param.dstSize * sizeof(float)));
     uint8_t repeatTimes = param.repeat;
     if (param.apiName != "MrgSort4" && param.apiName != "MrgSort") {
-        check::VecProposalApiParams chkParams { (uint64_t)output_local.GetPhyAddr(),
-            (uint64_t)input0_local.GetPhyAddr(),
-            (uint64_t)input1_local.GetPhyAddr(),
+        check::VecProposalApiParams chkParams { output.addr,
+            input0.addr,
+            input1.addr,
             repeatTimes,
             (uint32_t)(sizeof(float)),
             (uint32_t)(sizeof(float)),
             (uint32_t)(sizeof(uint32_t)),
-            (uint64_t)(output_local.GetLength()),
-            (uint64_t)(input0_local.GetLength()),
-            (uint64_t)(input1_local.GetLength()),
-            (uint8_t)(output_local.GetPosition()),
-            (uint8_t)(input0_local.GetPosition()),
-            (uint8_t)(input1_local.GetPosition()) };
+            output.length,
+            input0.length,
+            input1.length,
+            LogicPos(output),
+            LogicPos(input0),
+            LogicPos(input1) };
         check::TikcppVecProposalCheck chkIns { param.apiName, chkParams };
-        uint64_t mask = 128;
         bool flag = chkIns.CheckAllHighLevel();
         EXPECT_EQ(flag, param.expect);
     } else {
         uint16_t element[4] = {32, 32, 32, 32};
-        check::VecProposalApiParams chkParams { (uint64_t)output_local.GetPhyAddr(),
-            (uint64_t)input0_local.GetPhyAddr(),
+        check::VecProposalApiParams chkParams { output.addr,
+            input0.addr,
             repeatTimes,
             (uint32_t)(sizeof(float)),
             (uint32_t)(sizeof(float)),
-            (uint64_t)(output_local.GetLength()),
-            (uint64_t)(input0_local.GetLength()),
-            (uint8_t)(output_local.GetPosition()),
-            (uint8_t)(input0_local.GetPosition()),
+            output.length,
+            input0.length,
+            LogicPos(output),
+            LogicPos(input0),
             (uint16_t)(0xf),
             element,
             0 };

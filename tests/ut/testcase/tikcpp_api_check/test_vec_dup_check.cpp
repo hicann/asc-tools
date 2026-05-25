@@ -10,12 +10,13 @@
 #include <gtest/gtest.h>
 #define private public
 #define protected public
-#include "kernel_operator.h"
+#include "api_check_test_utils.h"
 #include "api_check/kernel_cpu_check.h"
-#include "test_utils.h"
 
 using namespace std;
 using namespace AscendC;
+using AscToolsUt::LogicPos;
+using AscToolsUt::MakeTensor;
 
 
 class TestBinaryDupCheck : public testing::Test {
@@ -47,8 +48,6 @@ protected:
         AscendC::CheckSyncState();
         g_coreType = MIX_TYPE;
     }
-public:
-    TPipe tpipe;
 };
 
 INSTANTIATE_TEST_CASE_P(TEST_VEC_DUP_CHECK, TestVecDupCheckSuite,
@@ -61,32 +60,23 @@ TEST_P(TestVecDupCheckSuite, TestCaseDup)
 {
     auto param = GetParam();
     uint32_t dataSize = param.dataSize;
-    LocalTensor<uint16_t> input0;
-    if (param.pos == TPosition::VECCALC) {
-        TBuf<TPosition::VECCALC> tbuf;
-        tpipe.InitBuffer(tbuf, ALIGN_ADDR(dataSize * sizeof(uint16_t)));
-        input0 = tbuf.Get<uint16_t>();
-    } else {
-        TBuf<TPosition::A1> tbuf;
-        tpipe.InitBuffer(tbuf, ALIGN_ADDR(dataSize * sizeof(uint16_t)));
-        input0 = tbuf.Get<uint16_t>();
-    }
+    auto input0 = MakeTensor(param.pos, ALIGN_ADDR(dataSize * sizeof(uint16_t)));
 
     uint16_t dstBlockStride = param.dstBlkStride;
     uint8_t repeatTimes = param.repeat;
     uint8_t dstRepeatStride = param.dstRptStride;
-    check::VecDupApiParams chkParams { (uint64_t)input0.GetPhyAddr(),
+    check::VecDupApiParams chkParams { input0.addr,
         repeatTimes,
         (uint16_t)(dstBlockStride),
         (uint16_t)(dstRepeatStride),
         (uint32_t)(sizeof(uint16_t)),
-        (uint64_t)(input0.GetLength()),
-        (uint8_t)(input0.GetPosition()) };
+        input0.length,
+        LogicPos(input0) };
     check::VecDupApiParams chkParams1 {
-        (uint64_t)input0.GetPhyAddr(),
+        input0.addr,
         (uint32_t)(sizeof(uint16_t)),
-        (uint64_t)(input0.GetLength()),
-        (uint8_t)(input0.GetPosition()),
+        input0.length,
+        LogicPos(input0),
         (uint32_t)param.calSize };
     check::TikcppVecDupCheck chkIns { "vdup", chkParams };
     check::TikcppVecDupCheck chkIns1 { "vdup", chkParams1 };

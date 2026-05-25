@@ -10,12 +10,13 @@
 #include <gtest/gtest.h>
 #define private public
 #define protected public
-#include "kernel_operator.h"
+#include "api_check_test_utils.h"
 #include "api_check/kernel_cpu_check.h"
-#include "test_utils.h"
 
 using namespace std;
 using namespace AscendC;
+using AscToolsUt::LogicPos;
+using AscToolsUt::MakeTensor;
 
 class TestBinaryCheck : public testing::Test {
 protected:
@@ -48,8 +49,6 @@ protected:
         AscendC::CheckSyncState();
         g_coreType = MIX_TYPE;
     }
-public:
-    TPipe tpipe;
 };
 
 class TestBinaryApiHighCheckSuite : public testing::Test, public testing::WithParamInterface<TestBinaryApiCheckParams> {
@@ -61,8 +60,6 @@ protected:
         AscendC::CheckSyncState();
         g_coreType = MIX_TYPE;
     }
-public:
-    TPipe tpipe;
 };
 
 INSTANTIATE_TEST_CASE_P(TEST_BINARY_API_CHECK, TestBinaryApiCheckSuite,
@@ -81,58 +78,31 @@ TEST_P(TestBinaryApiCheckSuite, BiApiCheckLowLevel)
 {
     auto param = GetParam();
     uint32_t dataSize = param.dataSize;
-    LocalTensor<uint16_t> input0;
-    LocalTensor<uint16_t> input1;
-    LocalTensor<uint16_t> output;
-    if (param.pos == TPosition::VECCALC) {
-        TBuf<TPosition::VECCALC> tbuf;
-        tpipe.InitBuffer(tbuf, ALIGN_ADDR(dataSize * sizeof(uint16_t)));
-        input0 = tbuf.Get<uint16_t>();
+    auto input0 = MakeTensor(param.pos, ALIGN_ADDR(dataSize * sizeof(uint16_t)));
+    auto input1 = MakeTensor(param.pos, ALIGN_ADDR(dataSize * sizeof(uint16_t)));
+    auto output = MakeTensor(param.pos, ALIGN_ADDR(dataSize * sizeof(uint16_t)));
 
-        TBuf<TPosition::VECCALC> tbuf1;
-        tpipe.InitBuffer(tbuf1, ALIGN_ADDR(dataSize * sizeof(uint16_t)));
-        input1 = tbuf1.Get<uint16_t>();
-
-        TBuf<TPosition::VECCALC> tbuf2;
-        tpipe.InitBuffer(tbuf2, ALIGN_ADDR(dataSize * sizeof(uint16_t)));
-        output = tbuf2.Get<uint16_t>();
-    } else {
-        TBuf<TPosition::A1> tbuf;
-        tpipe.InitBuffer(tbuf, ALIGN_ADDR(dataSize * sizeof(uint16_t)));
-        input0 = tbuf.Get<uint16_t>();
-
-        TBuf<TPosition::A1> tbuf1;
-        tpipe.InitBuffer(tbuf1, ALIGN_ADDR(dataSize * sizeof(uint16_t)));
-        input1 = tbuf1.Get<uint16_t>();
-
-        TBuf<TPosition::A1> tbuf2;
-        tpipe.InitBuffer(tbuf2, ALIGN_ADDR(dataSize * sizeof(uint16_t)));
-        output = tbuf2.Get<uint16_t>();
-    }
-
-    BinaryRepeatParams repeatParams { param.dstBlkStride, param.srcBlkStride, param.srcBlkStride,
-        param.dstRptStride, param.srcRptStride, param.srcRptStride };
     uint8_t repeatTimes = param.repeat;
     uint64_t maskFull = 0xffffffffffffffff;
-    check::VecBinaryApiParams chkParams { (uint64_t)output.GetPhyAddr(),
-        (uint64_t)input0.GetPhyAddr(),
-        (uint64_t)input1.GetPhyAddr(),
+    check::VecBinaryApiParams chkParams { output.addr,
+        input0.addr,
+        input1.addr,
         repeatTimes,
-        (uint16_t)(repeatParams.dstBlkStride),
-        (uint16_t)(repeatParams.src0BlkStride),
-        (uint16_t)(repeatParams.src1BlkStride),
-        (uint16_t)(repeatParams.dstRepStride),
-        (uint16_t)(repeatParams.src0RepStride),
-        (uint16_t)(repeatParams.src1RepStride),
+        param.dstBlkStride,
+        param.srcBlkStride,
+        param.srcBlkStride,
+        param.dstRptStride,
+        param.srcRptStride,
+        param.srcRptStride,
         (uint32_t)(sizeof(uint16_t)),
         (uint32_t)(sizeof(uint16_t)),
         (uint32_t)(sizeof(uint16_t)),
-        (uint64_t)(output.GetLength()),
-        (uint64_t)(input0.GetLength()),
-        (uint64_t)(input1.GetLength()),
-        (uint8_t)(output.GetPosition()),
-        (uint8_t)(input0.GetPosition()),
-        (uint8_t)(input1.GetPosition()) };
+        output.length,
+        input0.length,
+        input1.length,
+        LogicPos(output),
+        LogicPos(input0),
+        LogicPos(input1) };
     check::TikcppVecBinaryCheck chkIns { "test_intri", chkParams };
     MaskSetter::Instance().SetMask(true);
     bool flag = chkIns.CheckAllLowLevel({ maskFull, maskFull });
@@ -141,50 +111,24 @@ TEST_P(TestBinaryApiCheckSuite, BiApiCheckLowLevel)
 
 TEST_P(TestBinaryApiHighCheckSuite, BiApiCheckHighLevel)
 {
-    TPipe tpipe;
     auto param = GetParam();
     uint32_t dataSize = param.dataSize;
-    LocalTensor<uint16_t> input0;
-    LocalTensor<uint16_t> input1;
-    LocalTensor<uint16_t> output;
-    if (param.pos == TPosition::VECCALC) {
-        TBuf<TPosition::VECCALC> tbuf;
-        tpipe.InitBuffer(tbuf, ALIGN_ADDR(dataSize * sizeof(uint16_t)));
-        input0 = tbuf.Get<uint16_t>();
+    auto input0 = MakeTensor(param.pos, ALIGN_ADDR(dataSize * sizeof(uint16_t)));
+    auto input1 = MakeTensor(param.pos, ALIGN_ADDR(dataSize * sizeof(uint16_t)));
+    auto output = MakeTensor(param.pos, ALIGN_ADDR(dataSize * sizeof(uint16_t)));
 
-        TBuf<TPosition::VECCALC> tbuf1;
-        tpipe.InitBuffer(tbuf1, ALIGN_ADDR(dataSize * sizeof(uint16_t)));
-        input1 = tbuf1.Get<uint16_t>();
-
-        TBuf<TPosition::VECCALC> tbuf2;
-        tpipe.InitBuffer(tbuf2, ALIGN_ADDR(dataSize * sizeof(uint16_t)));
-        output = tbuf2.Get<uint16_t>();
-    } else {
-        TBuf<TPosition::B1> tbuf;
-        tpipe.InitBuffer(tbuf, ALIGN_ADDR(dataSize * sizeof(uint16_t)));
-        input0 = tbuf.Get<uint16_t>();
-
-        TBuf<TPosition::B1> tbuf1;
-        tpipe.InitBuffer(tbuf1, ALIGN_ADDR(dataSize * sizeof(uint16_t)));
-        input1 = tbuf1.Get<uint16_t>();
-
-        TBuf<TPosition::B1> tbuf2;
-        tpipe.InitBuffer(tbuf2, ALIGN_ADDR(dataSize * sizeof(uint16_t)));
-        output = tbuf2.Get<uint16_t>();
-    }
-
-    check::VecBinaryApiParams chkParams { (uint64_t)output.GetPhyAddr(),
-        (uint64_t)input0.GetPhyAddr(),
-        (uint64_t)input1.GetPhyAddr(),
+    check::VecBinaryApiParams chkParams { output.addr,
+        input0.addr,
+        input1.addr,
         (uint32_t)(sizeof(uint16_t)),
         (uint32_t)(sizeof(uint16_t)),
         (uint32_t)(sizeof(uint16_t)),
-        (uint64_t)(output.GetLength()),
-        (uint64_t)(input0.GetLength()),
-        (uint64_t)(input1.GetLength()),
-        (uint8_t)(output.GetPosition()),
-        (uint8_t)(input0.GetPosition()),
-        (uint8_t)(input1.GetPosition()),
+        output.length,
+        input0.length,
+        input1.length,
+        LogicPos(output),
+        LogicPos(input0),
+        LogicPos(input1),
         (uint32_t)(param.calSize) };
     check::TikcppVecBinaryCheck chkIns { "test_intri", chkParams };
     bool flag = chkIns.CheckAllHighLevel();
@@ -193,32 +137,23 @@ TEST_P(TestBinaryApiHighCheckSuite, BiApiCheckHighLevel)
 
 TEST_F(TestBinaryCheck, CmpCheckHighLevel)
 {
-    TPipe tpipe;
     uint32_t dataSize = 256;
-    TBuf<TPosition::VECCALC> tbuf;
-    tpipe.InitBuffer(tbuf, ALIGN_ADDR(dataSize * sizeof(uint16_t)));
-    LocalTensor<uint16_t> input0 = tbuf.Get<uint16_t>();
+    auto input0 = MakeTensor(TPosition::VECCALC, ALIGN_ADDR(dataSize * sizeof(uint16_t)));
+    auto input1 = MakeTensor(TPosition::VECCALC, ALIGN_ADDR(dataSize * sizeof(uint16_t)));
+    auto output = MakeTensor(TPosition::VECCALC, ALIGN_ADDR(dataSize * sizeof(uint16_t)));
 
-    TBuf<TPosition::VECCALC> tbuf1;
-    tpipe.InitBuffer(tbuf1, ALIGN_ADDR(dataSize * sizeof(uint16_t)));
-    LocalTensor<uint16_t> input1 = tbuf1.Get<uint16_t>();
-
-    TBuf<TPosition::VECCALC> tbuf2;
-    tpipe.InitBuffer(tbuf2, ALIGN_ADDR(dataSize * sizeof(uint16_t)));
-    LocalTensor<uint16_t> output = tbuf2.Get<uint16_t>();
-
-    check::VecBinaryApiParams chkParams { (uint64_t)output.GetPhyAddr(),
-        (uint64_t)input0.GetPhyAddr(),
-        (uint64_t)input1.GetPhyAddr(),
+    check::VecBinaryApiParams chkParams { output.addr,
+        input0.addr,
+        input1.addr,
         (uint32_t)(sizeof(uint16_t)),
         (uint32_t)(sizeof(uint16_t)),
         (uint32_t)(sizeof(uint16_t)),
-        (uint64_t)(output.GetLength()),
-        (uint64_t)(input0.GetLength()),
-        (uint64_t)(input1.GetLength()),
-        (uint8_t)(output.GetPosition()),
-        (uint8_t)(input0.GetPosition()),
-        (uint8_t)(input1.GetPosition()),
+        output.length,
+        input0.length,
+        input1.length,
+        LogicPos(output),
+        LogicPos(input0),
+        LogicPos(input1),
         (uint32_t)(256) };
     check::TikcppVecBinaryCheck chkIns { "vcmp", chkParams };
     bool flag = chkIns.CheckAllHighLevel();
@@ -227,42 +162,32 @@ TEST_F(TestBinaryCheck, CmpCheckHighLevel)
 
 TEST_F(TestBinaryCheck, CmpCheckLowLevel)
 {
-    TPipe tpipe;
     uint32_t dataSize = 256;
-    TBuf<TPosition::VECCALC> tbuf;
-    tpipe.InitBuffer(tbuf, ALIGN_ADDR(dataSize * sizeof(uint16_t)));
-    LocalTensor<uint16_t> input0 = tbuf.Get<uint16_t>();
+    auto input0 = MakeTensor(TPosition::VECCALC, ALIGN_ADDR(dataSize * sizeof(uint16_t)));
+    auto input1 = MakeTensor(TPosition::VECCALC, ALIGN_ADDR(dataSize * sizeof(uint16_t)));
+    auto output = MakeTensor(TPosition::VECCALC, ALIGN_ADDR(dataSize * sizeof(uint16_t)));
 
-    TBuf<TPosition::VECCALC> tbuf1;
-    tpipe.InitBuffer(tbuf1, ALIGN_ADDR(dataSize * sizeof(uint16_t)));
-    LocalTensor<uint16_t> input1 = tbuf1.Get<uint16_t>();
-
-    TBuf<TPosition::VECCALC> tbuf2;
-    tpipe.InitBuffer(tbuf2, ALIGN_ADDR(dataSize * sizeof(uint16_t)));
-    LocalTensor<uint16_t> output = tbuf2.Get<uint16_t>();
-
-    BinaryRepeatParams repeatParams { 1, 1, 1, 8, 8, 8 };
     uint8_t repeatTimes = 1;
     uint64_t maskFull = 0xffffffffffffffff;
-    check::VecBinaryApiParams chkParams { (uint64_t)output.GetPhyAddr(),
-        (uint64_t)input0.GetPhyAddr(),
-        (uint64_t)input1.GetPhyAddr(),
+    check::VecBinaryApiParams chkParams { output.addr,
+        input0.addr,
+        input1.addr,
         repeatTimes,
-        (uint16_t)(repeatParams.dstBlkStride),
-        (uint16_t)(repeatParams.src0BlkStride),
-        (uint16_t)(repeatParams.src1BlkStride),
-        (uint16_t)(repeatParams.dstRepStride),
-        (uint16_t)(repeatParams.src0RepStride),
-        (uint16_t)(repeatParams.src1RepStride),
+        1,
+        1,
+        1,
+        8,
+        8,
+        8,
         (uint32_t)(sizeof(uint16_t)),
         (uint32_t)(sizeof(uint16_t)),
         (uint32_t)(sizeof(uint16_t)),
-        (uint64_t)(output.GetLength()),
-        (uint64_t)(input0.GetLength()),
-        (uint64_t)(input1.GetLength()),
-        (uint8_t)(output.GetPosition()),
-        (uint8_t)(input0.GetPosition()),
-        (uint8_t)(input1.GetPosition()) };
+        output.length,
+        input0.length,
+        input1.length,
+        LogicPos(output),
+        LogicPos(input0),
+        LogicPos(input1) };
     check::TikcppVecBinaryCheck chkIns { "cmp", chkParams };
     bool flag = chkIns.CheckAllLowLevel({ maskFull, maskFull });
     EXPECT_EQ(flag, true);

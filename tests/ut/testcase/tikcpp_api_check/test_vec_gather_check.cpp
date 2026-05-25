@@ -10,12 +10,13 @@
 #include <gtest/gtest.h>
 #define private public
 #define protected public
-#include "kernel_operator.h"
+#include "api_check_test_utils.h"
 #include "api_check/kernel_cpu_check.h"
-#include "test_utils.h"
 
 using namespace std;
 using namespace AscendC;
+using AscToolsUt::LogicPos;
+using AscToolsUt::MakeTensor;
 
 struct TestVecGatherCheckParams {
     uint32_t dataSize;
@@ -36,8 +37,6 @@ protected:
         AscendC::CheckSyncState();
         g_coreType = MIX_TYPE;
     }
-public:
-    TPipe tpipe;
 };
 
 INSTANTIATE_TEST_CASE_P(TEST_VEC_GATHER_CHECK, TestVecGatherCheckSuite,
@@ -53,53 +52,28 @@ TEST_P(TestVecGatherCheckSuite, TestCaseGatherb)
     uint32_t dataSize = param.dataSize;
     uint32_t offsetLen = param.offsetLen;
 
-    LocalTensor<uint16_t> input0_local;
-    LocalTensor<uint32_t> offset_local;
-    LocalTensor<uint16_t> output_local;
-    if (param.pos == TPosition::VECCALC) {
-        TBuf<TPosition::VECCALC> tbuf;
-        tpipe.InitBuffer(tbuf, ALIGN_ADDR(dataSize * sizeof(uint16_t)));
-        input0_local = tbuf.Get<uint16_t>();
-
-        TBuf<TPosition::VECCALC> tbuf1;
-        tpipe.InitBuffer(tbuf1, offsetLen * sizeof(uint32_t));
-        offset_local = tbuf1.Get<uint32_t>();
-
-        TBuf<TPosition::VECCALC> tbuf2;
-        tpipe.InitBuffer(tbuf2, ALIGN_ADDR(dataSize * sizeof(uint16_t)));
-        output_local = tbuf2.Get<uint16_t>();
-    } else {
-        TBuf<TPosition::A1> tbuf;
-        tpipe.InitBuffer(tbuf, ALIGN_ADDR(dataSize * sizeof(uint16_t)));
-        input0_local = tbuf.Get<uint16_t>();
-
-        TBuf<TPosition::A1> tbuf1;
-        tpipe.InitBuffer(tbuf1, offsetLen * sizeof(uint32_t));
-        offset_local = tbuf1.Get<uint32_t>();
-
-        TBuf<TPosition::A1> tbuf2;
-        tpipe.InitBuffer(tbuf2, ALIGN_ADDR(dataSize * sizeof(uint16_t)));
-        output_local = tbuf2.Get<uint16_t>();
-    }
+    auto input0 = MakeTensor(param.pos, ALIGN_ADDR(dataSize * sizeof(uint16_t)));
+    auto offset = MakeTensor(param.pos, offsetLen * sizeof(uint32_t));
+    auto output = MakeTensor(param.pos, ALIGN_ADDR(dataSize * sizeof(uint16_t)));
 
     uint16_t dstBlockStride = param.dstBlkStride;
     uint8_t repeatTimes = param.repeat;
     uint8_t dstRepeatStride = param.dstRptStride;
-    check::VecGatherApiParams chkParams { (uint64_t)output_local.GetPhyAddr(),
-        (uint64_t)input0_local.GetPhyAddr(),
-        (uint64_t)offset_local.GetPhyAddr(),
+    check::VecGatherApiParams chkParams { output.addr,
+        input0.addr,
+        offset.addr,
         repeatTimes,
         (uint16_t)(dstBlockStride),
         (uint16_t)(dstRepeatStride),
         (uint32_t)(sizeof(uint16_t)),
         (uint32_t)(sizeof(uint16_t)),
         (uint32_t)(sizeof(uint32_t)),
-        (uint64_t)(output_local.GetLength()),
-        (uint64_t)(input0_local.GetLength()),
-        (uint64_t)(offset_local.GetLength()),
-        (uint8_t)(output_local.GetPosition()),
-        (uint8_t)(input0_local.GetPosition()),
-        (uint8_t)(offset_local.GetPosition()) };
+        output.length,
+        input0.length,
+        offset.length,
+        LogicPos(output),
+        LogicPos(input0),
+        LogicPos(offset) };
     check::TikcppVecGatherbCheck chkIns { "vgatherb", chkParams };
     uint64_t mask = 128;
     MaskSetter::Instance().SetMask(true);

@@ -10,12 +10,13 @@
 #include <gtest/gtest.h>
 #define private public
 #define protected public
-#include "kernel_operator.h"
+#include "api_check_test_utils.h"
 #include "api_check/kernel_cpu_check.h"
-#include "test_utils.h"
 
 using namespace std;
 using namespace AscendC;
+using AscToolsUt::LogicPos;
+using AscToolsUt::MakeTensor;
 
 class TestBroadCastToMMCheck : public testing::Test {
 protected:
@@ -62,46 +63,26 @@ INSTANTIATE_TEST_CASE_P(TEST_BROADCAST_TO_MM_CHECK, TestBroadCastToMMApiCheckSui
 
 TEST_P(TestBroadCastToMMApiCheckSuite, BroadCastToMMApiCheckAllHighLevel)
 {
-    TPipe tpipe;
     auto param = GetParam();
     uint64_t srcSize_ele = param.srcSize_ele;
     uint64_t dstSize_ele = param.dstSize_ele;
 
-    LocalTensor<half> input;
-    if (param.srcpos == TPosition::VECCALC) {
-        TBuf<TPosition::VECCALC> tbuf;
-        tpipe.InitBuffer(tbuf, ALIGN_ADDR(srcSize_ele * sizeof(half)));
-        input = tbuf.Get<half>();
-    } else {
-        TBuf<TPosition::A1> tbuf;
-        tpipe.InitBuffer(tbuf, ALIGN_ADDR(srcSize_ele * sizeof(half)));
-        input = tbuf.Get<half>();
-    }
-
-    LocalTensor<half> output;
-    if (param.dstpos == TPosition::CO1) {
-        TBuf<TPosition::CO1> tbuf1;
-        tpipe.InitBuffer(tbuf1, ALIGN_ADDR(dstSize_ele * sizeof(half)));
-        output = tbuf1.Get<half>();
-    } else {
-        TBuf<TPosition::B1> tbuf1;
-        tpipe.InitBuffer(tbuf1, ALIGN_ADDR(dstSize_ele * sizeof(half)));
-        output = tbuf1.Get<half>();
-    }
+    auto input = MakeTensor(param.srcpos, ALIGN_ADDR(srcSize_ele * sizeof(half)));
+    auto output = MakeTensor(param.dstpos, ALIGN_ADDR(dstSize_ele * sizeof(half)));
 
     uint32_t blockCount = param.blockCount;
     uint8_t blockLen = param.blockLen;
     uint8_t srcGap = param.srcGap;
     uint8_t dstGap = param.dstGap;
 
-    check::VecBroadCastToMMApiParams chkParams { (uint64_t)output.GetPhyAddr(),
-        (uint64_t)input.GetPhyAddr(),
+    check::VecBroadCastToMMApiParams chkParams { output.addr,
+        input.addr,
         (uint32_t)(sizeof(half)),
         (uint32_t)(sizeof(half)),
-        (uint64_t)(output.GetLength()),
-        (uint64_t)(input.GetLength()),
-        (uint8_t)(output.GetPosition()),
-        (uint8_t)(input.GetPosition()),
+        output.length,
+        input.length,
+        LogicPos(output),
+        LogicPos(input),
         blockCount,
         blockLen,
         srcGap,
