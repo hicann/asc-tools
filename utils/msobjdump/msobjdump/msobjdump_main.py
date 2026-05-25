@@ -47,6 +47,7 @@ KERNEL_TYPE_MAP = {'0': 'mix', '1': 'aiv', '2': 'aic'}
 F_TYPE_KTYPE = 1
 F_TYPE_CROSS_CORE_SYNC = 2
 F_TYPE_MIX_TASK_RATION = 3
+F_TYPE_ENABLE_EARLY_START = 11
 F_TYPE_DETERMINISTIC_INFO = 13
 F_TYPE_FUNCTION_ENTRY = 14
 F_TYPE_BLOCK_NUM = 15
@@ -55,6 +56,7 @@ F_TYPE_MAP = {
     F_TYPE_KTYPE: "KERNEL_TYPE",
     F_TYPE_CROSS_CORE_SYNC: "CROSS_CORE_SYNC",
     F_TYPE_MIX_TASK_RATION: "MIX_TASK_RATION",
+    F_TYPE_ENABLE_EARLY_START: "ENABLE_EARLY_START",
     F_TYPE_DETERMINISTIC_INFO: "DETERMINISTIC_INFO",
     F_TYPE_FUNCTION_ENTRY: "FUNCTION_ENTRY",
     F_TYPE_BLOCK_NUM: "BLOCK_NUM"
@@ -153,6 +155,9 @@ class ObjDump:
             v, = struct.unpack("I", content[index:index + 4])
             print(f"{F_TYPE_MAP.get(t)}: {K_TYPE_MAP.get(str(v))}")
         elif t == F_TYPE_DETERMINISTIC_INFO:
+            v, = struct.unpack("I", content[index:index + 4])
+            print(f"{F_TYPE_MAP.get(t)}: {v}")
+        elif t == F_TYPE_ENABLE_EARLY_START:
             v, = struct.unpack("I", content[index:index + 4])
             print(f"{F_TYPE_MAP.get(t)}: {v}")
         elif t == F_TYPE_FUNCTION_ENTRY:
@@ -516,10 +521,7 @@ class ObjDump:
                 index += 4
                 if (index + l) <= len(content):
                     self._show_ascend_meta_tlv(content, t, l, index)
-                if t == F_TYPE_FUNCTION_ENTRY:
-                    index = index + l + 3
-                else:
-                    index += l
+                index += l
 
     def _get_elf_ascend_meta_op_tlv(self, meta_infos: dict):
         meta_name = 'meta'

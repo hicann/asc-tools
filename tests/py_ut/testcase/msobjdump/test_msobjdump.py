@@ -289,6 +289,46 @@ class TestMsObjdump(unittest.TestCase):
         self._clean_out_dir(out_dir)
 
     @patch('msobjdump.msobjdump_main.ObjDump._get_segment_content')
+    @patch('msobjdump.utils.get_symbols_in_file')
+    @patch('msobjdump.utils.get_section_headers_in_file')
+    @patch('msobjdump.utils.get_all_section_symbols_in_file')
+    def test_dump_elf_ascend_meta_with_early_start(self, mock_all, mock_section, mock_symbol, mock_elf_content):
+        mock_symbol.return_value = 'test section list \n'
+        mock_all.return_value = 'test all section and symbols \n'
+        mock_section.return_value = \
+            '[15] .ascend.meta.gen_FFN_2000_mix_aic NOTE ' \
+            '0000000000000000 06e108 000018 00      0   0  4\n'
+        mock_elf_content.return_value = (
+            b'\x01\x00\x04\x00\x04\x00\x00\x00'
+            b'\x03\x00\x04\x00\x01\x00\x00\x00'
+            b'\x0b\x00\x04\x00\x01\x00\x00\x00'
+        )
+        parse_mock = MagicMock()
+        out_dir = self._make_out_dir('test_dump_elf_ascend_meta_early_start')
+        parse_mock.out_dir = out_dir
+        elf_file = os.path.join(out_dir, 'test_dump_elf_ascend_meta_early_start.o')
+        parse_mock.dump_elf = elf_file
+        parse_mock.extr_elf = None
+        parse_mock.list_elf = None
+        with open(elf_file, 'a+') as f:
+            f.write('test')
+
+        buf = StringIO()
+        try:
+            with contextlib.redirect_stdout(buf):
+                msobjdump_main.run_obj_dump(parse_mock)
+        except RuntimeError as e:
+            print(f'runtime error: {str(e)}')
+            self.assertTrue(False)
+        else:
+            print("test run dump elf without exception")
+            output = buf.getvalue()
+            self.assertIn('ENABLE_EARLY_START: 1', output)
+            self.assertIn('KERNEL_TYPE: MIX_AIC_MAIN', output)
+            self.assertIn('MIX_TASK_RATION: [1:0]', output)
+        self._clean_out_dir(out_dir)
+
+    @patch('msobjdump.msobjdump_main.ObjDump._get_segment_content')
     @patch('msobjdump.utils.extract_aicore_binary_from_elf')
     @patch('msobjdump.utils.get_all_section_symbols_in_file')
     @patch('msobjdump.utils.get_section_headers_in_file')
