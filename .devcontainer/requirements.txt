@@ -1,0 +1,25 @@
+setuptools
+attrs
+decorator
+psutil
+scipy
+absl-py
+ml-dtypes
+tornado
+numpy>=2.2,<2.3
+pybind11>=2.13.6,<3.0.0
+PyYAML
+ruamel.yaml
+jinja2
+coverage
+pytest
+cloudpickle
+build
+onnx==1.16.0
+protobuf==3.20.3
+expecttest
+tqdm
+torch @ https://download.pytorch.org/whl/cpu/torch-2.7.1%2Bcpu-cp312-cp312-manylinux_2_28_x86_64.whl ; platform_machine == "x86_64"
+torch_npu @ https://gitcode.com/Ascend/pytorch/releases/download/v26.0.0-pytorch2.7.1/torch_npu-2.7.1.post4-cp312-cp312-manylinux_2_28_x86_64.whl ; platform_machine == "x86_64"
+torch @ https://download.pytorch.org/whl/cpu/torch-2.7.1%2Bcpu-cp312-cp312-manylinux_2_28_aarch64.whl ; platform_machine == "aarch64"
+torch_npu @ https://gitcode.com/Ascend/pytorch/releases/download/v26.0.0-pytorch2.7.1/torch_npu-2.7.1.post4-cp312-cp312-manylinux_2_28_aarch64.whl ; platform_machine == "aarch64"

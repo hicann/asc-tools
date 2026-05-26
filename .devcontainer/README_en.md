@@ -45,8 +45,9 @@ if the command is not found, install it:
 
 ```bash
 mkdir -p /usr/local/lib/docker/cli-plugins
-ARCH=$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/')
-curl -fsSL "https://github.com/docker/buildx/releases/latest/download/buildx-linux-${ARCH}" \
+version="v0.34.1"
+arch=$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/')
+curl -fsSL "https://github.com/docker/buildx/releases/download/${version}/buildx-${version}.linux-${arch}" \
      -o /usr/local/lib/docker/cli-plugins/docker-buildx
 chmod +x /usr/local/lib/docker/cli-plugins/docker-buildx
 ```
@@ -122,11 +123,11 @@ The Dev Containers extension will automatically build the image and start the co
 
 ### Step 6: Install CANN inside the container
 
-After the container starts, in the container terminal refer to the [📥 Download and Install CANN Packages](../docs/quick_start.md#cann-install) section to download and install the toolkit and ops packages.
+After the container starts, in the container terminal refer to the [📥 Download and Install CANN Packages](../docs/00_quick_start.md#cann-install) section to download and install the toolkit and ops packages.
 
 ### Step 7: Verify environment
 
-In the container terminal, refer to the [✅ Environment Verification](../docs/quick_start.md#cann-verify) section to confirm NPU device and CANN package status, then follow [⚙️ Environment Variable Configuration](../docs/quick_start.md#cann-env-setup) to load the environment variables. You can then begin kernel development.
+In the container terminal, refer to the [✅ Environment Verification](../docs/00_quick_start.md#cann-verify) section to confirm NPU device and CANN package status, then follow [⚙️ Environment Variable Configuration](../docs/00_quick_start.md#cann-env-setup) to load the environment variables. You can then begin kernel development.
 
 ## 🤖 Quick Start (AI Agent)<a name="quick-start-ai-agent"></a>
 
@@ -185,7 +186,7 @@ docker run -itd --name ascendc_container ascendc:ubuntu24.04
 > [!IMPORTANT]
 >
 > - If the user needs to mount data directories, append each as `-v /host/path:/container/path`.
-> - After the container starts, CANN toolkit and ops packages must be installed manually inside the container. Ask the user for the CANN package paths or installer commands, or refer to the [📥 Download and Install CANN Packages](../docs/quick_start.md#cann-install) section.
+> - After the container starts, CANN toolkit and ops packages must be installed manually inside the container. Ask the user for the CANN package paths or installer commands, or refer to the [📥 Download and Install CANN Packages](../docs/00_quick_start.md#cann-install) section.
 
 ## 🐍 Python Environment
 
@@ -201,23 +202,27 @@ Default active environment is `py312`.
 
 ### Mirror Sources
 
-Default mirror sources can be overridden at build time via build arguments:
+Build args and defaults:
+
+| Build arg | Default | Description |
+| --- | --- | --- |
+| `GENERAL_MIRROR` | `mirrors.huaweicloud.com` | Shared host for apt / pypi packages |
+| `CONDA_MIRROR` | `https://mirrors.tuna.tsinghua.edu.cn/anaconda` | conda channels prefix; include the scheme |
+| `REPO_SCRIPT_URL` | `https://mirrors.tuna.tsinghua.edu.cn/git/git-repo` | `repo` tool script download URL; replace it with any accessible script URL as needed, such as `https://storage.googleapis.com/git-repo-downloads/repo` |
+| `REPO_GIT_URL` | `https://mirrors.ustc.edu.cn/aosp/git-repo` | Repository URL used by the `repo` tool at runtime |
+
+Override example:
 
 ```bash
 docker buildx build --network host \
-  --build-arg APT_MIRROR=mirrors.ustc.edu.cn \
   --build-arg CONDA_MIRROR=https://mirrors.ustc.edu.cn/anaconda \
-  --build-arg PYPI_MIRROR=https://pypi.mirrors.ustc.edu.cn/simple \
+  --build-arg REPO_SCRIPT_URL=https://storage.googleapis.com/git-repo-downloads/repo \
   -t ascendc:ubuntu24.04 .devcontainer/
 ```
 
-Available mirrors:
+### Build Cache
 
-| Build arg | Default | Tsinghua | USTC | Huawei |
-| :----------: | ------ | ---------- | -------- | -------- |
-| `APT_MIRROR` | `mirrors.huaweicloud.com` | `mirrors.tuna.tsinghua.edu.cn` | `mirrors.ustc.edu.cn` | `mirrors.huaweicloud.com` |
-| `CONDA_MIRROR` | `mirrors.tuna.tsinghua.edu.cn/anaconda` | `mirrors.tuna.tsinghua.edu.cn/anaconda` | `mirrors.ustc.edu.cn/anaconda` | — |
-| `PYPI_MIRROR` | `repo.huaweicloud.com/repository/pypi/simple` | `pypi.tuna.tsinghua.edu.cn/simple` | `pypi.mirrors.ustc.edu.cn/simple` | `repo.huaweicloud.com/repository/pypi/simple` |
+The Dockerfile uses BuildKit `--mount=type=cache` for apt / pip. On re-builds (when non-package layers change), package indexes and previously downloaded wheels are reused and the build finishes in seconds. `docker buildx build` enables BuildKit by default — no extra configuration required.
 
 ### Mount Directories
 
