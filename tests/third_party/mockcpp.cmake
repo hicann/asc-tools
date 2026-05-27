@@ -58,7 +58,7 @@ if (NOT EXISTS "${CMAKE_INSTALL_PREFIX}/mockcpp/lib/libmockcpp.a")
     set(MOCKCPP_OPTS
         -DCMAKE_CXX_FLAGS=${mockcpp_CXXFLAGS}
         -DCMAKE_C_FLAGS=${mockcpp_FLAGS}
-        -DBOOST_INCLUDE_DIRS=${BOOST_PATH}
+        -DBOOST_INCLUDE_DIRS=${BOOST_SRC_PATH}
         -DCMAKE_SHARED_LINKER_FLAGS=${mockcpp_LINKER_FLAGS}
         -DCMAKE_EXE_LINKER_FLAGS=${mockcpp_LINKER_FLAGS}
         -DBUILD_32_BIT_TARGET_BY_64_BIT_COMPILER=OFF
@@ -96,6 +96,7 @@ if (NOT EXISTS "${CMAKE_INSTALL_PREFIX}/mockcpp/lib/libmockcpp.a")
         ExternalProject_Add(mockcpp
             URL ${REQ_URL}
             URL_HASH SHA256=73ab0a8b6d1052361c2cebd85e022c0396f928d2e077bf132790ae3be766f603
+            DEPENDS third_party_boost
             DOWNLOAD_DIR ${third_party_TEM_DIR}
             SOURCE_DIR ${mockcpp_SRC_DIR}
             TLS_VERIFY OFF
@@ -111,7 +112,7 @@ set(MOCKCPP_DIR ${CMAKE_INSTALL_PREFIX}/mockcpp)
 
 set(MOCKCPP_INCLUDE_ONE ${MOCKCPP_DIR}/include)
 
-set(MOCKCPP_INCLUDE_TWO ${BOOST_PATH})
+set(MOCKCPP_INCLUDE_TWO ${BOOST_SRC_PATH})
 
 set(MOCKCPP_STATIC_LIBRARY ${MOCKCPP_DIR}/lib/libmockcpp.a)
 
