@@ -23,6 +23,8 @@ BUILTIN = "builtin"
 CUSTOM = "custom"
 CUSTOM_OPP_ENV = "ASCEND_CUSTOM_OPP_PATH"
 ASCEND_HOME_ENV = "ASCEND_HOME_PATH"
+CANN_ENV_ERROR = "Error: CANN environment variables are not configured."
+CANN_ENV_SOURCE_HINT = "Please execute: source <CANN_install_path>/cann/set_env.sh"
 
 
 @dataclass
@@ -88,13 +90,90 @@ class ConflictReport:
         return bool(self.custom_builtin or self.custom_custom)
 
 
-def expand_soc_aliases(soc_version: str) -> List[str]:
-    """Expand SoC aliases for OpType package directory lookup."""
-    normalized_soc = soc_version.lower()
+@dataclass
+class SocNameMap:
+    """Map public SoC versions to internal OPP config directory names."""
+
+    external_to_short: Dict[str, List[str]] = field(default_factory=dict)
+    external_lower_to_short: Dict[str, List[str]] = field(default_factory=dict)
+    short_to_external: Dict[str, List[str]] = field(default_factory=dict)
+
+
+def _append_unique(items: List[str], item: str) -> None:
+    if item and item not in items:
+        items.append(item)
+
+
+def _read_platform_config_soc_names(config_file: Path) -> Tuple[Optional[str], Optional[str]]:
+    external_soc = None
+    short_soc = None
+    try:
+        with config_file.open("r", encoding="utf-8") as file_obj:
+            for raw_line in file_obj:
+                line = raw_line.strip()
+                if not line or line.startswith("#") or "=" not in line:
+                    continue
+                key, value = [part.strip() for part in line.split("=", 1)]
+                lowered_key = key.lower()
+                if lowered_key == "soc_version":
+                    external_soc = value
+                elif lowered_key == "short_soc_version":
+                    short_soc = value
+    except OSError:
+        return None, None
+    return external_soc, short_soc
+
+
+def _platform_config_dirs(ascend_home_path: Path) -> List[Path]:
+    """Return platform_config directories without assuming a fixed CPU architecture."""
+    candidates = []
+    for child in sorted(ascend_home_path.glob("*-linux")):
+        platform_config_dir = child / "data" / "platform_config"
+        if platform_config_dir.is_dir():
+            candidates.append(platform_config_dir)
+    return candidates
+
+
+def load_soc_name_map(ascend_home_path: Optional[Path]) -> SocNameMap:
+    """Load public SoC name and internal short-name mapping from CANN platform_config."""
+    name_map = SocNameMap()
+    if not ascend_home_path:
+        return name_map
+    for platform_config_dir in _platform_config_dirs(ascend_home_path):
+        for config_file in sorted(platform_config_dir.glob("*.ini")):
+            external_soc, short_soc = _read_platform_config_soc_names(config_file)
+            if not external_soc or not short_soc:
+                continue
+            short_key = short_soc.lower()
+            _append_unique(name_map.external_to_short.setdefault(external_soc, []), short_key)
+            _append_unique(name_map.external_lower_to_short.setdefault(external_soc.lower(), []), short_key)
+            _append_unique(name_map.short_to_external.setdefault(short_key, []), external_soc)
+    return name_map
+
+
+def _expand_internal_soc_names(soc_names: Iterable[str]) -> List[str]:
     alias_map = {
         "ascend950": ["ascend950", "ascend910_95"],
     }
-    return alias_map.get(normalized_soc, [normalized_soc])
+    expanded_names = []
+    for soc_name in soc_names:
+        for expanded_name in alias_map.get(soc_name, [soc_name]):
+            _append_unique(expanded_names, expanded_name)
+    return expanded_names
+
+
+def expand_soc_aliases(soc_version: str, soc_name_map: Optional[SocNameMap] = None) -> List[str]:
+    """Resolve SoC input to OPP config directory names."""
+    normalized_soc = soc_version.lower()
+    if soc_name_map:
+        mapped_names = soc_name_map.external_to_short.get(soc_version)
+        if not mapped_names:
+            mapped_names = soc_name_map.external_lower_to_short.get(normalized_soc)
+        if mapped_names:
+            return _expand_internal_soc_names(mapped_names)
+    if soc_version != normalized_soc:
+        return []
+    return _expand_internal_soc_names([normalized_soc])
 
 
 def _read_json_file(json_file: Path, source: OpTypeSource) -> Optional[Any]:
@@ -305,7 +384,7 @@ def collect_custom_optypes(ascend_home_path: Path, custom_opp_path: Optional[str
     return _deduplicate_sources(sources), warnings
 
 
-def _available_soc_dirs(ascend_home_path: Path, custom_opp_path: Optional[str] = None) -> List[str]:
+def _available_soc_dir_names(ascend_home_path: Path, custom_opp_path: Optional[str] = None) -> List[str]:
     roots = [
         ascend_home_path / "opp" / "built-in" / "op_impl" / "ai_core" / "tbe" / "config",
         ascend_home_path / "opp" / "vendors",
@@ -323,53 +402,39 @@ def _available_soc_dirs(ascend_home_path: Path, custom_opp_path: Optional[str] =
 
 
 def scan_optypes(user_soc: str, need_builtin: bool = True, need_custom: bool = True) -> ScanResult:
-    soc_names = expand_soc_aliases(user_soc)
     ascend_home = os.environ.get(ASCEND_HOME_ENV)
     custom_opp_path = os.environ.get(CUSTOM_OPP_ENV)
     ascend_home_path = Path(ascend_home) if ascend_home else None
-    result = ScanResult(user_soc=user_soc.lower(), soc_names=soc_names,
+    soc_name_map = load_soc_name_map(ascend_home_path)
+    soc_names = expand_soc_aliases(user_soc, soc_name_map)
+    result = ScanResult(user_soc=user_soc, soc_names=soc_names,
                         ascend_home_path=ascend_home_path, custom_opp_path=custom_opp_path)
     if not ascend_home_path:
-        result.errors.append("Error: ASCEND_HOME_PATH is not set; cannot locate CANN OPP built-in packages.")
-        result.errors.append(
-            "Please source the CANN package set_env.sh first, "
-            "for example: source <CANN_INSTALL_PATH>/cann/set_env.sh"
-        )
+        result.errors.append(CANN_ENV_ERROR)
+        result.errors.append(CANN_ENV_SOURCE_HINT)
         return result
     if not (ascend_home_path / "opp").exists():
-        result.errors.append(
-            "Error: ASCEND_HOME_PATH is invalid; opp directory not found: {}".format(
-                ascend_home_path / "opp"
-            )
-        )
+        result.errors.append(CANN_ENV_ERROR)
+        result.errors.append(CANN_ENV_SOURCE_HINT)
+        return result
+    if not soc_names:
+        result.errors.append(_format_unsupported_soc_error(result.user_soc))
         return result
 
     if need_builtin:
         result.builtin_sources = collect_builtin_optypes(ascend_home_path, result.user_soc, soc_names)
         if not result.builtin_sources:
-            result.errors.append(
-                _format_missing_soc_error(
-                    "Built-in package config not found",
-                    result.user_soc,
-                    soc_names,
-                    _available_soc_dirs(ascend_home_path),
-                )
-            )
+            result.errors.append(_format_unsupported_soc_error(result.user_soc))
     if need_custom:
         result.custom_sources, custom_warnings = collect_custom_optypes(ascend_home_path, custom_opp_path,
                                                                         result.user_soc, soc_names)
         result.warnings.extend(custom_warnings)
         if not result.custom_sources:
-            available_soc_dirs = _available_soc_dirs(ascend_home_path, custom_opp_path)
-            if available_soc_dirs and not set(soc_names).intersection({soc.lower() for soc in available_soc_dirs}):
-                result.errors.append(
-                    _format_missing_soc_error(
-                        "Custom package config not found",
-                        result.user_soc,
-                        soc_names,
-                        available_soc_dirs,
-                    )
-                )
+            available_soc_dir_names = _available_soc_dir_names(ascend_home_path, custom_opp_path)
+            if available_soc_dir_names and not set(soc_names).intersection(
+                {soc.lower() for soc in available_soc_dir_names}
+            ):
+                result.errors.append(_format_unsupported_soc_error(result.user_soc))
             else:
                 result.warnings.append(
                     "No custom packages found. Checked ${ASCEND_HOME_PATH}/opp/vendors "
@@ -378,12 +443,8 @@ def scan_optypes(user_soc: str, need_builtin: bool = True, need_custom: bool = T
     return result
 
 
-def _format_missing_soc_error(prefix: str, user_soc: str, soc_names: Sequence[str], available: Sequence[str]) -> str:
-    lines = ["Error: {}: {}".format(prefix, user_soc)]
-    if available:
-        lines.append("Available SoC directories:")
-        lines.extend(["  - {}".format(soc_name) for soc_name in available])
-    return "\n".join(lines)
+def _format_unsupported_soc_error(user_soc: str) -> str:
+    return "Error: SoC name is not supported: {}".format(user_soc)
 
 
 def detect_conflicts(builtin_sources: Sequence[OpTypeSource], custom_sources: Sequence[OpTypeSource]) -> ConflictReport:
@@ -452,13 +513,13 @@ def _print_sources(result: ScanResult) -> None:
             source.status,
             len(source.optypes),
             len(source.config_files),
-            source.matched_soc,
+            source.soc,
             source.root_path,
         ]
         for source in _all_sources(result)
     ]
     if rows:
-        for line in _format_table(["Type", "Status", "OpTypes", "ConfigFiles", "MatchedSoC", "Path"], rows):
+        for line in _format_table(["Type", "Status", "OpTypes", "ConfigFiles", "SoC", "Path"], rows):
             print(line)
     else:
         print("  <no matching sources>")
@@ -498,8 +559,7 @@ def _print_source_optypes(source: OpTypeSource) -> None:
     source_optypes = sorted(source.optypes)
     print("  [{type}] {path}".format(type=source.source_type, path=source.root_path))
     _print_kv("OpTypes", len(source_optypes), width=16)
-    if source.matched_soc:
-        _print_kv("Matched SoC dirs", source.matched_soc, width=16)
+    _print_kv("SoC", source.soc, width=16)
     if source_optypes:
         print("    OpType")
         print("    ------")
@@ -575,10 +635,10 @@ def _build_parser() -> argparse.ArgumentParser:
     mode_group.add_argument("--all", action="store_true", help="List all built-in and custom OpTypes.")
     parser.add_argument(
         "--detect-conflicts",
-        metavar="SOC_VERSION",
+        metavar="SOC_NAME",
         help="Detect duplicate OpTypes for the specified SoC.",
     )
-    parser.add_argument("soc_version", nargs="?", help="Specify the SoC version, for example ascend910b or ascend950.")
+    parser.add_argument("soc_version", nargs="?", help="Specify the public SoC name, for example Ascend910B.")
     return parser
 
 

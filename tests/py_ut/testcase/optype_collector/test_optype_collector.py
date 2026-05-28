@@ -54,6 +54,15 @@ class TestOpTypeCollector(unittest.TestCase):
     def _custom_opp_config(self, root, vendor, soc, name="custom.json"):
         return root / vendor / "op_impl" / "ai_core" / "tbe" / "config" / soc / name
 
+    def _platform_config(self, arch, file_name, soc_version, short_soc_version):
+        config_path = self.ascend_home / arch / "data" / "platform_config" / file_name
+        config_path.parent.mkdir(parents=True, exist_ok=True)
+        config_path.write_text(
+            "[version]\nSoC_version={}\nShort_SoC_version={}\n".format(soc_version, short_soc_version),
+            encoding="utf-8",
+        )
+        return config_path
+
     def _run_main(self, argv, env):
         output = StringIO()
         with patch.dict(os.environ, env, clear=True):
@@ -61,18 +70,89 @@ class TestOpTypeCollector(unittest.TestCase):
                 ret = optype_collector_main.main(argv)
         return ret, output.getvalue()
 
-    def test_expand_soc_aliases_only_expands_ascend950_to_legacy_name(self):
+    def test_platform_config_maps_public_soc_to_short_lookup_and_preserves_input_in_output(self):
+        self._platform_config("aarch64-linux", "Ascend910B.ini", "Ascend910B", "Ascend910")
+        self._write_json(self._builtin_config("ascend910"), {"PublicMappedOp": {}})
+
+        ret, output = self._run_main(["Ascend910B", "--builtin"], {"ASCEND_HOME_PATH": str(self.ascend_home)})
+
+        self.assertEqual(ret, 0)
+        self.assertIn("PublicMappedOp", output)
+        self.assertIn("SoC                    : Ascend910B", output)
+        self.assertNotIn("MatchedSoC", output)
+        self.assertNotIn("Matched SoC dirs", output)
+
+    def test_platform_config_mapped_ascend950_keeps_legacy_910_95_compatibility(self):
+        self._platform_config("aarch64-linux", "Ascend950DT_95A2.ini", "Ascend950DT_95A2", "Ascend950")
+        self._write_json(self._builtin_config("ascend910_95"), {"LegacyAliasOp": {}})
+        self._write_json(self._builtin_config("ascend950"), {"CurrentAliasOp": {}})
+
+        ret, output = self._run_main(["Ascend950DT_95A2", "--builtin"], {"ASCEND_HOME_PATH": str(self.ascend_home)})
+
+        self.assertEqual(ret, 0)
+        self.assertIn("LegacyAliasOp", output)
+        self.assertIn("CurrentAliasOp", output)
+        self.assertIn("SoC                    : Ascend950DT_95A2", output)
+        self.assertNotIn("SoC                    : ascend910_95", output)
+
+    def test_lowercase_public_soc_maps_to_platform_config_short_name(self):
+        self._platform_config("x86_64-linux", "Ascend910B.ini", "Ascend910B", "Ascend910")
+        self._write_json(self._builtin_config("ascend910"), {"FullNameOnly": {}})
+        self._write_json(self._builtin_config("ascend910b"), {"LegacyLowercaseOnly": {}})
+
+        ret, output = self._run_main(["ascend910b", "--builtin"], {"ASCEND_HOME_PATH": str(self.ascend_home)})
+
+        self.assertEqual(ret, 0)
+        self.assertIn("FullNameOnly", output)
+        self.assertNotIn("LegacyLowercaseOnly", output)
+        self.assertIn("SoC                    : ascend910b", output)
+
+    def test_public_soc_name_case_is_preserved_in_output(self):
+        self._platform_config("x86_64-linux", "Ascend910B.ini", "Ascend910B", "Ascend910")
+        self._write_json(self._builtin_config("ascend910"), {"FullNameOnly": {}})
+        self._write_json(self._builtin_config("ascend910b"), {"CaseFallbackOnly": {}})
+
+        ret, output = self._run_main(["ascend910B", "--builtin"], {"ASCEND_HOME_PATH": str(self.ascend_home)})
+
+        self.assertEqual(ret, 0)
+        self.assertIn("SoC                    : ascend910B", output)
+        self.assertIn("FullNameOnly", output)
+        self.assertNotIn("CaseFallbackOnly", output)
+        self.assertNotIn("Available SoC", output)
+
+    def test_unsupported_soc_error_does_not_list_available_soc_versions(self):
+        self._platform_config("x86_64-linux", "Ascend910B.ini", "Ascend910B", "Ascend910")
+        self._write_json(self._builtin_config("ascend910"), {"Add": {}})
+
+        ret, output = self._run_main(["Ascend310P3", "--builtin"], {"ASCEND_HOME_PATH": str(self.ascend_home)})
+
+        self.assertEqual(ret, 2)
+        self.assertIn("SoC name is not supported: Ascend310P3", output)
+        self.assertNotIn("Available SoC", output)
+        self.assertNotIn("Ascend910B", output)
+
+    def test_expand_soc_aliases_only_expands_lowercase_ascend950_to_legacy_name(self):
         self.assertEqual(optype_collector_main.expand_soc_aliases("ascend910_95"), ["ascend910_95"])
-        self.assertEqual(optype_collector_main.expand_soc_aliases("Ascend950"), ["ascend950", "ascend910_95"])
-        self.assertEqual(optype_collector_main.expand_soc_aliases("Ascend910B"), ["ascend910b"])
+        self.assertEqual(optype_collector_main.expand_soc_aliases("ascend950"), ["ascend950", "ascend910_95"])
+        self.assertEqual(optype_collector_main.expand_soc_aliases("Ascend950"), [])
+        self.assertEqual(optype_collector_main.expand_soc_aliases("Ascend910B"), [])
+
+    def test_expand_soc_aliases_uses_public_soc_map_case_insensitively(self):
+        name_map = optype_collector_main.SocNameMap(
+            external_to_short={"Ascend910B": ["ascend910"]},
+            external_lower_to_short={"ascend910b": ["ascend910"]},
+        )
+
+        self.assertEqual(optype_collector_main.expand_soc_aliases("Ascend910B", name_map), ["ascend910"])
+        self.assertEqual(optype_collector_main.expand_soc_aliases("ascend910B", name_map), ["ascend910"])
 
     def test_missing_ascend_home_path_tells_user_to_source_cann_set_env(self):
         ret, output = self._run_main(["ascend910b", "--builtin"], {})
 
         self.assertEqual(ret, 2)
-        self.assertIn("ASCEND_HOME_PATH is not set", output)
-        self.assertIn("source", output)
-        self.assertIn("source <CANN_INSTALL_PATH>/cann/set_env.sh", output)
+        self.assertIn("CANN environment variables are not configured", output)
+        self.assertIn("Please execute: source <CANN_install_path>/cann/set_env.sh", output)
+        self.assertNotIn("ASCEND_HOME_PATH is not set", output)
 
     def test_invalid_ascend_home_path_returns_error_before_scan(self):
         self.ascend_home.mkdir(parents=True, exist_ok=True)
@@ -80,29 +160,31 @@ class TestOpTypeCollector(unittest.TestCase):
         ret, output = self._run_main(["ascend910b", "--builtin"], {"ASCEND_HOME_PATH": str(self.ascend_home)})
 
         self.assertEqual(ret, 2)
-        self.assertIn("ASCEND_HOME_PATH is invalid", output)
-        self.assertIn(str(self.ascend_home / "opp"), output)
+        self.assertIn("CANN environment variables are not configured", output)
+        self.assertIn("Please execute: source <CANN_install_path>/cann/set_env.sh", output)
+        self.assertNotIn("ASCEND_HOME_PATH is invalid", output)
+        self.assertNotIn(str(self.ascend_home / "opp"), output)
         self.assertIn("[Errors]", output)
 
-    def test_missing_builtin_soc_lists_available_soc_dirs(self):
+    def test_missing_builtin_soc_reports_unsupported_without_available_soc_dirs(self):
         self._write_json(self._builtin_config("ascend910b"), {"Add": {}})
 
         ret, output = self._run_main(["ascend310p", "--builtin"], {"ASCEND_HOME_PATH": str(self.ascend_home)})
 
         self.assertEqual(ret, 2)
-        self.assertIn("Built-in package config not found", output)
-        self.assertIn("Available SoC directories", output)
-        self.assertIn("ascend910b", output)
+        self.assertIn("SoC name is not supported: ascend310p", output)
+        self.assertNotIn("Available SoC", output)
+        self.assertNotIn("ascend910b", output)
 
-    def test_custom_list_reports_wrong_soc_and_available_soc_dirs(self):
+    def test_custom_list_reports_wrong_soc_without_available_soc_dirs(self):
         self._write_json(self._vendor_config("vendor_a", "ascend910b"), {"CustomOnly": {}})
 
         ret, output = self._run_main(["ascend310p", "--custom"], {"ASCEND_HOME_PATH": str(self.ascend_home)})
 
         self.assertEqual(ret, 2)
-        self.assertIn("Custom package config not found", output)
-        self.assertIn("Available SoC directories", output)
-        self.assertIn("ascend910b", output)
+        self.assertIn("SoC name is not supported: ascend310p", output)
+        self.assertNotIn("Available SoC", output)
+        self.assertNotIn("ascend910b", output)
         self.assertIn("[Errors]", output)
 
     def test_custom_list_reports_wrong_soc_from_ascend_custom_opp_path(self):
@@ -119,9 +201,9 @@ class TestOpTypeCollector(unittest.TestCase):
         )
 
         self.assertEqual(ret, 2)
-        self.assertIn("Custom package config not found", output)
-        self.assertIn("Available SoC directories", output)
-        self.assertIn("ascend910b", output)
+        self.assertIn("SoC name is not supported: qwe", output)
+        self.assertNotIn("Available SoC", output)
+        self.assertNotIn("ascend910b", output)
 
     def test_wrapper_reports_wrong_custom_soc_from_ascend_custom_opp_path(self):
         custom_root = self.tmp_dir / "direct_custom"
@@ -148,9 +230,9 @@ class TestOpTypeCollector(unittest.TestCase):
         )
 
         self.assertEqual(proc.returncode, 2)
-        self.assertIn("Custom package config not found", proc.stdout)
-        self.assertIn("Available SoC directories", proc.stdout)
-        self.assertIn("ascend910b", proc.stdout)
+        self.assertIn("SoC name is not supported: qwe", proc.stdout)
+        self.assertNotIn("Available SoC", proc.stdout)
+        self.assertNotIn("ascend910b", proc.stdout)
 
     def test_missing_soc_error_does_not_expose_tried_soc_dirs(self):
         self._write_json(self._builtin_config("ascend910b"), {"Add": {}})
@@ -158,7 +240,8 @@ class TestOpTypeCollector(unittest.TestCase):
         ret, output = self._run_main(["ascend950", "--builtin"], {"ASCEND_HOME_PATH": str(self.ascend_home)})
 
         self.assertEqual(ret, 2)
-        self.assertIn("Built-in package config not found", output)
+        self.assertIn("SoC name is not supported: ascend950", output)
+        self.assertNotIn("Available SoC", output)
         self.assertNotIn("Tried SoC", output)
         self.assertNotIn("Tried SoC dirs", output)
 
@@ -251,8 +334,8 @@ class TestOpTypeCollector(unittest.TestCase):
         self.assertIn("AliasOpB", output)
         self.assertIn("SoC                    : ascend950", output)
         self.assertNotIn("SoC                    : ascend910_95", output)
-        self.assertIn("ascend910_95", output)
-        self.assertIn("ascend950", output)
+        self.assertNotIn("MatchedSoC", output)
+        self.assertNotIn("Matched SoC dirs", output)
 
     def test_ascend910_95_does_not_collect_ascend950_dir(self):
         self._write_json(self._builtin_config("ascend910_95"), {"LegacyOnly": {}})
@@ -431,7 +514,8 @@ class TestOpTypeCollector(unittest.TestCase):
         ret, output = self._run_main(["--detect-conflicts", "ascend910b"], {})
 
         self.assertEqual(ret, 2)
-        self.assertIn("ASCEND_HOME_PATH is not set", output)
+        self.assertIn("CANN environment variables are not configured", output)
+        self.assertIn("Please execute: source <CANN_install_path>/cann/set_env.sh", output)
         self.assertIn("[Conflict Summary]", output)
 
     def test_module_entrypoint_uses_absolute_import_like_msobjdump(self):
