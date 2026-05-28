@@ -12,8 +12,6 @@ set(ASC_TOOLS_VERSION "9.1.0")
 set_cann_package(asc-tools VERSION ${ASC_TOOLS_VERSION})
 
 set_cann_build_dependencies(runtime "CUR_MAJOR_MINOR_VER")
-set_cann_build_dependencies(metadef "CUR_MAJOR_MINOR_VER")
-set_cann_build_dependencies(ge-executor "CUR_MAJOR_MINOR_VER")
 
 set_cann_run_dependencies(runtime "CUR_MAJOR_MINOR_VER")
 set_cann_run_dependencies(ge-executor "CUR_MAJOR_MINOR_VER")
