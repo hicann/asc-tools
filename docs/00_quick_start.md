@@ -234,7 +234,7 @@ source /usr/local/Ascend/cann/set_env.sh
 > [!NOTE] 使用前须知
 > 如果您使用**容器化技术**，容器中已为您安装好依赖，可跳过此步骤。
 
-   以下所列仅为本开源仓源码编译用到的依赖，可参考仓库内[DevContainer Python依赖](../.devcontainer/requirements.txt)，其中python、gcc、cmake的安装方法请参见配套版本的[用户手册](https://hiascend.com/document/redirect/CannCommunityInstDepend)，选择安装场景后，参见"安装CANN > 安装依赖"章节进行相关依赖的安装。
+   以下所列仅为本开源仓源码编译用到的依赖，可参考仓库内[DevContainer Python依赖（以 Python 3.12 为例）](../.devcontainer/requirements.txt)，其中python、gcc、cmake的安装方法请参见配套版本的[用户手册](https://hiascend.com/document/redirect/CannCommunityInstDepend)，选择安装场景后，参见"安装CANN > 安装依赖"章节进行相关依赖的安装。
 
    - python >= 3.7.0
 
