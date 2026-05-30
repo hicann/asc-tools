@@ -94,8 +94,8 @@ class TestOpTypeCollectorPackaging(unittest.TestCase):
     def test_docs_describe_usage_without_exposing_install_or_internal_soc_details(self):
         user_doc = USER_DOC.read_text(encoding="utf-8")
 
-        self.assertIn("optype_collector {soc_name}", user_doc)
-        self.assertIn("optype_collector --detect-conflicts {soc_name}", user_doc)
+        self.assertIn("optype_collector {soc_version}", user_doc)
+        self.assertIn("optype_collector --detect-conflicts {soc_version}", user_doc)
         self.assertIn("用户无需进入工具目录", user_doc)
         self.assertNotIn("${install_path}", user_doc)
         self.assertNotIn("${install_path}/bin/optype_collector", user_doc)

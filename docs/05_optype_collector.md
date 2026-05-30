@@ -30,33 +30,33 @@ source <CANN安装目录>/cann/set_env.sh
 
 ## 命令格式
 
-`{soc_name}` 为目标 SoC 名称，可填写 CANN 支持的产品 SoC 名称。
+`{soc_version}` 为目标 SoC 名称，可填写 CANN 支持的产品 SoC 名称。
 
 已有脚本中的全小写 SoC 名称仍可继续使用。
 
 - 输出内置算子 OpType 清单：
 
   ```bash
-  optype_collector {soc_name}
-  optype_collector {soc_name} --builtin
+  optype_collector {soc_version}
+  optype_collector {soc_version} --builtin
   ```
 
 - 输出自定义算子 OpType 清单：
 
   ```bash
-  optype_collector {soc_name} --custom
+  optype_collector {soc_version} --custom
   ```
 
 - 输出内置算子与自定义算子的全部 OpType 清单：
 
   ```bash
-  optype_collector {soc_name} --all
+  optype_collector {soc_version} --all
   ```
 
 - 检测 OpType 重名冲突：
 
   ```bash
-  optype_collector --detect-conflicts {soc_name}
+  optype_collector --detect-conflicts {soc_version}
   ```
 
 ## 返回值
@@ -79,7 +79,7 @@ source <CANN安装目录>/cann/set_env.sh
 当输入 SoC 不受支持时，工具返回阻塞类错误，并提示：
 
 ```text
-Error: SoC name is not supported: {soc_name}
+Error: SoC name is not supported: {soc_version}
 ```
 
 冲突检测模式会覆盖以下两类冲突：
@@ -90,12 +90,12 @@ Error: SoC name is not supported: {soc_name}
 ## 示例
 
 ```bash
-# 查看 {soc_name} 内置算子 OpType
-optype_collector {soc_name} --builtin
+# 查看 {soc_version} 内置算子 OpType
+optype_collector {soc_version} --builtin
 
-# 查看 {soc_name} 自定义算子 OpType
-optype_collector {soc_name} --custom
+# 查看 {soc_version} 自定义算子 OpType
+optype_collector {soc_version} --custom
 
-# 检测 {soc_name} 下自定义算子与内置算子、自定义算子之间的重名冲突
-optype_collector --detect-conflicts {soc_name}
+# 检测 {soc_version} 下自定义算子与内置算子、自定义算子之间的重名冲突
+optype_collector --detect-conflicts {soc_version}
 ```

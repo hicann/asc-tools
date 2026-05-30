@@ -444,7 +444,7 @@ def scan_optypes(user_soc: str, need_builtin: bool = True, need_custom: bool = T
 
 
 def _format_unsupported_soc_error(user_soc: str) -> str:
-    return "Error: SoC name is not supported: {}".format(user_soc)
+    return "Error: SoC version is not supported: {}".format(user_soc)
 
 
 def detect_conflicts(builtin_sources: Sequence[OpTypeSource], custom_sources: Sequence[OpTypeSource]) -> ConflictReport:
@@ -635,10 +635,10 @@ def _build_parser() -> argparse.ArgumentParser:
     mode_group.add_argument("--all", action="store_true", help="List all built-in and custom OpTypes.")
     parser.add_argument(
         "--detect-conflicts",
-        metavar="SOC_NAME",
+        metavar="SOC_VERSION",
         help="Detect duplicate OpTypes for the specified SoC.",
     )
-    parser.add_argument("soc_version", nargs="?", help="Specify the public SoC name, for example Ascend910B.")
+    parser.add_argument("soc_version", nargs="?", help="Specify the public SoC version.")
     return parser
 
 

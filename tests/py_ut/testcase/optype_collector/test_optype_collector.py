@@ -127,7 +127,7 @@ class TestOpTypeCollector(unittest.TestCase):
         ret, output = self._run_main(["Ascend310P3", "--builtin"], {"ASCEND_HOME_PATH": str(self.ascend_home)})
 
         self.assertEqual(ret, 2)
-        self.assertIn("SoC name is not supported: Ascend310P3", output)
+        self.assertIn("SoC version is not supported: Ascend310P3", output)
         self.assertNotIn("Available SoC", output)
         self.assertNotIn("Ascend910B", output)
 
@@ -172,7 +172,7 @@ class TestOpTypeCollector(unittest.TestCase):
         ret, output = self._run_main(["ascend310p", "--builtin"], {"ASCEND_HOME_PATH": str(self.ascend_home)})
 
         self.assertEqual(ret, 2)
-        self.assertIn("SoC name is not supported: ascend310p", output)
+        self.assertIn("SoC version is not supported: ascend310p", output)
         self.assertNotIn("Available SoC", output)
         self.assertNotIn("ascend910b", output)
 
@@ -182,7 +182,7 @@ class TestOpTypeCollector(unittest.TestCase):
         ret, output = self._run_main(["ascend310p", "--custom"], {"ASCEND_HOME_PATH": str(self.ascend_home)})
 
         self.assertEqual(ret, 2)
-        self.assertIn("SoC name is not supported: ascend310p", output)
+        self.assertIn("SoC version is not supported: ascend310p", output)
         self.assertNotIn("Available SoC", output)
         self.assertNotIn("ascend910b", output)
         self.assertIn("[Errors]", output)
@@ -201,7 +201,7 @@ class TestOpTypeCollector(unittest.TestCase):
         )
 
         self.assertEqual(ret, 2)
-        self.assertIn("SoC name is not supported: qwe", output)
+        self.assertIn("SoC version is not supported: qwe", output)
         self.assertNotIn("Available SoC", output)
         self.assertNotIn("ascend910b", output)
 
@@ -230,7 +230,7 @@ class TestOpTypeCollector(unittest.TestCase):
         )
 
         self.assertEqual(proc.returncode, 2)
-        self.assertIn("SoC name is not supported: qwe", proc.stdout)
+        self.assertIn("SoC version is not supported: qwe", proc.stdout)
         self.assertNotIn("Available SoC", proc.stdout)
         self.assertNotIn("ascend910b", proc.stdout)
 
@@ -240,7 +240,7 @@ class TestOpTypeCollector(unittest.TestCase):
         ret, output = self._run_main(["ascend950", "--builtin"], {"ASCEND_HOME_PATH": str(self.ascend_home)})
 
         self.assertEqual(ret, 2)
-        self.assertIn("SoC name is not supported: ascend950", output)
+        self.assertIn("SoC version is not supported: ascend950", output)
         self.assertNotIn("Available SoC", output)
         self.assertNotIn("Tried SoC", output)
         self.assertNotIn("Tried SoC dirs", output)
