@@ -236,9 +236,9 @@ source /usr/local/Ascend/cann/set_env.sh
 
    以下所列仅为本开源仓源码编译用到的依赖，可参考仓库内[DevContainer Python依赖（以 Python 3.12 为例）](../.devcontainer/requirements.txt)，其中python、gcc、cmake的安装方法请参见配套版本的[用户手册](https://hiascend.com/document/redirect/CannCommunityInstDepend)，选择安装场景后，参见"安装CANN > 安装依赖"章节进行相关依赖的安装。
 
-   - python >= 3.7.0
+   - python >= 3.7.0 (注意：python宣布3.7.x/3.8.x版本已经EOL，CANN即将停止对该版本的支持，请升级到>=3.9.x版本)
 
-   - gcc >= 7.3.0 / g++ >= 7.3.0 (注意：要求gcc与g++版本一致)
+   - gcc与g++支持版本范围为7.3.x版本至14.x版本 (注意：要求gcc与g++版本一致)
 
    - cmake >= 3.16.0
 
