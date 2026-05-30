@@ -95,7 +95,7 @@ class TestOpTypeCollector(unittest.TestCase):
         self.assertIn("SoC                    : Ascend950DT_95A2", output)
         self.assertNotIn("SoC                    : ascend910_95", output)
 
-    def test_lowercase_public_soc_maps_to_platform_config_short_name(self):
+    def test_lowercase_soc_uses_input_as_internal_lookup_name_before_platform_config(self):
         self._platform_config("x86_64-linux", "Ascend910B.ini", "Ascend910B", "Ascend910")
         self._write_json(self._builtin_config("ascend910"), {"FullNameOnly": {}})
         self._write_json(self._builtin_config("ascend910b"), {"LegacyLowercaseOnly": {}})
@@ -103,8 +103,8 @@ class TestOpTypeCollector(unittest.TestCase):
         ret, output = self._run_main(["ascend910b", "--builtin"], {"ASCEND_HOME_PATH": str(self.ascend_home)})
 
         self.assertEqual(ret, 0)
-        self.assertIn("FullNameOnly", output)
-        self.assertNotIn("LegacyLowercaseOnly", output)
+        self.assertIn("LegacyLowercaseOnly", output)
+        self.assertNotIn("FullNameOnly", output)
         self.assertIn("SoC                    : ascend910b", output)
 
     def test_public_soc_name_case_is_preserved_in_output(self):
@@ -145,6 +145,7 @@ class TestOpTypeCollector(unittest.TestCase):
 
         self.assertEqual(optype_collector_main.expand_soc_aliases("Ascend910B", name_map), ["ascend910"])
         self.assertEqual(optype_collector_main.expand_soc_aliases("ascend910B", name_map), ["ascend910"])
+        self.assertEqual(optype_collector_main.expand_soc_aliases("ascend910b", name_map), ["ascend910b"])
 
     def test_missing_ascend_home_path_tells_user_to_source_cann_set_env(self):
         ret, output = self._run_main(["ascend910b", "--builtin"], {})

@@ -165,15 +165,15 @@ def _expand_internal_soc_names(soc_names: Iterable[str]) -> List[str]:
 def expand_soc_aliases(soc_version: str, soc_name_map: Optional[SocNameMap] = None) -> List[str]:
     """Resolve SoC input to OPP config directory names."""
     normalized_soc = soc_version.lower()
+    if soc_version == normalized_soc:
+        return _expand_internal_soc_names([normalized_soc])
     if soc_name_map:
         mapped_names = soc_name_map.external_to_short.get(soc_version)
         if not mapped_names:
             mapped_names = soc_name_map.external_lower_to_short.get(normalized_soc)
         if mapped_names:
             return _expand_internal_soc_names(mapped_names)
-    if soc_version != normalized_soc:
-        return []
-    return _expand_internal_soc_names([normalized_soc])
+    return []
 
 
 def _read_json_file(json_file: Path, source: OpTypeSource) -> Optional[Any]:
