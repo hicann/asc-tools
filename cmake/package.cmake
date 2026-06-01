@@ -63,7 +63,7 @@ function(pack_built_in)
       message(WARNING "Unknown architecture: ${CMAKE_SYSTEM_PROCESSOR}")
   endif ()
 
-  set(script_prefix ${CMAKE_SOURCE_DIR}/scripts/package/asc-tools/scripts)
+  set(script_prefix ${CMAKE_CURRENT_SOURCE_DIR}/scripts/package/asc-tools/scripts)
   install(DIRECTORY ${script_prefix}/
       DESTINATION share/info/asc-tools/script
       FILE_PERMISSIONS

@@ -74,3 +74,8 @@ if(EXISTS ${CMAKE_SOURCE_DIR}/libraries/lib/cmake/targets-tikicpulib-release.cma
         WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/libraries/lib/cmake
     )
 endif()
+
+add_library(cpudebug_stubreg SHARED IMPORTED)
+set_target_properties(cpudebug_stubreg PROPERTIES
+    IMPORTED_LOCATION "${CMAKE_SOURCE_DIR}/libraries/lib/libcpudebug_stubreg.so"
+)

@@ -24,5 +24,5 @@ endif ()
 find_cann_package(unified_dlog REQUIRED)
 find_cann_package(securec REQUIRED)
 find_cann_package(mmpa REQUIRED)
-
+find_cann_package(acl_rt REQUIRED)
 find_cann_package(pvmodel REQUIRED)

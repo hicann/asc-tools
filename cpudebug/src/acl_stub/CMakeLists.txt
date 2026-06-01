@@ -28,12 +28,9 @@ target_compile_definitions(cpudebug_acl_stub PRIVATE
   ASCENDC_CPU_DEBUG=1
 )
 
-target_link_directories(cpudebug_acl_stub PRIVATE
-  ${CMAKE_CURRENT_SOURCE_DIR}/../../../libraries/lib/
-)
-
 target_link_libraries(cpudebug_acl_stub PRIVATE
   $<BUILD_INTERFACE:intf_pub_cxx17>
+  $<BUILD_INTERFACE:acl_rt_headers>
   cpudebug_stubreg
   c_sec
 )
