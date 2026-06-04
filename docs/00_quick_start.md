@@ -381,9 +381,9 @@ source /usr/local/Ascend/cann/set_env.sh
   # 切换到run包生成路径下
   cd build_out
   # 默认路径安装run包
-  ./cann-asc-tools_<cann_version>_linux-<arch>.run --full
+  ./cann-asc-tools_<cann_version>_linux-<arch>.run --full --pylocal
   # 指定路径安装run包
-  ./cann-asc-tools_<cann_version>_linux-<arch>.run --full --install-path=${install_path}
+  ./cann-asc-tools_<cann_version>_linux-<arch>.run --full --pylocal --install-path=${install_path}
   ```
 
 ## UT测试（可选）
