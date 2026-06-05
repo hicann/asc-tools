@@ -24,6 +24,12 @@ else()
   option(BUILD_WITH_INSTALLED_DEPENDENCY_CANN_PKG "Build asc-tools with cann source" OFF)
 endif()
 
+if (ENABLE_TEST)
+    set(CMAKE_SKIP_RPATH FALSE)
+else()
+    set(CMAKE_SKIP_RPATH TRUE)
+endif()
+
 set(KIRIN_BUILD_CPU_DEBUG OFF)
 set(CMAKE_C_FLAGS_RELEASE "")
 set(CMAKE_CXX_FLAGS_RELEASE "")

@@ -27,7 +27,7 @@ if(BUILD_OPEN_PROJECT)
     )
     install(FILES ${CMAKE_INSTALL_PREFIX}/lib/msobjdump-0.1.0-py3-none-any.whl
         ${INSTALL_OPTIONAL} DESTINATION tools/
-        PERMISSIONS OWNER_READ OWNER_EXECUTE GROUP_READ GROUP_EXECUTE
+        PERMISSIONS OWNER_READ GROUP_READ
         COMPONENT asc-tools
     )
 else()

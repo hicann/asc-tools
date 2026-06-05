@@ -10,6 +10,7 @@
 if(BUILD_OPEN_PROJECT)
   install(FILES ascendc_npuchk_report.py
     DESTINATION tools/ascendc_tools ${INSTALL_OPTIONAL}
+    PERMISSIONS OWNER_READ OWNER_EXECUTE GROUP_READ GROUP_EXECUTE
     COMPONENT asc-tools
   )
 else()

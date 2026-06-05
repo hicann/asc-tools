@@ -115,10 +115,12 @@ function(pack_built_in)
   install(FILES ${CMAKE_BINARY_DIR}/version.asc-tools.info
       DESTINATION share/info/asc-tools
       RENAME version.info
+      PERMISSIONS OWNER_READ OWNER_EXECUTE GROUP_READ GROUP_EXECUTE
       COMPONENT asc-tools
   )
   install(FILES ${CMAKE_SOURCE_DIR}/libraries/lib/scripts/compile_options_config.json
       DESTINATION ${CMAKE_SYSTEM_PROCESSOR}-linux/conf
+      PERMISSIONS OWNER_READ GROUP_READ
       COMPONENT asc-tools
   )
 

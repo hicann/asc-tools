@@ -41,6 +41,7 @@ target_link_options(cpudebug_acl_stub PRIVATE
 
 install(TARGETS cpudebug_acl_stub
     DESTINATION tools/cpudebug/lib64 ${INSTALL_OPTIONAL}
+    PERMISSIONS OWNER_READ OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE
     COMPONENT asc-tools
 )
 

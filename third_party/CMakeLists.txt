@@ -120,7 +120,7 @@ install(CODE "
 
     if(MSOPGEN_WHL)
         file(INSTALL \${MSOPGEN_WHL} DESTINATION \"\${CMAKE_INSTALL_PREFIX}/tools/\"
-            FILE_PERMISSIONS OWNER_READ OWNER_EXECUTE GROUP_READ GROUP_EXECUTE)
+            FILE_PERMISSIONS OWNER_READ GROUP_READ)
         message(STATUS \"Installed: \${MSOPGEN_WHL}\")
     else()
         message(WARNING \"msopgen whl not found at ${MSOPGEN_BUILD_DIR}\")
@@ -128,7 +128,7 @@ install(CODE "
 
     if(MSOPST_WHL)
         file(INSTALL \${MSOPST_WHL} DESTINATION \"\${CMAKE_INSTALL_PREFIX}/tools/\"
-            FILE_PERMISSIONS OWNER_READ OWNER_EXECUTE GROUP_READ GROUP_EXECUTE)
+            FILE_PERMISSIONS OWNER_READ GROUP_READ)
         message(STATUS \"Installed: \${MSOPST_WHL}\")
     else()
         message(WARNING \"msopst whl not found at ${MSOPGEN_BUILD_DIR}\")

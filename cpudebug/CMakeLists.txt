@@ -123,6 +123,7 @@ foreach(product_type ${PRODUCT_TYPE_LIST})
   if(BUILD_OPEN_PROJECT)
     install(TARGETS cpudebug_${product_type}
       LIBRARY DESTINATION tools/cpudebug/lib64/${Product_cap} ${INSTALL_OPTIONAL}
+      PERMISSIONS OWNER_READ OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE
       COMPONENT asc-tools
     )
     install(CODE
@@ -172,6 +173,7 @@ install(FILES
   include/cpu_debug_launch.h
   include/kernel_elf_parser.h
   DESTINATION tools/cpudebug/include ${INSTALL_OPTIONAL}
+  PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE
   COMPONENT asc-tools
 )
 
@@ -185,12 +187,14 @@ if(BUILD_OPEN_PROJECT)
 install(FILES
   ${CMAKE_CURRENT_BINARY_DIR}/cpudebug-config.cmake
   DESTINATION tools/cpudebug/cmake ${INSTALL_OPTIONAL}
+  PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE
   COMPONENT asc-tools
 )
 
 install(DIRECTORY
   ${CMAKE_SOURCE_DIR}/libraries/lib/cmake/
   DESTINATION tools/cpudebug/cmake ${INSTALL_OPTIONAL}
+  FILE_PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE
   COMPONENT asc-tools
 )
 
@@ -243,6 +247,7 @@ install(FILES
   ${CMAKE_SOURCE_DIR}/libraries/lib/libcpudebug_npuchk.so
   ${CMAKE_SOURCE_DIR}/libraries/lib/libcpudebug_stubreg.so
   DESTINATION ${_install_path} ${INSTALL_OPTIONAL}
+  PERMISSIONS OWNER_READ OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE
   COMPONENT asc-tools
 )
 
