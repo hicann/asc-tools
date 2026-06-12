@@ -48,11 +48,7 @@ if (NOT EXISTS "${CMAKE_INSTALL_PREFIX}/mockcpp/lib/libmockcpp.a")
         set(REQ_URL ${MOCKCPP_PKG})
     endif()
 
-    file(GLOB MOCKCPP_PATCH
-        LIST_DIRECTORIES True
-        ${CANN_3RD_LIB_PATH}/mockcpp*.patch
-    )
-
+    set(MOCKCPP_PATCH ${CANN_3RD_LIB_PATH}/mockcpp-2.7_py3-h3.patch)
     set(PATCH_FILE ${third_party_TEM_DIR}/mockcpp-2.7_py3.patch)
     set(MOCKCPP_SRC_PATH "${CANN_3RD_LIB_PATH}/../llt/third_party/mockcpp_src")
     set(MOCKCPP_OPTS
