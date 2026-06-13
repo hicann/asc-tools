@@ -1,90 +1,96 @@
-# CPU Debug直调样例说明
+# CPU Debug直调样例
 
 ## 概述
 
-本样例通过Ascend C编程语言实现了Add算子的CPU Debug调测。
+本样例基于Add算子演示Ascend C CPU Debug调测流程。CPU Debug模式下，样例kernel在CPU域执行，可配合GDB设置断点、单步执行、查看调用栈和内存状态。
 
-## 支持的产品
+## 本样例支持的产品及CANN软件版本
 
-- Ascend 950PR/Ascend 950DT
-- Atlas A2 训练系列产品/Atlas A2 推理系列产品
-- Atlas A3 训练系列产品/Atlas A3 推理系列产品
- 
+| 产品 | CANN软件版本 |
+|------|-------------|
+| Ascend 950PR/Ascend 950DT | >= CANN 9.1.0 |
+| Atlas A3 训练系列产品/Atlas A3 推理系列产品 | >= CANN 9.0.0 |
+| Atlas A2 训练系列产品/Atlas A2 推理系列产品 | >= CANN 9.0.0 |
+
 ## 目录结构介绍
 
 ```
 ├── 02_cpudebug
-│   ├── CMakeLists.txt          // 编译工程文件
-│   └── add.asc                 // Ascend C算子实现 & 调用样例
+│   ├── CMakeLists.txt      // 编译工程文件
+│   ├── add.asc             // Ascend C算子实现 & 调用样例
+│   └── README.md           // 样例说明文档
 ```
 
-## 算子描述
+## 样例描述
 
-- 算子功能：  
-CPU Debug介绍
-  CPU Debug功能支持对CPU执行过程中的运行状态进行调试，主要通过GDB工具实现。GDB调试支持设置断点、查看寄存器和内存状态、单步执行、查看调用栈等常用调试操作。
+- 样例功能：
 
-  - Add算子介绍  
-  Add算子实现了两个数据相加，返回相加结果的功能。对应的数学表达式为：  
+  Add计算公式为：
+
   ```
   z = x + y
   ```
-- 算子规格：  
-  Add算子：  
-  <table>
-  <tr><td rowspan="1" align="center">算子类型(OpType)</td><td colspan="4" align="center">Add</td></tr>
-  </tr>
-  <tr><td rowspan="3" align="center">算子输入</td><td align="center">name</td><td align="center">shape</td><td align="center">data type</td><td align="center">format</td></tr>
-  <tr><td align="center">x</td><td align="center">8 * 2048</td><td align="center">float</td><td align="center">ND</td></tr>
-  <tr><td align="center">y</td><td align="center">8 * 2048</td><td align="center">float</td><td align="center">ND</td></tr>
-  </tr>
-  </tr>
-  <tr><td rowspan="1" align="center">算子输出</td><td align="center">z</td><td align="center">8 * 2048</td><td align="center">float</td><td align="center">ND</td></tr>
-  </tr>
+
+- 样例规格：
+  <table border="2" align="center">
+  <caption>表1：Add样例规格描述</caption>
+  <tr><td rowspan="1" align="center">样例类型(OpType)</td><td colspan="4" align="center">Add</td></tr>
+  <tr><td rowspan="3" align="center">样例输入</td><td align="center">name</td><td align="center">shape</td><td align="center">data type</td><td align="center">format</td></tr>
+  <tr><td align="center">x</td><td align="center">[8, 2048]</td><td align="center">float</td><td align="center">ND</td></tr>
+  <tr><td align="center">y</td><td align="center">[8, 2048]</td><td align="center">float</td><td align="center">ND</td></tr>
+  <tr><td rowspan="1" align="center">样例输出</td><td align="center">z</td><td align="center">[8, 2048]</td><td align="center">float</td><td align="center">ND</td></tr>
   <tr><td rowspan="1" align="center">核函数名</td><td colspan="4" align="center">add_custom</td></tr>
   </table>
 
-- 算子实现：  
+- 样例实现：
 
-  Add算子： 
+  样例固定shape为`[8, 2048]`。输入数据先从Global Memory搬运到Local Memory，通过`AscendC::Add`完成向量加法，再将结果从Local Memory搬回Global Memory。计算流程分为`CopyIn`、`Compute`、`CopyOut`三个阶段。
 
-  本样例中实现的是固定shape为8*2048的Add算子。
+## 编译运行
 
-  - Kernel实现  
+在本样例根目录下执行如下步骤，编译并执行样例。
 
-    Add算子的数学表达式为：
-    ```
-    z = x + y
-    ```
-    计算逻辑是：Ascend C提供的矢量计算接口的操作元素都为LocalTensor，输入数据需要先搬运进片上存储，然后使用计算接口完成两个输入参数相加，得到最终结果，再搬出到外部存储上。
+- 配置环境变量
 
-    Add算子的实现流程分为3个基本任务：CopyIn，Compute，CopyOut。CopyIn任务负责将Global Memory上的输入Tensor xGm和yGm搬运到Local Memory，分别存储在xLocal、yLocal，Compute任务负责对xLocal、yLocal执行加法操作，计算结果存储在zLocal中，CopyOut任务负责将输出数据从zLocal搬运至Global Memory上的输出Tensor zGm中。
+  请根据当前环境上CANN开发套件包的[安装方式](../../docs/00_quick_start.md#prepare&install)，配置环境变量。
 
-## 编译运行  
+  ```bash
+  source ${install_path}/cann/set_env.sh
+  ```
 
-在本样例根目录下执行如下步骤，编译并执行算子。
-- 环境准备  
-  请参考[快速入门](../docs/00_quick_start.md#环境准备)完成环境准备。
+  > **说明：** `${install_path}` 为CANN包安装目录，未指定安装目录时默认安装至 `/usr/local/Ascend` 下。
 
 - 样例执行
-  请根据实际测试的 NPU 硬件架构选择对应的 `CMAKE_ASC_ARCHITECTURES` 参数
+
+  在本样例目录下执行如下命令。
+
   ```bash
-  cmake -B build -DCMAKE_ASC_RUN_MODE=cpu -DCMAKE_ASC_ARCHITECTURES=dav-2201;
-  cmake --build build;
-  ./build/add
+  mkdir -p build && cd build;
+  cmake -DCMAKE_ASC_RUN_MODE=cpu -DCMAKE_ASC_ARCHITECTURES=dav-2201 ..;make -j;
+  ./add
   ```
-  - 编译选项说明
-    | 选项 | 说明 |
- 	  |------|------|
- 	  | `CMAKE_ASC_RUN_MODE` | 指定为`cpu`, 开启CPU域编译 |
- 	  | `CMAKE_ASC_ARCHITECTURES` | 指定NPU架构版本号，CMake会根据该值配置对应的CPU调试依赖库。<br>`dav-2201` 对应 Atlas A2/A3 系列，`dav-3510` 对应 Ascend 950PR/Ascend 950DT |
+
+- 编译选项说明
+
+  | 选项 | 可选值 | 说明 |
+  |------|--------|------|
+  | `CMAKE_ASC_RUN_MODE` | `cpu` | 运行模式：CPU调试 |
+  | `CMAKE_ASC_ARCHITECTURES` | `dav-2201`（默认）、`dav-3510` | NPU 架构：<br>&bull; dav-2201，对应 Atlas A2 训练系列产品/Atlas A2 推理系列产品和 Atlas A3 训练系列产品/Atlas A3 推理系列产品<br>&bull; dav-3510，对应 Ascend 950PR/Ascend 950DT |
+
+- 执行结果
 
   执行结果如下，说明精度对比成功。
+
   ```bash
   [Success] Case accuracy is verification passed.
-  ```  
-- 进入gdb模式调试
-  在上述指令中"./add"前加入"gdb --args"，再次执行指令即可进入gdb模式。
-  ```bash
-  gdb --args ./build/add
   ```
+
+## GDB调试
+
+在`build`目录下执行如下命令进入GDB调试。
+
+```bash
+gdb --args ./add
+```
+
+进入GDB后可按需设置断点、单步执行或查看调用栈。
