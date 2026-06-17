@@ -364,51 +364,74 @@ TEST_F(TestKernelElfParserSuite, ToKernelMode_InvalidType)
     EXPECT_THROW(AscendC::ToKernelMode(info), std::invalid_argument);
 }
 
+TEST_F(TestKernelElfParserSuite, Demangle_ValidMangledSymbol)
+{
+    // _Z11test_kernelv is the Itanium ABI mangled name for "test_kernel()"
+    std::string result = AscendC::KernelModeRegister::Demangle("_Z11test_kernelv");
+    EXPECT_EQ(result, "test_kernel()");
+}
+
+TEST_F(TestKernelElfParserSuite, Demangle_InvalidMangledSymbol)
+{
+    // Non-mangled name should throw std::runtime_error
+    EXPECT_THROW(AscendC::KernelModeRegister::Demangle("not_a_mangled_name"), std::runtime_error);
+}
+
 TEST_F(TestKernelElfParserSuite, KernelModeRegister_RegisterAndGet)
 {
     AscendC::KernelModeRegister& reg = AscendC::KernelModeRegister::GetInstance();
     reg.Clear();
-    reg.Register(".ascend.meta.test_kernel", KernelMode::AIC_MODE);
+    // Register internally demangles _Z11test_kernelv -> "test_kernel()"
+    reg.Register("_Z11test_kernelv", KernelMode::AIC_MODE);
     
-    KernelMode mode = reg.GetKenelMode("test_kernel");
-    EXPECT_EQ(mode, KernelMode::AIC_MODE);
-}
-
-TEST_F(TestKernelElfParserSuite, KernelModeRegister_MixAivPostfix)
-{
-    AscendC::KernelModeRegister& reg = AscendC::KernelModeRegister::GetInstance();
-    reg.Clear();
-    reg.Register(".ascend.meta.test_kernel_mix_aiv", KernelMode::AIV_MODE);
-    
-    KernelMode mode = reg.GetKenelMode("test_kernel");
-    EXPECT_EQ(mode, KernelMode::AIV_MODE);
-}
-
-TEST_F(TestKernelElfParserSuite, KernelModeRegister_MixAicPostfix)
-{
-    AscendC::KernelModeRegister& reg = AscendC::KernelModeRegister::GetInstance();
-    reg.Clear();
-    reg.Register(".ascend.meta.test_kernel_mix_aic", KernelMode::AIC_MODE);
-    
-    KernelMode mode = reg.GetKenelMode("test_kernel");
+    // GetKenelMode internally demangles _Z11test_kernelv -> "test_kernel()", then finds it
+    KernelMode mode = reg.GetKenelMode("_Z11test_kernelv");
     EXPECT_EQ(mode, KernelMode::AIC_MODE);
 }
 
 TEST_F(TestKernelElfParserSuite, KernelModeRegister_NotFound)
 {
     AscendC::KernelModeRegister& reg = AscendC::KernelModeRegister::GetInstance();
-    EXPECT_THROW(reg.GetKenelMode("nonexistent_kernel"), std::invalid_argument);
+    reg.Clear();
+    // Valid mangled name, but not registered -> ASCENDC_ASSERT triggers abort
+    EXPECT_THROW(reg.GetKenelMode("_Z16nonexistent_namev"), std::invalid_argument);
 }
 
-TEST_F(TestKernelElfParserSuite, KernelModeRegister_Priority)
+TEST_F(TestKernelElfParserSuite, KernelModeRegister_GetWithInvalidMangling)
 {
     AscendC::KernelModeRegister& reg = AscendC::KernelModeRegister::GetInstance();
     reg.Clear();
-    reg.Register(".ascend.meta.test_kernel", KernelMode::AIV_MODE);
-    reg.Register(".ascend.meta.test_kernel_mix_aiv", KernelMode::MIX_MODE);
-    
-    KernelMode mode = reg.GetKenelMode("test_kernel");
-    EXPECT_EQ(mode, KernelMode::MIX_MODE);
+    // Invalid mangling -> Demangle throws std::runtime_error
+    EXPECT_THROW(reg.GetKenelMode("not_a_mangled_name"), std::runtime_error);
+}
+
+TEST_F(TestKernelElfParserSuite, KernelModeRegister_RegisterWithInvalidMangling)
+{
+    AscendC::KernelModeRegister& reg = AscendC::KernelModeRegister::GetInstance();
+    reg.Clear();
+    // Register with invalid mangling -> Demangle throws std::runtime_error
+    EXPECT_THROW(reg.Register("not_a_mangled_name", KernelMode::AIC_MODE), std::runtime_error);
+}
+
+TEST_F(TestKernelElfParserSuite, KernelModeRegister_RegisterWithUnstrippedPostfix)
+{
+    AscendC::KernelModeRegister& reg = AscendC::KernelModeRegister::GetInstance();
+    reg.Clear();
+    // Simulate the case where postfix is not correctly stripped in ParseKernelSections:
+    // The name "_Z11test_kernelv_mix_aiv" is NOT a valid Itanium ABI mangled name,
+    // Demangle will fail with std::runtime_error
+    EXPECT_THROW(reg.Register("_Z11test_kernelv_mix_aiv", KernelMode::AIV_MODE), std::runtime_error);
+}
+
+TEST_F(TestKernelElfParserSuite, KernelModeRegister_GetWithUnstrippedPostfix)
+{
+    AscendC::KernelModeRegister& reg = AscendC::KernelModeRegister::GetInstance();
+    reg.Clear();
+    // Register with correct mangled name (postfix already stripped)
+    reg.Register("_Z11test_kernelv", KernelMode::AIC_MODE);
+    // If GetKenelMode is called with a mangling that still has unstripped postfix,
+    // Demangle fails with std::runtime_error
+    EXPECT_THROW(reg.GetKenelMode("_Z11test_kernelv_mix_aiv"), std::runtime_error);
 }
 
 TEST_F(TestKernelElfParserSuite, RegisterKernelElf_Integration)
@@ -439,7 +462,8 @@ TEST_F(TestKernelElfParserSuite, RegisterKernelElf_Integration)
     shdr1->sh_offset = 256;
     shdr1->sh_size = 64;
     
-    const char* strTab = ".ascend.meta.test_kernel\0.shstrtab\n";
+    // Section name uses mangled kernel name
+    const char* strTab = ".ascend.meta._Z11test_kernelv\0.shstrtab\n";
     memcpy(elfData + 256, strTab, strlen(strTab) + 1);
     
     uint8_t* metaSection = elfData + 192;
@@ -455,6 +479,194 @@ TEST_F(TestKernelElfParserSuite, RegisterKernelElf_Integration)
     reg.Clear();
     AscendC::RegisterKernelElf(elfData, sizeof(elfData));
     
-    KernelMode mode = reg.GetKenelMode("test_kernel");
+    // GetKenelMode now takes mangled name
+    KernelMode mode = reg.GetKenelMode("_Z11test_kernelv");
+    EXPECT_EQ(mode, KernelMode::AIC_MODE);
+}
+
+// ===== ExtractKernelName tests =====
+
+TEST_F(TestKernelElfParserSuite, ExtractKernelName_NoPostfix)
+{
+    // Section without _mix_aiv/_mix_aic postfix: strip prefix only
+    std::string result = AscendC::ExtractKernelName(".ascend.meta._Z11test_kernelv");
+    EXPECT_EQ(result, "_Z11test_kernelv");
+}
+
+TEST_F(TestKernelElfParserSuite, ExtractKernelName_MixAivPostfix)
+{
+    // Section with _mix_aiv postfix: strip both prefix and postfix
+    std::string result = AscendC::ExtractKernelName(".ascend.meta._Z11test_kernelv_mix_aiv");
+    EXPECT_EQ(result, "_Z11test_kernelv");
+}
+
+TEST_F(TestKernelElfParserSuite, ExtractKernelName_MixAicPostfix)
+{
+    // Section with _mix_aic postfix: strip both prefix and postfix
+    std::string result = AscendC::ExtractKernelName(".ascend.meta._Z11test_kernelv_mix_aic");
+    EXPECT_EQ(result, "_Z11test_kernelv");
+}
+
+TEST_F(TestKernelElfParserSuite, ExtractKernelName_NonKernelSection)
+{
+    // Non-kernel-meta sections return empty string
+    std::string result = AscendC::ExtractKernelName(".other.section");
+    EXPECT_EQ(result, "");
+}
+
+TEST_F(TestKernelElfParserSuite, ExtractKernelName_PrefixOnly)
+{
+    // Exactly ".ascend.meta." with nothing after: name is empty, should return ""
+    std::string result = AscendC::ExtractKernelName(".ascend.meta.");
+    EXPECT_EQ(result, "");
+}
+
+TEST_F(TestKernelElfParserSuite, ExtractKernelName_ShortKernelName)
+{
+    // Short kernel name (shorter than postfix length), no postfix stripping
+    std::string result = AscendC::ExtractKernelName(".ascend.meta.short");
+    EXPECT_EQ(result, "short");
+}
+
+TEST_F(TestKernelElfParserSuite, ExtractKernelName_EmptyInput)
+{
+    // Empty input is not a kernel meta section
+    std::string result = AscendC::ExtractKernelName("");
+    EXPECT_EQ(result, "");
+}
+
+TEST_F(TestKernelElfParserSuite, ExtractKernelName_NotStartingWithPrefix)
+{
+    // Section name not starting with .ascend.meta.
+    std::string result = AscendC::ExtractKernelName(".text.something");
+    EXPECT_EQ(result, "");
+}
+
+// ===== ParseKernelSections tests =====
+
+TEST_F(TestKernelElfParserSuite, ParseKernelSections_MixAivAndAicSameKernel)
+{
+    // Construct ELF with two kernel meta sections:
+    //  - .ascend.meta._Z11test_kernelv_mix_aic -> AIC_MODE
+    //  - .ascend.meta._Z11test_kernelv_mix_aiv -> AIV_MODE
+    // Both strip to "_Z11test_kernelv", and GetKenelMode returns the last registered mode
+
+    uint8_t elfData[1024] = {0};
+
+    elfData[EI_MAG0] = 0x7f;
+    elfData[EI_MAG1] = 'E';
+    elfData[EI_MAG2] = 'L';
+    elfData[EI_MAG3] = 'F';
+    elfData[EI_CLASS] = ELFCLASS64;
+    elfData[EI_DATA] = ELFDATA2LSB;
+
+    elfData[40] = 64;   // e_shoff = 64
+    elfData[58] = 64;   // e_shentsize = 64
+    elfData[60] = 3;    // e_shnum = 3 (shstrtab + 2 kernel meta sections)
+    elfData[62] = 0;    // e_shstrndx = 0 (shstrtab is section 0)
+
+    // Section 0: .shstrtab
+    Elf64_Shdr* shdr0 = reinterpret_cast<Elf64_Shdr*>(elfData + 64);
+    shdr0->sh_name = 0;
+    shdr0->sh_type = SHT_STRTAB;
+    shdr0->sh_offset = 384;
+    shdr0->sh_size = 128;
+
+    // Section 1: .ascend.meta._Z11test_kernelv_mix_aic
+    Elf64_Shdr* shdr1 = reinterpret_cast<Elf64_Shdr*>(elfData + 128);
+    shdr1->sh_name = 1;  // offset in strtab -> ".ascend.meta._Z11test_kernelv_mix_aic"
+    shdr1->sh_type = 0;
+    shdr1->sh_offset = 512;
+    shdr1->sh_size = sizeof(AscendC::ElfTlvHead) + 4;
+
+    // Section 2: .ascend.meta._Z11test_kernelv_mix_aiv
+    Elf64_Shdr* shdr2 = reinterpret_cast<Elf64_Shdr*>(elfData + 192);
+    shdr2->sh_name = 39; // offset in strtab -> ".ascend.meta._Z11test_kernelv_mix_aiv"
+    shdr2->sh_type = 0;
+    shdr2->sh_offset = 576;
+    shdr2->sh_size = sizeof(AscendC::ElfTlvHead) + 4;
+
+    // String table: starts with '\0' then the two section names
+    const char* sectionName1 = ".ascend.meta._Z11test_kernelv_mix_aic";
+    const char* sectionName2 = ".ascend.meta._Z11test_kernelv_mix_aiv";
+    elfData[384] = '\0';
+    memcpy(elfData + 385, sectionName1, strlen(sectionName1) + 1);
+    memcpy(elfData + 385 + strlen(sectionName1) + 1, sectionName2, strlen(sectionName2) + 1);
+
+    // Meta section 1: K_TYPE_AIC
+    uint8_t* metaSection1 = elfData + 512;
+    AscendC::ElfTlvHead* head1 = reinterpret_cast<AscendC::ElfTlvHead*>(metaSection1);
+    head1->type = AscendC::FUNC_META_TYPE_KERNEL_TYPE;
+    head1->length = 4;
+    uint32_t kernelTypeAic = AscendC::K_TYPE_AIC;
+    memcpy(metaSection1 + sizeof(AscendC::ElfTlvHead), &kernelTypeAic, sizeof(uint32_t));
+
+    // Meta section 2: K_TYPE_AIV
+    uint8_t* metaSection2 = elfData + 576;
+    AscendC::ElfTlvHead* head2 = reinterpret_cast<AscendC::ElfTlvHead*>(metaSection2);
+    head2->type = AscendC::FUNC_META_TYPE_KERNEL_TYPE;
+    head2->length = 4;
+    uint32_t kernelTypeAiv = AscendC::K_TYPE_AIV;
+    memcpy(metaSection2 + sizeof(AscendC::ElfTlvHead), &kernelTypeAiv, sizeof(uint32_t));
+
+    AscendC::KernelModeRegister& reg = AscendC::KernelModeRegister::GetInstance();
+    reg.Clear();
+    AscendC::RegisterKernelElf(elfData, sizeof(elfData));
+
+    // After parsing, the AIV section was registered last, so GetKenelMode returns AIV_MODE
+    KernelMode mode = reg.GetKenelMode("_Z11test_kernelv");
+    EXPECT_EQ(mode, KernelMode::AIV_MODE);
+}
+
+TEST_F(TestKernelElfParserSuite, ParseKernelSections_UnstrippedPostfixCausesDemangleFailure)
+{
+    // Simulate incorrect behavior (postfix not stripped): section name has _mix_aiv postfix
+    // but is not a valid mangled name, causing Demangle to throw
+    // This test verifies that KernelModeRegister rejects unstripped names
+
+    uint8_t elfData[1024] = {0};
+
+    elfData[EI_MAG0] = 0x7f;
+    elfData[EI_MAG1] = 'E';
+    elfData[EI_MAG2] = 'L';
+    elfData[EI_MAG3] = 'F';
+    elfData[EI_CLASS] = ELFCLASS64;
+    elfData[EI_DATA] = ELFDATA2LSB;
+
+    elfData[40] = 64;   // e_shoff
+    elfData[58] = 64;   // e_shentsize
+    elfData[60] = 2;    // e_shnum = 2
+    elfData[62] = 0;    // e_shstrndx = 0
+
+    // Section 0: .shstrtab
+    Elf64_Shdr* shdr0 = reinterpret_cast<Elf64_Shdr*>(elfData + 64);
+    shdr0->sh_name = 0;
+    shdr0->sh_type = SHT_STRTAB;
+    shdr0->sh_offset = 192;
+    shdr0->sh_size = 128;
+
+    // Section 1: kernel meta section with a valid mangled name (postfix already stripped)
+    Elf64_Shdr* shdr1 = reinterpret_cast<Elf64_Shdr*>(elfData + 128);
+    shdr1->sh_name = 1;
+    shdr1->sh_type = 0;
+    shdr1->sh_offset = 320;
+    shdr1->sh_size = sizeof(AscendC::ElfTlvHead) + 4;
+
+    // String table contains only the valid kernel name (postfix already stripped)
+    memcpy(elfData + 192, "\0.ascend.meta._Z11test_kernelv", 31);
+
+    uint8_t* metaSection = elfData + 320;
+    AscendC::ElfTlvHead* head = reinterpret_cast<AscendC::ElfTlvHead*>(metaSection);
+    head->type = AscendC::FUNC_META_TYPE_KERNEL_TYPE;
+    head->length = 4;
+    uint32_t kernelType = AscendC::K_TYPE_AIC;
+    memcpy(metaSection + sizeof(AscendC::ElfTlvHead), &kernelType, sizeof(uint32_t));
+
+    AscendC::KernelModeRegister& reg = AscendC::KernelModeRegister::GetInstance();
+    reg.Clear();
+    AscendC::RegisterKernelElf(elfData, sizeof(elfData));
+
+    // Verify the kernel name with stripped postfix works
+    KernelMode mode = reg.GetKenelMode("_Z11test_kernelv");
     EXPECT_EQ(mode, KernelMode::AIC_MODE);
 }

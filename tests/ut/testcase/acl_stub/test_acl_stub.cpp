@@ -269,7 +269,7 @@ TEST_F(TEST_ACL_STUB, AclrtBinaryLoadFromDataSuccess)
     shdr1->sh_offset = 256;
     shdr1->sh_size = 64;
     
-    const char* strTab = ".ascend.meta.test_kernel\0.shstrtab\n";
+    const char* strTab = ".ascend.meta._Z11test_kernelv\0.shstrtab\n";
     memcpy(elfData + 256, strTab, strlen(strTab) + 1);
     
     uint8_t* metaSection = elfData + 192;
@@ -286,7 +286,7 @@ TEST_F(TEST_ACL_STUB, AclrtBinaryLoadFromDataSuccess)
     
     EXPECT_EQ(aclrtBinaryLoadFromData(elfData, sizeof(elfData), nullptr, nullptr), ACL_SUCCESS);
     
-    KernelMode mode = reg.GetKenelMode("test_kernel");
+    KernelMode mode = reg.GetKenelMode("_Z11test_kernelv");
     EXPECT_EQ(mode, KernelMode::AIC_MODE);
 }
 
