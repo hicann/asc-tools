@@ -10,10 +10,13 @@
 #ifndef KERNEL_ELF_PARSER_H
 #define KERNEL_ELF_PARSER_H
 
+#include <cstdlib>
+#include <memory>
 #include <stdexcept>
 #include <string>
 #include <unordered_map>
 #include <elf.h>
+#include <cxxabi.h>
 
 #include "stub_def.h"
 
@@ -24,6 +27,8 @@ constexpr uint16_t FUNC_META_TYPE_MIX_TASK_RATION = 3U;
 const std::string KERNEL_SECTION_NAME_PREFIX = ".ascend.meta.";
 const std::string KERNEL_MIX_AIV_POSTFIX = "_mix_aiv";
 const std::string KERNEL_MIX_AIC_POSTFIX = "_mix_aic";
+const size_t PREFIX_LEN = KERNEL_SECTION_NAME_PREFIX.length();
+const size_t MIX_SUFFIX_LEN = KERNEL_MIX_AIV_POSTFIX.length(); // KERNEL_MIX_AIC_POSTFIX.length() == KERNEL_MIX_AIV_POSTFIX.length()
 
 typedef struct {
     uint16_t type;
@@ -56,9 +61,32 @@ public:
         return instance;
     }
 
+    static std::string Demangle(const char* symbol) {
+        if (symbol == nullptr) {
+            throw std::runtime_error("Failed to demangle symbol: null symbol");
+        }
+
+        int status = 0;
+        std::unique_ptr<char, decltype(&std::free)> demangled(
+            abi::__cxa_demangle(symbol, nullptr, nullptr, &status),
+            std::free
+        ); 
+        // abi::__cxa_demangle mallocs memory for the demangled name, so we use unique_ptr to ensure it gets freed
+
+        if (status == 0 && demangled != nullptr) {
+            return std::string(demangled.get());
+        }
+
+        if (status == -2) {
+            return std::string(symbol);
+        }
+
+        throw std::runtime_error("Failed to demangle symbol: " + std::string(symbol));
+    }
+
     void Register(const std::string& kernelName, KernelMode kernelMode)
     {
-        kernelModeMap[kernelName] = kernelMode;
+        kernelModeMap[Demangle(kernelName.c_str())] = kernelMode;
     }
 
     void Clear()
@@ -66,22 +94,14 @@ public:
         kernelModeMap.clear();
     }
 
-    KernelMode GetKenelMode(const char* kernelName)
+    KernelMode GetKenelMode(const char* mangling)
     {
-        std::string searchKernelName = KERNEL_SECTION_NAME_PREFIX + std::string(kernelName);
-        auto it = kernelModeMap.find(searchKernelName + KERNEL_MIX_AIV_POSTFIX);
+        std::string kernelName = Demangle(mangling);
+        auto it = kernelModeMap.find(kernelName);
         if (it != kernelModeMap.end()) {
             return it->second;
         }
-        it = kernelModeMap.find(searchKernelName + KERNEL_MIX_AIC_POSTFIX);
-        if (it != kernelModeMap.end()) {
-            return it->second;
-        }
-        it = kernelModeMap.find(searchKernelName);
-        if (it != kernelModeMap.end()) {
-            return it->second;
-        }
-        throw std::invalid_argument("Kernel mode not found for kernel: " + std::string(kernelName));
+        throw std::invalid_argument("Kernel mode not found for kernel: " + kernelName);
     }
 private:
     std::unordered_map<std::string, KernelMode> kernelModeMap;
@@ -322,6 +342,25 @@ inline KernelMode ToKernelMode(ElfKernelInfo kernelInfo)
     return KernelMode::MIX_MODE;
 }
 
+// Extract kernel name from section name by stripping .ascend.meta. prefix and _mix_aiv/_mix_aic postfix
+// Returns empty string if sectionName is not a kernel meta section
+inline std::string ExtractKernelName(const std::string& sectionName)
+{
+    if (sectionName.length() > PREFIX_LEN &&
+            sectionName.compare(0, PREFIX_LEN, KERNEL_SECTION_NAME_PREFIX) == 0) {
+        size_t kernelNameLen = sectionName.length() - PREFIX_LEN;
+        if (kernelNameLen > MIX_SUFFIX_LEN) {
+            size_t suffixPos = sectionName.length() - MIX_SUFFIX_LEN;
+            if (sectionName.compare(suffixPos, MIX_SUFFIX_LEN, KERNEL_MIX_AIV_POSTFIX) == 0 ||
+                sectionName.compare(suffixPos, MIX_SUFFIX_LEN, KERNEL_MIX_AIC_POSTFIX) == 0) {
+                kernelNameLen -= MIX_SUFFIX_LEN;
+            }
+        }
+        return sectionName.substr(PREFIX_LEN, kernelNameLen);
+    }
+    return "";
+}
+
 inline void ParseKernelSections(const uint8_t* const elfData, size_t dataSize, Elf64_Ehdr header,
     Elf64_Shdr shStrTabHdr)
 {
@@ -329,19 +368,18 @@ inline void ParseKernelSections(const uint8_t* const elfData, size_t dataSize, E
     if (shStrTabHdr.sh_offset + shStrTabHdr.sh_size > dataSize) {
         throw std::invalid_argument("Data size is to small for parse section header string table");
     }
-
     for (int i = 0; i < header.e_shnum; ++i) {
         Elf64_Shdr shdr = GetSectionHeader(elfData, dataSize, header, i);
         std::string sectionName(reinterpret_cast<const char*>(shStrTab) + shdr.sh_name);
-        if ( sectionName.length() > KERNEL_SECTION_NAME_PREFIX.length() &&
-            sectionName.compare(0, KERNEL_SECTION_NAME_PREFIX.length(), KERNEL_SECTION_NAME_PREFIX) == 0) {
-                try{
-                    ElfKernelInfo kernelInfo = GetKernelInfo(elfData, dataSize, shdr); 
-                    KernelMode kernelMode = ToKernelMode(kernelInfo);
-                    KernelModeRegister::GetInstance().Register(sectionName, kernelMode);
-                } catch (std::invalid_argument &e) {
-                    throw std::invalid_argument("Failed to get kernel mode from section " + sectionName + ": " + e.what());
-                }
+        std::string kernelName = ExtractKernelName(sectionName);
+        if (!kernelName.empty()) {
+            try {
+                ElfKernelInfo kernelInfo = GetKernelInfo(elfData, dataSize, shdr);
+                KernelMode kernelMode = ToKernelMode(kernelInfo);
+                KernelModeRegister::GetInstance().Register(kernelName, kernelMode);
+            } catch (std::invalid_argument &e) {
+                throw std::invalid_argument("Failed to get kernel mode from section " + sectionName + ": " + e.what());
+            }
         }
     }
 }

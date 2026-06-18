@@ -281,15 +281,14 @@ aclError aclrtBinaryLoadFromData(const void *data, size_t length, const aclrtBin
     (void)options;
     (void)binHandle;
     if (data == nullptr || length == 0) {
-        printf("[ERROR] Get invalid elfData or data length.\n");
+        printf("[ERROR] During binary load, get invalid elfData or data length, may be caused by a compilation error.\n");
         return ACL_ERROR_INVALID_PARAM;
     }
 
     try{
         AscendC::RegisterKernelElf(reinterpret_cast<const uint8_t*>(data), length);
-    } catch(std::invalid_argument &e){
-        printf("[ERROR] Failed to register kernel elf data: %s\n", e.what());
-        return ACL_ERROR_INVALID_PARAM;
+    } catch(const std::exception& e){
+        printf("[ERROR] During binary load, failed to register kernel elf data: %s\n", e.what());        return ACL_ERROR_INVALID_PARAM;
     }
     return ACL_SUCCESS;
 }
