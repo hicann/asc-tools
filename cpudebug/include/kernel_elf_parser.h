@@ -10,6 +10,8 @@
 #ifndef KERNEL_ELF_PARSER_H
 #define KERNEL_ELF_PARSER_H
 
+#include <cstdlib>
+#include <memory>
 #include <stdexcept>
 #include <string>
 #include <unordered_map>
@@ -60,6 +62,10 @@ public:
     }
 
     static std::string Demangle(const char* symbol) {
+        if (symbol == nullptr) {
+            throw std::runtime_error("Failed to demangle symbol: null symbol");
+        }
+
         int status = 0;
         std::unique_ptr<char, decltype(&std::free)> demangled(
             abi::__cxa_demangle(symbol, nullptr, nullptr, &status),
@@ -69,6 +75,10 @@ public:
 
         if (status == 0 && demangled != nullptr) {
             return std::string(demangled.get());
+        }
+
+        if (status == -2) {
+            return std::string(symbol);
         }
 
         throw std::runtime_error("Failed to demangle symbol: " + std::string(symbol));

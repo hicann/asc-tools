@@ -371,10 +371,16 @@ TEST_F(TestKernelElfParserSuite, Demangle_ValidMangledSymbol)
     EXPECT_EQ(result, "test_kernel()");
 }
 
-TEST_F(TestKernelElfParserSuite, Demangle_InvalidMangledSymbol)
+TEST_F(TestKernelElfParserSuite, Demangle_CStyleSymbol)
 {
-    // Non-mangled name should throw std::runtime_error
-    EXPECT_THROW(AscendC::KernelModeRegister::Demangle("not_a_mangled_name"), std::runtime_error);
+    // C-style symbols are not Itanium C++ ABI mangled names and should be returned unchanged.
+    std::string result = AscendC::KernelModeRegister::Demangle("test_kernel");
+    EXPECT_EQ(result, "test_kernel");
+}
+
+TEST_F(TestKernelElfParserSuite, Demangle_NullSymbolThrows)
+{
+    EXPECT_THROW(AscendC::KernelModeRegister::Demangle(nullptr), std::runtime_error);
 }
 
 TEST_F(TestKernelElfParserSuite, KernelModeRegister_RegisterAndGet)
@@ -397,41 +403,14 @@ TEST_F(TestKernelElfParserSuite, KernelModeRegister_NotFound)
     EXPECT_THROW(reg.GetKenelMode("_Z16nonexistent_namev"), std::invalid_argument);
 }
 
-TEST_F(TestKernelElfParserSuite, KernelModeRegister_GetWithInvalidMangling)
+TEST_F(TestKernelElfParserSuite, KernelModeRegister_RegisterAndGetCStyleSymbol)
 {
     AscendC::KernelModeRegister& reg = AscendC::KernelModeRegister::GetInstance();
     reg.Clear();
-    // Invalid mangling -> Demangle throws std::runtime_error
-    EXPECT_THROW(reg.GetKenelMode("not_a_mangled_name"), std::runtime_error);
-}
-
-TEST_F(TestKernelElfParserSuite, KernelModeRegister_RegisterWithInvalidMangling)
-{
-    AscendC::KernelModeRegister& reg = AscendC::KernelModeRegister::GetInstance();
-    reg.Clear();
-    // Register with invalid mangling -> Demangle throws std::runtime_error
-    EXPECT_THROW(reg.Register("not_a_mangled_name", KernelMode::AIC_MODE), std::runtime_error);
-}
-
-TEST_F(TestKernelElfParserSuite, KernelModeRegister_RegisterWithUnstrippedPostfix)
-{
-    AscendC::KernelModeRegister& reg = AscendC::KernelModeRegister::GetInstance();
-    reg.Clear();
-    // Simulate the case where postfix is not correctly stripped in ParseKernelSections:
-    // The name "_Z11test_kernelv_mix_aiv" is NOT a valid Itanium ABI mangled name,
-    // Demangle will fail with std::runtime_error
-    EXPECT_THROW(reg.Register("_Z11test_kernelv_mix_aiv", KernelMode::AIV_MODE), std::runtime_error);
-}
-
-TEST_F(TestKernelElfParserSuite, KernelModeRegister_GetWithUnstrippedPostfix)
-{
-    AscendC::KernelModeRegister& reg = AscendC::KernelModeRegister::GetInstance();
-    reg.Clear();
-    // Register with correct mangled name (postfix already stripped)
-    reg.Register("_Z11test_kernelv", KernelMode::AIC_MODE);
-    // If GetKenelMode is called with a mangling that still has unstripped postfix,
-    // Demangle fails with std::runtime_error
-    EXPECT_THROW(reg.GetKenelMode("_Z11test_kernelv_mix_aiv"), std::runtime_error);
+    // extern "C" symbols are registered and queried by their original name.
+    reg.Register("test_kernel", KernelMode::AIC_MODE);
+    KernelMode mode = reg.GetKenelMode("test_kernel");
+    EXPECT_EQ(mode, KernelMode::AIC_MODE);
 }
 
 TEST_F(TestKernelElfParserSuite, RegisterKernelElf_Integration)
@@ -616,57 +595,4 @@ TEST_F(TestKernelElfParserSuite, ParseKernelSections_MixAivAndAicSameKernel)
     // After parsing, the AIV section was registered last, so GetKenelMode returns AIV_MODE
     KernelMode mode = reg.GetKenelMode("_Z11test_kernelv");
     EXPECT_EQ(mode, KernelMode::AIV_MODE);
-}
-
-TEST_F(TestKernelElfParserSuite, ParseKernelSections_UnstrippedPostfixCausesDemangleFailure)
-{
-    // Simulate incorrect behavior (postfix not stripped): section name has _mix_aiv postfix
-    // but is not a valid mangled name, causing Demangle to throw
-    // This test verifies that KernelModeRegister rejects unstripped names
-
-    uint8_t elfData[1024] = {0};
-
-    elfData[EI_MAG0] = 0x7f;
-    elfData[EI_MAG1] = 'E';
-    elfData[EI_MAG2] = 'L';
-    elfData[EI_MAG3] = 'F';
-    elfData[EI_CLASS] = ELFCLASS64;
-    elfData[EI_DATA] = ELFDATA2LSB;
-
-    elfData[40] = 64;   // e_shoff
-    elfData[58] = 64;   // e_shentsize
-    elfData[60] = 2;    // e_shnum = 2
-    elfData[62] = 0;    // e_shstrndx = 0
-
-    // Section 0: .shstrtab
-    Elf64_Shdr* shdr0 = reinterpret_cast<Elf64_Shdr*>(elfData + 64);
-    shdr0->sh_name = 0;
-    shdr0->sh_type = SHT_STRTAB;
-    shdr0->sh_offset = 192;
-    shdr0->sh_size = 128;
-
-    // Section 1: kernel meta section with a valid mangled name (postfix already stripped)
-    Elf64_Shdr* shdr1 = reinterpret_cast<Elf64_Shdr*>(elfData + 128);
-    shdr1->sh_name = 1;
-    shdr1->sh_type = 0;
-    shdr1->sh_offset = 320;
-    shdr1->sh_size = sizeof(AscendC::ElfTlvHead) + 4;
-
-    // String table contains only the valid kernel name (postfix already stripped)
-    memcpy(elfData + 192, "\0.ascend.meta._Z11test_kernelv", 31);
-
-    uint8_t* metaSection = elfData + 320;
-    AscendC::ElfTlvHead* head = reinterpret_cast<AscendC::ElfTlvHead*>(metaSection);
-    head->type = AscendC::FUNC_META_TYPE_KERNEL_TYPE;
-    head->length = 4;
-    uint32_t kernelType = AscendC::K_TYPE_AIC;
-    memcpy(metaSection + sizeof(AscendC::ElfTlvHead), &kernelType, sizeof(uint32_t));
-
-    AscendC::KernelModeRegister& reg = AscendC::KernelModeRegister::GetInstance();
-    reg.Clear();
-    AscendC::RegisterKernelElf(elfData, sizeof(elfData));
-
-    // Verify the kernel name with stripped postfix works
-    KernelMode mode = reg.GetKenelMode("_Z11test_kernelv");
-    EXPECT_EQ(mode, KernelMode::AIC_MODE);
 }
