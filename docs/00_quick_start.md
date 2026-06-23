@@ -15,18 +15,20 @@
 > - 如不希望使用容器，也可在带NPU设备的主机上完成**环境准备**，请参考[CANN软件安装指南 - 在物理机上安装](https://www.hiascend.com/document/redirect/CannCommunityInstWizard)。
 > - 针对仅体验"编译安装本开源仓 + 仿真环境运行算子"的用户，不要求主机带NPU设备，可跳过安装NPU驱动和固件，直接安装CANN包，请参考[下载安装CANN包](#📥-下载安装cann包)。
 
-### 1️⃣ 云开发环境
+### 1️⃣ 云开发环境<a name="cloud-dev-env"></a>
 
-对于无NPU设备的用户，可使用**云开发环境**提供的NPU计算资源进行开发体验，**云开发环境**提供了在线直接运行的昇腾ARM架构环境。目前仅适用于Atlas A2系列产品，提供两种接入方式：
+对于无NPU设备的用户，可直接使用**CANNLab云开发环境**，即"**一站式开发平台**"，该平台提供了在线可直接运行的昇腾ARM架构环境，环境中已安装必备的驱动固件、软件包和依赖，无需手动安装。该平台目前仅适用于Atlas A2系列产品，提供两种接入方式：
 
-- **WebIDE开发平台**，即"**一站式开发平台**"，提供网页版的便携开发体验。
+- **WebIDE**，提供网页版的便携开发体验。
 - **VSCode IDE**，支持远程连接**云开发环境**，提供VSCode强大插件市场的支持。
 
-1. 进入开源仓Gitcode页面，单击"`云开发`"按钮，使用已认证过的华为云账号登录。若未注册或认证，请根据页面提示进行注册和认证。
+1. 进入开源仓Gitcode页面，单击"`CANNLab > 云开发`"按钮，使用已认证过的华为云账号登录。若未注册或认证，请根据页面提示进行注册和认证。
 
    <p align="center"><img src="./figures/cloudIDE.png" alt="云平台" width="750px" height="90px"></p>
 
-2. 根据页面提示创建并启动云开发环境，单击"`连接 > WebIDE 或 Visual Studio Code`"进入云开发环境，开源项目的资源默认在`/mnt/workspace`目录下。
+2. 根据页面提示创建NPU环境并配置规格，启动云开发环境后，单击"`连接 > WebIDE 或 Visual Studio Code`"进入一站式开发平台。
+
+   当前开源项目资源默认在/mnt/workspace/gitCode/${gitCode_id}目录下，${gitCode_id}表示开发者个人gitCode账号。
 
    <p align="center"><img src="./figures/webIDE.png" alt="云平台" width="1000px" height="150px"></p>
 
@@ -34,7 +36,7 @@
 >
 > - 环境默认安装了最新的商用版NPU驱动和固件、CANN包，源码下载时注意与软件配套。
 > - 如需下载特定版本的CANN包，请参考[下载安装CANN包](#📥-下载安装cann包)。
-> - 更多关于**WebIDE开发平台**的介绍，请参考[云开发平台介绍](https://gitcode.com/org/cann/discussions/54)。
+> - 更多关于**CANNLab云开发环境**的介绍，请参考[CANNLab指导](https://gitcode.com/org/cann/discussions/54)。
 > - [Huawei Developer Space插件](https://marketplace.visualstudio.com/items?itemName=HuaweiCloud.developerspace)为VSCode IDE接入**云开发环境**提供技术支持。
 
 ### 2️⃣ 基于CANN镜像的Docker
@@ -43,7 +45,7 @@
 
 1. 确认主机环境
 
-   - 是否已安装NPU驱动和固件，使用`npu-smi info`能够输出NPU相关信息，如没有安装，请参考[CANN软件安装指南 - 在物理机上安装](https://www.hiascend.com/document/redirect/CannCommunityInstWizard)。
+   - 是否已安装NPU驱动和固件，使用`npu-smi info`能够输出NPU相关信息，如没有安装，请参考《[CANN软件安装指南](https://www.hiascend.com/document/redirect/CannCommunityInstWizard)》中"准备软件包"和"安装NPU驱动和固件"章节。驱动与固件是运行态依赖，若仅编译本项目源码，可以不安装。
    - 是否已安装Docker，使用`docker --version`能够输出Docker版本信息，如没有安装，请参考[Docker官方安装指南](https://docs.docker.com/engine/install/)。
 
 2. 下载CANN镜像
@@ -162,11 +164,12 @@ CANN包分为CANN toolkit包和CANN ops包。
     npu-smi info
     ```
 
-- **检查CANN包安装**：
+- **检查CANN包安装**:
   
     ```bash
-    # 查看CANN包的version字段提供的版本信息（默认路径安装）。WebIDE场景下，请将/usr/local替换为/home/developer
+    # 查看CANN Toolkit的version字段提供的版本信息（默认路径安装）。CANNLab场景下，请将/usr/local替换为/home/developer
     cat /usr/local/Ascend/cann/$(uname -m)-linux/ascend_toolkit_install.info
+    # 查看CANN ops的version字段提供的版本信息（默认路径安装）。CANNLab场景下，请将/usr/local替换为/home/developer
     cat /usr/local/Ascend/cann/$(uname -m)-linux/ascend_ops_install.info
     ```
 
