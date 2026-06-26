@@ -151,10 +151,10 @@ uninstallOpPython() {
     [ $? -ne 0 ] && return 1
 
     # remove op generator
-    whlUninstallPackage mindstudio_opgen ${install_path}/python/site-packages
+    whlUninstallPackage msopgen ${install_path}/python/site-packages
     [ $? -ne 0 ] && return 1
 
-    module_arr_=(mindstudio_opgen)
+    module_arr_=(msopgen)
     removePythonLocalBin ${install_path}/python/site-packages ${module_arr_[@]}
     [ $? -ne 0 ] && return 1
 
@@ -174,11 +174,11 @@ uninstallAllPython() {
     removePythonLocalBin ${install_path}/python/site-packages ${module_arr_[@]}
     [ $? -ne 0 ] && return 1
 
-    whlUninstallPackage mindstudio_opst ${install_path}/python/site-packages
+    whlUninstallPackage msopst ${install_path}/python/site-packages
     [ $? -ne 0 ] && return 1
 
     # remove op generator
-    whlUninstallPackage mindstudio_opgen ${install_path}/python/site-packages
+    whlUninstallPackage msopgen ${install_path}/python/site-packages
     [ $? -ne 0 ] && return 1
 
     module_arr_=(msopgen)
@@ -201,7 +201,9 @@ uninstallAllPython() {
     remove_package_leftovers ${install_path}/python/site-packages/show_kernel_debug_data
 
     # remove .dist-info directories
-    for dist_info in "${install_path}/python/site-packages"/mindstudio_opst-*.dist-info \
+    for dist_info in "${install_path}/python/site-packages"/msopst-*.dist-info \
+                     "${install_path}/python/site-packages"/msopgen-*.dist-info \
+                     "${install_path}/python/site-packages"/mindstudio_opst-*.dist-info \
                      "${install_path}/python/site-packages"/mindstudio_opgen-*.dist-info; do
         if [ -d "${dist_info}" ]; then
             rm -rf "${dist_info}"

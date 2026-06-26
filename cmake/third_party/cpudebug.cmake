@@ -9,6 +9,7 @@
 # ----------------------------------------------------------------------------------------------------------
 
 set(PKG_NAME "cpudebug_deps")
+set(ASC_TOOLS_VERSION "9.0.0-beta.2")
 string(TOLOWER "${CMAKE_BUILD_TYPE}" BUILD_TYPE_LOWER)
 
 if (CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64")
@@ -29,29 +30,47 @@ if (IS_DIRECTORY ${CMAKE_SOURCE_DIR}/libraries/lib AND NOT EXISTS ${CMAKE_SOURCE
 endif()
 
 if (NOT EXISTS ${CMAKE_SOURCE_DIR}/libraries/lib/include/stub_fun.h)
-    file(GLOB CPUDEBUG_PKG
-        LIST_DIRECTORIES True
-        ${CANN_3RD_LIB_PATH}/cann-asc-tools-cpudebug-deps*.tar.gz
-    )
-
-    set(CPUDEBUG_PKG_NAME cann-asc-tools-cpudebug-deps-lib_${BUILD_TYPE_LOWER}_9.0.0_linux-${CMAKE_SYSTEM_PROCESSOR}.tar.gz)
-    if(NOT EXISTS ${CPUDEBUG_PKG})
-        set(CPUDEBUG_PKG_URL "https://container-obsfs-filesystem.obs.cn-north-4.myhuaweicloud.com/package/cann/asc-toolkit-dev/version_compile/master/202601/20260131_174635_/ubuntu_${TAR_ARCH}/${CPUDEBUG_PKG_NAME}")
-        message(STATUS "cpudebug pkg not found in ${CANN_3RD_LIB_PATH}, downloading from ${CPUDEBUG_PKG_URL}")
-    else()
-        set(CPUDEBUG_PKG_URL ${CPUDEBUG_PKG})
+    set(CPUDEBUG_PKG_TYPES ${BUILD_TYPE_LOWER})
+    if (BUILD_TYPE_LOWER STREQUAL "debug")
+        list(APPEND CPUDEBUG_PKG_TYPES release)
     endif()
 
-    set(CPUDEBUG_PKG ${CANN_3RD_LIB_PATH}/${CPUDEBUG_PKG_NAME})
-    include(FetchContent)
-    FetchContent_Declare(
-        ${PKG_NAME}
-        URL ${CPUDEBUG_PKG_URL}
-        TLS_VERIFY FALSE
-        DOWNLOAD_DIR ${CANN_3RD_LIB_PATH}
-        DOWNLOAD_NO_EXTRACT TRUE
-    )
-    FetchContent_MakeAvailable(${PKG_NAME})
+    unset(CPUDEBUG_PKG)
+    foreach(CPUDEBUG_PKG_TYPE IN LISTS CPUDEBUG_PKG_TYPES)
+        set(CPUDEBUG_PKG_NAME cann-asc-tools-cpudebug-deps-lib_${CPUDEBUG_PKG_TYPE}_${ASC_TOOLS_VERSION}_linux-${CMAKE_SYSTEM_PROCESSOR}.tar.gz)
+        set(CPUDEBUG_PKG_PATH ${CANN_3RD_LIB_PATH}/${CPUDEBUG_PKG_NAME})
+        if(EXISTS ${CPUDEBUG_PKG_PATH})
+            set(CPUDEBUG_PKG ${CPUDEBUG_PKG_PATH})
+            message(STATUS "Using local cpudebug pkg: ${CPUDEBUG_PKG}")
+            break()
+        endif()
+
+        if(CPUDEBUG_PKG_TYPE STREQUAL "debug")
+            message(STATUS "Local debug cpudebug pkg not found in ${CANN_3RD_LIB_PATH}, fallback to release cpudebug pkg.")
+            continue()
+        endif()
+
+        set(CPUDEBUG_PKG_URL "https://cann-3rd.obs.cn-north-4.myhuaweicloud.com/cann/asc-tools-cpudebug/${ASC_TOOLS_VERSION}/${CPUDEBUG_PKG_NAME}")
+        message(STATUS "cpudebug pkg not found in ${CANN_3RD_LIB_PATH}, downloading from ${CPUDEBUG_PKG_URL}")
+        file(DOWNLOAD ${CPUDEBUG_PKG_URL} ${CPUDEBUG_PKG_PATH}
+            STATUS CPUDEBUG_DOWNLOAD_STATUS
+            TLS_VERIFY FALSE
+            SHOW_PROGRESS
+        )
+        list(GET CPUDEBUG_DOWNLOAD_STATUS 0 CPUDEBUG_DOWNLOAD_CODE)
+        if(CPUDEBUG_DOWNLOAD_CODE EQUAL 0)
+            set(CPUDEBUG_PKG ${CPUDEBUG_PKG_PATH})
+            break()
+        endif()
+
+        file(REMOVE ${CPUDEBUG_PKG_PATH})
+        list(GET CPUDEBUG_DOWNLOAD_STATUS 1 CPUDEBUG_DOWNLOAD_MSG)
+        message(WARNING "Download ${CPUDEBUG_PKG_NAME} failed: ${CPUDEBUG_DOWNLOAD_MSG}")
+    endforeach()
+
+    if(NOT CPUDEBUG_PKG)
+        message(FATAL_ERROR "Failed to get cpudebug deps from ${CANN_3RD_LIB_PATH}.")
+    endif()
 
     execute_process(
         COMMAND tar -xf ${CPUDEBUG_PKG} -C ${CMAKE_SOURCE_DIR}/libraries --strip-components 1
