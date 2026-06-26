@@ -1,12 +1,12 @@
 /**
-* Copyright (c) 2025 Huawei Technologies Co., Ltd.
-* This program is free software, you can redistribute it and/or modify it under the terms and conditions of
-* CANN Open Software License Agreement Version 2.0 (the "License").
-* Please refer to the License for details. You may not use this file except in compliance with the License.
-* THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
-* INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
-* See LICENSE in the root of the software repository for the full text of the License.
-*/
+ * Copyright (c) 2025 Huawei Technologies Co., Ltd.
+ * This program is free software, you can redistribute it and/or modify it under the terms and conditions of
+ * CANN Open Software License Agreement Version 2.0 (the "License").
+ * Please refer to the License for details. You may not use this file except in compliance with the License.
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
+ * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
+ * See LICENSE in the root of the software repository for the full text of the License.
+ */
 
 /*!
  * \file stub_base.cpp
@@ -29,7 +29,8 @@ int64_t g_ubBase = 0;
 uint64_t g_tilingKey = 0;
 int32_t g_coreType = 0; // mix = 0; cube = 1; vec = 2;
 int32_t g_matmulCount = 0;
-std::map<std::string, uint64_t>& GetArgVal() {
+std::map<std::string, uint64_t>& GetArgVal()
+{
     static std::map<std::string, uint64_t> instance;
     return instance;
 }
@@ -42,7 +43,8 @@ thread_local uint32_t g_threadIdxX = 0u;
 thread_local uint32_t g_threadIdxY = 0u;
 thread_local uint32_t g_threadIdxZ = 0u;
 int32_t sub_block_idx = 0;
-std::string& GetStrCoreType() {
+std::string& GetStrCoreType()
+{
     static std::string config = "mix";
     return config;
 }
@@ -50,19 +52,23 @@ uint64_t* g_workspaceSharedPtr = nullptr;
 uint64_t g_fullSizeOfWorkspace = 0;
 KernelMode g_kernelMode = KernelMode::MIX_MODE;
 SocVersion g_socVersion = SocVersion::VER_MAX;
-std::vector<ArgInfoT>& GetArgInfoList() {
+std::vector<ArgInfoT>& GetArgInfoList()
+{
     static std::vector<ArgInfoT> instance;
     return instance;
 }
-std::vector<std::string>& GetValidArgTypeList() {
+std::vector<std::string>& GetValidArgTypeList()
+{
     static std::vector<std::string> instance;
     return instance;
 }
-std::vector<std::string>& GetTmpFileName() {
+std::vector<std::string>& GetTmpFileName()
+{
     static std::vector<std::string> instance;
     return instance;
 }
-std::vector<int32_t>& GetProcessId() {
+std::vector<int32_t>& GetProcessId()
+{
     static std::vector<int32_t> instance;
     return instance;
 }
@@ -93,15 +99,9 @@ void SetKernelMode(KernelMode mode)
     }
 }
 
-void AddNameArg(const char* name, unsigned long val)
-{
-    GetArgVal().emplace(name, val);
-}
+void AddNameArg(const char* name, unsigned long val) { GetArgVal().emplace(name, val); }
 
-unsigned long GetNameArg(const char* name)
-{
-    return static_cast<unsigned long>(GetArgVal().find(name)->second);
-}
+unsigned long GetNameArg(const char* name) { return static_cast<unsigned long>(GetArgVal().find(name)->second); }
 
 std::string BuildExp(uint64_t val)
 {
@@ -128,7 +128,6 @@ std::string BuildExp(uint64_t val)
     }
     return std::string(buff);
 }
-
 
 bool FileExists(std::string fileName)
 {
@@ -174,7 +173,7 @@ void HandleError(bool condition, const std::string& message, int fd)
  *       HEADER                USER START                   USER TAIL 4K ALIGN
  */
 
-void *GmAlloc(size_t size)
+void* GmAlloc(size_t size)
 {
     int pageSize = getpagesize();
     if (size > (SIZE_MAX - pageSize * 2 + pageSize + 1)) { // 2 pages for header and tail
@@ -188,7 +187,6 @@ void *GmAlloc(size_t size)
     int res = ftruncate(fd, newSize);
     if (errno == EFBIG) {
         HandleError(res != 0, "The /tmp directory does not have enough space.", fd);
- 
     }
     auto filePtr = mmap(nullptr, newSize, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
     HandleError(filePtr == MAP_FAILED, "Error map file to ptr, error code: " + std::string(strerror(errno)), fd);
@@ -196,18 +194,18 @@ void *GmAlloc(size_t size)
         std::cout << "Error map file to ptr, error code: " << errno << std::endl;
         raise(SIGABRT);
     }
-    ShmMemT* mem =  static_cast<ShmMemT*>(filePtr);
+    ShmMemT* mem = static_cast<ShmMemT*>(filePtr);
     mem->fd = fd;
     mem->size = newSize;
     mem->magicCode = 0xdeadbeef;
     errno_t ret = strcpy_s(mem->fileName, sizeof(mem->fileName), fileName.c_str());
     HandleError(ret != EOK, "strcpy_s failed, ret = " + std::to_string(ret), fd);
     (void)mprotect(mem, pageSize, PROT_READ);
-    (void)mprotect(reinterpret_cast<uint8_t *>(mem) + newSize - pageSize, pageSize, PROT_NONE);
-    void *userStart = reinterpret_cast<uint8_t *>(mem) + newSize - pageSize - size;
-    void *headerTail = reinterpret_cast<uint8_t *>(mem) + pageSize;
+    (void)mprotect(reinterpret_cast<uint8_t*>(mem) + newSize - pageSize, pageSize, PROT_NONE);
+    void* userStart = reinterpret_cast<uint8_t*>(mem) + newSize - pageSize - size;
+    void* headerTail = reinterpret_cast<uint8_t*>(mem) + pageSize;
     if (userStart != headerTail) {
-        size_t emptySize = (uint8_t *)userStart - (uint8_t *)headerTail;
+        size_t emptySize = (uint8_t*)userStart - (uint8_t*)headerTail;
         if (emptySize > 0) {
             memset_s(headerTail, emptySize, 0xff, emptySize);
         }
@@ -215,10 +213,10 @@ void *GmAlloc(size_t size)
     return userStart;
 }
 
-void *GmGetHeader(void *ptr)
+void* GmGetHeader(void* ptr)
 {
     int pageSize = getpagesize();
-    return (void *)(((uint64_t)ptr & (~(pageSize - 1))) - pageSize);
+    return (void*)(((uint64_t)ptr & (~(pageSize - 1))) - pageSize);
 }
 
 uint64_t GmGetUserSize(uint64_t addr)
@@ -227,21 +225,22 @@ uint64_t GmGetUserSize(uint64_t addr)
     if (mprotect(reinterpret_cast<void*>(addr & ~(pageSize - 1)), pageSize, PROT_READ | PROT_WRITE) != 0) {
         return 0;
     }
-    ShmMemT *mem = static_cast<AscendC::ShmMemT *>(AscendC::GmGetHeader(reinterpret_cast<void *>(addr)));
+    ShmMemT* mem = static_cast<AscendC::ShmMemT*>(AscendC::GmGetHeader(reinterpret_cast<void*>(addr)));
     size_t size = mem->size;
     uint64_t offset = addr - (addr & ~(pageSize - 1));
     return size - DOUBLE * pageSize - offset;
 }
 
-void CheckEmptyGmValied(void *ptr)
+void CheckEmptyGmValied(void* ptr)
 {
     int pageSize = getpagesize();
-    void *headerTail = (void *)((uint64_t)ptr & (~(pageSize - 1)));
+    void* headerTail = (void*)((uint64_t)ptr & (~(pageSize - 1)));
     if (headerTail != ptr) {
-        for (uint8_t *tmpPtr = (uint8_t *)headerTail; tmpPtr < (uint8_t *)ptr; tmpPtr++) {
-            if (*(uint8_t *)tmpPtr != 0xff) {
+        for (uint8_t* tmpPtr = (uint8_t*)headerTail; tmpPtr < (uint8_t*)ptr; tmpPtr++) {
+            if (*(uint8_t*)tmpPtr != 0xff) {
                 std::cout << "Empty memory is accessed ! or \
-                              this memory has been released more than one time." << std::endl;
+                              this memory has been released more than one time."
+                          << std::endl;
                 raise(SIGABRT);
             }
         }
@@ -255,7 +254,7 @@ void GmFree(void* ptr)
     int fd;
     size_t size;
     char file[256];
-    ShmMemT *mem = static_cast<ShmMemT *>(GmGetHeader(ptr));
+    ShmMemT* mem = static_cast<ShmMemT*>(GmGetHeader(ptr));
     fd = mem->fd;
     size = mem->size;
     errno_t ret = strcpy_s(file, sizeof(file), mem->fileName);
@@ -267,7 +266,7 @@ void GmFree(void* ptr)
     close(fd);
     remove(file);
     (void)mprotect(mem, pageSize, PROT_READ | PROT_WRITE | PROT_EXEC);
-    (void)mprotect(reinterpret_cast<uint8_t *>(mem) + size - pageSize, pageSize, PROT_READ | PROT_WRITE | PROT_EXEC);
+    (void)mprotect(reinterpret_cast<uint8_t*>(mem) + size - pageSize, pageSize, PROT_READ | PROT_WRITE | PROT_EXEC);
 }
 
 void CheckGmValied(int argn, uint64_t* argv)
@@ -277,7 +276,7 @@ void CheckGmValied(int argn, uint64_t* argv)
         if (ret != 0) {
             continue;
         }
-        ShmMemT *mem = reinterpret_cast<ShmMemT *>(GmGetHeader((void*)argv[i]));
+        ShmMemT* mem = reinterpret_cast<ShmMemT*>(GmGetHeader((void*)argv[i]));
         if (mem->magicCode != 0xdeadbeef) {
             std::cout << "The address of args are not allocate by AscendC::GmAlloc!" << std::endl;
             raise(SIGABRT);
@@ -298,10 +297,7 @@ void CheckBlockdimForFfts(uint64_t numBlocks)
 #endif
 }
 
-void CheckNumBlocksForFfts(uint64_t numBlocks)
-{
-    CheckBlockdimForFfts(numBlocks);
-}
+void CheckNumBlocksForFfts(uint64_t numBlocks) { CheckBlockdimForFfts(numBlocks); }
 
 void SetGCoreType(int type)
 {
@@ -312,8 +308,5 @@ void SetGCoreType(int type)
     g_coreType = type;
 }
 
-void SetArgInfoList(const std::vector<ArgInfoT> &argInfoList)
-{
-    GetArgInfoList() = argInfoList;
-}
+void SetArgInfoList(const std::vector<ArgInfoT>& argInfoList) { GetArgInfoList() = argInfoList; }
 } // namespace AscendC

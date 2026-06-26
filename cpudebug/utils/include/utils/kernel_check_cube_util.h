@@ -1,12 +1,12 @@
 /**
-* Copyright (c) 2025 Huawei Technologies Co., Ltd.
-* This program is free software, you can redistribute it and/or modify it under the terms and conditions of
-* CANN Open Software License Agreement Version 2.0 (the "License").
-* Please refer to the License for details. You may not use this file except in compliance with the License.
-* THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
-* INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
-* See LICENSE in the root of the software repository for the full text of the License.
-*/
+ * Copyright (c) 2025 Huawei Technologies Co., Ltd.
+ * This program is free software, you can redistribute it and/or modify it under the terms and conditions of
+ * CANN Open Software License Agreement Version 2.0 (the "License").
+ * Please refer to the License for details. You may not use this file except in compliance with the License.
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
+ * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
+ * See LICENSE in the root of the software repository for the full text of the License.
+ */
 
 /*!
  * \file kernel_check_cube_util.h
@@ -22,32 +22,67 @@ namespace AscendC {
 namespace check {
 struct MmadApiParams {
     MmadApiParams() {}
-    MmadApiParams(uint64_t dstAddrIn, uint64_t src0AddrIn, uint64_t src1AddrIn, uint32_t dstDtypeBytesIn,
+    MmadApiParams(
+        uint64_t dstAddrIn, uint64_t src0AddrIn, uint64_t src1AddrIn, uint32_t dstDtypeBytesIn,
         uint32_t src0DtypeBytesIn, uint32_t src1DtypeBytesIn, uint64_t dstSizeIn, uint64_t src0SizeIn,
         uint64_t src1SizeIn, uint8_t dstPosIn, uint8_t src0PosIn, uint8_t src1PosIn, uint16_t mIn, uint16_t nIn,
-        uint16_t kIn, bool isBiasIn, int32_t fmOffsetIn, bool enSsparseIn, bool enWinogradAIn, bool enWinogradBIn) :
-        dstAddr(dstAddrIn), src0Addr(src0AddrIn), src1Addr(src1AddrIn), dstDtypeBytes(dstDtypeBytesIn),
-        src0DtypeBytes(src0DtypeBytesIn), src1DtypeBytes(src1DtypeBytesIn), dstSize(dstSizeIn), src0Size(src0SizeIn),
-        src1Size(src1SizeIn), dstLogicPos(dstPosIn), src0LogicPos(src0PosIn), src1LogicPos(src1PosIn), m(mIn), n(nIn), k(kIn),
-        isBias(isBiasIn), fmOffset(fmOffsetIn), enSsparse(enSsparseIn), enWinogradA(enWinogradAIn),
-        enWinogradB(enWinogradBIn)
+        uint16_t kIn, bool isBiasIn, int32_t fmOffsetIn, bool enSsparseIn, bool enWinogradAIn, bool enWinogradBIn)
+        : dstAddr(dstAddrIn),
+          src0Addr(src0AddrIn),
+          src1Addr(src1AddrIn),
+          dstDtypeBytes(dstDtypeBytesIn),
+          src0DtypeBytes(src0DtypeBytesIn),
+          src1DtypeBytes(src1DtypeBytesIn),
+          dstSize(dstSizeIn),
+          src0Size(src0SizeIn),
+          src1Size(src1SizeIn),
+          dstLogicPos(dstPosIn),
+          src0LogicPos(src0PosIn),
+          src1LogicPos(src1PosIn),
+          m(mIn),
+          n(nIn),
+          k(kIn),
+          isBias(isBiasIn),
+          fmOffset(fmOffsetIn),
+          enSsparse(enSsparseIn),
+          enWinogradA(enWinogradAIn),
+          enWinogradB(enWinogradBIn)
     {
         dstPos = static_cast<uint8_t>(GetPhyType(static_cast<TPosition>(dstPosIn)));
         src0Pos = static_cast<uint8_t>(GetPhyType(static_cast<TPosition>(src0PosIn)));
         src1Pos = static_cast<uint8_t>(GetPhyType(static_cast<TPosition>(src1PosIn)));
     }
 
-    MmadApiParams(uint64_t dstAddrIn, uint64_t src0AddrIn, uint64_t src1AddrIn, uint64_t src2AddrIn,
-        uint32_t dstDtypeBytesIn, uint32_t src0DtypeBytesIn, uint32_t src1DtypeBytesIn, uint32_t src2DtypeBytesIn,
-        uint64_t dstSizeIn, uint64_t src0SizeIn, uint64_t src1SizeIn, uint64_t src2SizeIn, uint8_t dstPosIn,
-        uint8_t src0PosIn, uint8_t src1PosIn, uint8_t src2PosIn, uint16_t mIn, uint16_t nIn, uint16_t kIn,
-        bool isBiasIn, int32_t fmOffsetIn, bool enSsparseIn, bool enWinogradAIn, bool enWinogradBIn) :
-        dstAddr(dstAddrIn), src0Addr(src0AddrIn), src1Addr(src1AddrIn), src2Addr(src2AddrIn),
-        dstDtypeBytes(dstDtypeBytesIn), src0DtypeBytes(src0DtypeBytesIn), src1DtypeBytes(src1DtypeBytesIn),
-        src2DtypeBytes(src2DtypeBytesIn), dstSize(dstSizeIn), src0Size(src0SizeIn), src1Size(src1SizeIn),
-        src2Size(src2SizeIn), dstLogicPos(dstPosIn), src0LogicPos(src0PosIn), src1LogicPos(src1PosIn), src2LogicPos(src2PosIn), m(mIn),
-        n(nIn), k(kIn), isBias(isBiasIn), fmOffset(fmOffsetIn), enSsparse(enSsparseIn), enWinogradA(enWinogradAIn),
-        enWinogradB(enWinogradBIn)
+    MmadApiParams(
+        uint64_t dstAddrIn, uint64_t src0AddrIn, uint64_t src1AddrIn, uint64_t src2AddrIn, uint32_t dstDtypeBytesIn,
+        uint32_t src0DtypeBytesIn, uint32_t src1DtypeBytesIn, uint32_t src2DtypeBytesIn, uint64_t dstSizeIn,
+        uint64_t src0SizeIn, uint64_t src1SizeIn, uint64_t src2SizeIn, uint8_t dstPosIn, uint8_t src0PosIn,
+        uint8_t src1PosIn, uint8_t src2PosIn, uint16_t mIn, uint16_t nIn, uint16_t kIn, bool isBiasIn,
+        int32_t fmOffsetIn, bool enSsparseIn, bool enWinogradAIn, bool enWinogradBIn)
+        : dstAddr(dstAddrIn),
+          src0Addr(src0AddrIn),
+          src1Addr(src1AddrIn),
+          src2Addr(src2AddrIn),
+          dstDtypeBytes(dstDtypeBytesIn),
+          src0DtypeBytes(src0DtypeBytesIn),
+          src1DtypeBytes(src1DtypeBytesIn),
+          src2DtypeBytes(src2DtypeBytesIn),
+          dstSize(dstSizeIn),
+          src0Size(src0SizeIn),
+          src1Size(src1SizeIn),
+          src2Size(src2SizeIn),
+          dstLogicPos(dstPosIn),
+          src0LogicPos(src0PosIn),
+          src1LogicPos(src1PosIn),
+          src2LogicPos(src2PosIn),
+          m(mIn),
+          n(nIn),
+          k(kIn),
+          isBias(isBiasIn),
+          fmOffset(fmOffsetIn),
+          enSsparse(enSsparseIn),
+          enWinogradA(enWinogradAIn),
+          enWinogradB(enWinogradBIn)
     {
         dstPos = static_cast<uint8_t>(GetPhyType(static_cast<TPosition>(dstPosIn)));
         src0Pos = static_cast<uint8_t>(GetPhyType(static_cast<TPosition>(src0PosIn)));
@@ -93,8 +128,9 @@ struct MmadApiParams {
 
 struct CubeInitConstValueApiParams {
     CubeInitConstValueApiParams() {}
-    CubeInitConstValueApiParams(uint64_t dstAddrIn, uint8_t repeatIn, uint16_t blkNumIn, uint16_t dstGapIn,
-        uint32_t dstDtypeBytesIn, uint64_t dstSizeIn, uint8_t dstPosIn)
+    CubeInitConstValueApiParams(
+        uint64_t dstAddrIn, uint8_t repeatIn, uint16_t blkNumIn, uint16_t dstGapIn, uint32_t dstDtypeBytesIn,
+        uint64_t dstSizeIn, uint8_t dstPosIn)
     {
         dstAddr = dstAddrIn;
         repeatTimes = repeatIn;
@@ -118,10 +154,10 @@ struct CubeInitConstValueApiParams {
 
 struct LoadData2dApiParams {
     LoadData2dApiParams() {}
-    LoadData2dApiParams(uint64_t dstAddrIn, uint64_t srcAddrIn, uint16_t startIndexIn, uint8_t repeatTimesIn,
-        uint16_t srcStrideIn, uint8_t sidIn, uint16_t dstGapIn, bool ifTransposeIn, uint8_t addrModeIn,
-        uint32_t dstDtypeBytesIn, uint32_t srcDtypeBytesIn, uint64_t dstSizeIn, uint64_t srcSizeIn, uint8_t dstPosIn,
-        uint8_t srcPosIn)
+    LoadData2dApiParams(
+        uint64_t dstAddrIn, uint64_t srcAddrIn, uint16_t startIndexIn, uint8_t repeatTimesIn, uint16_t srcStrideIn,
+        uint8_t sidIn, uint16_t dstGapIn, bool ifTransposeIn, uint8_t addrModeIn, uint32_t dstDtypeBytesIn,
+        uint32_t srcDtypeBytesIn, uint64_t dstSizeIn, uint64_t srcSizeIn, uint8_t dstPosIn, uint8_t srcPosIn)
     {
         dstAddr = dstAddrIn;
         srcAddr = srcAddrIn;
@@ -162,8 +198,9 @@ struct LoadData2dApiParams {
 
 struct LoadData2dv2ApiParams {
     LoadData2dv2ApiParams() {}
-    LoadData2dv2ApiParams(uint64_t dstAddrIn, uint64_t srcAddrIn, uint32_t mStartPositionIn, uint32_t kStartPositionIn,
-        uint16_t mStepIn, uint16_t kStepIn, int32_t srcStrideIn, uint16_t dstStrideIn, bool ifTransposeIn, uint8_t sidIn,
+    LoadData2dv2ApiParams(
+        uint64_t dstAddrIn, uint64_t srcAddrIn, uint32_t mStartPositionIn, uint32_t kStartPositionIn, uint16_t mStepIn,
+        uint16_t kStepIn, int32_t srcStrideIn, uint16_t dstStrideIn, bool ifTransposeIn, uint8_t sidIn,
         uint32_t dstDtypeBytesIn, uint32_t srcDtypeBytesIn, uint64_t dstSizeIn, uint64_t srcSizeIn, uint8_t dstPosIn,
         uint8_t srcPosIn)
     {
@@ -208,12 +245,13 @@ struct LoadData2dv2ApiParams {
 
 struct LoadData3dv1ApiParams {
     LoadData3dv1ApiParams() {}
-    LoadData3dv1ApiParams(uint64_t dstAddrIn, uint64_t srcAddrIn, const uint8_t padListIn[4], uint16_t l1HIn,
-        uint16_t l1WIn, uint16_t c1IndexIn, uint8_t fetchFilterWIn, uint8_t fetchFilterHIn, uint16_t leftTopWIn,
-        uint16_t leftTopHIn, uint8_t strideWIn, uint8_t strideHIn, uint8_t filterWIn, uint8_t filterHIn,
-        uint8_t dilationFilterWIn, uint8_t dilationFilterHIn, uint8_t jumpStrideIn, uint8_t repeatModeIn,
-        uint8_t repeatTimeIn, uint8_t cSizeIn, uint32_t dstDtypeBytesIn, uint32_t srcDtypeBytesIn,
-        uint64_t dstSizeIn, uint64_t srcSizeIn, uint8_t dstPosIn, uint8_t srcPosIn)
+    LoadData3dv1ApiParams(
+        uint64_t dstAddrIn, uint64_t srcAddrIn, const uint8_t padListIn[4], uint16_t l1HIn, uint16_t l1WIn,
+        uint16_t c1IndexIn, uint8_t fetchFilterWIn, uint8_t fetchFilterHIn, uint16_t leftTopWIn, uint16_t leftTopHIn,
+        uint8_t strideWIn, uint8_t strideHIn, uint8_t filterWIn, uint8_t filterHIn, uint8_t dilationFilterWIn,
+        uint8_t dilationFilterHIn, uint8_t jumpStrideIn, uint8_t repeatModeIn, uint8_t repeatTimeIn, uint8_t cSizeIn,
+        uint32_t dstDtypeBytesIn, uint32_t srcDtypeBytesIn, uint64_t dstSizeIn, uint64_t srcSizeIn, uint8_t dstPosIn,
+        uint8_t srcPosIn)
     {
         dstAddr = dstAddrIn;
         srcAddr = srcAddrIn;
@@ -278,12 +316,12 @@ struct LoadData3dv1ApiParams {
 
 struct LoadData3dv2ApiParams {
     LoadData3dv2ApiParams() {}
-    LoadData3dv2ApiParams(uint64_t dstAddrIn, uint64_t srcAddrIn, const uint8_t padListIn[4], uint16_t l1HIn,
-        uint16_t l1WIn, uint16_t channelSizeIn, uint16_t kExtensionIn, uint16_t mExtensionIn, uint16_t kStartPtIn,
-        uint16_t mStartPtIn, uint8_t strideWIn, uint8_t strideHIn, uint8_t filterWIn, uint8_t filterHIn,
-        uint8_t dilationFilterWIn, uint8_t dilationFilterHIn, bool enTransposeIn, bool enSmallKIn,
-        uint32_t dstDtypeBytesIn, uint32_t srcDtypeBytesIn, uint64_t dstSizeIn, uint64_t srcSizeIn, uint8_t dstPosIn,
-        uint8_t srcPosIn)
+    LoadData3dv2ApiParams(
+        uint64_t dstAddrIn, uint64_t srcAddrIn, const uint8_t padListIn[4], uint16_t l1HIn, uint16_t l1WIn,
+        uint16_t channelSizeIn, uint16_t kExtensionIn, uint16_t mExtensionIn, uint16_t kStartPtIn, uint16_t mStartPtIn,
+        uint8_t strideWIn, uint8_t strideHIn, uint8_t filterWIn, uint8_t filterHIn, uint8_t dilationFilterWIn,
+        uint8_t dilationFilterHIn, bool enTransposeIn, bool enSmallKIn, uint32_t dstDtypeBytesIn,
+        uint32_t srcDtypeBytesIn, uint64_t dstSizeIn, uint64_t srcSizeIn, uint8_t dstPosIn, uint8_t srcPosIn)
     {
         dstAddr = dstAddrIn;
         srcAddr = srcAddrIn;
@@ -350,11 +388,12 @@ struct LoadData3dv2ApiParams {
 
 struct LoadData3dv2ProApiParams {
     LoadData3dv2ProApiParams() {}
-    LoadData3dv2ProApiParams(uint64_t dstAddrIn, uint64_t srcAddrIn, uint16_t channelSizeIn, uint16_t kExtensionIn,
-        uint16_t mExtensionIn, uint16_t kStartPtIn, uint16_t mStartPtIn, uint8_t strideWIn, uint8_t strideHIn,
-        uint8_t filterWIn, uint8_t filterHIn, uint8_t dilationFilterWIn, uint8_t dilationFilterHIn, bool enTransposeIn,
-        bool enSmallKIn, uint32_t dstDtypeBytesIn, uint32_t srcDtypeBytesIn, uint64_t dstSizeIn, uint64_t srcSizeIn,
-        uint8_t dstPosIn, uint8_t srcPosIn)
+    LoadData3dv2ProApiParams(
+        uint64_t dstAddrIn, uint64_t srcAddrIn, uint16_t channelSizeIn, uint16_t kExtensionIn, uint16_t mExtensionIn,
+        uint16_t kStartPtIn, uint16_t mStartPtIn, uint8_t strideWIn, uint8_t strideHIn, uint8_t filterWIn,
+        uint8_t filterHIn, uint8_t dilationFilterWIn, uint8_t dilationFilterHIn, bool enTransposeIn, bool enSmallKIn,
+        uint32_t dstDtypeBytesIn, uint32_t srcDtypeBytesIn, uint64_t dstSizeIn, uint64_t srcSizeIn, uint8_t dstPosIn,
+        uint8_t srcPosIn)
     {
         dstAddr = dstAddrIn;
         srcAddr = srcAddrIn;
@@ -430,10 +469,10 @@ struct LoadImageToLocalApiParams {
         dstPos = 0;
     }
 
-    __aicore__ LoadImageToLocalApiParams(uint64_t dstAddrIn, uint16_t horizSizeIn, uint16_t vertSizeIn,
-        uint16_t horizStartPosIn, uint16_t vertStartPosIn, uint16_t srcHorizSizeIn, uint8_t topPadSizeIn,
-        uint8_t botPadSizeIn, uint16_t leftPadSizeIn, uint16_t rightPadSizeIn, uint32_t dstDtypeBytesIn,
-        uint64_t dstSizeIn, uint8_t dstPosIn)
+    __aicore__ LoadImageToLocalApiParams(
+        uint64_t dstAddrIn, uint16_t horizSizeIn, uint16_t vertSizeIn, uint16_t horizStartPosIn,
+        uint16_t vertStartPosIn, uint16_t srcHorizSizeIn, uint8_t topPadSizeIn, uint8_t botPadSizeIn,
+        uint16_t leftPadSizeIn, uint16_t rightPadSizeIn, uint32_t dstDtypeBytesIn, uint64_t dstSizeIn, uint8_t dstPosIn)
     {
         dstAddr = dstAddrIn;
         horizSize = horizSizeIn;

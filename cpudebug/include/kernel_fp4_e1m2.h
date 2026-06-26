@@ -1,12 +1,12 @@
 /**
-* Copyright (c) 2025 Huawei Technologies Co., Ltd.
-* This program is free software, you can redistribute it and/or modify it under the terms and conditions of
-* CANN Open Software License Agreement Version 2.0 (the "License").
-* Please refer to the License for details. You may not use this file except in compliance with the License.
-* THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
-* INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
-* See LICENSE in the root of the software repository for the full text of the License.
-*/
+ * Copyright (c) 2025 Huawei Technologies Co., Ltd.
+ * This program is free software, you can redistribute it and/or modify it under the terms and conditions of
+ * CANN Open Software License Agreement Version 2.0 (the "License").
+ * Please refer to the License for details. You may not use this file except in compliance with the License.
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
+ * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
+ * See LICENSE in the root of the software repository for the full text of the License.
+ */
 
 /*!
  * \file kernel_fp4_e1m2.h
@@ -30,7 +30,7 @@ constexpr uint32_t FP4_E1M2_EXP_LEN = 1;
 constexpr uint32_t FP4_E1M2_MAN_LEN = 2;
 inline uint8_t FP4E1M2_CONSTRUCTOR(uint16_t s, uint16_t e, uint16_t m)
 {
-    return (((s) << FP4_SIGN_INDEX) | ((e) << FP4_E1M2_MAN_LEN) | ((m) & FP4_E1M2_MAX_MAN));
+    return (((s) << FP4_SIGN_INDEX) | ((e) << FP4_E1M2_MAN_LEN) | ((m)&FP4_E1M2_MAX_MAN));
 }
 
 /*
@@ -41,6 +41,7 @@ inline uint8_t FP4E1M2_CONSTRUCTOR(uint16_t s, uint16_t e, uint16_t m)
  */
 struct Fp4e1m2T {
     uint8_t val;
+
 public:
     Fp4e1m2T() = default;
     Fp4e1m2T(const Fp4e1m2T& fp4) : val(fp4.val) {}

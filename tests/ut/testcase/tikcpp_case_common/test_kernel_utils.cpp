@@ -1,12 +1,12 @@
 /**
-* Copyright (c) 2025 Huawei Technologies Co., Ltd.
-* This program is free software, you can redistribute it and/or modify it under the terms and conditions of
-* CANN Open Software License Agreement Version 2.0 (the "License").
-* Please refer to the License for details. You may not use this file except in compliance with the License.
-* THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
-* INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
-* See LICENSE in the root of the software repository for the full text of the License.
-*/
+ * Copyright (c) 2025 Huawei Technologies Co., Ltd.
+ * This program is free software, you can redistribute it and/or modify it under the terms and conditions of
+ * CANN Open Software License Agreement Version 2.0 (the "License").
+ * Please refer to the License for details. You may not use this file except in compliance with the License.
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
+ * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
+ * See LICENSE in the root of the software repository for the full text of the License.
+ */
 #include <gtest/gtest.h>
 #include <string>
 #include <fstream>
@@ -34,29 +34,30 @@ protected:
     void TearDown() {}
 };
 
-INSTANTIATE_TEST_CASE_P(TEST_TENSOR_WRITE, TensorWriteTestsuite,
+INSTANTIATE_TEST_CASE_P(
+    TEST_TENSOR_WRITE, TensorWriteTestsuite,
     ::testing::Values(
 #if __CCE_AICORE__ == 200
 #if (__ST_CHIP_VER__ == 710)
-    TensorWriteTestParams{ "ut_710_test_tensor_write_v200_1.bin", "111111111", 0 },
-    TensorWriteTestParams{ "ut_710_test_tensor_write_v200_2.bin", "", -1 },
+        TensorWriteTestParams{"ut_710_test_tensor_write_v200_1.bin", "111111111", 0},
+        TensorWriteTestParams{"ut_710_test_tensor_write_v200_2.bin", "", -1},
 #elif (__ST_CHIP_VER__ == 610)
-    TensorWriteTestParams{ "ut_610_test_tensor_write_v200_3.bin", "111111111", 0 },
-    TensorWriteTestParams{ "ut_610_test_tensor_write_v200_4.bin", "", -1 },
+        TensorWriteTestParams{"ut_610_test_tensor_write_v200_3.bin", "111111111", 0},
+        TensorWriteTestParams{"ut_610_test_tensor_write_v200_4.bin", "", -1},
 #endif
 #elif (__CCE_AICORE__ == 100)
-    TensorWriteTestParams{ "ut_910_test_tensor_write_other_1.bin", "111111111", 0 },
-    TensorWriteTestParams{ "ut_910_test_tensor_write_other_2.bin", "", -1 },
+        TensorWriteTestParams{"ut_910_test_tensor_write_other_1.bin", "111111111", 0},
+        TensorWriteTestParams{"ut_910_test_tensor_write_other_2.bin", "", -1},
 #elif (__CCE_AICORE__ == 220)
 #if defined(__DAV_C220_VEC__)
-    TensorWriteTestParams{ "ut_920_vec_test_tensor_write_other_1.bin", "111111111", 0 },
-    TensorWriteTestParams{ "ut_920_vec_test_tensor_write_other_2.bin", "", -1 },
+        TensorWriteTestParams{"ut_920_vec_test_tensor_write_other_1.bin", "111111111", 0},
+        TensorWriteTestParams{"ut_920_vec_test_tensor_write_other_2.bin", "", -1},
 #else
-    TensorWriteTestParams{ "ut_920_cube_test_tensor_write_other_1.bin", "111111111", 0 },
-    TensorWriteTestParams{ "ut_920_cube_test_tensor_write_other_2.bin", "", -1 },
+        TensorWriteTestParams{"ut_920_cube_test_tensor_write_other_1.bin", "111111111", 0},
+        TensorWriteTestParams{"ut_920_cube_test_tensor_write_other_2.bin", "", -1},
 #endif
 #endif
-    TensorWriteTestParams{ "", "", -1 }));
+        TensorWriteTestParams{"", "", -1}));
 
 TEST_P(TensorWriteTestsuite, TensorWriteTestCase)
 {
@@ -78,12 +79,14 @@ TEST_P(TensorWriteTestsuite, TensorWriteTestCase)
     }
 }
 
-template <typename T> struct ScalarStringPair {
+template <typename T>
+struct ScalarStringPair {
     T input;
     string golden;
 };
 
-template <typename T> string ConvScalar2Str(uint8_t* input)
+template <typename T>
+string ConvScalar2Str(uint8_t* input)
 {
     T scalarValue = *((T*)input);
     return ScalarToString(scalarValue);
@@ -101,29 +104,31 @@ protected:
     void TearDown() {}
 };
 namespace {
-ScalarStringPair<int8_t> dataInt8{ -8, "-8" };
-ScalarStringPair<uint8_t> dataUInt8{ 8, "8" };
-ScalarStringPair<int16_t> dataInt16{ -188, "-188" };
-ScalarStringPair<uint16_t> dataUInt16{ 18, "18" };
-ScalarStringPair<float> dataFloat{ -88.888, "-88.888000" };
-ScalarStringPair<int32_t> dataInt32{ -88888, "-88888" };
-ScalarStringPair<uint32_t> dataUInt32{ 0x88888, "559240" };
-ScalarStringPair<int64_t> dataInt64{ -88888888888, "-88888888888" };
-ScalarStringPair<uint64_t> dataUInt64{ 0xFFFFFFFFFFFFFFFF, "18446744073709551615" };
-ScalarStringPair<half> dataHalf{ 1.325, "1.325195" };
+ScalarStringPair<int8_t> dataInt8{-8, "-8"};
+ScalarStringPair<uint8_t> dataUInt8{8, "8"};
+ScalarStringPair<int16_t> dataInt16{-188, "-188"};
+ScalarStringPair<uint16_t> dataUInt16{18, "18"};
+ScalarStringPair<float> dataFloat{-88.888, "-88.888000"};
+ScalarStringPair<int32_t> dataInt32{-88888, "-88888"};
+ScalarStringPair<uint32_t> dataUInt32{0x88888, "559240"};
+ScalarStringPair<int64_t> dataInt64{-88888888888, "-88888888888"};
+ScalarStringPair<uint64_t> dataUInt64{0xFFFFFFFFFFFFFFFF, "18446744073709551615"};
+ScalarStringPair<half> dataHalf{1.325, "1.325195"};
 } // namespace
 
-INSTANTIATE_TEST_CASE_P(TEST_OPEARATION_HALF_EQ, ScalarConvStrTestsuite,
-    ::testing::Values(ScalarConvStringParams{ (uint8_t*)(&dataInt8.input), dataInt8.golden, ConvScalar2Str<int8_t> },
-    ScalarConvStringParams{ (uint8_t*)(&dataUInt8.input), dataUInt8.golden, ConvScalar2Str<uint8_t> },
-    ScalarConvStringParams{ (uint8_t*)(&dataInt16.input), dataInt16.golden, ConvScalar2Str<int16_t> },
-    ScalarConvStringParams{ (uint8_t*)(&dataUInt16.input), dataUInt16.golden, ConvScalar2Str<uint16_t> },
-    ScalarConvStringParams{ (uint8_t*)(&dataFloat.input), dataFloat.golden, ConvScalar2Str<float> },
-    ScalarConvStringParams{ (uint8_t*)(&dataInt32.input), dataInt32.golden, ConvScalar2Str<int32_t> },
-    ScalarConvStringParams{ (uint8_t*)(&dataUInt32.input), dataUInt32.golden, ConvScalar2Str<uint32_t> },
-    ScalarConvStringParams{ (uint8_t*)(&dataInt64.input), dataInt64.golden, ConvScalar2Str<int64_t> },
-    ScalarConvStringParams{ (uint8_t*)(&dataUInt64.input), dataUInt64.golden, ConvScalar2Str<uint64_t> },
-    ScalarConvStringParams{ (uint8_t*)(&dataHalf.input), dataHalf.golden, ConvScalar2Str<half> }));
+INSTANTIATE_TEST_CASE_P(
+    TEST_OPEARATION_HALF_EQ, ScalarConvStrTestsuite,
+    ::testing::Values(
+        ScalarConvStringParams{(uint8_t*)(&dataInt8.input), dataInt8.golden, ConvScalar2Str<int8_t>},
+        ScalarConvStringParams{(uint8_t*)(&dataUInt8.input), dataUInt8.golden, ConvScalar2Str<uint8_t>},
+        ScalarConvStringParams{(uint8_t*)(&dataInt16.input), dataInt16.golden, ConvScalar2Str<int16_t>},
+        ScalarConvStringParams{(uint8_t*)(&dataUInt16.input), dataUInt16.golden, ConvScalar2Str<uint16_t>},
+        ScalarConvStringParams{(uint8_t*)(&dataFloat.input), dataFloat.golden, ConvScalar2Str<float>},
+        ScalarConvStringParams{(uint8_t*)(&dataInt32.input), dataInt32.golden, ConvScalar2Str<int32_t>},
+        ScalarConvStringParams{(uint8_t*)(&dataUInt32.input), dataUInt32.golden, ConvScalar2Str<uint32_t>},
+        ScalarConvStringParams{(uint8_t*)(&dataInt64.input), dataInt64.golden, ConvScalar2Str<int64_t>},
+        ScalarConvStringParams{(uint8_t*)(&dataUInt64.input), dataUInt64.golden, ConvScalar2Str<uint64_t>},
+        ScalarConvStringParams{(uint8_t*)(&dataHalf.input), dataHalf.golden, ConvScalar2Str<half>}));
 
 TEST_P(ScalarConvStrTestsuite, ScalarConvTestCase)
 {
@@ -191,12 +196,8 @@ TEST_F(TEST_UTILS, TEST_SUBINTEGER_INT4)
     EXPECT_EQ(val_neg == (AscendC::int4b_t)-2, true);
 }
 
-namespace AscendC{
-uint64_t get_imm(uint64_t arg0) {
-    return 0;
-}
+namespace AscendC {
+uint64_t get_imm(uint64_t arg0) { return 0; }
 
-int64_t get_status() {
-    return 0;
-}
-}
+int64_t get_status() { return 0; }
+} // namespace AscendC

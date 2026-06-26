@@ -1,12 +1,12 @@
 /**
-* Copyright (c) 2025 Huawei Technologies Co., Ltd.
-* This program is free software, you can redistribute it and/or modify it under the terms and conditions of
-* CANN Open Software License Agreement Version 2.0 (the "License").
-* Please refer to the License for details. You may not use this file except in compliance with the License.
-* THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
-* INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
-* See LICENSE in the root of the software repository for the full text of the License.
-*/
+ * Copyright (c) 2025 Huawei Technologies Co., Ltd.
+ * This program is free software, you can redistribute it and/or modify it under the terms and conditions of
+ * CANN Open Software License Agreement Version 2.0 (the "License").
+ * Please refer to the License for details. You may not use this file except in compliance with the License.
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
+ * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
+ * See LICENSE in the root of the software repository for the full text of the License.
+ */
 
 /*!
  * \file kernel_utils.h
@@ -23,9 +23,8 @@
 #include "utils/kernel_utils_struct_norm_sort.h"
 
 namespace AscendC {
-#if defined(__NPU_ARCH__) &&                                        \
-    ((__NPU_ARCH__ == 2201) || (__NPU_ARCH__ == 3002) ||            \
-     (__NPU_ARCH__ == 3510) || (__NPU_ARCH__ == 5102))
+#if defined(__NPU_ARCH__) && \
+    ((__NPU_ARCH__ == 2201) || (__NPU_ARCH__ == 3002) || (__NPU_ARCH__ == 3510) || (__NPU_ARCH__ == 5102))
 
 #if defined(__NPU_ARCH__) && ((__NPU_ARCH__ == 3510) || (__NPU_ARCH__ == 5102))
 
@@ -79,7 +78,7 @@ constexpr uint32_t FP8E4M3_MAN_LEN = 3;
 #define FP8_MAX_MAN (0x7)
 #define FP8_MAN_HIDE_BIT (0x8)
 
-} // FPTranslation
+} // namespace FPTranslation
 #endif
 #endif
 } // namespace AscendC
@@ -88,8 +87,9 @@ namespace AscendC {
 struct SliceInfo {
     __aicore__ SliceInfo() {}
 
-    __aicore__ SliceInfo(const uint32_t startIndexIn, const uint32_t endIndexIn, const uint32_t strideIn,
-        const uint32_t burstLenIn, const uint32_t shapeValueIn = 0)
+    __aicore__ SliceInfo(
+        const uint32_t startIndexIn, const uint32_t endIndexIn, const uint32_t strideIn, const uint32_t burstLenIn,
+        const uint32_t shapeValueIn = 0)
         : startIndex(startIndexIn),
           endIndex(endIndexIn),
           stride(strideIn),
@@ -106,10 +106,7 @@ struct SliceInfo {
 
 class AscendCUtils {
 public:
-    __aicore__ static inline int32_t GetC0Size()
-    {
-        return DEFAULT_C0_SIZE;
-    }
+    __aicore__ static inline int32_t GetC0Size() { return DEFAULT_C0_SIZE; }
 
     __aicore__ static inline int32_t GetC0Count(const int32_t dtypeSize)
     {
@@ -119,11 +116,7 @@ public:
 };
 
 #ifdef ASCENDC_CPU_DEBUG
-enum AtomicType {
-    SUM,
-    MAX,
-    MIN
-};
+enum AtomicType { SUM, MAX, MIN };
 extern bool g_isAtomic;
 extern AtomicType g_atomicType;
 

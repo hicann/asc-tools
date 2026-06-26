@@ -1,12 +1,12 @@
 /**
-* Copyright (c) 2025 Huawei Technologies Co., Ltd.
-* This program is free software, you can redistribute it and/or modify it under the terms and conditions of
-* CANN Open Software License Agreement Version 2.0 (the "License").
-* Please refer to the License for details. You may not use this file except in compliance with the License.
-* THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
-* INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
-* See LICENSE in the root of the software repository for the full text of the License.
-*/
+ * Copyright (c) 2025 Huawei Technologies Co., Ltd.
+ * This program is free software, you can redistribute it and/or modify it under the terms and conditions of
+ * CANN Open Software License Agreement Version 2.0 (the "License").
+ * Please refer to the License for details. You may not use this file except in compliance with the License.
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
+ * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
+ * See LICENSE in the root of the software repository for the full text of the License.
+ */
 
 /*!
  * \file stub_def.h
@@ -72,7 +72,7 @@
 #define __vector__
 
 namespace ConstantsInternal {
-#if defined (__NPU_ARCH__) && (__NPU_ARCH__ == 3103)
+#if defined(__NPU_ARCH__) && (__NPU_ARCH__ == 3103)
 constexpr uint16_t b4EleSize = 256;
 constexpr uint16_t b8EleSize = 128;
 constexpr uint16_t b16EleSize = 64;
@@ -85,7 +85,7 @@ constexpr uint16_t b16EleSize = 128;
 constexpr uint16_t b32EleSize = 64;
 constexpr uint16_t b64EleSize = 32;
 #endif
-}
+} // namespace ConstantsInternal
 
 // kirin symbol dependency
 #if defined(__NPU_ARCH__) && ((__NPU_ARCH__ == 3003) || (__NPU_ARCH__ == 3113))
@@ -121,7 +121,7 @@ struct int4x2_t {
     const static uint16_t BIT_NUM = 4u;
 
     // fix atomic compile problem
-    int4x2_t operator+(const int4x2_t &other) const
+    int4x2_t operator+(const int4x2_t& other) const
     {
         int4x2_t tmp;
         tmp.data = ((((data >> BIT_NUM) + (other.data >> BIT_NUM)) & 0xfu) << BIT_NUM) + ((data + other.data) & 0xfu);
@@ -138,10 +138,7 @@ struct vector_address {
     __aicore__ inline vector_address() {}
     explicit __aicore__ inline vector_address(int64_t) {}
     int64_t value = 0;
-    __aicore__ inline operator int64_t &()
-    {
-        return value;
-    }
+    __aicore__ inline operator int64_t&() { return value; }
 };
 
 using vector_align = std::array<int8_t, 32>;
@@ -175,18 +172,11 @@ enum class KernelMode {
     AIV_MODE,
     MIX_AIC_1_1,
 };
-enum class SocVersion {
-    VER_100 = 100,
-    VER_200 = 200,
-    VER_220 = 220,
-    VER_310 = 310,
-    VER_510 = 510,
-    VER_MAX = 0xFFFFFF
-};
+enum class SocVersion { VER_100 = 100, VER_200 = 200, VER_220 = 220, VER_310 = 310, VER_510 = 510, VER_MAX = 0xFFFFFF };
 
-using ArgInfoT =  struct ArgInfoT {   // parameter info
-    std::string argType;  // tensor, tensorlist, workspace, tiling
-    std::vector<uint8_t *> addrList;    // addr list
+using ArgInfoT = struct ArgInfoT {  // parameter info
+    std::string argType;            // tensor, tensorlist, workspace, tiling
+    std::vector<uint8_t*> addrList; // addr list
 };
 
 extern KernelMode g_kernelMode;
@@ -205,7 +195,7 @@ extern const int AIV_TYPE;
 extern const int PAGE_SIZE;
 extern const uint64_t ONE_GIGABYTE;
 extern bool g_isVdeq;
-#if defined (__NPU_ARCH__) && ((__NPU_ARCH__ == 3510) || (__NPU_ARCH__ == 5102))
+#if defined(__NPU_ARCH__) && ((__NPU_ARCH__ == 3510) || (__NPU_ARCH__ == 5102))
 constexpr int32_t FLAG_NUM = 32;
 #else
 constexpr int32_t FLAG_NUM = 16;
@@ -249,7 +239,8 @@ inline void InitSocVersion()
 #endif
 }
 
-inline constexpr int32_t GetMaxCoreNum() {
+inline constexpr int32_t GetMaxCoreNum()
+{
 #if defined(__NPU_ARCH__) && (__NPU_ARCH__ == 3510)
     return MAX_CORE_NUM_V310;
 #else
@@ -265,7 +256,7 @@ void GmFree(void* ptr);
 void CheckGmValied(int argn, uint64_t* argv);
 uint64_t GmGetUserSize(uint64_t addr);
 void SetGCoreType(int type);
-void SetArgInfoList(const std::vector<ArgInfoT> &argInfoList);
+void SetArgInfoList(const std::vector<ArgInfoT>& argInfoList);
 void SetKernelMode(KernelMode mode);
 void CheckBlockdimForFfts(uint64_t numBlocks);
 void CheckNumBlocksForFfts(uint64_t numBlocks);

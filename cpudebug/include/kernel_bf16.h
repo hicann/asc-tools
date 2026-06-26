@@ -1,12 +1,12 @@
 /**
-* Copyright (c) 2025 Huawei Technologies Co., Ltd.
-* This program is free software, you can redistribute it and/or modify it under the terms and conditions of
-* CANN Open Software License Agreement Version 2.0 (the "License").
-* Please refer to the License for details. You may not use this file except in compliance with the License.
-* THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
-* INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
-* See LICENSE in the root of the software repository for the full text of the License.
-*/
+ * Copyright (c) 2025 Huawei Technologies Co., Ltd.
+ * This program is free software, you can redistribute it and/or modify it under the terms and conditions of
+ * CANN Open Software License Agreement Version 2.0 (the "License").
+ * Please refer to the License for details. You may not use this file except in compliance with the License.
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
+ * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
+ * See LICENSE in the root of the software repository for the full text of the License.
+ */
 
 /*!
  * \file kernel_bf16.h
@@ -48,9 +48,9 @@ inline bool IsRoundOne(uint32_t sign, uint64_t man, uint16_t truncLen)
     uint64_t mask1 = (truncLen > roundingTruncLen) ? 0 : 0x1ul << (truncLen - 1);
     uint64_t mask2 = mask1 - 1;
 
-    bool lastBit = ((man & mask0) > 0);                           // Last bit after conversion
-    bool truncHighBit = ((man & mask1) > 0);                      // Highest bit in the truncated part
-    bool truncLeft = ((man & mask2) > 0);                         // Truncated left part (except for the highest bit)
+    bool lastBit = ((man & mask0) > 0);      // Last bit after conversion
+    bool truncHighBit = ((man & mask1) > 0); // Highest bit in the truncated part
+    bool truncLeft = ((man & mask2) > 0);    // Truncated left part (except for the highest bit)
 
     return (truncHighBit && (truncLeft || lastBit));
 }
@@ -92,37 +92,28 @@ union ConvertU32ToFp32 {
 
 inline uint16_t Bf16Constructor(uint16_t s, uint16_t e, uint16_t m)
 {
-    return (((s) << BF16_SIGN_INDEX) | ((e) << BF16_MAN_LEN) | ((m) & BF16_MAX_MAN));
+    return (((s) << BF16_SIGN_INDEX) | ((e) << BF16_MAN_LEN) | ((m)&BF16_MAX_MAN));
 }
 
 inline bool Bf16IsNan(const uint16_t& x)
 {
-    return ((((x) & BF16_EXP_MASK) == BF16_EXP_MASK) && (((x) & BF16_MAN_MASK) != 0));
+    return ((((x)&BF16_EXP_MASK) == BF16_EXP_MASK) && (((x)&BF16_MAN_MASK) != 0));
 }
 
 inline bool Bf16IsInf(const uint16_t& x)
 {
-    return ((((x) & BF16_EXP_MASK) == BF16_EXP_MASK) && (((x) & BF16_MAN_MASK) == 0));
+    return ((((x)&BF16_EXP_MASK) == BF16_EXP_MASK) && (((x)&BF16_MAN_MASK) == 0));
 }
 
-inline bool Bf16IsInvalid(uint16_t x)
-{
-    return ((x & BF16_EXP_MASK) == BF16_EXP_MASK);
-}
+inline bool Bf16IsInvalid(uint16_t x) { return ((x & BF16_EXP_MASK) == BF16_EXP_MASK); }
 
-inline uint16_t Bf16ExtracSign(uint16_t x)
-{
-    return (((x) >> BF16_SIGN_INDEX) & 1);
-}
+inline uint16_t Bf16ExtracSign(uint16_t x) { return (((x) >> BF16_SIGN_INDEX) & 1); }
 
-inline uint16_t Bf16ExtracExp(uint16_t x)
-{
-    return (((x) & BF16_EXP_MASK) >> BF16_MAN_LEN);
-}
+inline uint16_t Bf16ExtracExp(uint16_t x) { return (((x)&BF16_EXP_MASK) >> BF16_MAN_LEN); }
 
 inline bool Fp32IsInf(const uint32_t& x)
 {
-    return ((((x) & FP32_EXP_MASK) == FP32_EXP_MASK) && (((x) & FP32_MAN_MASK) == 0));
+    return ((((x)&FP32_EXP_MASK) == FP32_EXP_MASK) && (((x)&FP32_MAN_MASK) == 0));
 }
 /*
  * @ingroup fp32 special value judgment
@@ -130,24 +121,18 @@ inline bool Fp32IsInf(const uint32_t& x)
  */
 inline bool Fp32IsNan(const uint32_t& x)
 {
-    return ((((x) & FP32_EXP_MASK) == FP32_EXP_MASK) && (((x) & FP32_MAN_MASK) != 0));
+    return ((((x)&FP32_EXP_MASK) == FP32_EXP_MASK) && (((x)&FP32_MAN_MASK) != 0));
 }
 /*
  * @ingroup fp32 basic operator
  * @brief   get sign of fp32
  */
-inline uint16_t Fp32ExtracSign(uint32_t x)
-{
-    return (((x) >> FP32_SIGN_INDEX) & 1);
-}
+inline uint16_t Fp32ExtracSign(uint32_t x) { return (((x) >> FP32_SIGN_INDEX) & 1); }
 /*
  * @ingroup fp32 basic operator
  * @brief   get exponent of Bf16
  */
-inline uint32_t Fp32ExtracExp(uint32_t x)
-{
-    return (((x) & FP32_EXP_MASK) >> FP32_MAN_LEN);
-}
+inline uint32_t Fp32ExtracExp(uint32_t x) { return (((x)&FP32_EXP_MASK) >> FP32_MAN_LEN); }
 /*
  * @ingroup Bf16T
  * @brief   value range is the same as float, but poor accuracy compared to float
@@ -157,6 +142,7 @@ inline uint32_t Fp32ExtracExp(uint32_t x)
  */
 struct Bf16T {
     uint16_t val;
+
 public:
     Bf16T() = default;
     Bf16T(const Bf16T& bf) : val(bf.val) {}
@@ -168,42 +154,42 @@ public:
      * @brief   Override basic evaluation operator to copy Bf16T to a new Bf16T
      * @return  Return Bf16T result from fp
      */
-    Bf16T& operator = (const Bf16T& fp);
+    Bf16T& operator=(const Bf16T& fp);
     /*
      * @ingroup Bf16T math evaluation operator
      * @param [in] fVal float object to be converted to Bf16T
      * @brief   Override basic evaluation operator to convert float to Bf16T
      * @return  Return Bf16T result from fVal
      */
-    Bf16T& operator = (const float& fVal);
+    Bf16T& operator=(const float& fVal);
     /*
      * @ingroup Bf16T math operator
      * @param [in] fp Bf16T object to be added
      * @brief   Override addition operator to performing Bf16T addition
      * @return  Return Bf16T result of adding this and fp
      */
-    Bf16T operator + (const Bf16T fp) const;
+    Bf16T operator+(const Bf16T fp) const;
     /*
      * @ingroup Bf16T math operator
      * @param [in] fp Bf16T object to be added
      * @brief   Override addition operator to performing Bf16T addition
      * @return  Return Bf16T result of adding this and fp
      */
-    Bf16T operator += (const Bf16T fp);
+    Bf16T operator+=(const Bf16T fp);
     /*
      * @ingroup Bf16T math conversion
      * @brief   Override convert operator to convert Bf16T to float/fp32
      * @return  Return float/fp32 value of Bf16T
      */
-    Bf16T operator - (const Bf16T fp) const;
+    Bf16T operator-(const Bf16T fp) const;
     /*
      * @ingroup Bf16T math operator
      * @param [in] fp Bf16T object to be subtracted
      * @brief   Override subtraction operator to performing Bf16T subtraction
      * @return  Return Bf16T result of subtracting this and fp
      */
-    Bf16T operator -= (const Bf16T fp);
-     /*
+    Bf16T operator-=(const Bf16T fp);
+    /*
      * @ingroup Bf16T math operator
      * @param [in] fp Bf16T object to be subtracted
      * @brief   Override subtraction operator to performing Bf16T subtraction
@@ -223,4 +209,3 @@ public:
 } // namespace bfloat16
 using bfloat16_t = bfloat16::Bf16T;
 #endif // ASCENDC_BF16_H
-

@@ -1,12 +1,12 @@
 /**
-* Copyright (c) 2025 Huawei Technologies Co., Ltd.
-* This program is free software, you can redistribute it and/or modify it under the terms and conditions of
-* CANN Open Software License Agreement Version 2.0 (the "License").
-* Please refer to the License for details. You may not use this file except in compliance with the License.
-* THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
-* INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
-* See LICENSE in the root of the software repository for the full text of the License.
-*/
+ * Copyright (c) 2025 Huawei Technologies Co., Ltd.
+ * This program is free software, you can redistribute it and/or modify it under the terms and conditions of
+ * CANN Open Software License Agreement Version 2.0 (the "License").
+ * Please refer to the License for details. You may not use this file except in compliance with the License.
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
+ * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
+ * See LICENSE in the root of the software repository for the full text of the License.
+ */
 #include <gtest/gtest.h>
 #define private public
 #define protected public
@@ -23,9 +23,7 @@ protected:
     static void SetUpTestCase() {}
     static void TearDownTestCase() {}
     virtual void SetUp() {}
-    virtual void TearDown() {
-        AscendC::CheckSyncState();
-    }
+    virtual void TearDown() { AscendC::CheckSyncState(); }
 };
 
 struct TestMmadApiCheckParams {
@@ -37,18 +35,19 @@ struct TestMmadApiCheckParams {
 
 class TestMmadApiCheckSuite : public testing::Test, public testing::WithParamInterface<TestMmadApiCheckParams> {
 protected:
-    void SetUp() {
-        g_coreType = AIC_TYPE;
-    }
-    void TearDown() {
+    void SetUp() { g_coreType = AIC_TYPE; }
+    void TearDown()
+    {
         AscendC::CheckSyncState();
         g_coreType = MIX_TYPE;
     }
 };
 
-INSTANTIATE_TEST_CASE_P(TEST_MMAD_API_CHECK, TestMmadApiCheckSuite,
-    ::testing::Values(TestMmadApiCheckParams { 10, 10, 10, true },
-    TestMmadApiCheckParams { 32, 128, 128, true }, TestMmadApiCheckParams { 128, 128, 128, true }));
+INSTANTIATE_TEST_CASE_P(
+    TEST_MMAD_API_CHECK, TestMmadApiCheckSuite,
+    ::testing::Values(
+        TestMmadApiCheckParams{10, 10, 10, true}, TestMmadApiCheckParams{32, 128, 128, true},
+        TestMmadApiCheckParams{128, 128, 128, true}));
 
 TEST_P(TestMmadApiCheckSuite, MmadApiCheckHighLevel)
 {
@@ -61,7 +60,8 @@ TEST_P(TestMmadApiCheckSuite, MmadApiCheckHighLevel)
     auto fm = MakeTensor(TPosition::A2, ALIGN_ADDR(src0DataSizeIn * sizeof(half)));
     auto filter = MakeTensor(TPosition::B2, ALIGN_ADDR(src1DataSizeIn * sizeof(half)));
 
-    check::MmadApiParams chkParams{dst.addr,
+    check::MmadApiParams chkParams{
+        dst.addr,
         fm.addr,
         filter.addr,
         (uint32_t)(sizeof(half)),
@@ -81,7 +81,7 @@ TEST_P(TestMmadApiCheckSuite, MmadApiCheckHighLevel)
         false,
         false,
         false};
-    check::TikcppMmadCheck chkIns { "mmad", chkParams };
+    check::TikcppMmadCheck chkIns{"mmad", chkParams};
     bool flag = chkIns.CheckAllHighLevel();
     EXPECT_EQ(flag, param.expect);
 }

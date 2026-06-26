@@ -1,12 +1,12 @@
 /**
-* Copyright (c) 2025 Huawei Technologies Co., Ltd.
-* This program is free software, you can redistribute it and/or modify it under the terms and conditions of
-* CANN Open Software License Agreement Version 2.0 (the "License").
-* Please refer to the License for details. You may not use this file except in compliance with the License.
-* THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
-* INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
-* See LICENSE in the root of the software repository for the full text of the License.
-*/
+ * Copyright (c) 2025 Huawei Technologies Co., Ltd.
+ * This program is free software, you can redistribute it and/or modify it under the terms and conditions of
+ * CANN Open Software License Agreement Version 2.0 (the "License").
+ * Please refer to the License for details. You may not use this file except in compliance with the License.
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
+ * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
+ * See LICENSE in the root of the software repository for the full text of the License.
+ */
 
 /*!
  * \file kernel_vec_transpose_check.cpp
@@ -67,43 +67,60 @@ bool TikcppVecTransposeCheck::CheckAllLowLevel()
     ASCENDC_CHECK(CheckTensorScope(param_.dstLogicPos, static_cast<uint8_t>(HardWareIndex::UB), "dst", supportPos));
     ASCENDC_CHECK(CheckTensorScope(param_.srcLogicPos, static_cast<uint8_t>(HardWareIndex::UB), "src", supportPos));
     ASCENDC_CHECK(CheckAddrAlign());
-    ASCENDC_CHECK(CheckBufferSizeOverFlow(param_.dstSize, GlobalParams::Instance().bufferSizeMap.at(param_.dstPos),
+    ASCENDC_CHECK(CheckBufferSizeOverFlow(
+        param_.dstSize, GlobalParams::Instance().bufferSizeMap.at(param_.dstPos),
         "check dst tensor buffersize failed"));
-    ASCENDC_CHECK(CheckBufferSizeOverFlow(param_.srcSize, GlobalParams::Instance().bufferSizeMap.at(param_.srcPos),
+    ASCENDC_CHECK(CheckBufferSizeOverFlow(
+        param_.srcSize, GlobalParams::Instance().bufferSizeMap.at(param_.srcPos),
         "check src tensor buffersize failed"));
-#if defined (__NPU_ARCH__) && ((__NPU_ARCH__ != 3003) && (__NPU_ARCH__ != 3103) && (__NPU_ARCH__ != 3113))
+#if defined(__NPU_ARCH__) && ((__NPU_ARCH__ != 3003) && (__NPU_ARCH__ != 3103) && (__NPU_ARCH__ != 3113))
     uint64_t expectedSize = 0;
     if (apiName == "Transpose") {
-#if defined (__NPU_ARCH__) && ((__NPU_ARCH__ == 2201) || (__NPU_ARCH__ == 3002) ||                       \
-     (__NPU_ARCH__ == 3102) || (__NPU_ARCH__ == 3510) || (__NPU_ARCH__ == 5102))
+#if defined(__NPU_ARCH__) && ((__NPU_ARCH__ == 2201) || (__NPU_ARCH__ == 3002) || (__NPU_ARCH__ == 3102) || \
+                              (__NPU_ARCH__ == 3510) || (__NPU_ARCH__ == 5102))
         ASCENDC_CHECK(CheckTempTensorSizeOverflow());
 #endif
         TransposeType transType = param_.transposeType;
-        ASCENDC_CHECK_AND_LOG((transType == TransposeType::TRANSPOSE_TYPE_NONE || transType == TransposeType::TRANSPOSE_ND2ND_B16 ||
-                               transType == TransposeType::TRANSPOSE_NCHW2NHWC || transType == TransposeType::TRANSPOSE_NHWC2NCHW),
-                               {CHECK_LOG_ERROR("Failed to check transposeType when it only supports TRANSPOSE_TYPE_NONE, TRANSPOSE_ND2ND_B16, "
-                               "TRANSPOSE_NCHW2NHWC, TRANSPOSE_NHWC2NCHW in Transpose, while the current value is %u.", static_cast<uint32_t>(transType));});
+        ASCENDC_CHECK_AND_LOG(
+            (transType == TransposeType::TRANSPOSE_TYPE_NONE || transType == TransposeType::TRANSPOSE_ND2ND_B16 ||
+             transType == TransposeType::TRANSPOSE_NCHW2NHWC || transType == TransposeType::TRANSPOSE_NHWC2NCHW),
+            {
+                CHECK_LOG_ERROR(
+                    "Failed to check transposeType when it only supports TRANSPOSE_TYPE_NONE, TRANSPOSE_ND2ND_B16, "
+                    "TRANSPOSE_NCHW2NHWC, TRANSPOSE_NHWC2NCHW in Transpose, while the current value is %u.",
+                    static_cast<uint32_t>(transType));
+            });
         if (transType == TransposeType::TRANSPOSE_ND2ND_B16) {
-            ASCENDC_CHECK_AND_LOG((param_.hSize == NCHW_CONV_ADDR_LIST_SIZE), {CHECK_LOG_ERROR("Failed to check hSize "
-                "value when transposeType is TRANSPOSE_ND2ND_B16 in Transpose, its valid value is 16, current value "
-                "is %u.", param_.hSize);});
-            ASCENDC_CHECK_AND_LOG((param_.wSize == NCHW_CONV_ADDR_LIST_SIZE), {CHECK_LOG_ERROR("Failed to check wSize "
-                "value when transposeType is TRANSPOSE_ND2ND_B16 in Transpose, its valid value is 16, current value "
-                "is %u.", param_.wSize);});
+            ASCENDC_CHECK_AND_LOG((param_.hSize == NCHW_CONV_ADDR_LIST_SIZE), {
+                CHECK_LOG_ERROR(
+                    "Failed to check hSize "
+                    "value when transposeType is TRANSPOSE_ND2ND_B16 in Transpose, its valid value is 16, current "
+                    "value "
+                    "is %u.",
+                    param_.hSize);
+            });
+            ASCENDC_CHECK_AND_LOG((param_.wSize == NCHW_CONV_ADDR_LIST_SIZE), {
+                CHECK_LOG_ERROR(
+                    "Failed to check wSize "
+                    "value when transposeType is TRANSPOSE_ND2ND_B16 in Transpose, its valid value is 16, current "
+                    "value "
+                    "is %u.",
+                    param_.wSize);
+            });
         }
 
         if (transType == TransposeType::TRANSPOSE_ND2ND_B16) {
-            expectedSize = VALUE_512;  // 16 * 16 B16 matrix do transpose -> src and local both 512B
+            expectedSize = VALUE_512; // 16 * 16 B16 matrix do transpose -> src and local both 512B
         } else if (transType == TransposeType::TRANSPOSE_NCHW2NHWC || transType == TransposeType::TRANSPOSE_NHWC2NCHW) {
             expectedSize = param_.nSize * param_.cSize * param_.hSize * param_.wSize * param_.srcDtypeBytes; // NCHW
         }
         ASCENDC_CHECK(CheckTensorSizeOverflow(expectedSize, param_.srcSize, "srcLocal", "Transpose"));
         ASCENDC_CHECK(CheckTensorSizeOverflow(expectedSize, param_.dstSize, "dstLocal", "Transpose"));
     } else if (apiName == "TransDataTo5HD") {
-        if (param_.index != -1) {  // api that directly pass tensors
+        if (param_.index != -1) { // api that directly pass tensors
             ASCENDC_CHECK(TransdataCheckTensorSize());
-        } else {                                         // api that passes uint64_t tensor that stores address
-            expectedSize = 16 * param_.srcDtypeBytes;    // tensor only needs to store 16 tensor address
+        } else {                                      // api that passes uint64_t tensor that stores address
+            expectedSize = 16 * param_.srcDtypeBytes; // tensor only needs to store 16 tensor address
             ASCENDC_CHECK(CheckTensorSizeOverflow(expectedSize, param_.srcSize, "srcLocal", "TransDataTo5HD"));
             ASCENDC_CHECK(CheckTensorSizeOverflow(expectedSize, param_.dstSize, "dstLocal", "TransDataTo5HD"));
         }
@@ -111,5 +128,5 @@ bool TikcppVecTransposeCheck::CheckAllLowLevel()
 #endif
     return true;
 }
-}
-}
+} // namespace check
+} // namespace AscendC

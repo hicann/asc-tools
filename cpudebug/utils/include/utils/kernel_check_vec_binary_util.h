@@ -1,12 +1,12 @@
 /**
-* Copyright (c) 2025 Huawei Technologies Co., Ltd.
-* This program is free software, you can redistribute it and/or modify it under the terms and conditions of
-* CANN Open Software License Agreement Version 2.0 (the "License").
-* Please refer to the License for details. You may not use this file except in compliance with the License.
-* THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
-* INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
-* See LICENSE in the root of the software repository for the full text of the License.
-*/
+ * Copyright (c) 2025 Huawei Technologies Co., Ltd.
+ * This program is free software, you can redistribute it and/or modify it under the terms and conditions of
+ * CANN Open Software License Agreement Version 2.0 (the "License").
+ * Please refer to the License for details. You may not use this file except in compliance with the License.
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
+ * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
+ * See LICENSE in the root of the software repository for the full text of the License.
+ */
 
 /*!
  * \file kernel_check_vec_binary_util.h
@@ -23,11 +23,12 @@ namespace check {
 
 struct VecBinaryApiParams {
     VecBinaryApiParams() {}
-    VecBinaryApiParams(uint64_t dstAddrIn, uint64_t src0AddrIn, uint64_t src1AddrIn, uint8_t repeatIn,
-        uint16_t dstBlockStrideIn, uint16_t src0BlockStrideIn, uint16_t src1BlockStrideIn, uint16_t dstRepeatStrideIn,
-        uint16_t src0RepeatStrideIn, uint16_t src1RepeatStrideIn, uint32_t dstDtypeBytesIn, uint32_t src0DtypeBytesIn,
-        uint32_t src1DtypeBytesIn, uint64_t dstSizeIn, uint64_t src0SizeIn, uint64_t src1SizeIn, uint8_t dstPosIn,
-        uint8_t src0PosIn, uint8_t src1PosIn)
+    VecBinaryApiParams(
+        uint64_t dstAddrIn, uint64_t src0AddrIn, uint64_t src1AddrIn, uint8_t repeatIn, uint16_t dstBlockStrideIn,
+        uint16_t src0BlockStrideIn, uint16_t src1BlockStrideIn, uint16_t dstRepeatStrideIn, uint16_t src0RepeatStrideIn,
+        uint16_t src1RepeatStrideIn, uint32_t dstDtypeBytesIn, uint32_t src0DtypeBytesIn, uint32_t src1DtypeBytesIn,
+        uint64_t dstSizeIn, uint64_t src0SizeIn, uint64_t src1SizeIn, uint8_t dstPosIn, uint8_t src0PosIn,
+        uint8_t src1PosIn)
     {
         dstAddr = dstAddrIn;
         src0Addr = src0AddrIn;
@@ -54,7 +55,8 @@ struct VecBinaryApiParams {
     }
 
     // 外部参数修改，传入logic_pos，但是新增内部新增log_pos,原有的pos保留，在内部转换
-    VecBinaryApiParams(uint64_t dstAddrIn, uint64_t src0AddrIn, uint64_t src1AddrIn, uint32_t dstDtypeBytesIn,
+    VecBinaryApiParams(
+        uint64_t dstAddrIn, uint64_t src0AddrIn, uint64_t src1AddrIn, uint32_t dstDtypeBytesIn,
         uint32_t src0DtypeBytesIn, uint32_t src1DtypeBytesIn, uint64_t dstSizeIn, uint64_t src0SizeIn,
         uint64_t src1SizeIn, uint8_t dstPosIn, uint8_t src0PosIn, uint8_t src1PosIn, uint32_t count)
     {
@@ -97,13 +99,14 @@ struct VecBinaryApiParams {
     uint8_t src1LogicPos = 0;
     uint8_t dstPos = 0;
     uint8_t src0Pos = 0;
-    uint8_t src1Pos = 0;    
+    uint8_t src1Pos = 0;
     uint32_t calCount = 0;
 };
 
 struct VecBinaryScalarApiParams {
     VecBinaryScalarApiParams() {}
-    VecBinaryScalarApiParams(uint64_t dstAddrIn, uint64_t src0AddrIn, uint8_t repeatIn, uint16_t dstBlockStrideIn,
+    VecBinaryScalarApiParams(
+        uint64_t dstAddrIn, uint64_t src0AddrIn, uint8_t repeatIn, uint16_t dstBlockStrideIn,
         uint16_t src0BlockStrideIn, uint16_t dstRepeatStrideIn, uint16_t src0RepeatStrideIn, uint32_t dstDtypeBytesIn,
         uint32_t src0DtypeBytesIn, uint64_t dstSizeIn, uint64_t src0SizeIn, uint8_t dstPosIn, uint8_t src0PosIn)
     {
@@ -124,9 +127,9 @@ struct VecBinaryScalarApiParams {
         src0Pos = static_cast<uint8_t>(GetPhyType(static_cast<TPosition>(src0PosIn)));
     }
 
-    VecBinaryScalarApiParams(uint64_t dstAddrIn, uint64_t src0AddrIn, uint32_t dstDtypeBytesIn,
-        uint32_t src0DtypeBytesIn, uint64_t dstSizeIn, uint64_t src0SizeIn, uint8_t dstPosIn, uint8_t src0PosIn,
-        uint32_t count)
+    VecBinaryScalarApiParams(
+        uint64_t dstAddrIn, uint64_t src0AddrIn, uint32_t dstDtypeBytesIn, uint32_t src0DtypeBytesIn,
+        uint64_t dstSizeIn, uint64_t src0SizeIn, uint8_t dstPosIn, uint8_t src0PosIn, uint32_t count)
     {
         dstAddr = dstAddrIn;
         src0Addr = src0AddrIn;
@@ -142,9 +145,11 @@ struct VecBinaryScalarApiParams {
     }
 
 #if defined(__NPU_ARCH__) && ((__NPU_ARCH__ == 3510) || (__NPU_ARCH__ == 5102))
-    VecBinaryScalarApiParams(uint64_t dstAddrIn, uint64_t src0AddrIn, uint8_t repeatIn, uint16_t dstBlockStrideIn,
+    VecBinaryScalarApiParams(
+        uint64_t dstAddrIn, uint64_t src0AddrIn, uint8_t repeatIn, uint16_t dstBlockStrideIn,
         uint16_t src0BlockStrideIn, uint16_t dstRepeatStrideIn, uint16_t src0RepeatStrideIn, uint32_t dstDtypeBytesIn,
-        uint32_t src0DtypeBytesIn, uint64_t dstSizeIn, uint64_t src0SizeIn, uint8_t dstPosIn, uint8_t src0PosIn, uint8_t scalarPosIn)
+        uint32_t src0DtypeBytesIn, uint64_t dstSizeIn, uint64_t src0SizeIn, uint8_t dstPosIn, uint8_t src0PosIn,
+        uint8_t scalarPosIn)
     {
         dstAddr = dstAddrIn;
         src0Addr = src0AddrIn;
@@ -165,9 +170,10 @@ struct VecBinaryScalarApiParams {
         enableFlexibleScalar = 1;
     }
 
-    VecBinaryScalarApiParams(uint64_t dstAddrIn, uint64_t src0AddrIn, uint32_t dstDtypeBytesIn,
-        uint32_t src0DtypeBytesIn, uint64_t dstSizeIn, uint64_t src0SizeIn, uint8_t dstPosIn, uint8_t src0PosIn,
-        uint32_t count, uint8_t scalarPosIn)
+    VecBinaryScalarApiParams(
+        uint64_t dstAddrIn, uint64_t src0AddrIn, uint32_t dstDtypeBytesIn, uint32_t src0DtypeBytesIn,
+        uint64_t dstSizeIn, uint64_t src0SizeIn, uint8_t dstPosIn, uint8_t src0PosIn, uint32_t count,
+        uint8_t scalarPosIn)
     {
         dstAddr = dstAddrIn;
         src0Addr = src0AddrIn;
@@ -217,11 +223,10 @@ bool CheckFuncVecBinaryCmpImpl(VecBinaryApiParams& chkParams, const uint64_t mas
 bool CheckFuncVecBinaryCmpImpl(VecBinaryApiParams& chkParams, const char* intriName);
 
 bool CheckFuncVecBinaryScalarCmpImpl(VecBinaryScalarApiParams& chkParams, const char* intriName);
-bool CheckFuncVecBinaryScalarCmpImpl(VecBinaryScalarApiParams& chkParams, const uint64_t mask,
-    const char* intriName);
+bool CheckFuncVecBinaryScalarCmpImpl(VecBinaryScalarApiParams& chkParams, const uint64_t mask, const char* intriName);
 
-bool CheckFunVecBinaryScalarImplForMaskArray(VecBinaryScalarApiParams& chkParams, const uint64_t mask[],
-    const char* intriName);
+bool CheckFunVecBinaryScalarImplForMaskArray(
+    VecBinaryScalarApiParams& chkParams, const uint64_t mask[], const char* intriName);
 bool CheckFunVecBinaryScalarImpl(VecBinaryScalarApiParams& chkParams, const uint64_t mask, const char* intriName);
 bool CheckFunVecBinaryScalarImpl(VecBinaryScalarApiParams& chkParams, const char* intriName);
 } // namespace check

@@ -1,12 +1,12 @@
 /**
-* Copyright (c) 2025 Huawei Technologies Co., Ltd.
-* This program is free software, you can redistribute it and/or modify it under the terms and conditions of
-* CANN Open Software License Agreement Version 2.0 (the "License").
-* Please refer to the License for details. You may not use this file except in compliance with the License.
-* THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
-* INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
-* See LICENSE in the root of the software repository for the full text of the License.
-*/
+ * Copyright (c) 2025 Huawei Technologies Co., Ltd.
+ * This program is free software, you can redistribute it and/or modify it under the terms and conditions of
+ * CANN Open Software License Agreement Version 2.0 (the "License").
+ * Please refer to the License for details. You may not use this file except in compliance with the License.
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
+ * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
+ * See LICENSE in the root of the software repository for the full text of the License.
+ */
 
 /*!
  * \file kernel_check_vec_util.h
@@ -44,21 +44,22 @@ enum class TransposeType : uint8_t {
     TRANSPOSE_GRAD_ND_UB_GM, //  [B, S, H] -> [B, N, S, H/N]
     TRANSPOSE_ND2ND_B16,     // { shape:[16, 16], format:"ND", dataType: B16} -->{ shape:[16, 16], format:"ND"}
     TRANSPOSE_NCHW2NHWC,     // [ N, C, H, W] -> [N, H, W, C]
-    TRANSPOSE_NHWC2NCHW,      // [ N, H, W, C] -> [N, C, H, W]
+    TRANSPOSE_NHWC2NCHW,     // [ N, H, W, C] -> [N, C, H, W]
 #if defined(__NPU_ARCH__) && ((__NPU_ARCH__ == 3510) || (__NPU_ARCH__ == 5102))
-    TRANSPOSE_ND2ND_021,     // [H, W]->[W, H], [N, H, W]->[N, W, H]
-    TRANSPOSE_ND2ND_102,     // [N, H, W]->[H, N, W]
-    TRANSPOSE_ND2ND_210,      // [N, H, W]->[W, H, N]
-    TRANSPOSE_ND2NZ_WITH_INTLV  // [N, D] -> [N, Z]
+    TRANSPOSE_ND2ND_021,       // [H, W]->[W, H], [N, H, W]->[N, W, H]
+    TRANSPOSE_ND2ND_102,       // [N, H, W]->[H, N, W]
+    TRANSPOSE_ND2ND_210,       // [N, H, W]->[W, H, N]
+    TRANSPOSE_ND2NZ_WITH_INTLV // [N, D] -> [N, Z]
 #endif
 };
-}
+} // namespace AscendC
 
 namespace AscendC {
 namespace check {
 struct VecScatterApiParams {
     VecScatterApiParams() {}
-    VecScatterApiParams(uint64_t dstAddrIn, uint64_t srcAddrIn, uint64_t dstOffsetAddrIn, uint32_t dstDtypeBytesIn,
+    VecScatterApiParams(
+        uint64_t dstAddrIn, uint64_t srcAddrIn, uint64_t dstOffsetAddrIn, uint32_t dstDtypeBytesIn,
         uint32_t srcDtypeBytesIn, uint32_t dstOffsetDtypeBytesIn, uint32_t dstBaseAddrIn, uint32_t countIn,
         uint64_t dstSizeIn, uint64_t srcSizeIn, uint64_t dstOffsetSizeIn, uint8_t dstPosIn, uint8_t srcPosIn,
         uint8_t dstOffsetPosIn)
@@ -81,7 +82,8 @@ struct VecScatterApiParams {
         srcPos = static_cast<uint8_t>(GetPhyType(static_cast<TPosition>(srcPosIn)));
         dstOffsetPos = static_cast<uint8_t>(GetPhyType(static_cast<TPosition>(dstOffsetPosIn)));
     }
-    VecScatterApiParams(uint64_t dstAddrIn, uint64_t srcAddrIn, uint64_t dstOffsetAddrIn, uint32_t dstDtypeBytesIn,
+    VecScatterApiParams(
+        uint64_t dstAddrIn, uint64_t srcAddrIn, uint64_t dstOffsetAddrIn, uint32_t dstDtypeBytesIn,
         uint32_t srcDtypeBytesIn, uint32_t dstOffsetDtypeBytesIn, uint32_t dstBaseAddrIn, uint8_t repeatTimesIn,
         uint16_t srcRepStrideIn, uint64_t dstSizeIn, uint64_t srcSizeIn, uint64_t dstOffsetSizeIn, uint8_t dstPosIn,
         uint8_t srcPosIn, uint8_t dstOffsetPosIn)
@@ -127,8 +129,9 @@ struct VecScatterApiParams {
 };
 struct VecCmpRgtApiParams {
     VecCmpRgtApiParams() {}
-    VecCmpRgtApiParams(uint64_t src0AddrIn, uint64_t src1AddrIn, uint16_t src0BlockStrideIn, uint16_t src1BlockStrideIn,
-        uint16_t src0RepeatStrideIn, uint16_t src1RepeatStrideIn,  uint32_t src0DtypeBytesIn, uint32_t src1DtypeBytesIn,
+    VecCmpRgtApiParams(
+        uint64_t src0AddrIn, uint64_t src1AddrIn, uint16_t src0BlockStrideIn, uint16_t src1BlockStrideIn,
+        uint16_t src0RepeatStrideIn, uint16_t src1RepeatStrideIn, uint32_t src0DtypeBytesIn, uint32_t src1DtypeBytesIn,
         uint64_t src0SizeIn, uint64_t src1SizeIn, uint8_t src0PosIn, uint8_t src1PosIn)
     {
         src0Addr = src0AddrIn;
@@ -165,11 +168,12 @@ struct VecCmpRgtApiParams {
 
 struct VecBilinearInterpolationApiParams {
     VecBilinearInterpolationApiParams() {}
-    VecBilinearInterpolationApiParams(uint64_t dstAddrIn, uint64_t src0AddrIn, uint64_t offsetAddrIn,
-        uint64_t src1AddrIn, uint8_t hRepeatIn, bool repeatModeIn, uint16_t dstBlockStrideIn, uint16_t vROffsetIn,
-        uint16_t vRepeatIn, uint32_t dstDtypeBytesIn, uint32_t src0DtypeBytesIn, uint32_t offsetDtypeBytesIn,
-        uint32_t src1DtypeBytesIn, uint64_t dstSizeIn, uint64_t src0SizeIn, uint64_t offsetSizeIn, uint64_t src1SizeIn,
-        uint8_t dstPosIn, uint8_t src0PosIn, uint8_t offsetPosIn, uint8_t src1PosIn)
+    VecBilinearInterpolationApiParams(
+        uint64_t dstAddrIn, uint64_t src0AddrIn, uint64_t offsetAddrIn, uint64_t src1AddrIn, uint8_t hRepeatIn,
+        bool repeatModeIn, uint16_t dstBlockStrideIn, uint16_t vROffsetIn, uint16_t vRepeatIn, uint32_t dstDtypeBytesIn,
+        uint32_t src0DtypeBytesIn, uint32_t offsetDtypeBytesIn, uint32_t src1DtypeBytesIn, uint64_t dstSizeIn,
+        uint64_t src0SizeIn, uint64_t offsetSizeIn, uint64_t src1SizeIn, uint8_t dstPosIn, uint8_t src0PosIn,
+        uint8_t offsetPosIn, uint8_t src1PosIn)
     {
         dstAddr = dstAddrIn;
         src0Addr = src0AddrIn;
@@ -192,10 +196,14 @@ struct VecBilinearInterpolationApiParams {
         src0LogicPos = src0PosIn;
         offsetLogicPos = offsetPosIn;
         src1LogicPos = src1PosIn;
-        dstPos = static_cast<uint8_t>(GetPhyType(static_cast<TPosition>(dstPosIn)));;
-        src0Pos = static_cast<uint8_t>(GetPhyType(static_cast<TPosition>(src0PosIn)));;
-        offsetPos = static_cast<uint8_t>(GetPhyType(static_cast<TPosition>(offsetPosIn)));;
-        src1Pos = static_cast<uint8_t>(GetPhyType(static_cast<TPosition>(src1PosIn)));;
+        dstPos = static_cast<uint8_t>(GetPhyType(static_cast<TPosition>(dstPosIn)));
+        ;
+        src0Pos = static_cast<uint8_t>(GetPhyType(static_cast<TPosition>(src0PosIn)));
+        ;
+        offsetPos = static_cast<uint8_t>(GetPhyType(static_cast<TPosition>(offsetPosIn)));
+        ;
+        src1Pos = static_cast<uint8_t>(GetPhyType(static_cast<TPosition>(src1PosIn)));
+        ;
     }
     uint64_t dstAddr = 0;
     uint64_t src0Addr = 0;
@@ -226,7 +234,8 @@ struct VecBilinearInterpolationApiParams {
 
 struct VecTransposeApiParams {
     VecTransposeApiParams() {}
-    VecTransposeApiParams(uint64_t dstAddrIn, uint64_t srcAddrIn, uint8_t repeatIn, uint16_t dstRepeatStrideIn,
+    VecTransposeApiParams(
+        uint64_t dstAddrIn, uint64_t srcAddrIn, uint8_t repeatIn, uint16_t dstRepeatStrideIn,
         uint16_t srcRepeatStrideIn, uint32_t dstDtypeBytesIn, uint32_t srcDtypeBytesIn, uint64_t dstSizeIn,
         uint64_t srcSizeIn, uint8_t dstPosIn, uint8_t srcPosIn, int8_t indexIn = -1)
     {
@@ -245,7 +254,8 @@ struct VecTransposeApiParams {
         srcPos = static_cast<uint8_t>(GetPhyType(static_cast<TPosition>(srcPosIn)));
         index = indexIn;
     }
-    VecTransposeApiParams(uint64_t dstAddrIn, uint64_t srcAddrIn, uint8_t repeatIn, uint16_t dstRepeatStrideIn,
+    VecTransposeApiParams(
+        uint64_t dstAddrIn, uint64_t srcAddrIn, uint8_t repeatIn, uint16_t dstRepeatStrideIn,
         uint16_t srcRepeatStrideIn, uint32_t dstDtypeBytesIn, uint32_t srcDtypeBytesIn, uint64_t dstSizeIn,
         uint64_t srcSizeIn, uint64_t tmpBufferSizeIn, uint8_t dstPosIn, uint8_t srcPosIn, uint16_t nSizeIn,
         uint16_t cSizeIn, uint16_t hSizeIn, uint16_t wSizeIn, TransposeType transposeTypeIn)
@@ -290,14 +300,15 @@ struct VecTransposeApiParams {
     uint8_t srcLogicPos = 0;
     uint8_t dstPos = 0;
     uint8_t srcPos = 0;
-    int8_t index = 0;   // transdata [16]
+    int8_t index = 0; // transdata [16]
     TransposeType transposeType = TransposeType::TRANSPOSE_TYPE_NONE;
 };
 
 struct VecProposalApiParams {
     VecProposalApiParams() {}
-    VecProposalApiParams(uint64_t dstAddrIn, uint64_t src0AddrIn, uint8_t repeatIn, uint32_t dstDtypeBytesIn,
-        uint32_t src0DtypeBytesIn, uint64_t dstSizeIn, uint64_t src0SizeIn, uint8_t dstPosIn, uint8_t src0PosIn)
+    VecProposalApiParams(
+        uint64_t dstAddrIn, uint64_t src0AddrIn, uint8_t repeatIn, uint32_t dstDtypeBytesIn, uint32_t src0DtypeBytesIn,
+        uint64_t dstSizeIn, uint64_t src0SizeIn, uint8_t dstPosIn, uint8_t src0PosIn)
     {
         dstAddr = dstAddrIn;
         src0Addr = src0AddrIn;
@@ -311,9 +322,10 @@ struct VecProposalApiParams {
         dstPos = static_cast<uint8_t>(GetPhyType(static_cast<TPosition>(dstPosIn)));
         src0Pos = static_cast<uint8_t>(GetPhyType(static_cast<TPosition>(src0PosIn)));
     }
-    VecProposalApiParams(uint64_t dstAddrIn, uint64_t src0AddrIn, uint64_t src1AddrIn, uint8_t repeatIn,
-        uint32_t dstDtypeBytesIn, uint32_t src0DtypeBytesIn, uint32_t src1DtypeBytesIn, uint64_t dstSizeIn,
-        uint64_t src0SizeIn, uint64_t src1SizeIn, uint8_t dstPosIn, uint8_t src0PosIn, uint8_t src1PosIn)
+    VecProposalApiParams(
+        uint64_t dstAddrIn, uint64_t src0AddrIn, uint64_t src1AddrIn, uint8_t repeatIn, uint32_t dstDtypeBytesIn,
+        uint32_t src0DtypeBytesIn, uint32_t src1DtypeBytesIn, uint64_t dstSizeIn, uint64_t src0SizeIn,
+        uint64_t src1SizeIn, uint8_t dstPosIn, uint8_t src0PosIn, uint8_t src1PosIn)
     {
         dstAddr = dstAddrIn;
         src0Addr = src0AddrIn;
@@ -332,10 +344,10 @@ struct VecProposalApiParams {
         src0Pos = static_cast<uint8_t>(GetPhyType(static_cast<TPosition>(src0PosIn)));
         src1Pos = static_cast<uint8_t>(GetPhyType(static_cast<TPosition>(src1PosIn)));
     }
-    VecProposalApiParams(uint64_t dstAddrIn, uint64_t src0AddrIn, uint8_t repeatIn, uint32_t dstDtypeBytesIn,
-        uint32_t src0DtypeBytesIn, uint64_t dstSizeIn, uint64_t src0SizeIn, uint8_t dstPosIn, uint8_t src0PosIn,
-        uint16_t validBitIn, const uint16_t elementLenIn[4], uint8_t srcIndexIn, bool isExhaustedIn = false,
-        bool isContinousIn = false)
+    VecProposalApiParams(
+        uint64_t dstAddrIn, uint64_t src0AddrIn, uint8_t repeatIn, uint32_t dstDtypeBytesIn, uint32_t src0DtypeBytesIn,
+        uint64_t dstSizeIn, uint64_t src0SizeIn, uint8_t dstPosIn, uint8_t src0PosIn, uint16_t validBitIn,
+        const uint16_t elementLenIn[4], uint8_t srcIndexIn, bool isExhaustedIn = false, bool isContinousIn = false)
     {
         dstAddr = dstAddrIn;
         src0Addr = src0AddrIn;
@@ -381,7 +393,8 @@ struct VecProposalApiParams {
 };
 struct SortApiParams {
     SortApiParams() {}
-    SortApiParams(uint64_t dstAddrIn, uint64_t concatAddrIn, uint64_t indexAddrIn, uint64_t tmpAddrIn, uint8_t repeatIn,
+    SortApiParams(
+        uint64_t dstAddrIn, uint64_t concatAddrIn, uint64_t indexAddrIn, uint64_t tmpAddrIn, uint8_t repeatIn,
         uint32_t dstDtypeBytesIn, uint32_t concatDtypeBytesIn, uint32_t indexDtypeBytesIn, uint32_t tmpDtypeBytesIn,
         uint64_t dstSizeIn, uint64_t concatSizeIn, uint64_t indexSizeIn, uint64_t tmpSizeIn, uint8_t dstPosIn,
         uint8_t concatPosIn, uint8_t indexPosIn, uint8_t tmpPosIn, bool isFullSortIn)
@@ -434,10 +447,10 @@ struct SortApiParams {
 };
 bool CheckFuncVecCmpRgtImplForMaskArray(VecCmpRgtApiParams& chkParams, const uint64_t mask[], const char* intriName);
 bool CheckFuncVecCmpRgtImpl(VecCmpRgtApiParams& chkParams, const uint64_t mask, const char* intriName);
-bool CheckFuncBilinearInterpolationImpl(VecBilinearInterpolationApiParams& chkParams, const uint64_t mask,
-    const char* intriName);
-bool CheckFuncBilinearInterpolationImpl(VecBilinearInterpolationApiParams& chkParams, const uint64_t mask[],
-    const char* intriName);
+bool CheckFuncBilinearInterpolationImpl(
+    VecBilinearInterpolationApiParams& chkParams, const uint64_t mask, const char* intriName);
+bool CheckFuncBilinearInterpolationImpl(
+    VecBilinearInterpolationApiParams& chkParams, const uint64_t mask[], const char* intriName);
 bool CheckFunTransposeImpl(VecTransposeApiParams& chkParams, const char* intriName);
 bool CheckFunProposalImpl(VecProposalApiParams& chkParams, const char* intriName);
 bool CheckFunScatterImpl(VecScatterApiParams& chkParams, const char* intriName);

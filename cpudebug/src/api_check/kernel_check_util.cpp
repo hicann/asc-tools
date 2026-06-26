@@ -1,12 +1,12 @@
 /**
-* Copyright (c) 2025 Huawei Technologies Co., Ltd.
-* This program is free software, you can redistribute it and/or modify it under the terms and conditions of
-* CANN Open Software License Agreement Version 2.0 (the "License").
-* Please refer to the License for details. You may not use this file except in compliance with the License.
-* THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
-* INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
-* See LICENSE in the root of the software repository for the full text of the License.
-*/
+ * Copyright (c) 2025 Huawei Technologies Co., Ltd.
+ * This program is free software, you can redistribute it and/or modify it under the terms and conditions of
+ * CANN Open Software License Agreement Version 2.0 (the "License").
+ * Please refer to the License for details. You may not use this file except in compliance with the License.
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
+ * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
+ * See LICENSE in the root of the software repository for the full text of the License.
+ */
 
 /*!
  * \file kernel_check_util.cpp
@@ -20,13 +20,13 @@
 namespace AscendC {
 namespace check {
 
-#define ASCENDC_CHECK_INTRI_NAME(intriName)                                                 \
-    do {                                                                                    \
-        if ((intriName == nullptr) || (intriName != nullptr && intriName[0] == '\0')) {     \
-            CHECK_LOG_ERROR("intriName is null.");                                          \
-            return false;                                                                   \
-        }                                                                                   \
-    } while (0)                                                                             \
+#define ASCENDC_CHECK_INTRI_NAME(intriName)                                             \
+    do {                                                                                \
+        if ((intriName == nullptr) || (intriName != nullptr && intriName[0] == '\0')) { \
+            CHECK_LOG_ERROR("intriName is null.");                                      \
+            return false;                                                               \
+        }                                                                               \
+    } while (0)
 
 bool CheckFuncCopyImplForMaskArray(CopyApiParams& chkParams, const uint64_t mask[2], const char* intriName)
 {
@@ -58,7 +58,7 @@ bool CheckFuncCopyImpl(CopyApiParams& chkParams, const char* intriName)
     return true;
 }
 
-bool CheckFuncDataCopyImpl(DataCopyApiParams &chkParams, const char* intriName)
+bool CheckFuncDataCopyImpl(DataCopyApiParams& chkParams, const char* intriName)
 {
     ASCENDC_CHECK_INTRI_NAME(intriName);
     check::TikcppDataCopyCheck chkIns{intriName, chkParams};
@@ -68,7 +68,7 @@ bool CheckFuncDataCopyImpl(DataCopyApiParams &chkParams, const char* intriName)
     return true;
 }
 
-bool CheckFuncDataCopyPadImpl(DataCopyPadApiParams &chkParams, const char* intriName)
+bool CheckFuncDataCopyPadImpl(DataCopyPadApiParams& chkParams, const char* intriName)
 {
     ASCENDC_CHECK_INTRI_NAME(intriName);
     check::TikcppDataCopyPadCheck chkIns{intriName, chkParams};
@@ -175,8 +175,8 @@ bool CheckFuncVecBinaryCmpImpl(VecBinaryApiParams& chkParams, const char* intriN
     return chkIns.CheckAllHighLevel();
 }
 
-bool CheckFunVecBinaryScalarImplForMaskArray(VecBinaryScalarApiParams& chkParams, const uint64_t mask[2],
-    const char* intriName)
+bool CheckFunVecBinaryScalarImplForMaskArray(
+    VecBinaryScalarApiParams& chkParams, const uint64_t mask[2], const char* intriName)
 {
     ASCENDC_CHECK_INTRI_NAME(intriName);
     check::TikcppVecBinaryScalarCheck chkIns{intriName, chkParams};
@@ -204,8 +204,7 @@ bool CheckFuncVecBinaryScalarCmpImpl(VecBinaryScalarApiParams& chkParams, const 
     return chkIns.CheckAllHighLevel();
 }
 
-bool CheckFuncVecBinaryScalarCmpImpl(VecBinaryScalarApiParams& chkParams, const uint64_t mask,
-    const char* intriName)
+bool CheckFuncVecBinaryScalarCmpImpl(VecBinaryScalarApiParams& chkParams, const uint64_t mask, const char* intriName)
 {
     ASCENDC_CHECK_INTRI_NAME(intriName);
     check::TikcppVecCompareScalarCheck chkIns{intriName, chkParams};
@@ -254,7 +253,7 @@ bool CheckFunBcBImpl(VecBroadCastApiParams& chkParams, uint32_t dtypeSize, const
     return true;
 }
 
-bool CheckFunReduceOtherImpl(VecReduceApiParams &chkParams, const uint64_t mask, const char *intriName)
+bool CheckFunReduceOtherImpl(VecReduceApiParams& chkParams, const uint64_t mask, const char* intriName)
 {
     ASCENDC_CHECK_INTRI_NAME(intriName);
     check::TikcppVecReduceOtherCheck chkIns{intriName, chkParams};
@@ -268,14 +267,15 @@ bool CheckFunReduceOtherImplForMaskArray(VecReduceApiParams& chkParams, const ui
     return chkIns.CheckAllLowLevel({mask[1], mask[0]});
 }
 
-bool CheckFunReduceOtherWhlImpl(VecReduceWhlApiParams &chkParams, const uint64_t mask, const char *intriName)
+bool CheckFunReduceOtherWhlImpl(VecReduceWhlApiParams& chkParams, const uint64_t mask, const char* intriName)
 {
     ASCENDC_CHECK_INTRI_NAME(intriName);
     check::TikcppVecReduceOtherWhlCheck chkIns{intriName, chkParams};
     return chkIns.CheckAllLowLevel({mask});
 }
 
-bool CheckFunReduceOtherWhlImplForMaskArray(VecReduceWhlApiParams& chkParams, const uint64_t mask[2], const char* intriName)
+bool CheckFunReduceOtherWhlImplForMaskArray(
+    VecReduceWhlApiParams& chkParams, const uint64_t mask[2], const char* intriName)
 {
     ASCENDC_CHECK_INTRI_NAME(intriName);
     check::TikcppVecReduceOtherWhlCheck chkIns{intriName, chkParams};
@@ -382,9 +382,8 @@ bool CheckFuncCreateVecIndexImpl(VecCreateVecIndexApiParams& chkParams, const ch
     return chkIns.CheckAllHighLevel();
 }
 
-
-bool CheckFuncBilinearInterpolationImpl(VecBilinearInterpolationApiParams& chkParams, const uint64_t mask,
-    const char* intriName)
+bool CheckFuncBilinearInterpolationImpl(
+    VecBilinearInterpolationApiParams& chkParams, const uint64_t mask, const char* intriName)
 {
     ASCENDC_CHECK_INTRI_NAME(intriName);
     check::TikcppVecBilinearInterpolationCheck chkIns{intriName, chkParams};
@@ -394,8 +393,8 @@ bool CheckFuncBilinearInterpolationImpl(VecBilinearInterpolationApiParams& chkPa
     return true;
 }
 
-bool CheckFuncBilinearInterpolationImpl(VecBilinearInterpolationApiParams& chkParams, const uint64_t mask[2],
-    const char* intriName)
+bool CheckFuncBilinearInterpolationImpl(
+    VecBilinearInterpolationApiParams& chkParams, const uint64_t mask[2], const char* intriName)
 {
     ASCENDC_CHECK_INTRI_NAME(intriName);
     check::TikcppVecBilinearInterpolationCheck chkIns{intriName, chkParams};
@@ -505,7 +504,7 @@ bool CheckFuncLoadImageToLocalImpl(LoadImageToLocalApiParams& chkParams, const c
 bool CheckFuncBroadCastToMMImpl(VecBroadCastToMMApiParams& chkParams, const char* intriName)
 {
     ASCENDC_CHECK_INTRI_NAME(intriName);
-    check::TikcppBroadCastToMMCheck chkIns { intriName, chkParams };
+    check::TikcppBroadCastToMMCheck chkIns{intriName, chkParams};
     if (!chkIns.CheckAllHighLevel()) {
         return false;
     }
@@ -515,7 +514,7 @@ bool CheckFuncBroadCastToMMImpl(VecBroadCastToMMApiParams& chkParams, const char
 bool CheckFuncVecGatherMaskImpl(VecGatherMaskApiParams& chkParams, const uint32_t mask, const char* intriName)
 {
     ASCENDC_CHECK_INTRI_NAME(intriName);
-    check::TikcppGatherMaskCheck chkIns { intriName, chkParams };
+    check::TikcppGatherMaskCheck chkIns{intriName, chkParams};
     if (!chkIns.CheckAllLowLevel({0, mask})) {
         return false;
     }
@@ -552,10 +551,7 @@ bool CheckVectorPadding(VectorPaddingApiParams& chkParams, const char* intriName
     return true;
 }
 
-uint64_t GetHardWarebufferSize(uint8_t index)
-{
-    return check::GlobalParams::Instance().bufferSizeMap.at(index);
-}
+uint64_t GetHardWarebufferSize(uint8_t index) { return check::GlobalParams::Instance().bufferSizeMap.at(index); }
 
-}
-}
+} // namespace check
+} // namespace AscendC

@@ -1,12 +1,12 @@
 /**
-* Copyright (c) 2026 Huawei Technologies Co., Ltd.
-* This program is free software, you can redistribute it and/or modify it under the terms and conditions of
-* CANN Open Software License Agreement Version 2.0 (the "License").
-* Please refer to the License for details. You may not use this file except in compliance with the License.
-* THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
-* INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
-* See LICENSE in the root of the software repository for the full text of the License.
-*/
+ * Copyright (c) 2026 Huawei Technologies Co., Ltd.
+ * This program is free software, you can redistribute it and/or modify it under the terms and conditions of
+ * CANN Open Software License Agreement Version 2.0 (the "License").
+ * Please refer to the License for details. You may not use this file except in compliance with the License.
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
+ * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
+ * See LICENSE in the root of the software repository for the full text of the License.
+ */
 
 #ifndef KERNEL_SIMT_CPU_DEBUG
 #define KERNEL_SIMT_CPU_DEBUG
@@ -37,7 +37,7 @@ struct dim3 {
         z = z_;
     }
 };
-}  // namespace cce
+} // namespace cce
 
 inline cce::dim3 blockDim(1u, 1u, 1u);
 inline cce::dim3 blockIdx(0u, 0u, 0u);
@@ -71,8 +71,8 @@ public:
         // Shared memory in a warp to guarentee data exchange/modification without data race at warp level.
         std::unique_lock<std::mutex> lck(mtx_);
         auto currGeneration = syncGeneration;
-        void* temp = reinterpret_cast<void *>(&data[currGeneration % MEMORY_PIECE]);
-        T &dataToUpdate = *reinterpret_cast<T *>(temp);
+        void* temp = reinterpret_cast<void*>(&data[currGeneration % MEMORY_PIECE]);
+        T& dataToUpdate = *reinterpret_cast<T*>(temp);
         activeThreads--;
         if (activeThreads == 0) {
             syncGeneration++;
@@ -90,7 +90,8 @@ public:
             bool notTimeout = cv_.wait_for(
                 lck, std::chrono::seconds(5), [this, currGeneration] { return currGeneration != syncGeneration; });
             if (!notTimeout) {
-                KERNEL_LOG(KERNEL_ERROR,
+                KERNEL_LOG(
+                    KERNEL_ERROR,
                     "Warp operation timeout, CPU Debug only supports all 32 threads must be involved in the same "
                     "warp operation. If it has already satisfied this condition, maybe deadlock occurred.");
             }
@@ -104,8 +105,8 @@ public:
         std::unique_lock<std::mutex> lck(mtx_);
 
         auto currGeneration = syncGeneration;
-        void* temp = reinterpret_cast<void *>(&shuffleData[laneToWrite][currGeneration % MEMORY_PIECE]);
-        T &dataToUpdate = *reinterpret_cast<T *>(temp);
+        void* temp = reinterpret_cast<void*>(&shuffleData[laneToWrite][currGeneration % MEMORY_PIECE]);
+        T& dataToUpdate = *reinterpret_cast<T*>(temp);
         dataToUpdate = val;
         activeThreads--;
         if (activeThreads == 0) {
@@ -116,14 +117,16 @@ public:
             bool notTimeout = cv_.wait_for(
                 lck, std::chrono::seconds(5), [this, currGeneration] { return currGeneration != syncGeneration; });
             if (!notTimeout) {
-                KERNEL_LOG(KERNEL_ERROR,
-                    "Shuffle Warp operation timeout, CPU Debug only supports all 32 threads must be involved in the same "
+                KERNEL_LOG(
+                    KERNEL_ERROR,
+                    "Shuffle Warp operation timeout, CPU Debug only supports all 32 threads must be involved in the "
+                    "same "
                     "warp operation. If it has already satisfied this condition, maybe deadlock occurred.");
             }
         }
 
-        void* temp2 = reinterpret_cast<void *>(&shuffleData[laneToRead][currGeneration % MEMORY_PIECE]);
-        return *reinterpret_cast<T *>(temp2);
+        void* temp2 = reinterpret_cast<void*>(&shuffleData[laneToRead][currGeneration % MEMORY_PIECE]);
+        return *reinterpret_cast<T*>(temp2);
     }
 
 private:
@@ -140,15 +143,16 @@ private:
 
 class ThreadBlock {
 public:
-    static ThreadBlock &GetBlockInstance();
+    static ThreadBlock& GetBlockInstance();
 
     void Init(uint32_t num);
 
     template <typename Func>
     void Schedule(Func func, uint32_t idx)
     {
-        ASCENDC_ASSERT((idx / THREAD_PER_WARP < warpNum_),
-                       { KERNEL_LOG(KERNEL_ERROR, "thread idx %u exceeds warp count %u", idx, warpNum_); });
+        ASCENDC_ASSERT((idx / THREAD_PER_WARP < warpNum_), {
+            KERNEL_LOG(KERNEL_ERROR, "thread idx %u exceeds warp count %u", idx, warpNum_);
+        });
         warps_[idx / THREAD_PER_WARP].Schedule<Func>(func, idx / THREAD_PER_WARP, idx % THREAD_PER_WARP);
     }
 
@@ -167,10 +171,7 @@ public:
 
 public:
     ThreadBlock() : activeThreads(0), syncGeneration(0), threadThreshold(0), warpNum_(0) {}
-    ~ThreadBlock()
-    {
-        FinishJobs();
-    }
+    ~ThreadBlock() { FinishJobs(); }
 
     std::vector<Warp> warps_;
 
@@ -203,8 +204,8 @@ uint32_t GetLaneId();
 uint32_t GetWarpId();
 
 void Sync();
-}  // namespace Simt
-}  // namespace AscendC
+} // namespace Simt
+} // namespace AscendC
 
 #endif
-#endif  // KERNEL_SIMT_CPU_DEBUG
+#endif // KERNEL_SIMT_CPU_DEBUG

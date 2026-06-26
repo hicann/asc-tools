@@ -1,12 +1,12 @@
 /**
-* Copyright (c) 2025 Huawei Technologies Co., Ltd.
-* This program is free software, you can redistribute it and/or modify it under the terms and conditions of
-* CANN Open Software License Agreement Version 2.0 (the "License").
-* Please refer to the License for details. You may not use this file except in compliance with the License.
-* THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
-* INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
-* See LICENSE in the root of the software repository for the full text of the License.
-*/
+ * Copyright (c) 2025 Huawei Technologies Co., Ltd.
+ * This program is free software, you can redistribute it and/or modify it under the terms and conditions of
+ * CANN Open Software License Agreement Version 2.0 (the "License").
+ * Please refer to the License for details. You may not use this file except in compliance with the License.
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
+ * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
+ * See LICENSE in the root of the software repository for the full text of the License.
+ */
 
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
@@ -24,10 +24,7 @@ protected:
     void TearDown() {}
 };
 
-TEST_F(TEST_ACL_STUB, AclProfInitSuccess)
-{
-    EXPECT_EQ(aclprofInit(nullptr, 0), ACL_SUCCESS);
-}
+TEST_F(TEST_ACL_STUB, AclProfInitSuccess) { EXPECT_EQ(aclprofInit(nullptr, 0), ACL_SUCCESS); }
 
 TEST_F(TEST_ACL_STUB, AclProfSetConfigSuccess)
 {
@@ -47,10 +44,7 @@ TEST_F(TEST_ACL_STUB, AclInitFinalizeTest)
     EXPECT_EQ(aclFinalize(), ACL_SUCCESS);
 }
 
-TEST_F(TEST_ACL_STUB, AclrtGetVersionSuccess)
-{
-    EXPECT_EQ(aclrtGetVersion(nullptr, nullptr, nullptr), ACL_SUCCESS);
-}
+TEST_F(TEST_ACL_STUB, AclrtGetVersionSuccess) { EXPECT_EQ(aclrtGetVersion(nullptr, nullptr, nullptr), ACL_SUCCESS); }
 
 TEST_F(TEST_ACL_STUB, AclDataTypeSizeCorrect)
 {
@@ -98,10 +92,7 @@ TEST_F(TEST_ACL_STUB, AclrtDeviceStreamContextSuccess)
     EXPECT_EQ(aclrtDestroyContext(ctx), ACL_SUCCESS);
 }
 
-TEST_F(TEST_ACL_STUB, AclrtSynchronizeDeviceSuccess)
-{
-    EXPECT_EQ(aclrtSynchronizeDevice(), ACL_SUCCESS);
-}
+TEST_F(TEST_ACL_STUB, AclrtSynchronizeDeviceSuccess) { EXPECT_EQ(aclrtSynchronizeDevice(), ACL_SUCCESS); }
 
 TEST_F(TEST_ACL_STUB, AclrtMallocFreeSuccess)
 {
@@ -177,10 +168,12 @@ TEST_F(TEST_ACL_STUB, AclrtMemcpy2dSuccess)
 {
     char src[1024] = "test_memcpy2d";
     char dst[1024] = {0};
-    EXPECT_EQ(aclrtMemcpy2d(dst, sizeof(dst), src, sizeof(src), strlen(src) + 1, 1, ACL_MEMCPY_HOST_TO_HOST), ACL_SUCCESS);
+    EXPECT_EQ(
+        aclrtMemcpy2d(dst, sizeof(dst), src, sizeof(src), strlen(src) + 1, 1, ACL_MEMCPY_HOST_TO_HOST), ACL_SUCCESS);
     EXPECT_STREQ(dst, src);
 
-    EXPECT_EQ(aclrtMemcpy2d(dst, sizeof(dst), nullptr, sizeof(src), 10, 1, ACL_MEMCPY_HOST_TO_HOST), ACL_ERROR_INVALID_PARAM);
+    EXPECT_EQ(
+        aclrtMemcpy2d(dst, sizeof(dst), nullptr, sizeof(src), 10, 1, ACL_MEMCPY_HOST_TO_HOST), ACL_ERROR_INVALID_PARAM);
     EXPECT_EQ(aclrtMemcpy2d(dst, 5, src, sizeof(src), 10, 1, ACL_MEMCPY_HOST_TO_HOST), ACL_ERROR_BAD_ALLOC);
 }
 
@@ -189,11 +182,16 @@ TEST_F(TEST_ACL_STUB, AclrtMemcpy2dAsyncSuccess)
     char src[1024] = "test_memcpy2d_async";
     char dst[1024] = {0};
     aclrtStream stream = nullptr;
-    EXPECT_EQ(aclrtMemcpy2dAsync(dst, sizeof(dst), src, sizeof(src), strlen(src) + 1, 1, ACL_MEMCPY_HOST_TO_HOST, stream), ACL_SUCCESS);
+    EXPECT_EQ(
+        aclrtMemcpy2dAsync(dst, sizeof(dst), src, sizeof(src), strlen(src) + 1, 1, ACL_MEMCPY_HOST_TO_HOST, stream),
+        ACL_SUCCESS);
     EXPECT_STREQ(dst, src);
 
-    EXPECT_EQ(aclrtMemcpy2dAsync(dst, sizeof(dst), nullptr, sizeof(src), 10, 1, ACL_MEMCPY_HOST_TO_HOST, stream), ACL_ERROR_INVALID_PARAM);
-    EXPECT_EQ(aclrtMemcpy2dAsync(dst, 5, src, sizeof(src), 10, 1, ACL_MEMCPY_HOST_TO_HOST, stream), ACL_ERROR_BAD_ALLOC);
+    EXPECT_EQ(
+        aclrtMemcpy2dAsync(dst, sizeof(dst), nullptr, sizeof(src), 10, 1, ACL_MEMCPY_HOST_TO_HOST, stream),
+        ACL_ERROR_INVALID_PARAM);
+    EXPECT_EQ(
+        aclrtMemcpy2dAsync(dst, 5, src, sizeof(src), 10, 1, ACL_MEMCPY_HOST_TO_HOST, stream), ACL_ERROR_BAD_ALLOC);
 }
 
 TEST_F(TEST_ACL_STUB, AclrtMemcpy2dMultiRowPacked)
@@ -234,8 +232,9 @@ TEST_F(TEST_ACL_STUB, AclrtMemcpy2dAsyncMultiRow)
     float dst[height * 4] = {0};
     aclrtStream stream = nullptr;
 
-    EXPECT_EQ(aclrtMemcpy2dAsync(dst, rowBytes, src, rowBytes, rowBytes, height, ACL_MEMCPY_HOST_TO_HOST, stream),
-              ACL_SUCCESS);
+    EXPECT_EQ(
+        aclrtMemcpy2dAsync(dst, rowBytes, src, rowBytes, rowBytes, height, ACL_MEMCPY_HOST_TO_HOST, stream),
+        ACL_SUCCESS);
     for (size_t i = 0; i < height * 4; ++i) {
         EXPECT_EQ(dst[i], src[i]);
     }
@@ -244,48 +243,48 @@ TEST_F(TEST_ACL_STUB, AclrtMemcpy2dAsyncMultiRow)
 TEST_F(TEST_ACL_STUB, AclrtBinaryLoadFromDataSuccess)
 {
     uint8_t elfData[512] = {0};
-    
+
     elfData[EI_MAG0] = 0x7f;
     elfData[EI_MAG1] = 'E';
     elfData[EI_MAG2] = 'L';
     elfData[EI_MAG3] = 'F';
     elfData[EI_CLASS] = ELFCLASS64;
     elfData[EI_DATA] = ELFDATA2LSB;
-    
+
     elfData[40] = 64; // e_shoff
     elfData[58] = 64; // e_shentsize
-    elfData[60] = 2; // e_shnum
-    elfData[62] = 1; // e_shstrndx
-    
+    elfData[60] = 2;  // e_shnum
+    elfData[62] = 1;  // e_shstrndx
+
     Elf64_Shdr* shdr0 = reinterpret_cast<Elf64_Shdr*>(elfData + 64);
     shdr0->sh_name = 0;
     shdr0->sh_type = 0;
     shdr0->sh_offset = 192;
     shdr0->sh_size = 64;
-    
+
     Elf64_Shdr* shdr1 = reinterpret_cast<Elf64_Shdr*>(elfData + 128);
     shdr1->sh_name = 1;
     shdr1->sh_type = 0;
     shdr1->sh_offset = 256;
     shdr1->sh_size = 64;
-    
+
     const char* strTab = ".ascend.meta._Z11test_kernelv\0.shstrtab\n";
     memcpy(elfData + 256, strTab, strlen(strTab) + 1);
-    
+
     uint8_t* metaSection = elfData + 192;
     AscendC::ElfTlvHead* head = reinterpret_cast<AscendC::ElfTlvHead*>(metaSection);
     head->type = AscendC::FUNC_META_TYPE_KERNEL_TYPE;
     head->length = 4;
     uint32_t kernelType = AscendC::K_TYPE_AIC;
     memcpy(metaSection + sizeof(AscendC::ElfTlvHead), &kernelType, sizeof(uint32_t));
-    
+
     shdr0->sh_size = sizeof(AscendC::ElfTlvHead) + 4;
-    
+
     AscendC::KernelModeRegister& reg = AscendC::KernelModeRegister::GetInstance();
     reg.Clear();
-    
+
     EXPECT_EQ(aclrtBinaryLoadFromData(elfData, sizeof(elfData), nullptr, nullptr), ACL_SUCCESS);
-    
+
     KernelMode mode = reg.GetKenelMode("_Z11test_kernelv");
     EXPECT_EQ(mode, KernelMode::AIC_MODE);
 }
@@ -297,7 +296,7 @@ TEST_F(TEST_ACL_STUB, AclrtBinaryLoadFromDataInvalidElf)
     elfData[EI_MAG1] = 'E';
     elfData[EI_MAG2] = 'L';
     elfData[EI_MAG3] = 'X';
-    
+
     aclrtBinHandle binHandle = nullptr;
     EXPECT_EQ(aclrtBinaryLoadFromData(elfData, sizeof(elfData), nullptr, &binHandle), ACL_ERROR_INVALID_PARAM);
 }

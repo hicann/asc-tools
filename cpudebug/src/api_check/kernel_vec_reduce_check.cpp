@@ -1,12 +1,12 @@
 /**
-* Copyright (c) 2025 Huawei Technologies Co., Ltd.
-* This program is free software, you can redistribute it and/or modify it under the terms and conditions of
-* CANN Open Software License Agreement Version 2.0 (the "License").
-* Please refer to the License for details. You may not use this file except in compliance with the License.
-* THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
-* INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
-* See LICENSE in the root of the software repository for the full text of the License.
-*/
+ * Copyright (c) 2025 Huawei Technologies Co., Ltd.
+ * This program is free software, you can redistribute it and/or modify it under the terms and conditions of
+ * CANN Open Software License Agreement Version 2.0 (the "License").
+ * Please refer to the License for details. You may not use this file except in compliance with the License.
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
+ * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
+ * See LICENSE in the root of the software repository for the full text of the License.
+ */
 
 /*!
  * \file kernel_vec_reduce_check.cpp
@@ -29,21 +29,23 @@ uint32_t TikcppVecReduceCheck::AlignStartPos(const uint32_t startPos, const uint
     return resDiv * static_cast<uint32_t>(PlatFormParams::ONE_BLK_SIZE) / byteLen;
 }
 
-bool TikcppVecReduceCheck::CheckAllDtypeBytes(const std::string &errMsg)
+bool TikcppVecReduceCheck::CheckAllDtypeBytes(const std::string& errMsg)
 {
     uint32_t dstDtypeBytes = param_.dstDtypeBytes;
     uint32_t srcDtypeBytes = param_.src0DtypeBytes;
     uint32_t workDtypeBytes = param_.src1DtypeBytes;
     if ((dstDtypeBytes != srcDtypeBytes) || (srcDtypeBytes != workDtypeBytes) || (workDtypeBytes != dstDtypeBytes)) {
-        CHECK_LOG_ERROR("%s, ""Reduce need dst data type (%u),dst src type (%u), dst wokr type (%u) should be same",
+        CHECK_LOG_ERROR(
+            "%s, "
+            "Reduce need dst data type (%u),dst src type (%u), dst wokr type (%u) should be same",
             errMsg.c_str(), dstDtypeBytes, srcDtypeBytes, workDtypeBytes);
         return false;
     }
     return true;
 }
 
-void TikcppVecReduceCheck::ReduceBodyCal(const std::vector<uint32_t> &paramsArray, uint32_t &outputCount,
-    uint32_t &nextStartPos) const
+void TikcppVecReduceCheck::ReduceBodyCal(
+    const std::vector<uint32_t>& paramsArray, uint32_t& outputCount, uint32_t& nextStartPos) const
 {
     enum class ReduceBodyCalIndex {
         PRE_DATA_COUNT = 0,
@@ -74,12 +76,13 @@ void TikcppVecReduceCheck::ReduceBodyCal(const std::vector<uint32_t> &paramsArra
 }
 
 bool TikcppVecReduceCheck::CheckCheckWorkSize(
-    const std::string &errMsg, const uint64_t needElements, const uint32_t byteLen)
+    const std::string& errMsg, const uint64_t needElements, const uint32_t byteLen)
 {
     uint64_t needSize = static_cast<uint64_t>(needElements * byteLen);
     if (needSize > param_.src1Size) {
-        CHECK_LOG_ERROR("%s, "
-                        "Worktensor's size should be more than %lu, but get %lu",
+        CHECK_LOG_ERROR(
+            "%s, "
+            "Worktensor's size should be more than %lu, but get %lu",
             errMsg.c_str(), needSize, param_.src1Size);
         return false;
     }
@@ -103,7 +106,7 @@ bool TikcppVecReduceCheck::CheckWorkTensorOffset(const std::string& errMsg)
 
     // iteration1
     if (it1OutputCount == perRepOutput) {
-        resIndex = it1AlignStart+ it1OutputCount;
+        resIndex = it1AlignStart + it1OutputCount;
         needElement = resIndex;
         return CheckCheckWorkSize(errMsg, needElement, typeSize);
     }
@@ -117,7 +120,10 @@ bool TikcppVecReduceCheck::CheckWorkTensorOffset(const std::string& errMsg)
     uint32_t it2AlignStart = AlignStartPos(it1OutputCount, typeSize);
     uint32_t elementNumPerRep = static_cast<uint32_t>(PlatFormParams::ONE_REP_BYTE_SIZE) / typeSize;
     if (elementNumPerRep == 0) {
-        CHECK_LOG_ERROR("%s, ""elementNumPerRep can not be 0.", errMsg.c_str());
+        CHECK_LOG_ERROR(
+            "%s, "
+            "elementNumPerRep can not be 0.",
+            errMsg.c_str());
         return false;
     }
     ReduceBodyCal(
@@ -144,8 +150,10 @@ bool TikcppVecReduceCheck::CheckWorkTensorSizeEqual(const std::string& errMsg)
 {
     uint64_t needSize = static_cast<uint64_t>(param_.repeatTimes * param_.src1DtypeBytes);
     if (needSize > param_.src1Size) {
-        CHECK_LOG_ERROR("%s, ""Need size: %lu, while tensor size is %lu", errMsg.c_str(), needSize,
-            param_.src1Size);
+        CHECK_LOG_ERROR(
+            "%s, "
+            "Need size: %lu, while tensor size is %lu",
+            errMsg.c_str(), needSize, param_.src1Size);
         return false;
     }
 
@@ -162,8 +170,10 @@ bool TikcppVecReduceCheck::CheckDstTensorSizeRange(const std::string& errMsg)
     needSize = static_cast<uint64_t>(needCount * param_.dstDtypeBytes);
 
     if (needSize > param_.dstSize) {
-        CHECK_LOG_ERROR("%s, ""Need least output size: %lu, while tensor size is %lu", errMsg.c_str(), needSize,
-            param_.dstSize);
+        CHECK_LOG_ERROR(
+            "%s, "
+            "Need least output size: %lu, while tensor size is %lu",
+            errMsg.c_str(), needSize, param_.dstSize);
         return false;
     }
     return true;
@@ -189,11 +199,14 @@ bool TikcppVecReduceCheck::CommonCheck()
 
     ASCENDC_CHECK(CheckAddrAlign());
 
-    ASCENDC_CHECK(CheckBufferSizeOverFlow(param_.dstSize, GlobalParams::Instance().bufferSizeMap.at(param_.dstPos),
+    ASCENDC_CHECK(CheckBufferSizeOverFlow(
+        param_.dstSize, GlobalParams::Instance().bufferSizeMap.at(param_.dstPos),
         "check dst tensor buffersize failed"));
-    ASCENDC_CHECK(CheckBufferSizeOverFlow(param_.src0Size, GlobalParams::Instance().bufferSizeMap.at(param_.src0Pos),
+    ASCENDC_CHECK(CheckBufferSizeOverFlow(
+        param_.src0Size, GlobalParams::Instance().bufferSizeMap.at(param_.src0Pos),
         "check src tensor buffersize failed"));
-    ASCENDC_CHECK(CheckBufferSizeOverFlow(param_.src1Size, GlobalParams::Instance().bufferSizeMap.at(param_.src1Pos),
+    ASCENDC_CHECK(CheckBufferSizeOverFlow(
+        param_.src1Size, GlobalParams::Instance().bufferSizeMap.at(param_.src1Pos),
         "check work tensor buffersize failed"));
     return true;
 }
@@ -203,8 +216,7 @@ bool TikcppVecReduceCheck::CheckAllHighLevel()
     // Only for reduce interface level 2
     ASCENDC_CHECK(CommonCheck());
 
-    ASCENDC_CHECK(CheckTensorOverflowHigh(param_.src0DtypeBytes, param_.src0Size, param_.calCount,
-        "src0Local"));
+    ASCENDC_CHECK(CheckTensorOverflowHigh(param_.src0DtypeBytes, param_.src0Size, param_.calCount, "src0Local"));
     if (apiName == "ReduceSum") {
         ASCENDC_CHECK(CheckWorkTensorSizeEqual("Check Reduce Sum workLocal tensor size"));
     } else if (apiName == "ReduceMax") {
@@ -220,8 +232,9 @@ bool TikcppVecReduceCheck::CheckAllHighLevelMode2()
     uint32_t dstDtypeBytes = param_.dstDtypeBytes;
     uint32_t srcDtypeBytes = param_.src0DtypeBytes;
     if (dstDtypeBytes != srcDtypeBytes) {
-        CHECK_LOG_ERROR("Check Reduce data type, Reduce need dst data type (%u), src data type (%u) should be same",
-            dstDtypeBytes, srcDtypeBytes);
+        CHECK_LOG_ERROR(
+            "Check Reduce data type, Reduce need dst data type (%u), src data type (%u) should be same", dstDtypeBytes,
+            srcDtypeBytes);
         return false;
     }
 
@@ -235,12 +248,13 @@ bool TikcppVecReduceCheck::CheckAllHighLevelMode2()
     bool dstRes = CheckTensorAddrAlign(param_.dstAddr, param_.dstPos, param_.dstDtypeBytes, "dst");
     ASCENDC_CHECK(srcRes && dstRes);
 
-    ASCENDC_CHECK(CheckBufferSizeOverFlow(param_.dstSize, GlobalParams::Instance().bufferSizeMap.at(param_.dstPos),
+    ASCENDC_CHECK(CheckBufferSizeOverFlow(
+        param_.dstSize, GlobalParams::Instance().bufferSizeMap.at(param_.dstPos),
         "check dst tensor buffersize failed"));
-    ASCENDC_CHECK(CheckBufferSizeOverFlow(param_.src0Size, GlobalParams::Instance().bufferSizeMap.at(param_.src0Pos),
+    ASCENDC_CHECK(CheckBufferSizeOverFlow(
+        param_.src0Size, GlobalParams::Instance().bufferSizeMap.at(param_.src0Pos),
         "check src tensor buffersize failed"));
-    ASCENDC_CHECK(CheckTensorOverflowHigh(param_.src0DtypeBytes, param_.src0Size, param_.calCount,
-        "src0Local"));
+    ASCENDC_CHECK(CheckTensorOverflowHigh(param_.src0DtypeBytes, param_.src0Size, param_.calCount, "src0Local"));
 
     return true;
 }
@@ -251,8 +265,13 @@ bool TikcppVecReduceCheck::CheckAllLowLevel(std::vector<uint64_t> maskArray)
     ASCENDC_CHECK(UpdateMaskArrayAndCheck(maskArray, maxByteLen));
     ASCENDC_CHECK(CommonCheck());
 
-    TensorOverflowParams params = {param_.src0Size, param_.src0DtypeBytes, static_cast<uint64_t>(param_.repeatTimes),
-        static_cast<uint64_t>(param_.src0BlockStride), static_cast<uint64_t>(param_.src0RepeatStride), false};
+    TensorOverflowParams params = {
+        param_.src0Size,
+        param_.src0DtypeBytes,
+        static_cast<uint64_t>(param_.repeatTimes),
+        static_cast<uint64_t>(param_.src0BlockStride),
+        static_cast<uint64_t>(param_.src0RepeatStride),
+        false};
     ASCENDC_CHECK(CheckTensorOverflowLow(maskArray, params, "src0Local"));
     if (apiName == "ReduceSum") {
         ASCENDC_CHECK(CheckWorkTensorSizeEqual("Check Reduce sum workLocal tensor size"));
@@ -263,5 +282,5 @@ bool TikcppVecReduceCheck::CheckAllLowLevel(std::vector<uint64_t> maskArray)
     }
     return true;
 }
-}  // namespace check
-}  // namespace AscendC
+} // namespace check
+} // namespace AscendC

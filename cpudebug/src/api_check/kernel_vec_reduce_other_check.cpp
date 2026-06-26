@@ -1,12 +1,12 @@
 /**
-* Copyright (c) 2025 Huawei Technologies Co., Ltd.
-* This program is free software, you can redistribute it and/or modify it under the terms and conditions of
-* CANN Open Software License Agreement Version 2.0 (the "License").
-* Please refer to the License for details. You may not use this file except in compliance with the License.
-* THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
-* INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
-* See LICENSE in the root of the software repository for the full text of the License.
-*/
+ * Copyright (c) 2025 Huawei Technologies Co., Ltd.
+ * This program is free software, you can redistribute it and/or modify it under the terms and conditions of
+ * CANN Open Software License Agreement Version 2.0 (the "License").
+ * Please refer to the License for details. You may not use this file except in compliance with the License.
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
+ * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
+ * See LICENSE in the root of the software repository for the full text of the License.
+ */
 
 /*!
  * \file kernel_vec_reduce_other_check.cpp
@@ -20,7 +20,7 @@
 namespace AscendC {
 namespace check {
 
-bool TikcppVecReduceOtherCheck::CheckWholeReduceDtypeBytes(const std::string &errMsg)
+bool TikcppVecReduceOtherCheck::CheckWholeReduceDtypeBytes(const std::string& errMsg)
 {
     uint32_t dstDtypeBytes = param_.dstDtypeBytes;
     uint32_t srcDtypeBytes = param_.src0DtypeBytes;
@@ -30,7 +30,9 @@ bool TikcppVecReduceOtherCheck::CheckWholeReduceDtypeBytes(const std::string &er
     if (apiName == "WholeReduceSum") {
         constexpr uint32_t kMaxDstSrcByteRatio = 2;
         if ((dstDtypeBytes != srcDtypeBytes) && (dstDtypeBytes != srcDtypeBytes * kMaxDstSrcByteRatio)) {
-            CHECK_LOG_ERROR("%s, ""ReduceSum need dst data type (%u) should be same or 2x of src type (%u)",
+            CHECK_LOG_ERROR(
+                "%s, "
+                "ReduceSum need dst data type (%u) should be same or 2x of src type (%u)",
                 errMsg.c_str(), dstDtypeBytes, srcDtypeBytes);
             return false;
         }
@@ -38,7 +40,9 @@ bool TikcppVecReduceOtherCheck::CheckWholeReduceDtypeBytes(const std::string &er
 #endif
     {
         if (dstDtypeBytes != srcDtypeBytes) {
-            CHECK_LOG_ERROR("%s, ""Reduce need dst data type (%u),dst src type (%u), should be same",
+            CHECK_LOG_ERROR(
+                "%s, "
+                "Reduce need dst data type (%u),dst src type (%u), should be same",
                 errMsg.c_str(), dstDtypeBytes, srcDtypeBytes);
             return false;
         }
@@ -54,10 +58,11 @@ bool TikcppVecReduceOtherCheck::CheckWholeReduceDstSize()
     return true;
 }
 
-static bool CheckTensorWhlSumOverflowLowCounter(std::vector<uint64_t>& maskArray, const VecReduceApiParams& param,
-    const uint64_t unit, const std::string& tensorName, const std::string& apiName)
+static bool CheckTensorWhlSumOverflowLowCounter(
+    std::vector<uint64_t>& maskArray, const VecReduceApiParams& param, const uint64_t unit,
+    const std::string& tensorName, const std::string& apiName)
 {
-    uint32_t oneRepeatNum = ONE_REPEAT_BYTE_SIZE / param.dstDtypeBytes;                   // when counter mode, always full mask
+    uint32_t oneRepeatNum = ONE_REPEAT_BYTE_SIZE / param.dstDtypeBytes;          // when counter mode, always full mask
     uint64_t elementNum = (maskArray.size() == 1) ? maskArray[0] : maskArray[1]; // maskLow means element num
     int32_t repeatTimes = (elementNum + oneRepeatNum - 1) / oneRepeatNum;
     uint32_t needSize = (repeatTimes - 1) * param.dstRepeatStride * unit + unit;
@@ -65,16 +70,16 @@ static bool CheckTensorWhlSumOverflowLowCounter(std::vector<uint64_t>& maskArray
     return true;
 }
 
-static bool CheckTensorWhlSumOverflowLowNorm(const VecReduceApiParams& param, const uint64_t unit,
-    const std::string& tensorName, const std::string& apiName)
+static bool CheckTensorWhlSumOverflowLowNorm(
+    const VecReduceApiParams& param, const uint64_t unit, const std::string& tensorName, const std::string& apiName)
 {
     uint32_t needSize = (param.repeatTimes - 1) * param.dstRepeatStride * unit + unit;
     ASCENDC_CHECK(CheckTensorSizeOverflow(needSize, param.dstSize, tensorName, apiName, ModeType::NORM_MODE));
     return true;
 }
 
-bool TikcppVecReduceOtherCheck::CheckWholeReduceDstSize(std::vector<uint64_t>& maskArray, const uint64_t unit,
-    const std::string& tensorName)
+bool TikcppVecReduceOtherCheck::CheckWholeReduceDstSize(
+    std::vector<uint64_t>& maskArray, const uint64_t unit, const std::string& tensorName)
 {
     if (ModelFactoryGetMaskMode() == 1) { // counter mode
         return CheckTensorWhlSumOverflowLowCounter(maskArray, param_, unit, tensorName, apiName);
@@ -82,65 +87,68 @@ bool TikcppVecReduceOtherCheck::CheckWholeReduceDstSize(std::vector<uint64_t>& m
     return CheckTensorWhlSumOverflowLowNorm(param_, unit, tensorName, apiName);
 }
 
-static uint64_t CalculatePairVecMaxOffset(const uint64_t repeatTimes, const uint64_t blkStride, const uint64_t repStride,
-    const uint64_t maskLen, const uint64_t blockLen, uint32_t unit, const uint32_t dtypeBytes)
+static uint64_t CalculatePairVecMaxOffset(
+    const uint64_t repeatTimes, const uint64_t blkStride, const uint64_t repStride, const uint64_t maskLen,
+    const uint64_t blockLen, uint32_t unit, const uint32_t dtypeBytes)
 {
     if (repeatTimes == 0) {
         return 0;
     }
     ASSERT(blockLen != 0);
-    uint64_t maskNum = maskLen / 2; // every 2 src get 1 dst
-    uint64_t blkNumLastRep = DivCeil(maskNum, blockLen);   // last repeat needs x blocks for maskLen elements
+    uint64_t maskNum = maskLen / 2;                      // every 2 src get 1 dst
+    uint64_t blkNumLastRep = DivCeil(maskNum, blockLen); // last repeat needs x blocks for maskLen elements
     uint64_t eleNumLastBlk = ((maskNum % blockLen) != 0) ? (maskNum % blockLen) : blockLen;
-    uint64_t maxOffset = (repeatTimes - 1) * unit * repStride + (blkNumLastRep - 1) * blkStride * blockLen *
-        dtypeBytes + eleNumLastBlk * dtypeBytes;
+    uint64_t maxOffset = (repeatTimes - 1) * unit * repStride +
+                         (blkNumLastRep - 1) * blkStride * blockLen * dtypeBytes + eleNumLastBlk * dtypeBytes;
     return maxOffset;
 }
 
-static uint64_t CalculatePairNeededTensorSize(std::vector<uint64_t>& maskArray, const uint32_t dtypeBytes,
-    const uint64_t repeatTimes, const uint64_t blkStride, const uint64_t repStride, uint32_t unit)
+static uint64_t CalculatePairNeededTensorSize(
+    std::vector<uint64_t>& maskArray, const uint32_t dtypeBytes, const uint64_t repeatTimes, const uint64_t blkStride,
+    const uint64_t repStride, uint32_t unit)
 {
     uint64_t maskVal = (maskArray.size() == 1) ? maskArray[0] : GetMaskLength(maskArray, dtypeBytes);
     ASSERT(dtypeBytes != 0);
     uint64_t eleNumPerBlock = static_cast<uint64_t>(PlatFormParams::ONE_BLK_SIZE) / dtypeBytes;
-    uint64_t maxOffset = CalculatePairVecMaxOffset(repeatTimes, blkStride, repStride, maskVal, eleNumPerBlock, unit,
-        dtypeBytes);
+    uint64_t maxOffset =
+        CalculatePairVecMaxOffset(repeatTimes, blkStride, repStride, maskVal, eleNumPerBlock, unit, dtypeBytes);
     return maxOffset;
 }
 
-static bool CheckTensorPairOverflowLowCounter(std::vector<uint64_t>& maskArray, const VecReduceApiParams& param,
-    const std::string& tensorName, const std::string& apiName)
+static bool CheckTensorPairOverflowLowCounter(
+    std::vector<uint64_t>& maskArray, const VecReduceApiParams& param, const std::string& tensorName,
+    const std::string& apiName)
 {
     std::vector<uint64_t> mainMaskArray = {0};
     std::vector<uint64_t> tailMaskArray = {0};
     uint64_t mainRepeatTimes = 0;
     uint64_t tailRepeatTimes = 0;
-    CounterSplitMainTail(maskArray, param.dstDtypeBytes, mainRepeatTimes, tailRepeatTimes, mainMaskArray,
-        tailMaskArray);
-    uint64_t maskVal = (mainMaskArray.size() == 1) ? mainMaskArray[0] : GetMaskLength(mainMaskArray,
-        param.dstDtypeBytes);
+    CounterSplitMainTail(
+        maskArray, param.dstDtypeBytes, mainRepeatTimes, tailRepeatTimes, mainMaskArray, tailMaskArray);
+    uint64_t maskVal =
+        (mainMaskArray.size() == 1) ? mainMaskArray[0] : GetMaskLength(mainMaskArray, param.dstDtypeBytes);
     uint32_t unit = maskVal / 2 * param.dstDtypeBytes;
-    uint64_t mainBlkSize = CalculatePairNeededTensorSize(mainMaskArray, param.dstDtypeBytes, mainRepeatTimes,
-        DEFAULT_BLK_STRIDE, param.dstRepeatStride, unit);
+    uint64_t mainBlkSize = CalculatePairNeededTensorSize(
+        mainMaskArray, param.dstDtypeBytes, mainRepeatTimes, DEFAULT_BLK_STRIDE, param.dstRepeatStride, unit);
     uint64_t maxOffset = mainBlkSize;
-    if (tailRepeatTimes > 0) {  // calculate tail block from the last repStride in main block
+    if (tailRepeatTimes > 0) { // calculate tail block from the last repStride in main block
         uint64_t tailRepeatStart = mainRepeatTimes * param.dstRepeatStride * unit;
-        uint64_t tailBlkSize = CalculatePairNeededTensorSize(tailMaskArray, param.dstDtypeBytes, tailRepeatTimes,
-            DEFAULT_BLK_STRIDE, param.dstRepeatStride, unit);
+        uint64_t tailBlkSize = CalculatePairNeededTensorSize(
+            tailMaskArray, param.dstDtypeBytes, tailRepeatTimes, DEFAULT_BLK_STRIDE, param.dstRepeatStride, unit);
         maxOffset = std::max(mainBlkSize, tailRepeatStart + tailBlkSize);
     }
     ASCENDC_CHECK(CheckTensorSizeOverflow(maxOffset, param.dstSize, tensorName, apiName, ModeType::COUNTER_MODE));
     return true;
 }
 
-static bool CheckTensorPairOverflowLowNorm(std::vector<uint64_t>& maskArray, const VecReduceApiParams& param,
-    const std::string& tensorName, const std::string& apiName)
+static bool CheckTensorPairOverflowLowNorm(
+    std::vector<uint64_t>& maskArray, const VecReduceApiParams& param, const std::string& tensorName,
+    const std::string& apiName)
 {
     uint64_t maskVal = (maskArray.size() == 1) ? maskArray[0] : GetMaskLength(maskArray, param.dstDtypeBytes);
     uint32_t unit = maskVal / 2 * param.dstDtypeBytes;
     uint32_t lastRepeatSize = maskVal / 2;
-    uint32_t needSize = (param.repeatTimes - 1) * param.dstRepeatStride * unit + lastRepeatSize *
-        param.dstDtypeBytes;
+    uint32_t needSize = (param.repeatTimes - 1) * param.dstRepeatStride * unit + lastRepeatSize * param.dstDtypeBytes;
     ASCENDC_CHECK(CheckTensorSizeOverflow(needSize, param.dstSize, tensorName, apiName, ModeType::NORM_MODE));
     return true;
 }
@@ -193,24 +201,26 @@ bool TikcppVecReduceOtherCheck::CheckAddrAlign()
 // maskLen: each repeat calculate the first maskLen elements
 // blockLen: element num per block
 // return: in unit of element
-static uint64_t CalculateByteVectorMaxOffset(const uint64_t repeatTimes, const uint64_t blkStride, const uint64_t repStride,
-    const uint64_t maskLen, const uint64_t blockLen)
+static uint64_t CalculateByteVectorMaxOffset(
+    const uint64_t repeatTimes, const uint64_t blkStride, const uint64_t repStride, const uint64_t maskLen,
+    const uint64_t blockLen)
 {
     if (repeatTimes == 0) {
         return 0;
     }
     ASSERT(blockLen != 0);
-    uint64_t maskNum = (maskLen + blockLen - 1) / blockLen; // one block get one dst elements
-    uint64_t blkNumLastRep = (maskNum + blockLen - 1) / blockLen;   // last repeat needs x blocks for maskNum elements
+    uint64_t maskNum = (maskLen + blockLen - 1) / blockLen;       // one block get one dst elements
+    uint64_t blkNumLastRep = (maskNum + blockLen - 1) / blockLen; // last repeat needs x blocks for maskNum elements
     uint64_t eleNumLastBlk = ((maskNum % blockLen) != 0) ? (maskNum % blockLen) : blockLen;
-    uint64_t maxOffset = ((repeatTimes - 1) * repStride / 32 + (blkNumLastRep - 1) * blkStride) * blockLen +
-        eleNumLastBlk;
+    uint64_t maxOffset =
+        ((repeatTimes - 1) * repStride / 32 + (blkNumLastRep - 1) * blkStride) * blockLen + eleNumLastBlk;
     return maxOffset;
 }
 
 // Given repeatTimes and stride etc, to return total buffersize needed in unit of Bytes
-static uint64_t CalculateNeededByteTensorSize(std::vector<uint64_t>& maskArray, const uint32_t dtypeBytes,
-    const uint64_t repeatTimes, const uint64_t blkStride, const uint64_t repStride)
+static uint64_t CalculateNeededByteTensorSize(
+    std::vector<uint64_t>& maskArray, const uint32_t dtypeBytes, const uint64_t repeatTimes, const uint64_t blkStride,
+    const uint64_t repStride)
 {
     uint64_t maskVal = (maskArray.size() == 1) ? maskArray[0] : GetMaskLength(maskArray, dtypeBytes);
     ASSERT(dtypeBytes != 0);
@@ -220,25 +230,26 @@ static uint64_t CalculateNeededByteTensorSize(std::vector<uint64_t>& maskArray, 
     return maxOffset;
 }
 
-static bool CheckTensorByteOverflowLowCounter(std::vector<uint64_t>& maskArray, const TensorOverflowParams& params,
-    const std::string& tensorName, const std::string& apiName)
+static bool CheckTensorByteOverflowLowCounter(
+    std::vector<uint64_t>& maskArray, const TensorOverflowParams& params, const std::string& tensorName,
+    const std::string& apiName)
 {
     std::vector<uint64_t> mainMaskArray = {0};
     std::vector<uint64_t> tailMaskArray = {0};
     uint64_t mainRepeatTimes = 0;
     uint64_t tailRepeatTimes = 0;
-    CounterSplitMainTail(maskArray, params.dtypeSize, mainRepeatTimes, tailRepeatTimes, mainMaskArray,
-        tailMaskArray);
+    CounterSplitMainTail(maskArray, params.dtypeSize, mainRepeatTimes, tailRepeatTimes, mainMaskArray, tailMaskArray);
     // when counter mode, repeatTimes given by user is not used
     // Need to compare: endpoint of mainBlock VS endpoint of tailBlock
     // Especially scenes where blkStride is much larger than repStride. mainBlock endpoint will be larger!!
-    uint64_t mainBlkSize = CalculateNeededByteTensorSize(mainMaskArray, params.dtypeSize, mainRepeatTimes,
-        params.blkStride, params.repStride);
+    uint64_t mainBlkSize = CalculateNeededByteTensorSize(
+        mainMaskArray, params.dtypeSize, mainRepeatTimes, params.blkStride, params.repStride);
     uint64_t maxOffset = mainBlkSize;
-    if (tailRepeatTimes > 0) {  // calculate tail block from the last repStride in main block
+    if (tailRepeatTimes > 0) { // calculate tail block from the last repStride in main block
         uint64_t tailRepeatStart = mainRepeatTimes * params.repStride / 32 * ONE_BLK_SIZE / 2;
-        uint64_t tailBlkSize = CalculateNeededByteTensorSize(tailMaskArray, params.dtypeSize, tailRepeatTimes,
-            params.blkStride, params.repStride); // the unit of repStride is Byte
+        uint64_t tailBlkSize = CalculateNeededByteTensorSize(
+            tailMaskArray, params.dtypeSize, tailRepeatTimes, params.blkStride,
+            params.repStride); // the unit of repStride is Byte
         maxOffset = std::max(mainBlkSize, tailRepeatStart + tailBlkSize);
     }
     ASCENDC_CHECK(CheckTensorSizeOverflow(maxOffset, params.bufferSize, tensorName, apiName, ModeType::COUNTER_MODE));
@@ -246,18 +257,19 @@ static bool CheckTensorByteOverflowLowCounter(std::vector<uint64_t>& maskArray, 
 }
 
 // in normal mode, check whether the data calculated in cmd exceed the tensor size
-static bool CheckTensorByteOverflowLowNorm(std::vector<uint64_t>& maskArray, const TensorOverflowParams& params,
-    const std::string& tensorName, const std::string& apiName)
+static bool CheckTensorByteOverflowLowNorm(
+    std::vector<uint64_t>& maskArray, const TensorOverflowParams& params, const std::string& tensorName,
+    const std::string& apiName)
 {
-    uint64_t maxOffset = CalculateNeededByteTensorSize(maskArray, params.dtypeSize, params.repeatTimes,
-    params.blkStride, params.repStride);
+    uint64_t maxOffset = CalculateNeededByteTensorSize(
+        maskArray, params.dtypeSize, params.repeatTimes, params.blkStride, params.repStride);
     ASCENDC_CHECK(CheckTensorSizeOverflow(maxOffset, params.bufferSize, tensorName, apiName, ModeType::NORM_MODE));
     return true;
 }
 
 // the unit of dstRepStride is Byte
-bool TikcppVecReduceOtherCheck::CheckTensorByteOverflowLow(std::vector<uint64_t>& maskArray,
-    const TensorOverflowParams& params, const std::string& tensorName)
+bool TikcppVecReduceOtherCheck::CheckTensorByteOverflowLow(
+    std::vector<uint64_t>& maskArray, const TensorOverflowParams& params, const std::string& tensorName)
 {
     if (ModelFactoryGetMaskMode() == 1) { // counter mode
         return CheckTensorByteOverflowLowCounter(maskArray, params, tensorName, apiName);
@@ -281,9 +293,13 @@ bool TikcppVecReduceOtherCheck::CheckAllLowLevel(std::vector<uint64_t> maskArray
     }
 
     if ((apiName == "BlockReduceSum") || (apiName == "BlockReduceMax") || (apiName == "BlockReduceMin")) {
-        TensorOverflowParams params = {param_.dstSize, param_.dstDtypeBytes,
-            static_cast<uint64_t>(param_.repeatTimes), static_cast<uint64_t>(DEFAULT_BLK_STRIDE),
-            static_cast<uint64_t>(param_.dstRepeatStride * param_.dstDtypeBytes * 8), false};
+        TensorOverflowParams params = {
+            param_.dstSize,
+            param_.dstDtypeBytes,
+            static_cast<uint64_t>(param_.repeatTimes),
+            static_cast<uint64_t>(DEFAULT_BLK_STRIDE),
+            static_cast<uint64_t>(param_.dstRepeatStride * param_.dstDtypeBytes * 8),
+            false};
         ASCENDC_CHECK(CheckTensorByteOverflowLow(maskArray, params, "dstLocal"));
     }
 
@@ -301,15 +317,22 @@ bool TikcppVecReduceOtherCheck::CheckAllLowLevel(std::vector<uint64_t> maskArray
 
     ASCENDC_CHECK(CheckAddrAlign());
 
-    ASCENDC_CHECK(CheckBufferSizeOverFlow(param_.dstSize, GlobalParams::Instance().bufferSizeMap.at(param_.dstPos),
+    ASCENDC_CHECK(CheckBufferSizeOverFlow(
+        param_.dstSize, GlobalParams::Instance().bufferSizeMap.at(param_.dstPos),
         "check dst tensor buffersize failed"));
-    ASCENDC_CHECK(CheckBufferSizeOverFlow(param_.src0Size, GlobalParams::Instance().bufferSizeMap.at(param_.src0Pos),
+    ASCENDC_CHECK(CheckBufferSizeOverFlow(
+        param_.src0Size, GlobalParams::Instance().bufferSizeMap.at(param_.src0Pos),
         "check src tensor buffersize failed"));
 
-    TensorOverflowParams params = {param_.src0Size, param_.src0DtypeBytes, static_cast<uint64_t>(param_.repeatTimes),
-        static_cast<uint64_t>(param_.src0BlockStride), static_cast<uint64_t>(param_.src0RepeatStride), false};
+    TensorOverflowParams params = {
+        param_.src0Size,
+        param_.src0DtypeBytes,
+        static_cast<uint64_t>(param_.repeatTimes),
+        static_cast<uint64_t>(param_.src0BlockStride),
+        static_cast<uint64_t>(param_.src0RepeatStride),
+        false};
     ASCENDC_CHECK(CheckTensorOverflowLow(maskArray, params, "srcLocal"));
     return true;
 }
-}  // namespace check
-}  // namespace AscendC
+} // namespace check
+} // namespace AscendC

@@ -1,12 +1,12 @@
 /**
-* Copyright (c) 2025 Huawei Technologies Co., Ltd.
-* This program is free software, you can redistribute it and/or modify it under the terms and conditions of
-* CANN Open Software License Agreement Version 2.0 (the "License").
-* Please refer to the License for details. You may not use this file except in compliance with the License.
-* THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
-* INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
-* See LICENSE in the root of the software repository for the full text of the License.
-*/
+ * Copyright (c) 2025 Huawei Technologies Co., Ltd.
+ * This program is free software, you can redistribute it and/or modify it under the terms and conditions of
+ * CANN Open Software License Agreement Version 2.0 (the "License").
+ * Please refer to the License for details. You may not use this file except in compliance with the License.
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
+ * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
+ * See LICENSE in the root of the software repository for the full text of the License.
+ */
 
 /*!
  * \file kernel_macros.h
@@ -39,7 +39,7 @@
 #endif // __aicore__
 
 #ifndef __host_aicore__
-#define __host_aicore__ [host, aicore]
+#define __host_aicore__ [ host, aicore ]
 #endif // __host_aicore__
 
 #ifndef __disable_kernel_type_autoinfer__
@@ -87,30 +87,29 @@
 #define QBUF_TOTAL_RESERVED_LEN 4
 #endif
 
-#if defined(__DAV_C220_CUBE__)  || defined(__DAV_C310_CUBE__) || defined(__DAV_310R6_CUBE__)
+#if defined(__DAV_C220_CUBE__) || defined(__DAV_C310_CUBE__) || defined(__DAV_310R6_CUBE__)
 #define SPLIT_CORE_CUBE
 #endif
 
 #if defined(__DAV_C220_VEC__) || defined(__DAV_C310_VEC__) || defined(__DAV_310R6_VEC__)
 #define SPLIT_CORE_VEC
 #endif
-#if (defined(__NPU_ARCH__) &&                                               \
-     ((__NPU_ARCH__ == 1001) || (__NPU_ARCH__ == 2002) ||                   \
-      (__NPU_ARCH__ == 2201) || (__NPU_ARCH__ == 3002) ||                   \
-      (__NPU_ARCH__ == 3510) || (__NPU_ARCH__ == 5102)))
+#if (                                                                                                       \
+    defined(__NPU_ARCH__) && ((__NPU_ARCH__ == 1001) || (__NPU_ARCH__ == 2002) || (__NPU_ARCH__ == 2201) || \
+                              (__NPU_ARCH__ == 3002) || (__NPU_ARCH__ == 3510) || (__NPU_ARCH__ == 5102)))
 #ifndef ASCENDC_DUMP
 #define ASCENDC_DUMP 1
 #endif
 #endif
 
 #if defined(ASCENDC_DUMP) && (ASCENDC_DUMP == 0)
-    #undef ASCENDC_DUMP
+#undef ASCENDC_DUMP
 #endif
 
 namespace AscendC {
-#if defined(__NPU_ARCH__) && ((__NPU_ARCH__ == 2002) || (__NPU_ARCH__ == 2201) ||           \
-    (__NPU_ARCH__ == 3002) || (__NPU_ARCH__ == 3102) || (__NPU_ARCH__ == 3510) ||           \
-    (__NPU_ARCH__ == 5102)) // Available for V200 and V210
+#if defined(__NPU_ARCH__) &&                                                                                 \
+    ((__NPU_ARCH__ == 2002) || (__NPU_ARCH__ == 2201) || (__NPU_ARCH__ == 3002) || (__NPU_ARCH__ == 3102) || \
+     (__NPU_ARCH__ == 3510) || (__NPU_ARCH__ == 5102)) // Available for V200 and V210
 constexpr int32_t QUE_MAX_EVENT = 8;
 #else
 constexpr int32_t QUE_MAX_EVENT = 4;

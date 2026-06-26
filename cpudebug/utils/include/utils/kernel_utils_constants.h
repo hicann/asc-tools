@@ -1,12 +1,12 @@
 /**
-* Copyright (c) 2025 Huawei Technologies Co., Ltd.
-* This program is free software, you can redistribute it and/or modify it under the terms and conditions of
-* CANN Open Software License Agreement Version 2.0 (the "License").
-* Please refer to the License for details. You may not use this file except in compliance with the License.
-* THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
-* INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
-* See LICENSE in the root of the software repository for the full text of the License.
-*/
+ * Copyright (c) 2025 Huawei Technologies Co., Ltd.
+ * This program is free software, you can redistribute it and/or modify it under the terms and conditions of
+ * CANN Open Software License Agreement Version 2.0 (the "License").
+ * Please refer to the License for details. You may not use this file except in compliance with the License.
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
+ * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
+ * See LICENSE in the root of the software repository for the full text of the License.
+ */
 
 /*!
  * \file kernel_utils_constants.h
@@ -30,8 +30,7 @@ const int32_t MAX_REPEAT_TIMES = 255;
 const int32_t MIN_REPEAT_TIMES = 0;
 const int32_t ONE_BYTE_BIT_SIZE = 8;
 const uint32_t MAX_SLICE_SIZE = 6 * 256;
-const uint16_t VALUE_512 = 512;         // align with 512B / value range [0, 512]
-
+const uint16_t VALUE_512 = 512; // align with 512B / value range [0, 512]
 
 // int4b_t param
 constexpr uint32_t INT4_TWO = 2;
@@ -44,8 +43,8 @@ constexpr uint32_t INT2_BIT_NUM = 2;
 constexpr uint32_t INT1_BIT_NUM = 1;
 #endif
 
-#if defined(__NPU_ARCH__) && ((__NPU_ARCH__ == 2103) || (__NPU_ARCH__ == 3003) || \
-    (__NPU_ARCH__ == 3103) || (__NPU_ARCH__ == 3113))
+#if defined(__NPU_ARCH__) && \
+    ((__NPU_ARCH__ == 2103) || (__NPU_ARCH__ == 3003) || (__NPU_ARCH__ == 3103) || (__NPU_ARCH__ == 3113))
 // int3b_t param
 constexpr uint32_t INT3_BIT_NUM = 3;
 // int2b_t param
@@ -406,19 +405,23 @@ namespace Internal {
 constexpr uint8_t REGION_PROPOSAL_ELEMENT_NUM = 8;
 }
 
-template <typename T> std::string ScalarToString(T scalarValue);
-template <> inline std::string ScalarToString(half scalarValue)
+template <typename T>
+std::string ScalarToString(T scalarValue);
+template <>
+inline std::string ScalarToString(half scalarValue)
 {
     return std::to_string(scalarValue.ToFloat());
 }
-#if defined(__NPU_ARCH__) && ((__NPU_ARCH__ == 2201) || (__NPU_ARCH__ == 3002) ||                      \
-      (__NPU_ARCH__ == 3510) || (__NPU_ARCH__ == 5102))
-template <> inline std::string ScalarToString(bfloat16_t scalarValue)
+#if defined(__NPU_ARCH__) && \
+    ((__NPU_ARCH__ == 2201) || (__NPU_ARCH__ == 3002) || (__NPU_ARCH__ == 3510) || (__NPU_ARCH__ == 5102))
+template <>
+inline std::string ScalarToString(bfloat16_t scalarValue)
 {
     return std::to_string(scalarValue.ToFloat());
 }
 #endif
-template <typename T> uint64_t GetScalarBitcode(T scalarValue);
+template <typename T>
+uint64_t GetScalarBitcode(T scalarValue);
 // deq tensor ptr could not be passed by cce instructions, so pass ptr to model by this function
 void SetModelDeqTensor(void* deqTensor);
 #if __NPU_ARCH__ == 3002
@@ -440,33 +443,40 @@ void SetModelScatterDst0Tensor(uint64_t dst0, const uint32_t length);
 #endif // ASCENDC_CPU_DEBUG
 
 #if defined(__NPU_ARCH__) && ((__NPU_ARCH__ == 3510) || (__NPU_ARCH__ == 5102))
-template <typename T> struct GetPadValueType {
+template <typename T>
+struct GetPadValueType {
     using Type = T;
 };
 
 // To support FP8 datacopypad, pad type needs transfer to b8
-template <> struct GetPadValueType<fp8_e5m2_t> {
+template <>
+struct GetPadValueType<fp8_e5m2_t> {
     using Type = uint8_t;
 };
 
-template <> struct GetPadValueType<fp8_e4m3fn_t> {
+template <>
+struct GetPadValueType<fp8_e4m3fn_t> {
     using Type = uint8_t;
 };
 
-template <> struct GetPadValueType<fp8_e8m0_t> {
+template <>
+struct GetPadValueType<fp8_e8m0_t> {
     using Type = uint8_t;
 };
 
-template <> struct GetPadValueType<hifloat8_t> {
+template <>
+struct GetPadValueType<hifloat8_t> {
     using Type = uint8_t;
 };
 
 // To support FP4 datacopypad, pad type needs transfer to b8
-template <> struct GetPadValueType<fp4x2_e1m2_t> {
+template <>
+struct GetPadValueType<fp4x2_e1m2_t> {
     using Type = uint8_t;
 };
 
-template <> struct GetPadValueType<fp4x2_e2m1_t> {
+template <>
+struct GetPadValueType<fp4x2_e2m1_t> {
     using Type = uint8_t;
 };
 #endif
@@ -493,11 +503,9 @@ struct IntegerSubType {
     Storage storage;
     __aicore__ inline IntegerSubType() = default;
 
-    __aicore__ inline IntegerSubType(uint32_t value)
-        : storage(reinterpret_cast<Storage const &>(value) & mask) {}
+    __aicore__ inline IntegerSubType(uint32_t value) : storage(reinterpret_cast<Storage const&>(value) & mask) {}
 
-    __aicore__ inline IntegerSubType(int32_t value)
-        : storage(reinterpret_cast<Storage const &>(value) & mask) {}
+    __aicore__ inline IntegerSubType(int32_t value) : storage(reinterpret_cast<Storage const&>(value) & mask) {}
 
     __aicore__ inline operator T() const
     {
@@ -508,17 +516,11 @@ struct IntegerSubType {
         return T(storage);
     }
 
-    __aicore__ inline bool operator == (IntegerSubType const &rhs) const
-    {
-        return storage == rhs.storage;
-    }
+    __aicore__ inline bool operator==(IntegerSubType const& rhs) const { return storage == rhs.storage; }
 
-    __aicore__ inline bool operator != (IntegerSubType const &rhs) const
-    {
-        return storage != rhs.storage;
-    }
+    __aicore__ inline bool operator!=(IntegerSubType const& rhs) const { return storage != rhs.storage; }
 
-    __aicore__ inline bool operator > (IntegerSubType const &rhs) const
+    __aicore__ inline bool operator>(IntegerSubType const& rhs) const
     {
         bool lhsIsNeg = (this->storage & (static_cast<uint64_t>(1) << static_cast<uint32_t>(this->kBits - 1)));
         bool rhsIsNeg = (rhs.storage & (static_cast<uint64_t>(1) << static_cast<uint32_t>(rhs.kBits - 1)));
@@ -528,7 +530,7 @@ struct IntegerSubType {
         return this->storage > rhs.storage;
     }
 
-    __aicore__ inline bool operator >= (IntegerSubType const &rhs) const
+    __aicore__ inline bool operator>=(IntegerSubType const& rhs) const
     {
         bool lhsIsNeg = (this->storage & (static_cast<uint64_t>(1) << static_cast<uint32_t>(this->kBits - 1)));
         bool rhsIsNeg = (rhs.storage & (static_cast<uint64_t>(1) << static_cast<uint32_t>(rhs.kBits - 1)));
@@ -538,15 +540,9 @@ struct IntegerSubType {
         return storage >= rhs.storage;
     }
 
-    __aicore__ inline bool operator < (IntegerSubType const &rhs) const
-    {
-        return !(*this >= rhs);
-    }
+    __aicore__ inline bool operator<(IntegerSubType const& rhs) const { return !(*this >= rhs); }
 
-    __aicore__ inline bool operator <= (IntegerSubType const &rhs) const
-    {
-        return !(*this > rhs);
-    }
+    __aicore__ inline bool operator<=(IntegerSubType const& rhs) const { return !(*this > rhs); }
 };
 
 using int4b_t = IntegerSubType<INT4_BIT_NUM, true>;
@@ -565,15 +561,18 @@ struct GetDstType {
     using Type = T;
 };
 
-template <> struct GetDstType<mx_fp8_e5m2_t> {
+template <>
+struct GetDstType<mx_fp8_e5m2_t> {
     using Type = fp8_e5m2_t;
 };
 
-template <> struct GetDstType<mx_fp8_e4m3_t> {
+template <>
+struct GetDstType<mx_fp8_e4m3_t> {
     using Type = fp8_e4m3fn_t;
 };
 
-template <> struct GetDstType<mx_fp8_e8m0_t> {
+template <>
+struct GetDstType<mx_fp8_e8m0_t> {
     using Type = fp8_e8m0_t;
 };
 #endif

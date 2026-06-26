@@ -1,12 +1,12 @@
 /**
-* Copyright (c) 2025 Huawei Technologies Co., Ltd.
-* This program is free software, you can redistribute it and/or modify it under the terms and conditions of
-* CANN Open Software License Agreement Version 2.0 (the "License").
-* Please refer to the License for details. You may not use this file except in compliance with the License.
-* THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
-* INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
-* See LICENSE in the root of the software repository for the full text of the License.
-*/
+ * Copyright (c) 2025 Huawei Technologies Co., Ltd.
+ * This program is free software, you can redistribute it and/or modify it under the terms and conditions of
+ * CANN Open Software License Agreement Version 2.0 (the "License").
+ * Please refer to the License for details. You may not use this file except in compliance with the License.
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
+ * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
+ * See LICENSE in the root of the software repository for the full text of the License.
+ */
 
 /* !
  * \file stub_backtrace.cpp
@@ -26,47 +26,49 @@
 #include "stub_def.h"
 
 namespace {
-std::map<std::string, uint64_t>& BinaryBaseMap() {
+std::map<std::string, uint64_t>& BinaryBaseMap()
+{
     static std::map<std::string, uint64_t> instance;
     return instance;
 }
 
-}
+} // namespace
 
 namespace AscendC {
 constexpr int32_t BT_MAX = 24 * 1024;
 
-const std::map<int, std::string> &GetCoreTypeMap()
+const std::map<int, std::string>& GetCoreTypeMap()
 {
     static const std::map<int, std::string> coreTypeMap = {
-        { AscendC::AIC_TYPE, "AIC_" },
-        { AscendC::AIV_TYPE, "AIV_" },
-        { AscendC::MIX_TYPE, "CORE_" },
+        {AscendC::AIC_TYPE, "AIC_"},
+        {AscendC::AIV_TYPE, "AIV_"},
+        {AscendC::MIX_TYPE, "CORE_"},
     };
     return coreTypeMap;
 }
 
-std::map<int, std::string>& GetSignalMessage () {
+std::map<int, std::string>& GetSignalMessage()
+{
     static std::map<int, std::string> g_signalMessage = {
-        { SIGILL, "SIGILL Signal (Illegal instruction) catched" },
-        { SIGBUS, "SIGBUS Signal (Bus error) catched" },
-        { SIGFPE, "SIGFPE Signal (Floating point exception) catched" },
-        { SIGSEGV, "SIGSEGV Signal (Invalid memory reference) catched" },
-        { SIGPIPE, "SIGPIPE Signal (Broken pipe: write to pipe with no readers) catched" },
-        { SIGABRT, "SIGABRT Signal (Abort Signal from abort) catched" },
+        {SIGILL, "SIGILL Signal (Illegal instruction) catched"},
+        {SIGBUS, "SIGBUS Signal (Bus error) catched"},
+        {SIGFPE, "SIGFPE Signal (Floating point exception) catched"},
+        {SIGSEGV, "SIGSEGV Signal (Invalid memory reference) catched"},
+        {SIGPIPE, "SIGPIPE Signal (Broken pipe: write to pipe with no readers) catched"},
+        {SIGABRT, "SIGABRT Signal (Abort Signal from abort) catched"},
     };
     return g_signalMessage;
 }
 
 struct BacktraceData {
     std::string exeObjName;
-    std::ostringstream *outStream;
+    std::ostringstream* outStream;
 };
 
 // parse the input msg and get the exec file name,
 // input msg is like this: output/ascend/host/ubuntu20.04/x86_64/lib/xxxxxx
 // the last / means the executed file name
-std::string GetExecName(const std::string &msg)
+std::string GetExecName(const std::string& msg)
 {
     size_t lastSlashPos = msg.find_last_of('/');
     if (lastSlashPos != std::string::npos) {
@@ -77,9 +79,9 @@ std::string GetExecName(const std::string &msg)
 }
 
 // execute addr2line cmd and get the output
-std::string ExecCmd(const char *cmd)
+std::string ExecCmd(const char* cmd)
 {
-    FILE *fp = popen(cmd, "r");
+    FILE* fp = popen(cmd, "r");
     if (fp) {
         char buffer[BT_MAX] = "";
         if (fgets(buffer, BT_MAX, fp) == nullptr) {
@@ -97,19 +99,19 @@ bool IsValidBinary(const std::string& exceutePath);
 
 namespace {
 // callback function to process each frame
-_Unwind_Reason_Code UnwindCallback(struct _Unwind_Context *context, void *arg)
+_Unwind_Reason_Code UnwindCallback(struct _Unwind_Context* context, void* arg)
 {
     // get pc with unwind function
     int ipBeforeInsn = 0;
     static int32_t frameId = 0;
     uintptr_t pc = _Unwind_GetIPInfo(context, &ipBeforeInsn);
-    BacktraceData *btData = reinterpret_cast<BacktraceData *>(arg);
+    BacktraceData* btData = reinterpret_cast<BacktraceData*>(arg);
     if (ipBeforeInsn == 0) {
         --pc;
     }
 
     Dl_info info;
-    int32_t ret = dladdr(reinterpret_cast<void *>(pc), &info);
+    int32_t ret = dladdr(reinterpret_cast<void*>(pc), &info);
     if (ret == 0) {
         return _URC_NO_REASON;
     }
@@ -139,7 +141,7 @@ _Unwind_Reason_Code UnwindCallback(struct _Unwind_Context *context, void *arg)
 // translate cpu debug index to core name in v220
 std::string ConvertCpuIdxToCoreName(int idx)
 {
-    const std::map<int, std::string> &coreTypeMap = GetCoreTypeMap();
+    const std::map<int, std::string>& coreTypeMap = GetCoreTypeMap();
     constexpr int subCoreAic = 0;
     constexpr int defaultTaskRation = 2;
     std::string coreName;
@@ -176,7 +178,7 @@ std::string GetMainExecName()
 }
 
 // record all binary name and base addr
-int32_t DlCallback(struct dl_phdr_info *info, size_t size, void *data)
+int32_t DlCallback(struct dl_phdr_info* info, size_t size, void* data)
 {
     (void)data;
     (void)size;
@@ -231,7 +233,7 @@ std::string StackTrace()
     dl_iterate_phdr(DlCallback, nullptr);
     std::ostringstream stacktraceStream;
     std::string exeName = GetMainExecName();
-    BacktraceData btData = { exeName, &stacktraceStream };
+    BacktraceData btData = {exeName, &stacktraceStream};
     _Unwind_Backtrace(UnwindCallback, &btData);
     // return the backtrace info str
     std::string stackTrace = stacktraceStream.str();
@@ -243,7 +245,7 @@ std::string GetCoreName(int idx)
 {
     int coreIdx = idx;
     std::string coreName = "CORE_" + std::to_string(coreIdx);
-    if (g_socVersion == SocVersion::VER_220 || g_socVersion == SocVersion::VER_310 ||\
+    if (g_socVersion == SocVersion::VER_220 || g_socVersion == SocVersion::VER_310 ||
         g_socVersion == SocVersion::VER_510) {
         coreName = ConvertCpuIdxToCoreName(idx);
     }
@@ -253,9 +255,9 @@ std::string GetCoreName(int idx)
 void BacktracePrint(int sig)
 {
     int flatIdx = block_idx;
-    const std::map<int, std::string> &coreTypeMap = GetCoreTypeMap();
+    const std::map<int, std::string>& coreTypeMap = GetCoreTypeMap();
     std::string coreName = coreTypeMap.at(AscendC::MIX_TYPE);
-    if (g_socVersion == SocVersion::VER_220 || g_socVersion == SocVersion::VER_310 ||\
+    if (g_socVersion == SocVersion::VER_220 || g_socVersion == SocVersion::VER_310 ||
         g_socVersion == SocVersion::VER_510) {
         if (g_kernelMode == KernelMode::MIX_MODE) {
             coreName = coreTypeMap.at(g_coreType);

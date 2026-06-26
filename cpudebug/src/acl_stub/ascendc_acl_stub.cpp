@@ -1,12 +1,12 @@
 /**
-* Copyright (c) 2025 Huawei Technologies Co., Ltd.
-* This program is free software, you can redistribute it and/or modify it under the terms and conditions of
-* CANN Open Software License Agreement Version 2.0 (the "License").
-* Please refer to the License for details. You may not use this file except in compliance with the License.
-* THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
-* INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
-* See LICENSE in the root of the software repository for the full text of the License.
-*/
+ * Copyright (c) 2025 Huawei Technologies Co., Ltd.
+ * This program is free software, you can redistribute it and/or modify it under the terms and conditions of
+ * CANN Open Software License Agreement Version 2.0 (the "License").
+ * Please refer to the License for details. You may not use this file except in compliance with the License.
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
+ * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
+ * See LICENSE in the root of the software repository for the full text of the License.
+ */
 
 /*!
  * \file ascendc_acl_stub.cpp
@@ -26,15 +26,14 @@
 extern "C" {
 #endif
 
-aclError aclprofInit(const char *profilerResultPath, size_t length)
+aclError aclprofInit(const char* profilerResultPath, size_t length)
 {
     (void)profilerResultPath;
     (void)length;
     return ACL_SUCCESS;
 }
 
-aclError aclprofSetConfig(aclprofConfigType configType, const char *config,
-                          size_t configLength)
+aclError aclprofSetConfig(aclprofConfigType configType, const char* config, size_t configLength)
 {
     (void)configType;
     (void)config;
@@ -42,35 +41,29 @@ aclError aclprofSetConfig(aclprofConfigType configType, const char *config,
     return ACL_SUCCESS;
 }
 
-aclError aclprofStart(const aclprofConfig *profilerConfig)
+aclError aclprofStart(const aclprofConfig* profilerConfig)
 {
     (void)profilerConfig;
     return ACL_SUCCESS;
 }
 
-aclError aclprofStop(const aclprofConfig *profilerConfig)
+aclError aclprofStop(const aclprofConfig* profilerConfig)
 {
     (void)profilerConfig;
     return ACL_SUCCESS;
 }
 
-aclError aclprofFinalize()
-{
-    return ACL_SUCCESS;
-}
+aclError aclprofFinalize() { return ACL_SUCCESS; }
 
-aclError aclInit(const char *configPath)
+aclError aclInit(const char* configPath)
 {
     (void)configPath;
     return ACL_SUCCESS;
 }
 
-aclError aclFinalize()
-{
-    return ACL_SUCCESS;
-}
+aclError aclFinalize() { return ACL_SUCCESS; }
 
-aclError aclrtGetVersion(int32_t *majorVersion, int32_t *minorVersion, int32_t *patchVersion)
+aclError aclrtGetVersion(int32_t* majorVersion, int32_t* minorVersion, int32_t* patchVersion)
 {
     (void)majorVersion;
     (void)minorVersion;
@@ -81,31 +74,38 @@ aclError aclrtGetVersion(int32_t *majorVersion, int32_t *minorVersion, int32_t *
 size_t aclDataTypeSize(aclDataType dataType)
 {
     switch (dataType) {
-        case ACL_FLOAT:     return 4;
-        case ACL_FLOAT16:   return 2;
-        case ACL_INT8:      return 1;
-        case ACL_INT16:     return 2;
-        case ACL_INT32:     return 4;
-        case ACL_INT64:     return 8;
-        case ACL_UINT8:     return 1;
-        case ACL_UINT16:    return 2;
-        case ACL_UINT32:    return 4;
-        case ACL_UINT64:    return 8;
-        case ACL_DOUBLE:    return 8;
-        case ACL_BOOL:      return 1;
-        default:            return 0;
+        case ACL_FLOAT:
+            return 4;
+        case ACL_FLOAT16:
+            return 2;
+        case ACL_INT8:
+            return 1;
+        case ACL_INT16:
+            return 2;
+        case ACL_INT32:
+            return 4;
+        case ACL_INT64:
+            return 8;
+        case ACL_UINT8:
+            return 1;
+        case ACL_UINT16:
+            return 2;
+        case ACL_UINT32:
+            return 4;
+        case ACL_UINT64:
+            return 8;
+        case ACL_DOUBLE:
+            return 8;
+        case ACL_BOOL:
+            return 1;
+        default:
+            return 0;
     }
 }
 
-float aclFloat16ToFloat(aclFloat16 value)
-{
-    return static_cast<float>(half(value));
-}
+float aclFloat16ToFloat(aclFloat16 value) { return static_cast<float>(half(value)); }
 
-aclFloat16 aclFloatToFloat16(float value)
-{
-    return static_cast<aclFloat16>(half(value));
-}
+aclFloat16 aclFloatToFloat16(float value) { return static_cast<aclFloat16>(half(value)); }
 
 aclError aclrtSetDevice(int32_t deviceId)
 {
@@ -119,13 +119,13 @@ aclError aclrtResetDevice(int32_t deviceId)
     return ACL_SUCCESS;
 }
 
-aclError aclrtCreateStream(aclrtStream *stream)
+aclError aclrtCreateStream(aclrtStream* stream)
 {
     (void)stream;
     return ACL_SUCCESS;
 }
 
-aclError aclrtCreateStreamWithConfig(aclrtStream *stream, uint32_t priority, uint32_t flag)
+aclError aclrtCreateStreamWithConfig(aclrtStream* stream, uint32_t priority, uint32_t flag)
 {
     (void)priority;
     (void)flag;
@@ -151,7 +151,7 @@ aclError aclrtSynchronizeStream(aclrtStream stream)
     return ACL_SUCCESS;
 }
 
-aclError aclrtMalloc(void **devPtr, size_t size, aclrtMemMallocPolicy policy)
+aclError aclrtMalloc(void** devPtr, size_t size, aclrtMemMallocPolicy policy)
 {
     (void)policy;
     if (size == 0 || devPtr == nullptr) {
@@ -162,7 +162,7 @@ aclError aclrtMalloc(void **devPtr, size_t size, aclrtMemMallocPolicy policy)
     return ACL_SUCCESS;
 }
 
-aclError aclrtFree(void *devPtr)
+aclError aclrtFree(void* devPtr)
 {
     if (devPtr == nullptr) {
         printf("[ERROR] The parameter is invalid.\n");
@@ -172,7 +172,7 @@ aclError aclrtFree(void *devPtr)
     return ACL_SUCCESS;
 }
 
-aclError aclrtMallocHost(void **hostPtr, size_t size)
+aclError aclrtMallocHost(void** hostPtr, size_t size)
 {
     if (size == 0 || hostPtr == nullptr) {
         printf("[ERROR] The parameter is invalid.\n");
@@ -182,7 +182,7 @@ aclError aclrtMallocHost(void **hostPtr, size_t size)
     return ACL_SUCCESS;
 }
 
-aclError aclrtFreeHost(void *hostPtr)
+aclError aclrtFreeHost(void* hostPtr)
 {
     if (hostPtr == nullptr) {
         printf("[ERROR] The parameter is invalid.\n");
@@ -192,7 +192,7 @@ aclError aclrtFreeHost(void *hostPtr)
     return ACL_SUCCESS;
 }
 
-aclError aclrtMemset(void *devPtr, size_t maxCount, int32_t value, size_t count)
+aclError aclrtMemset(void* devPtr, size_t maxCount, int32_t value, size_t count)
 {
     if (devPtr == nullptr) {
         printf("[ERROR] The parameter is invalid.\n");
@@ -208,14 +208,13 @@ aclError aclrtMemset(void *devPtr, size_t maxCount, int32_t value, size_t count)
     return ACL_SUCCESS;
 }
 
-aclError aclrtMemsetAsync(void *devPtr, size_t maxCount, int32_t value, size_t count, aclrtStream stream)
+aclError aclrtMemsetAsync(void* devPtr, size_t maxCount, int32_t value, size_t count, aclrtStream stream)
 {
     (void)stream;
     return aclrtMemset(devPtr, maxCount, value, count);
 }
 
-aclError aclrtMemcpy(void *dst, size_t destMax, const void *src,
-                     size_t count, aclrtMemcpyKind kind)
+aclError aclrtMemcpy(void* dst, size_t destMax, const void* src, size_t count, aclrtMemcpyKind kind)
 {
     (void)kind;
     auto ret = memcpy_s(dst, destMax, src, count);
@@ -225,8 +224,8 @@ aclError aclrtMemcpy(void *dst, size_t destMax, const void *src,
     return ACL_SUCCESS;
 }
 
-aclError aclrtMemcpyAsync(void *dst, size_t destMax, const void *src, size_t count,
-                        aclrtMemcpyKind kind, aclrtStream stream)
+aclError aclrtMemcpyAsync(
+    void* dst, size_t destMax, const void* src, size_t count, aclrtMemcpyKind kind, aclrtStream stream)
 {
     (void)kind;
     (void)stream;
@@ -237,16 +236,16 @@ aclError aclrtMemcpyAsync(void *dst, size_t destMax, const void *src, size_t cou
     return ACL_SUCCESS;
 }
 
-aclError aclrtMemcpy2d(void *dst, size_t dpitch, const void *src, size_t spitch,
-                       size_t width, size_t height, aclrtMemcpyKind kind)
+aclError aclrtMemcpy2d(
+    void* dst, size_t dpitch, const void* src, size_t spitch, size_t width, size_t height, aclrtMemcpyKind kind)
 {
     (void)kind;
     if (src == nullptr) {
         printf("[ERROR] The parameter is invalid.\n");
         return ACL_ERROR_INVALID_PARAM;
     }
-    auto *dstBytes = static_cast<char *>(dst);
-    const auto *srcBytes = static_cast<const char *>(src);
+    auto* dstBytes = static_cast<char*>(dst);
+    const auto* srcBytes = static_cast<const char*>(src);
     for (size_t i = 0; i < height; ++i) {
         auto ret = memcpy_s(dstBytes + i * dpitch, dpitch, srcBytes + i * spitch, width);
         if (ret != EOK) {
@@ -256,14 +255,15 @@ aclError aclrtMemcpy2d(void *dst, size_t dpitch, const void *src, size_t spitch,
     return ACL_SUCCESS;
 }
 
-aclError aclrtMemcpy2dAsync(void *dst, size_t dpitch, const void *src, size_t spitch, 
-                            size_t width, size_t height, aclrtMemcpyKind kind, aclrtStream stream)
+aclError aclrtMemcpy2dAsync(
+    void* dst, size_t dpitch, const void* src, size_t spitch, size_t width, size_t height, aclrtMemcpyKind kind,
+    aclrtStream stream)
 {
     (void)stream;
     return aclrtMemcpy2d(dst, dpitch, src, spitch, width, height, kind);
 }
 
-aclError aclrtCreateContext(aclrtContext *context, int32_t deviceId)
+aclError aclrtCreateContext(aclrtContext* context, int32_t deviceId)
 {
     (void)context;
     (void)deviceId;
@@ -276,39 +276,40 @@ aclError aclrtDestroyContext(aclrtContext context)
     return ACL_SUCCESS;
 }
 
-aclError aclrtBinaryLoadFromData(const void *data, size_t length, const aclrtBinaryLoadOptions *options, aclrtBinHandle *binHandle)
+aclError aclrtBinaryLoadFromData(
+    const void* data, size_t length, const aclrtBinaryLoadOptions* options, aclrtBinHandle* binHandle)
 {
     (void)options;
     (void)binHandle;
     if (data == nullptr || length == 0) {
-        printf("[ERROR] During binary load, get invalid elfData or data length, may be caused by a compilation error.\n");
+        printf(
+            "[ERROR] During binary load, get invalid elfData or data length, may be caused by a compilation error.\n");
         return ACL_ERROR_INVALID_PARAM;
     }
 
-    try{
+    try {
         AscendC::RegisterKernelElf(reinterpret_cast<const uint8_t*>(data), length);
-    } catch(const std::exception& e){
-        printf("[ERROR] During binary load, failed to register kernel elf data: %s\n", e.what());        return ACL_ERROR_INVALID_PARAM;
+    } catch (const std::exception& e) {
+        printf("[ERROR] During binary load, failed to register kernel elf data: %s\n", e.what());
+        return ACL_ERROR_INVALID_PARAM;
     }
     return ACL_SUCCESS;
 }
 
-aclError aclrtSynchronizeDevice()
-{
-    return ACL_SUCCESS;
-}
+aclError aclrtSynchronizeDevice() { return ACL_SUCCESS; }
 #ifdef __cplusplus
 }
 #endif // __cplusplus
 
 namespace {
-static int callback(struct dl_phdr_info *info, size_t size, void *data)
+static int callback(struct dl_phdr_info* info, size_t size, void* data)
 {
     (void)size;
     (void)data;
     std::string soName = std::string(info->dlpi_name);
     if (soName.find("libascendcl.so") != std::string::npos) {
-        printf("[ERROR] The support of ACL interfaces in CPU debug is limited; Only the following list is supported currently.\n\
+        printf(
+            "[ERROR] The support of ACL interfaces in CPU debug is limited; Only the following list is supported currently.\n\
         [aclprofInit, aclprofSetConfig, aclprofStart, aclprofStop, aclprofFinalize, aclInit, aclFinalize,\n\
         aclrtGetVersion, aclDataTypeSize, aclFloat16ToFloat, aclFloatToFloat16, aclrtSetDevice, aclrtResetDevice,\n\
         aclrtCreateStream, aclrtCreateStreamWithConfig, aclrtDestroyStream, aclrtDestroyStreamForce, aclrtSynchronizeStream,\n\
@@ -325,6 +326,6 @@ __attribute__((constructor)) void check_interface()
     printf("[%s][%s:%d]\n", __FILE__, __FUNCTION__, __LINE__);
     dl_iterate_phdr(callback, nullptr);
 }
-}
+} // namespace
 
 #endif // ASCENDC_CPU_DEBUG

@@ -1,12 +1,12 @@
 /**
-* Copyright (c) 2025 Huawei Technologies Co., Ltd.
-* This program is free software, you can redistribute it and/or modify it under the terms and conditions of
-* CANN Open Software License Agreement Version 2.0 (the "License").
-* Please refer to the License for details. You may not use this file except in compliance with the License.
-* THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
-* INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
-* See LICENSE in the root of the software repository for the full text of the License.
-*/
+ * Copyright (c) 2025 Huawei Technologies Co., Ltd.
+ * This program is free software, you can redistribute it and/or modify it under the terms and conditions of
+ * CANN Open Software License Agreement Version 2.0 (the "License").
+ * Please refer to the License for details. You may not use this file except in compliance with the License.
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
+ * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
+ * See LICENSE in the root of the software repository for the full text of the License.
+ */
 
 /*!
  * \file kernel_fp32.h
@@ -59,12 +59,12 @@ constexpr uint32_t FP32_NAN = 0x7FFFFFFF;
 
 inline uint32_t Fp32Constructor(uint32_t s, uint32_t e, uint32_t m)
 {
-    return (((s) << FP32_SIGN_INDEX) | ((e) << FP32_MAN_LEN) | ((m) & FP32_MAX_MAN));
+    return (((s) << FP32_SIGN_INDEX) | ((e) << FP32_MAN_LEN) | ((m)&FP32_MAX_MAN));
 }
 
 inline bool Fp32IsInf(const uint32_t x)
 {
-    return ((((x) & FP32_EXP_MASK) == FP32_EXP_MASK) && (((x) & FP32_MAN_MASK) == 0));
+    return ((((x)&FP32_EXP_MASK) == FP32_EXP_MASK) && (((x)&FP32_MAN_MASK) == 0));
 }
 /*
  * @ingroup fp32 special value judgment
@@ -72,29 +72,20 @@ inline bool Fp32IsInf(const uint32_t x)
  */
 inline bool Fp32IsNan(const uint32_t x)
 {
-    return ((((x) & FP32_EXP_MASK) == FP32_EXP_MASK) && (((x) & FP32_MAN_MASK) != 0));
+    return ((((x)&FP32_EXP_MASK) == FP32_EXP_MASK) && (((x)&FP32_MAN_MASK) != 0));
 }
 
-inline bool Fp32IsZero(const uint32_t x)
-{
-    return (((x) & FP32_ABS_MAX) == 0);
-}
+inline bool Fp32IsZero(const uint32_t x) { return (((x)&FP32_ABS_MAX) == 0); }
 /*
  * @ingroup fp32 basic operator
  * @brief   get sign of fp32
  */
-inline uint16_t Fp32ExtracSign(uint32_t x)
-{
-    return (((x) >> FP32_SIGN_INDEX) & 1);
-}
+inline uint16_t Fp32ExtracSign(uint32_t x) { return (((x) >> FP32_SIGN_INDEX) & 1); }
 /*
  * @ingroup fp32 basic operator
  * @brief   get exponent of fp32
  */
-inline uint32_t Fp32ExtracExp(uint32_t x)
-{
-    return (((x) & FP32_EXP_MASK) >> FP32_MAN_LEN);
-}
+inline uint32_t Fp32ExtracExp(uint32_t x) { return (((x)&FP32_EXP_MASK) >> FP32_MAN_LEN); }
 
 /**
  * @ingroup fp32 basic operator
@@ -102,6 +93,6 @@ inline uint32_t Fp32ExtracExp(uint32_t x)
  */
 inline uint32_t Fp32ExtracMan(uint32_t x)
 {
-    return (((x) & FP32_MAN_MASK) | (((((x) >> FP32_MAN_LEN) & FP32_MAX_EXP) > 0 ? 1 : 0) * FP32_MAN_HIDE_BIT));
+    return (((x)&FP32_MAN_MASK) | (((((x) >> FP32_MAN_LEN) & FP32_MAX_EXP) > 0 ? 1 : 0) * FP32_MAN_HIDE_BIT));
 }
 #endif // ASCENDC_FP32_H

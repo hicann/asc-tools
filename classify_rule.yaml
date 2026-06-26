@@ -19,6 +19,10 @@ asc-tools:
       - cpudebug/src/regfwk/stub_backtrace.cpp
       - cpudebug/src/regfwk/stub_base.cpp
       - cpudebug/src/api_check/kernel_vec_gather_check.cpp
+      - cpudebug/include
+      - cpudebug/src/api_check
+      - cpudebug/src/regfwk
+      - cpudebug/src/acl_stub/kernel_fp16.cpp
   llt:
     ut_check: true
     st_check: false
@@ -49,6 +53,10 @@ cpp@asc-tools:
       - cpudebug/src/regfwk/stub_backtrace.cpp
       - cpudebug/src/regfwk/stub_base.cpp
       - utils/opbuild/op_aclnn_generator.cpp
+      - cpudebug/include
+      - cpudebug/src/api_check
+      - cpudebug/src/regfwk
+      - cpudebug/src/acl_stub/kernel_fp16.cpp
   llt:
     ut_check: true
     st_check: false

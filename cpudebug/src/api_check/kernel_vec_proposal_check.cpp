@@ -1,12 +1,12 @@
 /**
-* Copyright (c) 2025 Huawei Technologies Co., Ltd.
-* This program is free software, you can redistribute it and/or modify it under the terms and conditions of
-* CANN Open Software License Agreement Version 2.0 (the "License").
-* Please refer to the License for details. You may not use this file except in compliance with the License.
-* THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
-* INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
-* See LICENSE in the root of the software repository for the full text of the License.
-*/
+ * Copyright (c) 2025 Huawei Technologies Co., Ltd.
+ * This program is free software, you can redistribute it and/or modify it under the terms and conditions of
+ * CANN Open Software License Agreement Version 2.0 (the "License").
+ * Please refer to the License for details. You may not use this file except in compliance with the License.
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
+ * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
+ * See LICENSE in the root of the software repository for the full text of the License.
+ */
 
 /*!
  * \file kernel_vec_proposal_check.cpp
@@ -18,8 +18,8 @@
 
 namespace AscendC {
 namespace check {
-const uint32_t ONE_REPEAT_CAL_NUM = 16;   // 1 repeat = 16 region proposals
-const uint32_t PROPOSAL_SIZE = 8;         // 1 proposal = 8 element
+const uint32_t ONE_REPEAT_CAL_NUM = 16; // 1 repeat = 16 region proposals
+const uint32_t PROPOSAL_SIZE = 8;       // 1 proposal = 8 element
 
 bool TikcppVecProposalCheck::CheckAddrAlign(const std::string& src0Name)
 {
@@ -54,8 +54,12 @@ uint8_t TikcppVecProposalCheck::CountBit(uint16_t validBit) const
 bool TikcppVecProposalCheck::CheckValidBit(uint16_t validBit) const
 {
     bool validBitRes = validBit == 3 || validBit == 7 || validBit == 15;
-    ASCENDC_CHECK_AND_LOG((validBitRes), {CHECK_LOG_ERROR("Failed to check validBit value in %s, its valid value is "
-        "[3, 7, 15], current value is %u.", apiName.c_str(), validBit);});
+    ASCENDC_CHECK_AND_LOG((validBitRes), {
+        CHECK_LOG_ERROR(
+            "Failed to check validBit value in %s, its valid value is "
+            "[3, 7, 15], current value is %u.",
+            apiName.c_str(), validBit);
+    });
     return true;
 }
 
@@ -73,8 +77,8 @@ bool TikcppVecProposalCheck::NeedRepeatTimes() const
 {
     // 1. 4 region proposals has same lengths
     bool cond1 = (param_.elementLengths[0] == param_.elementLengths[1]) &&
-        (param_.elementLengths[1] == param_.elementLengths[2]) &&
-        (param_.elementLengths[2] == param_.elementLengths[3]);
+                 (param_.elementLengths[1] == param_.elementLengths[2]) &&
+                 (param_.elementLengths[2] == param_.elementLengths[3]);
     // 2. continuous stored  3. ifExhaused = false 4. validBit = 15
     return cond1 && param_.isContinuous && (!param_.isExhausted) && (param_.validBit == 15);
 }
@@ -90,7 +94,8 @@ bool TikcppVecProposalCheck::Vbs16Check() const
 
 bool TikcppVecProposalCheck::Vbs32Check() const
 {
-    ASCENDC_CHECK(CheckBufferSizeOverFlow(param_.src1Size, GlobalParams::Instance().bufferSizeMap.at(param_.src1Pos),
+    ASCENDC_CHECK(CheckBufferSizeOverFlow(
+        param_.src1Size, GlobalParams::Instance().bufferSizeMap.at(param_.src1Pos),
         "check src1 tensor buffersize failed"));
 
     if (param_.dstDtypeBytes == 0) {
@@ -98,14 +103,14 @@ bool TikcppVecProposalCheck::Vbs32Check() const
         return false;
     }
     // In 1 repeat, dst: 256B   src0: 32 * element   src1: 32 element
-    const uint32_t oneCalNumVbs32 = 32;   // 1 repeat calculates 32 groups of (score + index)
+    const uint32_t oneCalNumVbs32 = 32; // 1 repeat calculates 32 groups of (score + index)
     uint32_t elemPerRepeat = ONE_REPEAT_BYTE_SIZE / param_.dstDtypeBytes;
-    ASCENDC_CHECK(CheckTensorOverflowHigh(param_.dstDtypeBytes, param_.dstSize, elemPerRepeat * param_.repeatTimes,
-        "dstLocal"));
-    ASCENDC_CHECK(CheckTensorOverflowHigh(param_.src0DtypeBytes, param_.src0Size, oneCalNumVbs32 * param_.repeatTimes,
-        "src0Local"));
-    ASCENDC_CHECK(CheckTensorOverflowHigh(param_.src1DtypeBytes, param_.src1Size, oneCalNumVbs32 * param_.repeatTimes,
-        "src1Local"));
+    ASCENDC_CHECK(
+        CheckTensorOverflowHigh(param_.dstDtypeBytes, param_.dstSize, elemPerRepeat * param_.repeatTimes, "dstLocal"));
+    ASCENDC_CHECK(CheckTensorOverflowHigh(
+        param_.src0DtypeBytes, param_.src0Size, oneCalNumVbs32 * param_.repeatTimes, "src0Local"));
+    ASCENDC_CHECK(CheckTensorOverflowHigh(
+        param_.src1DtypeBytes, param_.src1Size, oneCalNumVbs32 * param_.repeatTimes, "src1Local"));
     return true;
 }
 
@@ -118,7 +123,7 @@ bool TikcppVecProposalCheck::Vms4Check() const
     }
 
     uint64_t sortElePerRep = CalSortElemPerRep(param_.elementLengths, count);
-    uint64_t elemPerRep = sortElePerRep * PROPOSAL_SIZE;     // 1 sort element = 1 proposal = 8 elements
+    uint64_t elemPerRep = sortElePerRep * PROPOSAL_SIZE; // 1 sort element = 1 proposal = 8 elements
     uint64_t validRepeatTimes = 1;
     if (NeedRepeatTimes()) {
         validRepeatTimes = param_.repeatTimes;
@@ -126,8 +131,8 @@ bool TikcppVecProposalCheck::Vms4Check() const
     }
     // if exhausted, do not know total size. Thus no check
     if (!param_.isExhausted) {
-        ASCENDC_CHECK(CheckTensorOverflowHigh(param_.dstDtypeBytes, param_.dstSize, elemPerRep * param_.repeatTimes,
-            "dstLocal"));
+        ASCENDC_CHECK(
+            CheckTensorOverflowHigh(param_.dstDtypeBytes, param_.dstSize, elemPerRep * param_.repeatTimes, "dstLocal"));
     }
     std::string tensorName = "src" + std::to_string(param_.srcIndex) + " in srcLocal";
     uint64_t srcEle = (validRepeatTimes - 1) * elemPerRep + param_.elementLengths[param_.srcIndex] * PROPOSAL_SIZE;
@@ -144,7 +149,7 @@ bool TikcppVecProposalCheck::Vms4v2Check() const
     }
 
     uint64_t sortElePerRep = CalSortElemPerRep(param_.elementLengths, count);
-    uint64_t bytePerRep = sortElePerRep * PROPOSAL_SIZE;                         // 1 sorted element = 8 Byte
+    uint64_t bytePerRep = sortElePerRep * PROPOSAL_SIZE; // 1 sorted element = 8 Byte
     uint64_t validRepeatTimes = 1;
     if (NeedRepeatTimes()) {
         validRepeatTimes = param_.repeatTimes;
@@ -184,11 +189,11 @@ bool TikcppVecProposalCheck::ConcatCheck() const
     // src: repeat * 16 element        dst: V220 dst = src, V200:  repeat * 16 region proposal (16 * 8 element)
     uint32_t base = param_.repeatTimes * ONE_REPEAT_CAL_NUM;
     ASCENDC_CHECK(CheckTensorOverflowHigh(param_.src0DtypeBytes, param_.src0Size, base, "srcLocal"));
-#if defined (__NPU_ARCH__) && ((__NPU_ARCH__ == 2201) || (__NPU_ARCH__ == 3002) ||                       \
-     (__NPU_ARCH__ == 3102) || (__NPU_ARCH__ == 3510) || (__NPU_ARCH__ == 5102))
+#if defined(__NPU_ARCH__) && ((__NPU_ARCH__ == 2201) || (__NPU_ARCH__ == 3002) || (__NPU_ARCH__ == 3102) || \
+                              (__NPU_ARCH__ == 3510) || (__NPU_ARCH__ == 5102))
     // tmpLocal is not used
     ASCENDC_CHECK(CheckTensorOverflowHigh(param_.dstDtypeBytes, param_.dstSize, base, "concatLocal"));
-#elif defined (__NPU_ARCH__) && ((__NPU_ARCH__ == 1001) || (__NPU_ARCH__ == 2002))
+#elif defined(__NPU_ARCH__) && ((__NPU_ARCH__ == 1001) || (__NPU_ARCH__ == 2002))
     ASCENDC_CHECK(CheckTensorOverflowHigh(param_.src1DtypeBytes, param_.src1Size, base * PROPOSAL_SIZE, "tmpLocal"));
     ASCENDC_CHECK(CheckTensorOverflowHigh(param_.dstDtypeBytes, param_.dstSize, base * PROPOSAL_SIZE, "concatLocal"));
 #endif
@@ -198,16 +203,16 @@ bool TikcppVecProposalCheck::ConcatCheck() const
 bool TikcppVecProposalCheck::ExtractCheck() const
 {
     // In extract: dst -> dstValueLocal, src1 -> dstIndexLocal, src0 -> sortedLocal
-#if defined (__NPU_ARCH__) && ((__NPU_ARCH__ == 2201) || (__NPU_ARCH__ == 3002) ||                       \
-     (__NPU_ARCH__ == 3102) || (__NPU_ARCH__ == 3510) || (__NPU_ARCH__ == 5102))
+#if defined(__NPU_ARCH__) && ((__NPU_ARCH__ == 2201) || (__NPU_ARCH__ == 3002) || (__NPU_ARCH__ == 3102) || \
+                              (__NPU_ARCH__ == 3510) || (__NPU_ARCH__ == 5102))
     // 1 repeat:  32 groups of (score + index)   sortedLocal: 256B      dst: 32 elements
-    uint64_t groupNumPerRep = 32;   // 1 sort result is 8 Bytes, thus 1 repeat = 32 groups
+    uint64_t groupNumPerRep = 32; // 1 sort result is 8 Bytes, thus 1 repeat = 32 groups
     uint64_t totalEleNum = groupNumPerRep * param_.repeatTimes;
-    ASCENDC_CHECK(CheckTensorSizeOverflow(param_.repeatTimes * ONE_REPEAT_BYTE_SIZE, param_.src0Size, "sortedLocal",
-        "Extract"));
+    ASCENDC_CHECK(
+        CheckTensorSizeOverflow(param_.repeatTimes * ONE_REPEAT_BYTE_SIZE, param_.src0Size, "sortedLocal", "Extract"));
     ASCENDC_CHECK(CheckTensorOverflowHigh(param_.src1DtypeBytes, param_.src1Size, totalEleNum, "dstIndexLocal"));
     ASCENDC_CHECK(CheckTensorOverflowHigh(param_.dstDtypeBytes, param_.dstSize, totalEleNum, "dstValueLocal"));
-#elif defined (__NPU_ARCH__) && ((__NPU_ARCH__ == 1001) || (__NPU_ARCH__ == 2002))
+#elif defined(__NPU_ARCH__) && ((__NPU_ARCH__ == 1001) || (__NPU_ARCH__ == 2002))
     // 1 repeat:  src: 16 region proposal   dst: 16 elements
     uint32_t base = param_.repeatTimes * ONE_REPEAT_CAL_NUM;
     ASCENDC_CHECK(CheckTensorOverflowHigh(param_.src0DtypeBytes, param_.src0Size, base * PROPOSAL_SIZE, "sortedLocal"));
@@ -222,22 +227,24 @@ bool TikcppVecProposalCheck::CheckAllHighLevel()
     const std::string supportPos = "VECIN / VECOUT / VECCALC";
     ASCENDC_CHECK(CheckTensorScope(param_.dstLogicPos, static_cast<uint8_t>(HardWareIndex::UB), "dst", supportPos));
     std::string src0Name = "src0";
-    if (apiName == "MrgSort" || apiName == "MrgSort4") {  // only has src1 ~ src4
+    if (apiName == "MrgSort" || apiName == "MrgSort4") { // only has src1 ~ src4
         src0Name = "src" + std::to_string(param_.srcIndex) + " in srcLocal";
     }
     ASCENDC_CHECK(CheckTensorScope(param_.src0LogicPos, static_cast<uint8_t>(HardWareIndex::UB), src0Name, supportPos));
     if (apiName == "Sort32" || apiName == "Concat" || apiName == "Extract") {
-        ASCENDC_CHECK(CheckTensorScope(param_.src1LogicPos, static_cast<uint8_t>(HardWareIndex::UB), "src1", supportPos));
+        ASCENDC_CHECK(
+            CheckTensorScope(param_.src1LogicPos, static_cast<uint8_t>(HardWareIndex::UB), "src1", supportPos));
         ASCENDC_CHECK(CheckTensorAddrAlign(param_.src1Addr, param_.src1Pos, ONE_BLK_SIZE, "src1"));
     }
 
     ASCENDC_CHECK(CheckAddrAlign(src0Name));
 
     std::string bufferSrc0 = "check " + src0Name + " tensor buffersize failed";
-    ASCENDC_CHECK(CheckBufferSizeOverFlow(param_.dstSize, GlobalParams::Instance().bufferSizeMap.at(param_.dstPos),
+    ASCENDC_CHECK(CheckBufferSizeOverFlow(
+        param_.dstSize, GlobalParams::Instance().bufferSizeMap.at(param_.dstPos),
         "check dst tensor buffersize failed"));
-    ASCENDC_CHECK(CheckBufferSizeOverFlow(param_.src0Size, GlobalParams::Instance().bufferSizeMap.at(param_.src0Pos),
-        bufferSrc0));
+    ASCENDC_CHECK(CheckBufferSizeOverFlow(
+        param_.src0Size, GlobalParams::Instance().bufferSizeMap.at(param_.src0Pos), bufferSrc0));
 
     if (apiName == "Sort32") {
         return Vbs32Check();
@@ -258,5 +265,5 @@ bool TikcppVecProposalCheck::CheckAllHighLevel()
     }
     return true;
 }
-}  // namespace check
-}  // namespace AscendC
+} // namespace check
+} // namespace AscendC

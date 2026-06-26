@@ -1,12 +1,12 @@
 /**
-* Copyright (c) 2025 Huawei Technologies Co., Ltd.
-* This program is free software, you can redistribute it and/or modify it under the terms and conditions of
-* CANN Open Software License Agreement Version 2.0 (the "License").
-* Please refer to the License for details. You may not use this file except in compliance with the License.
-* THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
-* INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
-* See LICENSE in the root of the software repository for the full text of the License.
-*/
+ * Copyright (c) 2025 Huawei Technologies Co., Ltd.
+ * This program is free software, you can redistribute it and/or modify it under the terms and conditions of
+ * CANN Open Software License Agreement Version 2.0 (the "License").
+ * Please refer to the License for details. You may not use this file except in compliance with the License.
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
+ * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
+ * See LICENSE in the root of the software repository for the full text of the License.
+ */
 #include <gtest/gtest.h>
 #include <string>
 #define private public
@@ -34,30 +34,28 @@ struct ReduceCheckParams {
 
 class TestVecReduceCheckSuite : public testing::Test, public testing::WithParamInterface<ReduceCheckParams> {
 protected:
-    void SetUp() {
-        g_coreType = AIV_TYPE;
-    }
-    void TearDown() {
+    void SetUp() { g_coreType = AIV_TYPE; }
+    void TearDown()
+    {
         AscendC::CheckSyncState();
         g_coreType = MIX_TYPE;
     }
 };
 
-INSTANTIATE_TEST_CASE_P(TEST_VEC_REDUCE_CHECK, TestVecReduceCheckSuite,
+INSTANTIATE_TEST_CASE_P(
+    TEST_VEC_REDUCE_CHECK, TestVecReduceCheckSuite,
     ::testing::Values(
-        ReduceCheckParams { TPosition::VECCALC, 8320, 16, 64, 2, 0, "ReduceSum", false, false},
-        ReduceCheckParams { TPosition::VECCALC, 8320, 16, 80, 2, 0, "ReduceSum", false, true},
-        ReduceCheckParams { TPosition::VECCALC, 288, 16, 2, 2, 2, "ReduceSum", false, true},
-        ReduceCheckParams { TPosition::VECCALC, 288, 16, 2, 2, 0, "ReduceSum", false, false, true},
-        ReduceCheckParams { TPosition::VECCALC, 512, 16, 17, 2, 0, "ReduceMax", true, true},
-        ReduceCheckParams { TPosition::VECCALC, 512, 16, 18, 2, 0, "ReduceMax", true, true},
-        ReduceCheckParams { TPosition::VECCALC, 288, 16, 17, 2, 2, "ReduceMin", true, false},
-        ReduceCheckParams { TPosition::VECCALC, 288, 16, 18, 2, 2, "ReduceMin", true, false},
-        ReduceCheckParams { TPosition::VECCALC, 288, 2, 18, 2, 2, "ReduceMin", true, false},
-        ReduceCheckParams { TPosition::VECCALC, 288, 1, 18, 2, 2, "ReduceMax", false, false},
-        ReduceCheckParams { TPosition::VECCALC, 288, 1, 18, 2, 2, "ReduceMin", true, false}
-    )
-);
+        ReduceCheckParams{TPosition::VECCALC, 8320, 16, 64, 2, 0, "ReduceSum", false, false},
+        ReduceCheckParams{TPosition::VECCALC, 8320, 16, 80, 2, 0, "ReduceSum", false, true},
+        ReduceCheckParams{TPosition::VECCALC, 288, 16, 2, 2, 2, "ReduceSum", false, true},
+        ReduceCheckParams{TPosition::VECCALC, 288, 16, 2, 2, 0, "ReduceSum", false, false, true},
+        ReduceCheckParams{TPosition::VECCALC, 512, 16, 17, 2, 0, "ReduceMax", true, true},
+        ReduceCheckParams{TPosition::VECCALC, 512, 16, 18, 2, 0, "ReduceMax", true, true},
+        ReduceCheckParams{TPosition::VECCALC, 288, 16, 17, 2, 2, "ReduceMin", true, false},
+        ReduceCheckParams{TPosition::VECCALC, 288, 16, 18, 2, 2, "ReduceMin", true, false},
+        ReduceCheckParams{TPosition::VECCALC, 288, 2, 18, 2, 2, "ReduceMin", true, false},
+        ReduceCheckParams{TPosition::VECCALC, 288, 1, 18, 2, 2, "ReduceMax", false, false},
+        ReduceCheckParams{TPosition::VECCALC, 288, 1, 18, 2, 2, "ReduceMin", true, false}));
 
 TEST_P(TestVecReduceCheckSuite, TestCaseReduce)
 {
@@ -78,7 +76,8 @@ TEST_P(TestVecReduceCheckSuite, TestCaseReduce)
     if (param.apiName == "ReduceSum") {
         if (param.level == 0) {
             if (param.isReduce220 == false) {
-                check::VecReduceApiParams chkParams { dst.addr,
+                check::VecReduceApiParams chkParams{
+                    dst.addr,
                     src.addr,
                     work.addr,
                     (uint32_t)(param.dtypeSize),
@@ -91,26 +90,21 @@ TEST_P(TestVecReduceCheckSuite, TestCaseReduce)
                     LogicPos(dst),
                     LogicPos(src),
                     LogicPos(work),
-                    (uint16_t)(srcRepStride) };
-                check::TikcppVecReduceCheck chkIns { param.apiName, chkParams };
-                bool flag = chkIns.CheckAllLowLevel({ mask });
+                    (uint16_t)(srcRepStride)};
+                check::TikcppVecReduceCheck chkIns{param.apiName, chkParams};
+                bool flag = chkIns.CheckAllLowLevel({mask});
                 EXPECT_EQ(flag, param.expect);
             } else {
-                check::VecReduceApiParams chkParams { dst.addr,
-                    src.addr,
-                    (uint32_t)(param.dtypeSize),
-                    4,
-                    1,
-                    dst.length,
-                    src.length,
-                    LogicPos(dst),
-                    LogicPos(src) };
-                check::TikcppVecReduceCheck chkIns { param.apiName, chkParams };
+                check::VecReduceApiParams chkParams{
+                    dst.addr,      src.addr,     (uint32_t)(param.dtypeSize), 4, 1, dst.length, src.length,
+                    LogicPos(dst), LogicPos(src)};
+                check::TikcppVecReduceCheck chkIns{param.apiName, chkParams};
                 bool flag = chkIns.CheckAllHighLevelMode2();
                 EXPECT_EQ(flag, param.expect);
             }
         } else {
-            check::VecReduceApiParams chkParams { dst.addr,
+            check::VecReduceApiParams chkParams{
+                dst.addr,
                 src.addr,
                 work.addr,
                 (uint32_t)(param.dtypeSize),
@@ -123,14 +117,15 @@ TEST_P(TestVecReduceCheckSuite, TestCaseReduce)
                 work.length,
                 LogicPos(dst),
                 LogicPos(src),
-                LogicPos(work) };
-            check::TikcppVecReduceCheck chkIns { param.apiName, chkParams };
+                LogicPos(work)};
+            check::TikcppVecReduceCheck chkIns{param.apiName, chkParams};
             bool flag = chkIns.CheckAllHighLevel();
             EXPECT_EQ(flag, param.expect);
         }
     } else {
         if (param.level = 0) {
-            check::VecReduceApiParams chkParams { dst.addr,
+            check::VecReduceApiParams chkParams{
+                dst.addr,
                 src.addr,
                 work.addr,
                 (uint32_t)(param.dtypeSize),
@@ -144,12 +139,13 @@ TEST_P(TestVecReduceCheckSuite, TestCaseReduce)
                 LogicPos(dst),
                 LogicPos(src),
                 LogicPos(work),
-                (uint16_t)(srcRepStride) };
-            check::TikcppVecReduceCheck chkIns { param.apiName, chkParams };
-            bool flag = chkIns.CheckAllLowLevel({ mask });
+                (uint16_t)(srcRepStride)};
+            check::TikcppVecReduceCheck chkIns{param.apiName, chkParams};
+            bool flag = chkIns.CheckAllLowLevel({mask});
             EXPECT_EQ(flag, param.expect);
         } else {
-            check::VecReduceApiParams chkParams { dst.addr,
+            check::VecReduceApiParams chkParams{
+                dst.addr,
                 src.addr,
                 work.addr,
                 (uint32_t)(param.dtypeSize),
@@ -163,8 +159,8 @@ TEST_P(TestVecReduceCheckSuite, TestCaseReduce)
                 work.length,
                 LogicPos(dst),
                 LogicPos(src),
-                LogicPos(work) };
-            check::TikcppVecReduceCheck chkIns { param.apiName, chkParams };
+                LogicPos(work)};
+            check::TikcppVecReduceCheck chkIns{param.apiName, chkParams};
             bool flag = chkIns.CheckAllHighLevel();
             EXPECT_EQ(flag, param.expect);
         }

@@ -1,12 +1,12 @@
 /**
-* Copyright (c) 2025 Huawei Technologies Co., Ltd.
-* This program is free software, you can redistribute it and/or modify it under the terms and conditions of
-* CANN Open Software License Agreement Version 2.0 (the "License").
-* Please refer to the License for details. You may not use this file except in compliance with the License.
-* THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
-* INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
-* See LICENSE in the root of the software repository for the full text of the License.
-*/
+ * Copyright (c) 2025 Huawei Technologies Co., Ltd.
+ * This program is free software, you can redistribute it and/or modify it under the terms and conditions of
+ * CANN Open Software License Agreement Version 2.0 (the "License").
+ * Please refer to the License for details. You may not use this file except in compliance with the License.
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
+ * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
+ * See LICENSE in the root of the software repository for the full text of the License.
+ */
 
 /*!
  * \file kernel_vec_sort_check.cpp
@@ -18,15 +18,15 @@
 
 namespace AscendC {
 namespace check {
-const uint32_t ONE_REPEAT_CAL_NUM = 16;   // 1 repeat = 16 region proposals
-const uint32_t PROPOSAL_SIZE = 8;         // 1 proposal = 8 element
+const uint32_t ONE_REPEAT_CAL_NUM = 16; // 1 repeat = 16 region proposals
+const uint32_t PROPOSAL_SIZE = 8;       // 1 proposal = 8 element
 constexpr uint32_t REGION_PROPOSAL_DATA_SIZE_V200 = 8;
 constexpr uint32_t REGION_PROPOSAL_DATA_SIZE_HALF_V220 = 4;
 constexpr uint32_t REGION_PROPOSAL_DATA_SIZE_FLOAT_V220 = 2;
 
 bool TikcppVecSortCheck::Sort32Check()
 {
-    ASCENDC_CHECK_AND_LOG(param_.dstDtypeBytes != 0, {CHECK_LOG_ERROR("dstDtypeBytes should not be 0.");});
+    ASCENDC_CHECK_AND_LOG(param_.dstDtypeBytes != 0, { CHECK_LOG_ERROR("dstDtypeBytes should not be 0."); });
     // dst: 256 Bytes per repeat
     const uint32_t dstTotalElements = ONE_REPEAT_BYTE_SIZE / param_.dstDtypeBytes * param_.repeatTimes;
     ASCENDC_CHECK(CheckTensorOverflowHigh(param_.dstDtypeBytes, param_.dstSize, dstTotalElements, "dstLocal"));
@@ -37,7 +37,7 @@ bool TikcppVecSortCheck::Sort32Check()
 
     if (param_.isFullSort) {
         uint64_t coefficient = (param_.tmpDtypeBytes == sizeof(float)) ? REGION_PROPOSAL_DATA_SIZE_FLOAT_V220 :
-            REGION_PROPOSAL_DATA_SIZE_HALF_V220;
+                                                                         REGION_PROPOSAL_DATA_SIZE_HALF_V220;
         uint64_t tmpElements = totalElements * coefficient;
         ASCENDC_CHECK(CheckTensorOverflowHigh(param_.tmpDtypeBytes, param_.tmpSize, tmpElements, "tmpLocal"));
     }
@@ -72,14 +72,14 @@ bool TikcppVecSortCheck::CheckAllHighLevel()
     ASCENDC_CHECK(CheckTensorAddrAlign(param_.indexAddr, param_.indexPos, ONE_BLK_SIZE, "indexLocal"));
     ASCENDC_CHECK(CheckTensorAddrAlign(param_.tmpAddr, param_.tmpPos, ONE_BLK_SIZE, "tmpLocal"));
 
-#if defined (__NPU_ARCH__) && ((__NPU_ARCH__ == 2201) || (__NPU_ARCH__ == 3002) ||                       \
-     (__NPU_ARCH__ == 3102) || (__NPU_ARCH__ == 3510) || (__NPU_ARCH__ == 5102))
+#if defined(__NPU_ARCH__) && ((__NPU_ARCH__ == 2201) || (__NPU_ARCH__ == 3002) || (__NPU_ARCH__ == 3102) || \
+                              (__NPU_ARCH__ == 3510) || (__NPU_ARCH__ == 5102))
     ASCENDC_CHECK(Sort32Check());
-#elif defined (__NPU_ARCH__) && ((__NPU_ARCH__ == 1001) || (__NPU_ARCH__ == 2002))
+#elif defined(__NPU_ARCH__) && ((__NPU_ARCH__ == 1001) || (__NPU_ARCH__ == 2002))
     ASCENDC_CHECK(RpSort16Check());
 #endif
     return true;
 }
 
-}
-}
+} // namespace check
+} // namespace AscendC

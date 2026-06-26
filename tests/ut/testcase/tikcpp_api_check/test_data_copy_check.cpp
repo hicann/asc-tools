@@ -1,12 +1,12 @@
 /**
-* Copyright (c) 2025 Huawei Technologies Co., Ltd.
-* This program is free software, you can redistribute it and/or modify it under the terms and conditions of
-* CANN Open Software License Agreement Version 2.0 (the "License").
-* Please refer to the License for details. You may not use this file except in compliance with the License.
-* THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
-* INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
-* See LICENSE in the root of the software repository for the full text of the License.
-*/
+ * Copyright (c) 2025 Huawei Technologies Co., Ltd.
+ * This program is free software, you can redistribute it and/or modify it under the terms and conditions of
+ * CANN Open Software License Agreement Version 2.0 (the "License").
+ * Please refer to the License for details. You may not use this file except in compliance with the License.
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
+ * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
+ * See LICENSE in the root of the software repository for the full text of the License.
+ */
 #include <gtest/gtest.h>
 #define private public
 #define protected public
@@ -30,12 +30,9 @@ struct TestDataCopySliceApiCheckParams {
 };
 
 class TestDataCopySliceApiCheckSuite : public testing::Test,
-    public testing::WithParamInterface<TestDataCopySliceApiCheckParams> {
+                                       public testing::WithParamInterface<TestDataCopySliceApiCheckParams> {
 protected:
-    void SetUp()
-    {
-        g_coreType = AIV_TYPE;
-    }
+    void SetUp() { g_coreType = AIV_TYPE; }
     void TearDown()
     {
         AscendC::CheckSyncState();
@@ -43,111 +40,126 @@ protected:
     }
 };
 
-INSTANTIATE_TEST_CASE_P(TEST_DATA_COPY_SLICE_API_CHECK, TestDataCopySliceApiCheckSuite,
-    ::testing::Values(TestDataCopySliceApiCheckParams{ 264,
-    96,
-    TPosition::VECCALC,
-    4,
-    { { 16, 71, 8, 3, 88 }, { 0, 2, 1, 1, 3 } },
-    { { 0, 47, 0, 3, 48 }, { 0, 1, 0, 1, 2 } },
-    true,
-    true },
-    TestDataCopySliceApiCheckParams{ 264,
-    96,
-    TPosition::VECCALC,
-    4,
-    { { 16, 71, 7, 3, 88 }, { 0, 2, 1, 1, 3 } },
-    { { 0, 47, 0, 3, 48 }, { 0, 1, 0, 1, 2 } },
-    false,
-    false },
-    TestDataCopySliceApiCheckParams{ 264,
-    96,
-    TPosition::VECCALC,
-    4,
-    { { 16, 71, 8, 3, 88 }, { 0, 2, 1, 1, 3 } },
-    { { 0, 47, 1, 3, 48 }, { 0, 1, 0, 1, 2 } },
-    true,
-    false },
-    TestDataCopySliceApiCheckParams{ 264,
-    96,
-    TPosition::VECCALC,
-    4,
-    { { 16, 72, 8, 3, 88 }, { 0, 2, 1, 1, 3 } },
-    { { 0, 47, 0, 3, 48 }, { 0, 1, 0, 1, 2 } },
-    true,
-    false },
-    TestDataCopySliceApiCheckParams{ 264,
-    96,
-    TPosition::VECCALC,
-    4,
-    { { 16, 71, 8, 3, 88 }, { 0, 2, 1, 1, 3 } },
-    { { 0, 49, 0, 3, 48 }, { 0, 1, 0, 1, 2 } },
-    true,
-    false },
-    TestDataCopySliceApiCheckParams{ 264,
-    96,
-    TPosition::VECCALC,
-    4,
-    { { 16, 88, 8, 3, 88 }, { 0, 2, 1, 1, 3 } },
-    { { 0, 47, 0, 3, 48 }, { 0, 1, 0, 1, 2 } },
-    true,
-    false },
-    TestDataCopySliceApiCheckParams{ 264,
-    96,
-    TPosition::VECCALC,
-    4,
-    { { 16, 71, 8, 3, 88 }, { 0, 2, 1, 1, 3 } },
-    { { 54, 47, 0, 3, 48 }, { 0, 1, 0, 1, 2 } },
-    true,
-    false },
-    TestDataCopySliceApiCheckParams{ 264,
-    96,
-    TPosition::VECCALC,
-    4,
-    { { 71, 71, 8, 3, 88 }, { 0, 2, 1, 1, 3 } },
-    { { 0, 47, 0, 3, 48 }, { 0, 1, 0, 1, 2 } },
-    true,
-    false },
-    TestDataCopySliceApiCheckParams{ 264,
-    96,
-    TPosition::A1,
-    4,
-    { { 16, 71, 8, 3, 88 }, { 0, 2, 1, 1, 3 } },
-    { { 0, 47, 0, 3, 48 }, { 0, 1, 0, 1, 2 } },
-    true,
-    false },
-    TestDataCopySliceApiCheckParams{ 264,
-    96,
-    TPosition::A1,
-    4,
-    { { 16, 71, 8, 3, 88 }, { 0, 2, 1, 1, 3 } },
-    { { 0, 47, 0, 3, 48 }, { 0, 1, 0, 1, 2 } },
-    false,
-    false },
-    TestDataCopySliceApiCheckParams{ 264,
-    96,
-    TPosition::VECCALC,
-    4,
-    { { 16, 71, 8, 3, 88 }, { 0, 2, 1, 1, 3 } },
-    { { 0, 47, 0, 1, 48 }, { 0, 1, 0, 1, 2 } },
-    true,
-    false },
-    TestDataCopySliceApiCheckParams{ 264,
-    96,
-    TPosition::VECCALC,
-    4,
-    { { 16, 71, 8, 3, 88 }, { 0, 2, 1, 2, 3 } },
-    { { 0, 47, 0, 3, 48 }, { 0, 1, 0, 2, 2 } },
-    true,
-    false },
-    TestDataCopySliceApiCheckParams{ 264,
-    96,
-    TPosition::VECCALC,
-    4,
-    { { 16, 71, 8, 3, 88 }, { 0, 2, 1, 1, 3 } },
-    { { 47, 47, 0, 3, 48 }, { 0, 1, 0, 1, 2 } },
-    true,
-    false }));
+INSTANTIATE_TEST_CASE_P(
+    TEST_DATA_COPY_SLICE_API_CHECK, TestDataCopySliceApiCheckSuite,
+    ::testing::Values(
+        TestDataCopySliceApiCheckParams{
+            264,
+            96,
+            TPosition::VECCALC,
+            4,
+            {{16, 71, 8, 3, 88}, {0, 2, 1, 1, 3}},
+            {{0, 47, 0, 3, 48}, {0, 1, 0, 1, 2}},
+            true,
+            true},
+        TestDataCopySliceApiCheckParams{
+            264,
+            96,
+            TPosition::VECCALC,
+            4,
+            {{16, 71, 7, 3, 88}, {0, 2, 1, 1, 3}},
+            {{0, 47, 0, 3, 48}, {0, 1, 0, 1, 2}},
+            false,
+            false},
+        TestDataCopySliceApiCheckParams{
+            264,
+            96,
+            TPosition::VECCALC,
+            4,
+            {{16, 71, 8, 3, 88}, {0, 2, 1, 1, 3}},
+            {{0, 47, 1, 3, 48}, {0, 1, 0, 1, 2}},
+            true,
+            false},
+        TestDataCopySliceApiCheckParams{
+            264,
+            96,
+            TPosition::VECCALC,
+            4,
+            {{16, 72, 8, 3, 88}, {0, 2, 1, 1, 3}},
+            {{0, 47, 0, 3, 48}, {0, 1, 0, 1, 2}},
+            true,
+            false},
+        TestDataCopySliceApiCheckParams{
+            264,
+            96,
+            TPosition::VECCALC,
+            4,
+            {{16, 71, 8, 3, 88}, {0, 2, 1, 1, 3}},
+            {{0, 49, 0, 3, 48}, {0, 1, 0, 1, 2}},
+            true,
+            false},
+        TestDataCopySliceApiCheckParams{
+            264,
+            96,
+            TPosition::VECCALC,
+            4,
+            {{16, 88, 8, 3, 88}, {0, 2, 1, 1, 3}},
+            {{0, 47, 0, 3, 48}, {0, 1, 0, 1, 2}},
+            true,
+            false},
+        TestDataCopySliceApiCheckParams{
+            264,
+            96,
+            TPosition::VECCALC,
+            4,
+            {{16, 71, 8, 3, 88}, {0, 2, 1, 1, 3}},
+            {{54, 47, 0, 3, 48}, {0, 1, 0, 1, 2}},
+            true,
+            false},
+        TestDataCopySliceApiCheckParams{
+            264,
+            96,
+            TPosition::VECCALC,
+            4,
+            {{71, 71, 8, 3, 88}, {0, 2, 1, 1, 3}},
+            {{0, 47, 0, 3, 48}, {0, 1, 0, 1, 2}},
+            true,
+            false},
+        TestDataCopySliceApiCheckParams{
+            264,
+            96,
+            TPosition::A1,
+            4,
+            {{16, 71, 8, 3, 88}, {0, 2, 1, 1, 3}},
+            {{0, 47, 0, 3, 48}, {0, 1, 0, 1, 2}},
+            true,
+            false},
+        TestDataCopySliceApiCheckParams{
+            264,
+            96,
+            TPosition::A1,
+            4,
+            {{16, 71, 8, 3, 88}, {0, 2, 1, 1, 3}},
+            {{0, 47, 0, 3, 48}, {0, 1, 0, 1, 2}},
+            false,
+            false},
+        TestDataCopySliceApiCheckParams{
+            264,
+            96,
+            TPosition::VECCALC,
+            4,
+            {{16, 71, 8, 3, 88}, {0, 2, 1, 1, 3}},
+            {{0, 47, 0, 1, 48}, {0, 1, 0, 1, 2}},
+            true,
+            false},
+        TestDataCopySliceApiCheckParams{
+            264,
+            96,
+            TPosition::VECCALC,
+            4,
+            {{16, 71, 8, 3, 88}, {0, 2, 1, 2, 3}},
+            {{0, 47, 0, 3, 48}, {0, 1, 0, 2, 2}},
+            true,
+            false},
+        TestDataCopySliceApiCheckParams{
+            264,
+            96,
+            TPosition::VECCALC,
+            4,
+            {{16, 71, 8, 3, 88}, {0, 2, 1, 1, 3}},
+            {{47, 47, 0, 3, 48}, {0, 1, 0, 1, 2}},
+            true,
+            false}));
 
 TEST_P(TestDataCopySliceApiCheckSuite, DataCopySliceApiHighLevel)
 {
@@ -164,7 +176,8 @@ TEST_P(TestDataCopySliceApiCheckSuite, DataCopySliceApiHighLevel)
 
     auto input = MakeTensor(param.pos, param.dstdataSize * sizeof(uint32_t));
 
-    check::DataCopySliceApiParams chkParams{ input.addr,
+    check::DataCopySliceApiParams chkParams{
+        input.addr,
         input.addr,
         static_cast<uint32_t>(param.typeSize),
         static_cast<uint32_t>(param.typeSize),
@@ -175,8 +188,8 @@ TEST_P(TestDataCopySliceApiCheckSuite, DataCopySliceApiHighLevel)
         srcShape,
         param.dstSliceInfo,
         param.srcSliceInfo,
-        param.isGm2Ub };
-    check::TikcppDataCopySliceCheck chkIns{ "mov_align", chkParams };
+        param.isGm2Ub};
+    check::TikcppDataCopySliceCheck chkIns{"mov_align", chkParams};
     bool flag = CheckFuncDataCopySliceImpl(chkParams, "mov_align");
 
     EXPECT_EQ(flag, param.expect);
@@ -197,13 +210,9 @@ struct TestDataCopyApiCheckParams {
     bool expect;
 };
 
-class TestDataCopyApiCheckSuite : public testing::Test,
-    public testing::WithParamInterface<TestDataCopyApiCheckParams> {
+class TestDataCopyApiCheckSuite : public testing::Test, public testing::WithParamInterface<TestDataCopyApiCheckParams> {
 protected:
-    void SetUp()
-    {
-        g_coreType = AIV_TYPE;
-    }
+    void SetUp() { g_coreType = AIV_TYPE; }
     void TearDown()
     {
         g_coreType = MIX_TYPE;
@@ -211,22 +220,20 @@ protected:
     }
 };
 
-INSTANTIATE_TEST_CASE_P(TEST_DATA_COPY_API_CHECK, TestDataCopyApiCheckSuite,
-    ::testing::Values(
-    TestDataCopyApiCheckParams{ 0x12345, 0x6789, 4, 4,
-    static_cast<uint8_t>(Hardware::GM), static_cast<uint8_t>(Hardware::UB),
-    1, 1, 8, 8, false }
-    ));
+INSTANTIATE_TEST_CASE_P(
+    TEST_DATA_COPY_API_CHECK, TestDataCopyApiCheckSuite,
+    ::testing::Values(TestDataCopyApiCheckParams{
+        0x12345, 0x6789, 4, 4, static_cast<uint8_t>(Hardware::GM), static_cast<uint8_t>(Hardware::UB), 1, 1, 8, 8,
+        false}));
 
 TEST_P(TestDataCopyApiCheckSuite, DataCopyApiHighLevel)
 {
     auto param = GetParam();
 
-    check::DataCopyApiParams chkParams{
-        param.dstAddr, param.srcAddr, param.dstDtypeBytes, param.srcDtypeBytes, param.dstPos, 
-        param.srcPos, param.blockCount, param.blockLen, param.srcStride, param.dstStride
-    };
-    check::TikcppDataCopyCheck chkIns{ "DataCopy", chkParams };
+    check::DataCopyApiParams chkParams{param.dstAddr,   param.srcAddr,  param.dstDtypeBytes, param.srcDtypeBytes,
+                                       param.dstPos,    param.srcPos,   param.blockCount,    param.blockLen,
+                                       param.srcStride, param.dstStride};
+    check::TikcppDataCopyCheck chkIns{"DataCopy", chkParams};
     bool flag = CheckFuncDataCopyImpl(chkParams, "DataCopy");
 
     EXPECT_EQ(flag, param.expect);

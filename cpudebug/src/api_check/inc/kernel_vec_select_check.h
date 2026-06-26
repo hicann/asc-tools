@@ -1,12 +1,12 @@
 /**
-* Copyright (c) 2025 Huawei Technologies Co., Ltd.
-* This program is free software, you can redistribute it and/or modify it under the terms and conditions of
-* CANN Open Software License Agreement Version 2.0 (the "License").
-* Please refer to the License for details. You may not use this file except in compliance with the License.
-* THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
-* INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
-* See LICENSE in the root of the software repository for the full text of the License.
-*/
+ * Copyright (c) 2025 Huawei Technologies Co., Ltd.
+ * This program is free software, you can redistribute it and/or modify it under the terms and conditions of
+ * CANN Open Software License Agreement Version 2.0 (the "License").
+ * Please refer to the License for details. You may not use this file except in compliance with the License.
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
+ * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
+ * See LICENSE in the root of the software repository for the full text of the License.
+ */
 
 /*!
  * \file kernel_vec_select_check.h
@@ -21,16 +21,17 @@ namespace AscendC {
 namespace check {
 class TikcppSelectBinaryCheck : public TikcppBaseCheck {
 public:
-    TikcppSelectBinaryCheck(const std::string& name, VecSelectApiParams& param)
-        : TikcppBaseCheck(name), param_(param) {}
+    TikcppSelectBinaryCheck(const std::string& name, VecSelectApiParams& param) : TikcppBaseCheck(name), param_(param)
+    {}
     ~TikcppSelectBinaryCheck() override = default;
     bool CheckAllLowLevel(std::vector<uint64_t> maskArray);
     bool CheckAllHighLevel();
     bool CheckAddrAlign();
     bool CommonCheck();
+
 public:
     VecSelectApiParams& param_;
 };
-}
-}
+} // namespace check
+} // namespace AscendC
 #endif

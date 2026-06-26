@@ -1,12 +1,12 @@
 /**
-* Copyright (c) 2025 Huawei Technologies Co., Ltd.
-* This program is free software, you can redistribute it and/or modify it under the terms and conditions of
-* CANN Open Software License Agreement Version 2.0 (the "License").
-* Please refer to the License for details. You may not use this file except in compliance with the License.
-* THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
-* INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
-* See LICENSE in the root of the software repository for the full text of the License.
-*/
+ * Copyright (c) 2025 Huawei Technologies Co., Ltd.
+ * This program is free software, you can redistribute it and/or modify it under the terms and conditions of
+ * CANN Open Software License Agreement Version 2.0 (the "License").
+ * Please refer to the License for details. You may not use this file except in compliance with the License.
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
+ * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
+ * See LICENSE in the root of the software repository for the full text of the License.
+ */
 
 /*!
  * \file kernel_vec_binary_check.cpp
@@ -19,8 +19,8 @@
 namespace AscendC {
 namespace check {
 
-bool TikcppVecBinaryCheck::CheckCmpTensorOverflowHigh(const uint32_t dtypeSize, const uint64_t bufferSize,
-    const uint32_t calCount, const std::string& tensorName)
+bool TikcppVecBinaryCheck::CheckCmpTensorOverflowHigh(
+    const uint32_t dtypeSize, const uint64_t bufferSize, const uint32_t calCount, const std::string& tensorName)
 {
     uint64_t needSize = static_cast<uint64_t>(dtypeSize * calCount / 8); // 1 uint8 equal to 8 bits
     ASCENDC_CHECK(CheckTensorSizeOverflow(needSize, bufferSize, tensorName, apiName));
@@ -33,13 +33,13 @@ static uint64_t CalculateNeededCmpTensorSize(const uint64_t repeatTimes, const u
         return 0;
     }
     ASCENDC_CHECK(srcDtypeBytes != 0);
-    uint64_t maxOffset = repeatTimes *
-        static_cast<uint64_t>(PlatFormParams::ONE_REP_BYTE_SIZE) / srcDtypeBytes / 8;  // 1 uint8 equal to 8 bits
+    uint64_t maxOffset = repeatTimes * static_cast<uint64_t>(PlatFormParams::ONE_REP_BYTE_SIZE) / srcDtypeBytes /
+                         8; // 1 uint8 equal to 8 bits
     return maxOffset;
 }
 
-bool TikcppVecBinaryCheck::CheckCmpTensorOverflowLowNorm(const TensorOverflowParams& params,
-    const std::string& tensorName)
+bool TikcppVecBinaryCheck::CheckCmpTensorOverflowLowNorm(
+    const TensorOverflowParams& params, const std::string& tensorName)
 {
     uint64_t maxOffset = CalculateNeededCmpTensorSize(params.repeatTimes, param_.src0DtypeBytes);
     ASCENDC_CHECK(CheckTensorSizeOverflow(maxOffset, params.bufferSize, tensorName, apiName, ModeType::NORM_MODE));
@@ -53,11 +53,14 @@ bool TikcppVecBinaryCheck::CommonCheck()
     ASCENDC_CHECK(CheckTensorScope(param_.src0LogicPos, static_cast<uint8_t>(HardWareIndex::UB), "src0", supportPos));
     ASCENDC_CHECK(CheckTensorScope(param_.src1LogicPos, static_cast<uint8_t>(HardWareIndex::UB), "src1", supportPos));
 
-    ASCENDC_CHECK(CheckBufferSizeOverFlow(param_.dstSize, GlobalParams::Instance().bufferSizeMap.at(param_.dstPos),
+    ASCENDC_CHECK(CheckBufferSizeOverFlow(
+        param_.dstSize, GlobalParams::Instance().bufferSizeMap.at(param_.dstPos),
         "check dst tensor buffersize failed"));
-    ASCENDC_CHECK(CheckBufferSizeOverFlow(param_.src0Size, GlobalParams::Instance().bufferSizeMap.at(param_.src0Pos),
+    ASCENDC_CHECK(CheckBufferSizeOverFlow(
+        param_.src0Size, GlobalParams::Instance().bufferSizeMap.at(param_.src0Pos),
         "check src0 tensor buffersize failed"));
-    ASCENDC_CHECK(CheckBufferSizeOverFlow(param_.src1Size, GlobalParams::Instance().bufferSizeMap.at(param_.src1Pos),
+    ASCENDC_CHECK(CheckBufferSizeOverFlow(
+        param_.src1Size, GlobalParams::Instance().bufferSizeMap.at(param_.src1Pos),
         "check src1 tensor buffersize failed"));
     ASCENDC_CHECK(CheckAddrAlign());
     return true;
@@ -69,19 +72,34 @@ bool TikcppVecBinaryCheck::CheckAllLowLevel(std::vector<uint64_t> maskArray)
     ASCENDC_CHECK(UpdateMaskArrayAndCheck(maskArray, maxByteLen));
     ASCENDC_CHECK(CommonCheck());
 
-    TensorOverflowParams params = {param_.dstSize, param_.dstDtypeBytes, static_cast<uint64_t>(param_.repeatTimes),
-        static_cast<uint64_t>(param_.dstBlockStride), static_cast<uint64_t>(param_.dstRepeatStride), false};
+    TensorOverflowParams params = {
+        param_.dstSize,
+        param_.dstDtypeBytes,
+        static_cast<uint64_t>(param_.repeatTimes),
+        static_cast<uint64_t>(param_.dstBlockStride),
+        static_cast<uint64_t>(param_.dstRepeatStride),
+        false};
     // check dst src0 and src1 tensor overflow
     if (apiName == "Compare" || apiName == "Compare operator") {
         ASCENDC_CHECK(CheckCmpTensorOverflowLowNorm(params, "dstLocal"));
     } else {
         ASCENDC_CHECK(CheckTensorOverflowLow(maskArray, params, "dstLocal"));
     }
-    params = {param_.src0Size, param_.src0DtypeBytes, static_cast<uint64_t>(param_.repeatTimes),
-        static_cast<uint64_t>(param_.src0BlockStride), static_cast<uint64_t>(param_.src0RepeatStride), false};
+    params = {
+        param_.src0Size,
+        param_.src0DtypeBytes,
+        static_cast<uint64_t>(param_.repeatTimes),
+        static_cast<uint64_t>(param_.src0BlockStride),
+        static_cast<uint64_t>(param_.src0RepeatStride),
+        false};
     ASCENDC_CHECK(CheckTensorOverflowLow(maskArray, params, "src0Local"));
-    params = {param_.src1Size, param_.src1DtypeBytes, static_cast<uint64_t>(param_.repeatTimes),
-        static_cast<uint64_t>(param_.src1BlockStride), static_cast<uint64_t>(param_.src1RepeatStride), false};
+    params = {
+        param_.src1Size,
+        param_.src1DtypeBytes,
+        static_cast<uint64_t>(param_.repeatTimes),
+        static_cast<uint64_t>(param_.src1BlockStride),
+        static_cast<uint64_t>(param_.src1RepeatStride),
+        false};
     ASCENDC_CHECK(CheckTensorOverflowLow(maskArray, params, "src1Local"));
 
     return true;

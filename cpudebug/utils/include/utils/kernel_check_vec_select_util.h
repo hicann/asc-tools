@@ -1,12 +1,12 @@
 /**
-* Copyright (c) 2025 Huawei Technologies Co., Ltd.
-* This program is free software, you can redistribute it and/or modify it under the terms and conditions of
-* CANN Open Software License Agreement Version 2.0 (the "License").
-* Please refer to the License for details. You may not use this file except in compliance with the License.
-* THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
-* INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
-* See LICENSE in the root of the software repository for the full text of the License.
-*/
+ * Copyright (c) 2025 Huawei Technologies Co., Ltd.
+ * This program is free software, you can redistribute it and/or modify it under the terms and conditions of
+ * CANN Open Software License Agreement Version 2.0 (the "License").
+ * Please refer to the License for details. You may not use this file except in compliance with the License.
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
+ * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
+ * See LICENSE in the root of the software repository for the full text of the License.
+ */
 
 /*!
  * \file kernel_check_vec_select_util.h
@@ -23,13 +23,13 @@ namespace check {
 
 struct VecSelectApiParams {
     VecSelectApiParams() {}
-    VecSelectApiParams(uint64_t dstAddrIn, uint64_t selMaskAddrIn, uint64_t src0AddrIn, uint64_t src1AddrIn,
-        uint8_t repeatIn, uint16_t dstBlockStrideIn, uint16_t src0BlockStrideIn,
-        uint16_t src1BlockStrideIn, uint16_t dstRepeatStrideIn, uint16_t src0RepeatStrideIn,
-        uint16_t src1RepeatStrideIn, uint32_t dstDtypeBytesIn, uint32_t selMaskDtypeBytesIn, uint32_t src0DtypeBytesIn,
-        uint32_t src1DtypeBytesIn, uint64_t dstSizeIn, uint64_t selMaskSizeIn, uint64_t src0SizeIn,
-        uint64_t src1SizeIn, uint8_t dstPosIn,
-        uint8_t selMaskIn, uint8_t src0PosIn, uint8_t src1PosIn)
+    VecSelectApiParams(
+        uint64_t dstAddrIn, uint64_t selMaskAddrIn, uint64_t src0AddrIn, uint64_t src1AddrIn, uint8_t repeatIn,
+        uint16_t dstBlockStrideIn, uint16_t src0BlockStrideIn, uint16_t src1BlockStrideIn, uint16_t dstRepeatStrideIn,
+        uint16_t src0RepeatStrideIn, uint16_t src1RepeatStrideIn, uint32_t dstDtypeBytesIn,
+        uint32_t selMaskDtypeBytesIn, uint32_t src0DtypeBytesIn, uint32_t src1DtypeBytesIn, uint64_t dstSizeIn,
+        uint64_t selMaskSizeIn, uint64_t src0SizeIn, uint64_t src1SizeIn, uint8_t dstPosIn, uint8_t selMaskIn,
+        uint8_t src0PosIn, uint8_t src1PosIn)
     {
         dstAddr = dstAddrIn;
         selMaskAddr = selMaskAddrIn;
@@ -60,10 +60,11 @@ struct VecSelectApiParams {
         src1Pos = static_cast<uint8_t>(GetPhyType(static_cast<TPosition>(src1PosIn)));
     }
 
-    VecSelectApiParams(uint64_t dstAddrIn, uint64_t selMaskAddrIn, uint64_t src0AddrIn, uint64_t src1AddrIn,
-        uint32_t dstDtypeBytesIn, uint32_t selMaskDtypeBytesIn, uint32_t src0DtypeBytesIn, uint32_t src1DtypeBytesIn,
-        uint64_t dstSizeIn, uint64_t selMaskSizeIn, uint64_t src0SizeIn, uint64_t src1SizeIn, uint8_t dstPosIn,
-        uint8_t selMaskIn, uint8_t src0PosIn, uint8_t src1PosIn, uint32_t count)
+    VecSelectApiParams(
+        uint64_t dstAddrIn, uint64_t selMaskAddrIn, uint64_t src0AddrIn, uint64_t src1AddrIn, uint32_t dstDtypeBytesIn,
+        uint32_t selMaskDtypeBytesIn, uint32_t src0DtypeBytesIn, uint32_t src1DtypeBytesIn, uint64_t dstSizeIn,
+        uint64_t selMaskSizeIn, uint64_t src0SizeIn, uint64_t src1SizeIn, uint8_t dstPosIn, uint8_t selMaskIn,
+        uint8_t src0PosIn, uint8_t src1PosIn, uint32_t count)
     {
         dstAddr = dstAddrIn;
         selMaskAddr = selMaskAddrIn;
@@ -120,10 +121,11 @@ struct VecSelectApiParams {
 
 struct VecGatherApiParams {
     VecGatherApiParams() {}
-    VecGatherApiParams(uint64_t dstAddrIn, uint64_t srcAddrIn, uint64_t offsetAddrIn, uint8_t repeatIn,
-        uint16_t dstBlockStrideIn, uint16_t dstRepeatStrideIn, uint32_t dstDtypeBytesIn, uint32_t srcDtypeBytesIn,
-        uint32_t offsetDtypeBytesIn, uint64_t dstSizeIn, uint64_t srcSizeIn, uint64_t offsetSizeIn, uint8_t dstPosIn,
-        uint8_t srcPosIn, uint8_t offsetPosIn)
+    VecGatherApiParams(
+        uint64_t dstAddrIn, uint64_t srcAddrIn, uint64_t offsetAddrIn, uint8_t repeatIn, uint16_t dstBlockStrideIn,
+        uint16_t dstRepeatStrideIn, uint32_t dstDtypeBytesIn, uint32_t srcDtypeBytesIn, uint32_t offsetDtypeBytesIn,
+        uint64_t dstSizeIn, uint64_t srcSizeIn, uint64_t offsetSizeIn, uint8_t dstPosIn, uint8_t srcPosIn,
+        uint8_t offsetPosIn)
     {
         dstAddr = dstAddrIn;
         srcAddr = srcAddrIn;
@@ -145,10 +147,11 @@ struct VecGatherApiParams {
         offsetPos = static_cast<uint8_t>(GetPhyType(static_cast<TPosition>(offsetPosIn)));
     }
 
-    VecGatherApiParams(uint64_t dstAddrIn, uint64_t srcAddrIn, uint64_t offsetAddrIn, uint32_t srcBaseOffsetIn,
-        uint8_t repeatIn, uint16_t dstBlockStrideIn, uint16_t dstRepeatStrideIn, uint32_t dstDtypeBytesIn,
-        uint32_t srcDtypeBytesIn, uint32_t offsetDtypeBytesIn, uint64_t dstSizeIn, uint64_t srcSizeIn,
-        uint64_t offsetSizeIn, uint8_t dstPosIn, uint8_t srcPosIn, uint8_t offsetPosIn)
+    VecGatherApiParams(
+        uint64_t dstAddrIn, uint64_t srcAddrIn, uint64_t offsetAddrIn, uint32_t srcBaseOffsetIn, uint8_t repeatIn,
+        uint16_t dstBlockStrideIn, uint16_t dstRepeatStrideIn, uint32_t dstDtypeBytesIn, uint32_t srcDtypeBytesIn,
+        uint32_t offsetDtypeBytesIn, uint64_t dstSizeIn, uint64_t srcSizeIn, uint64_t offsetSizeIn, uint8_t dstPosIn,
+        uint8_t srcPosIn, uint8_t offsetPosIn)
     {
         dstAddr = dstAddrIn;
         srcAddr = srcAddrIn;
@@ -171,7 +174,8 @@ struct VecGatherApiParams {
         offsetPos = static_cast<uint8_t>(GetPhyType(static_cast<TPosition>(offsetPosIn)));
     }
 
-    VecGatherApiParams(uint64_t dstAddrIn, uint64_t srcAddrIn, uint64_t offsetAddrIn, uint32_t srcBaseOffsetIn,
+    VecGatherApiParams(
+        uint64_t dstAddrIn, uint64_t srcAddrIn, uint64_t offsetAddrIn, uint32_t srcBaseOffsetIn,
         uint32_t dstDtypeBytesIn, uint32_t srcDtypeBytesIn, uint32_t offsetDtypeBytesIn, uint64_t dstSizeIn,
         uint64_t srcSizeIn, uint64_t offsetSizeIn, uint8_t dstPosIn, uint8_t srcPosIn, uint8_t offsetPosIn,
         uint32_t calCountIn)
@@ -222,11 +226,11 @@ const uint8_t REPSTR = 8;
 const uint16_t REPSIZE = 256;
 struct VecGatherMaskApiParams {
     VecGatherMaskApiParams() {}
-    VecGatherMaskApiParams(uint64_t dstAddrIn, uint64_t src0AddrIn, uint64_t src1AddrIn, bool reduceModeIn,
-        uint8_t src0BlockStrideIn, uint16_t repeatTimesIn, uint16_t src0RepeatStrideIn, uint16_t src1RepeatStrideIn,
-        uint64_t rsvdCntIn, uint32_t dstDtypeBytesIn, uint32_t src0DtypeBytesIn, uint32_t src1DtypeBytesIn,
-        uint64_t dstSizeIn, uint64_t src0SizeIn, uint64_t src1SizeIn, uint8_t dstPosIn, uint8_t src0PosIn,
-        uint8_t src1PosIn)
+    VecGatherMaskApiParams(
+        uint64_t dstAddrIn, uint64_t src0AddrIn, uint64_t src1AddrIn, bool reduceModeIn, uint8_t src0BlockStrideIn,
+        uint16_t repeatTimesIn, uint16_t src0RepeatStrideIn, uint16_t src1RepeatStrideIn, uint64_t rsvdCntIn,
+        uint32_t dstDtypeBytesIn, uint32_t src0DtypeBytesIn, uint32_t src1DtypeBytesIn, uint64_t dstSizeIn,
+        uint64_t src0SizeIn, uint64_t src1SizeIn, uint8_t dstPosIn, uint8_t src0PosIn, uint8_t src1PosIn)
     {
         dstAddr = dstAddrIn;
         src0Addr = src0AddrIn;
@@ -255,10 +259,11 @@ struct VecGatherMaskApiParams {
         src1Pos = static_cast<uint8_t>(GetPhyType(static_cast<TPosition>(src1PosIn)));
     }
 
-    VecGatherMaskApiParams(uint64_t dstAddrIn, uint64_t src0AddrIn, uint8_t src1PatternIn, bool reduceModeIn,
-        uint8_t src0BlockStrideIn, uint16_t repeatTimesIn, uint16_t src0RepeatStrideIn, uint16_t src1RepeatStrideIn,
-        uint64_t rsvdCntIn, uint32_t dstDtypeBytesIn, uint32_t src0DtypeBytesIn, uint64_t dstSizeIn,
-        uint64_t src0SizeIn, uint8_t dstPosIn, uint8_t src0PosIn)
+    VecGatherMaskApiParams(
+        uint64_t dstAddrIn, uint64_t src0AddrIn, uint8_t src1PatternIn, bool reduceModeIn, uint8_t src0BlockStrideIn,
+        uint16_t repeatTimesIn, uint16_t src0RepeatStrideIn, uint16_t src1RepeatStrideIn, uint64_t rsvdCntIn,
+        uint32_t dstDtypeBytesIn, uint32_t src0DtypeBytesIn, uint64_t dstSizeIn, uint64_t src0SizeIn, uint8_t dstPosIn,
+        uint8_t src0PosIn)
     {
         dstAddr = dstAddrIn;
         src0Addr = src0AddrIn;

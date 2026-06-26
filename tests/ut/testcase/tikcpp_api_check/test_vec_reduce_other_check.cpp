@@ -1,12 +1,12 @@
 /**
-* Copyright (c) 2025 Huawei Technologies Co., Ltd.
-* This program is free software, you can redistribute it and/or modify it under the terms and conditions of
-* CANN Open Software License Agreement Version 2.0 (the "License").
-* Please refer to the License for details. You may not use this file except in compliance with the License.
-* THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
-* INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
-* See LICENSE in the root of the software repository for the full text of the License.
-*/
+ * Copyright (c) 2025 Huawei Technologies Co., Ltd.
+ * This program is free software, you can redistribute it and/or modify it under the terms and conditions of
+ * CANN Open Software License Agreement Version 2.0 (the "License").
+ * Please refer to the License for details. You may not use this file except in compliance with the License.
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
+ * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
+ * See LICENSE in the root of the software repository for the full text of the License.
+ */
 #include <gtest/gtest.h>
 #include <string>
 #define private public
@@ -32,18 +32,18 @@ struct TestReduceOtherApiCheckParams {
 };
 
 class TestVecReduceOtherCheckSuite : public testing::Test,
-    public testing::WithParamInterface<TestReduceOtherApiCheckParams> {
+                                     public testing::WithParamInterface<TestReduceOtherApiCheckParams> {
 protected:
-    void SetUp() {
-        g_coreType = AIV_TYPE;
-    }
-    void TearDown() {
+    void SetUp() { g_coreType = AIV_TYPE; }
+    void TearDown()
+    {
         AscendC::CheckSyncState();
         g_coreType = MIX_TYPE;
     }
 };
 
-INSTANTIATE_TEST_CASE_P(TEST_VEC_REDUCE_OTHER_CHECK, TestVecReduceOtherCheckSuite,
+INSTANTIATE_TEST_CASE_P(
+    TEST_VEC_REDUCE_OTHER_CHECK, TestVecReduceOtherCheckSuite,
     ::testing::Values(
         TestReduceOtherApiCheckParams{TPosition::VECCALC, 256, 16, 1, 1, 8, 2, 2, "WholeReduceMax", true},
         TestReduceOtherApiCheckParams{TPosition::VECCALC, 256, 16, 1, 1, 8, 2, 2, "WholeReduceMin", true},
@@ -62,9 +62,7 @@ INSTANTIATE_TEST_CASE_P(TEST_VEC_REDUCE_OTHER_CHECK, TestVecReduceOtherCheckSuit
         TestReduceOtherApiCheckParams{TPosition::VECCALC, 128, 8, 8, 1, 8, 2, 2, "BlockReduceMin", true},
         TestReduceOtherApiCheckParams{TPosition::VECCALC, 128, 7, 8, 1, 8, 2, 2, "BlockReduceMin", true},
         TestReduceOtherApiCheckParams{TPosition::VECCALC, 128, 64, 8, 1, 8, 2, 2, "PairReduceSum", true},
-        TestReduceOtherApiCheckParams{TPosition::VECCALC, 128, 16, 8, 1, 8, 2, 2, "PairReduceSum", false}
-    )
-);
+        TestReduceOtherApiCheckParams{TPosition::VECCALC, 128, 16, 8, 1, 8, 2, 2, "PairReduceSum", false}));
 
 TEST_P(TestVecReduceOtherCheckSuite, TestCaseReduceOther)
 {
@@ -80,7 +78,8 @@ TEST_P(TestVecReduceOtherCheckSuite, TestCaseReduceOther)
     uint32_t srcdtypeSizeIn = param.srcdtypeSize;
     uint32_t dstdtypeSizeIn = param.dstdtypeSize;
 
-    check::VecReduceApiParams chkParams { dst.addr,
+    check::VecReduceApiParams chkParams{
+        dst.addr,
         src.addr,
         (uint32_t)(dstdtypeSizeIn),
         (uint32_t)(srcdtypeSizeIn),
@@ -91,9 +90,9 @@ TEST_P(TestVecReduceOtherCheckSuite, TestCaseReduceOther)
         dst.length,
         src.length,
         LogicPos(dst),
-        LogicPos(src) };
-    check::TikcppVecReduceOtherCheck chkIns { param.apiName, chkParams };
-    bool flag = chkIns.CheckAllLowLevel({ mask });
+        LogicPos(src)};
+    check::TikcppVecReduceOtherCheck chkIns{param.apiName, chkParams};
+    bool flag = chkIns.CheckAllLowLevel({mask});
     EXPECT_EQ(flag, param.expect);
     return;
 }

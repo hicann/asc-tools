@@ -1,12 +1,12 @@
 /**
-* Copyright (c) 2025 Huawei Technologies Co., Ltd.
-* This program is free software, you can redistribute it and/or modify it under the terms and conditions of
-* CANN Open Software License Agreement Version 2.0 (the "License").
-* Please refer to the License for details. You may not use this file except in compliance with the License.
-* THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
-* INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
-* See LICENSE in the root of the software repository for the full text of the License.
-*/
+ * Copyright (c) 2025 Huawei Technologies Co., Ltd.
+ * This program is free software, you can redistribute it and/or modify it under the terms and conditions of
+ * CANN Open Software License Agreement Version 2.0 (the "License").
+ * Please refer to the License for details. You may not use this file except in compliance with the License.
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
+ * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
+ * See LICENSE in the root of the software repository for the full text of the License.
+ */
 
 /*!
  * \file kernel_fp16.h
@@ -112,41 +112,39 @@ inline uint16_t FP16_EXTRAC_SIGN(uint16_t x)
 // / @brief   get exponent of fp16
 inline int16_t FP16_EXTRAC_EXP(uint16_t x)
 {
-    return (((x) >> static_cast<uint16_t>(Fp16BasicParam::K_FP16_MAN_LEN)) &
+    return (
+        ((x) >> static_cast<uint16_t>(Fp16BasicParam::K_FP16_MAN_LEN)) &
         static_cast<uint16_t>(Fp16BasicParam::K_FP16_MAX_EXP));
 }
 // / @ingroup fp16 basic operator
 // / @brief   get mantissa of fp16
 inline uint16_t FP16_EXTRAC_MAN(uint16_t x)
 {
-    return ((((x) >> 0) & 0x3FF) |
+    return (
+        (((x) >> 0) & 0x3FF) |
         (((((x) >> static_cast<uint16_t>(Fp16BasicParam::K_FP16_MAN_LEN)) & 0x1F) > 0 ? 1 : 0) * 0x400));
 }
 // / @ingroup fp16 basic operator
 // / @brief   constructor of fp16 from sign exponent and mantissa
 inline uint16_t FP16_CONSTRUCTOR(uint16_t s, uint16_t e, uint16_t m)
 {
-    return (((s) << (static_cast<uint16_t>(Fp16BasicParam::K_FP16_SIGN_INDEX))) |
+    return (
+        ((s) << (static_cast<uint16_t>(Fp16BasicParam::K_FP16_SIGN_INDEX))) |
         ((e) << static_cast<uint16_t>(Fp16BasicParam::K_FP16_MAN_LEN)) |
         ((m) & (static_cast<uint16_t>(Fp16BasicParam::K_FP16_MAX_MAN))));
 }
 // / @ingroup fp16 special value judgment
 // / @brief   whether a fp16 is zero
-inline bool FP16_IS_ZERO(uint16_t x)
-{
-    return (x & (static_cast<uint16_t>(Fp16BasicParam::K_FP16_ABS_MAX))) == 0;
-}
+inline bool FP16_IS_ZERO(uint16_t x) { return (x & (static_cast<uint16_t>(Fp16BasicParam::K_FP16_ABS_MAX))) == 0; }
 // / @ingroup fp16 special value judgment
 // / @brief   whether a fp16 is a denormalized value
-inline bool FP16_IS_DENORM(uint16_t x)
-{
-    return (x & (static_cast<uint16_t>(Fp16BasicParam::K_FP16_EXP_MASK))) == 0;
-}
+inline bool FP16_IS_DENORM(uint16_t x) { return (x & (static_cast<uint16_t>(Fp16BasicParam::K_FP16_EXP_MASK))) == 0; }
 // / @ingroup fp16 special value judgment
 // / @brief   whether a fp16 is invalid
 inline bool FP16_IS_INVALID(uint16_t x)
 {
-    return ((x & static_cast<uint16_t>(Fp16BasicParam::K_FP16_EXP_MASK)) ==
+    return (
+        (x & static_cast<uint16_t>(Fp16BasicParam::K_FP16_EXP_MASK)) ==
         static_cast<uint16_t>(Fp16BasicParam::K_FP16_EXP_MASK));
 }
 
@@ -168,7 +166,8 @@ enum class Fp32BasicParam : uint32_t {
 // / @brief   constructor of fp32 from sign exponent and mantissa
 inline uint32_t FP32_CONSTRUCTOR(uint32_t s, uint32_t e, uint32_t m)
 {
-    return (((s) << static_cast<uint16_t>(Fp32BasicParam::K_FP32_SIGN_INDEX)) |
+    return (
+        ((s) << static_cast<uint16_t>(Fp32BasicParam::K_FP32_SIGN_INDEX)) |
         ((e) << static_cast<uint16_t>(Fp32BasicParam::K_FP32_MAN_LEN)) |
         ((m) & static_cast<uint32_t>(Fp32BasicParam::K_FP32_MAX_MAN)));
 }
@@ -292,14 +291,14 @@ public:
      * @brief   Override addition operator to performing half addition
      * @return  Return half result of adding this and fp
      */
-    half operator + (const half fp) const;
+    half operator+(const half fp) const;
     /* *
      * @ingroup half math operator
      * @param [in] fp half object to be subtracted
      * @brief   Override addition operator to performing half subtraction
      * @return  Return half result of subtraction fp from this
      */
-    half operator - (const half fp) const;
+    half operator-(const half fp) const;
     /* *
      * @ingroup half math operator
      * @param [in] fp half object to be multiplied
@@ -314,21 +313,21 @@ public:
      * @brief   Override division operator to performing half division
      * @return  Return half result of division this by fp
      */
-    half operator / (const half fp) const;
+    half operator/(const half fp) const;
     /* *
      * @ingroup half math operator
      * @param [in] fp half object to be added
      * @brief   Override addition operator to performing half addition
      * @return  Return half result of adding this and fp
      */
-    half operator += (const half fp);
+    half operator+=(const half fp);
     /* *
      * @ingroup half math operator
      * @param [in] fp half object to be subtracted
      * @brief   Override addition operator to performing half subtraction
      * @return  Return half result of subtraction fp from this
      */
-    half operator -= (const half fp);
+    half operator-=(const half fp);
     /* *
      * @ingroup half math operator
      * @param [in] fp half object to be multiplied
@@ -336,56 +335,56 @@ public:
      * multiplication
      * @return  Return half result of multiplying this and fp
      */
-    half operator *= (const half fp);
+    half operator*=(const half fp);
     /* *
      * @ingroup half math operator divided
      * @param [in] fp half object to be divided
      * @brief   Override division operator to performing half division
      * @return  Return half result of division this by fp
      */
-    half operator /= (const half fp);
+    half operator/=(const half fp);
     /*
      * @ingroup half math operator auto-increment
      * @param [in] fp half object to be Front auto-increment
      * @brief   Override Front auto-increment operator to performing half Front auto-increment
      * @return  Return half result of Front auto-increment this and fp
      */
-    half operator ++ ();
+    half operator++();
     /*
      * @ingroup half math operator auto-increment
      * @param [in] fp half object to be Back auto-increment
      * @brief   Override Front Back auto-increment operator to performing half Back auto-increment
      * @return  Return half result of Back auto-increment this and fp
      */
-    half operator ++ (int);
+    half operator++(int);
     /*
      * @ingroup half math operator auto-decrement
      * @param [in] fp half object to be Front auto-decrement
      * @brief   Override Front auto-decrement operator to performing half Front auto-decrement
      * @return  Return half result of Front auto-decrement this and fp
      */
-    half operator -- ();
+    half operator--();
     /*
      * @ingroup half math operator auto-decrement
      * @param [in] fp half object to be Back auto-decrement
      * @brief   Override Back auto-decrement operator to performing half Back auto-decrement
      * @return  Return half result of Back auto-decrement this and fp
      */
-    half operator -- (int);
+    half operator--(int);
     /*
      * @ingroup half math operator AND
      * @param [in] fp half object to be AND
      * @brief   Override AND operator to performing half Front AND
      * @return  Return half result of AND this and fp
      */
-    bool operator && (const half fp) const;
+    bool operator&&(const half fp) const;
     /*
      * @ingroup half math operator OR
      * @param [in] fp half object to be OR
      * @brief   Override OR operator to performing half OR
      * @return  Return half result of OR this and fp
      */
-    bool operator || (const half fp) const;
+    bool operator||(const half fp) const;
 
     /* *
      * @ingroup half math compare operator
@@ -394,7 +393,7 @@ public:
      * comparison
      * @return  Return boolean result of if-equal comparison of this and fp.
      */
-    bool operator == (const half& fp) const;
+    bool operator==(const half& fp) const;
     /* *
      * @ingroup half math compare operator
      * @param [in] fp half object to be compared
@@ -402,7 +401,7 @@ public:
      * comparison
      * @return  Return boolean result of not-equal comparison of this and fp.
      */
-    bool operator != (const half& fp) const;
+    bool operator!=(const half& fp) const;
     /* *
      * @ingroup half math compare operator
      * @param [in] fp half object to be compared
@@ -410,7 +409,7 @@ public:
      * greater-than comparison
      * @return  Return boolean result of greater-than comparison of this and fp.
      */
-    bool operator > (const half& fp) const;
+    bool operator>(const half& fp) const;
     /* *
      * @ingroup half math compare operator
      * @param [in] fp half object to be compared
@@ -418,7 +417,7 @@ public:
      * greater-equal comparison
      * @return  Return boolean result of greater-equal comparison of this and fp.
      */
-    bool operator >= (const half& fp) const;
+    bool operator>=(const half& fp) const;
     /* *
      * @ingroup half math compare operator
      * @param [in] fp half object to be compared
@@ -426,7 +425,7 @@ public:
      * comparison
      * @return  Return boolean result of less-than comparison of this and fp.
      */
-    bool operator < (const half& fp) const;
+    bool operator<(const half& fp) const;
     /* *
      * @ingroup half math compare operator
      * @param [in] fp half object to be compared
@@ -434,7 +433,7 @@ public:
      * comparison
      * @return  Return boolean result of less-equal comparison of this and fp.
      */
-    bool operator <= (const half& fp) const;
+    bool operator<=(const half& fp) const;
 
     /* *
      * @ingroup half math evaluation operator
@@ -442,7 +441,7 @@ public:
      * @brief   Override basic evaluation operator to copy half to a new half
      * @return  Return half result from fp
      */
-    half& operator = (const half& fp);
+    half& operator=(const half& fp);
 
     /* *
      * @ingroup half math evaluation operator
@@ -450,56 +449,56 @@ public:
      * @brief   Override basic evaluation operator to convert float to half
      * @return  Return half result from fVal
      */
-    half& operator = (const float& fVal);
+    half& operator=(const float& fVal);
     /* *
      * @ingroup half math evaluation operator
      * @param [in] dVal double object to be converted to half
      * @brief   Override basic evaluation operator to convert double to half
      * @return  Return half result from dVal
      */
-    half& operator = (const double& dVal);
+    half& operator=(const double& dVal);
     /* *
      * @ingroup half math evaluation operator
      * @param [in] iVal float object to be converted to half
      * @brief   Override basic evaluation operator to convert float to half
      * @return  Return half result from iVal
      */
-    half& operator = (const int8_t& iVal);
+    half& operator=(const int8_t& iVal);
     /* *
      * @ingroup half math evaluation operator
      * @param [in] uiVal uint8_t object to be converted to half
      * @brief   Override basic evaluation operator to convert uint8_t to half
      * @return  Return half result from uiVal
      */
-    half& operator = (const uint8_t& uiVal);
+    half& operator=(const uint8_t& uiVal);
     /* *
      * @ingroup half math evaluation operator
      * @param [in] iVal int16_t object to be converted to half
      * @brief   Override basic evaluation operator to convert int16_t to half
      * @return  Return half result from iVal
      */
-    half& operator = (const int16_t& iVal);
+    half& operator=(const int16_t& iVal);
     /* *
      * @ingroup half math evaluation operator
      * @param [in] uiVal uint16_t object to be converted to half
      * @brief   Override basic evaluation operator to convert uint16_t to half
      * @return  Return half result from uiVal
      */
-    half& operator = (const uint16_t& uiVal);
+    half& operator=(const uint16_t& uiVal);
     /* *
      * @ingroup half math evaluation operator
      * @param [in] iVal int32_t object to be converted to half
      * @brief   Override basic evaluation operator to convert int32_t to half
      * @return  Return half result from iVal
      */
-    half& operator = (const int32_t& iVal);
+    half& operator=(const int32_t& iVal);
     /* *
      * @ingroup half math evaluation operator
      * @param [in] uiVal uint32_t object to be converted to half
      * @brief   Override basic evaluation operator to convert uint32_t to half
      * @return  Return half result from uiVal
      */
-    half& operator = (const uint32_t& uiVal);
+    half& operator=(const uint32_t& uiVal);
     /* *
      * @ingroup half math conversion
      * @brief   Override convert operator to convert half to float/fp32
@@ -622,7 +621,8 @@ void ExtractFp16(const uint16_t& val, uint16_t& s, int16_t& e, uint16_t& m);
  * complement)
  * @return  Return complement of man
  */
-template <typename T> void ReverseMan(bool negative, T& man)
+template <typename T>
+void ReverseMan(bool negative, T& man)
 {
     if (negative) {
         man = (~(man)) + 1;
@@ -638,7 +638,8 @@ template <typename T> void ReverseMan(bool negative, T& man)
  * one
  * @return  Return mantissawhoes exponent is less than another one
  */
-template <typename T> T MinMan(const int16_t& ea, T& ma, const int16_t& eb, T& mb)
+template <typename T>
+T MinMan(const int16_t& ea, T& ma, const int16_t& eb, T& mb)
 {
     return (ea > eb) ? mb : ma;
 }
@@ -650,7 +651,8 @@ template <typename T> T MinMan(const int16_t& ea, T& ma, const int16_t& eb, T& m
  * @brief   right shift a mantissa
  * @return  Return right-shift mantissa
  */
-template <typename T> T RightShift(T man, int16_t shift)
+template <typename T>
+T RightShift(T man, int16_t shift)
 {
     int32_t bits = sizeof(T) * 8; // one byte have 8 bits
     T mask = ((static_cast<T>(1u)) << (static_cast<uint32_t>(bits - 1)));
@@ -670,7 +672,8 @@ template <typename T> T RightShift(T man, int16_t shift)
  * uint16_t/uint32_t/uint64_t
  * @return  Return mantissa sum
  */
-template <typename T> T GetManSum(int16_t ea, const T& ma, int16_t eb, const T& mb)
+template <typename T>
+T GetManSum(int16_t ea, const T& ma, int16_t eb, const T& mb)
 {
     T sum;
     if (ea != eb) {
@@ -703,7 +706,8 @@ template <typename T> T GetManSum(int16_t ea, const T& ma, int16_t eb, const T& 
  * @brief    Round half or float mantissa to nearest value
  * @return   Returns true if round 1,otherwise false;
  */
-template <typename T> T ManRoundToNearest(bool bit0, bool bit1, bool bitLeft, T man, uint16_t shift = 0)
+template <typename T>
+T ManRoundToNearest(bool bit0, bool bit1, bool bitLeft, T man, uint16_t shift = 0)
 {
     man = ((bit1 && (bit0 || bitLeft)) ? 1 : 0) + (man >> shift);
     return man;
@@ -715,7 +719,8 @@ template <typename T> T ManRoundToNearest(bool bit0, bool bit1, bool bitLeft, T 
  * @brief   Get bit length of a uint32_t number
  * @return  Return bit length of man
  */
-template <typename T> int16_t GetManBitLength(T man)
+template <typename T>
+int16_t GetManBitLength(T man)
 {
     int16_t lenRet = 0;
     while (man) {
@@ -737,6 +742,6 @@ template <typename T> int16_t GetManBitLength(T man)
  * On average we have log10(2**11) â‰ˆ 3.311 decimal digits.
  */
 namespace float16 {
-    using Fp16T = half;
+using Fp16T = half;
 } // namespace float16
 #endif // ASCENDC_FP16_H

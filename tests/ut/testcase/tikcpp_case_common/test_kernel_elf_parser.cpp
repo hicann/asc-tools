@@ -1,12 +1,12 @@
 /**
-* Copyright (c) 2026 Huawei Technologies Co., Ltd.
-* This program is free software, you can redistribute it and/or modify it under the terms and conditions of
-* CANN Open Software License Agreement Version 2.0 (the "License").
-* Please refer to the License for details. You may not use this file except in compliance with the License.
-* THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
-* INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
-* See LICENSE in the root of the software repository for the full text of the License.
-*/
+ * Copyright (c) 2026 Huawei Technologies Co., Ltd.
+ * This program is free software, you can redistribute it and/or modify it under the terms and conditions of
+ * CANN Open Software License Agreement Version 2.0 (the "License").
+ * Please refer to the License for details. You may not use this file except in compliance with the License.
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
+ * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
+ * See LICENSE in the root of the software repository for the full text of the License.
+ */
 #include <gtest/gtest.h>
 #include <cstring>
 #include "kernel_elf_parser.h"
@@ -88,7 +88,7 @@ TEST_F(TestKernelElfParserSuite, ParseElfHeader_Success_LittleEndian)
     elfData[EI_MAG3] = 'F';
     elfData[EI_CLASS] = ELFCLASS64;
     elfData[EI_DATA] = ELFDATA2LSB;
-    
+
     Elf64_Ehdr header = AscendC::ParseElfHeader(elfData, sizeof(elfData));
     EXPECT_EQ(header.e_type, 0);
     EXPECT_EQ(header.e_machine, 0);
@@ -104,7 +104,7 @@ TEST_F(TestKernelElfParserSuite, ParseElfHeader_Success_BigEndian)
     elfData[EI_MAG3] = 'F';
     elfData[EI_CLASS] = ELFCLASS64;
     elfData[EI_DATA] = ELFDATA2MSB;
-    
+
     Elf64_Ehdr header = AscendC::ParseElfHeader(elfData, sizeof(elfData));
     EXPECT_EQ(header.e_type, 0);
     EXPECT_EQ(header.e_machine, 0);
@@ -126,7 +126,7 @@ TEST_F(TestKernelElfParserSuite, ParseElfHeader_Not64Bit)
     elfData[EI_MAG3] = 'F';
     elfData[EI_CLASS] = ELFCLASS32;
     elfData[EI_DATA] = ELFDATA2LSB;
-    
+
     EXPECT_THROW(AscendC::ParseElfHeader(elfData, sizeof(elfData)), std::invalid_argument);
 }
 
@@ -139,7 +139,7 @@ TEST_F(TestKernelElfParserSuite, GetSectionHeader_Success)
     elfData[EI_MAG3] = 'F';
     elfData[EI_CLASS] = ELFCLASS64;
     elfData[EI_DATA] = ELFDATA2LSB;
-    
+
     elfData[40] = 64; // e_shoff
     elfData[41] = 0;
     elfData[42] = 0;
@@ -148,13 +148,13 @@ TEST_F(TestKernelElfParserSuite, GetSectionHeader_Success)
     elfData[45] = 0;
     elfData[46] = 0;
     elfData[47] = 0;
-    
+
     elfData[58] = 64; // e_shentsize
     elfData[59] = 0;
-    
+
     elfData[60] = 2; // e_shnum
     elfData[61] = 0;
-    
+
     Elf64_Ehdr header = AscendC::ParseElfHeader(elfData, sizeof(elfData));
     Elf64_Shdr shdr = AscendC::GetSectionHeader(elfData, sizeof(elfData), header, 0);
     EXPECT_EQ(shdr.sh_name, 0);
@@ -170,7 +170,7 @@ TEST_F(TestKernelElfParserSuite, GetSectionHeader_InvalidIndex)
     elfData[EI_MAG3] = 'F';
     elfData[EI_CLASS] = ELFCLASS64;
     elfData[EI_DATA] = ELFDATA2LSB;
-    
+
     elfData[40] = 64; // e_shoff
     elfData[41] = 0;
     elfData[42] = 0;
@@ -179,13 +179,13 @@ TEST_F(TestKernelElfParserSuite, GetSectionHeader_InvalidIndex)
     elfData[45] = 0;
     elfData[46] = 0;
     elfData[47] = 0;
-    
+
     elfData[58] = 64; // e_shentsize
     elfData[59] = 0;
-    
+
     elfData[60] = 2; // e_shnum
     elfData[61] = 0;
-    
+
     Elf64_Ehdr header = AscendC::ParseElfHeader(elfData, sizeof(elfData));
     EXPECT_THROW(AscendC::GetSectionHeader(elfData, sizeof(elfData), header, 5), std::invalid_argument);
 }
@@ -199,11 +199,11 @@ TEST_F(TestKernelElfParserSuite, GetSectionHeader_DataTooSmall)
     elfData[EI_MAG3] = 'F';
     elfData[EI_CLASS] = ELFCLASS64;
     elfData[EI_DATA] = ELFDATA2LSB;
-    
+
     elfData[40] = 64; // e_shoff
     elfData[58] = 64; // e_shentsize
-    elfData[60] = 1; // e_shnum
-    
+    elfData[60] = 1;  // e_shnum
+
     Elf64_Ehdr header = AscendC::ParseElfHeader(elfData, sizeof(elfData));
     EXPECT_THROW(AscendC::GetSectionHeader(elfData, sizeof(elfData), header, 0), std::invalid_argument);
 }
@@ -216,11 +216,11 @@ TEST_F(TestKernelElfParserSuite, GetKernelInfo_KernelType)
     head->length = 4;
     uint32_t kernelType = AscendC::K_TYPE_AIC;
     memcpy(tlvData + sizeof(AscendC::ElfTlvHead), &kernelType, sizeof(uint32_t));
-    
+
     Elf64_Shdr sectionHead;
     sectionHead.sh_offset = 0;
     sectionHead.sh_size = sizeof(AscendC::ElfTlvHead) + 4;
-    
+
     AscendC::ElfKernelInfo info = AscendC::GetKernelInfo(tlvData, sizeof(tlvData), sectionHead);
     EXPECT_EQ(info.kernelType, AscendC::K_TYPE_AIC);
 }
@@ -233,7 +233,7 @@ TEST_F(TestKernelElfParserSuite, GetKernelInfo_MixTaskRation)
     head->length = 4;
     uint32_t kernelType = AscendC::K_TYPE_MIX_AIC_MAIN;
     memcpy(tlvData + sizeof(AscendC::ElfTlvHead), &kernelType, sizeof(uint32_t));
-    
+
     AscendC::ElfTlvHead* head2 = reinterpret_cast<AscendC::ElfTlvHead*>(tlvData + sizeof(AscendC::ElfTlvHead) + 4);
     head2->type = AscendC::FUNC_META_TYPE_MIX_TASK_RATION;
     head2->length = 4;
@@ -241,11 +241,11 @@ TEST_F(TestKernelElfParserSuite, GetKernelInfo_MixTaskRation)
     uint16_t aivRation = 2;
     memcpy(tlvData + sizeof(AscendC::ElfTlvHead) * 2 + 4, &aicRation, sizeof(uint16_t));
     memcpy(tlvData + sizeof(AscendC::ElfTlvHead) * 2 + 4 + sizeof(uint16_t), &aivRation, sizeof(uint16_t));
-    
+
     Elf64_Shdr sectionHead;
     sectionHead.sh_offset = 0;
     sectionHead.sh_size = sizeof(AscendC::ElfTlvHead) * 2 + 8;
-    
+
     AscendC::ElfKernelInfo info = AscendC::GetKernelInfo(tlvData, sizeof(tlvData), sectionHead);
     EXPECT_EQ(info.kernelType, AscendC::K_TYPE_MIX_AIC_MAIN);
     EXPECT_EQ(info.aicRation, 1);
@@ -258,22 +258,22 @@ TEST_F(TestKernelElfParserSuite, GetKernelInfo_InvalidTlvLength)
     AscendC::ElfTlvHead* head = reinterpret_cast<AscendC::ElfTlvHead*>(tlvData);
     head->type = 1;
     head->length = 100;
-    
+
     Elf64_Shdr sectionHead;
-    sectionHead.sh_offset =0;
+    sectionHead.sh_offset = 0;
     sectionHead.sh_size = 8;
-    
+
     EXPECT_THROW(AscendC::GetKernelInfo(tlvData, sizeof(tlvData), sectionHead), std::invalid_argument);
 }
 
 TEST_F(TestKernelElfParserSuite, GetKernelInfo_DataTooSmall)
 {
     uint8_t tlvData[4] = {0};
-    
+
     Elf64_Shdr sectionHead;
     sectionHead.sh_offset = 0;
     sectionHead.sh_size = 100;
-    
+
     EXPECT_THROW(AscendC::GetKernelInfo(tlvData, sizeof(tlvData), sectionHead), std::invalid_argument);
 }
 
@@ -283,7 +283,7 @@ TEST_F(TestKernelElfParserSuite, ToKernelMode_AIC)
     info.kernelType = AscendC::K_TYPE_AIC;
     info.aicRation = 0;
     info.aivRation = 0;
-    
+
     KernelMode mode = AscendC::ToKernelMode(info);
     EXPECT_EQ(mode, KernelMode::AIC_MODE);
 }
@@ -294,7 +294,7 @@ TEST_F(TestKernelElfParserSuite, ToKernelMode_AIC_Rollback)
     info.kernelType = AscendC::K_TYPE_AIC_ROLLBACK;
     info.aicRation = 0;
     info.aivRation = 0;
-    
+
     KernelMode mode = AscendC::ToKernelMode(info);
     EXPECT_EQ(mode, KernelMode::AIC_MODE);
 }
@@ -305,7 +305,7 @@ TEST_F(TestKernelElfParserSuite, ToKernelMode_AIV)
     info.kernelType = AscendC::K_TYPE_AIV;
     info.aicRation = 0;
     info.aivRation = 0;
-    
+
     KernelMode mode = AscendC::ToKernelMode(info);
     EXPECT_EQ(mode, KernelMode::AIV_MODE);
 }
@@ -316,7 +316,7 @@ TEST_F(TestKernelElfParserSuite, ToKernelMode_AIV_Rollback)
     info.kernelType = AscendC::K_TYPE_AIV_ROLLBACK;
     info.aicRation = 0;
     info.aivRation = 0;
-    
+
     KernelMode mode = AscendC::ToKernelMode(info);
     EXPECT_EQ(mode, KernelMode::AIV_MODE);
 }
@@ -327,7 +327,7 @@ TEST_F(TestKernelElfParserSuite, ToKernelMode_MixAicMain)
     info.kernelType = AscendC::K_TYPE_MIX_AIC_MAIN;
     info.aicRation = 1;
     info.aivRation = 0;
-    
+
     KernelMode mode = AscendC::ToKernelMode(info);
     EXPECT_EQ(mode, KernelMode::AIC_MODE);
 }
@@ -338,7 +338,7 @@ TEST_F(TestKernelElfParserSuite, ToKernelMode_MixAic1_1)
     info.kernelType = AscendC::K_TYPE_MIX_AIC_MAIN;
     info.aicRation = 1;
     info.aivRation = 1;
-    
+
     KernelMode mode = AscendC::ToKernelMode(info);
     EXPECT_EQ(mode, KernelMode::MIX_AIC_1_1);
 }
@@ -349,7 +349,7 @@ TEST_F(TestKernelElfParserSuite, ToKernelMode_MixMode)
     info.kernelType = AscendC::K_TYPE_MIX_AIC_MAIN;
     info.aicRation = 1;
     info.aivRation = 2;
-    
+
     KernelMode mode = AscendC::ToKernelMode(info);
     EXPECT_EQ(mode, KernelMode::MIX_MODE);
 }
@@ -360,7 +360,7 @@ TEST_F(TestKernelElfParserSuite, ToKernelMode_InvalidType)
     info.kernelType = AscendC::K_TYPE_INVALID;
     info.aicRation = 0;
     info.aivRation = 0;
-    
+
     EXPECT_THROW(AscendC::ToKernelMode(info), std::invalid_argument);
 }
 
@@ -389,7 +389,7 @@ TEST_F(TestKernelElfParserSuite, KernelModeRegister_RegisterAndGet)
     reg.Clear();
     // Register internally demangles _Z11test_kernelv -> "test_kernel()"
     reg.Register("_Z11test_kernelv", KernelMode::AIC_MODE);
-    
+
     // GetKenelMode internally demangles _Z11test_kernelv -> "test_kernel()", then finds it
     KernelMode mode = reg.GetKenelMode("_Z11test_kernelv");
     EXPECT_EQ(mode, KernelMode::AIC_MODE);
@@ -416,48 +416,48 @@ TEST_F(TestKernelElfParserSuite, KernelModeRegister_RegisterAndGetCStyleSymbol)
 TEST_F(TestKernelElfParserSuite, RegisterKernelElf_Integration)
 {
     uint8_t elfData[512] = {0};
-    
+
     elfData[EI_MAG0] = 0x7f;
     elfData[EI_MAG1] = 'E';
     elfData[EI_MAG2] = 'L';
     elfData[EI_MAG3] = 'F';
     elfData[EI_CLASS] = ELFCLASS64;
     elfData[EI_DATA] = ELFDATA2LSB;
-    
+
     elfData[40] = 64; // e_shoff
     elfData[58] = 64; // e_shentsize
-    elfData[60] = 2; // e_shnum
-    elfData[62] = 1; // e_shstrndx
-    
+    elfData[60] = 2;  // e_shnum
+    elfData[62] = 1;  // e_shstrndx
+
     Elf64_Shdr* shdr0 = reinterpret_cast<Elf64_Shdr*>(elfData + 64);
     shdr0->sh_name = 0;
     shdr0->sh_type = 0;
     shdr0->sh_offset = 192;
     shdr0->sh_size = 64;
-    
+
     Elf64_Shdr* shdr1 = reinterpret_cast<Elf64_Shdr*>(elfData + 128);
     shdr1->sh_name = 1;
     shdr1->sh_type = 0;
     shdr1->sh_offset = 256;
     shdr1->sh_size = 64;
-    
+
     // Section name uses mangled kernel name
     const char* strTab = ".ascend.meta._Z11test_kernelv\0.shstrtab\n";
     memcpy(elfData + 256, strTab, strlen(strTab) + 1);
-    
+
     uint8_t* metaSection = elfData + 192;
     AscendC::ElfTlvHead* head = reinterpret_cast<AscendC::ElfTlvHead*>(metaSection);
     head->type = AscendC::FUNC_META_TYPE_KERNEL_TYPE;
     head->length = 4;
     uint32_t kernelType = AscendC::K_TYPE_AIC;
     memcpy(metaSection + sizeof(AscendC::ElfTlvHead), &kernelType, sizeof(uint32_t));
-    
+
     shdr0->sh_size = sizeof(AscendC::ElfTlvHead) + 4;
 
     AscendC::KernelModeRegister& reg = AscendC::KernelModeRegister::GetInstance();
     reg.Clear();
     AscendC::RegisterKernelElf(elfData, sizeof(elfData));
-    
+
     // GetKenelMode now takes mangled name
     KernelMode mode = reg.GetKenelMode("_Z11test_kernelv");
     EXPECT_EQ(mode, KernelMode::AIC_MODE);
@@ -539,10 +539,10 @@ TEST_F(TestKernelElfParserSuite, ParseKernelSections_MixAivAndAicSameKernel)
     elfData[EI_CLASS] = ELFCLASS64;
     elfData[EI_DATA] = ELFDATA2LSB;
 
-    elfData[40] = 64;   // e_shoff = 64
-    elfData[58] = 64;   // e_shentsize = 64
-    elfData[60] = 3;    // e_shnum = 3 (shstrtab + 2 kernel meta sections)
-    elfData[62] = 0;    // e_shstrndx = 0 (shstrtab is section 0)
+    elfData[40] = 64; // e_shoff = 64
+    elfData[58] = 64; // e_shentsize = 64
+    elfData[60] = 3;  // e_shnum = 3 (shstrtab + 2 kernel meta sections)
+    elfData[62] = 0;  // e_shstrndx = 0 (shstrtab is section 0)
 
     // Section 0: .shstrtab
     Elf64_Shdr* shdr0 = reinterpret_cast<Elf64_Shdr*>(elfData + 64);
@@ -553,7 +553,7 @@ TEST_F(TestKernelElfParserSuite, ParseKernelSections_MixAivAndAicSameKernel)
 
     // Section 1: .ascend.meta._Z11test_kernelv_mix_aic
     Elf64_Shdr* shdr1 = reinterpret_cast<Elf64_Shdr*>(elfData + 128);
-    shdr1->sh_name = 1;  // offset in strtab -> ".ascend.meta._Z11test_kernelv_mix_aic"
+    shdr1->sh_name = 1; // offset in strtab -> ".ascend.meta._Z11test_kernelv_mix_aic"
     shdr1->sh_type = 0;
     shdr1->sh_offset = 512;
     shdr1->sh_size = sizeof(AscendC::ElfTlvHead) + 4;

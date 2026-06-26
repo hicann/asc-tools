@@ -7,3 +7,6 @@ libraries
 third_party/*.tar.gz
 third_party/makeself
 third_party/msot
+oat_reports/
+
+log/

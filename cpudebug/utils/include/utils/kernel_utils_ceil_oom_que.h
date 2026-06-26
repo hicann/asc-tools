@@ -1,12 +1,12 @@
 /**
-* Copyright (c) 2025 Huawei Technologies Co., Ltd.
-* This program is free software, you can redistribute it and/or modify it under the terms and conditions of
-* CANN Open Software License Agreement Version 2.0 (the "License").
-* Please refer to the License for details. You may not use this file except in compliance with the License.
-* THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
-* INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
-* See LICENSE in the root of the software repository for the full text of the License.
-*/
+ * Copyright (c) 2025 Huawei Technologies Co., Ltd.
+ * This program is free software, you can redistribute it and/or modify it under the terms and conditions of
+ * CANN Open Software License Agreement Version 2.0 (the "License").
+ * Please refer to the License for details. You may not use this file except in compliance with the License.
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
+ * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
+ * See LICENSE in the root of the software repository for the full text of the License.
+ */
 
 /*!
  * \file kernel_utils_ceil_oom_que.h
@@ -42,9 +42,8 @@
 #include "stub_fun.h"
 #endif // ASCENDC_CPU_DEBUG
 
-#if defined(__NPU_ARCH__) && ((__NPU_ARCH__ == 5102) ||                             \
-	(__NPU_ARCH__ == 2103) || (__NPU_ARCH__ == 3003) || (__NPU_ARCH__ == 3103) ||   \
-	(__NPU_ARCH__ == 3113) || (__NPU_ARCH__ == 3510))
+#if defined(__NPU_ARCH__) && ((__NPU_ARCH__ == 5102) || (__NPU_ARCH__ == 2103) || (__NPU_ARCH__ == 3003) || \
+                              (__NPU_ARCH__ == 3103) || (__NPU_ARCH__ == 3113) || (__NPU_ARCH__ == 3510))
 
 #if !defined(ASCENDC_CPU_DEBUG)
 using fp4x2_e2m1_t = float4_e2m1x2_t;
@@ -71,17 +70,12 @@ extern uint64_t g_tilingKey;
 
 namespace AscendC {
 
-__aicore__ constexpr inline uint32_t DivCeil(uint32_t a, uint32_t b)
-{
-    return (a + b - 1) / b;
-}
+__aicore__ constexpr inline uint32_t DivCeil(uint32_t a, uint32_t b) { return (a + b - 1) / b; }
 
-__aicore__ constexpr inline uint32_t AlignUp(uint32_t a, uint32_t b)
-{
-    return DivCeil(a, b) * b;
-}
+__aicore__ constexpr inline uint32_t AlignUp(uint32_t a, uint32_t b) { return DivCeil(a, b) * b; }
 
-template <bool b> struct BoolInst {
+template <bool b>
+struct BoolInst {
     using Type = BoolInst<b>;
     static constexpr bool value = b;
 };
@@ -89,9 +83,11 @@ template <bool b> struct BoolInst {
 using TrueType = BoolInst<true>;
 using FalseType = BoolInst<false>;
 
-template <typename T, typename U> struct IsSameType : public FalseType {};
+template <typename T, typename U>
+struct IsSameType : public FalseType {};
 
-template <typename T> struct IsSameType<T, T> : public TrueType {};
+template <typename T>
+struct IsSameType<T, T> : public TrueType {};
 
 template <typename... Arg>
 struct Tuple {};

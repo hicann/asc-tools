@@ -1,12 +1,12 @@
 /**
-* Copyright (c) 2025 Huawei Technologies Co., Ltd.
-* This program is free software, you can redistribute it and/or modify it under the terms and conditions of
-* CANN Open Software License Agreement Version 2.0 (the "License").
-* Please refer to the License for details. You may not use this file except in compliance with the License.
-* THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
-* INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
-* See LICENSE in the root of the software repository for the full text of the License.
-*/
+ * Copyright (c) 2025 Huawei Technologies Co., Ltd.
+ * This program is free software, you can redistribute it and/or modify it under the terms and conditions of
+ * CANN Open Software License Agreement Version 2.0 (the "License").
+ * Please refer to the License for details. You may not use this file except in compliance with the License.
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
+ * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
+ * See LICENSE in the root of the software repository for the full text of the License.
+ */
 
 /*!
  * \file kernel_check_vec_data_filling_util.h
@@ -21,7 +21,8 @@ namespace AscendC {
 namespace check {
 struct VecDupApiParams {
     VecDupApiParams() {}
-    VecDupApiParams(uint64_t dstAddrIn, uint8_t repeatIn, uint16_t dstBlockStrideIn, uint16_t dstRepeatStrideIn,
+    VecDupApiParams(
+        uint64_t dstAddrIn, uint8_t repeatIn, uint16_t dstBlockStrideIn, uint16_t dstRepeatStrideIn,
         uint32_t dstDtypeBytesIn, uint64_t dstSizeIn, uint8_t dstPosIn)
     {
         dstAddr = dstAddrIn;
@@ -54,7 +55,8 @@ struct VecDupApiParams {
 };
 struct VecCreateVecIndexApiParams {
     VecCreateVecIndexApiParams() {}
-    VecCreateVecIndexApiParams(uint64_t dstAddrIn, uint8_t repeatIn, uint16_t dstBlkStrideIn, uint16_t dstRepStrideIn,
+    VecCreateVecIndexApiParams(
+        uint64_t dstAddrIn, uint8_t repeatIn, uint16_t dstBlkStrideIn, uint16_t dstRepStrideIn,
         uint32_t dstDtypeBytesIn, uint64_t dstSizeIn, uint8_t dstPosIn, uint32_t calCountIn)
     {
         dstAddr = dstAddrIn;
