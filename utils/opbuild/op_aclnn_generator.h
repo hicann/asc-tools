@@ -267,7 +267,14 @@ const std::map<int, std::string> FORMAT_SUPPORT_MAP = {
     { ge::FORMAT_ND_RNN_BIAS, "ge::FORMAT_ND_RNN_BIAS" },
     { ge::FORMAT_NYUV, "ge::FORMAT_NYUV" },
     { ge::FORMAT_NYUV_A, "ge::FORMAT_NYUV_A" },
-    { ge::FORMAT_NCL, "ge::FORMAT_NCL" }
+    { ge::FORMAT_NCL, "ge::FORMAT_NCL" },
+    { ge::FORMAT_FRACTAL_Z_WINO, "ge::FORMAT_FRACTAL_Z_WINO"},
+    { ge::FORMAT_C1HWC0, "ge::FORMAT_C1HWC0"},
+    { ge::FORMAT_FRACTAL_NZ_C0_2, "ge::FORMAT_FRACTAL_NZ_C0_2"},
+    { ge::FORMAT_FRACTAL_NZ_C0_4, "ge::FORMAT_FRACTAL_NZ_C0_4"},
+    { ge::FORMAT_FRACTAL_NZ_C0_8, "ge::FORMAT_FRACTAL_NZ_C0_8"},
+    { ge::FORMAT_FRACTAL_NZ_C0_16, "ge::FORMAT_FRACTAL_NZ_C0_16"},
+    { ge::FORMAT_FRACTAL_NZ_C0_32, "ge::FORMAT_FRACTAL_NZ_C0_32"}
 };
 
 const std::unordered_set<ge::DataType> VALUE_DEPEND_SUPPORT_DTYPES = {
