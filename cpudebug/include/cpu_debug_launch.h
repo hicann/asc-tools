@@ -18,14 +18,10 @@
 #include "kernel_elf_parser.h"
 
 namespace AscendC{
-extern "C" __attribute__ ((visibility("hidden"))) __attribute__((weak)) uint32_t __asc_LaunchAndProfiling(const char *kernelName,
-    uint32_t blockDim, void *stream, void **args, uint32_t size, const uint32_t ubufDynamicSize);
-
-
 template <typename T, typename... Args>
-inline void AscCPUKernelLaunch(unsigned numBlocks, void* dynicsize, aclrtStream stream, const char *mangling, T kernelFunc, Args... args)
+inline void AscCPUKernelLaunch(
+    unsigned numBlocks, void* dynicsize, aclrtStream stream, const char *mangling, T kernelFunc, Args... args)
 {
-    __asc_LaunchAndProfiling(mangling, numBlocks, stream, nullptr, 0, 0);
     AscendC::SetKernelMode(KernelModeRegister::GetInstance().GetKenelMode(mangling));
     AscendC::RunKernelFunctionOnCpu(kernelFunc, mangling, numBlocks, args...);
 }

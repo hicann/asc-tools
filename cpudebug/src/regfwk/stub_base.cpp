@@ -177,11 +177,12 @@ void HandleError(bool condition, const std::string& message, int fd)
 void *GmAlloc(size_t size)
 {
     int pageSize = getpagesize();
-    if (size > (SIZE_MAX - pageSize * 2 + pageSize + 1)) { // 2 pages for header and tail
+    size_t alignedExtraPageSize = pageSize * 2 + pageSize - 1; // 2 pages for header and tail
+    if (size > (SIZE_MAX - alignedExtraPageSize)) {
         std::cerr << "GmAlloc Error: input size overflow detected." << std::endl;
         raise(SIGABRT);
     }
-    size_t newSize = (size + pageSize * 2 + pageSize - 1) & (~(pageSize - 1));
+    size_t newSize = (size + alignedExtraPageSize) & (~(pageSize - 1)); // align to multiple page size
     std::string fileName = GetFileName();
     int fd = open(fileName.c_str(), O_RDWR | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR);
     HandleError(fd == -1, "Failed to open file: " + std::string(strerror(errno)), fd);
