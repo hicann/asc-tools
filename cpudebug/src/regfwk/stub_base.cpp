@@ -175,7 +175,7 @@ void HandleError(bool condition, const std::string& message, int fd)
 
 void* GmAlloc(size_t size)
 {
-    int pageSize = getpagesize();
+    size_t pageSize = getpagesize();
     size_t alignedExtraPageSize = pageSize * 2 + pageSize - 1; // 2 pages for header and tail
     if (size > (SIZE_MAX - alignedExtraPageSize)) {
         std::cerr << "GmAlloc Error: input size overflow detected." << std::endl;
