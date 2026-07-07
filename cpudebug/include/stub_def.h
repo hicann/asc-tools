@@ -50,6 +50,7 @@
 #define __cc__
 #define __ca__
 #define __cb__
+#define __biasbuf__
 #define __fbuf__
 #define __sync_noalias__
 #define __sync_alias__
