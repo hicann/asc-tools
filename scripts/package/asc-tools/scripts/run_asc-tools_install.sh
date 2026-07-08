@@ -151,7 +151,7 @@ installTool()
     "$INSTALL_COMMON_PARSER_PATH" --install ${shell_options_} ${custom_options_} --feature=$feature_type --use-share-info --chip=$chip_type\
         "${install_type}" "${input_install_path}" "${FILELIST_PATH}"
     if [ -d "$install_dir/tools/ascendc_tools" ];then
-        chmod 550 "$install_dir/tools/ascendc_tools"
+        chmod 555 "$install_dir/tools/ascendc_tools"
     fi
     if [ $? -ne 0 ]; then
         log_and_print $LEVEL_ERROR "Install ${PACKAGE_NAME} files failed."
