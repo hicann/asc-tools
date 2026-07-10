@@ -13,8 +13,8 @@ project(ascendc_cpulib)
 if(BUILD_OPEN_PROJECT)
   set(ASCENDC_FRAMEWORK_DIR ${CMAKE_CURRENT_SOURCE_DIR})
 
-  add_library(tikcfw_headers INTERFACE)
-  target_include_directories(tikcfw_headers INTERFACE
+  add_library(asc_tools_headers INTERFACE)
+  target_include_directories(asc_tools_headers INTERFACE
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/utils>
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/utils/include>
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/utils/include/utils>
@@ -104,7 +104,7 @@ foreach(product_type ${PRODUCT_TYPE_LIST})
   )
   target_link_libraries(cpudebug_${product_type} PRIVATE
     $<BUILD_INTERFACE:intf_pub_cxx17>
-    $<BUILD_INTERFACE:tikcfw_headers>
+    $<BUILD_INTERFACE:asc_tools_headers>
     $<BUILD_INTERFACE:mmpa_headers>
     c_sec
     dl

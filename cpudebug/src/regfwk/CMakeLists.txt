@@ -50,7 +50,7 @@ endif()
 
 target_link_libraries(cpudebug_stubreg PRIVATE
   $<BUILD_INTERFACE:intf_pub>
-  $<BUILD_INTERFACE:tikcfw_headers>
+  $<BUILD_INTERFACE:asc_tools_headers>
   $<BUILD_INTERFACE:mmpa_headers>
   c_sec
   dl
