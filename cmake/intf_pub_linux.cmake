@@ -19,7 +19,7 @@ target_compile_options(intf_pub INTERFACE
   -fPIC
   -Werror
   $<IF:$<VERSION_GREATER:${CMAKE_C_COMPILER_VERSION},4.8.5>,-fstack-protector-strong,-fstack-protector-all>
-  $<$<COMPILE_LANGUAGE:CXX>:-std=c++14>
+  $<$<COMPILE_LANGUAGE:CXX>:-std=c++17>
   $<$<BOOL:${ENABLE_GCOV}>:-fprofile-arcs -ftest-coverage>
   $<$<BOOL:${ENABLE_ASAN}>:-fsanitize=address -fsanitize=leak -fsanitize-recover=address,all -fno-stack-protector -fno-omit-frame-pointer -g>
 )

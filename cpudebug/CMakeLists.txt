@@ -103,7 +103,7 @@ foreach(product_type ${PRODUCT_TYPE_LIST})
     $<$<STREQUAL:${product_type},ascend950pr_9599>:NO_COSIM>
   )
   target_link_libraries(cpudebug_${product_type} PRIVATE
-    $<BUILD_INTERFACE:intf_pub_cxx17>
+    $<BUILD_INTERFACE:intf_pub>
     $<BUILD_INTERFACE:asc_tools_headers>
     $<BUILD_INTERFACE:mmpa_headers>
     c_sec

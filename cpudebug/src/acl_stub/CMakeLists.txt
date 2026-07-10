@@ -29,7 +29,7 @@ target_compile_definitions(cpudebug_acl_stub PRIVATE
 )
 
 target_link_libraries(cpudebug_acl_stub PRIVATE
-  $<BUILD_INTERFACE:intf_pub_cxx17>
+  $<BUILD_INTERFACE:intf_pub>
   $<BUILD_INTERFACE:acl_rt_headers>
   cpudebug_stubreg
   c_sec
