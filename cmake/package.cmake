@@ -50,6 +50,70 @@ function(pack_custom)
   endif()
 endfunction()
 
+function(patch_rpm_deb_package_generator)
+  if (NOT PACKAGE_TYPE STREQUAL "rpm" AND NOT PACKAGE_TYPE STREQUAL "deb" AND NOT PACKAGE_TYPE STREQUAL "all")
+      return()
+  endif()
+
+  if (PYTHON)
+      set(PATCH_PYTHON "${PYTHON}")
+  elseif (Python3_EXECUTABLE)
+      set(PATCH_PYTHON "${Python3_EXECUTABLE}")
+  else()
+      set(PATCH_PYTHON python3)
+  endif()
+
+  execute_process(
+      COMMAND "${PATCH_PYTHON}" "${CMAKE_CURRENT_SOURCE_DIR}/scripts/package/asc-tools/rpm_deb/patch_cann_cmake_packaging.py" "${CANN_CMAKE_DIR}"
+      RESULT_VARIABLE PATCH_RESULT
+      OUTPUT_VARIABLE PATCH_OUTPUT
+      ERROR_VARIABLE PATCH_ERROR
+  )
+  string(STRIP "${PATCH_OUTPUT}" PATCH_OUTPUT)
+  string(STRIP "${PATCH_ERROR}" PATCH_ERROR)
+  if (PATCH_OUTPUT)
+      message(STATUS "${PATCH_OUTPUT}")
+  endif()
+  if (NOT PATCH_RESULT EQUAL 0)
+      message(FATAL_ERROR "Failed to patch cann-cmake package generator: ${PATCH_ERROR}")
+  endif()
+endfunction()
+
+function(set_rpm_dynamic_path_excludes)
+  if (NOT PACKAGE_TYPE STREQUAL "rpm" AND NOT PACKAGE_TYPE STREQUAL "all")
+      return()
+  endif()
+
+  set(ASC_TOOLS_INSTALL_PREFIX "/usr/local/Ascend/cann-${CANN_VERSION_asc-tools_VERSION}")
+  set(ASC_TOOLS_DYNAMIC_PATHS
+      "compiler"
+      "compiler/conf"
+      "compiler/conf/compile_options_config.json"
+      "share/info/asc-tools/script/install.sh"
+      "share/info/asc-tools/script/run_asc-tools_install.sh"
+      "tools/cpudebug/lib64/Ascend310B1/libtikcpp_debug.so"
+      "tools/cpudebug/lib64/Ascend310P1/libtikcpp_debug.so"
+      "tools/cpudebug/lib64/Ascend910A/libtikcpp_debug.so"
+      "tools/cpudebug/lib64/Ascend910B1/libtikcpp_debug.so"
+      "tools/cpudebug/lib64/Ascend950PR_9599/libtikcpp_debug.so"
+      "tools/cpudebug/lib64/Kirin9030/libtikcpp_debug.so"
+      "tools/cpudebug/lib64/KirinX90/libtikcpp_debug.so"
+      "tools/cpudebug/lib64/libascendc_acl_stub.so"
+      "tools/cpudebug/lib64/libtikicpulib_cceprint.so"
+      "tools/cpudebug/lib64/libtikicpulib_npuchk.so"
+      "tools/cpudebug/lib64/libtikicpulib_stubreg.so"
+  )
+
+  set(ASC_TOOLS_RPM_USER_FILELIST)
+  foreach(DYNAMIC_PATH IN LISTS ASC_TOOLS_DYNAMIC_PATHS)
+      list(APPEND ASC_TOOLS_RPM_USER_FILELIST "%exclude ${ASC_TOOLS_INSTALL_PREFIX}/${DYNAMIC_PATH}")
+  endforeach()
+
+  string(TOUPPER "asc-tools" ASC_TOOLS_COMPONENT_UPPER)
+  set("CPACK_RPM_asc-tools_USER_FILELIST" ${ASC_TOOLS_RPM_USER_FILELIST} PARENT_SCOPE)
+  set("CPACK_RPM_${ASC_TOOLS_COMPONENT_UPPER}_USER_FILELIST" ${ASC_TOOLS_RPM_USER_FILELIST} PARENT_SCOPE)
+endfunction()
+
 function(pack_built_in)
   #### built-in package ####
   message(STATUS "System processor: ${CMAKE_SYSTEM_PROCESSOR}")
@@ -167,7 +231,9 @@ function(pack_built_in)
   message(STATUS "current compute_unit is: ${compute_unit}")
 
   # ============= CPack =============
-  set_cann_cpack_config(asc-tools SHARE_INFO_NAME asc-tools)
+  patch_rpm_deb_package_generator()
+  set_rpm_dynamic_path_excludes()
+  set_cann_cpack_config(asc-tools SHARE_INFO_NAME asc-tools PACKAGE_TYPE "${PACKAGE_TYPE}")
 
 endfunction()
 

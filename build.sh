@@ -13,7 +13,7 @@ set -e
 
 SUPPORTED_SHORT_OPTS=("h" "j" "t" "p")
 SUPPORTED_LONG_OPTS=(
-  "help" "cov" "cache" "pkg" "msot" "asan" "make_clean" "cann_3rd_lib_path" "test" "cann_path" "build-type" "cpp_utest" "python_utest"
+  "help" "cov" "cache" "pkg" "msot" "asan" "make_clean" "cann_3rd_lib_path" "test" "cann_path" "build-type" "pkg-type" "cpp_utest" "python_utest"
 )
 
 CURRENT_DIR=$(dirname $(readlink -f ${BASH_SOURCE[0]}))
@@ -25,6 +25,7 @@ THREAD_NUM=${CPU_NUM}
 CUSTOM_OPTION="-DCMAKE_INSTALL_PREFIX=${OUTPUT_DIR} -DBUILD_OPEN_PROJECT=ON"
 CANN_3RD_LIB_PATH=${CURRENT_DIR}/third_party
 BUILD_TYPE="Release"
+PACKAGE_TYPE="run"
 
 dotted_line="----------------------------------------------------------------"
 
@@ -42,9 +43,11 @@ usage() {
         echo "    -j                   Compile thread nums, default is 16, eg: -j 8"
         echo "    --cann_3rd_lib_path  Set the path for third-party library dependencies, eg: ./build"
         echo "    --asan               Enable ASAN (address Sanitizer)"
+        echo "    --pkg-type=<TYPE>    Specify package type (TYPE options: run/rpm/deb), Default: run"
         echo $dotted_line
         echo "Examples:"
         echo "    bash build.sh --pkg                    # Build asc-tools package"
+        echo "    bash build.sh --pkg --pkg-type=rpm     # Build asc-tools rpm package"
         echo "    bash build.sh --pkg --msot             # Build msot package"
         echo "    bash build.sh --pkg -j 8"
         echo "    bash build.sh --pkg --asan -j 32"
@@ -98,6 +101,8 @@ usage() {
   echo "    --make_clean         Clean build artifacts"
   echo "    --build-type=<TYPE>"
   echo "                         Specify build type (TYPE options: Release/Debug), Default:Release"
+  echo "    --pkg-type=<TYPE>"
+  echo "                         Specify package type (TYPE options: run/rpm/deb), Default:run"
 }
 
 function log() {
@@ -296,6 +301,15 @@ check_param_j() {
   fi
 }
 
+check_pkg_type() {
+  local pkg_type="$1"
+  if [[ "${pkg_type}" != "run" && "${pkg_type}" != "rpm" && "${pkg_type}" != "deb" ]]; then
+    log "[ERROR] Invalid value ${pkg_type} for option --pkg-type"
+    usage
+    exit 1
+  fi
+}
+
 check_param_clean() {
   if [[ "$#" -gt 1 || ( "$#" -eq 2 && $has_h == "true" ) ]]; then
     log "[ERROR] --make_clean must be used separately."
@@ -423,6 +437,16 @@ set_options() {
       IS_BUILD="true"
       BUILD_TYPE="$2"
       check_param_test_pkg
+      shift 2
+      ;;
+    --pkg-type=*)
+      PACKAGE_TYPE="${1#*=}"
+      check_pkg_type "${PACKAGE_TYPE}"
+      shift
+      ;;
+    --pkg-type)
+      PACKAGE_TYPE="$2"
+      check_pkg_type "${PACKAGE_TYPE}"
       shift 2
       ;;
     *)
@@ -849,7 +873,7 @@ main() {
     CUSTOM_OPTION="${CUSTOM_OPTION} -DPACKAGE_OPEN_PROJECT=ON"
   fi
 
-  CUSTOM_OPTION="${CUSTOM_OPTION} -DASCEND_CANN_PACKAGE_PATH=${ASCEND_CANN_PACKAGE_PATH} -DCANN_3RD_LIB_PATH=${CANN_3RD_LIB_PATH} -DCMAKE_BUILD_TYPE=${BUILD_TYPE}"
+  CUSTOM_OPTION="${CUSTOM_OPTION} -DASCEND_CANN_PACKAGE_PATH=${ASCEND_CANN_PACKAGE_PATH} -DCANN_3RD_LIB_PATH=${CANN_3RD_LIB_PATH} -DCMAKE_BUILD_TYPE=${BUILD_TYPE} -DPACKAGE_TYPE=${PACKAGE_TYPE}"
 
   if [[ ! -d "${BUILD_DIR}" ]]; then
     mkdir -p "${BUILD_DIR}"

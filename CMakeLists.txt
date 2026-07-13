@@ -34,6 +34,8 @@ set(KIRIN_BUILD_CPU_DEBUG OFF)
 set(CMAKE_C_FLAGS_RELEASE "")
 set(CMAKE_CXX_FLAGS_RELEASE "")
 
+include(version.cmake)
+
 if(BUILD_OPEN_PROJECT)
     find_package(Python3 COMPONENTS Interpreter)
     set(HI_PYTHON ${Python3_EXECUTABLE})
@@ -48,7 +50,6 @@ endif()
 
 set(ASCEND_INSTALL_PATH "${ASCEND_CANN_PACKAGE_PATH}")
 
-include(version.cmake)
 if(BUILD_OPEN_PROJECT)
   include(cmake/third_party/cpudebug.cmake)
 endif()
