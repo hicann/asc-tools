@@ -206,7 +206,7 @@ source /usr/local/Ascend/cann/set_env.sh
   ```
 - 若您的编译环境无法访问网络，可以通过压缩包方式下载（下载时间较短，但步骤稍微复杂）。
 
-  **注：如果需要下载其它版本代码，请先请根据前置条件说明进行asc-tools仓分支切换。下载压缩包命名跟tag/branch相关，此处以master分支为例，下载的名字将会是asc-tools-master.zip**
+  **注：如果需要下载其它版本代码，请先根据前置条件说明进行asc-tools仓分支切换。下载压缩包命名跟tag/branch相关，此处以master分支为例，下载的名字将会是asc-tools-master.zip**
   ```bash
   # 1. asc-tools仓右上角选择 【下载ZIP】。
   # 2. 将ZIP包上传到开发环境中的普通用户某个目录中，【例如：${git_clone_path}/asc-tools-master.zip】。
