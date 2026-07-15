@@ -31,4 +31,3 @@ setup(name="show_kernel_debug_data",
       description="show_kernel_debug_data: ",
       packages=find_packages(where=".", include=("*",)),
 )
-

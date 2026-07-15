@@ -1,5 +1,14 @@
 #!/usr/bin/env python
 # -*- coding: UTF-8 -*-
+# ----------------------------------------------------------------------------------------------------------
+# Copyright (c) 2026 Huawei Technologies Co., Ltd.
+# This program is free software, you can redistribute it and/or modify it under the terms and conditions of
+# CANN Open Software License Agreement Version 2.0 (the "License").
+# Please refer to the License for details. You may not use this file except in compliance with the License.
+# THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
+# INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
+# See LICENSE in the root of the software repository for the full text of the License.
+# ----------------------------------------------------------------------------------------------------------
 """
 Created on Feb  28 20:56:45 2020
 Copyright (c) Huawei Technologies Co., Ltd. 2020-2021. All rights reserved.
@@ -407,7 +416,7 @@ grep -q \"None of the given tiling keys are in the supported list\"; then\n"
 
         build_cmd_var += ")\n"
         build_cmd_var += "\n"
-    
+
         check_result = self._generate_check_result(enable_tiling_keys, bin_file)
         build_cmd_var += check_result
         build_cmd_var += f'echo "[{self.soc}] Generating {bin_file} Done"\n'
@@ -501,7 +510,7 @@ def gen_bin_param_file(cfgfile: str, out_dir: str, soc: str,
 
     debug_config = defaultdict(set)
     super_config = defaultdict(set)
-    
+
     op_descs = opdesc_parser.get_op_desc(cfgfile, [], [], BinParamBuilder, ops)
     tiling_key_info, op_debug_config = parse_op_debug_confg(opc_config_file, soc)
     for _op_type, _op_option in op_debug_config.items():

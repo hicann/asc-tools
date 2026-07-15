@@ -31,4 +31,3 @@ setup(name="msobjdump",
       description="msobjdump: ",
       packages=find_packages(where=".", include=("*",)),
 )
-

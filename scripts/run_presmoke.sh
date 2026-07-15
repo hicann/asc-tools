@@ -64,7 +64,7 @@ format_duration() {
 run_example1() {
     local base_path=$1
     local example_name=$2
-    
+
     cd "${base_path}/${example_name}/" || return 1
     rm -rf build
     cmake -B build -DCMAKE_ASC_RUN_MODE=cpu -DCMAKE_ASC_ARCHITECTURES=dav-2201 || return 1
@@ -76,7 +76,7 @@ run_example1() {
 run_example2() {
     local base_path=$1
     local example_name=$2
-    
+
     cd "${base_path}/${example_name}/" || return 1
     rm -rf build
     mkdir -p build && cd build || return 1
@@ -90,27 +90,27 @@ run_test_case() {
     local tools_path=$1
     local example_name=$2
     local log_path=$3
-    
+
     local case_name="${example_name}"
     local start_time end_time duration elapsed
-    
+
     start_time=$(date +%s)
     echo ">>>>>>>>>>>>>>>>>>>>> $(date '+%Y-%m-%d %H:%M:%S') run ${case_name} start! <<<<<<<<<<<<<<<<<<<<<"
-    
+
     if [ "${case_name}" == "01_show_kernel_debug_data" ]; then
         run_example2 "${tools_path}" "${example_name}" 2>&1 | tee "${log_path}/${case_name}.log"
     else
         run_example1 "${tools_path}" "${example_name}" 2>&1 | tee "${log_path}/${case_name}.log"
     fi
-    
+
     local test_result=${PIPESTATUS[0]}
     end_time=$(date +%s)
     duration=$((end_time - start_time))
     elapsed=$(format_duration "${duration}")
-    
+
     echo "test case ${case_name} duration: ${elapsed}"
     echo ">>>>>>>>>>>>>>>>>>>>> $(date '+%Y-%m-%d %H:%M:%S') run ${case_name} finished! <<<<<<<<<<<<<<<<<<<<<"
-    
+
     return ${test_result}
 }
 
@@ -119,28 +119,28 @@ main() {
     echo "Current directory: ${PWD}"
     echo "Tools path: ${TOOLS_PATH}"
     echo "Log path: ${LOG_PATH}"
-    
+
     local start_time end_time total_duration total_elapsed
-    
+
     start_time=$(date +%s)
     echo "=== $(date '+%Y-%m-%d %H:%M:%S') ==="
-    
+
     # 准备日志目录
     mkdir -p "${LOG_PATH}"
     rm -rf "${LOG_PATH:?}"/*
     rm -f result_tools.txt tools_cases.txt
-    
+
     # 执行所有测试用例
     for example_name in "${EXAMPLE_LIST[@]}"; do
         run_test_case "${TOOLS_PATH}" "${example_name}" "${LOG_PATH}"
     done
-    
+
     # 分析测试结果
     cd "${LOG_PATH}"
     ls * > ../tools_cases.txt
     sed -i 's/.log//g' ../tools_cases.txt
     cd ..
-    
+
     while read -r line; do
         if [ -z "${line}" ]; then
             continue
@@ -152,7 +152,7 @@ main() {
             echo "${line} fail" >> result_tools.txt
         fi
     done < tools_cases.txt
-    
+
     # 检查是否有失败的测试
     prf2=$(grep -E "fail" result_tools.txt || true)
     if [ -n "$prf2" ]; then
@@ -166,7 +166,7 @@ main() {
     else
         echo "execute samples success"
     fi
-    
+
     # 输出总耗时
     end_time=$(date +%s)
     total_duration=$((end_time - start_time))

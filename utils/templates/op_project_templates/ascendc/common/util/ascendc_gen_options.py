@@ -65,14 +65,14 @@ def gen_compile_options(compile_options_file: str, op_type: str, \
         write_options_to_file(compile_options_file, options_str, op_type, compute_unit, ",")
     opc_config_str = ""
     if opc_debug_config:
-        opc_config_str = "--op_debug_config=" + ';'.join([opt for opt in opc_debug_config]) 
+        opc_config_str = "--op_debug_config=" + ';'.join([opt for opt in opc_debug_config])
     if len(opc_tiling_keys) > 0:
         if opc_config_str != "":
             opc_config_str += "@"
         opc_config_str += "--tiling_key=" + opc_tiling_keys
 
     if opc_config_str != "":
-        write_options_to_file(opc_config_file, opc_config_str, op_type, compute_unit, "@") 
+        write_options_to_file(opc_config_file, opc_config_str, op_type, compute_unit, "@")
 
 
 if __name__ == '__main__':

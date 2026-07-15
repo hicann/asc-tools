@@ -37,7 +37,7 @@ def download_files_native(url_list, target_dir):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Download files from URLs.")
-    parser.add_argument('--dest_dir', '-d', type=str, default='.', 
+    parser.add_argument('--dest_dir', '-d', type=str, default='.',
                         help='Target directory to save files (default: current directory)')
     args = parser.parse_args()
 

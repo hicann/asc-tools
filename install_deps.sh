@@ -353,7 +353,7 @@ install_googletest() {
             # Install libgtest-dev
             msg_1="1. Download source: wget https://github.com/google/googletest/archive/refs/tags/release-1.11.0.tar.gz"
             msg_2="2. Extract and compile: tar -zxf release-1.11.0.tar.gz && cd googletest-release-1.11.0 && cmake . && make && sudo make install"
-            
+
             apt_ver=$(apt list libgtest-dev -a 2>&1 | awk 'NR == 5 {print $2}')
             if version_ge "$req_ver" "$apt_ver"; then
                 echo "The gtest version provided by apt is too old. Please install it manually:"

@@ -172,7 +172,7 @@ class MetaInfo:
     def get_size(cls):
         fmt = cls.get_format()
         return struct.calcsize(fmt)
-    
+
     def unpack(self, buffer):
         core_type_convert = {
             0: "MIX",
@@ -258,7 +258,7 @@ dtype_to_fmt = {
     0: 'f',  # DT_FLOAT
     1: 'e',  # DT_FLOAT16
     2: 'b',  # DT_INT8
-    3: 'i',  # DT_INT32   
+    3: 'i',  # DT_INT32
     4: 'B',  # DT_UINT8
     6: 'h',  # DT_INT16
     7: 'H',  # DT_UINT16

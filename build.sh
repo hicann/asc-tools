@@ -493,17 +493,17 @@ function detect_msot_zone() {
 function create_symlink() {
   local src_path="$1"
   local dst_path="$2"
-  
+
   if [[ ! -e "${src_path}" && ! -L "${src_path}" ]]; then
     log "[WARNING] Source not found: ${src_path}"
     return 1
   fi
-  
+
   if [[ -e "${dst_path}" || -L "${dst_path}" ]]; then
     log "[INFO] Symlink already exists: ${dst_path}"
     return 0
   fi
-  
+
   ln -s "${src_path}" "${dst_path}"
   log "[INFO] Created symlink: ${dst_path} -> ${src_path}"
   return 0
@@ -513,9 +513,9 @@ function create_symlink() {
 function create_msot_submodule_symlinks() {
   local msot_path="$1"
   local mindstudio_path="$2"
-  
+
   log "Creating submodule symlinks for existing msot..."
-  
+
   # 创建子仓软链
   for submodule in "${MSOT_SUBMODULES[@]}"; do
     local src_path="${mindstudio_path}/${submodule}"
@@ -528,23 +528,23 @@ function create_msot_submodule_symlinks() {
 function create_msopscommon_symlinks() {
   local msot_path="$1"
   local mindstudio_path="$2"
-  
+
   log "Creating msopscommon symlinks..."
-  
+
   local msopcom_src="${mindstudio_path}/msopcom"
-  
+
   # msopprof/msopscommon -> mindstudio/msopcom
   local msopprof_path="${msot_path}/msopprof"
   if [[ -d "${msopprof_path}" ]]; then
     create_symlink "${msopcom_src}" "${msopprof_path}/msopscommon"
   fi
-  
+
   # mssanitizer/msopscommon -> mindstudio/msopcom
   local mssanitizer_path="${msot_path}/mssanitizer"
   if [[ -d "${mssanitizer_path}" ]]; then
     create_symlink "${msopcom_src}" "${mssanitizer_path}/msopscommon"
   fi
-  
+
   # 为 msopcom 创建三方依赖软链（json等）
   create_msopcom_thirdparty_symlinks "${msot_path}" "${mindstudio_path}"
 }
@@ -553,26 +553,26 @@ function create_msopscommon_symlinks() {
 function create_msopcom_thirdparty_symlinks() {
   local msot_path="$1"
   local mindstudio_path="$2"
-  
+
   log "Creating msopcom third-party symlinks..."
-  
+
   local msopcom_src="${mindstudio_path}/msopcom"
-  
+
   if [[ ! -d "${msopcom_src}" ]]; then
     log "[WARNING] msopcom not found: ${msopcom_src}"
     return
   fi
-  
+
   # 为每个依赖 msopcom 的子仓创建三方库软链
   for parent in "msopprof" "mssanitizer"; do
     local parent_path="${msot_path}/${parent}"
     local msopscommon_path="${parent_path}/msopscommon"
-    
+
     if [[ ! -d "${msopscommon_path}" ]]; then
       continue
     fi
-    
-    local thirdparty_dst="${msopscommon_path}/thirdparty"   
+
+    local thirdparty_dst="${msopscommon_path}/thirdparty"
     create_symlink "${CANN_3RD_LIB_PATH}/json" "${thirdparty_dst}/json"
   done
 }
@@ -580,53 +580,53 @@ function create_msopcom_thirdparty_symlinks() {
 # 创建三方库软链
 function create_thirdparty_symlinks() {
   local msot_path="$1"
-  
+
   log "Creating third-party library symlinks..."
-  
+
   # 三方库源路径（CANN_3RD_LIB_PATH）
   local thirdparty_src_base="${CANN_3RD_LIB_PATH}"
   # asc-tools 特殊路径（与mindstudio同级）
   local asc_tools_src="${CANN_3RD_LIB_PATH}/../asc/asc-tools"
   local securec_src="${CANN_3RD_LIB_PATH}/../abl/libc_sec"
-  
+
   for submodule in "${MSOT_SUBMODULES[@]}" "msot"; do
     local config="${SUBMODULE_THIRDPARTY_DEPS[$submodule]}"
     if [[ -z "${config}" ]]; then
       continue
     fi
-    
+
     # 解析配置: "thirdparty:lib1,lib2,..."
     local thirdparty_dir="${config%%:*}"
     local libs="${config#*:}"
-    
+
     # 如果没有依赖库，跳过
     if [[ -z "${libs}" ]]; then
       continue
     fi
-    
+
     local submodule_path
     if [[ "${submodule}" == "msot" ]]; then
       submodule_path="${msot_path}"
     else
       submodule_path="${msot_path}/${submodule}"
     fi
-    
+
     # 如果子仓目录不存在，跳过
     if [[ ! -d "${submodule_path}" ]]; then
       log "[WARNING] Submodule directory not found: ${submodule_path}"
       continue
     fi
-    
+
     # 创建 thirdparty 目录（如果不存在）
     local thirdparty_dst="${submodule_path}/${thirdparty_dir}"
     mkdir -p "${thirdparty_dst}"
-    
+
     # 为每个三方库创建软链
     IFS=',' read -ra lib_array <<< "${libs}"
     for lib in "${lib_array[@]}"; do
       local lib_src lib_dst
       local lib_src_name lib_dst_name
-      
+
       # 解析 "源名->目标名" 格式
       if [[ "${lib}" == *"->"* ]]; then
         lib_src_name="${lib%%->*}"
@@ -635,16 +635,16 @@ function create_thirdparty_symlinks() {
         lib_src_name="${lib}"
         lib_dst_name="${lib}"
       fi
-      
+
       # makeself 特殊处理：复制 tar.gz 和 patch 到子仓，让 CMake 正常解压
       if [[ "${lib_dst_name}" == "makeself" ]]; then
         local makeself_src="${thirdparty_src_base}/${lib_src_name}"
         local makeself_dst="${thirdparty_dst}/${lib_dst_name}"
-        
+
         if [[ -d "${makeself_src}" ]]; then
           # 确保目标目录存在
           mkdir -p "${makeself_dst}"
-          
+
           # 检查源目录是否已有 tar 包和 patch 文件
           if ls ${makeself_src}/makeself-*.tar.gz 1>/dev/null 2>&1 && ls ${makeself_src}/makeself-*.patch 1>/dev/null 2>&1; then
             # 已有 tar.gz 和 patch，直接复制到目标目录
@@ -657,7 +657,7 @@ function create_thirdparty_symlinks() {
           else
             # 在源目录创建 tar 包和 patch 文件
             log "Creating makeself tar and patch in ${makeself_src}..."
-            
+
             # 创建 tar 包（带外层目录 makeself-custom/）
             local tar_name="makeself-custom.tar.gz"
             local patch_name="makeself-custom.patch"
@@ -669,7 +669,7 @@ function create_thirdparty_symlinks() {
             rm -rf "${temp_dir}"
             mv "${temp_tar}" "${makeself_src}/${tar_name}"
             log "[INFO] Created ${makeself_src}/${tar_name}"
-            
+
             # 创建固定格式的 patch 文件
             # makeself.sh 文件内容固定，使用硬编码的空操作 patch
             cat > "${makeself_src}/${patch_name}" << 'PATCH_EOF'
@@ -687,7 +687,7 @@ index aa55dc0..302f96a 100755
 
 PATCH_EOF
             log "[INFO] Created ${makeself_src}/${patch_name}"
-            
+
             # 复制 tar.gz 和 patch 到目标目录
             cp -f "${makeself_src}/${tar_name}" "${makeself_dst}/"
             cp -f "${makeself_src}/${patch_name}" "${makeself_dst}/"
@@ -698,7 +698,7 @@ PATCH_EOF
         fi
         continue
       fi
-      
+
       # 确定源路径
       if [[ "${lib_dst_name}" == "asc-tools" ]]; then
         # asc-tools 特殊处理：指向asc-tools路径
@@ -709,7 +709,7 @@ PATCH_EOF
       else
         lib_src="${thirdparty_src_base}/${lib_src_name}"
       fi
-      
+
       lib_dst="${thirdparty_dst}/${lib_dst_name}"
       create_symlink "${lib_src}" "${lib_dst}"
     done
@@ -720,7 +720,7 @@ PATCH_EOF
 function prepare_msot_submodule() {
   local msot_path="$1"
   local msot_url="https://gitcode.com/Ascend/msot.git"
-  
+
   # 情况1：msot目录已存在
   if [[ -d "${msot_path}" ]]; then
     # 检查是否是git submodule
@@ -728,33 +728,33 @@ function prepare_msot_submodule() {
       log "msot submodule already configured"
       return 0
     fi
-    
+
     # 检查是否是软链
     if [[ -L "${msot_path}" ]]; then
       log "Using existing msot symlink: ${msot_path}"
       return 0
     fi
-    
+
     # 已存在普通目录，检查是否是git仓库
     if [[ -d "${msot_path}/.git" ]]; then
       log "Using existing msot git repository: ${msot_path}"
       return 0
     fi
-    
+
     log "[WARNING] ${msot_path} exists but is not a valid git repository or submodule"
     return 1
   fi
-  
+
   # 情况2：msot未配置，尝试自动添加submodule
   log "msot not found, adding as git submodule..."
-  
+
   # 检查是否已经在.gitmodules中配置
   if git config --file .gitmodules --get submodule.msot.url >/dev/null 2>&1; then
     log "msot already in .gitmodules, initializing..."
     git submodule update --init --no-fetch msot
     return $?
   fi
-  
+
   # 自动添加submodule（不递归）
   log "Adding msot submodule from ${msot_url}..."
   git submodule add --depth 1 "${msot_url}" msot
@@ -762,7 +762,7 @@ function prepare_msot_submodule() {
     log "[ERROR] Failed to add msot submodule"
     return 1
   fi
-  
+
   log "msot submodule added successfully"
   return 0
 }
@@ -771,26 +771,26 @@ function prepare_msot_submodule() {
 function build_msot() {
   detect_msot_zone
   local msot_path="${CURRENT_DIR}/msot"
-  
+
   if [[ -d "${CANN_3RD_LIB_PATH}/../mindstudio" ]]; then
     # 使用构建环境中的mindstudio源码
     log "Building msot with existing msot..."
     log "MindStudio path: ${MSOT_MINDSTUDIO_PATH}"
     log "CANN_3RD_LIB_PATH: ${CANN_3RD_LIB_PATH}"
-    
+
     # msot源码路径
     local msot_src="${MSOT_MINDSTUDIO_PATH}/msot"
-    
+
     if [[ ! -d "${msot_src}" ]]; then
       log "[ERROR] msot directory not found: ${msot_src}"
       exit 1
     fi
-    
+
     # 创建所有软链
     create_msot_submodule_symlinks "${msot_src}" "${MSOT_MINDSTUDIO_PATH}"
     create_msopscommon_symlinks "${msot_src}" "${MSOT_MINDSTUDIO_PATH}"
     create_thirdparty_symlinks "${msot_src}"
-    
+
     # 切换到msot目录，使用local模式构建
     cd "${msot_src}"
     python3 build.py local
@@ -809,19 +809,19 @@ function build_msot() {
   else
     # 使用git submodule
     log "Building msot with submodule..."
-    
+
     # 1. 自动准备msot submodule（不存在则自动添加）
     if ! prepare_msot_submodule "${msot_path}"; then
       log "[ERROR] Failed to prepare msot submodule"
       exit 1
     fi
-    
+
     # 2. 如果是git submodule，初始化（不递归）
     if [[ -f "${msot_path}/.git" ]]; then
       log "Initializing msot submodule (non-recursive)..."
       git submodule update --init --no-fetch msot
     fi
-    
+
     # 3. 让msot的build.py处理所有其他依赖（makeself、子仓、msopscommon等）
     cd "${msot_path}"
     log "Running: python3 build.py"

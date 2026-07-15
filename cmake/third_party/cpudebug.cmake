@@ -24,7 +24,7 @@ endif ()
 if (IS_DIRECTORY ${CMAKE_SOURCE_DIR}/libraries/lib AND NOT EXISTS ${CMAKE_SOURCE_DIR}/libraries/lib/cmake/targets-tikicpulib-${BUILD_TYPE_LOWER}.cmake)
     execute_process(
         COMMAND ${CMAKE_COMMAND} -E rm -rf ${CMAKE_SOURCE_DIR}/libraries/lib
-        COMMENT "Removing ${CMAKE_SOURCE_DIR}/libraries/lib directory..." 
+        COMMENT "Removing ${CMAKE_SOURCE_DIR}/libraries/lib directory..."
     )
 endif()
 

@@ -76,7 +76,7 @@ class DumpParserLog:
         log_path = os.path.dirname(log_file)
         if not log_path:
             log_path = os.getcwd()
-        
+
         log_file = os.path.join(log_path, file_name)
         print("log file saves to ", log_file)
         self._set_log_file(log_file)

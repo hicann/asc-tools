@@ -7,13 +7,33 @@ ci:
   autoupdate_schedule: monthly
 
 repos:
+ # pre-commit 基础检查
+  - repo: https://gitcode.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: trailing-whitespace
+        exclude: \.md$
+      - id: end-of-file-fixer
+        exclude: \.md$
+      - id: check-yaml
+        args: ["--allow-multiple-documents"]
+      - id: check-added-large-files
+      - id: check-merge-conflict
+      - id: detect-private-key
+      - id: check-json
+        exclude: ^\.devcontainer/devcontainer\.json$
   # C++ 代码格式化检查
   - repo: https://gitcode.com/pre-commit-clang/mirrors-clang-format
     rev: v18.1.8
     hooks:
       - id: clang-format
         types_or: [file]
-        files: \.(c|h|cpp|hpp|cc|hh|cxx|hxx|asc)$
+        files: |
+          (?x)^(
+            examples/|
+            tests/ut/
+          ).*\.(c|h|cpp|hpp|cc|hh|cxx|hxx|asc)$
+        exclude: ^(third_party/|cmake/third_party/|tests/third_party/)
         args:
           - "--style=file"
           - "--verbose"
@@ -27,6 +47,8 @@ repos:
         entry: bash scripts/oat_check.sh
         language: system
         pass_filenames: true
+        require_serial: true
         types: [file]
+        exclude: ^LICENSE$
         stages: [pre-commit]
         verbose: true

@@ -88,9 +88,9 @@ else()
         if(NOT third_party_msot_POPULATED)
             FetchContent_Populate(third_party_msot)
         endif()
-        execute_process(                                                                                                                                                                               
+        execute_process(
             COMMAND git submodule update --remote msopgen
-            WORKING_DIRECTORY "${_ms_root}/msot"                                                                                                                                         
+            WORKING_DIRECTORY "${_ms_root}/msot"
         )
     endif()
 endif()

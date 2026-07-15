@@ -1,5 +1,14 @@
 #!/usr/bin/env python
 # -*- coding: UTF-8 -*-
+# ----------------------------------------------------------------------------------------------------------
+# Copyright (c) 2026 Huawei Technologies Co., Ltd.
+# This program is free software, you can redistribute it and/or modify it under the terms and conditions of
+# CANN Open Software License Agreement Version 2.0 (the "License").
+# Please refer to the License for details. You may not use this file except in compliance with the License.
+# THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
+# INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
+# See LICENSE in the root of the software repository for the full text of the License.
+# ----------------------------------------------------------------------------------------------------------
 # Copyright (c) Huawei Technologies Co., Ltd. 2024. All rights reserved.
 
 import os
@@ -53,7 +62,7 @@ class PackKernel:
         name = name.replace("/", "_")
         name = name.replace("-", "_")
         return name.replace(".", "_")
-    
+
     def ascendc_gen_object(self: any, in_file: str, path: str, vname: str):
         in_file = vname + "/" + in_file
         path = vname + "/" + path
@@ -89,7 +98,7 @@ class PackKernel:
                                       AscendCLogLevel.LOG_ERROR, LogUtil.Option.NON_SOC)
             return None
         return [sym + "_start", sym + "_end"]
-    
+
     def ascendc_get_config(self: any):
         os.chdir(self.copy_path)
         current_directory = os.getcwd()
@@ -118,7 +127,7 @@ class PackKernel:
                 op_info[file_name].append(os.path.join(self.vendor_name, path))
                 op_info[file_name].append(self.ascendc_gen_object(op_cfgs[file_name], path, self.vendor_name))
         self.op_info = op_info
-    
+
     def ascendc_gen_register(self, macro_op, var_str):
         registry_file = os.path.join(self.registry_path, "custom_op_registry_V2.cpp")
         try:
@@ -211,7 +220,7 @@ class PackKernel:
                     "const uint8_t *, const uint8_t *>> __ascendc_op_info_" + self.vendor_name + " = \n")
         macro_op_register += "{{\n{}}}; \n".format("".join(socs_res))
         self.ascendc_gen_register(macro_op_register, var_str)
-    
+
     def ascendc_gen_lib(self: any):
         out_lib = os.path.join(self.out_path, "libopregistry.a")
         if os.path.exists(out_lib):
