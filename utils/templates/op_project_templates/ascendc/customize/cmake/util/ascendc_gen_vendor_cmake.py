@@ -137,7 +137,11 @@ def make_targets_file(filename, output_dir, static_lib_name, dynamic_lib_name):
     output_targets_file = os.path.join(output_dir, f"{filename}-targets.cmake")
     os.makedirs(output_dir, exist_ok=True)
 
-    values = {"replace_op": filename, "static_lib_name": static_lib_name, "dynamic_lib_name": dynamic_lib_name}
+    values = {
+        "replace_op": filename,
+        "static_lib_name": static_lib_name,
+        "dynamic_lib_name": dynamic_lib_name,
+    }
     content = TARGETS_CONTEXT.strip()
     for key in sorted(values, key=lambda x: len(x), reverse=True):
         content = re.sub(f"##{{{key}}}##", values.get(key, ""), content)
@@ -148,18 +152,10 @@ def make_targets_file(filename, output_dir, static_lib_name, dynamic_lib_name):
 
 def args_parse():
     parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "-v", "--vendor-name", help="Vendor name for cmake file."
-    )
-    parser.add_argument(
-        "-o", "--output-path", help="Ouput path for cmake file."
-    )
-    parser.add_argument(
-        "-s", "--static-lib-name", help="Static lib name."
-    )
-    parser.add_argument(
-        "-d", "--dynamic-lib-name", help="Dynamic lib name."
-    )
+    parser.add_argument("-v", "--vendor-name", help="Vendor name for cmake file.")
+    parser.add_argument("-o", "--output-path", help="Ouput path for cmake file.")
+    parser.add_argument("-s", "--static-lib-name", help="Static lib name.")
+    parser.add_argument("-d", "--dynamic-lib-name", help="Dynamic lib name.")
     return parser.parse_args()
 
 
@@ -168,9 +164,14 @@ def main():
         args = args_parse()
 
         make_config_file(args.vendor_name, args.output_path)
-        make_targets_file(args.vendor_name, args.output_path, args.static_lib_name, args.dynamic_lib_name)
+        make_targets_file(
+            args.vendor_name,
+            args.output_path,
+            args.static_lib_name,
+            args.dynamic_lib_name,
+        )
     except Exception as e:
-        raise(e)
+        raise (e)
 
 
 if __name__ == "__main__":

@@ -12,7 +12,6 @@
 # Copyright (c) Huawei Technologies Co., Ltd. 2024. All rights reserved.
 
 import os
-import sys
 import subprocess
 import json
 import glob
@@ -34,8 +33,12 @@ class PackKernel:
         try:
             os.makedirs(self.out_path, exist_ok=True)
         except Exception as e:
-            LogUtil.print_compile_log("", f"make {self.out_path} error: {e}!",
-                                      AscendCLogLevel.LOG_ERROR, LogUtil.Option.NON_SOC)
+            LogUtil.print_compile_log(
+                "",
+                f"make {self.out_path} error: {e}!",
+                AscendCLogLevel.LOG_ERROR,
+                LogUtil.Option.NON_SOC,
+            )
 
     def load_json(self: any, json_file: str):
         with open(json_file, encoding="utf-8") as file:
@@ -49,14 +52,29 @@ class PackKernel:
     def ascendc_gen_object(self: any, in_file: str, soc: str):
         sym = self.get_symbol("_binary_" + in_file)
         out_file = os.path.join(self.out_path, sym + ".o")
-        #ascend610lite only supoort aarch64
-        if soc == 'ascend610lite':
+        # ascend610lite only supoort aarch64
+        if soc == "ascend610lite":
             try:
-                subprocess.run(['llvm-objcopy', '--input-target', 'binary', '--output-target', 'elf64-littleaarch64',
-                                '--binary-architecture', 'aarch64', in_file, out_file])
-            except Exception as e:
-                LogUtil.print_compile_log("", " ascend610lite execute objcopy fail!",
-                                          AscendCLogLevel.LOG_ERROR, LogUtil.Option.NON_SOC)
+                subprocess.run(
+                    [
+                        "llvm-objcopy",
+                        "--input-target",
+                        "binary",
+                        "--output-target",
+                        "elf64-littleaarch64",
+                        "--binary-architecture",
+                        "aarch64",
+                        in_file,
+                        out_file,
+                    ]
+                )
+            except Exception:
+                LogUtil.print_compile_log(
+                    "",
+                    " ascend610lite execute objcopy fail!",
+                    AscendCLogLevel.LOG_ERROR,
+                    LogUtil.Option.NON_SOC,
+                )
                 return None
             return [sym + "_start", sym + "_end"]
         uname = os.popen("uname -m").read().strip()
@@ -66,16 +84,42 @@ class PackKernel:
             target_platform = uname
         try:
             if target_platform == "x86_64":
-                subprocess.run(['llvm-objcopy', '--input-target', 'binary', '--output-target', 'elf64-x86-64',
-                                '--binary-architecture', 'i386', in_file, out_file])
+                subprocess.run(
+                    [
+                        "llvm-objcopy",
+                        "--input-target",
+                        "binary",
+                        "--output-target",
+                        "elf64-x86-64",
+                        "--binary-architecture",
+                        "i386",
+                        in_file,
+                        out_file,
+                    ]
+                )
             elif target_platform == "aarch64":
-                subprocess.run(['llvm-objcopy', '--input-target', 'binary', '--output-target', 'elf64-littleaarch64',
-                                '--binary-architecture', 'aarch64', in_file, out_file])
+                subprocess.run(
+                    [
+                        "llvm-objcopy",
+                        "--input-target",
+                        "binary",
+                        "--output-target",
+                        "elf64-littleaarch64",
+                        "--binary-architecture",
+                        "aarch64",
+                        in_file,
+                        out_file,
+                    ]
+                )
             else:
-                subprocess.run(['echo', 'unsported environment!'])
+                subprocess.run(["echo", "unsported environment!"])
         except Exception as e:
-            LogUtil.print_compile_log("", f"{target_platform} execute objcopy error: {e}!",
-                                      AscendCLogLevel.LOG_ERROR, LogUtil.Option.NON_SOC)
+            LogUtil.print_compile_log(
+                "",
+                f"{target_platform} execute objcopy error: {e}!",
+                AscendCLogLevel.LOG_ERROR,
+                LogUtil.Option.NON_SOC,
+            )
             return None
         return [sym + "_start", sym + "_end"]
 
@@ -126,10 +170,12 @@ class PackKernel:
     def ascendc_gen_header(self: any):
         for op_type in self.op_info.keys():
             op_obj = self.op_info.get(op_type)
-            macro_op = "#define {}_OP_RESOURCES std::make_tuple<std::vector<void *>, \\\n" \
-            "    std::map<ge::AscendString, std::vector<std::tuple<const uint8_t *, const uint8_t *>>>, \\\n" \
-            "    std::vector<std::tuple<const uint8_t *, const uint8_t *>>>({{{}}}, \\\n".format(
-                op_type, ", ".join(op_obj.get("op_fun"))
+            macro_op = (
+                "#define {}_OP_RESOURCES std::make_tuple<std::vector<void *>, \\\n"
+                "    std::map<ge::AscendString, std::vector<std::tuple<const uint8_t *, const uint8_t *>>>, \\\n"
+                "    std::vector<std::tuple<const uint8_t *, const uint8_t *>>>({{{}}}, \\\n".format(
+                    op_type, ", ".join(op_obj.get("op_fun"))
+                )
             )
             op_bin = op_obj.get("op_bin")
             socs_res = []
@@ -152,9 +198,15 @@ class PackKernel:
             macro_str = '#define {}_RESOURCES {{{{"{}", {}}}}}'.format(
                 op_type, op_type, "{}_OP_RESOURCES".format(op_type)
             )
-            var_str = ("extern gert::OpImplRegisterV2 op_impl_register_optiling_{};\n".format(op_type))
+            var_str = (
+                "extern gert::OpImplRegisterV2 op_impl_register_optiling_{};\n".format(
+                    op_type
+                )
+            )
             if len(op_syms) > 0:
-                var_str += ('extern uint8_t ' + ";\nextern uint8_t ".join(op_syms) + ";\n")
+                var_str += (
+                    "extern uint8_t " + ";\nextern uint8_t ".join(op_syms) + ";\n"
+                )
             head_file = os.path.join(self.out_path, "{}_op_resource.h".format(op_type))
             try:
                 with os.fdopen(
@@ -167,12 +219,16 @@ class PackKernel:
                     fd.write('#include "graph/ascend_string.h"\n')
                     fd.write('#include "register/op_impl_registry.h"\n\n')
                     fd.write(var_str)
-                    fd.write('\n')
+                    fd.write("\n")
                     fd.write(macro_op)
                     fd.write(macro_str)
             except Exception as e:
-                LogUtil.print_compile_log("", f"{op_type}_op_resource.h create error: {e}!",
-                                          AscendCLogLevel.LOG_ERROR, LogUtil.Option.NON_SOC)
+                LogUtil.print_compile_log(
+                    "",
+                    f"{op_type}_op_resource.h create error: {e}!",
+                    AscendCLogLevel.LOG_ERROR,
+                    LogUtil.Option.NON_SOC,
+                )
 
     def ascendc_gen_lib(self: any):
         out_lib = os.path.join(self.out_path, "libkernels.a")
@@ -185,11 +241,15 @@ class PackKernel:
             sub_objs = objs[start : start + batch_size]
             start += batch_size
             try:
-                subprocess.run(['ar', 'qc', out_lib] + sub_objs)
-                subprocess.run(['ranlib', out_lib])
+                subprocess.run(["ar", "qc", out_lib] + sub_objs)
+                subprocess.run(["ranlib", out_lib])
             except Exception as e:
-                LogUtil.print_compile_log("", f"execute ar/ranlib command error: {e}!",
-                                          AscendCLogLevel.LOG_ERROR, LogUtil.Option.NON_SOC)
+                LogUtil.print_compile_log(
+                    "",
+                    f"execute ar/ranlib command error: {e}!",
+                    AscendCLogLevel.LOG_ERROR,
+                    LogUtil.Option.NON_SOC,
+                )
 
     def ascendc_gen_opsinfo(self: any):
         ascendc_ops_config.gen_all_soc_config(self.in_path)
@@ -204,10 +264,18 @@ def args_parse():
         "-o", "--output-path", nargs="?", help="Output path of compile result."
     )
     parser.add_argument(
-        "-l", "--enable-library", nargs="?", default=None, help="Whether library is enabled."
+        "-l",
+        "--enable-library",
+        nargs="?",
+        default=None,
+        help="Whether library is enabled.",
     )
     parser.add_argument(
-        "-p", "--platform", nargs="?", default=None, help="target platform is x86_64 or aarch64."
+        "-p",
+        "--platform",
+        nargs="?",
+        default=None,
+        help="target platform is x86_64 or aarch64.",
     )
     return parser.parse_args()
 

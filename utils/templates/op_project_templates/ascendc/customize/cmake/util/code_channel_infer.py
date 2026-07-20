@@ -13,13 +13,8 @@
 Created on Feb  28 20:56:45 2020
 Copyright (c) Huawei Technologies Co., Ltd. 2020-2021. All rights reserved.
 """
-import os
-import stat
-import ctypes
+
 import collections
-import shutil
-import subprocess
-import copy
 
 """CODE_* is used to cube/vector api is called in operator code
 CODE_MIX means both cube and vector api is called
@@ -42,8 +37,17 @@ def _is_v220(op_product: str):
     return False
 
 
-InfoCodeChanelParams = collections.namedtuple('InfoCodeChanelParams',\
-['src_file', 'tiling_header', 'kernel_name', 'outdir', 'op_product', 'compile_options'])
+InfoCodeChanelParams = collections.namedtuple(
+    "InfoCodeChanelParams",
+    [
+        "src_file",
+        "tiling_header",
+        "kernel_name",
+        "outdir",
+        "op_product",
+        "compile_options",
+    ],
+)
 
 
 def infer_code_channel(params: InfoCodeChanelParams):

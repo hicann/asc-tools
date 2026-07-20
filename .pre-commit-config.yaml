@@ -7,7 +7,7 @@ ci:
   autoupdate_schedule: monthly
 
 repos:
- # pre-commit 基础检查
+  # pre-commit 基础检查
   - repo: https://gitcode.com/pre-commit/pre-commit-hooks
     rev: v4.6.0
     hooks:
@@ -28,16 +28,22 @@ repos:
     hooks:
       - id: clang-format
         types_or: [file]
-        files: |
-          (?x)^(
-            examples/|
-            tests/ut/
-          ).*\.(c|h|cpp|hpp|cc|hh|cxx|hxx|asc)$
+        files: \.(c|h|cpp|hpp|cc|hh|cxx|hxx|asc)$
         exclude: ^(third_party/|cmake/third_party/|tests/third_party/)
         args:
           - "--style=file"
           - "--verbose"
           - "-i"
+
+  # Python 代码检查和格式化
+  - repo: https://gitcode.com/gh_mirrors/ru/ruff-pre-commit
+    rev: v0.14.14
+    hooks:
+      - id: ruff-check
+        args: ["--fix", "--show-fixes"]
+        exclude: ^(third_party/|cmake/third_party/|tests/third_party/|utils/msobjdump/|utils/show_kernel_debug_data/)
+      - id: ruff-format
+        exclude: ^(third_party/|cmake/third_party/|tests/third_party/|utils/msobjdump/|utils/show_kernel_debug_data/)
 
   # OAT 合规性检查 (Open Source Audit Tool)
   - repo: local

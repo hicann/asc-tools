@@ -19,10 +19,9 @@ import argparse
 
 def args_parse():
     parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "-i", "--ini-file", help="op info ini."
-    )
+    parser.add_argument("-i", "--ini-file", help="op info ini.")
     return parser.parse_args()
+
 
 if __name__ == "__main__":
     args = args_parse()

@@ -22,15 +22,16 @@ else:
 
 VERSIONS = "0.1.0"
 
-os.environ['SOURCE_DATE_EPOCH'] = str(int(os.path.getctime(os.path.realpath(__file__))))
+os.environ["SOURCE_DATE_EPOCH"] = str(int(os.path.getctime(os.path.realpath(__file__))))
 
-setup(name="optype_collector",
-      version=VERSIONS,
-      description="optype_collector: collect and detect duplicated CANN OPP OpTypes",
-      packages=find_packages(where=".", include=("*",)),
-      entry_points={
-          "console_scripts": [
-              "optype_collector=optype_collector.optype_collector_main:main",
-          ],
-      },
+setup(
+    name="optype_collector",
+    version=VERSIONS,
+    description="optype_collector: collect and detect duplicated CANN OPP OpTypes",
+    packages=find_packages(where=".", include=("*",)),
+    entry_points={
+        "console_scripts": [
+            "optype_collector=optype_collector.optype_collector_main:main",
+        ],
+    },
 )

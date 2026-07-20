@@ -22,7 +22,7 @@ def download_files_native(url_list, target_dir):
 
     for url in url_list:
         try:
-            file_name = url.split('/')[-1]
+            file_name = url.split("/")[-1]
             if not file_name or file_name == "":
                 file_name = "downloaded_file"
             file_path = os.path.join(target_dir, file_name)
@@ -37,8 +37,13 @@ def download_files_native(url_list, target_dir):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Download files from URLs.")
-    parser.add_argument('--dest_dir', '-d', type=str, default='.',
-                        help='Target directory to save files (default: current directory)')
+    parser.add_argument(
+        "--dest_dir",
+        "-d",
+        type=str,
+        default=".",
+        help="Target directory to save files (default: current directory)",
+    )
     args = parser.parse_args()
 
     tar_urls = [
@@ -47,7 +52,7 @@ if __name__ == "__main__":
         "https://gitcode.com/cann-src-third-party/googletest/releases/download/v1.14.0/googletest-1.14.0.tar.gz",
         "https://gitcode.com/cann-src-third-party/mockcpp/releases/download/v2.7-h2/mockcpp-2.7.tar.gz",
         "https://gitcode.com/cann-src-third-party/mockcpp/releases/download/v2.7-h3/mockcpp-2.7_py3-h3.patch",
-        "https://cann-3rd.obs.cn-north-4.myhuaweicloud.com/cmake/cmake-master-003.tar.gz"
+        "https://cann-3rd.obs.cn-north-4.myhuaweicloud.com/cmake/cmake-master-003.tar.gz",
     ]
 
     download_files_native(tar_urls, args.dest_dir)

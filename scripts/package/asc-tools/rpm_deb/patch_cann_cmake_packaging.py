@@ -18,8 +18,14 @@ GENERATOR_RELATIVE_PATH = Path("scripts") / "package" / "gen_postinst_prerm.py"
 EUID_ROOT_CHECK = 'if [ "$EUID" -eq 0 ]; then'
 POSIX_ROOT_CHECK = 'if [ "$(id -u)" -eq 0 ]; then'
 TARGET_CLEANUP_REPLACEMENTS = (
-    ('rm -rf \\"$INSTALL_PATH\\"/\\"{target}\\"', 'rmdir \\"$INSTALL_PATH\\"/\\"{target}\\" 2>/dev/null || true'),
-    ('rm -rf "$INSTALL_PATH"/"{target}"', 'rmdir "$INSTALL_PATH"/"{target}" 2>/dev/null || true'),
+    (
+        'rm -rf \\"$INSTALL_PATH\\"/\\"{target}\\"',
+        'rmdir \\"$INSTALL_PATH\\"/\\"{target}\\" 2>/dev/null || true',
+    ),
+    (
+        'rm -rf "$INSTALL_PATH"/"{target}"',
+        'rmdir "$INSTALL_PATH"/"{target}" 2>/dev/null || true',
+    ),
 )
 
 
@@ -29,10 +35,14 @@ def patch_content(content):
         patched = patched.replace(old, new)
 
     if "$EUID" in patched:
-        raise RuntimeError("failed to remove EUID root checks from gen_postinst_prerm.py")
+        raise RuntimeError(
+            "failed to remove EUID root checks from gen_postinst_prerm.py"
+        )
     for old, _ in TARGET_CLEANUP_REPLACEMENTS:
         if old in patched:
-            raise RuntimeError("failed to replace recursive target directory cleanup in gen_postinst_prerm.py")
+            raise RuntimeError(
+                "failed to replace recursive target directory cleanup in gen_postinst_prerm.py"
+            )
     return patched
 
 
@@ -46,8 +56,12 @@ def patch_file(path):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Patch cann-cmake package generator for asc-tools rpm/deb packaging.")
-    parser.add_argument("cann_cmake_dir", help="Path to fetched cann-cmake source directory")
+    parser = argparse.ArgumentParser(
+        description="Patch cann-cmake package generator for asc-tools rpm/deb packaging."
+    )
+    parser.add_argument(
+        "cann_cmake_dir", help="Path to fetched cann-cmake source directory"
+    )
     args = parser.parse_args()
 
     generator_path = Path(args.cann_cmake_dir) / GENERATOR_RELATIVE_PATH

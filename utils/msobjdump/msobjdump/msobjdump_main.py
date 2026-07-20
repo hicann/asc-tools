@@ -168,15 +168,15 @@ class ObjDump:
             print(f"{F_TYPE_MAP.get(t)}: {v}")
 
     @staticmethod
-    def _unpack_buff_content_by_type(content: bytes, start_idx: int, read_len: int, type_str: str):
+    def _unpack_buff_content_by_type(content: bytes, start_idx: int, read_len: int, type_str: str) -> int:
+        error_message = "[ERROR]: Parse ascend kernel content failed with out of bound."
+        end_idx = start_idx + read_len
+        if start_idx < 0 or read_len < 0 or end_idx > len(content):
+            raise RuntimeError(error_message)
         try:
-            if start_idx + read_len >= len(content):
-                raise RuntimeError('[ERROR]: Parse ascend kernel content failed with out of bound.')
-            else:
-                return struct.unpack('I', content[start_idx : start_idx + read_len])[0]
-        except RuntimeError as e:
-            print(f'[ERROR]: Parse ascend kernel content failed with out of bound.')
-            return
+            return struct.unpack(type_str, content[start_idx : end_idx])[0]
+        except struct.error as error:
+            raise RuntimeError(error_message) from error
 
     def run(self):
         self._parse_process()

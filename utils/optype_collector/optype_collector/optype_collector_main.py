@@ -51,7 +51,12 @@ class OpTypeSource:
 
     @property
     def identity(self) -> Tuple[str, str, str, str]:
-        return (self.source_type, self.vendor_name or "", self.matched_soc, str(self.root_path))
+        return (
+            self.source_type,
+            self.vendor_name or "",
+            self.matched_soc,
+            str(self.root_path),
+        )
 
 
 @dataclass
@@ -104,7 +109,9 @@ def _append_unique(items: List[str], item: str) -> None:
         items.append(item)
 
 
-def _read_platform_config_soc_names(config_file: Path) -> Tuple[Optional[str], Optional[str]]:
+def _read_platform_config_soc_names(
+    config_file: Path,
+) -> Tuple[Optional[str], Optional[str]]:
     external_soc = None
     short_soc = None
     try:
@@ -145,9 +152,16 @@ def load_soc_name_map(ascend_home_path: Optional[Path]) -> SocNameMap:
             if not external_soc or not short_soc:
                 continue
             short_key = short_soc.lower()
-            _append_unique(name_map.external_to_short.setdefault(external_soc, []), short_key)
-            _append_unique(name_map.external_lower_to_short.setdefault(external_soc.lower(), []), short_key)
-            _append_unique(name_map.short_to_external.setdefault(short_key, []), external_soc)
+            _append_unique(
+                name_map.external_to_short.setdefault(external_soc, []), short_key
+            )
+            _append_unique(
+                name_map.external_lower_to_short.setdefault(external_soc.lower(), []),
+                short_key,
+            )
+            _append_unique(
+                name_map.short_to_external.setdefault(short_key, []), external_soc
+            )
     return name_map
 
 
@@ -162,7 +176,9 @@ def _expand_internal_soc_names(soc_names: Iterable[str]) -> List[str]:
     return expanded_names
 
 
-def expand_soc_aliases(soc_version: str, soc_name_map: Optional[SocNameMap] = None) -> List[str]:
+def expand_soc_aliases(
+    soc_version: str, soc_name_map: Optional[SocNameMap] = None
+) -> List[str]:
     """Resolve SoC input to OPP config directory names."""
     normalized_soc = soc_version.lower()
     if soc_version == normalized_soc:
@@ -181,7 +197,9 @@ def _read_json_file(json_file: Path, source: OpTypeSource) -> Optional[Any]:
         with json_file.open("r", encoding="utf-8") as file_obj:
             return json.load(file_obj)
     except Exception as err:
-        source.warnings.append("Failed to parse JSON: {}; reason: {}".format(json_file, err))
+        source.warnings.append(
+            "Failed to parse JSON: {}; reason: {}".format(json_file, err)
+        )
         return None
 
 
@@ -190,19 +208,65 @@ def _looks_like_op_type(name: str) -> bool:
         return False
     lowered = name.lower()
     non_op_keys = {
-        "bininfo", "bin_info", "supportinfo", "support_info", "opinfo", "op_info", "oplist", "op_list",
-        "ops", "op", "socversion", "soc_version", "version", "platform", "impl_path", "dynamic_compile_static",
-        "static_compile", "dynamic_compile", "simplifiedkeymode", "simplified_key_mode", "computeunit",
-        "compute_unit", "opfile", "op_file", "jsonfilepath", "json_file_path", "kernelname", "kernel_name",
-        "input", "output", "attr", "attrs", "dtype", "format", "precision_reduce", "enable_vector_core",
+        "bininfo",
+        "bin_info",
+        "supportinfo",
+        "support_info",
+        "opinfo",
+        "op_info",
+        "oplist",
+        "op_list",
+        "ops",
+        "op",
+        "socversion",
+        "soc_version",
+        "version",
+        "platform",
+        "impl_path",
+        "dynamic_compile_static",
+        "static_compile",
+        "dynamic_compile",
+        "simplifiedkeymode",
+        "simplified_key_mode",
+        "computeunit",
+        "compute_unit",
+        "opfile",
+        "op_file",
+        "jsonfilepath",
+        "json_file_path",
+        "kernelname",
+        "kernel_name",
+        "input",
+        "output",
+        "attr",
+        "attrs",
+        "dtype",
+        "format",
+        "precision_reduce",
+        "enable_vector_core",
     }
     return lowered not in non_op_keys
 
 
 def _collect_optypes_from_json(data: Any) -> Set[str]:
     optypes = set()
-    container_keys = {"ops", "opList", "op_list", "op_info", "opInfo", "binInfo", "bin_info"}
-    explicit_optype_keys = {"opType", "op_type", "opTypeName", "op_type_name", "opName", "op_name"}
+    container_keys = {
+        "ops",
+        "opList",
+        "op_list",
+        "op_info",
+        "opInfo",
+        "binInfo",
+        "bin_info",
+    }
+    explicit_optype_keys = {
+        "opType",
+        "op_type",
+        "opTypeName",
+        "op_type_name",
+        "opName",
+        "op_name",
+    }
 
     def visit(obj: Any, parent_key: Optional[str] = None) -> None:
         if isinstance(obj, dict):
@@ -217,7 +281,8 @@ def _collect_optypes_from_json(data: Any) -> Set[str]:
                     continue
 
                 key_is_optype = (
-                    isinstance(key, str) and isinstance(value, (dict, list))
+                    isinstance(key, str)
+                    and isinstance(value, (dict, list))
                     and (parent_key is None or parent_key in container_keys)
                     and _looks_like_op_type(key)
                 )
@@ -234,10 +299,20 @@ def _collect_optypes_from_json(data: Any) -> Set[str]:
     return optypes
 
 
-def _scan_config_dir(source_type: str, soc: str, matched_soc: str, root_path: Path,
-                     vendor_name: Optional[str] = None) -> OpTypeSource:
-    source = OpTypeSource(source_type=source_type, soc=soc, matched_soc=matched_soc,
-                          vendor_name=vendor_name, root_path=root_path)
+def _scan_config_dir(
+    source_type: str,
+    soc: str,
+    matched_soc: str,
+    root_path: Path,
+    vendor_name: Optional[str] = None,
+) -> OpTypeSource:
+    source = OpTypeSource(
+        source_type=source_type,
+        soc=soc,
+        matched_soc=matched_soc,
+        vendor_name=vendor_name,
+        root_path=root_path,
+    )
     if not root_path.exists():
         source.errors.append("Path does not exist: {}".format(root_path))
         return source
@@ -298,15 +373,21 @@ def _deduplicate_sources(sources: Iterable[OpTypeSource]) -> List[OpTypeSource]:
             continue
         exist = merged[key]
         exist.matched_soc = _merge_matched_soc(exist.matched_soc, source.matched_soc)
-        exist.config_files = _merge_config_files(exist.config_files, source.config_files)
+        exist.config_files = _merge_config_files(
+            exist.config_files, source.config_files
+        )
         exist.optypes.update(source.optypes)
         exist.warnings.extend(source.warnings)
         exist.errors.extend(source.errors)
     return list(merged.values())
 
 
-def _candidate_builtin_dirs(ascend_home_path: Path, soc_names: Sequence[str]) -> List[Tuple[str, Path]]:
-    base = ascend_home_path / "opp" / "built-in" / "op_impl" / "ai_core" / "tbe" / "config"
+def _candidate_builtin_dirs(
+    ascend_home_path: Path, soc_names: Sequence[str]
+) -> List[Tuple[str, Path]]:
+    base = (
+        ascend_home_path / "opp" / "built-in" / "op_impl" / "ai_core" / "tbe" / "config"
+    )
     candidates = []
     for soc_name in soc_names:
         candidates.append((soc_name, base / soc_name))
@@ -317,7 +398,9 @@ def _candidate_builtin_dirs(ascend_home_path: Path, soc_names: Sequence[str]) ->
     return candidates
 
 
-def collect_builtin_optypes(ascend_home_path: Path, user_soc: str, soc_names: Sequence[str]) -> List[OpTypeSource]:
+def collect_builtin_optypes(
+    ascend_home_path: Path, user_soc: str, soc_names: Sequence[str]
+) -> List[OpTypeSource]:
     sources = []
     for matched_soc, path in _candidate_builtin_dirs(ascend_home_path, soc_names):
         if path.exists():
@@ -325,7 +408,9 @@ def collect_builtin_optypes(ascend_home_path: Path, user_soc: str, soc_names: Se
     return _deduplicate_sources(sources)
 
 
-def _vendor_dirs(vendors_root: Path, soc_names: Sequence[str]) -> List[Tuple[str, str, Path]]:
+def _vendor_dirs(
+    vendors_root: Path, soc_names: Sequence[str]
+) -> List[Tuple[str, str, Path]]:
     candidates = []
     if not vendors_root.exists():
         return candidates
@@ -333,12 +418,19 @@ def _vendor_dirs(vendors_root: Path, soc_names: Sequence[str]) -> List[Tuple[str
         if not vendor_dir.is_dir():
             continue
         for soc_name in soc_names:
-            candidates.append((vendor_dir.name, soc_name,
-                               vendor_dir / "op_impl" / "ai_core" / "tbe" / "config" / soc_name))
+            candidates.append(
+                (
+                    vendor_dir.name,
+                    soc_name,
+                    vendor_dir / "op_impl" / "ai_core" / "tbe" / "config" / soc_name,
+                )
+            )
     return candidates
 
 
-def _custom_opp_dirs(custom_root: Path, soc_names: Sequence[str]) -> List[Tuple[str, str, Path]]:
+def _custom_opp_dirs(
+    custom_root: Path, soc_names: Sequence[str]
+) -> List[Tuple[str, str, Path]]:
     candidates = []
     for soc_name in soc_names:
         direct_path = custom_root / "op_impl" / "ai_core" / "tbe" / "config" / soc_name
@@ -349,21 +441,34 @@ def _custom_opp_dirs(custom_root: Path, soc_names: Sequence[str]) -> List[Tuple[
         if not vendor_dir.is_dir():
             continue
         for soc_name in soc_names:
-            candidates.append((vendor_dir.name, soc_name,
-                               vendor_dir / "op_impl" / "ai_core" / "tbe" / "config" / soc_name))
+            candidates.append(
+                (
+                    vendor_dir.name,
+                    soc_name,
+                    vendor_dir / "op_impl" / "ai_core" / "tbe" / "config" / soc_name,
+                )
+            )
     return candidates
 
 
-def collect_custom_optypes(ascend_home_path: Path, custom_opp_path: Optional[str], user_soc: str,
-                           soc_names: Sequence[str]) -> Tuple[List[OpTypeSource], List[str]]:
+def collect_custom_optypes(
+    ascend_home_path: Path,
+    custom_opp_path: Optional[str],
+    user_soc: str,
+    soc_names: Sequence[str],
+) -> Tuple[List[OpTypeSource], List[str]]:
     warnings = []
     sources = []
     vendors_root = ascend_home_path / "opp" / "vendors"
     if not vendors_root.exists():
-        warnings.append("${{ASCEND_HOME_PATH}}/opp/vendors not found: {}".format(vendors_root))
+        warnings.append(
+            "${{ASCEND_HOME_PATH}}/opp/vendors not found: {}".format(vendors_root)
+        )
     for vendor, matched_soc, path in _vendor_dirs(vendors_root, soc_names):
         if path.exists():
-            sources.append(_scan_config_dir(CUSTOM, user_soc, matched_soc, path, vendor))
+            sources.append(
+                _scan_config_dir(CUSTOM, user_soc, matched_soc, path, vendor)
+            )
 
     if not custom_opp_path:
         warnings.append(
@@ -377,16 +482,28 @@ def collect_custom_optypes(ascend_home_path: Path, custom_opp_path: Optional[str
             continue
         custom_root = Path(custom_root_str)
         if not custom_root.exists():
-            warnings.append("ASCEND_CUSTOM_OPP_PATH Path does not exist: {}".format(custom_root))
+            warnings.append(
+                "ASCEND_CUSTOM_OPP_PATH Path does not exist: {}".format(custom_root)
+            )
         for vendor, matched_soc, path in _custom_opp_dirs(custom_root, soc_names):
             if path.exists():
-                sources.append(_scan_config_dir(CUSTOM, user_soc, matched_soc, path, vendor))
+                sources.append(
+                    _scan_config_dir(CUSTOM, user_soc, matched_soc, path, vendor)
+                )
     return _deduplicate_sources(sources), warnings
 
 
-def _available_soc_dir_names(ascend_home_path: Path, custom_opp_path: Optional[str] = None) -> List[str]:
+def _available_soc_dir_names(
+    ascend_home_path: Path, custom_opp_path: Optional[str] = None
+) -> List[str]:
     roots = [
-        ascend_home_path / "opp" / "built-in" / "op_impl" / "ai_core" / "tbe" / "config",
+        ascend_home_path
+        / "opp"
+        / "built-in"
+        / "op_impl"
+        / "ai_core"
+        / "tbe"
+        / "config",
         ascend_home_path / "opp" / "vendors",
     ]
     if custom_opp_path:
@@ -401,14 +518,20 @@ def _available_soc_dir_names(ascend_home_path: Path, custom_opp_path: Optional[s
     return sorted(socs)
 
 
-def scan_optypes(user_soc: str, need_builtin: bool = True, need_custom: bool = True) -> ScanResult:
+def scan_optypes(
+    user_soc: str, need_builtin: bool = True, need_custom: bool = True
+) -> ScanResult:
     ascend_home = os.environ.get(ASCEND_HOME_ENV)
     custom_opp_path = os.environ.get(CUSTOM_OPP_ENV)
     ascend_home_path = Path(ascend_home) if ascend_home else None
     soc_name_map = load_soc_name_map(ascend_home_path)
     soc_names = expand_soc_aliases(user_soc, soc_name_map)
-    result = ScanResult(user_soc=user_soc, soc_names=soc_names,
-                        ascend_home_path=ascend_home_path, custom_opp_path=custom_opp_path)
+    result = ScanResult(
+        user_soc=user_soc,
+        soc_names=soc_names,
+        ascend_home_path=ascend_home_path,
+        custom_opp_path=custom_opp_path,
+    )
     if not ascend_home_path:
         result.errors.append(CANN_ENV_ERROR)
         result.errors.append(CANN_ENV_SOURCE_HINT)
@@ -422,15 +545,20 @@ def scan_optypes(user_soc: str, need_builtin: bool = True, need_custom: bool = T
         return result
 
     if need_builtin:
-        result.builtin_sources = collect_builtin_optypes(ascend_home_path, result.user_soc, soc_names)
+        result.builtin_sources = collect_builtin_optypes(
+            ascend_home_path, result.user_soc, soc_names
+        )
         if not result.builtin_sources:
             result.errors.append(_format_unsupported_soc_error(result.user_soc))
     if need_custom:
-        result.custom_sources, custom_warnings = collect_custom_optypes(ascend_home_path, custom_opp_path,
-                                                                        result.user_soc, soc_names)
+        result.custom_sources, custom_warnings = collect_custom_optypes(
+            ascend_home_path, custom_opp_path, result.user_soc, soc_names
+        )
         result.warnings.extend(custom_warnings)
         if not result.custom_sources:
-            available_soc_dir_names = _available_soc_dir_names(ascend_home_path, custom_opp_path)
+            available_soc_dir_names = _available_soc_dir_names(
+                ascend_home_path, custom_opp_path
+            )
             if available_soc_dir_names and not set(soc_names).intersection(
                 {soc.lower() for soc in available_soc_dir_names}
             ):
@@ -447,7 +575,9 @@ def _format_unsupported_soc_error(user_soc: str) -> str:
     return "Error: SoC version is not supported: {}".format(user_soc)
 
 
-def detect_conflicts(builtin_sources: Sequence[OpTypeSource], custom_sources: Sequence[OpTypeSource]) -> ConflictReport:
+def detect_conflicts(
+    builtin_sources: Sequence[OpTypeSource], custom_sources: Sequence[OpTypeSource]
+) -> ConflictReport:
     report = ConflictReport()
     builtin_all = set()
     for source in builtin_sources:
@@ -457,11 +587,17 @@ def detect_conflicts(builtin_sources: Sequence[OpTypeSource], custom_sources: Se
         for custom in custom_sources:
             conflicts = sorted(custom.optypes.intersection(builtin_all))
             if conflicts:
-                report.custom_builtin.append(ConflictGroup("Custom package conflicts with built-in OpTypes",
-                                                           custom, builtin_reference, conflicts))
+                report.custom_builtin.append(
+                    ConflictGroup(
+                        "Custom package conflicts with built-in OpTypes",
+                        custom,
+                        builtin_reference,
+                        conflicts,
+                    )
+                )
 
     for index, left in enumerate(custom_sources):
-        for right in custom_sources[index + 1:]:
+        for right in custom_sources[index + 1 :]:
             if left.root_path == right.root_path:
                 continue
             conflicts = sorted(left.optypes.intersection(right.optypes))
@@ -487,9 +623,14 @@ def _format_table(headers: Sequence[str], rows: Sequence[Sequence[Any]]) -> List
     for row in str_rows:
         for index, item in enumerate(row):
             widths[index] = max(widths[index], len(item))
-    header_line = "  " + "  ".join(header.ljust(widths[index]) for index, header in enumerate(headers))
+    header_line = "  " + "  ".join(
+        header.ljust(widths[index]) for index, header in enumerate(headers)
+    )
     separator = "  " + "  ".join("-" * widths[index] for index in range(len(headers)))
-    body = ["  " + "  ".join(item.ljust(widths[index]) for index, item in enumerate(row)) for row in str_rows]
+    body = [
+        "  " + "  ".join(item.ljust(widths[index]) for index, item in enumerate(row))
+        for row in str_rows
+    ]
     return [header_line, separator] + body
 
 
@@ -519,7 +660,9 @@ def _print_sources(result: ScanResult) -> None:
         for source in _all_sources(result)
     ]
     if rows:
-        for line in _format_table(["Type", "Status", "OpTypes", "ConfigFiles", "SoC", "Path"], rows):
+        for line in _format_table(
+            ["Type", "Status", "OpTypes", "ConfigFiles", "SoC", "Path"], rows
+        ):
             print(line)
     else:
         print("  <no matching sources>")
@@ -577,7 +720,9 @@ def _print_list(result: ScanResult, mode: str) -> None:
         selected_sources = result.custom_sources
     else:
         selected_sources = _all_sources(result)
-    optypes = sorted({optype for source in selected_sources for optype in source.optypes})
+    optypes = sorted(
+        {optype for source in selected_sources for optype in source.optypes}
+    )
     _print_list_summary(result, mode, len(optypes))
     if len(selected_sources) > 1:
         for source in selected_sources:
@@ -592,7 +737,9 @@ def _print_list(result: ScanResult, mode: str) -> None:
 
 
 def _print_conflicts(result: ScanResult, report: ConflictReport) -> None:
-    builtin_count = len({optype for source in result.builtin_sources for optype in source.optypes})
+    builtin_count = len(
+        {optype for source in result.builtin_sources for optype in source.optypes}
+    )
     print("[Conflict Summary]")
     _print_kv("SoC", result.user_soc)
     _print_kv("Built-in OpTypes", builtin_count)
@@ -607,8 +754,18 @@ def _print_conflicts(result: ScanResult, report: ConflictReport) -> None:
     for group in report.custom_builtin + report.custom_custom:
         print("[Conflict {}] {}".format(conflict_index, group.conflict_type))
         rows = [
-            ["A", group.left.source_type, group.left.vendor_name or "-", group.left.root_path],
-            ["B", group.right.source_type, group.right.vendor_name or "-", group.right.root_path],
+            [
+                "A",
+                group.left.source_type,
+                group.left.vendor_name or "-",
+                group.left.root_path,
+            ],
+            [
+                "B",
+                group.right.source_type,
+                group.right.vendor_name or "-",
+                group.right.root_path,
+            ],
         ]
         for line in _format_table(["Pkg", "Type", "Vendor", "Path"], rows):
             print(line)
@@ -631,14 +788,20 @@ def _build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="List built-in OpTypes only. This is the default list mode.",
     )
-    mode_group.add_argument("--custom", action="store_true", help="List custom OpTypes only.")
-    mode_group.add_argument("--all", action="store_true", help="List all built-in and custom OpTypes.")
+    mode_group.add_argument(
+        "--custom", action="store_true", help="List custom OpTypes only."
+    )
+    mode_group.add_argument(
+        "--all", action="store_true", help="List all built-in and custom OpTypes."
+    )
     parser.add_argument(
         "--detect-conflicts",
         metavar="SOC_VERSION",
         help="Detect duplicate OpTypes for the specified SoC.",
     )
-    parser.add_argument("soc_version", nargs="?", help="Specify the public SoC version.")
+    parser.add_argument(
+        "soc_version", nargs="?", help="Specify the public SoC version."
+    )
     return parser
 
 
@@ -656,7 +819,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     args = parser.parse_args(argv)
 
     if args.detect_conflicts:
-        result = scan_optypes(args.detect_conflicts, need_builtin=True, need_custom=True)
+        result = scan_optypes(
+            args.detect_conflicts, need_builtin=True, need_custom=True
+        )
         _print_scan_info(result)
         _print_sources(result)
         report = detect_conflicts(result.builtin_sources, result.custom_sources)
@@ -671,7 +836,11 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         return 2
 
     mode = _list_mode(args)
-    result = scan_optypes(args.soc_version, need_builtin=mode in (BUILTIN, "all"), need_custom=mode in (CUSTOM, "all"))
+    result = scan_optypes(
+        args.soc_version,
+        need_builtin=mode in (BUILTIN, "all"),
+        need_custom=mode in (CUSTOM, "all"),
+    )
     _print_scan_info(result)
     _print_sources(result)
     _print_list(result, mode)
