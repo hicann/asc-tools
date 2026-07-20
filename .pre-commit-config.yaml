@@ -22,14 +22,14 @@ repos:
       - id: detect-private-key
       - id: check-json
         exclude: ^\.devcontainer/devcontainer\.json$
+
   # C++ 代码格式化检查
   - repo: https://gitcode.com/pre-commit-clang/mirrors-clang-format
     rev: v18.1.8
     hooks:
       - id: clang-format
-        types_or: [file]
         files: \.(c|h|cpp|hpp|cc|hh|cxx|hxx|asc)$
-        exclude: ^(third_party/|cmake/third_party/|tests/third_party/)
+        exclude: ^build/|tests/third_party/
         args:
           - "--style=file"
           - "--verbose"
@@ -44,6 +44,18 @@ repos:
         exclude: ^(third_party/|cmake/third_party/|tests/third_party/|utils/msobjdump/|utils/show_kernel_debug_data/)
       - id: ruff-format
         exclude: ^(third_party/|cmake/third_party/|tests/third_party/|utils/msobjdump/|utils/show_kernel_debug_data/)
+
+  # 拼写检查
+  - repo: https://gitcode.com/gh_mirrors/co/codespell
+    rev: v2.4.1
+    hooks:
+      - id: codespell
+        args: [
+            "-L",
+            "CANN,cann,NNAL,nnal,ASCEND,ascend,EnQue,CopyIn,ArchType,AND,ND,tbe,copyin,alog,thirdparty,abl,commiter,Backgroud,Succed,opeator,projcet,computaion,permision,unsecure,covert",
+            "--skip",
+            "*.py,*.cpp,*.hpp,*.c,*.h",
+          ]
 
   # OAT 合规性检查 (Open Source Audit Tool)
   - repo: local
