@@ -1,12 +1,12 @@
-setuptools
+setuptools>=75,<80
 attrs
 decorator
 psutil
 scipy
 absl-py
-ml-dtypes
+ml-dtypes>=0.5.1,<1.0.0
 tornado
-numpy>=2.2,<2.3
+numpy>=1.26.0,<2.2.0
 pybind11>=2.13.6,<3.0.0
 PyYAML
 ruamel.yaml
@@ -19,7 +19,18 @@ onnx==1.16.0
 protobuf==3.20.3
 expecttest
 tqdm
+en_dtypes==0.0.4
+pre-commit
+oat-py>=1.0.1
+tensorflow-cpu==2.19.1; platform_machine == "x86_64"
+tensorflow==2.19.1; platform_machine == "aarch64"
+
+torch @ https://download.pytorch.org/whl/cpu/torch-2.7.1%2Bcpu-cp311-cp311-manylinux_2_28_x86_64.whl ; python_version == "3.11" and platform_machine == "x86_64"
+torch @ https://download.pytorch.org/whl/cpu/torch-2.7.1%2Bcpu-cp311-cp311-manylinux_2_28_aarch64.whl ; python_version == "3.11" and platform_machine == "aarch64"
 torch @ https://download.pytorch.org/whl/cpu/torch-2.7.1%2Bcpu-cp312-cp312-manylinux_2_28_x86_64.whl ; python_version == "3.12" and platform_machine == "x86_64"
-torch_npu @ https://gitcode.com/Ascend/pytorch/releases/download/v26.0.0-pytorch2.7.1/torch_npu-2.7.1.post4-cp312-cp312-manylinux_2_28_x86_64.whl ; python_version == "3.12" and platform_machine == "x86_64"
 torch @ https://download.pytorch.org/whl/cpu/torch-2.7.1%2Bcpu-cp312-cp312-manylinux_2_28_aarch64.whl ; python_version == "3.12" and platform_machine == "aarch64"
+
+torch_npu @ https://gitcode.com/Ascend/pytorch/releases/download/v26.0.0-pytorch2.7.1/torch_npu-2.7.1.post4-cp311-cp311-manylinux_2_28_x86_64.whl ; python_version == "3.11" and platform_machine == "x86_64"
+torch_npu @ https://gitcode.com/Ascend/pytorch/releases/download/v26.0.0-pytorch2.7.1/torch_npu-2.7.1.post4-cp311-cp311-manylinux_2_28_aarch64.whl ; python_version == "3.11" and platform_machine == "aarch64"
+torch_npu @ https://gitcode.com/Ascend/pytorch/releases/download/v26.0.0-pytorch2.7.1/torch_npu-2.7.1.post4-cp312-cp312-manylinux_2_28_x86_64.whl ; python_version == "3.12" and platform_machine == "x86_64"
 torch_npu @ https://gitcode.com/Ascend/pytorch/releases/download/v26.0.0-pytorch2.7.1/torch_npu-2.7.1.post4-cp312-cp312-manylinux_2_28_aarch64.whl ; python_version == "3.12" and platform_machine == "aarch64"
