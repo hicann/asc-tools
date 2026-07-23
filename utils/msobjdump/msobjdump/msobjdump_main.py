@@ -727,7 +727,7 @@ class FileAction(argparse.Action):
         文件有效性检查
         """
         try:
-            if KEY_A_FILE in values:
+            if values.endswith(KEY_A_FILE):
                 get_o_file(values)
                 values = get_o_file(values)
             if not values or not os.path.exists(values):

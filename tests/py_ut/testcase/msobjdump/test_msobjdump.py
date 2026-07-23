@@ -13,9 +13,11 @@ import os
 import sys
 import shutil
 import struct
+import tempfile
 import unittest
 import contextlib
 import importlib
+from types import SimpleNamespace
 
 from unittest.mock import MagicMock, patch
 from io import StringIO
@@ -50,6 +52,23 @@ class TestMsObjdump(unittest.TestCase):
     def test_unpack_buff_content_by_type_out_of_bounds(self):
         with self.assertRaisesRegex(RuntimeError, "out of bound"):
             msobjdump_main.ObjDump._unpack_buff_content_by_type(b"\x00", 0, 4, "I")
+
+    def test_file_action_only_parses_a_suffix_as_archive(self):
+        action = msobjdump_main.FileAction([], "file")
+        with tempfile.TemporaryDirectory() as temp_dir:
+            axx_file = os.path.join(temp_dir, "xxx.axx")
+            a_file = os.path.join(temp_dir, "xxx.a")
+            open(axx_file, "w").close()
+            open(a_file, "w").close()
+
+            with patch.object(
+                msobjdump_main, "get_o_file", side_effect=lambda value: value
+            ) as mock_get_o_file:
+                action(None, SimpleNamespace(), axx_file)
+                self.assertEqual(mock_get_o_file.call_count, 0)
+
+                action(None, SimpleNamespace(), a_file)
+                self.assertEqual(mock_get_o_file.call_count, 2)
 
     def _make_out_dir(self, out_dir_name):
         out_dir = os.path.join(FILE_PATH, out_dir_name)
