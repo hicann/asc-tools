@@ -19,7 +19,7 @@ namespace AscendC {
 namespace check {
 bool TikcppVecCompareScalarCheck::CommonCheck()
 {
-    const std::string supportPos = "VECIN / VECOUT / VECCALC";
+    const std::string supportPos = "VECIN/VECOUT/VECCALC";
     ASCENDC_CHECK(CheckTensorScope(param_.dstLogicPos, static_cast<uint8_t>(HardWareIndex::UB), "dst", supportPos));
     ASCENDC_CHECK(CheckTensorScope(param_.src0LogicPos, static_cast<uint8_t>(HardWareIndex::UB), "src", supportPos));
 

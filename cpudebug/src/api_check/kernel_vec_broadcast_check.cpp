@@ -34,7 +34,7 @@ bool TikcppVecBroadCastCheck::CheckSrcTensorOverflow(const std::string& errMsg)
 bool TikcppVecBroadCastCheck::CheckAllLowLevel(std::vector<uint64_t> maskArray)
 {
     (void)(maskArray);
-    const std::string supportPos = "VECIN / VECOUT / VECCALC";
+    const std::string supportPos = "VECIN/VECOUT/VECCALC";
     ASCENDC_CHECK(CheckTensorScope(param_.dstLogicPos, static_cast<uint8_t>(HardWareIndex::UB), "dst", supportPos));
     ASCENDC_CHECK(CheckTensorScope(param_.srcLogicPos, static_cast<uint8_t>(HardWareIndex::UB), "src", supportPos));
     ASCENDC_CHECK(CheckTensorAddrAlign(param_.dstAddr, param_.dstPos, ONE_BLK_SIZE, "dst"));

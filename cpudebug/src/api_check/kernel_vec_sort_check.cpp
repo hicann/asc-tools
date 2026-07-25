@@ -60,7 +60,7 @@ bool TikcppVecSortCheck::RpSort16Check()
 
 bool TikcppVecSortCheck::CheckAllHighLevel()
 {
-    const std::string supportPos = "VECIN / VECOUT / VECCALC";
+    const std::string supportPos = "VECIN/VECOUT/VECCALC";
     const uint8_t ubPos = static_cast<uint8_t>(HardWareIndex::UB);
     ASCENDC_CHECK(CheckTensorScope(param_.dstLogicPos, ubPos, "dstLocal", supportPos));
     ASCENDC_CHECK(CheckTensorScope(param_.concatLogicPos, ubPos, "concatLocal", supportPos));

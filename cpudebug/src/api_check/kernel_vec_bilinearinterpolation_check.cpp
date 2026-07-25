@@ -61,7 +61,7 @@ bool TikcppVecBilinearInterpolationCheck::CheckAllLowLevel(std::vector<uint64_t>
     uint32_t maxByteLen = std::max(std::max(param_.dstDtypeBytes, param_.src0DtypeBytes), param_.src1DtypeBytes);
     ASCENDC_CHECK(UpdateMaskArrayAndCheck(maskArray, maxByteLen));
 
-    const std::string supportPos = "VECIN / VECOUT / VECCALC";
+    const std::string supportPos = "VECIN/VECOUT/VECCALC";
     ASCENDC_CHECK(
         CheckTensorScope(param_.dstLogicPos, static_cast<uint8_t>(HardWareIndex::UB), "dstLocal", supportPos));
     ASCENDC_CHECK(

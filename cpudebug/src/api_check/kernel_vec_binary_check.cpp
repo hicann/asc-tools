@@ -48,7 +48,7 @@ bool TikcppVecBinaryCheck::CheckCmpTensorOverflowLowNorm(
 
 bool TikcppVecBinaryCheck::CommonCheck()
 {
-    const std::string supportPos = "VECIN / VECOUT / VECCALC";
+    const std::string supportPos = "VECIN/VECOUT/VECCALC";
     ASCENDC_CHECK(CheckTensorScope(param_.dstLogicPos, static_cast<uint8_t>(HardWareIndex::UB), "dst", supportPos));
     ASCENDC_CHECK(CheckTensorScope(param_.src0LogicPos, static_cast<uint8_t>(HardWareIndex::UB), "src0", supportPos));
     ASCENDC_CHECK(CheckTensorScope(param_.src1LogicPos, static_cast<uint8_t>(HardWareIndex::UB), "src1", supportPos));

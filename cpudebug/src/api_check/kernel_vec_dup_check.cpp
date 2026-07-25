@@ -21,8 +21,8 @@ namespace check {
 
 bool TikcppVecDupCheck::CheckAllHighLevel()
 {
-    ASCENDC_CHECK(CheckTensorScope(
-        param_.dstLogicPos, static_cast<uint8_t>(HardWareIndex::UB), "dst", "VECIN / VECOUT / VECCALC"));
+    ASCENDC_CHECK(
+        CheckTensorScope(param_.dstLogicPos, static_cast<uint8_t>(HardWareIndex::UB), "dst", "VECIN/VECOUT/VECCALC"));
 
     ASCENDC_CHECK(CheckTensorAddrAlign(param_.dstAddr, param_.dstPos, ONE_BLK_SIZE, "dst"));
     ASCENDC_CHECK(CheckBufferSizeOverFlow(
@@ -37,8 +37,8 @@ bool TikcppVecDupCheck::CheckAllLowLevel(std::vector<uint64_t> maskArray)
     uint32_t maxByteLen = param_.dstDtypeBytes;
     ASCENDC_CHECK(UpdateMaskArrayAndCheck(maskArray, maxByteLen));
 
-    ASCENDC_CHECK(CheckTensorScope(
-        param_.dstLogicPos, static_cast<uint8_t>(HardWareIndex::UB), "dst", "VECIN / VECOUT / VECCALC"));
+    ASCENDC_CHECK(
+        CheckTensorScope(param_.dstLogicPos, static_cast<uint8_t>(HardWareIndex::UB), "dst", "VECIN/VECOUT/VECCALC"));
     ASCENDC_CHECK(CheckTensorAddrAlign(param_.dstAddr, param_.dstPos, ONE_BLK_SIZE, "dst"));
 
     ASCENDC_CHECK(CheckBufferSizeOverFlow(

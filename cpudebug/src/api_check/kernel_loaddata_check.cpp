@@ -25,7 +25,8 @@ bool TikcppLoaddata2dCheck::CheckAllHighLevel()
         ((param_.dstPos != static_cast<uint8_t>(HardWareIndex::L0A)) &&
          (param_.dstPos != static_cast<uint8_t>(HardWareIndex::L0B)))) {
         ASCENDC_CHECK_TPOSITION(
-            (false), "dst", "A2 / B2", "LoadData", ConstDefiner::Instance().logicNameMap.at(param_.dstLogicPos));
+            (false), "dst", "L0A Buffer(A2)/L0B Buffer(B2)", "LoadData",
+            GetPositionDisplay(static_cast<TPosition>(param_.dstLogicPos)));
         return false;
     }
     if ((param_.srcPos == static_cast<uint8_t>(HardWareIndex::GM)) &&
@@ -33,14 +34,15 @@ bool TikcppLoaddata2dCheck::CheckAllHighLevel()
          (param_.dstPos != static_cast<uint8_t>(HardWareIndex::L0A)) &&
          (param_.dstPos != static_cast<uint8_t>(HardWareIndex::L0B)))) {
         ASCENDC_CHECK_TPOSITION(
-            (false), "dst", "A1 / B1 / A2 / B2", "LoadData",
-            ConstDefiner::Instance().logicNameMap.at(param_.dstLogicPos));
+            (false), "dst", "L1 Buffer(A1/B1)/L0A Buffer(A2)/L0B Buffer(B2)", "LoadData",
+            GetPositionDisplay(static_cast<TPosition>(param_.dstLogicPos)));
         return false;
     }
     if ((param_.srcPos != static_cast<uint8_t>(HardWareIndex::L1)) &&
         (param_.srcPos != static_cast<uint8_t>(HardWareIndex::GM))) {
         ASCENDC_CHECK_TPOSITION(
-            (false), "src", "A1 / B1 / GM", "LoadData", ConstDefiner::Instance().logicNameMap.at(param_.srcLogicPos));
+            (false), "src", "L1 Buffer(A1/B1)/GM", "LoadData",
+            GetPositionDisplay(static_cast<TPosition>(param_.srcLogicPos)));
         return false;
     }
     if (param_.srcPos != static_cast<uint8_t>(HardWareIndex::GM)) {
@@ -126,7 +128,7 @@ bool TikcppLoaddata3dv1Check::CheckAllHighLevel() const
         return false;
     }
 
-    ASCENDC_CHECK(CheckTensorScope(param_.srcLogicPos, static_cast<uint8_t>(HardWareIndex::L1), "srcLocal", "A1 / B1"));
+    ASCENDC_CHECK(CheckTensorScope(param_.srcLogicPos, static_cast<uint8_t>(HardWareIndex::L1), "srcLocal", "A1/B1"));
 
     ASCENDC_CHECK(CheckBufferSizeOverFlow(
         param_.dstSize, GlobalParams::Instance().bufferSizeMap.at(param_.dstPos),
@@ -173,7 +175,7 @@ bool TikcppLoaddata3dv2Check::CheckAllHighLevel()
         return false;
     }
 #endif
-    ASCENDC_CHECK(CheckTensorScope(param_.srcLogicPos, static_cast<uint8_t>(HardWareIndex::L1), "srcLocal", "A1 / B1"));
+    ASCENDC_CHECK(CheckTensorScope(param_.srcLogicPos, static_cast<uint8_t>(HardWareIndex::L1), "srcLocal", "A1/B1"));
 
     ASCENDC_CHECK(CheckBufferSizeOverFlow(
         param_.dstSize, GlobalParams::Instance().bufferSizeMap.at(param_.dstPos),
@@ -209,7 +211,7 @@ bool TikcppLoaddata3dv2ProCheck::CheckAllHighLevel()
         return false;
     }
 #endif
-    ASCENDC_CHECK(CheckTensorScope(param_.srcLogicPos, static_cast<uint8_t>(HardWareIndex::L1), "srcLocal", "A1 / B1"));
+    ASCENDC_CHECK(CheckTensorScope(param_.srcLogicPos, static_cast<uint8_t>(HardWareIndex::L1), "srcLocal", "A1/B1"));
 
     ASCENDC_CHECK(CheckBufferSizeOverFlow(
         param_.dstSize, GlobalParams::Instance().bufferSizeMap.at(param_.dstPos),
@@ -226,7 +228,7 @@ bool TikcppLoaddata3dv2ProCheck::CheckAllHighLevel()
 bool TikcppLoadImageToLocalCheck::CheckAllHighLevel()
 {
 #if defined(__NPU_ARCH__) && ((__NPU_ARCH__ != 3510) || (__NPU_ARCH__ == 5102))
-    ASCENDC_CHECK(CheckTensorScope(param_.dstLogicPos, static_cast<uint8_t>(HardWareIndex::L1), "dstLocal", "A1 / B1"));
+    ASCENDC_CHECK(CheckTensorScope(param_.dstLogicPos, static_cast<uint8_t>(HardWareIndex::L1), "dstLocal", "A1/B1"));
 #endif
     ASCENDC_CHECK(CheckTensorAddrAlign(param_.dstAddr, param_.dstPos, ONE_BLK_SIZE, "dst"));
 

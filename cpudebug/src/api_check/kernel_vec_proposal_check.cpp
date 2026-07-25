@@ -224,7 +224,7 @@ bool TikcppVecProposalCheck::ExtractCheck() const
 
 bool TikcppVecProposalCheck::CheckAllHighLevel()
 {
-    const std::string supportPos = "VECIN / VECOUT / VECCALC";
+    const std::string supportPos = "VECIN/VECOUT/VECCALC";
     ASCENDC_CHECK(CheckTensorScope(param_.dstLogicPos, static_cast<uint8_t>(HardWareIndex::UB), "dst", supportPos));
     std::string src0Name = "src0";
     if (apiName == "MrgSort" || apiName == "MrgSort4") { // only has src1 ~ src4

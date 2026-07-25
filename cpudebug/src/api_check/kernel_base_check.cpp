@@ -125,7 +125,6 @@ bool TikcppBaseCheck::CheckTensorScope(
     const uint8_t logicPos, const uint8_t expectedPos, const std::string& tensorInfo, const std::string& posInfo) const
 {
     auto& hwNameMap = GlobalParams::Instance().hardwareNameMap;
-    auto& logicNameMap = ConstDefiner::Instance().logicNameMap;
     // tensorPos从逻辑位置转换到物理位置
     uint8_t hardPos = static_cast<uint8_t>(GetPhyType(static_cast<TPosition>(logicPos)));
     if (hwNameMap.find(hardPos) == hwNameMap.end() || hwNameMap.find(expectedPos) == hwNameMap.end()) {
@@ -136,10 +135,12 @@ bool TikcppBaseCheck::CheckTensorScope(
     }
 
     ASCENDC_CHECK_AND_LOG(hardPos == expectedPos, {
+        const std::string supportedPos = GetPositionDisplay(static_cast<Hardware>(expectedPos), posInfo);
+        const std::string currentPos = GetPositionDisplay(static_cast<TPosition>(logicPos));
         CHECK_LOG_ERROR(
             "Failed to check %s tensor position in %s, "
             "supported positions are %s, current position is %s.",
-            tensorInfo.c_str(), apiName.c_str(), posInfo.c_str(), logicNameMap.at(logicPos).c_str());
+            tensorInfo.c_str(), apiName.c_str(), supportedPos.c_str(), currentPos.c_str());
     });
     return true;
 }

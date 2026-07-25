@@ -158,7 +158,7 @@ bool TikcppDataCopySliceCheck::CheckDataCopyInstrsNum(const std::string& errMsg)
 
 bool TikcppDataCopySliceCheck::CheckAllHighLevel()
 {
-    const std::string supportPos = "VECIN / VECOUT / VECCALC";
+    const std::string supportPos = "VECIN/VECOUT/VECCALC";
     if (param_.isGM2UB) {
         ASCENDC_CHECK(CheckTensorScope(param_.logicPos, static_cast<uint8_t>(HardWareIndex::UB), "dst", supportPos));
     } else {

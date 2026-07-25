@@ -21,8 +21,8 @@ namespace check {
 bool TikcppBroadCastToMMCheck::CheckAllHighLevel()
 {
     ASCENDC_CHECK(CheckTensorScope(param_.dstLogicPos, static_cast<uint8_t>(HardWareIndex::L0C), "dst", "CO1"));
-    ASCENDC_CHECK(CheckTensorScope(
-        param_.srcLogicPos, static_cast<uint8_t>(HardWareIndex::UB), "src", "VECIN / VECOUT / VECCALC"));
+    ASCENDC_CHECK(
+        CheckTensorScope(param_.srcLogicPos, static_cast<uint8_t>(HardWareIndex::UB), "src", "VECIN/VECOUT/VECCALC"));
 
     constexpr uint64_t baseNumL0C = 256; // L0C has 16 * 16 elements as 1 fractal
     uint64_t dstAlignBytes = param_.dstDtypeBytes * baseNumL0C;

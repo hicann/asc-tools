@@ -22,7 +22,7 @@ namespace check {
 bool TikcppVecCreateVecIndexCheck::CommonCheck()
 {
     ASCENDC_CHECK(CheckTensorScope(
-        param_.dstLogicPos, static_cast<uint8_t>(HardWareIndex::UB), "dstLocal", "VECIN / VECOUT / VECCALC"));
+        param_.dstLogicPos, static_cast<uint8_t>(HardWareIndex::UB), "dstLocal", "VECIN/VECOUT/VECCALC"));
     ASCENDC_CHECK(CheckBufferSizeOverFlow(
         param_.dstSize, GlobalParams::Instance().bufferSizeMap.at(param_.dstPos),
         "Failed to check dstLocal tensor buffersize in CreateVecIndex"));

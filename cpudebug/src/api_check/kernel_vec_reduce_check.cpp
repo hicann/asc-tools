@@ -192,7 +192,7 @@ bool TikcppVecReduceCheck::CommonCheck()
     ASCENDC_CHECK(CheckAllDtypeBytes("Check Reduce data type"));
     ASCENDC_CHECK(CheckDstTensorSizeRange("Check Reduce dst data size"));
 
-    const std::string supportPos = "VECIN / VECOUT / VECCALC";
+    const std::string supportPos = "VECIN/VECOUT/VECCALC";
     ASCENDC_CHECK(CheckTensorScope(param_.dstLogicPos, static_cast<uint8_t>(HardWareIndex::UB), "dst", supportPos));
     ASCENDC_CHECK(CheckTensorScope(param_.src0LogicPos, static_cast<uint8_t>(HardWareIndex::UB), "src", supportPos));
     ASCENDC_CHECK(CheckTensorScope(param_.src1LogicPos, static_cast<uint8_t>(HardWareIndex::UB), "work", supportPos));
@@ -240,7 +240,7 @@ bool TikcppVecReduceCheck::CheckAllHighLevelMode2()
 
     ASCENDC_CHECK(CheckDstTensorSizeRange("Check Reduce dst data size"));
 
-    const std::string supportPos = "VECIN / VECOUT / VECCALC";
+    const std::string supportPos = "VECIN/VECOUT/VECCALC";
     ASCENDC_CHECK(CheckTensorScope(param_.dstLogicPos, static_cast<uint8_t>(HardWareIndex::UB), "dst", supportPos));
     ASCENDC_CHECK(CheckTensorScope(param_.src0LogicPos, static_cast<uint8_t>(HardWareIndex::UB), "src", supportPos));
 

@@ -21,10 +21,10 @@ namespace check {
 
 bool TikcppCopyCheck::CheckAllHighLevel()
 {
-    ASCENDC_CHECK(CheckTensorScope(
-        param_.dstLogicPos, static_cast<uint8_t>(HardWareIndex::UB), "dst", "VECIN / VECOUT / VECCALC"));
-    ASCENDC_CHECK(CheckTensorScope(
-        param_.srcLogicPos, static_cast<uint8_t>(HardWareIndex::UB), "src", "VECIN / VECOUT / VECCALC"));
+    ASCENDC_CHECK(
+        CheckTensorScope(param_.dstLogicPos, static_cast<uint8_t>(HardWareIndex::UB), "dst", "VECIN/VECOUT/VECCALC"));
+    ASCENDC_CHECK(
+        CheckTensorScope(param_.srcLogicPos, static_cast<uint8_t>(HardWareIndex::UB), "src", "VECIN/VECOUT/VECCALC"));
     ASCENDC_CHECK(CheckTensorAddrAlign(param_.dstAddr, param_.dstPos, ONE_BLK_SIZE, "dst"));
     ASCENDC_CHECK(CheckTensorAddrAlign(param_.srcAddr, param_.srcPos, ONE_BLK_SIZE, "src"));
     ASCENDC_CHECK(CheckBufferSizeOverFlow(
@@ -43,7 +43,7 @@ bool TikcppCopyCheck::CheckAllLowLevel(std::vector<uint64_t> maskArray)
     uint32_t maxByteLen = std::max(param_.dstDtypeBytes, param_.srcDtypeBytes);
     ASCENDC_CHECK(UpdateMaskArrayAndCheck(maskArray, maxByteLen));
 
-    const std::string supportPos = "VECIN / VECOUT / VECCALC";
+    const std::string supportPos = "VECIN/VECOUT/VECCALC";
     ASCENDC_CHECK(CheckTensorScope(param_.dstLogicPos, static_cast<uint8_t>(HardWareIndex::UB), "dst", supportPos));
     ASCENDC_CHECK(CheckTensorScope(param_.srcLogicPos, static_cast<uint8_t>(HardWareIndex::UB), "src", supportPos));
 
