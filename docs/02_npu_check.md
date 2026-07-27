@@ -20,7 +20,7 @@ Ascend C Tools提供的孪生调试分为debug功能和npu check功能，debug�
   python3 ${git_clone_path}/asc-tools/npuchk/ascendc_npuchk_report.py npuchk/xxx_npuchk.log
   ```
 
-- 检测到Error：命令行执行完毕后，失败结果打屏。例如错误码ErrorRead3及相关失败信息如下： 
+- 检测到Error：命令行执行完毕后，失败结果打屏。例如错误码ErrorRead3及相关失败信息如下：
 
   ``` bash
   [V] [ErrorRead3] on read 0x7f328c11b010 0x800B

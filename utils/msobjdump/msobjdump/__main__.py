@@ -19,5 +19,5 @@ def main():
     args.entry_function(args)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     sys.exit(main())

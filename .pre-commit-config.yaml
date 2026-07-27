@@ -12,9 +12,7 @@ repos:
     rev: v4.6.0
     hooks:
       - id: trailing-whitespace
-        exclude: \.md$
       - id: end-of-file-fixer
-        exclude: \.md$
       - id: check-yaml
         args: ["--allow-multiple-documents"]
       - id: check-added-large-files
@@ -40,10 +38,10 @@ repos:
     rev: v0.14.14
     hooks:
       - id: ruff-check
-        args: ["--fix", "--show-fixes"]
-        exclude: ^(third_party/|cmake/third_party/|tests/third_party/|utils/msobjdump/|utils/show_kernel_debug_data/)
+        args: ["--output-format", "github", "--fix"]
+        types: [python]
       - id: ruff-format
-        exclude: ^(third_party/|cmake/third_party/|tests/third_party/|utils/msobjdump/|utils/show_kernel_debug_data/)
+        types: [python]
 
   # 拼写检查
   - repo: https://gitcode.com/gh_mirrors/co/codespell
@@ -51,8 +49,9 @@ repos:
     hooks:
       - id: codespell
         args: [
+            "--write-changes",
             "-L",
-            "CANN,cann,NNAL,nnal,ASCEND,ascend,EnQue,CopyIn,ArchType,AND,ND,tbe,copyin,alog,thirdparty,abl,commiter,Backgroud,Succed,opeator,projcet,computaion,permision,unsecure,covert",
+            "CANN,cann,NNAL,nnal,ASCEND,ascend,EnQue,CopyIn,ArchType,AND,ND,tbe,copyin,alog,commiter,abl,thirdparty",
             "--skip",
             "*.py,*.cpp,*.hpp,*.c,*.h",
           ]

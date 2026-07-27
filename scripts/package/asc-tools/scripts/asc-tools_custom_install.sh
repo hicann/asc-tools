@@ -317,7 +317,7 @@ installOpPythonLocal() {
     installPyWhlLocal "mindstudio_opst-*-py3-none-any.whl"
     [ $? -ne 0 ] && return 1
 
-    log $LEVEL_INFO "Install opeator python package succeed."
+    log $LEVEL_INFO "Install operator python package succeed."
     return 0
 }
 

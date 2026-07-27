@@ -41,9 +41,9 @@ else()
     ${CPULIB_SRC_DIR}/include
     ${CPULIB_SRC_DIR}/model/cpulib
     ${CPULIB_GEN_DIR}
-    ${TOP_DIR}/abl/libc_sec/include
+    ${TOP_DIR}/able/libc_sec/include
     ${TOP_DIR}/metadef/inc
-    ${TOP_DIR}/abl/slog/inc/toolchain
+    ${TOP_DIR}/able/slog/inc/toolchain
     ${TOP_DIR}/metadef/inc/external
   )
 endif()

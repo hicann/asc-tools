@@ -338,7 +338,7 @@ parent_dirs_permision_check(){
     else
         owner=$(stat -c %U "${parent_dir}"/"${short_install_dir}")
         if [ "${owner}" != "root" ]; then
-            log_and_print $LEVEL_WARN "The dir [${short_install_dir}] permision not right, it should belong to root."
+            log_and_print $LEVEL_WARN "The dir [${short_install_dir}] permission not right, it should belong to root."
             return 1
         fi
 
@@ -378,7 +378,7 @@ install_path_should_belong_to_root() {
     fi
 
     if [ ${ret} -ne 0 ]; then
-        print_log $LEVEL_INFO "You are going to put run-files on a unsecure install-path, do you want to continue? [y/n]"
+        print_log $LEVEL_INFO "You are going to put run-files on a insecure install-path, do you want to continue? [y/n]"
         while true
         do
             read yn
@@ -411,7 +411,7 @@ getInstallRealPath() {
     if [ x"${_install_path}" = "x" ]; then
         _install_path="/"
     fi
-    # covert relative path to absolute path
+    # convert relative path to absolute path
     _prefix=`echo "${_install_path}" | cut -d"/" -f1 | cut -d"~" -f1`
     if [ x"${_prefix}" = "x" ]; then
         _install_dir="${_install_path}"
@@ -429,7 +429,7 @@ getInstallRealPath() {
     if [ x"${_install_dir}" = "x" ]; then
         _install_dir="/"
     fi
-    # covert '~' to home path
+    # convert '~' to home path
     _home=`echo "${_install_dir}" | cut -d"~" -f1`
     if [ "x${_home}" = "x" ]; then
         _install_path=`echo "${_install_dir}" | cut -d"~" -f2`

@@ -165,7 +165,7 @@ CANN包分为CANN toolkit包和CANN ops包。
     ```
 
 - **检查CANN包安装**:
-  
+
     ```bash
     # 查看CANN Toolkit的version字段提供的版本信息（默认路径安装）。CANNLab场景下，请将/usr/local替换为/home/developer
     cat /usr/local/Ascend/cann/$(uname -m)-linux/ascend_toolkit_install.info
@@ -250,7 +250,7 @@ source /usr/local/Ascend/cann/set_env.sh
      建议版本[release-v4.6.1](https://github.com/ccache/ccache/releases/tag/v4.6.1)，x86_64环境[下载链接](https://github.com/ccache/ccache/releases/download/v4.6.1/ccache-4.6.1-linux-x86_64.tar.xz)，aarch64环境[下载链接](https://github.com/ccache/ccache/releases/download/v4.6.1/ccache-4.6.1.tar.gz)。
 
      x86_64环境安装步骤如下：
-     
+
      ```bash
      # 在准备安装的路径下创建buildtools目录，如有则忽略
      # 这里以安装路径/opt为例，对安装命令进行说明
@@ -265,13 +265,13 @@ source /usr/local/Ascend/cann/set_env.sh
      # 将ccache添加到环境变量PATH
      export PATH=/usr/local/ccache/bin:$PATH
      ```
-     
+
      aarch64环境安装步骤如下：
-     - 下载依赖项  
+     - 下载依赖项
        下载[zstd](https://github.com/facebook/zstd/releases/download/v1.5.0/zstd-1.5.0.tar.gz)和[hiredis](https://github.com/redis/hiredis/archive/refs/tags/v1.0.2.tar.gz)。
-    
+
      - 编译安装
-     
+
         ```bash
         # 在准备安装的路径下创建buildtools目录，如有则忽略
         # 这里以安装路径/opt为例，对安装命令进行说明
@@ -311,7 +311,7 @@ source /usr/local/Ascend/cann/set_env.sh
      ```
 
    - lcov >= 1.13（可选，仅执行UT时依赖）
-   
+
      以Ubuntu系统为例，x86_64环境执行以下命令安装：
      ```bash
      apt install lcov
@@ -327,7 +327,7 @@ source /usr/local/Ascend/cann/set_env.sh
      ```bash
      pip3 install pytest
      ```
-   
+
    - coverage >= 4.5.4（可选，仅执行UT时依赖）
 
      执行以下命令安装：

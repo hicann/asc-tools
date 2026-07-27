@@ -26,22 +26,22 @@ from dataclasses import dataclass, field
 from msobjdump import utils
 
 
-KEY_ASCEND_META = '.ascend.meta.'
-KEY_ASCEND_META_OP = '.ascend.meta'
-KEY_ASCEND_KERNEL = '.ascend.kernel.'
-KEY_AICORE_BINARY = '.aicore_binary'
-KEY_O_JSON = '_binary_'
-KEY_A_FILE = '.a'
-KEY_O_FILE = '.cpp.o'
+KEY_ASCEND_META = ".ascend.meta."
+KEY_ASCEND_META_OP = ".ascend.meta"
+KEY_ASCEND_KERNEL = ".ascend.kernel."
+KEY_AICORE_BINARY = ".aicore_binary"
+KEY_O_JSON = "_binary_"
+KEY_A_FILE = ".a"
+KEY_O_FILE = ".cpp.o"
 HEX_NUM = 16
 ############### _o_json define ####################
-TYPE_START = 'start'
-TYPE_END = 'end'
-TYPE_SIZE = 'size'
-ACLNN_BINARY = ''
+TYPE_START = "start"
+TYPE_END = "end"
+TYPE_SIZE = "size"
+ACLNN_BINARY = ""
 
 ############### ascend kernel define ####################
-KERNEL_TYPE_MAP = {'0': 'mix', '1': 'aiv', '2': 'aic'}
+KERNEL_TYPE_MAP = {"0": "mix", "1": "aiv", "2": "aic"}
 
 ############### Function Meta Type ####################
 F_TYPE_KTYPE = 1
@@ -59,7 +59,7 @@ F_TYPE_MAP = {
     F_TYPE_ENABLE_EARLY_START: "ENABLE_EARLY_START",
     F_TYPE_DETERMINISTIC_INFO: "DETERMINISTIC_INFO",
     F_TYPE_FUNCTION_ENTRY: "FUNCTION_ENTRY",
-    F_TYPE_BLOCK_NUM: "BLOCK_NUM"
+    F_TYPE_BLOCK_NUM: "BLOCK_NUM",
 }
 
 ############### Binary Meta Type ####################
@@ -74,7 +74,7 @@ B_TYPE_MAP = {
     B_TYPE_DEBUG: "DEBUG",
     B_TYPE_DYNAMIC_PARAM: "DYNAMIC_PARAM",
     B_TYPE_OPTIONAL_PARAM: "OPTIONAL_PARAM",
-    B_TYPE_RUNTIME_IMPLICIT_INFO: "RUNTIME_IMPLICIT_INFO"
+    B_TYPE_RUNTIME_IMPLICIT_INFO: "RUNTIME_IMPLICIT_INFO",
 }
 
 K_TYPE_MAP = {
@@ -84,15 +84,15 @@ K_TYPE_MAP = {
     "4": "MIX_AIC_MAIN",
     "5": "MIX_AIV_MAIN",
     "6": "AIC_ROLLBACK",
-    "7": "AIV_ROLLBACK"
+    "7": "AIV_ROLLBACK",
 }
-C_TYPE_MAP = {"0":"NO_USE_SYNC", "1": "USE_SYNC"}
+C_TYPE_MAP = {"0": "NO_USE_SYNC", "1": "USE_SYNC"}
 RUNTIME_IMPLICIT_INFO_MAP = {
     1: "SIMD Printf Flag",
     2: "Hardware Sync Flag",
     3: "L2Cache Hint Flag",
     4: "SIMT Printf Flag",
-    5: "SIMD Assert Flag"
+    5: "SIMD Assert Flag",
 }
 
 
@@ -125,56 +125,59 @@ class AscendKernelInfos:
 
 
 class ObjDump:
-    '''
+    """
     objdump tool manager
     ====================
     支持简易工程打包交付件、aclnn打包交付件、单算子编译交付件的解压解析
     ====================
-    '''
+    """
+
     def __init__(self, args):
-        self.obj = None # 待解析解压文件
-        self.src_obj = None # 用户原始输入文件
-        self.parse_obj_mode = None # ParseObjMode 解析解压类型
-        self.obj_type = None # ObjType obj文件场景分类
-        self.tmp_dir = None # 存放临时文件 结束后目录会删除
-        self.out_dir = args.out_dir # 落盘文件目录，用户未设置时当前路径
+        self.obj = None  # 待解析解压文件
+        self.src_obj = None  # 用户原始输入文件
+        self.parse_obj_mode = None  # ParseObjMode 解析解压类型
+        self.obj_type = None  # ObjType obj文件场景分类
+        self.tmp_dir = None  # 存放临时文件 结束后目录会删除
+        self.out_dir = args.out_dir  # 落盘文件目录，用户未设置时当前路径
         self._aicore_binary_meta_printed = set()
         self._set_out_dir()
         # preprocess args
         self._set_parse_obj_and_mode(args)
 
     @staticmethod
-    def _show_ascend_meta_tlv(content: bytes, t: int, l: int, index: int):
+    def _show_ascend_meta_tlv(content: bytes, t: int, tlv_len: int, index: int):
         if t == F_TYPE_MIX_TASK_RATION:
-            v1, v2 = struct.unpack("2H", content[index:index + 4])
+            v1, v2 = struct.unpack("2H", content[index : index + 4])
             print(f"{F_TYPE_MAP.get(t)}: [{v1}:{v2}]")
         elif t == F_TYPE_CROSS_CORE_SYNC:
-            v, = struct.unpack("I", content[index:index + 4])
+            (v,) = struct.unpack("I", content[index : index + 4])
             print(f"{F_TYPE_MAP.get(t)}: {C_TYPE_MAP.get(str(v))}")
         elif t == F_TYPE_KTYPE:
-            v, = struct.unpack("I", content[index:index + 4])
+            (v,) = struct.unpack("I", content[index : index + 4])
             print(f"{F_TYPE_MAP.get(t)}: {K_TYPE_MAP.get(str(v))}")
         elif t == F_TYPE_DETERMINISTIC_INFO:
-            v, = struct.unpack("I", content[index:index + 4])
+            (v,) = struct.unpack("I", content[index : index + 4])
             print(f"{F_TYPE_MAP.get(t)}: {v}")
         elif t == F_TYPE_ENABLE_EARLY_START:
-            v, = struct.unpack("I", content[index:index + 4])
+            (v,) = struct.unpack("I", content[index : index + 4])
             print(f"{F_TYPE_MAP.get(t)}: {v}")
         elif t == F_TYPE_FUNCTION_ENTRY:
-            v, = struct.unpack("<Q", content[index + 4:index + 12])
+            (v,) = struct.unpack("<Q", content[index + 4 : index + 12])
             print(f"{F_TYPE_MAP.get(t)}: {v}")
         elif t == F_TYPE_BLOCK_NUM:
             v = "0xFFFFFFFF"
             print(f"{F_TYPE_MAP.get(t)}: {v}")
 
     @staticmethod
-    def _unpack_buff_content_by_type(content: bytes, start_idx: int, read_len: int, type_str: str) -> int:
+    def _unpack_buff_content_by_type(
+        content: bytes, start_idx: int, read_len: int, type_str: str
+    ) -> int:
         error_message = "[ERROR]: Parse ascend kernel content failed with out of bound."
         end_idx = start_idx + read_len
         if start_idx < 0 or read_len < 0 or end_idx > len(content):
             raise RuntimeError(error_message)
         try:
-            return struct.unpack(type_str, content[start_idx : end_idx])[0]
+            return struct.unpack(type_str, content[start_idx:end_idx])[0]
         except struct.error as error:
             raise RuntimeError(error_message) from error
 
@@ -183,28 +186,32 @@ class ObjDump:
         self._clean()
         return
 
-    def _show_ascend_meta_op_tlv(self, content: bytes, t: int, l: int, index: int):
+    def _show_ascend_meta_op_tlv(
+        self, content: bytes, t: int, tlv_len: int, index: int
+    ):
         if t == B_TYPE_VERSION:
-            v, = struct.unpack("I", content[index:index + 4])
+            (v,) = struct.unpack("I", content[index : index + 4])
             output = f"{B_TYPE_MAP.get(t)}: {v}"
             self._print_ascend_meta_op_tlv(output)
         if t == B_TYPE_DEBUG:
-            debugBufSize, debugOptions = struct.unpack("II", content[index:index + 8])
+            debugBufSize, debugOptions = struct.unpack("II", content[index : index + 8])
             output = f"{B_TYPE_MAP.get(t)}: debugBufSize={debugBufSize}, debugOptions={debugOptions}"
             self._print_ascend_meta_op_tlv(output)
         elif t == B_TYPE_DYNAMIC_PARAM:
-            dynamicParamMode, = struct.unpack("H", content[index + 2:index + 4])
+            (dynamicParamMode,) = struct.unpack("H", content[index + 2 : index + 4])
             output = f"{B_TYPE_MAP.get(t)}: dynamicParamMode={dynamicParamMode}"
             self._print_ascend_meta_op_tlv(output)
         elif t == B_TYPE_OPTIONAL_PARAM:
-            optionalInputMode, optionalOutputMode = struct.unpack("HH", content[index:index + 4])
+            optionalInputMode, optionalOutputMode = struct.unpack(
+                "HH", content[index : index + 4]
+            )
             output = (
                 f"{B_TYPE_MAP.get(t)}: optionalInputMode={optionalInputMode}, "
                 f"optionalOutputMode={optionalOutputMode}"
             )
             self._print_ascend_meta_op_tlv(output)
         elif t == B_TYPE_RUNTIME_IMPLICIT_INFO:
-            v, = struct.unpack("I", content[index:index + 4])
+            (v,) = struct.unpack("I", content[index : index + 4])
             output = f"{B_TYPE_MAP.get(t)}: {RUNTIME_IMPLICIT_INFO_MAP.get(v, v)}"
             self._print_ascend_meta_op_tlv(output)
 
@@ -220,21 +227,27 @@ class ObjDump:
             self.out_dir = os.getcwd()
         self.out_dir = os.path.realpath(self.out_dir)
         if not os.path.isdir(self.out_dir):
-            raise RuntimeError(f'[ERROR]: output dir {(self.out_dir)} is invalid path!')
-        self.tmp_dir = os.path.join(self.out_dir, 'objdump_' + time.strftime("%Y%m%d_%H%M%S") + "_" + str(os.getpid()))
+            raise RuntimeError(f"[ERROR]: output dir {(self.out_dir)} is invalid path!")
+        self.tmp_dir = os.path.join(
+            self.out_dir,
+            "objdump_" + time.strftime("%Y%m%d_%H%M%S") + "_" + str(os.getpid()),
+        )
         try:
             os.mkdir(self.tmp_dir)
         except PermissionError as e:
             raise PermissionError(
-                f"[ERROR]: Cannot create {self.tmp_dir} for saving tmp file, please check user permission.") from e
+                f"[ERROR]: Cannot create {self.tmp_dir} for saving tmp file, please check user permission."
+            ) from e
 
     def _set_parse_obj_and_mode(self, args):
-        #args check
+        # args check
         try:
             if (args.dump_elf or args.extr_elf or args.list_elf) is None:
-                raise RuntimeError(f'[ERROR]: File does not exist or permission denied!!!')
-        except RuntimeError as e:
-            print(f'[ERROR]: command check error, please check !!!')
+                raise RuntimeError(
+                    "[ERROR]: File does not exist or permission denied!!!"
+                )
+        except RuntimeError:
+            print("[ERROR]: command check error, please check !!!")
             return
 
         if args.dump_elf:
@@ -275,26 +288,33 @@ class ObjDump:
             self.obj_type = ObjType.TYPE_AICORE_BINARY
 
     def _extract_aicore_binary(self) -> str:
-        src_obj = getattr(self, 'src_obj', None)
-        src_name = os.path.basename(src_obj) if src_obj else 'fusion_aicore_binary'
-        tmp_file = os.path.join(self.tmp_dir, f'{src_name}.aicore.o')
+        src_obj = getattr(self, "src_obj", None)
+        src_name = os.path.basename(src_obj) if src_obj else "fusion_aicore_binary"
+        tmp_file = os.path.join(self.tmp_dir, f"{src_name}.aicore.o")
         if os.path.exists(tmp_file):
             os.remove(tmp_file)
         try:
             result = utils.extract_aicore_binary_from_elf(self.obj, tmp_file)
         except FileNotFoundError as e:
-            raise RuntimeError('[ERROR]: llvm-objcopy is not available, cannot extract .aicore_binary.') from e
+            raise RuntimeError(
+                "[ERROR]: llvm-objcopy is not available, cannot extract .aicore_binary."
+            ) from e
 
         if result.returncode != 0:
-            err_msg = result.stderr.strip() if result.stderr else 'unknown error'
-            raise RuntimeError(f'[ERROR]: Extract .aicore_binary failed: {err_msg}')
+            err_msg = result.stderr.strip() if result.stderr else "unknown error"
+            raise RuntimeError(f"[ERROR]: Extract .aicore_binary failed: {err_msg}")
 
         if not os.path.exists(tmp_file) or os.path.getsize(tmp_file) == 0:
-            raise RuntimeError('[ERROR]: Extracted .aicore_binary file is empty or missing.')
+            raise RuntimeError(
+                "[ERROR]: Extracted .aicore_binary file is empty or missing."
+            )
         return tmp_file
 
     def _parse_process(self):
-        if self.parse_obj_mode == ParseObjMode.MODE_DUMP_ELF or self.parse_obj_mode == ParseObjMode.MODE_VERBOSE:
+        if (
+            self.parse_obj_mode == ParseObjMode.MODE_DUMP_ELF
+            or self.parse_obj_mode == ParseObjMode.MODE_VERBOSE
+        ):
             self._dump_elf_process()
         elif self.parse_obj_mode == ParseObjMode.MODE_EXTRA_ELF:
             self._extra_elf()
@@ -310,24 +330,26 @@ class ObjDump:
             point_content_list = self._parse_binary_o_json_obj()
             save_files = self._save_dump_elf_o_json(point_content_list)
             for file_name in save_files:
-                if file_name.endswith('.o'):
+                if file_name.endswith(".o"):
                     self.obj = save_files[file_name]
                     self._show_elf_ascend_meta_obj()
             if self.parse_obj_mode == ParseObjMode.MODE_VERBOSE:
                 self._show_binary_o_json_obj(save_files)
         elif self.obj_type == ObjType.TYPE_ASCEND_KERNEL:
             ascend_kernel_dict = self._parse_ascend_kernel_infos()
-            kernel_obj_infos = self._parse_elf_ascend_kernel_by_type(ascend_kernel_dict, 'dump')
+            kernel_obj_infos = self._parse_elf_ascend_kernel_by_type(
+                ascend_kernel_dict, "dump"
+            )
             self._show_elf_ascend_kernel_obj(kernel_obj_infos)
         elif self.obj_type == ObjType.TYPE_ASCEND_META:
             self._show_elf_ascend_meta_obj()
         elif self.obj_type == ObjType.TYPE_AICORE_BINARY:
             self._show_elf_ascend_meta_obj()
             if self.parse_obj_mode == ParseObjMode.MODE_VERBOSE:
-                print(f'====== [elf header infos] ======')
+                print("====== [elf header infos] ======")
                 print(utils.get_all_section_symbols_in_file(self.obj))
         else:
-            print(f'The kernel meta information cannot be found.')
+            print("The kernel meta information cannot be found.")
 
     def _extra_elf(self):
         if self.obj_type == ObjType.TYPE_BINARY_O_JSON:
@@ -336,10 +358,12 @@ class ObjDump:
             self._move_file_to_outdir_o_json(save_files)
         elif self.obj_type == ObjType.TYPE_ASCEND_KERNEL:
             ascend_kernel_dict = self._parse_ascend_kernel_infos()
-            kernel_obj_infos = self._parse_elf_ascend_kernel_by_type(ascend_kernel_dict, 'dump')
+            kernel_obj_infos = self._parse_elf_ascend_kernel_by_type(
+                ascend_kernel_dict, "dump"
+            )
             self._move_file_to_outdir_ascend_kernel(kernel_obj_infos)
         elif self.obj_type == ObjType.TYPE_ASCEND_META:
-            print('[WARNING]: nothing to extra in single op elf file')
+            print("[WARNING]: nothing to extra in single op elf file")
         elif self.obj_type == ObjType.TYPE_AICORE_BINARY:
             self._move_extracted_aicore_binary_to_outdir()
 
@@ -349,28 +373,34 @@ class ObjDump:
             self._list_elf_info_aclnn_pkg_obj(point_content_list)
         elif self.obj_type == ObjType.TYPE_ASCEND_KERNEL:
             ascend_kernel_dict = self._parse_ascend_kernel_infos()
-            self._parse_elf_ascend_kernel_by_type(ascend_kernel_dict, 'list')
+            self._parse_elf_ascend_kernel_by_type(ascend_kernel_dict, "list")
         elif self.obj_type == ObjType.TYPE_ASCEND_META:
-            print('[WARNING]: nothing to list in single op elf file')
+            print("[WARNING]: nothing to list in single op elf file")
         elif self.obj_type == ObjType.TYPE_AICORE_BINARY:
             self._list_extracted_aicore_binary()
 
     def _list_extracted_aicore_binary(self):
-        print(f'ELF file    0: {os.path.basename(self.obj)}')
+        print(f"ELF file    0: {os.path.basename(self.obj)}")
 
     def _move_extracted_aicore_binary_to_outdir(self):
-        utils.copy_file_src_exist(self.obj, os.path.join(self.out_dir, os.path.basename(self.obj)))
+        utils.copy_file_src_exist(
+            self.obj, os.path.join(self.out_dir, os.path.basename(self.obj))
+        )
 
-    def _copy_file_o_json_to_out_dir(self, src_file: str, json_file: str, copy_files: list):
+    def _copy_file_o_json_to_out_dir(
+        self, src_file: str, json_file: str, copy_files: list
+    ):
         utils.copy_file_src_exist(src_file, os.path.join(self.out_dir, json_file))
         copy_files.append(src_file)
-        tmp_o_file = src_file.replace('.json', '.o')
-        o_file = json_file.replace('.json', '.o')
+        tmp_o_file = src_file.replace(".json", ".o")
+        o_file = json_file.replace(".json", ".o")
         if os.path.exists(tmp_o_file):
             utils.copy_file_src_exist(tmp_o_file, os.path.join(self.out_dir, o_file))
             copy_files.append(tmp_o_file)
 
-    def _copy_file_with_file_name_manual(self, base_name: str, tmp_file: str, copy_files: list):
+    def _copy_file_with_file_name_manual(
+        self, base_name: str, tmp_file: str, copy_files: list
+    ):
         new_file_name = self._get_file_name_with_path(base_name)
         if new_file_name != base_name:
             self._copy_file_o_json_to_out_dir(tmp_file, new_file_name, copy_files)
@@ -378,92 +408,108 @@ class ObjDump:
     def _move_file_to_outdir_o_json(self, tmp_files: dict):
         copy_files = []
         for base_name, tmp_file in tmp_files.items():
-            if not base_name.endswith('.json'):
+            if not base_name.endswith(".json"):
                 continue
-            with open(tmp_file, 'r') as f:
+            with open(tmp_file, "r") as f:
                 op_json = json.load(f)
 
-            if op_json.get('filePath', None):
-                file_json = op_json['filePath']
+            if op_json.get("filePath", None):
+                file_json = op_json["filePath"]
                 self._copy_file_o_json_to_out_dir(tmp_file, file_json, copy_files)
             else:
                 self._copy_file_with_file_name_manual(base_name, tmp_file, copy_files)
 
         for base_name, tmp_file in tmp_files.items():
             if tmp_file not in copy_files:
-                utils.copy_file_src_exist(tmp_file, os.path.join(self.out_dir, base_name))
+                utils.copy_file_src_exist(
+                    tmp_file, os.path.join(self.out_dir, base_name)
+                )
 
-    def _move_file_to_outdir_ascend_kernel(self, kernel_obj_info_list: List[AscendKernelInfos]):
+    def _move_file_to_outdir_ascend_kernel(
+        self, kernel_obj_info_list: List[AscendKernelInfos]
+    ):
         for kernel_obj_infos in kernel_obj_info_list:
             for kernel_info in kernel_obj_infos.kernels:
                 tmp_file = kernel_info.kernel_file
-                utils.copy_file_src_exist(tmp_file, os.path.join(self.out_dir, os.path.basename(tmp_file)))
+                utils.copy_file_src_exist(
+                    tmp_file, os.path.join(self.out_dir, os.path.basename(tmp_file))
+                )
 
     def _get_file_name_with_path(self, base_name: str):
-        name_list = base_name.split('_')
-        dir_names = [item for item in name_list if utils.is_prefix_substring(item, ['config', 'ascend'])]
+        name_list = base_name.split("_")
+        dir_names = [
+            item
+            for item in name_list
+            if utils.is_prefix_substring(item, ["config", "ascend"])
+        ]
         if not dir_names:
             return base_name
         dir_path = os.path.join(*dir_names)
         file_idx = name_list.index(dir_names[-1]) + 1
         if file_idx >= len(name_list):
             return base_name
-        file_name = '_'.join(name_list[file_idx:])
+        file_name = "_".join(name_list[file_idx:])
         return os.path.join(dir_path, file_name)
 
     def _parse_binary_o_json_obj(self) -> dict:
-        '''
+        """
         解析各个_o _json的 地址偏移信息, 并把各个obj内容落盘到临时文件中
-        '''
+        """
         point_content_list = {}
         output = utils.get_symbols_in_file(self.obj)
 
-        for line in output.split('\n'):
+        for line in output.split("\n"):
             if KEY_O_JSON not in line:
                 continue
-            if line.endswith('_' + TYPE_START):
+            if line.endswith("_" + TYPE_START):
                 line_list = utils.split_str_with_space(line)
                 line_name = utils.get_str_between(line, KEY_O_JSON, "_" + TYPE_START)
                 if line_name not in point_content_list:
                     point_content_list[line_name] = {}
-                point_content_list[line_name][TYPE_START] = hex(int(line_list[1], HEX_NUM))
-            elif line.endswith('_' + TYPE_END):
+                point_content_list[line_name][TYPE_START] = hex(
+                    int(line_list[1], HEX_NUM)
+                )
+            elif line.endswith("_" + TYPE_END):
                 line_list = utils.split_str_with_space(line)
                 line_name = utils.get_str_between(line, KEY_O_JSON, "_" + TYPE_END)
                 if line_name not in point_content_list:
                     point_content_list[line_name] = {}
-                point_content_list[line_name][TYPE_END] = hex(int(line_list[1], HEX_NUM))
-            elif line.endswith('_' + TYPE_SIZE):
+                point_content_list[line_name][TYPE_END] = hex(
+                    int(line_list[1], HEX_NUM)
+                )
+            elif line.endswith("_" + TYPE_SIZE):
                 line_list = utils.split_str_with_space(line)
                 line_name = utils.get_str_between(line, KEY_O_JSON, "_" + TYPE_SIZE)
                 if line_name not in point_content_list:
                     point_content_list[line_name] = {}
-                point_content_list[line_name][TYPE_SIZE] = hex(int(line_list[1], HEX_NUM))
+                point_content_list[line_name][TYPE_SIZE] = hex(
+                    int(line_list[1], HEX_NUM)
+                )
         return point_content_list
 
     def _show_binary_o_json_obj(self, device_files: dict):
         for file_name, file_path in device_files.items():
-            if file_name.endswith('.json'):
+            if file_name.endswith(".json"):
                 continue
             output = utils.get_all_section_symbols_in_file(file_path)
-            print(f'===== [elf header infos] in {file_name} =====:')
-            for line in output.split('\n'):
+            print(f"===== [elf header infos] in {file_name} =====:")
+            for line in output.split("\n"):
                 print(line)
 
     def _list_elf_info_aclnn_pkg_obj(self, point_content_dict: dict):
         file_idx = 0
         for obj_name, _ in point_content_dict.items():
             file_name = self._get_file_name_o_json(obj_name)
-            print(f'ELF file    {str(file_idx)}: {file_name}')
+            print(f"ELF file    {str(file_idx)}: {file_name}")
             file_idx += 1
 
     def _parse_ascend_kernel_infos(self) -> dict:
-        '''
+        """
         解析的.ascend.kernel. 地址偏移信息
-        '''
+        """
         ascend_kernel_infos = {}
         output = utils.get_section_headers_in_file(self.obj)
-        for line in output.split('\n'):
+        for line in output.split("\n"):
             if KEY_ASCEND_KERNEL not in line:
                 continue
             line = line.split(KEY_ASCEND_KERNEL)[1]
@@ -473,83 +519,101 @@ class ObjDump:
             addr_offsize = 2
             offset_offsize = 3
             size_offsize = 4
-            ascend_kernel_name = line_list[ascend_kernel_name_id].replace('.', '_')
-            ascend_kernel_addr = hex(int(line_list[ascend_kernel_name_id + addr_offsize], HEX_NUM))
-            ascend_kernel_offset = hex(int(line_list[ascend_kernel_name_id + offset_offsize], HEX_NUM))
-            ascend_kernel_size = hex(int(line_list[ascend_kernel_name_id + size_offsize], HEX_NUM))
-            ascend_kernel_infos[ascend_kernel_name] = [ascend_kernel_addr, ascend_kernel_offset, ascend_kernel_size]
+            ascend_kernel_name = line_list[ascend_kernel_name_id].replace(".", "_")
+            ascend_kernel_addr = hex(
+                int(line_list[ascend_kernel_name_id + addr_offsize], HEX_NUM)
+            )
+            ascend_kernel_offset = hex(
+                int(line_list[ascend_kernel_name_id + offset_offsize], HEX_NUM)
+            )
+            ascend_kernel_size = hex(
+                int(line_list[ascend_kernel_name_id + size_offsize], HEX_NUM)
+            )
+            ascend_kernel_infos[ascend_kernel_name] = [
+                ascend_kernel_addr,
+                ascend_kernel_offset,
+                ascend_kernel_size,
+            ]
         return ascend_kernel_infos
 
-
-    def _show_elf_ascend_kernel_obj(self, kernel_obj_info_list: List[AscendKernelInfos]):
-        '''
+    def _show_elf_ascend_kernel_obj(
+        self, kernel_obj_info_list: List[AscendKernelInfos]
+    ):
+        """
         打屏显示elf文件信息、section段、symbols
-        '''
+        """
         for kernel_obj_infos in kernel_obj_info_list:
-            print(f'===========================')
-            print(f'[VERSION]: {kernel_obj_infos.version}')
-            print(f'[TYPE COUNT]: {kernel_obj_infos.type_cnt}')
-            print(f'===========================')
+            print("===========================")
+            print(f"[VERSION]: {kernel_obj_infos.version}")
+            print(f"[TYPE COUNT]: {kernel_obj_infos.type_cnt}")
+            print("===========================")
             for idx, kernel_info in enumerate(kernel_obj_infos.kernels):
                 file_name = os.path.basename(kernel_info.kernel_file)
-                print(f'[ELF FILE {idx}]: {file_name}')
-                print(f'[KERNEL TYPE]: {kernel_info.kernel_type}')
-                print(f'[KERNEL LEN]: {kernel_info.kernel_len}')
-                print(f'[ASCEND META]: {self._show_elf_ascend_meta_obj()}')
+                print(f"[ELF FILE {idx}]: {file_name}")
+                print(f"[KERNEL TYPE]: {kernel_info.kernel_type}")
+                print(f"[KERNEL LEN]: {kernel_info.kernel_len}")
+                print(f"[ASCEND META]: {self._show_elf_ascend_meta_obj()}")
                 if self.parse_obj_mode == ParseObjMode.MODE_VERBOSE:
-                    print(f'====== [elf header infos] ======')
-                    print(utils.get_all_section_symbols_in_file(kernel_info.kernel_file))
-
+                    print("====== [elf header infos] ======")
+                    print(
+                        utils.get_all_section_symbols_in_file(kernel_info.kernel_file)
+                    )
 
     def _get_elf_ascend_meta_tlv(self, meta_infos: dict):
-        '''
+        """
         接收.ascend.meta. 字典数据， offset偏移获取TLV起始地址, size 获取TLV数据长度
         循环遍历获取TLV数据并打印映射信息
-        '''
+        """
         meta_item_num = 0
         for meta_name, meta_lists in meta_infos.items():
             if meta_name == "meta":
                 continue
-            content = self._get_segment_content(int(meta_lists[1], HEX_NUM), int(meta_lists[2], HEX_NUM))
+            content = self._get_segment_content(
+                int(meta_lists[1], HEX_NUM), int(meta_lists[2], HEX_NUM)
+            )
             index = 0
-            print(f'{KEY_ASCEND_META} [{meta_item_num}]: {meta_name}')
+            print(f"{KEY_ASCEND_META} [{meta_item_num}]: {meta_name}")
             while index < len(content):
                 if index + 4 > len(content):
                     break
 
-                t, l = struct.unpack("2H", content[index:index + 4])
+                t, tlv_len = struct.unpack("2H", content[index : index + 4])
                 index += 4
-                if (index + l) <= len(content):
-                    self._show_ascend_meta_tlv(content, t, l, index)
-                index += l
+                if (index + tlv_len) <= len(content):
+                    self._show_ascend_meta_tlv(content, t, tlv_len, index)
+                index += tlv_len
 
     def _get_elf_ascend_meta_op_tlv(self, meta_infos: dict):
-        meta_name = 'meta'
+        meta_name = "meta"
         if meta_name in meta_infos.keys():
             self._aicore_binary_meta_printed.clear()
             meta_lists = meta_infos[meta_name]
-            content = self._get_segment_content(int(meta_lists[1], HEX_NUM), int(meta_lists[2], HEX_NUM))
+            content = self._get_segment_content(
+                int(meta_lists[1], HEX_NUM), int(meta_lists[2], HEX_NUM)
+            )
             idx = 0
             index = 0
-            print(f'{KEY_ASCEND_META_OP} META INFO')
-            while index < len(content) and (idx < 4 or self.obj_type == ObjType.TYPE_AICORE_BINARY):
+            print(f"{KEY_ASCEND_META_OP} META INFO")
+            while index < len(content) and (
+                idx < 4 or self.obj_type == ObjType.TYPE_AICORE_BINARY
+            ):
                 if index + 4 > len(content):
                     break
-                t, l = struct.unpack("2H", content[index:index+4])
+                t, tlv_len = struct.unpack("2H", content[index : index + 4])
                 index += 4
-                if index + l > len(content):
+                if index + tlv_len > len(content):
                     break
-                self._show_ascend_meta_op_tlv(content, t, l, index)
-                index += l
+                self._show_ascend_meta_op_tlv(content, t, tlv_len, index)
+                index += tlv_len
                 idx += 1
 
     def _show_elf_ascend_meta_obj(self):
-        '''
+        """
         展示.ascend.meta段信息
-        '''
+        """
         meta_infos = {}
         output = utils.get_section_headers_in_file(self.obj)
-        for line in output.split('\n'):
+        for line in output.split("\n"):
             if KEY_ASCEND_META in line or KEY_ASCEND_META_OP in line:
                 if KEY_ASCEND_META in line:
                     line = line.split(KEY_ASCEND_META)[1]
@@ -566,87 +630,105 @@ class ObjDump:
         self._get_elf_ascend_meta_tlv(meta_infos)
 
     def _get_file_name_o_json(self, obj_name: str) -> list:
-        file_name = obj_name[: obj_name.rfind('_')] + '.' + obj_name[obj_name.rfind('_') + 1 :]
+        file_name = (
+            obj_name[: obj_name.rfind("_")] + "." + obj_name[obj_name.rfind("_") + 1 :]
+        )
         return file_name
 
     def _save_dump_elf_o_json(self, point_content_dict: dict) -> dict:
-        '''
+        """
         保存data段各个elf的内容到临时文件下
             文件名示例: ascend910b_add_custom_AddCustom_c43818e8e69f92d25146c434c100f58a.json:
             若是xxxx_o: 保存为.o
             若是xxxx_json: 保存为.json
-        '''
+        """
         save_files = {}
         data_addr, data_offset, data_size = get_data_segment_range(self.obj)
         if data_size == 0:
-            print(f'[WARNING]: there is no .data section in {self.obj}, please check input elf file.')
+            print(
+                f"[WARNING]: there is no .data section in {self.obj}, please check input elf file."
+            )
             return {}
         for obj_name, point_content in point_content_dict.items():
-            obj_start_offset = int(point_content[TYPE_START], HEX_NUM) + data_offset - data_addr
+            obj_start_offset = (
+                int(point_content[TYPE_START], HEX_NUM) + data_offset - data_addr
+            )
             obj_size = int(point_content[TYPE_SIZE], HEX_NUM)
             file_name = self._get_file_name_o_json(obj_name)
             tmp_file = os.path.join(self.tmp_dir, file_name)
 
             content = self._get_segment_content(obj_start_offset, obj_size)
-            if file_name.endswith('.json'):
-                content = json.loads(content.decode('utf-8'))
-                with open(tmp_file, 'a') as f:
+            if file_name.endswith(".json"):
+                content = json.loads(content.decode("utf-8"))
+                with open(tmp_file, "a") as f:
                     json.dump(content, f, indent=4)
             else:
-                with open(tmp_file, 'ab') as f:
+                with open(tmp_file, "ab") as f:
                     f.write(content)
             save_files[file_name] = tmp_file
         return save_files
 
-    def _parse_elf_ascend_kernel_by_type(self, point_content_dict: dict, parse_type: str) -> list:
-        '''
+    def _parse_elf_ascend_kernel_by_type(
+        self, point_content_dict: dict, parse_type: str
+    ) -> list:
+        """
         保存.ascend.kernel段各个elf的内容到临时文件下
             文件名示例: ascend910b_add_custom_AddCustom_c43818e8e69f92d25146c434c100f58a.json:
             若是xxxx_o: 保存为.o
             若是xxxx_json: 保存为.json
-        '''
+        """
         kernel_infos = []
         for obj_name, point_content in point_content_dict.items():
             start_offset = int(point_content[1], HEX_NUM)
             content_size = int(point_content[2], HEX_NUM)
             content = self._get_segment_content(start_offset, content_size)
-            kernel_info = self._parse_ascend_kernel_content(content, obj_name, parse_type)
+            kernel_info = self._parse_ascend_kernel_content(
+                content, obj_name, parse_type
+            )
             kernel_infos.append(kernel_info)
         return kernel_infos
 
-    def _parse_ascend_kernel_content(self, content: bytes, obj_name: str, parse_type: str) -> AscendKernelInfos:
-        '''
+    def _parse_ascend_kernel_content(
+        self, content: bytes, obj_name: str, parse_type: str
+    ) -> AscendKernelInfos:
+        """
         解析.ascend.kernel section的内容
         内容落盘, 返回生成的AscendKernelInfos信息
-        '''
+        """
         total_len = len(content)
         read_len = 0
         kernel_infos = AscendKernelInfos(0, 0)
         read_head_len = 8
         if read_len + read_head_len < total_len:
-            version = struct.unpack('I', content[read_len : read_len + 4])[0]
+            version = struct.unpack("I", content[read_len : read_len + 4])[0]
             read_len += 4
-            type_cnt = struct.unpack('I', content[read_len : read_len + 4])[0]
+            type_cnt = struct.unpack("I", content[read_len : read_len + 4])[0]
             read_len += 4
 
             kernel_infos = AscendKernelInfos(version, type_cnt)
             for kernel_id in range(type_cnt):
                 # parse info
-                kernel_type = self._unpack_buff_content_by_type(content, read_len, 4, 'I')
-                kernel_type = KERNEL_TYPE_MAP.get(str(kernel_type), 'unknow')
+                kernel_type = self._unpack_buff_content_by_type(
+                    content, read_len, 4, "I"
+                )
+                kernel_type = KERNEL_TYPE_MAP.get(str(kernel_type), "unknow")
                 read_len += 4
-                kernel_len = self._unpack_buff_content_by_type(content, read_len, 4, 'I')
+                kernel_len = self._unpack_buff_content_by_type(
+                    content, read_len, 4, "I"
+                )
                 read_len += 4
-                kernel_len_real = self._unpack_buff_content_by_type(content, read_len, 4, 'I')
+                kernel_len_real = self._unpack_buff_content_by_type(
+                    content, read_len, 4, "I"
+                )
                 read_len += 4
                 # parse buff
-                file_name = '_'.join([obj_name, str(kernel_id), kernel_type]) + '.o'
-                if parse_type == 'list':
-                    print('ELF file    ' + str(kernel_id) + ": " + file_name)
+                file_name = "_".join([obj_name, str(kernel_id), kernel_type]) + ".o"
+                if parse_type == "list":
+                    print("ELF file    " + str(kernel_id) + ": " + file_name)
                 else:
                     file_name = os.path.join(self.tmp_dir, file_name)
-                    with open(file_name, 'ab') as f:
-                        f.write(content[read_len: read_len + kernel_len_real])
+                    with open(file_name, "ab") as f:
+                        f.write(content[read_len : read_len + kernel_len_real])
                 read_len += kernel_len
                 # record info in kernel_infos
                 ascend_kernel = AscendKernel(kernel_type, kernel_len_real, file_name)
@@ -655,38 +737,42 @@ class ObjDump:
         return kernel_infos
 
     def _get_segment_content(self, offset: int, size: int):
-        '''
+        """
         获取data段上指定偏移量和大小的内容
-        '''
+        """
         file_size = int(os.path.getsize(self.obj))
-        with open(self.obj, 'r+b') as f:
+        with open(self.obj, "r+b") as f:
             mm = mmap.mmap(f.fileno(), file_size)
             return mm[offset : (offset + size)]
 
 
 def get_data_segment_range(filename: str):
-    '''
+    """
     获取data段的起始地址和大小
-    '''
+    """
     output = utils.get_section_headers_in_file(filename)
-    for line in output.split('\n'):
-        if ' .data ' in line:
+    for line in output.split("\n"):
+        if " .data " in line:
             parts = line.strip().split()
-            return int(parts[3], HEX_NUM), int(parts[4], HEX_NUM), int(parts[5], HEX_NUM)
+            return (
+                int(parts[3], HEX_NUM),
+                int(parts[4], HEX_NUM),
+                int(parts[5], HEX_NUM),
+            )
     return 0, 0, 0
 
 
 def run_obj_dump(args):
-    '''
+    """
     Total entry for objdump tool
     支持多用户同时调用
-    '''
+    """
     objdump = ObjDump(args)
     objdump.run()
 
 
 def extract_values_from_parentheses(string):
-    pattern = r'\((.*?)\)'
+    pattern = r"\((.*?)\)"
     match = re.search(pattern, string)
     if match:
         return match.group(1)
@@ -696,7 +782,7 @@ def extract_values_from_parentheses(string):
 
 def get_o_file_name(file_path):
     output = utils.get_all_section_symbols_in_file(file_path)
-    for line in output.split('\n'):
+    for line in output.split("\n"):
         if KEY_O_FILE in line:
             file_name = extract_values_from_parentheses(line)
         if KEY_ASCEND_KERNEL in line:
@@ -713,15 +799,14 @@ def get_o_file(values):
         print("[ERROR]: The specified file or directory does not exist!!!")
     except PermissionError:
         print("[ERROR]: Permission denied!!!")
-    except Exception as e:
+    except Exception:
         print("[ERROR]: The input file or directory does not exist!!!")
     return values
 
 
 class FileAction(argparse.Action):
-    """
+    """ """
 
-    """
     def __call__(self, parser, namespace, values, option_string=None):
         """
         文件有效性检查
@@ -731,26 +816,63 @@ class FileAction(argparse.Action):
                 get_o_file(values)
                 values = get_o_file(values)
             if not values or not os.path.exists(values):
-                raise RuntimeError(f'[ERROR]: File({values}) does not exist or permission denied!!!')
+                raise RuntimeError(
+                    f"[ERROR]: File({values}) does not exist or permission denied!!!"
+                )
             else:
                 setattr(namespace, self.dest, os.path.realpath(values))
-        except RuntimeError as e:
-            print('[ERROR]: File does not exist or permission denied!!!')
+        except RuntimeError:
+            print("[ERROR]: File does not exist or permission denied!!!")
+
 
 def parse_args():
-    parser = argparse.ArgumentParser(prog="msobjdump", description='objdump tool for Ascend C elf file')
+    parser = argparse.ArgumentParser(
+        prog="msobjdump", description="objdump tool for Ascend C elf file"
+    )
     elf_operator_group = parser.add_argument_group()
-    elf_operator_group.add_argument('--dump-elf', '-d', dest='dump_elf', required=False, metavar="", action=FileAction,
-                                     help='Dump ELF Object brief informations.')
-    elf_operator_group.add_argument('--verbose', '-V', dest='verbose', required=False, action='store_true',
-                                    default=False, help='Dump ELF Object all section informations.')
-    elf_operator_group.add_argument('--extract-elf', '-e', dest='extr_elf', required=False, metavar="",
-                                    action=FileAction,
-                                    help='Extract ELF file(s) name containing <partial file name> and save as file(s).')
-    elf_operator_group.add_argument('--list-elf', '-l', dest='list_elf', required=False, metavar="", action=FileAction,
-                                    help='List all the ELF files available in the fatbin.')
-    parser.add_argument('--out-dir', '-o', dest='out_dir', required=False,
-                        help='Set user output dir path.')
+    elf_operator_group.add_argument(
+        "--dump-elf",
+        "-d",
+        dest="dump_elf",
+        required=False,
+        metavar="",
+        action=FileAction,
+        help="Dump ELF Object brief informations.",
+    )
+    elf_operator_group.add_argument(
+        "--verbose",
+        "-V",
+        dest="verbose",
+        required=False,
+        action="store_true",
+        default=False,
+        help="Dump ELF Object all section informations.",
+    )
+    elf_operator_group.add_argument(
+        "--extract-elf",
+        "-e",
+        dest="extr_elf",
+        required=False,
+        metavar="",
+        action=FileAction,
+        help="Extract ELF file(s) name containing <partial file name> and save as file(s).",
+    )
+    elf_operator_group.add_argument(
+        "--list-elf",
+        "-l",
+        dest="list_elf",
+        required=False,
+        metavar="",
+        action=FileAction,
+        help="List all the ELF files available in the fatbin.",
+    )
+    parser.add_argument(
+        "--out-dir",
+        "-o",
+        dest="out_dir",
+        required=False,
+        help="Set user output dir path.",
+    )
 
     parser.set_defaults(entry_function=run_obj_dump)
     if len(sys.argv) == 1:
@@ -767,5 +889,5 @@ def main():
     args.entry_function(args)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     sys.exit(main())

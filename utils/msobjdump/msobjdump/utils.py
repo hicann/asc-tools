@@ -17,16 +17,16 @@ import subprocess
 
 
 def split_str_with_space(input_str: str) -> list:
-    result = re.split(r'\s+', input_str)
-    return [element for element in result if element != '']
+    result = re.split(r"\s+", input_str)
+    return [element for element in result if element != ""]
 
 
 def get_str_between(input_str: str, sub_str_s: str, sub_str_e: str) -> str:
-    pattern = rf'{sub_str_s}(.*?){sub_str_e}'
+    pattern = rf"{sub_str_s}(.*?){sub_str_e}"
     result = re.search(pattern, input_str)
     if result:
         return result.group(1)
-    return ''
+    return ""
 
 
 def is_prefix_substring(str_check: str, str_lst: list) -> bool:
@@ -45,24 +45,37 @@ def copy_file_src_exist(src_file: str, dest_file: str) -> None:
 
 
 def get_section_headers_in_file(file_name: str) -> str:
-    return subprocess.run(['readelf', '-SW', file_name], capture_output=True, text=True).stdout
+    return subprocess.run(
+        ["readelf", "-SW", file_name], capture_output=True, text=True
+    ).stdout
 
 
 def get_symbols_in_file(file_name: str) -> str:
-    return subprocess.run(['readelf', '-sW', file_name], capture_output=True, text=True).stdout
+    return subprocess.run(
+        ["readelf", "-sW", file_name], capture_output=True, text=True
+    ).stdout
 
 
 def get_all_section_symbols_in_file(file_name: str) -> str:
-    return subprocess.run(['readelf', '-aW', file_name], capture_output=True, text=True).stdout
+    return subprocess.run(
+        ["readelf", "-aW", file_name], capture_output=True, text=True
+    ).stdout
 
 
 def get_o_file_from_a_file(file_path: str, file_name: str) -> str:
-    return subprocess.run(['ar', 'x', file_path, file_name], capture_output=True)
+    return subprocess.run(["ar", "x", file_path, file_name], capture_output=True)
 
 
 def extract_aicore_binary_from_elf(input_file: str, output_file: str):
     return subprocess.run(
-        ['llvm-objcopy', '-O', 'binary', '--only-section=.aicore_binary', input_file, output_file],
+        [
+            "llvm-objcopy",
+            "-O",
+            "binary",
+            "--only-section=.aicore_binary",
+            input_file,
+            output_file,
+        ],
         capture_output=True,
-        text=True
+        text=True,
     )

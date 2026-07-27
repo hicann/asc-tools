@@ -24,10 +24,11 @@ else:
 
 VERSIONS = "0.1.0"
 
-os.environ['SOURCE_DATE_EPOCH'] = str(int(os.path.getctime(os.path.realpath(__file__))))
+os.environ["SOURCE_DATE_EPOCH"] = str(int(os.path.getctime(os.path.realpath(__file__))))
 
-setup(name="msobjdump",
-      version=VERSIONS,
-      description="msobjdump: ",
-      packages=find_packages(where=".", include=("*",)),
+setup(
+    name="msobjdump",
+    version=VERSIONS,
+    description="msobjdump: ",
+    packages=find_packages(where=".", include=("*",)),
 )

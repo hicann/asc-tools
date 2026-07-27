@@ -23,7 +23,7 @@ Ascend C Tools是[CANN](https://hiascend.com/software/cann) （Compute Architect
 
 ## 🔍目录结构说明
 
-本代码仓目录结构如下: 
+本代码仓目录结构如下:
 
 ```
 ├── cmake                               // Ascend C Tools构建源代码

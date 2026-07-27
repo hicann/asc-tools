@@ -24,10 +24,11 @@ else:
 
 VERSIONS = "0.1.0"
 
-os.environ['SOURCE_DATE_EPOCH'] = str(int(os.path.getctime(os.path.realpath(__file__))))
+os.environ["SOURCE_DATE_EPOCH"] = str(int(os.path.getctime(os.path.realpath(__file__))))
 
-setup(name="show_kernel_debug_data",
-      version=VERSIONS,
-      description="show_kernel_debug_data: ",
-      packages=find_packages(where=".", include=("*",)),
+setup(
+    name="show_kernel_debug_data",
+    version=VERSIONS,
+    description="show_kernel_debug_data: ",
+    packages=find_packages(where=".", include=("*",)),
 )
