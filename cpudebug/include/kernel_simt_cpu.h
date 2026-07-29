@@ -21,7 +21,6 @@
 #include "stub_def.h"
 #include "kernel_log.h"
 
-namespace cce {
 struct dim3 {
     uint32_t x = 1u, y = 1u, z = 1u;
     dim3(uint32_t x_) { x = x_; }
@@ -37,12 +36,11 @@ struct dim3 {
         z = z_;
     }
 };
-} // namespace cce
 
-inline cce::dim3 blockDim(1u, 1u, 1u);
-inline cce::dim3 blockIdx(0u, 0u, 0u);
-inline thread_local cce::dim3 threadIdx(0u, 0u, 0u);
-inline cce::dim3 gridDim(8u, 1u, 1u);
+inline dim3 blockDim(1u, 1u, 1u);
+inline dim3 blockIdx(0u, 0u, 0u);
+inline thread_local dim3 threadIdx(0u, 0u, 0u);
+inline dim3 gridDim(8u, 1u, 1u);
 
 namespace AscendC {
 namespace Simt {
