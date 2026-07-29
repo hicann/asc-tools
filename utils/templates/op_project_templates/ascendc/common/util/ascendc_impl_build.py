@@ -523,7 +523,7 @@ class AdpBuilder(opdesc_parser.OpDesc):
                 if attr_type == "bool":
                     attrval = attrval.capitalize()
                 elif attr_type == "str":
-                    attrval = '"' + attrval + '"'
+                    attrval = attrval
                 self.argsdefv.append(attrval)
                 continue
             if optional:
