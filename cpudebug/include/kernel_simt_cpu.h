@@ -18,28 +18,13 @@
 #include <condition_variable>
 #include <chrono>
 
+#include "acl/acl.h"
 #include "stub_def.h"
 #include "kernel_log.h"
 
 namespace cce {
-struct dim3 {
-    uint32_t x = 1u, y = 1u, z = 1u;
-    dim3(uint32_t x_) { x = x_; }
-    dim3(uint32_t x_, uint32_t y_)
-    {
-        x = x_;
-        y = y_;
-    }
-    dim3(uint32_t x_, uint32_t y_, uint32_t z_)
-    {
-        x = x_;
-        y = y_;
-        z = z_;
-    }
-};
+using ::dim3;
 } // namespace cce
-
-using dim3 = cce::dim3;
 
 inline dim3 blockDim(1u, 1u, 1u);
 inline dim3 blockIdx(0u, 0u, 0u);
