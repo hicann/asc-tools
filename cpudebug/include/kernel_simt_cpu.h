@@ -20,7 +20,6 @@
 
 #include "acl/acl.h"
 #include "stub_def.h"
-#include "kernel_log.h"
 
 namespace cce {
 using ::dim3;
