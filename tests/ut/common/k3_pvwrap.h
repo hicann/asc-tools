@@ -15,6 +15,7 @@
 #include <deque>
 #include <memory>
 #include <string>
+#include <cstdint>
 
 using svOpenArrayHandle = uint8_t*;
 inline uint8_t* svGetArrayPtr(svOpenArrayHandle buf) { return buf; }
