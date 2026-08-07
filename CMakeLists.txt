@@ -58,6 +58,8 @@ add_cann_version_info_targets()
 
 add_subdirectory(cpudebug)
 add_subdirectory(npuchk)
+add_subdirectory(npu_sanitizer/sanitizer_api)
+add_subdirectory(npu_sanitizer/cann_sanitizer)
 add_subdirectory(utils/msobjdump)
 add_subdirectory(utils/optype_collector)
 add_subdirectory(utils/templates)
