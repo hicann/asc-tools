@@ -177,6 +177,12 @@ public:
      */
     Bf16T operator+=(const Bf16T fp);
     /*
+     * @ingroup Bf16T math operator
+     * @brief   Override unary negation operator to negate a Bf16T value
+     * @return  Return Bf16T result of negating this
+     */
+    Bf16T operator-() const;
+    /*
      * @ingroup Bf16T math conversion
      * @brief   Override convert operator to convert Bf16T to float/fp32
      * @return  Return float/fp32 value of Bf16T

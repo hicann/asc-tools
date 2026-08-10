@@ -294,6 +294,12 @@ public:
     half operator+(const half fp) const;
     /* *
      * @ingroup half math operator
+     * @brief   Override unary negation operator to negate a half value
+     * @return  Return half result of negating this
+     */
+    half operator-() const;
+    /* *
+     * @ingroup half math operator
      * @param [in] fp half object to be subtracted
      * @brief   Override addition operator to performing half subtraction
      * @return  Return half result of subtraction fp from this
