@@ -12,7 +12,7 @@ set -e
 set -o pipefail
 cd ${WORKSPACE}
 echo $(grep -E "^VERSION_ID=" /etc/os-release | cut -d'"' -f2)
-if [[ "${task_name}" =~ x86_compile_ubuntu24 ]]; then
+if [[ "${task_name}" =~ x86_compile_ubuntu24 ]] && [ "${TARGET_BRANCH}" == master ]; then
     echo "api-check=compile" >> "${ATOMGIT_OUTPUT}"
 else
     echo "api-check=continue" >> "${ATOMGIT_OUTPUT}"
