@@ -53,6 +53,23 @@ bool WriteMemoryImage(const void *imageData, uint64_t imageSize, const std::stri
     return output.good();
 }
 
+AscsanBinaryImageData MakeFileImageView(const std::string &path, uint32_t flags)
+{
+    AscsanBinaryImageData image{};
+    image.kind = ASCSAN_PATCH_IMAGE_FILE;
+    image.flags = flags | ASCSAN_BINARY_IMAGE_FLAG_PATH_VALID;
+    image.path = path.c_str();
+    return image;
+}
+
+void CopyText(char *dst, std::size_t dstSize, const char *src)
+{
+    if (dst == nullptr || dstSize == 0) {
+        return;
+    }
+    std::snprintf(dst, dstSize, "%s", src != nullptr ? src : "");
+}
+
 std::string SelectCacheDir(const AscsanPatchOptions *options, const AscsanLaunchConfig &config)
 {
     if (options != nullptr && options->cacheDir != nullptr && options->cacheDir[0] != '\0') {
@@ -76,7 +93,7 @@ AscsanStatus ApiCore::RegisterBuiltinPatchPipelines()
          sizeof(AscsanPatchPipelineDesc),
          ASCSAN_PATCH_PIPELINE_SET_WAIT_FLAG,
          ASCSAN_CB_DOMAIN_DEVICE_INSTRUCTION,
-         ASCSAN_CBID_DEVICE_INSTRUCTION_SET_WAIT_FLAG,
+         ASCSAN_CBID_DEVICE_SYNC,
          "SET_WAIT_FLAG",
          "ascsan_dev_trace_set_wait_flag",
          "set_wait_flag",
@@ -86,7 +103,7 @@ AscsanStatus ApiCore::RegisterBuiltinPatchPipelines()
          sizeof(AscsanPatchPipelineDesc),
          ASCSAN_PATCH_PIPELINE_GET_RLS_BUF,
          ASCSAN_CB_DOMAIN_DEVICE_INSTRUCTION,
-         ASCSAN_CBID_DEVICE_INSTRUCTION_GET_RLS_BUF,
+         ASCSAN_CBID_DEVICE_SYNC,
          "GET_RLS_BUF",
          "ascsan_dev_trace_get_rls_buf",
          "get_rls_buf",
@@ -96,7 +113,7 @@ AscsanStatus ApiCore::RegisterBuiltinPatchPipelines()
          sizeof(AscsanPatchPipelineDesc),
          ASCSAN_PATCH_PIPELINE_MTE2,
          ASCSAN_CB_DOMAIN_DEVICE_INSTRUCTION,
-         ASCSAN_CBID_DEVICE_INSTRUCTION_MTE2,
+         ASCSAN_CBID_DEVICE_MEMORY_ACCESS,
          "MTE2",
          "ascsan_dev_trace_mte2",
          "mte2",
@@ -106,7 +123,7 @@ AscsanStatus ApiCore::RegisterBuiltinPatchPipelines()
          sizeof(AscsanPatchPipelineDesc),
          ASCSAN_PATCH_PIPELINE_MTE3,
          ASCSAN_CB_DOMAIN_DEVICE_INSTRUCTION,
-         ASCSAN_CBID_DEVICE_INSTRUCTION_MTE3,
+         ASCSAN_CBID_DEVICE_MEMORY_ACCESS,
          "MTE3",
          "ascsan_dev_trace_mte3",
          "mte3",
@@ -116,7 +133,7 @@ AscsanStatus ApiCore::RegisterBuiltinPatchPipelines()
          sizeof(AscsanPatchPipelineDesc),
          ASCSAN_PATCH_PIPELINE_FIXPIPE,
          ASCSAN_CB_DOMAIN_DEVICE_INSTRUCTION,
-         ASCSAN_CBID_DEVICE_INSTRUCTION_FIXPIPE,
+         ASCSAN_CBID_DEVICE_MEMORY_ACCESS,
          "FIXPIPE",
          "ascsan_dev_trace_fixpipe",
          "fixpipe",
@@ -295,17 +312,27 @@ AscsanStatus ApiCore::PatchBinaryFromImage(const AscsanPatchImageDesc *image,
 
     const uint32_t pipelineMask = activeHookPlan_.patchPipelineMask;
     AscsanPatchData data{};
-    data.version = ASCSAN_API_VERSION;
-    data.size = sizeof(data);
-    data.apiName = "ascsanPatchBinaryFromImage";
-    data.originalPath = originalPath.c_str();
+    data.common.version = ASCSAN_API_VERSION;
+    data.common.size = sizeof(data);
+    data.common.apiName = "ascsanPatchBinaryFromImage";
+    data.original = MakeFileImageView(originalPath,
+                                      image->kind == ASCSAN_PATCH_IMAGE_MEMORY
+                                          ? ASCSAN_BINARY_IMAGE_FLAG_MATERIALIZED_PATH
+                                          : ASCSAN_BINARY_IMAGE_FLAG_NONE);
+    if (image->kind == ASCSAN_PATCH_IMAGE_MEMORY) {
+        data.original.kind = ASCSAN_PATCH_IMAGE_MEMORY;
+        data.original.flags |= ASCSAN_BINARY_IMAGE_FLAG_DATA_VALID;
+        data.original.imageData = image->imageData;
+        data.original.imageSize = image->imageSize;
+    }
+    data.original.imageVersion = image->imageVersion;
     data.pipelineMask = pipelineMask;
     Dispatch(ASCSAN_CB_DOMAIN_PATCH, ASCSAN_CBID_PATCH_BEGIN, &data);
 
     PatchResult result{};
     AscsanStatus status = BuildDummyPatchResult(originalPath.c_str(), pipelineMask, &result);
     if (status != ASCSAN_STATUS_SUCCESS) {
-        data.result = static_cast<int>(status);
+        data.common.result = static_cast<int>(status);
         Dispatch(ASCSAN_CB_DOMAIN_PATCH, ASCSAN_CBID_PATCH_END, &data);
         return status;
     }
@@ -314,8 +341,9 @@ AscsanStatus ApiCore::PatchBinaryFromImage(const AscsanPatchImageDesc *image,
     StorePatchSites(binaryId, result.sites);
     data.binaryId = binaryId;
     data.patchPlanId = result.patchPlanId;
-    data.patchedPath = result.patchedPath.c_str();
-    data.result = ASCSAN_STATUS_SUCCESS;
+    data.patched = MakeFileImageView(result.patchedPath, ASCSAN_BINARY_IMAGE_FLAG_MATERIALIZED_PATH);
+    data.siteCount = static_cast<uint32_t>(result.sites.size());
+    data.common.result = ASCSAN_STATUS_SUCCESS;
     if (plan != nullptr) {
         *plan = result.patchPlanId;
     }
@@ -339,6 +367,59 @@ AscsanStatus ApiCore::GetPatchSiteInfo(uint32_t siteId, AscsanPatchSiteInfo *inf
     info->functionName = it->second.functionName.c_str();
     info->opName = it->second.opName.c_str();
     info->sourceFile = it->second.sourceFile.c_str();
+    return ASCSAN_STATUS_SUCCESS;
+}
+
+AscsanStatus ApiCore::SymbolizeDevicePc(const AscsanDevicePcQuery *query,
+                                        char *payload,
+                                        uint64_t payloadSize,
+                                        uint64_t *payloadBytes) const
+{
+    if (query == nullptr || payloadBytes == nullptr) {
+        return ASCSAN_STATUS_ERROR_INVALID_VALUE;
+    }
+    if (query->version != ASCSAN_API_VERSION || query->size < sizeof(AscsanDevicePcQuery)) {
+        return ASCSAN_STATUS_ERROR_VERSION_MISMATCH;
+    }
+    *payloadBytes = 0;
+    if (payload == nullptr || payloadSize == 0) {
+        return ASCSAN_STATUS_ERROR_INVALID_VALUE;
+    }
+
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    if (query->siteId == 0) {
+        return ASCSAN_STATUS_ERROR_NOT_FOUND;
+    }
+
+    auto it = patchSites_.find(query->siteId);
+    if (it == patchSites_.end()) {
+        return ASCSAN_STATUS_ERROR_NOT_FOUND;
+    }
+
+    const auto &site = it->second;
+    const uint64_t pc = query->pc != 0 ? query->pc : site.info.pc;
+    uint32_t flags = ASCSAN_SYMBOLIZE_FLAG_FROM_SITE_MAP;
+    if (site.sourceFile.empty() || site.sourceFile == "<unknown>") {
+        flags |= ASCSAN_SYMBOLIZE_FLAG_FALLBACK;
+    }
+
+    std::ostringstream os;
+    os << site.functionName << "\n"
+       << site.sourceFile << ":" << site.info.sourceLine << ":0\n"
+       << "pc=0x" << std::hex << pc << std::dec
+       << " siteId=" << query->siteId
+       << " binaryId=" << site.info.binaryId
+       << " functionId=" << site.info.functionId
+       << " op=" << site.opName
+       << " flags=0x" << std::hex << flags << std::dec
+       << "\n";
+
+    const std::string text = os.str();
+    *payloadBytes = static_cast<uint64_t>(text.size());
+    if (payloadSize <= text.size()) {
+        return ASCSAN_STATUS_ERROR_INVALID_VALUE;
+    }
+    CopyText(payload, static_cast<std::size_t>(payloadSize), text.c_str());
     return ASCSAN_STATUS_SUCCESS;
 }
 

@@ -63,9 +63,9 @@ void CaptureCommon(ToolEvent &event, const T *data)
     if (data == nullptr) {
         return;
     }
-    event.apiName = data->apiName != nullptr ? data->apiName : "";
-    event.result = data->result;
-    event.correlationId = data->correlationId;
+    event.apiName = data->common.apiName != nullptr ? data->common.apiName : "";
+    event.result = data->common.result;
+    event.correlationId = data->common.correlationId;
 }
 
 void FillInstructionSite(ToolEvent &event)
@@ -120,12 +120,8 @@ ToolEvent BuildToolEvent(AscsanCallbackDomain domain, uint32_t cbid, const void 
                 CaptureCommon(event, data);
                 if (data != nullptr) {
                     event.hasMemory = true;
-                    event.memory.version = data->version;
-                    event.memory.size = sizeof(event.memory);
-                    event.memory.apiName = data->apiName;
-                    event.memory.result = data->result;
-                    event.memory.correlationId = data->correlationId;
-                    event.memory.timestampNs = data->timestampNs;
+                    event.memory.common = data->common;
+                    event.memory.common.size = sizeof(event.memory);
                     event.memory.dst = data->dst;
                     event.memory.src = nullptr;
                     event.memory.bytes = data->bytes;
@@ -140,10 +136,12 @@ ToolEvent BuildToolEvent(AscsanCallbackDomain domain, uint32_t cbid, const void 
             if (data != nullptr) {
                 event.hasPatch = true;
                 event.patch = *data;
-                event.patchOriginalPath = data->originalPath != nullptr ? data->originalPath : "";
-                event.patchPatchedPath = data->patchedPath != nullptr ? data->patchedPath : "";
-                event.patch.originalPath = nullptr;
-                event.patch.patchedPath = nullptr;
+                event.patchOriginalPath = data->original.path != nullptr ? data->original.path : "";
+                event.patchPatchedPath = data->patched.path != nullptr ? data->patched.path : "";
+                event.patch.original.path = nullptr;
+                event.patch.original.imageData = nullptr;
+                event.patch.patched.path = nullptr;
+                event.patch.patched.imageData = nullptr;
             }
             break;
         }

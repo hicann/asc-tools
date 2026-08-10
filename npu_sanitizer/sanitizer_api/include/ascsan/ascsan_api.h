@@ -4,6 +4,7 @@
 #include "ascsan/ascsan_callback.h"
 #include "ascsan/ascsan_memory.h"
 #include "ascsan/ascsan_patch.h"
+#include "ascsan/ascsan_symbolize.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -13,10 +14,6 @@ typedef struct AscsanInitParams {
     uint32_t version;
     uint32_t size;
     const AscsanLaunchConfig *launchConfig;
-    const void *runtimeInitInfo;
-    const char *installRoot;
-    const char *workDir;
-    uint64_t flags;
 } AscsanInitParams;
 
 AscsanStatus ascsanInitialize(const AscsanInitParams *params);

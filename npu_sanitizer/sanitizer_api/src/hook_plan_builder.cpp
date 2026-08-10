@@ -50,15 +50,15 @@ uint32_t PipelineToCbid(AscsanPatchPipeline pipeline)
 {
     switch (pipeline) {
         case ASCSAN_PATCH_PIPELINE_SET_WAIT_FLAG:
-            return ASCSAN_CBID_DEVICE_INSTRUCTION_SET_WAIT_FLAG;
+            return ASCSAN_CBID_DEVICE_SYNC;
         case ASCSAN_PATCH_PIPELINE_GET_RLS_BUF:
-            return ASCSAN_CBID_DEVICE_INSTRUCTION_GET_RLS_BUF;
+            return ASCSAN_CBID_DEVICE_SYNC;
         case ASCSAN_PATCH_PIPELINE_MTE2:
-            return ASCSAN_CBID_DEVICE_INSTRUCTION_MTE2;
+            return ASCSAN_CBID_DEVICE_MEMORY_ACCESS;
         case ASCSAN_PATCH_PIPELINE_MTE3:
-            return ASCSAN_CBID_DEVICE_INSTRUCTION_MTE3;
+            return ASCSAN_CBID_DEVICE_MEMORY_ACCESS;
         case ASCSAN_PATCH_PIPELINE_FIXPIPE:
-            return ASCSAN_CBID_DEVICE_INSTRUCTION_FIXPIPE;
+            return ASCSAN_CBID_DEVICE_MEMORY_ACCESS;
         default:
             return 0;
     }
@@ -140,24 +140,20 @@ AscsanRuntimeHookPlan ApiCore::BuildHookPlanFromSubscriptions()
                           ASCSAN_HOOK_DISPATCH_CALLBACK);
     }
 
-    const struct {
-        uint32_t cbid;
-        AscsanPatchPipeline pipeline;
-    } deviceSubscriptions[] = {
-        {ASCSAN_CBID_DEVICE_INSTRUCTION_SET_WAIT_FLAG, ASCSAN_PATCH_PIPELINE_SET_WAIT_FLAG},
-        {ASCSAN_CBID_DEVICE_INSTRUCTION_GET_RLS_BUF, ASCSAN_PATCH_PIPELINE_GET_RLS_BUF},
-        {ASCSAN_CBID_DEVICE_INSTRUCTION_MTE2, ASCSAN_PATCH_PIPELINE_MTE2},
-        {ASCSAN_CBID_DEVICE_INSTRUCTION_MTE3, ASCSAN_PATCH_PIPELINE_MTE3},
-        {ASCSAN_CBID_DEVICE_INSTRUCTION_FIXPIPE, ASCSAN_PATCH_PIPELINE_FIXPIPE},
-    };
-    for (const auto &entry : deviceSubscriptions) {
-        if (HasEnabledCallbackLocked(ASCSAN_CB_DOMAIN_DEVICE_INSTRUCTION, entry.cbid)) {
-            plan.patchPipelineMask |= PipelineMask(entry.pipeline);
-            AddRuleAction(plan, ASCSAN_RT_API_ACLRT_BINARY_LOAD_FROM_FILE, ASCSAN_HOOK_PATCH_BINARY);
-            AddRuleAction(plan,
-                          ASCSAN_RT_API_ACLRT_SYNCHRONIZE_STREAM,
-                          ASCSAN_HOOK_FLUSH_TRACE | ASCSAN_HOOK_DISPATCH_CALLBACK);
-        }
+    if (HasEnabledCallbackLocked(ASCSAN_CB_DOMAIN_DEVICE_INSTRUCTION, ASCSAN_CBID_DEVICE_MEMORY_ACCESS)) {
+        plan.patchPipelineMask |= PipelineMask(ASCSAN_PATCH_PIPELINE_MTE2);
+        plan.patchPipelineMask |= PipelineMask(ASCSAN_PATCH_PIPELINE_MTE3);
+        plan.patchPipelineMask |= PipelineMask(ASCSAN_PATCH_PIPELINE_FIXPIPE);
+    }
+    if (HasEnabledCallbackLocked(ASCSAN_CB_DOMAIN_DEVICE_INSTRUCTION, ASCSAN_CBID_DEVICE_SYNC)) {
+        plan.patchPipelineMask |= PipelineMask(ASCSAN_PATCH_PIPELINE_SET_WAIT_FLAG);
+        plan.patchPipelineMask |= PipelineMask(ASCSAN_PATCH_PIPELINE_GET_RLS_BUF);
+    }
+    if (plan.patchPipelineMask != 0) {
+        AddRuleAction(plan, ASCSAN_RT_API_ACLRT_BINARY_LOAD_FROM_FILE, ASCSAN_HOOK_PATCH_BINARY);
+        AddRuleAction(plan,
+                      ASCSAN_RT_API_ACLRT_SYNCHRONIZE_STREAM,
+                      ASCSAN_HOOK_FLUSH_TRACE | ASCSAN_HOOK_DISPATCH_CALLBACK);
     }
     return plan;
 }

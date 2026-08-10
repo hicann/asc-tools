@@ -56,6 +56,23 @@ typedef struct AscsanRuntimeMemsetParams {
     void *stream;
 } AscsanRuntimeMemsetParams;
 
+typedef struct AscsanRuntimeBinaryLoadFromFileParams {
+    uint32_t version;
+    uint32_t size;
+    const char *path;
+    const char *imageVersion;
+    uint64_t binaryId;
+} AscsanRuntimeBinaryLoadFromFileParams;
+
+typedef struct AscsanRuntimeBinaryLoadFromDataParams {
+    uint32_t version;
+    uint32_t size;
+    const void *imageData;
+    uint64_t imageSize;
+    const char *imageVersion;
+    uint64_t binaryId;
+} AscsanRuntimeBinaryLoadFromDataParams;
+
 const char *ascsanGetVersionString(void);
 
 AscsanStatus ascsanExportLaunchConfigToFd(const AscsanLaunchConfig *config, int fd);

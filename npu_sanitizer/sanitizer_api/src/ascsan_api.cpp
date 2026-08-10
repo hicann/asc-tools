@@ -139,6 +139,15 @@ extern "C" AscsanStatus ascsanGetPatchSiteInfo(uint32_t siteId, AscsanPatchSiteI
     return ASCSAN_GUARDED_STATUS(ApiCore::Instance().GetPatchSiteInfo(siteId, info));
 }
 
+extern "C" AscsanStatus ascsanSymbolizeDevicePc(const AscsanDevicePcQuery *query,
+                                                 char *payload,
+                                                 uint64_t payloadSize,
+                                                 uint64_t *payloadBytes)
+{
+    return ASCSAN_GUARDED_STATUS(
+        ApiCore::Instance().SymbolizeDevicePc(query, payload, payloadSize, payloadBytes));
+}
+
 extern "C" AscsanStatus ascsanSetLaunchUserData(AscsanLaunchHandle launch,
                                                  void *function,
                                                  void *stream,

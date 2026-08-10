@@ -7,13 +7,34 @@
 extern "C" {
 #endif
 
-typedef struct AscsanResourceData {
+typedef struct AscsanCallbackCommonData {
     uint32_t version;
     uint32_t size;
     const char *apiName;
     int result;
     uint64_t correlationId;
     uint64_t timestampNs;
+} AscsanCallbackCommonData;
+
+typedef enum AscsanBinaryImageFlags {
+    ASCSAN_BINARY_IMAGE_FLAG_NONE = 0,
+    ASCSAN_BINARY_IMAGE_FLAG_PATH_VALID = 1u << 0u,
+    ASCSAN_BINARY_IMAGE_FLAG_DATA_VALID = 1u << 1u,
+    ASCSAN_BINARY_IMAGE_FLAG_MATERIALIZED_PATH = 1u << 2u
+} AscsanBinaryImageFlags;
+
+typedef struct AscsanBinaryImageData {
+    uint32_t kind;
+    uint32_t flags;
+    const char *path;
+    const void *imageData;
+    uint64_t imageSize;
+    const char *imageVersion;
+    uint64_t imageHash;
+} AscsanBinaryImageData;
+
+typedef struct AscsanResourceData {
+    AscsanCallbackCommonData common;
     void *ptr;
     uint64_t bytes;
     uint32_t memorySpace;
@@ -22,12 +43,7 @@ typedef struct AscsanResourceData {
 } AscsanResourceData;
 
 typedef struct AscsanMemoryMemcpyData {
-    uint32_t version;
-    uint32_t size;
-    const char *apiName;
-    int result;
-    uint64_t correlationId;
-    uint64_t timestampNs;
+    AscsanCallbackCommonData common;
     void *dst;
     const void *src;
     uint64_t bytes;
@@ -36,12 +52,7 @@ typedef struct AscsanMemoryMemcpyData {
 } AscsanMemoryMemcpyData;
 
 typedef struct AscsanMemoryMemsetData {
-    uint32_t version;
-    uint32_t size;
-    const char *apiName;
-    int result;
-    uint64_t correlationId;
-    uint64_t timestampNs;
+    AscsanCallbackCommonData common;
     void *dst;
     uint64_t bytes;
     int32_t value;
@@ -49,37 +60,23 @@ typedef struct AscsanMemoryMemsetData {
 } AscsanMemoryMemsetData;
 
 typedef struct AscsanBinaryData {
-    uint32_t version;
-    uint32_t size;
-    const char *apiName;
-    int result;
-    uint64_t correlationId;
-    uint64_t timestampNs;
+    AscsanCallbackCommonData common;
     uint64_t binaryId;
-    const char *path;
+    AscsanBinaryImageData image;
 } AscsanBinaryData;
 
 typedef struct AscsanPatchData {
-    uint32_t version;
-    uint32_t size;
-    const char *apiName;
-    int result;
-    uint64_t correlationId;
-    uint64_t timestampNs;
-    const char *originalPath;
-    const char *patchedPath;
+    AscsanCallbackCommonData common;
+    AscsanBinaryImageData original;
+    AscsanBinaryImageData patched;
     uint64_t binaryId;
     uint64_t patchPlanId;
     uint32_t pipelineMask;
+    uint32_t siteCount;
 } AscsanPatchData;
 
 typedef struct AscsanLaunchData {
-    uint32_t version;
-    uint32_t size;
-    const char *apiName;
-    int result;
-    uint64_t correlationId;
-    uint64_t timestampNs;
+    AscsanCallbackCommonData common;
     uint64_t launchId;
     void *function;
     void *stream;
@@ -87,22 +84,12 @@ typedef struct AscsanLaunchData {
 } AscsanLaunchData;
 
 typedef struct AscsanSynchronizeData {
-    uint32_t version;
-    uint32_t size;
-    const char *apiName;
-    int result;
-    uint64_t correlationId;
-    uint64_t timestampNs;
+    AscsanCallbackCommonData common;
     void *stream;
 } AscsanSynchronizeData;
 
 typedef struct AscsanDeviceInstructionData {
-    uint32_t version;
-    uint32_t size;
-    const char *apiName;
-    int result;
-    uint64_t correlationId;
-    uint64_t timestampNs;
+    AscsanCallbackCommonData common;
     uint32_t pipeline;
     uint32_t cbid;
     uint32_t siteId;
@@ -115,23 +102,13 @@ typedef struct AscsanDeviceInstructionData {
 } AscsanDeviceInstructionData;
 
 typedef struct AscsanReportData {
-    uint32_t version;
-    uint32_t size;
-    const char *apiName;
-    int result;
-    uint64_t correlationId;
-    uint64_t timestampNs;
+    AscsanCallbackCommonData common;
     const char *tool;
     const char *message;
 } AscsanReportData;
 
 typedef struct AscsanErrorData {
-    uint32_t version;
-    uint32_t size;
-    const char *apiName;
-    int result;
-    uint64_t correlationId;
-    uint64_t timestampNs;
+    AscsanCallbackCommonData common;
     const char *tool;
     const char *message;
 } AscsanErrorData;

@@ -53,6 +53,7 @@ install(FILES
   include/ascsan/ascsan_callback.h
   include/ascsan/ascsan_memory.h
   include/ascsan/ascsan_patch.h
+  include/ascsan/ascsan_symbolize.h
   include/ascsan/ascsan_types.h
   DESTINATION include/ascsan ${INSTALL_OPTIONAL}
   COMPONENT asc-tools

@@ -172,7 +172,7 @@ struct ToolContext {
     bool initialized = false;
     ToolKind tool = ToolKind::Memcheck;
     AscsanLaunchConfig config{};
-    AscsanSubscriberHandle subscriber = 0;
+    AscsanSubscriberHandle subscriber = ASCSAN_INVALID_SUBSCRIBER_HANDLE;
     AscsanCannSanitizerStats stats{};
     DummyChecker checker;
     std::ofstream log;

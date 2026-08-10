@@ -103,7 +103,6 @@ extern "C" AscsanStatus ascsanCannSanitizerInitialize(const AscsanLaunchConfig *
     init.version = ASCSAN_API_VERSION;
     init.size = sizeof(init);
     init.launchConfig = &loaded;
-    init.workDir = loaded.workDir;
     status = ascsanInitialize(&init);
     if (status != ASCSAN_STATUS_SUCCESS) {
         return status;
@@ -145,7 +144,7 @@ extern "C" AscsanStatus ascsanCannSanitizerInitialize(const AscsanLaunchConfig *
     status = ascsan::cann::EnableToolProfile(ctx, *profile);
     if (status != ASCSAN_STATUS_SUCCESS) {
         (void)ascsanUnsubscribe(ctx.subscriber);
-        ctx.subscriber = 0;
+        ctx.subscriber = ASCSAN_INVALID_SUBSCRIBER_HANDLE;
         return status;
     }
 
@@ -163,9 +162,9 @@ extern "C" AscsanStatus ascsanCannSanitizerFinalize(void)
     }
     ctx.checker.FlushAll(ctx, "finalize");
     ctx.checker.Reset();
-    if (ctx.subscriber != 0) {
+    if (ctx.subscriber != ASCSAN_INVALID_SUBSCRIBER_HANDLE) {
         (void)ascsanUnsubscribe(ctx.subscriber);
-        ctx.subscriber = 0;
+        ctx.subscriber = ASCSAN_INVALID_SUBSCRIBER_HANDLE;
     }
     ascsan::cann::Log(ctx, "[cann-sanitizer] finalize");
     if (ctx.log.is_open()) {

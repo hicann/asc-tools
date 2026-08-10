@@ -20,19 +20,19 @@ AscsanStatus ValidateRuntimeParams(const AscsanRuntimeEvent &event, const T **pa
 template <typename T>
 void InitCallbackData(T *data, const AscsanRuntimeEvent &event)
 {
-    data->version = ASCSAN_API_VERSION;
-    data->size = sizeof(*data);
-    data->apiName = event.apiName;
-    data->result = event.result;
-    data->correlationId = event.correlationId;
+    data->common.version = ASCSAN_API_VERSION;
+    data->common.size = sizeof(*data);
+    data->common.apiName = event.apiName;
+    data->common.result = event.result;
+    data->common.correlationId = event.correlationId;
 }
 
 template <typename T>
 void InitCallbackData(T *data, const char *apiName)
 {
-    data->version = ASCSAN_API_VERSION;
-    data->size = sizeof(*data);
-    data->apiName = apiName;
+    data->common.version = ASCSAN_API_VERSION;
+    data->common.size = sizeof(*data);
+    data->common.apiName = apiName;
 }
 
 AscsanPatchPipeline FirstEnabledPipeline(uint32_t mask)
@@ -59,11 +59,7 @@ AscsanStatus FillResourceFromMalloc(const AscsanRuntimeEvent &event, AscsanResou
     if (status != ASCSAN_STATUS_SUCCESS) {
         return status;
     }
-    resource->version = ASCSAN_API_VERSION;
-    resource->size = sizeof(*resource);
-    resource->apiName = event.apiName;
-    resource->result = event.result;
-    resource->correlationId = event.correlationId;
+    InitCallbackData(resource, event);
     resource->ptr = params->ptr;
     resource->bytes = params->bytes;
     resource->memorySpace = params->memorySpace;
@@ -79,11 +75,7 @@ AscsanStatus FillResourceFromFree(const AscsanRuntimeEvent &event, AscsanResourc
     if (status != ASCSAN_STATUS_SUCCESS) {
         return status;
     }
-    resource->version = ASCSAN_API_VERSION;
-    resource->size = sizeof(*resource);
-    resource->apiName = event.apiName;
-    resource->result = event.result;
-    resource->correlationId = event.correlationId;
+    InitCallbackData(resource, event);
     resource->ptr = params->ptr;
     resource->bytes = params->bytes;
     resource->memorySpace = params->memorySpace;
@@ -99,11 +91,7 @@ AscsanStatus FillMemoryFromMemcpy(const AscsanRuntimeEvent &event, AscsanMemoryM
     if (status != ASCSAN_STATUS_SUCCESS) {
         return status;
     }
-    memory->version = ASCSAN_API_VERSION;
-    memory->size = sizeof(*memory);
-    memory->apiName = event.apiName;
-    memory->result = event.result;
-    memory->correlationId = event.correlationId;
+    InitCallbackData(memory, event);
     memory->dst = params->dst;
     memory->src = params->src;
     memory->bytes = params->bytes;
@@ -119,15 +107,54 @@ AscsanStatus FillMemoryFromMemset(const AscsanRuntimeEvent &event, AscsanMemoryM
     if (status != ASCSAN_STATUS_SUCCESS) {
         return status;
     }
-    memory->version = ASCSAN_API_VERSION;
-    memory->size = sizeof(*memory);
-    memory->apiName = event.apiName;
-    memory->result = event.result;
-    memory->correlationId = event.correlationId;
+    InitCallbackData(memory, event);
     memory->dst = params->dst;
     memory->bytes = params->bytes;
     memory->value = params->value;
     memory->stream = params->stream;
+    return ASCSAN_STATUS_SUCCESS;
+}
+
+AscsanStatus FillBinaryFromFile(const AscsanRuntimeEvent &event, AscsanBinaryData *binary)
+{
+    InitCallbackData(binary, event);
+    binary->image.kind = ASCSAN_PATCH_IMAGE_FILE;
+    if (event.params == nullptr) {
+        return ASCSAN_STATUS_SUCCESS;
+    }
+
+    const auto *params = static_cast<const AscsanRuntimeBinaryLoadFromFileParams *>(event.params);
+    if (params->version != ASCSAN_API_VERSION || params->size < sizeof(AscsanRuntimeBinaryLoadFromFileParams)) {
+        return ASCSAN_STATUS_ERROR_VERSION_MISMATCH;
+    }
+    binary->binaryId = params->binaryId;
+    binary->image.path = params->path;
+    binary->image.imageVersion = params->imageVersion;
+    if (params->path != nullptr && params->path[0] != '\0') {
+        binary->image.flags |= ASCSAN_BINARY_IMAGE_FLAG_PATH_VALID;
+    }
+    return ASCSAN_STATUS_SUCCESS;
+}
+
+AscsanStatus FillBinaryFromData(const AscsanRuntimeEvent &event, AscsanBinaryData *binary)
+{
+    InitCallbackData(binary, event);
+    binary->image.kind = ASCSAN_PATCH_IMAGE_MEMORY;
+    if (event.params == nullptr) {
+        return ASCSAN_STATUS_SUCCESS;
+    }
+
+    const auto *params = static_cast<const AscsanRuntimeBinaryLoadFromDataParams *>(event.params);
+    if (params->version != ASCSAN_API_VERSION || params->size < sizeof(AscsanRuntimeBinaryLoadFromDataParams)) {
+        return ASCSAN_STATUS_ERROR_VERSION_MISMATCH;
+    }
+    binary->binaryId = params->binaryId;
+    binary->image.imageData = params->imageData;
+    binary->image.imageSize = params->imageSize;
+    binary->image.imageVersion = params->imageVersion;
+    if (params->imageData != nullptr && params->imageSize != 0) {
+        binary->image.flags |= ASCSAN_BINARY_IMAGE_FLAG_DATA_VALID;
+    }
     return ASCSAN_STATUS_SUCCESS;
 }
 
@@ -248,9 +275,15 @@ AscsanStatus ApiCore::OnRuntimeEvent(const AscsanRuntimeEvent *event)
         return ASCSAN_STATUS_SUCCESS;
     }
 
-    if (event->apiId == ASCSAN_RT_API_ACLRT_BINARY_LOAD_FROM_FILE) {
+    if (event->apiId == ASCSAN_RT_API_ACLRT_BINARY_LOAD_FROM_FILE ||
+        event->apiId == ASCSAN_RT_API_ACLRT_BINARY_LOAD_FROM_DATA) {
         AscsanBinaryData binary{};
-        InitCallbackData(&binary, *event);
+        AscsanStatus status =
+            event->apiId == ASCSAN_RT_API_ACLRT_BINARY_LOAD_FROM_FILE ? FillBinaryFromFile(*event, &binary)
+                                                                      : FillBinaryFromData(*event, &binary);
+        if (status != ASCSAN_STATUS_SUCCESS) {
+            return status;
+        }
         if (event->phase == ASCSAN_RUNTIME_EVENT_ENTER) {
             Dispatch(ASCSAN_CB_DOMAIN_BINARY, ASCSAN_CBID_BINARY_LOAD_BEGIN, &binary);
         } else {

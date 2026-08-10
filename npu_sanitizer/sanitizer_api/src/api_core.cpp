@@ -96,9 +96,6 @@ AscsanStatus ApiCore::Initialize(const AscsanInitParams *params)
         if (params->launchConfig != nullptr) {
             config_ = *params->launchConfig;
         }
-        if (params->workDir != nullptr && params->workDir[0] != '\0') {
-            std::snprintf(config_.workDir, sizeof(config_.workDir), "%s", params->workDir);
-        }
     }
     if (config_.version == 0) {
         config_.version = ASCSAN_API_VERSION;
@@ -116,6 +113,8 @@ AscsanStatus ApiCore::Finalize()
     std::lock_guard<std::recursive_mutex> lock(mutex_);
     FlushReports();
     subscriber_.reset();
+    subscriberToken_.reset();
+    retiredSubscriberTokens_.clear();
     patchSites_.clear();
     reports_.clear();
     for (auto &entry : memories_) {
@@ -225,15 +224,15 @@ AscsanStatus ApiCore::ReportError(const char *tool, const char *message)
     std::cerr << "[ascsan-api] " << report << "\n";
 
     AscsanReportData reportData{};
-    reportData.version = ASCSAN_API_VERSION;
-    reportData.size = sizeof(reportData);
-    reportData.apiName = "ascsanReportError";
+    reportData.common.version = ASCSAN_API_VERSION;
+    reportData.common.size = sizeof(reportData);
+    reportData.common.apiName = "ascsanReportError";
     reportData.tool = tool;
     reportData.message = message;
     AscsanErrorData errorData{};
-    errorData.version = ASCSAN_API_VERSION;
-    errorData.size = sizeof(errorData);
-    errorData.apiName = "ascsanReportError";
+    errorData.common.version = ASCSAN_API_VERSION;
+    errorData.common.size = sizeof(errorData);
+    errorData.common.apiName = "ascsanReportError";
     errorData.tool = tool;
     errorData.message = message;
     Dispatch(ASCSAN_CB_DOMAIN_REPORT, ASCSAN_CBID_REPORT_RECORD, &reportData);

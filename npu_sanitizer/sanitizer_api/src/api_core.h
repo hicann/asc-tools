@@ -8,19 +8,27 @@
 #include "ascsan/internal_api.h"
 
 #include <map>
+#include <memory>
 #include <mutex>
 #include <optional>
 #include <set>
 #include <string>
 #include <vector>
 
+struct AscsanSubscriberToken_st {
+    uint64_t magic = 0;
+    uint64_t generation = 0;
+    bool active = false;
+};
+
 namespace ascsan {
 
 struct Subscriber {
-    AscsanSubscriberHandle handle = 0;
+    AscsanSubscriberHandle handle = ASCSAN_INVALID_SUBSCRIBER_HANDLE;
     std::string name;
     AscsanCallbackFunc callback = nullptr;
     void *userdata = nullptr;
+    uint64_t flags = 0;
     std::set<AscsanCallbackDomain> enabledDomains;
     std::set<std::pair<AscsanCallbackDomain, uint32_t>> enabledCallbacks;
 };
@@ -83,6 +91,10 @@ public:
                                       uint64_t patchedPathSize,
                                       AscsanPatchPlanHandle *plan);
     AscsanStatus GetPatchSiteInfo(uint32_t siteId, AscsanPatchSiteInfo *info) const;
+    AscsanStatus SymbolizeDevicePc(const AscsanDevicePcQuery *query,
+                                   char *payload,
+                                   uint64_t payloadSize,
+                                   uint64_t *payloadBytes) const;
     AscsanStatus SetLaunchUserData(AscsanLaunchHandle launch,
                                    void *function,
                                    void *stream,
@@ -122,6 +134,7 @@ private:
     bool HasEnabledDomainLocked(AscsanCallbackDomain domain) const;
     bool IsSupportedDomain(AscsanCallbackDomain domain) const;
     bool IsKnownCbid(AscsanCallbackDomain domain, uint32_t cbid) const;
+    AscsanSubscriberToken_st *ValidateSubscriberLocked(AscsanSubscriberHandle subscriber) const;
     AscsanStatus ValidateInitialized() const;
     AscsanStatus BuildDummyPatchResult(const std::string &originalPath,
                                        uint32_t pipelineMask,
@@ -134,7 +147,7 @@ private:
     bool finalized_ = false;
     AscsanLaunchConfig config_{};
 
-    AscsanSubscriberHandle nextSubscriber_ = 1;
+    uint64_t nextSubscriberGeneration_ = 1;
     uint64_t nextPatchImage_ = 1;
     uint64_t nextPatchPlan_ = 1;
     uint64_t nextBinary_ = 1;
@@ -142,6 +155,8 @@ private:
     uint64_t nextHookGeneration_ = 1;
 
     std::optional<Subscriber> subscriber_;
+    std::unique_ptr<AscsanSubscriberToken_st> subscriberToken_;
+    std::vector<std::unique_ptr<AscsanSubscriberToken_st>> retiredSubscriberTokens_;
     std::map<uint64_t, AscsanPatchImageDesc> patchImages_;
     std::map<AscsanPatchPipeline, AscsanPatchPipelineDesc> patchPipelines_;
     std::map<uint32_t, PatchSiteRecord> patchSites_;
