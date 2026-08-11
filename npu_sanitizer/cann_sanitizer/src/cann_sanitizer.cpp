@@ -1,3 +1,13 @@
+/**
+ * Copyright (c) 2025 Huawei Technologies Co., Ltd.
+ * This program is free software, you can redistribute it and/or modify it under the terms and conditions of
+ * CANN Open Software License Agreement Version 2.0 (the "License").
+ * Please refer to the License for details. You may not use this file except in compliance with the License.
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
+ * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
+ * See LICENSE in the root of the software repository for the full text of the License.
+ */
+
 #include "cann_sanitizer_context.h"
 
 #include <cstdio>
@@ -8,7 +18,7 @@
 namespace ascsan::cann {
 namespace {
 
-void FillDefaultConfig(AscsanLaunchConfig *config)
+void FillDefaultConfig(AscsanLaunchConfig* config)
 {
     std::memset(config, 0, sizeof(*config));
     config->version = ASCSAN_API_VERSION;
@@ -18,7 +28,7 @@ void FillDefaultConfig(AscsanLaunchConfig *config)
     std::snprintf(config->probeCacheDir, sizeof(config->probeCacheDir), "%s", "/tmp/ascsan_cann_sanitizer/cache");
 }
 
-AscsanStatus LoadConfig(const AscsanLaunchConfig *explicitConfig, AscsanLaunchConfig *out)
+AscsanStatus LoadConfig(const AscsanLaunchConfig* explicitConfig, AscsanLaunchConfig* out)
 {
     if (out == nullptr) {
         return ASCSAN_STATUS_ERROR_INVALID_VALUE;
@@ -40,7 +50,7 @@ AscsanStatus LoadConfig(const AscsanLaunchConfig *explicitConfig, AscsanLaunchCo
     return ASCSAN_STATUS_SUCCESS;
 }
 
-void CopyToolName(AscsanCannSanitizerStats *stats, const char *toolName)
+void CopyToolName(AscsanCannSanitizerStats* stats, const char* toolName)
 {
     if (stats == nullptr) {
         return;
@@ -48,27 +58,25 @@ void CopyToolName(AscsanCannSanitizerStats *stats, const char *toolName)
     std::snprintf(stats->toolName, sizeof(stats->toolName), "%s", toolName != nullptr ? toolName : "");
 }
 
-void LogProfileSelection(ascsan::cann::ToolContext &ctx, const ascsan::cann::ToolProfile &profile)
+void LogProfileSelection(ascsan::cann::ToolContext& ctx, const ascsan::cann::ToolProfile& profile)
 {
     std::ostringstream os;
-    os << "[cann-sanitizer] config tool=" << profile.name
-       << " callbacks=" << profile.callbackCount;
+    os << "[cann-sanitizer] config tool=" << profile.name << " callbacks=" << profile.callbackCount;
     for (uint64_t i = 0; i < profile.callbackCount; ++i) {
-        os << " [" << static_cast<uint32_t>(profile.callbacks[i].domain)
-           << ":" << profile.callbacks[i].cbid << "]";
+        os << " [" << static_cast<uint32_t>(profile.callbacks[i].domain) << ":" << profile.callbacks[i].cbid << "]";
     }
     ascsan::cann::Log(ctx, os.str());
 }
 
 } // namespace
 
-ToolContext &Context()
+ToolContext& Context()
 {
     static ToolContext context;
     return context;
 }
 
-void Log(ToolContext &ctx, const std::string &message)
+void Log(ToolContext& ctx, const std::string& message)
 {
     if (ctx.log.is_open()) {
         ctx.log << message << "\n";
@@ -80,9 +88,9 @@ void Log(ToolContext &ctx, const std::string &message)
 
 } // namespace ascsan::cann
 
-extern "C" AscsanStatus ascsanCannSanitizerInitialize(const AscsanLaunchConfig *config)
+extern "C" AscsanStatus ascsanCannSanitizerInitialize(const AscsanLaunchConfig* config)
 {
-    auto &ctx = ascsan::cann::Context();
+    auto& ctx = ascsan::cann::Context();
     std::lock_guard<std::mutex> lock(ctx.mutex);
     if (ctx.initialized) {
         return ASCSAN_STATUS_SUCCESS;
@@ -94,7 +102,7 @@ extern "C" AscsanStatus ascsanCannSanitizerInitialize(const AscsanLaunchConfig *
         return status;
     }
 
-    const auto *profile = ascsan::cann::FindToolProfile(loaded.toolName);
+    const auto* profile = ascsan::cann::FindToolProfile(loaded.toolName);
     if (profile == nullptr) {
         return ASCSAN_STATUS_ERROR_INVALID_VALUE;
     }
@@ -155,7 +163,7 @@ extern "C" AscsanStatus ascsanCannSanitizerInitialize(const AscsanLaunchConfig *
 
 extern "C" AscsanStatus ascsanCannSanitizerFinalize(void)
 {
-    auto &ctx = ascsan::cann::Context();
+    auto& ctx = ascsan::cann::Context();
     std::lock_guard<std::mutex> lock(ctx.mutex);
     if (!ctx.initialized) {
         return ASCSAN_STATUS_SUCCESS;
@@ -174,20 +182,20 @@ extern "C" AscsanStatus ascsanCannSanitizerFinalize(void)
     return ASCSAN_STATUS_SUCCESS;
 }
 
-extern "C" AscsanStatus ascsanCannSanitizerGetStats(AscsanCannSanitizerStats *stats)
+extern "C" AscsanStatus ascsanCannSanitizerGetStats(AscsanCannSanitizerStats* stats)
 {
     if (stats == nullptr) {
         return ASCSAN_STATUS_ERROR_INVALID_VALUE;
     }
-    auto &ctx = ascsan::cann::Context();
+    auto& ctx = ascsan::cann::Context();
     std::lock_guard<std::mutex> lock(ctx.mutex);
     *stats = ctx.stats;
     return ASCSAN_STATUS_SUCCESS;
 }
 
-extern "C" int acltoolInitalize(const void *initInfo)
+extern "C" int acltoolInitalize(const void* initInfo)
 {
-    auto *config = static_cast<const AscsanLaunchConfig *>(initInfo);
+    auto* config = static_cast<const AscsanLaunchConfig*>(initInfo);
     return static_cast<int>(ascsanCannSanitizerInitialize(config));
 }
 
@@ -199,7 +207,4 @@ extern "C" void CannComputeInit(void)
     }
 }
 
-__attribute__((destructor)) static void AscsanCannSanitizerAutoFinalize()
-{
-    (void)ascsanCannSanitizerFinalize();
-}
+__attribute__((destructor)) static void AscsanCannSanitizerAutoFinalize() { (void)ascsanCannSanitizerFinalize(); }

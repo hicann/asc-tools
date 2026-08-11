@@ -1,3 +1,13 @@
+/**
+ * Copyright (c) 2025 Huawei Technologies Co., Ltd.
+ * This program is free software, you can redistribute it and/or modify it under the terms and conditions of
+ * CANN Open Software License Agreement Version 2.0 (the "License").
+ * Please refer to the License for details. You may not use this file except in compliance with the License.
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
+ * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
+ * See LICENSE in the root of the software repository for the full text of the License.
+ */
+
 #include "api_core.h"
 
 #include <cstring>
@@ -5,7 +15,7 @@
 namespace ascsan {
 namespace {
 
-void AddRuleAction(AscsanRuntimeHookPlan &plan, uint32_t api, uint32_t actions)
+void AddRuleAction(AscsanRuntimeHookPlan& plan, uint32_t api, uint32_t actions)
 {
     for (uint32_t i = 0; i < plan.ruleCount; ++i) {
         if (plan.rules[i].api == api) {
@@ -23,7 +33,7 @@ void AddRuleAction(AscsanRuntimeHookPlan &plan, uint32_t api, uint32_t actions)
 
 } // namespace
 
-const char *PipelineName(AscsanPatchPipeline pipeline)
+const char* PipelineName(AscsanPatchPipeline pipeline)
 {
     switch (pipeline) {
         case ASCSAN_PATCH_PIPELINE_SET_WAIT_FLAG:
@@ -78,66 +88,55 @@ AscsanRuntimeHookPlan ApiCore::BuildHookPlanFromSubscriptions()
     }
 
     if (HasEnabledCallbackLocked(ASCSAN_CB_DOMAIN_RESOURCE, ASCSAN_CBID_RESOURCE_MEMORY_ALLOC)) {
-        AddRuleAction(plan,
-                      ASCSAN_RT_API_ACLRT_MALLOC,
-                      ASCSAN_HOOK_RECORD_POST | ASCSAN_HOOK_TRACK_RESOURCE |
-                          ASCSAN_HOOK_DISPATCH_CALLBACK);
-        AddRuleAction(plan,
-                      ASCSAN_RT_API_ACLRT_MALLOC_HOST,
-                      ASCSAN_HOOK_RECORD_POST | ASCSAN_HOOK_TRACK_RESOURCE |
-                          ASCSAN_HOOK_DISPATCH_CALLBACK);
+        AddRuleAction(
+            plan, ASCSAN_RT_API_ACLRT_MALLOC,
+            ASCSAN_HOOK_RECORD_POST | ASCSAN_HOOK_TRACK_RESOURCE | ASCSAN_HOOK_DISPATCH_CALLBACK);
+        AddRuleAction(
+            plan, ASCSAN_RT_API_ACLRT_MALLOC_HOST,
+            ASCSAN_HOOK_RECORD_POST | ASCSAN_HOOK_TRACK_RESOURCE | ASCSAN_HOOK_DISPATCH_CALLBACK);
     }
     if (HasEnabledCallbackLocked(ASCSAN_CB_DOMAIN_RESOURCE, ASCSAN_CBID_RESOURCE_MEMORY_FREE)) {
-        AddRuleAction(plan,
-                      ASCSAN_RT_API_ACLRT_FREE,
-                      ASCSAN_HOOK_RECORD_PRE | ASCSAN_HOOK_TRACK_RESOURCE |
-                          ASCSAN_HOOK_DISPATCH_CALLBACK);
-        AddRuleAction(plan,
-                      ASCSAN_RT_API_ACLRT_FREE_HOST,
-                      ASCSAN_HOOK_RECORD_PRE | ASCSAN_HOOK_TRACK_RESOURCE |
-                          ASCSAN_HOOK_DISPATCH_CALLBACK);
+        AddRuleAction(
+            plan, ASCSAN_RT_API_ACLRT_FREE,
+            ASCSAN_HOOK_RECORD_PRE | ASCSAN_HOOK_TRACK_RESOURCE | ASCSAN_HOOK_DISPATCH_CALLBACK);
+        AddRuleAction(
+            plan, ASCSAN_RT_API_ACLRT_FREE_HOST,
+            ASCSAN_HOOK_RECORD_PRE | ASCSAN_HOOK_TRACK_RESOURCE | ASCSAN_HOOK_DISPATCH_CALLBACK);
     }
     if (HasEnabledDomainLocked(ASCSAN_CB_DOMAIN_MEMORY) ||
         HasEnabledCallbackLocked(ASCSAN_CB_DOMAIN_MEMORY, ASCSAN_CBID_MEMORY_MEMCPY_BEGIN) ||
         HasEnabledCallbackLocked(ASCSAN_CB_DOMAIN_MEMORY, ASCSAN_CBID_MEMORY_MEMCPY_END)) {
-        AddRuleAction(plan,
-                      ASCSAN_RT_API_ACLRT_MEMCPY,
-                      ASCSAN_HOOK_RECORD_PRE | ASCSAN_HOOK_RECORD_POST |
-                          ASCSAN_HOOK_DISPATCH_CALLBACK);
+        AddRuleAction(
+            plan, ASCSAN_RT_API_ACLRT_MEMCPY,
+            ASCSAN_HOOK_RECORD_PRE | ASCSAN_HOOK_RECORD_POST | ASCSAN_HOOK_DISPATCH_CALLBACK);
     }
     if (HasEnabledCallbackLocked(ASCSAN_CB_DOMAIN_MEMORY, ASCSAN_CBID_MEMORY_MEMSET_BEGIN) ||
         HasEnabledCallbackLocked(ASCSAN_CB_DOMAIN_MEMORY, ASCSAN_CBID_MEMORY_MEMSET_END)) {
-        AddRuleAction(plan,
-                      ASCSAN_RT_API_ACLRT_MEMSET,
-                      ASCSAN_HOOK_RECORD_PRE | ASCSAN_HOOK_RECORD_POST |
-                          ASCSAN_HOOK_DISPATCH_CALLBACK);
+        AddRuleAction(
+            plan, ASCSAN_RT_API_ACLRT_MEMSET,
+            ASCSAN_HOOK_RECORD_PRE | ASCSAN_HOOK_RECORD_POST | ASCSAN_HOOK_DISPATCH_CALLBACK);
     }
     if (HasEnabledDomainLocked(ASCSAN_CB_DOMAIN_BINARY)) {
-        AddRuleAction(plan,
-                      ASCSAN_RT_API_ACLRT_BINARY_LOAD_FROM_FILE,
-                      ASCSAN_HOOK_RECORD_PRE | ASCSAN_HOOK_RECORD_POST |
-                          ASCSAN_HOOK_DISPATCH_CALLBACK);
+        AddRuleAction(
+            plan, ASCSAN_RT_API_ACLRT_BINARY_LOAD_FROM_FILE,
+            ASCSAN_HOOK_RECORD_PRE | ASCSAN_HOOK_RECORD_POST | ASCSAN_HOOK_DISPATCH_CALLBACK);
     }
     if (HasEnabledDomainLocked(ASCSAN_CB_DOMAIN_PATCH)) {
-        AddRuleAction(plan,
-                      ASCSAN_RT_API_ACLRT_BINARY_LOAD_FROM_FILE,
-                      ASCSAN_HOOK_PATCH_BINARY | ASCSAN_HOOK_DISPATCH_CALLBACK);
+        AddRuleAction(
+            plan, ASCSAN_RT_API_ACLRT_BINARY_LOAD_FROM_FILE, ASCSAN_HOOK_PATCH_BINARY | ASCSAN_HOOK_DISPATCH_CALLBACK);
     }
     if (HasEnabledDomainLocked(ASCSAN_CB_DOMAIN_LAUNCH)) {
-        AddRuleAction(plan,
-                      ASCSAN_RT_API_ACLRT_LAUNCH_KERNEL_WITH_ARGS_ARRAY,
-                      ASCSAN_HOOK_RECORD_PRE | ASCSAN_HOOK_RECORD_POST |
-                          ASCSAN_HOOK_DISPATCH_CALLBACK);
+        AddRuleAction(
+            plan, ASCSAN_RT_API_ACLRT_LAUNCH_KERNEL_WITH_ARGS_ARRAY,
+            ASCSAN_HOOK_RECORD_PRE | ASCSAN_HOOK_RECORD_POST | ASCSAN_HOOK_DISPATCH_CALLBACK);
     }
     if (HasEnabledDomainLocked(ASCSAN_CB_DOMAIN_SYNCHRONIZE)) {
-        AddRuleAction(plan,
-                      ASCSAN_RT_API_ACLRT_SYNCHRONIZE_STREAM,
-                      ASCSAN_HOOK_RECORD_POST | ASCSAN_HOOK_FLUSH_TRACE |
-                          ASCSAN_HOOK_DISPATCH_CALLBACK);
-        AddRuleAction(plan,
-                      ASCSAN_RT_API_ACLRT_SYNCHRONIZE_DEVICE,
-                      ASCSAN_HOOK_RECORD_POST | ASCSAN_HOOK_FLUSH_TRACE |
-                          ASCSAN_HOOK_DISPATCH_CALLBACK);
+        AddRuleAction(
+            plan, ASCSAN_RT_API_ACLRT_SYNCHRONIZE_STREAM,
+            ASCSAN_HOOK_RECORD_POST | ASCSAN_HOOK_FLUSH_TRACE | ASCSAN_HOOK_DISPATCH_CALLBACK);
+        AddRuleAction(
+            plan, ASCSAN_RT_API_ACLRT_SYNCHRONIZE_DEVICE,
+            ASCSAN_HOOK_RECORD_POST | ASCSAN_HOOK_FLUSH_TRACE | ASCSAN_HOOK_DISPATCH_CALLBACK);
     }
 
     if (HasEnabledCallbackLocked(ASCSAN_CB_DOMAIN_DEVICE_INSTRUCTION, ASCSAN_CBID_DEVICE_MEMORY_ACCESS)) {
@@ -151,17 +150,13 @@ AscsanRuntimeHookPlan ApiCore::BuildHookPlanFromSubscriptions()
     }
     if (plan.patchPipelineMask != 0) {
         AddRuleAction(plan, ASCSAN_RT_API_ACLRT_BINARY_LOAD_FROM_FILE, ASCSAN_HOOK_PATCH_BINARY);
-        AddRuleAction(plan,
-                      ASCSAN_RT_API_ACLRT_SYNCHRONIZE_STREAM,
-                      ASCSAN_HOOK_FLUSH_TRACE | ASCSAN_HOOK_DISPATCH_CALLBACK);
+        AddRuleAction(
+            plan, ASCSAN_RT_API_ACLRT_SYNCHRONIZE_STREAM, ASCSAN_HOOK_FLUSH_TRACE | ASCSAN_HOOK_DISPATCH_CALLBACK);
     }
     return plan;
 }
 
-void ApiCore::ReconfigureHookPlan()
-{
-    activeHookPlan_ = BuildHookPlanFromSubscriptions();
-}
+void ApiCore::ReconfigureHookPlan() { activeHookPlan_ = BuildHookPlanFromSubscriptions(); }
 
 uint32_t ApiCore::ActivePatchPipelineMask() const
 {
@@ -169,7 +164,7 @@ uint32_t ApiCore::ActivePatchPipelineMask() const
     return activeHookPlan_.patchPipelineMask;
 }
 
-AscsanStatus ApiCore::ConfigureRuntimeHook(const AscsanRuntimeHookPlan *plan)
+AscsanStatus ApiCore::ConfigureRuntimeHook(const AscsanRuntimeHookPlan* plan)
 {
     if (plan == nullptr) {
         return ASCSAN_STATUS_ERROR_INVALID_VALUE;
@@ -182,7 +177,7 @@ AscsanStatus ApiCore::ConfigureRuntimeHook(const AscsanRuntimeHookPlan *plan)
     return ASCSAN_STATUS_SUCCESS;
 }
 
-AscsanStatus ApiCore::GetRuntimeHookState(AscsanRuntimeHookState *state) const
+AscsanStatus ApiCore::GetRuntimeHookState(AscsanRuntimeHookState* state) const
 {
     if (state == nullptr) {
         return ASCSAN_STATUS_ERROR_INVALID_VALUE;

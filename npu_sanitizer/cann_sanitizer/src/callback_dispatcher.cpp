@@ -1,3 +1,13 @@
+/**
+ * Copyright (c) 2025 Huawei Technologies Co., Ltd.
+ * This program is free software, you can redistribute it and/or modify it under the terms and conditions of
+ * CANN Open Software License Agreement Version 2.0 (the "License").
+ * Please refer to the License for details. You may not use this file except in compliance with the License.
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
+ * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
+ * See LICENSE in the root of the software repository for the full text of the License.
+ */
+
 #include "cann_sanitizer_context.h"
 
 #include <cstdio>
@@ -8,7 +18,7 @@
 namespace ascsan::cann {
 namespace {
 
-void CopyText(char *dst, std::size_t dstSize, const char *src)
+void CopyText(char* dst, std::size_t dstSize, const char* src)
 {
     if (dst == nullptr || dstSize == 0) {
         return;
@@ -16,12 +26,9 @@ void CopyText(char *dst, std::size_t dstSize, const char *src)
     std::snprintf(dst, dstSize, "%s", src != nullptr ? src : "");
 }
 
-uint64_t PointerValue(const void *ptr)
-{
-    return static_cast<uint64_t>(reinterpret_cast<std::uintptr_t>(ptr));
-}
+uint64_t PointerValue(const void* ptr) { return static_cast<uint64_t>(reinterpret_cast<std::uintptr_t>(ptr)); }
 
-void CountDomain(ToolContext &ctx, AscsanCallbackDomain domain)
+void CountDomain(ToolContext& ctx, AscsanCallbackDomain domain)
 {
     ++ctx.stats.callbacks;
     switch (domain) {
@@ -58,7 +65,7 @@ void CountDomain(ToolContext &ctx, AscsanCallbackDomain domain)
 }
 
 template <typename T>
-void CaptureCommon(ToolEvent &event, const T *data)
+void CaptureCommon(ToolEvent& event, const T* data)
 {
     if (data == nullptr) {
         return;
@@ -68,7 +75,7 @@ void CaptureCommon(ToolEvent &event, const T *data)
     event.correlationId = data->common.correlationId;
 }
 
-void FillInstructionSite(ToolEvent &event)
+void FillInstructionSite(ToolEvent& event)
 {
     event.parsed = ParseInstruction(event.instruction);
 
@@ -89,7 +96,7 @@ void FillInstructionSite(ToolEvent &event)
     }
 }
 
-ToolEvent BuildToolEvent(AscsanCallbackDomain domain, uint32_t cbid, const void *cbdata)
+ToolEvent BuildToolEvent(AscsanCallbackDomain domain, uint32_t cbid, const void* cbdata)
 {
     ToolEvent event{};
     event.domain = domain;
@@ -97,7 +104,7 @@ ToolEvent BuildToolEvent(AscsanCallbackDomain domain, uint32_t cbid, const void 
 
     switch (domain) {
         case ASCSAN_CB_DOMAIN_RESOURCE: {
-            const auto *data = static_cast<const AscsanResourceData *>(cbdata);
+            const auto* data = static_cast<const AscsanResourceData*>(cbdata);
             CaptureCommon(event, data);
             if (data != nullptr) {
                 event.hasResource = true;
@@ -106,17 +113,15 @@ ToolEvent BuildToolEvent(AscsanCallbackDomain domain, uint32_t cbid, const void 
             break;
         }
         case ASCSAN_CB_DOMAIN_MEMORY:
-            if (cbid == ASCSAN_CBID_MEMORY_MEMCPY_BEGIN ||
-                cbid == ASCSAN_CBID_MEMORY_MEMCPY_END) {
-                const auto *data = static_cast<const AscsanMemoryMemcpyData *>(cbdata);
+            if (cbid == ASCSAN_CBID_MEMORY_MEMCPY_BEGIN || cbid == ASCSAN_CBID_MEMORY_MEMCPY_END) {
+                const auto* data = static_cast<const AscsanMemoryMemcpyData*>(cbdata);
                 CaptureCommon(event, data);
                 if (data != nullptr) {
                     event.hasMemory = true;
                     event.memory = *data;
                 }
-            } else if (cbid == ASCSAN_CBID_MEMORY_MEMSET_BEGIN ||
-                       cbid == ASCSAN_CBID_MEMORY_MEMSET_END) {
-                const auto *data = static_cast<const AscsanMemoryMemsetData *>(cbdata);
+            } else if (cbid == ASCSAN_CBID_MEMORY_MEMSET_BEGIN || cbid == ASCSAN_CBID_MEMORY_MEMSET_END) {
+                const auto* data = static_cast<const AscsanMemoryMemsetData*>(cbdata);
                 CaptureCommon(event, data);
                 if (data != nullptr) {
                     event.hasMemory = true;
@@ -131,7 +136,7 @@ ToolEvent BuildToolEvent(AscsanCallbackDomain domain, uint32_t cbid, const void 
             }
             break;
         case ASCSAN_CB_DOMAIN_PATCH: {
-            const auto *data = static_cast<const AscsanPatchData *>(cbdata);
+            const auto* data = static_cast<const AscsanPatchData*>(cbdata);
             CaptureCommon(event, data);
             if (data != nullptr) {
                 event.hasPatch = true;
@@ -146,7 +151,7 @@ ToolEvent BuildToolEvent(AscsanCallbackDomain domain, uint32_t cbid, const void 
             break;
         }
         case ASCSAN_CB_DOMAIN_DEVICE_INSTRUCTION: {
-            const auto *data = static_cast<const AscsanDeviceInstructionData *>(cbdata);
+            const auto* data = static_cast<const AscsanDeviceInstructionData*>(cbdata);
             CaptureCommon(event, data);
             if (data != nullptr) {
                 event.hasInstruction = true;
@@ -156,19 +161,19 @@ ToolEvent BuildToolEvent(AscsanCallbackDomain domain, uint32_t cbid, const void 
             break;
         }
         case ASCSAN_CB_DOMAIN_BINARY:
-            CaptureCommon(event, static_cast<const AscsanBinaryData *>(cbdata));
+            CaptureCommon(event, static_cast<const AscsanBinaryData*>(cbdata));
             break;
         case ASCSAN_CB_DOMAIN_LAUNCH:
-            CaptureCommon(event, static_cast<const AscsanLaunchData *>(cbdata));
+            CaptureCommon(event, static_cast<const AscsanLaunchData*>(cbdata));
             break;
         case ASCSAN_CB_DOMAIN_SYNCHRONIZE:
-            CaptureCommon(event, static_cast<const AscsanSynchronizeData *>(cbdata));
+            CaptureCommon(event, static_cast<const AscsanSynchronizeData*>(cbdata));
             break;
         case ASCSAN_CB_DOMAIN_REPORT:
-            CaptureCommon(event, static_cast<const AscsanReportData *>(cbdata));
+            CaptureCommon(event, static_cast<const AscsanReportData*>(cbdata));
             break;
         case ASCSAN_CB_DOMAIN_ERROR:
-            CaptureCommon(event, static_cast<const AscsanErrorData *>(cbdata));
+            CaptureCommon(event, static_cast<const AscsanErrorData*>(cbdata));
             break;
         default:
             break;
@@ -176,9 +181,9 @@ ToolEvent BuildToolEvent(AscsanCallbackDomain domain, uint32_t cbid, const void 
     return event;
 }
 
-void CaptureCallbackData(ToolContext &ctx, const ToolEvent &event)
+void CaptureCallbackData(ToolContext& ctx, const ToolEvent& event)
 {
-    auto &stats = ctx.stats;
+    auto& stats = ctx.stats;
     stats.lastDomain = static_cast<uint32_t>(event.domain);
     stats.lastCbid = event.cbid;
     stats.lastResult = event.result;
@@ -235,12 +240,9 @@ void CaptureCallbackData(ToolContext &ctx, const ToolEvent &event)
 
 } // namespace
 
-void DispatchToolCallback(void *userdata,
-                          AscsanCallbackDomain domain,
-                          uint32_t cbid,
-                          const void *cbdata)
+void DispatchToolCallback(void* userdata, AscsanCallbackDomain domain, uint32_t cbid, const void* cbdata)
 {
-    auto *ctx = static_cast<ToolContext *>(userdata);
+    auto* ctx = static_cast<ToolContext*>(userdata);
     if (ctx == nullptr) {
         return;
     }
@@ -250,10 +252,9 @@ void DispatchToolCallback(void *userdata,
     ToolEvent event = BuildToolEvent(domain, cbid, cbdata);
     CaptureCallbackData(*ctx, event);
     if (event.hasInstruction) {
-        CopyText(ctx->stats.lastInstructionOpName,
-                 sizeof(ctx->stats.lastInstructionOpName),
-                 event.hasSite && !event.site.opName.empty() ? event.site.opName.c_str()
-                                                              : event.parsed.op.c_str());
+        CopyText(
+            ctx->stats.lastInstructionOpName, sizeof(ctx->stats.lastInstructionOpName),
+            event.hasSite && !event.site.opName.empty() ? event.site.opName.c_str() : event.parsed.op.c_str());
         ctx->stats.lastInstructionSrc = event.parsed.src;
         ctx->stats.lastInstructionDst = event.parsed.dst;
         ctx->stats.lastInstructionBytes = event.parsed.bytes;

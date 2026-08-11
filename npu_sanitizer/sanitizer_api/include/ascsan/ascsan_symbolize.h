@@ -1,3 +1,13 @@
+/**
+ * Copyright (c) 2025 Huawei Technologies Co., Ltd.
+ * This program is free software, you can redistribute it and/or modify it under the terms and conditions of
+ * CANN Open Software License Agreement Version 2.0 (the "License").
+ * Please refer to the License for details. You may not use this file except in compliance with the License.
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
+ * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
+ * See LICENSE in the root of the software repository for the full text of the License.
+ */
+
 #ifndef ASCSAN_SYMBOLIZE_H
 #define ASCSAN_SYMBOLIZE_H
 
@@ -43,10 +53,8 @@ typedef struct AscsanDeviceStackFrame {
     char sourceFile[ASCSAN_PATH_MAX];
 } AscsanDeviceStackFrame;
 
-AscsanStatus ascsanSymbolizeDevicePc(const AscsanDevicePcQuery *query,
-                                      char *payload,
-                                      uint64_t payloadSize,
-                                      uint64_t *payloadBytes);
+AscsanStatus ascsanSymbolizeDevicePc(
+    const AscsanDevicePcQuery* query, char* payload, uint64_t payloadSize, uint64_t* payloadBytes);
 
 #ifdef __cplusplus
 }

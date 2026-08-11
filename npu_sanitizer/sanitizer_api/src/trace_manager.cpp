@@ -1,15 +1,25 @@
+/**
+ * Copyright (c) 2025 Huawei Technologies Co., Ltd.
+ * This program is free software, you can redistribute it and/or modify it under the terms and conditions of
+ * CANN Open Software License Agreement Version 2.0 (the "License").
+ * Please refer to the License for details. You may not use this file except in compliance with the License.
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
+ * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
+ * See LICENSE in the root of the software repository for the full text of the License.
+ */
+
 #include "api_core.h"
 
 namespace ascsan {
 namespace {
 
 template <typename T>
-AscsanStatus ValidateRuntimeParams(const AscsanRuntimeEvent &event, const T **params)
+AscsanStatus ValidateRuntimeParams(const AscsanRuntimeEvent& event, const T** params)
 {
     if (event.params == nullptr || params == nullptr) {
         return ASCSAN_STATUS_ERROR_INVALID_VALUE;
     }
-    const auto *typed = static_cast<const T *>(event.params);
+    const auto* typed = static_cast<const T*>(event.params);
     if (typed->version != ASCSAN_API_VERSION || typed->size < sizeof(T)) {
         return ASCSAN_STATUS_ERROR_VERSION_MISMATCH;
     }
@@ -18,7 +28,7 @@ AscsanStatus ValidateRuntimeParams(const AscsanRuntimeEvent &event, const T **pa
 }
 
 template <typename T>
-void InitCallbackData(T *data, const AscsanRuntimeEvent &event)
+void InitCallbackData(T* data, const AscsanRuntimeEvent& event)
 {
     data->common.version = ASCSAN_API_VERSION;
     data->common.size = sizeof(*data);
@@ -28,7 +38,7 @@ void InitCallbackData(T *data, const AscsanRuntimeEvent &event)
 }
 
 template <typename T>
-void InitCallbackData(T *data, const char *apiName)
+void InitCallbackData(T* data, const char* apiName)
 {
     data->common.version = ASCSAN_API_VERSION;
     data->common.size = sizeof(*data);
@@ -38,11 +48,8 @@ void InitCallbackData(T *data, const char *apiName)
 AscsanPatchPipeline FirstEnabledPipeline(uint32_t mask)
 {
     const AscsanPatchPipeline pipelines[] = {
-        ASCSAN_PATCH_PIPELINE_SET_WAIT_FLAG,
-        ASCSAN_PATCH_PIPELINE_GET_RLS_BUF,
-        ASCSAN_PATCH_PIPELINE_MTE2,
-        ASCSAN_PATCH_PIPELINE_MTE3,
-        ASCSAN_PATCH_PIPELINE_FIXPIPE,
+        ASCSAN_PATCH_PIPELINE_SET_WAIT_FLAG, ASCSAN_PATCH_PIPELINE_GET_RLS_BUF, ASCSAN_PATCH_PIPELINE_MTE2,
+        ASCSAN_PATCH_PIPELINE_MTE3,          ASCSAN_PATCH_PIPELINE_FIXPIPE,
     };
     for (AscsanPatchPipeline pipeline : pipelines) {
         if ((mask & PipelineMask(pipeline)) != 0) {
@@ -52,9 +59,9 @@ AscsanPatchPipeline FirstEnabledPipeline(uint32_t mask)
     return ASCSAN_PATCH_PIPELINE_INVALID;
 }
 
-AscsanStatus FillResourceFromMalloc(const AscsanRuntimeEvent &event, AscsanResourceData *resource)
+AscsanStatus FillResourceFromMalloc(const AscsanRuntimeEvent& event, AscsanResourceData* resource)
 {
-    const AscsanRuntimeMemoryAllocParams *params = nullptr;
+    const AscsanRuntimeMemoryAllocParams* params = nullptr;
     AscsanStatus status = ValidateRuntimeParams(event, &params);
     if (status != ASCSAN_STATUS_SUCCESS) {
         return status;
@@ -68,9 +75,9 @@ AscsanStatus FillResourceFromMalloc(const AscsanRuntimeEvent &event, AscsanResou
     return ASCSAN_STATUS_SUCCESS;
 }
 
-AscsanStatus FillResourceFromFree(const AscsanRuntimeEvent &event, AscsanResourceData *resource)
+AscsanStatus FillResourceFromFree(const AscsanRuntimeEvent& event, AscsanResourceData* resource)
 {
-    const AscsanRuntimeMemoryFreeParams *params = nullptr;
+    const AscsanRuntimeMemoryFreeParams* params = nullptr;
     AscsanStatus status = ValidateRuntimeParams(event, &params);
     if (status != ASCSAN_STATUS_SUCCESS) {
         return status;
@@ -84,9 +91,9 @@ AscsanStatus FillResourceFromFree(const AscsanRuntimeEvent &event, AscsanResourc
     return ASCSAN_STATUS_SUCCESS;
 }
 
-AscsanStatus FillMemoryFromMemcpy(const AscsanRuntimeEvent &event, AscsanMemoryMemcpyData *memory)
+AscsanStatus FillMemoryFromMemcpy(const AscsanRuntimeEvent& event, AscsanMemoryMemcpyData* memory)
 {
-    const AscsanRuntimeMemcpyParams *params = nullptr;
+    const AscsanRuntimeMemcpyParams* params = nullptr;
     AscsanStatus status = ValidateRuntimeParams(event, &params);
     if (status != ASCSAN_STATUS_SUCCESS) {
         return status;
@@ -100,9 +107,9 @@ AscsanStatus FillMemoryFromMemcpy(const AscsanRuntimeEvent &event, AscsanMemoryM
     return ASCSAN_STATUS_SUCCESS;
 }
 
-AscsanStatus FillMemoryFromMemset(const AscsanRuntimeEvent &event, AscsanMemoryMemsetData *memory)
+AscsanStatus FillMemoryFromMemset(const AscsanRuntimeEvent& event, AscsanMemoryMemsetData* memory)
 {
-    const AscsanRuntimeMemsetParams *params = nullptr;
+    const AscsanRuntimeMemsetParams* params = nullptr;
     AscsanStatus status = ValidateRuntimeParams(event, &params);
     if (status != ASCSAN_STATUS_SUCCESS) {
         return status;
@@ -115,7 +122,7 @@ AscsanStatus FillMemoryFromMemset(const AscsanRuntimeEvent &event, AscsanMemoryM
     return ASCSAN_STATUS_SUCCESS;
 }
 
-AscsanStatus FillBinaryFromFile(const AscsanRuntimeEvent &event, AscsanBinaryData *binary)
+AscsanStatus FillBinaryFromFile(const AscsanRuntimeEvent& event, AscsanBinaryData* binary)
 {
     InitCallbackData(binary, event);
     binary->image.kind = ASCSAN_PATCH_IMAGE_FILE;
@@ -123,7 +130,7 @@ AscsanStatus FillBinaryFromFile(const AscsanRuntimeEvent &event, AscsanBinaryDat
         return ASCSAN_STATUS_SUCCESS;
     }
 
-    const auto *params = static_cast<const AscsanRuntimeBinaryLoadFromFileParams *>(event.params);
+    const auto* params = static_cast<const AscsanRuntimeBinaryLoadFromFileParams*>(event.params);
     if (params->version != ASCSAN_API_VERSION || params->size < sizeof(AscsanRuntimeBinaryLoadFromFileParams)) {
         return ASCSAN_STATUS_ERROR_VERSION_MISMATCH;
     }
@@ -136,7 +143,7 @@ AscsanStatus FillBinaryFromFile(const AscsanRuntimeEvent &event, AscsanBinaryDat
     return ASCSAN_STATUS_SUCCESS;
 }
 
-AscsanStatus FillBinaryFromData(const AscsanRuntimeEvent &event, AscsanBinaryData *binary)
+AscsanStatus FillBinaryFromData(const AscsanRuntimeEvent& event, AscsanBinaryData* binary)
 {
     InitCallbackData(binary, event);
     binary->image.kind = ASCSAN_PATCH_IMAGE_MEMORY;
@@ -144,7 +151,7 @@ AscsanStatus FillBinaryFromData(const AscsanRuntimeEvent &event, AscsanBinaryDat
         return ASCSAN_STATUS_SUCCESS;
     }
 
-    const auto *params = static_cast<const AscsanRuntimeBinaryLoadFromDataParams *>(event.params);
+    const auto* params = static_cast<const AscsanRuntimeBinaryLoadFromDataParams*>(event.params);
     if (params->version != ASCSAN_API_VERSION || params->size < sizeof(AscsanRuntimeBinaryLoadFromDataParams)) {
         return ASCSAN_STATUS_ERROR_VERSION_MISMATCH;
     }
@@ -184,13 +191,13 @@ std::vector<AscsanRawTraceRecord> ApiCore::BuildSyntheticRecordsForSync() const
     return {record};
 }
 
-AscsanStatus ApiCore::IngestRawTraces(const AscsanRawTraceRecord *records, uint64_t count)
+AscsanStatus ApiCore::IngestRawTraces(const AscsanRawTraceRecord* records, uint64_t count)
 {
     if (records == nullptr && count != 0) {
         return ASCSAN_STATUS_ERROR_INVALID_VALUE;
     }
     for (uint64_t i = 0; i < count; ++i) {
-        const auto &record = records[i];
+        const auto& record = records[i];
         const uint32_t cbid = PipelineToCbid(static_cast<AscsanPatchPipeline>(record.pipeline));
         if (cbid == 0) {
             continue;
@@ -218,7 +225,7 @@ AscsanStatus ApiCore::IngestRawTraces(const AscsanRawTraceRecord *records, uint6
     return ASCSAN_STATUS_SUCCESS;
 }
 
-AscsanStatus ApiCore::OnRuntimeEvent(const AscsanRuntimeEvent *event)
+AscsanStatus ApiCore::OnRuntimeEvent(const AscsanRuntimeEvent* event)
 {
     if (event == nullptr) {
         return ASCSAN_STATUS_ERROR_INVALID_VALUE;
@@ -227,8 +234,7 @@ AscsanStatus ApiCore::OnRuntimeEvent(const AscsanRuntimeEvent *event)
         return ASCSAN_STATUS_ERROR_VERSION_MISMATCH;
     }
 
-    if ((event->apiId == ASCSAN_RT_API_ACLRT_MALLOC ||
-         event->apiId == ASCSAN_RT_API_ACLRT_MALLOC_HOST) &&
+    if ((event->apiId == ASCSAN_RT_API_ACLRT_MALLOC || event->apiId == ASCSAN_RT_API_ACLRT_MALLOC_HOST) &&
         event->phase == ASCSAN_RUNTIME_EVENT_EXIT && event->result == 0) {
         AscsanResourceData resource{};
         AscsanStatus status = FillResourceFromMalloc(*event, &resource);
@@ -239,8 +245,7 @@ AscsanStatus ApiCore::OnRuntimeEvent(const AscsanRuntimeEvent *event)
         return ASCSAN_STATUS_SUCCESS;
     }
 
-    if ((event->apiId == ASCSAN_RT_API_ACLRT_FREE ||
-         event->apiId == ASCSAN_RT_API_ACLRT_FREE_HOST) &&
+    if ((event->apiId == ASCSAN_RT_API_ACLRT_FREE || event->apiId == ASCSAN_RT_API_ACLRT_FREE_HOST) &&
         event->phase == ASCSAN_RUNTIME_EVENT_ENTER) {
         AscsanResourceData resource{};
         AscsanStatus status = FillResourceFromFree(*event, &resource);
@@ -257,8 +262,8 @@ AscsanStatus ApiCore::OnRuntimeEvent(const AscsanRuntimeEvent *event)
         if (status != ASCSAN_STATUS_SUCCESS) {
             return status;
         }
-        const uint32_t cbid = event->phase == ASCSAN_RUNTIME_EVENT_ENTER ? ASCSAN_CBID_MEMORY_MEMCPY_BEGIN
-                                                                         : ASCSAN_CBID_MEMORY_MEMCPY_END;
+        const uint32_t cbid = event->phase == ASCSAN_RUNTIME_EVENT_ENTER ? ASCSAN_CBID_MEMORY_MEMCPY_BEGIN :
+                                                                           ASCSAN_CBID_MEMORY_MEMCPY_END;
         Dispatch(ASCSAN_CB_DOMAIN_MEMORY, cbid, &memory);
         return ASCSAN_STATUS_SUCCESS;
     }
@@ -269,8 +274,8 @@ AscsanStatus ApiCore::OnRuntimeEvent(const AscsanRuntimeEvent *event)
         if (status != ASCSAN_STATUS_SUCCESS) {
             return status;
         }
-        const uint32_t cbid = event->phase == ASCSAN_RUNTIME_EVENT_ENTER ? ASCSAN_CBID_MEMORY_MEMSET_BEGIN
-                                                                         : ASCSAN_CBID_MEMORY_MEMSET_END;
+        const uint32_t cbid = event->phase == ASCSAN_RUNTIME_EVENT_ENTER ? ASCSAN_CBID_MEMORY_MEMSET_BEGIN :
+                                                                           ASCSAN_CBID_MEMORY_MEMSET_END;
         Dispatch(ASCSAN_CB_DOMAIN_MEMORY, cbid, &memory);
         return ASCSAN_STATUS_SUCCESS;
     }
@@ -278,9 +283,9 @@ AscsanStatus ApiCore::OnRuntimeEvent(const AscsanRuntimeEvent *event)
     if (event->apiId == ASCSAN_RT_API_ACLRT_BINARY_LOAD_FROM_FILE ||
         event->apiId == ASCSAN_RT_API_ACLRT_BINARY_LOAD_FROM_DATA) {
         AscsanBinaryData binary{};
-        AscsanStatus status =
-            event->apiId == ASCSAN_RT_API_ACLRT_BINARY_LOAD_FROM_FILE ? FillBinaryFromFile(*event, &binary)
-                                                                      : FillBinaryFromData(*event, &binary);
+        AscsanStatus status = event->apiId == ASCSAN_RT_API_ACLRT_BINARY_LOAD_FROM_FILE ?
+                                  FillBinaryFromFile(*event, &binary) :
+                                  FillBinaryFromData(*event, &binary);
         if (status != ASCSAN_STATUS_SUCCESS) {
             return status;
         }
@@ -296,14 +301,13 @@ AscsanStatus ApiCore::OnRuntimeEvent(const AscsanRuntimeEvent *event)
         event->apiId == ASCSAN_RT_API_ACLRT_LAUNCH_KERNEL_WITH_ARGS_ARRAY) {
         AscsanLaunchData launch{};
         InitCallbackData(&launch, *event);
-        const uint32_t cbid = event->phase == ASCSAN_RUNTIME_EVENT_ENTER ? ASCSAN_CBID_LAUNCH_BEGIN
-                                                                         : ASCSAN_CBID_LAUNCH_END;
+        const uint32_t cbid =
+            event->phase == ASCSAN_RUNTIME_EVENT_ENTER ? ASCSAN_CBID_LAUNCH_BEGIN : ASCSAN_CBID_LAUNCH_END;
         Dispatch(ASCSAN_CB_DOMAIN_LAUNCH, cbid, &launch);
         return ASCSAN_STATUS_SUCCESS;
     }
 
-    if (event->apiId == ASCSAN_RT_API_ACLRT_SYNCHRONIZE_STREAM &&
-        event->phase == ASCSAN_RUNTIME_EVENT_EXIT) {
+    if (event->apiId == ASCSAN_RT_API_ACLRT_SYNCHRONIZE_STREAM && event->phase == ASCSAN_RUNTIME_EVENT_EXIT) {
         AscsanSynchronizeData sync{};
         InitCallbackData(&sync, *event);
         Dispatch(ASCSAN_CB_DOMAIN_SYNCHRONIZE, ASCSAN_CBID_SYNCHRONIZE_STREAM_SYNC_END, &sync);
@@ -312,8 +316,7 @@ AscsanStatus ApiCore::OnRuntimeEvent(const AscsanRuntimeEvent *event)
             return IngestRawTraces(records.data(), records.size());
         }
     }
-    if (event->apiId == ASCSAN_RT_API_ACLRT_SYNCHRONIZE_DEVICE &&
-        event->phase == ASCSAN_RUNTIME_EVENT_EXIT) {
+    if (event->apiId == ASCSAN_RT_API_ACLRT_SYNCHRONIZE_DEVICE && event->phase == ASCSAN_RUNTIME_EVENT_EXIT) {
         AscsanSynchronizeData sync{};
         InitCallbackData(&sync, *event);
         Dispatch(ASCSAN_CB_DOMAIN_SYNCHRONIZE, ASCSAN_CBID_SYNCHRONIZE_DEVICE_SYNC_END, &sync);

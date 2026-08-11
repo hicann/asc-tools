@@ -1,3 +1,13 @@
+/**
+ * Copyright (c) 2025 Huawei Technologies Co., Ltd.
+ * This program is free software, you can redistribute it and/or modify it under the terms and conditions of
+ * CANN Open Software License Agreement Version 2.0 (the "License").
+ * Please refer to the License for details. You may not use this file except in compliance with the License.
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
+ * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
+ * See LICENSE in the root of the software repository for the full text of the License.
+ */
+
 #include "cann_sanitizer_context.h"
 
 namespace ascsan::cann {
@@ -77,7 +87,7 @@ constexpr ToolProfile kProfiles[] = {
     {ToolKind::Synccheck, "synccheck", kSynccheckCallbacks, std::size(kSynccheckCallbacks)},
 };
 
-bool EqualToolName(const char *lhs, const char *rhs)
+bool EqualToolName(const char* lhs, const char* rhs)
 {
     if (lhs == nullptr || rhs == nullptr) {
         return false;
@@ -94,12 +104,12 @@ bool EqualToolName(const char *lhs, const char *rhs)
 
 } // namespace
 
-const ToolProfile *FindToolProfile(const char *toolName)
+const ToolProfile* FindToolProfile(const char* toolName)
 {
     if (toolName == nullptr || toolName[0] == '\0') {
         return &kProfiles[0];
     }
-    for (const auto &profile : kProfiles) {
+    for (const auto& profile : kProfiles) {
         if (EqualToolName(profile.name, toolName)) {
             return &profile;
         }
@@ -107,9 +117,9 @@ const ToolProfile *FindToolProfile(const char *toolName)
     return nullptr;
 }
 
-const char *ToolKindName(ToolKind kind)
+const char* ToolKindName(ToolKind kind)
 {
-    for (const auto &profile : kProfiles) {
+    for (const auto& profile : kProfiles) {
         if (profile.kind == kind) {
             return profile.name;
         }
@@ -117,12 +127,11 @@ const char *ToolKindName(ToolKind kind)
     return "unknown";
 }
 
-AscsanStatus EnableToolProfile(ToolContext &ctx, const ToolProfile &profile)
+AscsanStatus EnableToolProfile(ToolContext& ctx, const ToolProfile& profile)
 {
     for (uint64_t i = 0; i < profile.callbackCount; ++i) {
-        const auto &selector = profile.callbacks[i];
-        const AscsanStatus status = ascsanEnableCallback(
-            ctx.subscriber, selector.domain, selector.cbid, 1);
+        const auto& selector = profile.callbacks[i];
+        const AscsanStatus status = ascsanEnableCallback(ctx.subscriber, selector.domain, selector.cbid, 1);
         if (status != ASCSAN_STATUS_SUCCESS) {
             return status;
         }

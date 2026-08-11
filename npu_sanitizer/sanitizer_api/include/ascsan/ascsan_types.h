@@ -1,3 +1,13 @@
+/**
+ * Copyright (c) 2025 Huawei Technologies Co., Ltd.
+ * This program is free software, you can redistribute it and/or modify it under the terms and conditions of
+ * CANN Open Software License Agreement Version 2.0 (the "License").
+ * Please refer to the License for details. You may not use this file except in compliance with the License.
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
+ * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
+ * See LICENSE in the root of the software repository for the full text of the License.
+ */
+
 #ifndef ASCSAN_TYPES_H
 #define ASCSAN_TYPES_H
 
@@ -32,7 +42,7 @@ typedef enum AscsanStatus {
     ASCSAN_STATUS_ERROR_MAX_LIMIT_REACHED = 12
 } AscsanStatus;
 
-typedef struct AscsanSubscriberToken_st *AscsanSubscriberHandle;
+typedef struct AscsanSubscriberToken_st* AscsanSubscriberHandle;
 #define ASCSAN_INVALID_SUBSCRIBER_HANDLE ((AscsanSubscriberHandle)0)
 
 typedef uint64_t AscsanBinaryHandle;
@@ -150,10 +160,7 @@ typedef enum AscsanHookAction {
     ASCSAN_HOOK_DISPATCH_CALLBACK = 1u << 5u
 } AscsanHookAction;
 
-typedef enum AscsanMemorySpace {
-    ASCSAN_MEMORY_SPACE_DEVICE = 1,
-    ASCSAN_MEMORY_SPACE_HOST = 2
-} AscsanMemorySpace;
+typedef enum AscsanMemorySpace { ASCSAN_MEMORY_SPACE_DEVICE = 1, ASCSAN_MEMORY_SPACE_HOST = 2 } AscsanMemorySpace;
 
 typedef enum AscsanMemcpyKind {
     ASCSAN_MEMCPY_HOST_TO_HOST = 0,
@@ -209,13 +216,13 @@ typedef struct AscsanRuntimeHookState {
 typedef struct AscsanRuntimeApiTable {
     uint32_t version;
     uint32_t size;
-    int (*mallocDevice)(void **devPtr, size_t bytes, uint32_t policy);
-    int (*freeDevice)(void *devPtr);
-    int (*mallocHost)(void **hostPtr, size_t bytes);
-    int (*freeHost)(void *hostPtr);
-    int (*memcpy)(void *dst, size_t dstMax, const void *src, size_t bytes, int kind);
-    int (*memset)(void *dst, size_t dstMax, int32_t value, size_t bytes);
-    int (*synchronizeStream)(void *stream);
+    int (*mallocDevice)(void** devPtr, size_t bytes, uint32_t policy);
+    int (*freeDevice)(void* devPtr);
+    int (*mallocHost)(void** hostPtr, size_t bytes);
+    int (*freeHost)(void* hostPtr);
+    int (*memcpy)(void* dst, size_t dstMax, const void* src, size_t bytes, int kind);
+    int (*memset)(void* dst, size_t dstMax, int32_t value, size_t bytes);
+    int (*synchronizeStream)(void* stream);
 } AscsanRuntimeApiTable;
 
 typedef struct AscsanRawTraceRecord {
@@ -238,8 +245,8 @@ typedef struct AscsanRuntimeEvent {
     uint32_t size;
     uint32_t apiId;
     uint32_t phase;
-    const char *apiName;
-    const void *params;
+    const char* apiName;
+    const void* params;
     int result;
     uint64_t correlationId;
 } AscsanRuntimeEvent;

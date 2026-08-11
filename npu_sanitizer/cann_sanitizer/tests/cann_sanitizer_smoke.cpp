@@ -1,3 +1,13 @@
+/**
+ * Copyright (c) 2025 Huawei Technologies Co., Ltd.
+ * This program is free software, you can redistribute it and/or modify it under the terms and conditions of
+ * CANN Open Software License Agreement Version 2.0 (the "License").
+ * Please refer to the License for details. You may not use this file except in compliance with the License.
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
+ * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
+ * See LICENSE in the root of the software repository for the full text of the License.
+ */
+
 #include "ascsan/cann_sanitizer.h"
 #include "ascsan/internal_api.h"
 
@@ -11,12 +21,9 @@
 
 namespace {
 
-void EnsureDir(const char *path)
-{
-    mkdir(path, 0755);
-}
+void EnsureDir(const char* path) { mkdir(path, 0755); }
 
-AscsanLaunchConfig MakeConfig(const char *toolName, const char *workDir, const char *cacheDir)
+AscsanLaunchConfig MakeConfig(const char* toolName, const char* workDir, const char* cacheDir)
 {
     EnsureDir(workDir);
     EnsureDir(cacheDir);
@@ -30,7 +37,7 @@ AscsanLaunchConfig MakeConfig(const char *toolName, const char *workDir, const c
     return config;
 }
 
-void PatchDummyKernel(const char *workDir)
+void PatchDummyKernel(const char* workDir)
 {
     const std::string originalPath = std::string(workDir) + "/kernel.o";
     {
@@ -45,16 +52,13 @@ void PatchDummyKernel(const char *workDir)
     image.path = originalPath.c_str();
     char patchedPath[ASCSAN_PATH_MAX] = {};
     AscsanPatchPlanHandle plan = 0;
-    assert(ascsanPatchBinaryFromImage(&image, nullptr, patchedPath, sizeof(patchedPath), &plan) ==
-           ASCSAN_STATUS_SUCCESS);
+    assert(
+        ascsanPatchBinaryFromImage(&image, nullptr, patchedPath, sizeof(patchedPath), &plan) == ASCSAN_STATUS_SUCCESS);
     assert(plan != 0);
     assert(std::strlen(patchedPath) > 0);
 }
 
-void *TestPtr(uint64_t value)
-{
-    return reinterpret_cast<void *>(static_cast<std::uintptr_t>(value));
-}
+void* TestPtr(uint64_t value) { return reinterpret_cast<void*>(static_cast<std::uintptr_t>(value)); }
 
 void SendMemcheckHostEvents()
 {
@@ -133,8 +137,8 @@ void SendSyncEvent()
 
 void RunMemcheckProfile()
 {
-    const char *workDir = "/tmp/ascsan_cann_sanitizer_smoke_memcheck";
-    const char *cacheDir = "/tmp/ascsan_cann_sanitizer_smoke_memcheck/cache";
+    const char* workDir = "/tmp/ascsan_cann_sanitizer_smoke_memcheck";
+    const char* cacheDir = "/tmp/ascsan_cann_sanitizer_smoke_memcheck/cache";
     AscsanLaunchConfig config = MakeConfig("memcheck", workDir, cacheDir);
 
     assert(acltoolInitalize(&config) == static_cast<int>(ASCSAN_STATUS_SUCCESS));
@@ -194,8 +198,8 @@ void RunMemcheckProfile()
 
 void RunSynccheckProfile()
 {
-    const char *workDir = "/tmp/ascsan_cann_sanitizer_smoke_synccheck";
-    const char *cacheDir = "/tmp/ascsan_cann_sanitizer_smoke_synccheck/cache";
+    const char* workDir = "/tmp/ascsan_cann_sanitizer_smoke_synccheck";
+    const char* cacheDir = "/tmp/ascsan_cann_sanitizer_smoke_synccheck/cache";
     AscsanLaunchConfig config = MakeConfig("synccheck", workDir, cacheDir);
 
     assert(acltoolInitalize(&config) == static_cast<int>(ASCSAN_STATUS_SUCCESS));

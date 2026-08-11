@@ -1,3 +1,13 @@
+/**
+ * Copyright (c) 2025 Huawei Technologies Co., Ltd.
+ * This program is free software, you can redistribute it and/or modify it under the terms and conditions of
+ * CANN Open Software License Agreement Version 2.0 (the "License").
+ * Please refer to the License for details. You may not use this file except in compliance with the License.
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
+ * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
+ * See LICENSE in the root of the software repository for the full text of the License.
+ */
+
 #include "api_core.h"
 
 namespace ascsan {
@@ -7,7 +17,7 @@ constexpr uint64_t kSubscriberTokenMagic = 0x41534353414e5355ull;
 
 } // namespace
 
-AscsanStatus ApiCore::Subscribe(const AscsanSubscribeDesc *desc, AscsanSubscriberHandle *subscriber)
+AscsanStatus ApiCore::Subscribe(const AscsanSubscribeDesc* desc, AscsanSubscriberHandle* subscriber)
 {
     if (desc == nullptr || subscriber == nullptr || desc->callback == nullptr) {
         return ASCSAN_STATUS_ERROR_INVALID_VALUE;
@@ -37,7 +47,7 @@ AscsanStatus ApiCore::Subscribe(const AscsanSubscribeDesc *desc, AscsanSubscribe
 AscsanStatus ApiCore::Unsubscribe(AscsanSubscriberHandle subscriber)
 {
     std::lock_guard<std::recursive_mutex> lock(mutex_);
-    auto *token = ValidateSubscriberLocked(subscriber);
+    auto* token = ValidateSubscriberLocked(subscriber);
     if (token == nullptr) {
         return ASCSAN_STATUS_ERROR_NOT_FOUND;
     }
@@ -51,10 +61,8 @@ AscsanStatus ApiCore::Unsubscribe(AscsanSubscriberHandle subscriber)
     return ASCSAN_STATUS_SUCCESS;
 }
 
-AscsanStatus ApiCore::EnableCallback(AscsanSubscriberHandle subscriber,
-                                     AscsanCallbackDomain domain,
-                                     uint32_t cbid,
-                                     bool enable)
+AscsanStatus ApiCore::EnableCallback(
+    AscsanSubscriberHandle subscriber, AscsanCallbackDomain domain, uint32_t cbid, bool enable)
 {
     std::lock_guard<std::recursive_mutex> lock(mutex_);
     if (!IsKnownCbid(domain, cbid)) {
@@ -73,9 +81,7 @@ AscsanStatus ApiCore::EnableCallback(AscsanSubscriberHandle subscriber,
     return ASCSAN_STATUS_SUCCESS;
 }
 
-AscsanStatus ApiCore::EnableDomain(AscsanSubscriberHandle subscriber,
-                                   AscsanCallbackDomain domain,
-                                   bool enable)
+AscsanStatus ApiCore::EnableDomain(AscsanSubscriberHandle subscriber, AscsanCallbackDomain domain, bool enable)
 {
     std::lock_guard<std::recursive_mutex> lock(mutex_);
     if (!IsSupportedDomain(domain)) {
@@ -93,10 +99,8 @@ AscsanStatus ApiCore::EnableDomain(AscsanSubscriberHandle subscriber,
     return ASCSAN_STATUS_SUCCESS;
 }
 
-AscsanStatus ApiCore::GetCallbackState(AscsanSubscriberHandle subscriber,
-                                       AscsanCallbackDomain domain,
-                                       uint32_t cbid,
-                                       int *enabled) const
+AscsanStatus ApiCore::GetCallbackState(
+    AscsanSubscriberHandle subscriber, AscsanCallbackDomain domain, uint32_t cbid, int* enabled) const
 {
     if (enabled == nullptr) {
         return ASCSAN_STATUS_ERROR_INVALID_VALUE;
@@ -105,8 +109,8 @@ AscsanStatus ApiCore::GetCallbackState(AscsanSubscriberHandle subscriber,
     if (ValidateSubscriberLocked(subscriber) == nullptr) {
         return ASCSAN_STATUS_ERROR_NOT_FOUND;
     }
-    *enabled = subscriber_->enabledDomains.count(domain) != 0 ||
-               subscriber_->enabledCallbacks.count({domain, cbid}) != 0;
+    *enabled =
+        subscriber_->enabledDomains.count(domain) != 0 || subscriber_->enabledCallbacks.count({domain, cbid}) != 0;
     return ASCSAN_STATUS_SUCCESS;
 }
 
@@ -122,26 +126,19 @@ bool ApiCore::IsKnownCbid(AscsanCallbackDomain domain, uint32_t cbid) const
     }
     switch (domain) {
         case ASCSAN_CB_DOMAIN_RESOURCE:
-            return cbid >= ASCSAN_CBID_RESOURCE_MEMORY_ALLOC &&
-                   cbid <= ASCSAN_CBID_RESOURCE_FUNCTION_GET;
+            return cbid >= ASCSAN_CBID_RESOURCE_MEMORY_ALLOC && cbid <= ASCSAN_CBID_RESOURCE_FUNCTION_GET;
         case ASCSAN_CB_DOMAIN_MEMORY:
-            return cbid >= ASCSAN_CBID_MEMORY_MEMCPY_BEGIN &&
-                   cbid <= ASCSAN_CBID_MEMORY_MEMSET_END;
+            return cbid >= ASCSAN_CBID_MEMORY_MEMCPY_BEGIN && cbid <= ASCSAN_CBID_MEMORY_MEMSET_END;
         case ASCSAN_CB_DOMAIN_BINARY:
-            return cbid >= ASCSAN_CBID_BINARY_LOAD_BEGIN &&
-                   cbid <= ASCSAN_CBID_BINARY_LOAD_END;
+            return cbid >= ASCSAN_CBID_BINARY_LOAD_BEGIN && cbid <= ASCSAN_CBID_BINARY_LOAD_END;
         case ASCSAN_CB_DOMAIN_PATCH:
-            return cbid >= ASCSAN_CBID_PATCH_BEGIN &&
-                   cbid <= ASCSAN_CBID_PATCH_SITE_MAP_CREATED;
+            return cbid >= ASCSAN_CBID_PATCH_BEGIN && cbid <= ASCSAN_CBID_PATCH_SITE_MAP_CREATED;
         case ASCSAN_CB_DOMAIN_LAUNCH:
-            return cbid >= ASCSAN_CBID_LAUNCH_BEGIN &&
-                   cbid <= ASCSAN_CBID_LAUNCH_END;
+            return cbid >= ASCSAN_CBID_LAUNCH_BEGIN && cbid <= ASCSAN_CBID_LAUNCH_END;
         case ASCSAN_CB_DOMAIN_SYNCHRONIZE:
-            return cbid >= ASCSAN_CBID_SYNCHRONIZE_STREAM_SYNC_END &&
-                   cbid <= ASCSAN_CBID_SYNCHRONIZE_DEVICE_SYNC_END;
+            return cbid >= ASCSAN_CBID_SYNCHRONIZE_STREAM_SYNC_END && cbid <= ASCSAN_CBID_SYNCHRONIZE_DEVICE_SYNC_END;
         case ASCSAN_CB_DOMAIN_DEVICE_INSTRUCTION:
-            return cbid >= ASCSAN_CBID_DEVICE_MEMORY_ACCESS &&
-                   cbid <= ASCSAN_CBID_DEVICE_ERROR;
+            return cbid >= ASCSAN_CBID_DEVICE_MEMORY_ACCESS && cbid <= ASCSAN_CBID_DEVICE_ERROR;
         case ASCSAN_CB_DOMAIN_REPORT:
             return cbid == ASCSAN_CBID_REPORT_RECORD;
         case ASCSAN_CB_DOMAIN_ERROR:
@@ -151,7 +148,7 @@ bool ApiCore::IsKnownCbid(AscsanCallbackDomain domain, uint32_t cbid) const
     }
 }
 
-AscsanSubscriberToken_st *ApiCore::ValidateSubscriberLocked(AscsanSubscriberHandle subscriber) const
+AscsanSubscriberToken_st* ApiCore::ValidateSubscriberLocked(AscsanSubscriberHandle subscriber) const
 {
     if (subscriber == ASCSAN_INVALID_SUBSCRIBER_HANDLE) {
         return nullptr;
@@ -173,8 +170,7 @@ bool ApiCore::HasEnabledCallbackLocked(AscsanCallbackDomain domain, uint32_t cbi
     if (!subscriber_.has_value()) {
         return false;
     }
-    return subscriber_->enabledDomains.count(domain) != 0 ||
-           subscriber_->enabledCallbacks.count({domain, cbid}) != 0;
+    return subscriber_->enabledDomains.count(domain) != 0 || subscriber_->enabledCallbacks.count({domain, cbid}) != 0;
 }
 
 bool ApiCore::HasEnabledDomainLocked(AscsanCallbackDomain domain) const
@@ -185,7 +181,7 @@ bool ApiCore::HasEnabledDomainLocked(AscsanCallbackDomain domain) const
     if (subscriber_->enabledDomains.count(domain) != 0) {
         return true;
     }
-    for (const auto &entry : subscriber_->enabledCallbacks) {
+    for (const auto& entry : subscriber_->enabledCallbacks) {
         if (entry.first == domain) {
             return true;
         }

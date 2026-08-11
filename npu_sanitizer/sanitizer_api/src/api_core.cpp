@@ -1,3 +1,13 @@
+/**
+ * Copyright (c) 2025 Huawei Technologies Co., Ltd.
+ * This program is free software, you can redistribute it and/or modify it under the terms and conditions of
+ * CANN Open Software License Agreement Version 2.0 (the "License").
+ * Please refer to the License for details. You may not use this file except in compliance with the License.
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
+ * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
+ * See LICENSE in the root of the software repository for the full text of the License.
+ */
+
 #include "api_core.h"
 
 #include <cerrno>
@@ -14,21 +24,15 @@ thread_local bool g_insideCallback = false;
 
 class CallbackGuard {
 public:
-    CallbackGuard() : old_(g_insideCallback)
-    {
-        g_insideCallback = true;
-    }
+    CallbackGuard() : old_(g_insideCallback) { g_insideCallback = true; }
 
-    ~CallbackGuard()
-    {
-        g_insideCallback = old_;
-    }
+    ~CallbackGuard() { g_insideCallback = old_; }
 
 private:
     bool old_;
 };
 
-void EnsureDir(const char *path)
+void EnsureDir(const char* path)
 {
     if (path == nullptr || path[0] == '\0') {
         return;
@@ -38,9 +42,9 @@ void EnsureDir(const char *path)
     }
 }
 
-AscsanStatus ReadFull(int fd, void *buf, size_t bytes)
+AscsanStatus ReadFull(int fd, void* buf, size_t bytes)
 {
-    auto *cursor = static_cast<char *>(buf);
+    auto* cursor = static_cast<char*>(buf);
     size_t total = 0;
     while (total < bytes) {
         const ssize_t rc = read(fd, cursor + total, bytes - total);
@@ -58,9 +62,9 @@ AscsanStatus ReadFull(int fd, void *buf, size_t bytes)
     return ASCSAN_STATUS_SUCCESS;
 }
 
-AscsanStatus WriteFull(int fd, const void *buf, size_t bytes)
+AscsanStatus WriteFull(int fd, const void* buf, size_t bytes)
 {
-    const auto *cursor = static_cast<const char *>(buf);
+    const auto* cursor = static_cast<const char*>(buf);
     size_t total = 0;
     while (total < bytes) {
         const ssize_t rc = write(fd, cursor + total, bytes - total);
@@ -77,13 +81,13 @@ AscsanStatus WriteFull(int fd, const void *buf, size_t bytes)
 
 } // namespace
 
-ApiCore &ApiCore::Instance()
+ApiCore& ApiCore::Instance()
 {
     static ApiCore core;
     return core;
 }
 
-AscsanStatus ApiCore::Initialize(const AscsanInitParams *params)
+AscsanStatus ApiCore::Initialize(const AscsanInitParams* params)
 {
     std::lock_guard<std::recursive_mutex> lock(mutex_);
     if (initialized_) {
@@ -117,7 +121,7 @@ AscsanStatus ApiCore::Finalize()
     retiredSubscriberTokens_.clear();
     patchSites_.clear();
     reports_.clear();
-    for (auto &entry : memories_) {
+    for (auto& entry : memories_) {
         std::free(entry.first);
     }
     memories_.clear();
@@ -126,12 +130,9 @@ AscsanStatus ApiCore::Finalize()
     return ASCSAN_STATUS_SUCCESS;
 }
 
-const char *ApiCore::VersionString() const
-{
-    return "ascsan sanitizer_api p0";
-}
+const char* ApiCore::VersionString() const { return "ascsan sanitizer_api p0"; }
 
-AscsanStatus ApiCore::ExportLaunchConfigToFd(const AscsanLaunchConfig *config, int fd)
+AscsanStatus ApiCore::ExportLaunchConfigToFd(const AscsanLaunchConfig* config, int fd)
 {
     if (config == nullptr || fd < 0) {
         return ASCSAN_STATUS_ERROR_INVALID_VALUE;
@@ -139,7 +140,7 @@ AscsanStatus ApiCore::ExportLaunchConfigToFd(const AscsanLaunchConfig *config, i
     return WriteFull(fd, config, sizeof(*config));
 }
 
-AscsanStatus ApiCore::ImportLaunchConfigFromFd(int fd, AscsanLaunchConfig *config)
+AscsanStatus ApiCore::ImportLaunchConfigFromFd(int fd, AscsanLaunchConfig* config)
 {
     if (config == nullptr || fd < 0) {
         return ASCSAN_STATUS_ERROR_INVALID_VALUE;
@@ -157,7 +158,7 @@ AscsanStatus ApiCore::ImportLaunchConfigFromFd(int fd, AscsanLaunchConfig *confi
     return ASCSAN_STATUS_SUCCESS;
 }
 
-AscsanStatus ApiCore::ApplyLaunchConfig(const AscsanLaunchConfig *config)
+AscsanStatus ApiCore::ApplyLaunchConfig(const AscsanLaunchConfig* config)
 {
     if (config == nullptr) {
         return ASCSAN_STATUS_ERROR_INVALID_VALUE;
@@ -175,22 +176,16 @@ AscsanStatus ApiCore::ApplyLaunchConfig(const AscsanLaunchConfig *config)
     return ASCSAN_STATUS_SUCCESS;
 }
 
-const AscsanLaunchConfig *ApiCore::GetLaunchConfig() const
-{
-    return &config_;
-}
+const AscsanLaunchConfig* ApiCore::GetLaunchConfig() const { return &config_; }
 
 AscsanStatus ApiCore::ValidateInitialized() const
 {
     return initialized_ && !finalized_ ? ASCSAN_STATUS_SUCCESS : ASCSAN_STATUS_ERROR_NOT_INITIALIZED;
 }
 
-bool ApiCore::IsInsideCallback() const
-{
-    return g_insideCallback;
-}
+bool ApiCore::IsInsideCallback() const { return g_insideCallback; }
 
-void ApiCore::Dispatch(AscsanCallbackDomain domain, uint32_t cbid, const void *cbdata)
+void ApiCore::Dispatch(AscsanCallbackDomain domain, uint32_t cbid, const void* cbdata)
 {
     Subscriber target{};
     bool hasTarget = false;
@@ -211,7 +206,7 @@ void ApiCore::Dispatch(AscsanCallbackDomain domain, uint32_t cbid, const void *c
     target.callback(target.userdata, domain, cbid, cbdata);
 }
 
-AscsanStatus ApiCore::ReportError(const char *tool, const char *message)
+AscsanStatus ApiCore::ReportError(const char* tool, const char* message)
 {
     std::string report = "[";
     report += tool != nullptr ? tool : "unknown";
@@ -244,7 +239,7 @@ AscsanStatus ApiCore::FlushReports()
 {
     std::lock_guard<std::recursive_mutex> lock(mutex_);
     std::cout << "[ascsan-api] summary: reports=" << reports_.size() << "\n";
-    for (const auto &report : reports_) {
+    for (const auto& report : reports_) {
         std::cout << "[ascsan-api] summary item: " << report << "\n";
     }
     return ASCSAN_STATUS_SUCCESS;

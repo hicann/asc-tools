@@ -1,3 +1,13 @@
+/**
+ * Copyright (c) 2025 Huawei Technologies Co., Ltd.
+ * This program is free software, you can redistribute it and/or modify it under the terms and conditions of
+ * CANN Open Software License Agreement Version 2.0 (the "License").
+ * Please refer to the License for details. You may not use this file except in compliance with the License.
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
+ * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
+ * See LICENSE in the root of the software repository for the full text of the License.
+ */
+
 #include "cann_sanitizer_context.h"
 
 #include <cstddef>
@@ -7,34 +17,25 @@
 namespace ascsan::cann {
 namespace {
 
-uint64_t PointerValue(const void *ptr)
+uint64_t PointerValue(const void* ptr) { return static_cast<uint64_t>(reinterpret_cast<std::uintptr_t>(ptr)); }
+
+uint64_t EventPtr(const AscsanResourceData& resource) { return PointerValue(resource.ptr); }
+
+std::size_t WindowInstructionCount(const CheckWindow& window)
 {
-    return static_cast<uint64_t>(reinterpret_cast<std::uintptr_t>(ptr));
+    return window.mte2.size() + window.mte3.size() + window.fixpipe.size() + window.setWaitFlag.size() +
+           window.getRlsBuf.size();
 }
 
-uint64_t EventPtr(const AscsanResourceData &resource)
+void AppendWindowCounts(std::ostringstream& os, const CheckWindow& window)
 {
-    return PointerValue(resource.ptr);
-}
-
-std::size_t WindowInstructionCount(const CheckWindow &window)
-{
-    return window.mte2.size() + window.mte3.size() + window.fixpipe.size() +
-           window.setWaitFlag.size() + window.getRlsBuf.size();
-}
-
-void AppendWindowCounts(std::ostringstream &os, const CheckWindow &window)
-{
-    os << " mte2=" << window.mte2.size()
-       << " mte3=" << window.mte3.size()
-       << " fixpipe=" << window.fixpipe.size()
-       << " setWaitFlag=" << window.setWaitFlag.size()
-       << " getRlsBuf=" << window.getRlsBuf.size();
+    os << " mte2=" << window.mte2.size() << " mte3=" << window.mte3.size() << " fixpipe=" << window.fixpipe.size()
+       << " setWaitFlag=" << window.setWaitFlag.size() << " getRlsBuf=" << window.getRlsBuf.size();
 }
 
 } // namespace
 
-bool CheckWindowKey::operator<(const CheckWindowKey &other) const
+bool CheckWindowKey::operator<(const CheckWindowKey& other) const
 {
     if (launchId != other.launchId) {
         return launchId < other.launchId;
@@ -48,7 +49,7 @@ bool CheckWindowKey::operator<(const CheckWindowKey &other) const
     return blockId < other.blockId;
 }
 
-bool DummyChecker::HandlerKey::operator<(const HandlerKey &other) const
+bool DummyChecker::HandlerKey::operator<(const HandlerKey& other) const
 {
     if (domain != other.domain) {
         return domain < other.domain;
@@ -120,10 +121,7 @@ void DummyChecker::RegisterRacecheck()
     Register(ASCSAN_CB_DOMAIN_DEVICE_INSTRUCTION, ASCSAN_CBID_DEVICE_MEMORY_ACCESS, &DummyChecker::OnInstruction);
 }
 
-void DummyChecker::RegisterInitcheck()
-{
-    RegisterMemcheck();
-}
+void DummyChecker::RegisterInitcheck() { RegisterMemcheck(); }
 
 void DummyChecker::RegisterSynccheck()
 {
@@ -135,7 +133,7 @@ void DummyChecker::RegisterSynccheck()
     Register(ASCSAN_CB_DOMAIN_DEVICE_INSTRUCTION, ASCSAN_CBID_DEVICE_SYNC, &DummyChecker::OnInstruction);
 }
 
-void DummyChecker::OnCallback(ToolContext &ctx, const ToolEvent &event)
+void DummyChecker::OnCallback(ToolContext& ctx, const ToolEvent& event)
 {
     ++ctx.stats.checkerEvents;
     const auto it = handlers_.find(HandlerKey{event.domain, event.cbid});
@@ -147,28 +145,23 @@ void DummyChecker::OnCallback(ToolContext &ctx, const ToolEvent &event)
     ctx.stats.checkerReports = reports_.size();
 }
 
-void DummyChecker::OnResourceAlloc(ToolContext &ctx, const ToolEvent &event)
+void DummyChecker::OnResourceAlloc(ToolContext& ctx, const ToolEvent& event)
 {
     if (!event.hasResource) {
         return;
     }
     allocations_[EventPtr(event.resource)] = AllocationRecord{
-        event.resource.resourceId,
-        EventPtr(event.resource),
-        event.resource.bytes,
-        event.resource.memorySpace,
-        event.resource.deviceId,
+        event.resource.resourceId,  EventPtr(event.resource), event.resource.bytes,
+        event.resource.memorySpace, event.resource.deviceId,
     };
 
     std::ostringstream os;
-    os << "[cann-sanitizer] checker=" << ToolKindName(tool_)
-       << " resource-alloc id=" << event.resource.resourceId
-       << " ptr=0x" << std::hex << EventPtr(event.resource) << std::dec
-       << " bytes=" << event.resource.bytes;
+    os << "[cann-sanitizer] checker=" << ToolKindName(tool_) << " resource-alloc id=" << event.resource.resourceId
+       << " ptr=0x" << std::hex << EventPtr(event.resource) << std::dec << " bytes=" << event.resource.bytes;
     Log(ctx, os.str());
 }
 
-void DummyChecker::OnResourceFree(ToolContext &ctx, const ToolEvent &event)
+void DummyChecker::OnResourceFree(ToolContext& ctx, const ToolEvent& event)
 {
     if (!event.hasResource) {
         return;
@@ -176,13 +169,12 @@ void DummyChecker::OnResourceFree(ToolContext &ctx, const ToolEvent &event)
     allocations_.erase(EventPtr(event.resource));
 
     std::ostringstream os;
-    os << "[cann-sanitizer] checker=" << ToolKindName(tool_)
-       << " resource-free id=" << event.resource.resourceId
+    os << "[cann-sanitizer] checker=" << ToolKindName(tool_) << " resource-free id=" << event.resource.resourceId
        << " ptr=0x" << std::hex << EventPtr(event.resource) << std::dec;
     Log(ctx, os.str());
 }
 
-void DummyChecker::OnMemoryOp(ToolContext &ctx, const ToolEvent &event)
+void DummyChecker::OnMemoryOp(ToolContext& ctx, const ToolEvent& event)
 {
     if (!event.hasMemory) {
         return;
@@ -190,15 +182,13 @@ void DummyChecker::OnMemoryOp(ToolContext &ctx, const ToolEvent &event)
     memoryOps_.push_back(event);
 
     std::ostringstream os;
-    os << "[cann-sanitizer] checker=" << ToolKindName(tool_)
-       << " memory-op cbid=" << event.cbid
-       << " src=0x" << std::hex << PointerValue(event.memory.src)
-       << " dst=0x" << PointerValue(event.memory.dst) << std::dec
+    os << "[cann-sanitizer] checker=" << ToolKindName(tool_) << " memory-op cbid=" << event.cbid << " src=0x"
+       << std::hex << PointerValue(event.memory.src) << " dst=0x" << PointerValue(event.memory.dst) << std::dec
        << " bytes=" << event.memory.bytes;
     Log(ctx, os.str());
 }
 
-void DummyChecker::OnPatch(ToolContext &ctx, const ToolEvent &event)
+void DummyChecker::OnPatch(ToolContext& ctx, const ToolEvent& event)
 {
     if (!event.hasPatch) {
         return;
@@ -206,17 +196,15 @@ void DummyChecker::OnPatch(ToolContext &ctx, const ToolEvent &event)
     patchEvents_.push_back(event);
 
     std::ostringstream os;
-    os << "[cann-sanitizer] checker=" << ToolKindName(tool_)
-       << " patch cbid=" << event.cbid
-       << " plan=" << event.patch.patchPlanId
-       << " mask=0x" << std::hex << event.patch.pipelineMask << std::dec;
+    os << "[cann-sanitizer] checker=" << ToolKindName(tool_) << " patch cbid=" << event.cbid
+       << " plan=" << event.patch.patchPlanId << " mask=0x" << std::hex << event.patch.pipelineMask << std::dec;
     if (!event.patchPatchedPath.empty()) {
         os << " patched=" << event.patchPatchedPath;
     }
     Log(ctx, os.str());
 }
 
-CheckWindowKey DummyChecker::MakeWindowKey(const ToolEvent &event) const
+CheckWindowKey DummyChecker::MakeWindowKey(const ToolEvent& event) const
 {
     CheckWindowKey key{};
     if (!event.hasInstruction) {
@@ -229,7 +217,7 @@ CheckWindowKey DummyChecker::MakeWindowKey(const ToolEvent &event) const
     return key;
 }
 
-CheckWindow &DummyChecker::GetWindow(ToolContext &ctx, const CheckWindowKey &key)
+CheckWindow& DummyChecker::GetWindow(ToolContext& ctx, const CheckWindowKey& key)
 {
     auto result = windows_.try_emplace(key);
     if (result.second) {
@@ -238,14 +226,14 @@ CheckWindow &DummyChecker::GetWindow(ToolContext &ctx, const CheckWindowKey &key
     return result.first->second;
 }
 
-void DummyChecker::OnInstruction(ToolContext &ctx, const ToolEvent &event)
+void DummyChecker::OnInstruction(ToolContext& ctx, const ToolEvent& event)
 {
     if (!event.hasInstruction) {
         return;
     }
 
     ++ctx.stats.checkerInstructions;
-    auto &window = GetWindow(ctx, MakeWindowKey(event));
+    auto& window = GetWindow(ctx, MakeWindowKey(event));
     switch (event.parsed.pipeline) {
         case ASCSAN_PATCH_PIPELINE_MTE2:
             window.mte2.push_back(event);
@@ -272,41 +260,36 @@ void DummyChecker::OnInstruction(ToolContext &ctx, const ToolEvent &event)
     }
 
     std::ostringstream os;
-    os << "[cann-sanitizer] checker=" << ToolKindName(tool_)
-       << " instruction=" << event.parsed.op
-       << " site=" << event.parsed.siteId
-       << " pc=0x" << std::hex << event.parsed.pc << std::dec;
+    os << "[cann-sanitizer] checker=" << ToolKindName(tool_) << " instruction=" << event.parsed.op
+       << " site=" << event.parsed.siteId << " pc=0x" << std::hex << event.parsed.pc << std::dec;
     if (event.hasSite) {
-        os << " siteOp=" << event.site.opName
-           << " sitePc=0x" << std::hex << event.site.pc << std::dec
+        os << " siteOp=" << event.site.opName << " sitePc=0x" << std::hex << event.site.pc << std::dec
            << " function=" << event.site.functionName;
     }
     Log(ctx, os.str());
 }
 
-void DummyChecker::OnSynchronize(ToolContext &ctx, const ToolEvent &event)
+void DummyChecker::OnSynchronize(ToolContext& ctx, const ToolEvent& event)
 {
     std::ostringstream os;
-    os << "[cann-sanitizer] checker=" << ToolKindName(tool_)
-       << " synchronize cbid=" << event.cbid
+    os << "[cann-sanitizer] checker=" << ToolKindName(tool_) << " synchronize cbid=" << event.cbid
        << " api=" << event.apiName;
     Log(ctx, os.str());
     FlushAll(ctx, "sync");
 }
 
-void DummyChecker::OnGeneric(ToolContext &ctx, const ToolEvent &event)
+void DummyChecker::OnGeneric(ToolContext& ctx, const ToolEvent& event)
 {
     std::ostringstream os;
     os << "[cann-sanitizer] checker=" << ToolKindName(tool_)
-       << " generic domain=" << static_cast<uint32_t>(event.domain)
-       << " cbid=" << event.cbid;
+       << " generic domain=" << static_cast<uint32_t>(event.domain) << " cbid=" << event.cbid;
     if (!event.apiName.empty()) {
         os << " api=" << event.apiName;
     }
     Log(ctx, os.str());
 }
 
-void DummyChecker::FlushAll(ToolContext &ctx, const char *reason)
+void DummyChecker::FlushAll(ToolContext& ctx, const char* reason)
 {
     while (!windows_.empty()) {
         auto it = windows_.begin();
@@ -317,10 +300,8 @@ void DummyChecker::FlushAll(ToolContext &ctx, const char *reason)
     }
 }
 
-void DummyChecker::CompleteWindow(ToolContext &ctx,
-                                  const CheckWindowKey &key,
-                                  const CheckWindow &window,
-                                  const char *reason)
+void DummyChecker::CompleteWindow(
+    ToolContext& ctx, const CheckWindowKey& key, const CheckWindow& window, const char* reason)
 {
     if (WindowInstructionCount(window) == 0) {
         return;
@@ -331,17 +312,14 @@ void DummyChecker::CompleteWindow(ToolContext &ctx,
         !window.fixpipe.empty() && window.mte2.empty() && window.mte3.empty()) {
         AddReport(ctx, "FIXPIPE window has no MTE2/MTE3 producer records");
     }
-    if ((tool_ == ToolKind::Synccheck || tool_ == ToolKind::Racecheck) &&
-        !window.getRlsBuf.empty() && window.setWaitFlag.empty()) {
+    if ((tool_ == ToolKind::Synccheck || tool_ == ToolKind::Racecheck) && !window.getRlsBuf.empty() &&
+        window.setWaitFlag.empty()) {
         AddReport(ctx, "GET_RLS_BUF window has no SET_WAIT_FLAG record");
     }
 
     std::ostringstream os;
-    os << "[cann-sanitizer] checker=" << ToolKindName(tool_)
-       << " window-complete reason=" << reason
-       << " launch=" << key.launchId
-       << " binary=" << key.binaryId
-       << " function=" << key.functionId
+    os << "[cann-sanitizer] checker=" << ToolKindName(tool_) << " window-complete reason=" << reason
+       << " launch=" << key.launchId << " binary=" << key.binaryId << " function=" << key.functionId
        << " block=" << key.blockId;
     AppendWindowCounts(os, window);
     os << " reports=" << reports_.size();
@@ -349,7 +327,7 @@ void DummyChecker::CompleteWindow(ToolContext &ctx,
     ctx.stats.checkerReports = reports_.size();
 }
 
-void DummyChecker::AddReport(ToolContext &ctx, const std::string &message)
+void DummyChecker::AddReport(ToolContext& ctx, const std::string& message)
 {
     reports_.push_back(message);
     ctx.stats.checkerReports = reports_.size();

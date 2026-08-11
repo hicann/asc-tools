@@ -1,3 +1,13 @@
+/**
+ * Copyright (c) 2025 Huawei Technologies Co., Ltd.
+ * This program is free software, you can redistribute it and/or modify it under the terms and conditions of
+ * CANN Open Software License Agreement Version 2.0 (the "License").
+ * Please refer to the License for details. You may not use this file except in compliance with the License.
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
+ * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
+ * See LICENSE in the root of the software repository for the full text of the License.
+ */
+
 #ifndef ASCSAN_CANN_SANITIZER_CONTEXT_H
 #define ASCSAN_CANN_SANITIZER_CONTEXT_H
 
@@ -14,12 +24,7 @@
 
 namespace ascsan::cann {
 
-enum class ToolKind {
-    Memcheck,
-    Racecheck,
-    Initcheck,
-    Synccheck
-};
+enum class ToolKind { Memcheck, Racecheck, Initcheck, Synccheck };
 
 struct CallbackSelector {
     AscsanCallbackDomain domain;
@@ -28,19 +33,13 @@ struct CallbackSelector {
 
 struct ToolProfile {
     ToolKind kind;
-    const char *name;
-    const CallbackSelector *callbacks;
+    const char* name;
+    const CallbackSelector* callbacks;
     uint64_t callbackCount;
 };
 
 struct ParsedInstruction {
-    enum class Kind {
-        Unknown,
-        MemoryTransfer,
-        Fixpipe,
-        SyncFlag,
-        BufferLifetime
-    };
+    enum class Kind { Unknown, MemoryTransfer, Fixpipe, SyncFlag, BufferLifetime };
 
     Kind kind = Kind::Unknown;
     AscsanPatchPipeline pipeline = ASCSAN_PATCH_PIPELINE_INVALID;
@@ -98,7 +97,7 @@ struct CheckWindowKey {
     uint64_t functionId = 0;
     uint32_t blockId = 0;
 
-    bool operator<(const CheckWindowKey &other) const;
+    bool operator<(const CheckWindowKey& other) const;
 };
 
 struct AllocationRecord {
@@ -123,18 +122,18 @@ class DummyChecker {
 public:
     void Configure(ToolKind tool);
     void Reset();
-    void OnCallback(ToolContext &ctx, const ToolEvent &event);
-    void FlushAll(ToolContext &ctx, const char *reason);
+    void OnCallback(ToolContext& ctx, const ToolEvent& event);
+    void FlushAll(ToolContext& ctx, const char* reason);
 
 private:
     struct HandlerKey {
         AscsanCallbackDomain domain = ASCSAN_CB_DOMAIN_ERROR;
         uint32_t cbid = 0;
 
-        bool operator<(const HandlerKey &other) const;
+        bool operator<(const HandlerKey& other) const;
     };
 
-    using Handler = void (DummyChecker::*)(ToolContext &, const ToolEvent &);
+    using Handler = void (DummyChecker::*)(ToolContext&, const ToolEvent&);
 
     void Register(AscsanCallbackDomain domain, uint32_t cbid, Handler handler);
     void RegisterMemcheck();
@@ -142,21 +141,18 @@ private:
     void RegisterInitcheck();
     void RegisterSynccheck();
 
-    void OnResourceAlloc(ToolContext &ctx, const ToolEvent &event);
-    void OnResourceFree(ToolContext &ctx, const ToolEvent &event);
-    void OnMemoryOp(ToolContext &ctx, const ToolEvent &event);
-    void OnPatch(ToolContext &ctx, const ToolEvent &event);
-    void OnInstruction(ToolContext &ctx, const ToolEvent &event);
-    void OnSynchronize(ToolContext &ctx, const ToolEvent &event);
-    void OnGeneric(ToolContext &ctx, const ToolEvent &event);
+    void OnResourceAlloc(ToolContext& ctx, const ToolEvent& event);
+    void OnResourceFree(ToolContext& ctx, const ToolEvent& event);
+    void OnMemoryOp(ToolContext& ctx, const ToolEvent& event);
+    void OnPatch(ToolContext& ctx, const ToolEvent& event);
+    void OnInstruction(ToolContext& ctx, const ToolEvent& event);
+    void OnSynchronize(ToolContext& ctx, const ToolEvent& event);
+    void OnGeneric(ToolContext& ctx, const ToolEvent& event);
 
-    CheckWindowKey MakeWindowKey(const ToolEvent &event) const;
-    CheckWindow &GetWindow(ToolContext &ctx, const CheckWindowKey &key);
-    void CompleteWindow(ToolContext &ctx,
-                        const CheckWindowKey &key,
-                        const CheckWindow &window,
-                        const char *reason);
-    void AddReport(ToolContext &ctx, const std::string &message);
+    CheckWindowKey MakeWindowKey(const ToolEvent& event) const;
+    CheckWindow& GetWindow(ToolContext& ctx, const CheckWindowKey& key);
+    void CompleteWindow(ToolContext& ctx, const CheckWindowKey& key, const CheckWindow& window, const char* reason);
+    void AddReport(ToolContext& ctx, const std::string& message);
 
     ToolKind tool_ = ToolKind::Memcheck;
     std::map<HandlerKey, Handler> handlers_;
@@ -178,16 +174,13 @@ struct ToolContext {
     std::ofstream log;
 };
 
-ToolContext &Context();
-const ToolProfile *FindToolProfile(const char *toolName);
-AscsanStatus EnableToolProfile(ToolContext &ctx, const ToolProfile &profile);
-ParsedInstruction ParseInstruction(const AscsanDeviceInstructionData &instruction);
-void DispatchToolCallback(void *userdata,
-                          AscsanCallbackDomain domain,
-                          uint32_t cbid,
-                          const void *cbdata);
-void Log(ToolContext &ctx, const std::string &message);
-const char *ToolKindName(ToolKind kind);
+ToolContext& Context();
+const ToolProfile* FindToolProfile(const char* toolName);
+AscsanStatus EnableToolProfile(ToolContext& ctx, const ToolProfile& profile);
+ParsedInstruction ParseInstruction(const AscsanDeviceInstructionData& instruction);
+void DispatchToolCallback(void* userdata, AscsanCallbackDomain domain, uint32_t cbid, const void* cbdata);
+void Log(ToolContext& ctx, const std::string& message);
+const char* ToolKindName(ToolKind kind);
 
 } // namespace ascsan::cann
 

@@ -1,3 +1,13 @@
+/**
+ * Copyright (c) 2025 Huawei Technologies Co., Ltd.
+ * This program is free software, you can redistribute it and/or modify it under the terms and conditions of
+ * CANN Open Software License Agreement Version 2.0 (the "License").
+ * Please refer to the License for details. You may not use this file except in compliance with the License.
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
+ * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
+ * See LICENSE in the root of the software repository for the full text of the License.
+ */
+
 #ifndef ASCSAN_CALLBACK_H
 #define ASCSAN_CALLBACK_H
 
@@ -10,7 +20,7 @@ extern "C" {
 typedef struct AscsanCallbackCommonData {
     uint32_t version;
     uint32_t size;
-    const char *apiName;
+    const char* apiName;
     int result;
     uint64_t correlationId;
     uint64_t timestampNs;
@@ -26,16 +36,16 @@ typedef enum AscsanBinaryImageFlags {
 typedef struct AscsanBinaryImageData {
     uint32_t kind;
     uint32_t flags;
-    const char *path;
-    const void *imageData;
+    const char* path;
+    const void* imageData;
     uint64_t imageSize;
-    const char *imageVersion;
+    const char* imageVersion;
     uint64_t imageHash;
 } AscsanBinaryImageData;
 
 typedef struct AscsanResourceData {
     AscsanCallbackCommonData common;
-    void *ptr;
+    void* ptr;
     uint64_t bytes;
     uint32_t memorySpace;
     uint32_t deviceId;
@@ -44,19 +54,19 @@ typedef struct AscsanResourceData {
 
 typedef struct AscsanMemoryMemcpyData {
     AscsanCallbackCommonData common;
-    void *dst;
-    const void *src;
+    void* dst;
+    const void* src;
     uint64_t bytes;
     uint32_t kind;
-    void *stream;
+    void* stream;
 } AscsanMemoryMemcpyData;
 
 typedef struct AscsanMemoryMemsetData {
     AscsanCallbackCommonData common;
-    void *dst;
+    void* dst;
     uint64_t bytes;
     int32_t value;
-    void *stream;
+    void* stream;
 } AscsanMemoryMemsetData;
 
 typedef struct AscsanBinaryData {
@@ -78,14 +88,14 @@ typedef struct AscsanPatchData {
 typedef struct AscsanLaunchData {
     AscsanCallbackCommonData common;
     uint64_t launchId;
-    void *function;
-    void *stream;
-    const char *functionName;
+    void* function;
+    void* stream;
+    const char* functionName;
 } AscsanLaunchData;
 
 typedef struct AscsanSynchronizeData {
     AscsanCallbackCommonData common;
-    void *stream;
+    void* stream;
 } AscsanSynchronizeData;
 
 typedef struct AscsanDeviceInstructionData {
@@ -103,44 +113,34 @@ typedef struct AscsanDeviceInstructionData {
 
 typedef struct AscsanReportData {
     AscsanCallbackCommonData common;
-    const char *tool;
-    const char *message;
+    const char* tool;
+    const char* message;
 } AscsanReportData;
 
 typedef struct AscsanErrorData {
     AscsanCallbackCommonData common;
-    const char *tool;
-    const char *message;
+    const char* tool;
+    const char* message;
 } AscsanErrorData;
 
-typedef void (*AscsanCallbackFunc)(
-    void *userdata,
-    AscsanCallbackDomain domain,
-    uint32_t cbid,
-    const void *cbdata);
+typedef void (*AscsanCallbackFunc)(void* userdata, AscsanCallbackDomain domain, uint32_t cbid, const void* cbdata);
 
 typedef struct AscsanSubscribeDesc {
     uint32_t version;
     uint32_t size;
-    const char *name;
+    const char* name;
     AscsanCallbackFunc callback;
-    void *userdata;
+    void* userdata;
     uint64_t flags;
 } AscsanSubscribeDesc;
 
-AscsanStatus ascsanSubscribe(const AscsanSubscribeDesc *desc, AscsanSubscriberHandle *subscriber);
+AscsanStatus ascsanSubscribe(const AscsanSubscribeDesc* desc, AscsanSubscriberHandle* subscriber);
 AscsanStatus ascsanUnsubscribe(AscsanSubscriberHandle subscriber);
-AscsanStatus ascsanEnableCallback(AscsanSubscriberHandle subscriber,
-                                  AscsanCallbackDomain domain,
-                                  uint32_t cbid,
-                                  int enable);
-AscsanStatus ascsanEnableDomain(AscsanSubscriberHandle subscriber,
-                                AscsanCallbackDomain domain,
-                                int enable);
-AscsanStatus ascsanGetCallbackState(AscsanSubscriberHandle subscriber,
-                                    AscsanCallbackDomain domain,
-                                    uint32_t cbid,
-                                    int *enabled);
+AscsanStatus ascsanEnableCallback(
+    AscsanSubscriberHandle subscriber, AscsanCallbackDomain domain, uint32_t cbid, int enable);
+AscsanStatus ascsanEnableDomain(AscsanSubscriberHandle subscriber, AscsanCallbackDomain domain, int enable);
+AscsanStatus ascsanGetCallbackState(
+    AscsanSubscriberHandle subscriber, AscsanCallbackDomain domain, uint32_t cbid, int* enabled);
 int ascsanIsInsideCallback(void);
 
 #ifdef __cplusplus
