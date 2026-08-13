@@ -9,11 +9,11 @@
 # ----------------------------------------------------------------------------------------------------------
 
 cmake_minimum_required(VERSION 3.16.0)
-project(ascsan_sanitizer_api)
+project(aclsan_sanitizer_api)
 
-add_library(ascsan_api SHARED
+add_library(aclsan_api SHARED
   src/api_core.cpp
-  src/ascsan_api.cpp
+  src/aclsan_api.cpp
   src/callback_registry.cpp
   src/dummy_backends.cpp
   src/hook_plan_builder.cpp
@@ -22,8 +22,8 @@ add_library(ascsan_api SHARED
   src/trace_manager.cpp
 )
 
-target_compile_features(ascsan_api PUBLIC cxx_std_17)
-target_include_directories(ascsan_api
+target_compile_features(aclsan_api PUBLIC cxx_std_17)
+target_include_directories(aclsan_api
   PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>
@@ -31,30 +31,30 @@ target_include_directories(ascsan_api
     ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
 
-target_link_libraries(ascsan_api PRIVATE dl pthread)
+target_link_libraries(aclsan_api PRIVATE dl pthread)
 
-set_target_properties(ascsan_api PROPERTIES
+set_target_properties(aclsan_api PROPERTIES
   OUTPUT_NAME sanitizer_api
 )
 
 if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
-  add_executable(ascsan_api_smoke tests/api_smoke.cpp)
-  target_compile_features(ascsan_api_smoke PRIVATE cxx_std_17)
-  target_link_libraries(ascsan_api_smoke PRIVATE ascsan_api)
+  add_executable(aclsan_api_smoke tests/api_smoke.cpp)
+  target_compile_features(aclsan_api_smoke PRIVATE cxx_std_17)
+  target_link_libraries(aclsan_api_smoke PRIVATE aclsan_api)
 endif()
 
-install(TARGETS ascsan_api
+install(TARGETS aclsan_api
   LIBRARY DESTINATION lib ${INSTALL_OPTIONAL}
   COMPONENT asc-tools
 )
 
 install(FILES
-  include/ascsan/ascsan_api.h
-  include/ascsan/ascsan_callback.h
-  include/ascsan/ascsan_memory.h
-  include/ascsan/ascsan_patch.h
-  include/ascsan/ascsan_symbolize.h
-  include/ascsan/ascsan_types.h
-  DESTINATION include/ascsan ${INSTALL_OPTIONAL}
+  include/aclsan/aclsan_api.h
+  include/aclsan/aclsan_callback.h
+  include/aclsan/aclsan_memory.h
+  include/aclsan/aclsan_patch.h
+  include/aclsan/aclsan_symbolize.h
+  include/aclsan/aclsan_types.h
+  DESTINATION include/aclsan ${INSTALL_OPTIONAL}
   COMPONENT asc-tools
 )

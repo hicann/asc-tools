@@ -8,23 +8,23 @@
  * See LICENSE in the root of the software repository for the full text of the License.
  */
 
-#ifndef ASCSAN_CANN_SANITIZER_H
-#define ASCSAN_CANN_SANITIZER_H
+#ifndef ACLSAN_CANN_SANITIZER_H
+#define ACLSAN_CANN_SANITIZER_H
 
-#include "ascsan/ascsan_api.h"
+#include "aclsan/aclsan_api.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-#define ASCSAN_CANN_EVENT_NAME_MAX 128
+#define ACLSAN_CANN_EVENT_NAME_MAX 128
 
-typedef struct AscsanCannSanitizerStats {
+typedef struct AclsanCannSanitizerStats {
     uint32_t version;
     uint32_t size;
-    char toolName[ASCSAN_TOOL_NAME_MAX];
-    char lastApiName[ASCSAN_CANN_EVENT_NAME_MAX];
-    char lastInstructionOpName[ASCSAN_CANN_EVENT_NAME_MAX];
+    char toolName[ACLSAN_TOOL_NAME_MAX];
+    char lastApiName[ACLSAN_CANN_EVENT_NAME_MAX];
+    char lastInstructionOpName[ACLSAN_CANN_EVENT_NAME_MAX];
     uint64_t callbacks;
     uint64_t resourceCallbacks;
     uint64_t memoryCallbacks;
@@ -64,15 +64,15 @@ typedef struct AscsanCannSanitizerStats {
     uint64_t lastInstructionSrc;
     uint64_t lastInstructionDst;
     uint64_t lastInstructionBytes;
-} AscsanCannSanitizerStats;
+} AclsanCannSanitizerStats;
 
-AscsanStatus ascsanCannSanitizerInitialize(const AscsanLaunchConfig* config);
-AscsanStatus ascsanCannSanitizerFinalize(void);
-AscsanStatus ascsanCannSanitizerGetStats(AscsanCannSanitizerStats* stats);
+AclsanStatus aclsanCannSanitizerInitialize(const AclsanLaunchConfig* config);
+AclsanStatus aclsanCannSanitizerFinalize(void);
+AclsanStatus aclsanCannSanitizerGetStats(AclsanCannSanitizerStats* stats);
 
 /*
  * Injection entry points. P0 accepts a nullable initInfo and imports
- * AscsanLaunchConfig from ASCSAN_CONFIG_FD when no explicit config is passed.
+ * AclsanLaunchConfig from ACLSAN_CONFIG_FD when no explicit config is passed.
  */
 int acltoolInitalize(const void* initInfo);
 void CannComputeInit(void);

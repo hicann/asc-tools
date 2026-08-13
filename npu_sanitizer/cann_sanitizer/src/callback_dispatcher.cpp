@@ -15,7 +15,7 @@
 #include <cstddef>
 #include <sstream>
 
-namespace ascsan::cann {
+namespace aclsan::cann {
 namespace {
 
 void CopyText(char* dst, std::size_t dstSize, const char* src)
@@ -28,35 +28,35 @@ void CopyText(char* dst, std::size_t dstSize, const char* src)
 
 uint64_t PointerValue(const void* ptr) { return static_cast<uint64_t>(reinterpret_cast<std::uintptr_t>(ptr)); }
 
-void CountDomain(ToolContext& ctx, AscsanCallbackDomain domain)
+void CountDomain(ToolContext& ctx, AclsanCallbackDomain domain)
 {
     ++ctx.stats.callbacks;
     switch (domain) {
-        case ASCSAN_CB_DOMAIN_RESOURCE:
+        case ACLSAN_CB_DOMAIN_RESOURCE:
             ++ctx.stats.resourceCallbacks;
             break;
-        case ASCSAN_CB_DOMAIN_MEMORY:
+        case ACLSAN_CB_DOMAIN_MEMORY:
             ++ctx.stats.memoryCallbacks;
             break;
-        case ASCSAN_CB_DOMAIN_BINARY:
+        case ACLSAN_CB_DOMAIN_BINARY:
             ++ctx.stats.binaryCallbacks;
             break;
-        case ASCSAN_CB_DOMAIN_PATCH:
+        case ACLSAN_CB_DOMAIN_PATCH:
             ++ctx.stats.patchCallbacks;
             break;
-        case ASCSAN_CB_DOMAIN_LAUNCH:
+        case ACLSAN_CB_DOMAIN_LAUNCH:
             ++ctx.stats.launchCallbacks;
             break;
-        case ASCSAN_CB_DOMAIN_SYNCHRONIZE:
+        case ACLSAN_CB_DOMAIN_SYNCHRONIZE:
             ++ctx.stats.syncCallbacks;
             break;
-        case ASCSAN_CB_DOMAIN_DEVICE_INSTRUCTION:
+        case ACLSAN_CB_DOMAIN_DEVICE_INSTRUCTION:
             ++ctx.stats.deviceInstructionCallbacks;
             break;
-        case ASCSAN_CB_DOMAIN_REPORT:
+        case ACLSAN_CB_DOMAIN_REPORT:
             ++ctx.stats.reportCallbacks;
             break;
-        case ASCSAN_CB_DOMAIN_ERROR:
+        case ACLSAN_CB_DOMAIN_ERROR:
             ++ctx.stats.errorCallbacks;
             break;
         default:
@@ -79,10 +79,10 @@ void FillInstructionSite(ToolEvent& event)
 {
     event.parsed = ParseInstruction(event.instruction);
 
-    AscsanPatchSiteInfo site{};
-    site.version = ASCSAN_API_VERSION;
+    AclsanPatchSiteInfo site{};
+    site.version = ACLSAN_API_VERSION;
     site.size = sizeof(site);
-    if (ascsanGetPatchSiteInfo(event.parsed.siteId, &site) == ASCSAN_STATUS_SUCCESS) {
+    if (aclsanGetPatchSiteInfo(event.parsed.siteId, &site) == ACLSAN_STATUS_SUCCESS) {
         event.hasSite = true;
         event.site.siteId = site.siteId;
         event.site.pipeline = site.pipeline;
@@ -96,15 +96,15 @@ void FillInstructionSite(ToolEvent& event)
     }
 }
 
-ToolEvent BuildToolEvent(AscsanCallbackDomain domain, uint32_t cbid, const void* cbdata)
+ToolEvent BuildToolEvent(AclsanCallbackDomain domain, uint32_t cbid, const void* cbdata)
 {
     ToolEvent event{};
     event.domain = domain;
     event.cbid = cbid;
 
     switch (domain) {
-        case ASCSAN_CB_DOMAIN_RESOURCE: {
-            const auto* data = static_cast<const AscsanResourceData*>(cbdata);
+        case ACLSAN_CB_DOMAIN_RESOURCE: {
+            const auto* data = static_cast<const AclsanResourceData*>(cbdata);
             CaptureCommon(event, data);
             if (data != nullptr) {
                 event.hasResource = true;
@@ -112,16 +112,16 @@ ToolEvent BuildToolEvent(AscsanCallbackDomain domain, uint32_t cbid, const void*
             }
             break;
         }
-        case ASCSAN_CB_DOMAIN_MEMORY:
-            if (cbid == ASCSAN_CBID_MEMORY_MEMCPY_BEGIN || cbid == ASCSAN_CBID_MEMORY_MEMCPY_END) {
-                const auto* data = static_cast<const AscsanMemoryMemcpyData*>(cbdata);
+        case ACLSAN_CB_DOMAIN_MEMORY:
+            if (cbid == ACLSAN_CBID_MEMORY_MEMCPY_BEGIN || cbid == ACLSAN_CBID_MEMORY_MEMCPY_END) {
+                const auto* data = static_cast<const AclsanMemoryMemcpyData*>(cbdata);
                 CaptureCommon(event, data);
                 if (data != nullptr) {
                     event.hasMemory = true;
                     event.memory = *data;
                 }
-            } else if (cbid == ASCSAN_CBID_MEMORY_MEMSET_BEGIN || cbid == ASCSAN_CBID_MEMORY_MEMSET_END) {
-                const auto* data = static_cast<const AscsanMemoryMemsetData*>(cbdata);
+            } else if (cbid == ACLSAN_CBID_MEMORY_MEMSET_BEGIN || cbid == ACLSAN_CBID_MEMORY_MEMSET_END) {
+                const auto* data = static_cast<const AclsanMemoryMemsetData*>(cbdata);
                 CaptureCommon(event, data);
                 if (data != nullptr) {
                     event.hasMemory = true;
@@ -130,13 +130,13 @@ ToolEvent BuildToolEvent(AscsanCallbackDomain domain, uint32_t cbid, const void*
                     event.memory.dst = data->dst;
                     event.memory.src = nullptr;
                     event.memory.bytes = data->bytes;
-                    event.memory.kind = ASCSAN_MEMCPY_DEFAULT;
+                    event.memory.kind = ACLSAN_MEMCPY_DEFAULT;
                     event.memory.stream = data->stream;
                 }
             }
             break;
-        case ASCSAN_CB_DOMAIN_PATCH: {
-            const auto* data = static_cast<const AscsanPatchData*>(cbdata);
+        case ACLSAN_CB_DOMAIN_PATCH: {
+            const auto* data = static_cast<const AclsanPatchData*>(cbdata);
             CaptureCommon(event, data);
             if (data != nullptr) {
                 event.hasPatch = true;
@@ -150,8 +150,8 @@ ToolEvent BuildToolEvent(AscsanCallbackDomain domain, uint32_t cbid, const void*
             }
             break;
         }
-        case ASCSAN_CB_DOMAIN_DEVICE_INSTRUCTION: {
-            const auto* data = static_cast<const AscsanDeviceInstructionData*>(cbdata);
+        case ACLSAN_CB_DOMAIN_DEVICE_INSTRUCTION: {
+            const auto* data = static_cast<const AclsanDeviceInstructionData*>(cbdata);
             CaptureCommon(event, data);
             if (data != nullptr) {
                 event.hasInstruction = true;
@@ -160,20 +160,20 @@ ToolEvent BuildToolEvent(AscsanCallbackDomain domain, uint32_t cbid, const void*
             }
             break;
         }
-        case ASCSAN_CB_DOMAIN_BINARY:
-            CaptureCommon(event, static_cast<const AscsanBinaryData*>(cbdata));
+        case ACLSAN_CB_DOMAIN_BINARY:
+            CaptureCommon(event, static_cast<const AclsanBinaryData*>(cbdata));
             break;
-        case ASCSAN_CB_DOMAIN_LAUNCH:
-            CaptureCommon(event, static_cast<const AscsanLaunchData*>(cbdata));
+        case ACLSAN_CB_DOMAIN_LAUNCH:
+            CaptureCommon(event, static_cast<const AclsanLaunchData*>(cbdata));
             break;
-        case ASCSAN_CB_DOMAIN_SYNCHRONIZE:
-            CaptureCommon(event, static_cast<const AscsanSynchronizeData*>(cbdata));
+        case ACLSAN_CB_DOMAIN_SYNCHRONIZE:
+            CaptureCommon(event, static_cast<const AclsanSynchronizeData*>(cbdata));
             break;
-        case ASCSAN_CB_DOMAIN_REPORT:
-            CaptureCommon(event, static_cast<const AscsanReportData*>(cbdata));
+        case ACLSAN_CB_DOMAIN_REPORT:
+            CaptureCommon(event, static_cast<const AclsanReportData*>(cbdata));
             break;
-        case ASCSAN_CB_DOMAIN_ERROR:
-            CaptureCommon(event, static_cast<const AscsanErrorData*>(cbdata));
+        case ACLSAN_CB_DOMAIN_ERROR:
+            CaptureCommon(event, static_cast<const AclsanErrorData*>(cbdata));
             break;
         default:
             break;
@@ -240,7 +240,7 @@ void CaptureCallbackData(ToolContext& ctx, const ToolEvent& event)
 
 } // namespace
 
-void DispatchToolCallback(void* userdata, AscsanCallbackDomain domain, uint32_t cbid, const void* cbdata)
+void DispatchToolCallback(void* userdata, AclsanCallbackDomain domain, uint32_t cbid, const void* cbdata)
 {
     auto* ctx = static_cast<ToolContext*>(userdata);
     if (ctx == nullptr) {
@@ -262,4 +262,4 @@ void DispatchToolCallback(void* userdata, AscsanCallbackDomain domain, uint32_t 
     ctx->checker.OnCallback(*ctx, event);
 }
 
-} // namespace ascsan::cann
+} // namespace aclsan::cann

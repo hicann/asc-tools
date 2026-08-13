@@ -8,26 +8,26 @@
  * See LICENSE in the root of the software repository for the full text of the License.
  */
 
-#ifndef ASCSAN_API_H
-#define ASCSAN_API_H
+#ifndef ACLSAN_API_H
+#define ACLSAN_API_H
 
-#include "ascsan/ascsan_callback.h"
-#include "ascsan/ascsan_memory.h"
-#include "ascsan/ascsan_patch.h"
-#include "ascsan/ascsan_symbolize.h"
+#include "aclsan/aclsan_callback.h"
+#include "aclsan/aclsan_memory.h"
+#include "aclsan/aclsan_patch.h"
+#include "aclsan/aclsan_symbolize.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-typedef struct AscsanInitParams {
+typedef struct AclsanInitParams {
     uint32_t version;
     uint32_t size;
-    const AscsanLaunchConfig* launchConfig;
-} AscsanInitParams;
+    const AclsanLaunchConfig* launchConfig;
+} AclsanInitParams;
 
-AscsanStatus ascsanInitialize(const AscsanInitParams* params);
-AscsanStatus ascsanFinalize(void);
+AclsanStatus aclsanInitialize(const AclsanInitParams* params);
+AclsanStatus aclsanFinalize(void);
 
 #ifdef __cplusplus
 }

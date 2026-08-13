@@ -8,11 +8,11 @@
  * See LICENSE in the root of the software repository for the full text of the License.
  */
 
-#ifndef ASCSAN_CANN_SANITIZER_CONTEXT_H
-#define ASCSAN_CANN_SANITIZER_CONTEXT_H
+#ifndef ACLSAN_CANN_SANITIZER_CONTEXT_H
+#define ACLSAN_CANN_SANITIZER_CONTEXT_H
 
-#include "ascsan/cann_sanitizer.h"
-#include "ascsan/internal_api.h"
+#include "aclsan/cann_sanitizer.h"
+#include "aclsan/internal_api.h"
 
 #include <array>
 #include <cstdint>
@@ -22,12 +22,12 @@
 #include <string>
 #include <vector>
 
-namespace ascsan::cann {
+namespace aclsan::cann {
 
 enum class ToolKind { Memcheck, Racecheck, Initcheck, Synccheck };
 
 struct CallbackSelector {
-    AscsanCallbackDomain domain;
+    AclsanCallbackDomain domain;
     uint32_t cbid;
 };
 
@@ -42,7 +42,7 @@ struct ParsedInstruction {
     enum class Kind { Unknown, MemoryTransfer, Fixpipe, SyncFlag, BufferLifetime };
 
     Kind kind = Kind::Unknown;
-    AscsanPatchPipeline pipeline = ASCSAN_PATCH_PIPELINE_INVALID;
+    AclsanPatchPipeline pipeline = ACLSAN_PATCH_PIPELINE_INVALID;
     uint32_t cbid = 0;
     uint32_t siteId = 0;
     uint64_t pc = 0;
@@ -56,7 +56,7 @@ struct ParsedInstruction {
 
 struct ToolEventSite {
     uint32_t siteId = 0;
-    AscsanPatchPipeline pipeline = ASCSAN_PATCH_PIPELINE_INVALID;
+    AclsanPatchPipeline pipeline = ACLSAN_PATCH_PIPELINE_INVALID;
     uint64_t binaryId = 0;
     uint64_t functionId = 0;
     uint64_t pc = 0;
@@ -67,25 +67,25 @@ struct ToolEventSite {
 };
 
 struct ToolEvent {
-    AscsanCallbackDomain domain = ASCSAN_CB_DOMAIN_ERROR;
+    AclsanCallbackDomain domain = ACLSAN_CB_DOMAIN_ERROR;
     uint32_t cbid = 0;
     std::string apiName;
     int result = 0;
     uint64_t correlationId = 0;
 
     bool hasResource = false;
-    AscsanResourceData resource{};
+    AclsanResourceData resource{};
 
     bool hasMemory = false;
-    AscsanMemoryMemcpyData memory{};
+    AclsanMemoryMemcpyData memory{};
 
     bool hasPatch = false;
-    AscsanPatchData patch{};
+    AclsanPatchData patch{};
     std::string patchOriginalPath;
     std::string patchPatchedPath;
 
     bool hasInstruction = false;
-    AscsanDeviceInstructionData instruction{};
+    AclsanDeviceInstructionData instruction{};
     ParsedInstruction parsed{};
     bool hasSite = false;
     ToolEventSite site{};
@@ -127,7 +127,7 @@ public:
 
 private:
     struct HandlerKey {
-        AscsanCallbackDomain domain = ASCSAN_CB_DOMAIN_ERROR;
+        AclsanCallbackDomain domain = ACLSAN_CB_DOMAIN_ERROR;
         uint32_t cbid = 0;
 
         bool operator<(const HandlerKey& other) const;
@@ -135,7 +135,7 @@ private:
 
     using Handler = void (DummyChecker::*)(ToolContext&, const ToolEvent&);
 
-    void Register(AscsanCallbackDomain domain, uint32_t cbid, Handler handler);
+    void Register(AclsanCallbackDomain domain, uint32_t cbid, Handler handler);
     void RegisterMemcheck();
     void RegisterRacecheck();
     void RegisterInitcheck();
@@ -167,21 +167,21 @@ struct ToolContext {
     std::mutex mutex;
     bool initialized = false;
     ToolKind tool = ToolKind::Memcheck;
-    AscsanLaunchConfig config{};
-    AscsanSubscriberHandle subscriber = ASCSAN_INVALID_SUBSCRIBER_HANDLE;
-    AscsanCannSanitizerStats stats{};
+    AclsanLaunchConfig config{};
+    AclsanSubscriberHandle subscriber = ACLSAN_INVALID_SUBSCRIBER_HANDLE;
+    AclsanCannSanitizerStats stats{};
     DummyChecker checker;
     std::ofstream log;
 };
 
 ToolContext& Context();
 const ToolProfile* FindToolProfile(const char* toolName);
-AscsanStatus EnableToolProfile(ToolContext& ctx, const ToolProfile& profile);
-ParsedInstruction ParseInstruction(const AscsanDeviceInstructionData& instruction);
-void DispatchToolCallback(void* userdata, AscsanCallbackDomain domain, uint32_t cbid, const void* cbdata);
+AclsanStatus EnableToolProfile(ToolContext& ctx, const ToolProfile& profile);
+ParsedInstruction ParseInstruction(const AclsanDeviceInstructionData& instruction);
+void DispatchToolCallback(void* userdata, AclsanCallbackDomain domain, uint32_t cbid, const void* cbdata);
 void Log(ToolContext& ctx, const std::string& message);
 const char* ToolKindName(ToolKind kind);
 
-} // namespace ascsan::cann
+} // namespace aclsan::cann
 
 #endif

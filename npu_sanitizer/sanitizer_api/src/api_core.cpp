@@ -17,7 +17,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-namespace ascsan {
+namespace aclsan {
 namespace {
 
 thread_local bool g_insideCallback = false;
@@ -38,11 +38,11 @@ void EnsureDir(const char* path)
         return;
     }
     if (mkdir(path, 0755) != 0 && errno != EEXIST) {
-        std::cerr << "[ascsan-api] mkdir failed path=" << path << " errno=" << errno << "\n";
+        std::cerr << "[aclsan-api] mkdir failed path=" << path << " errno=" << errno << "\n";
     }
 }
 
-AscsanStatus ReadFull(int fd, void* buf, size_t bytes)
+AclsanStatus ReadFull(int fd, void* buf, size_t bytes)
 {
     auto* cursor = static_cast<char*>(buf);
     size_t total = 0;
@@ -52,17 +52,17 @@ AscsanStatus ReadFull(int fd, void* buf, size_t bytes)
             if (errno == EINTR) {
                 continue;
             }
-            return ASCSAN_STATUS_ERROR_IO;
+            return ACLSAN_STATUS_ERROR_IO;
         }
         if (rc == 0) {
-            return ASCSAN_STATUS_ERROR_IO;
+            return ACLSAN_STATUS_ERROR_IO;
         }
         total += static_cast<size_t>(rc);
     }
-    return ASCSAN_STATUS_SUCCESS;
+    return ACLSAN_STATUS_SUCCESS;
 }
 
-AscsanStatus WriteFull(int fd, const void* buf, size_t bytes)
+AclsanStatus WriteFull(int fd, const void* buf, size_t bytes)
 {
     const auto* cursor = static_cast<const char*>(buf);
     size_t total = 0;
@@ -72,11 +72,11 @@ AscsanStatus WriteFull(int fd, const void* buf, size_t bytes)
             if (errno == EINTR) {
                 continue;
             }
-            return ASCSAN_STATUS_ERROR_IO;
+            return ACLSAN_STATUS_ERROR_IO;
         }
         total += static_cast<size_t>(rc);
     }
-    return ASCSAN_STATUS_SUCCESS;
+    return ACLSAN_STATUS_SUCCESS;
 }
 
 } // namespace
@@ -87,32 +87,32 @@ ApiCore& ApiCore::Instance()
     return core;
 }
 
-AscsanStatus ApiCore::Initialize(const AscsanInitParams* params)
+AclsanStatus ApiCore::Initialize(const AclsanInitParams* params)
 {
     std::lock_guard<std::recursive_mutex> lock(mutex_);
     if (initialized_) {
-        return ASCSAN_STATUS_SUCCESS;
+        return ACLSAN_STATUS_SUCCESS;
     }
     if (params != nullptr) {
-        if (params->version != ASCSAN_API_VERSION || params->size < sizeof(AscsanInitParams)) {
-            return ASCSAN_STATUS_ERROR_VERSION_MISMATCH;
+        if (params->version != ACLSAN_API_VERSION || params->size < sizeof(AclsanInitParams)) {
+            return ACLSAN_STATUS_ERROR_VERSION_MISMATCH;
         }
         if (params->launchConfig != nullptr) {
             config_ = *params->launchConfig;
         }
     }
     if (config_.version == 0) {
-        config_.version = ASCSAN_API_VERSION;
+        config_.version = ACLSAN_API_VERSION;
         config_.size = sizeof(config_);
     }
     EnsureDir(config_.workDir);
     EnsureDir(config_.probeCacheDir);
     initialized_ = true;
     finalized_ = false;
-    return ASCSAN_STATUS_SUCCESS;
+    return ACLSAN_STATUS_SUCCESS;
 }
 
-AscsanStatus ApiCore::Finalize()
+AclsanStatus ApiCore::Finalize()
 {
     std::lock_guard<std::recursive_mutex> lock(mutex_);
     FlushReports();
@@ -127,65 +127,65 @@ AscsanStatus ApiCore::Finalize()
     memories_.clear();
     initialized_ = false;
     finalized_ = true;
-    return ASCSAN_STATUS_SUCCESS;
+    return ACLSAN_STATUS_SUCCESS;
 }
 
-const char* ApiCore::VersionString() const { return "ascsan sanitizer_api p0"; }
+const char* ApiCore::VersionString() const { return "aclsan sanitizer_api p0"; }
 
-AscsanStatus ApiCore::ExportLaunchConfigToFd(const AscsanLaunchConfig* config, int fd)
+AclsanStatus ApiCore::ExportLaunchConfigToFd(const AclsanLaunchConfig* config, int fd)
 {
     if (config == nullptr || fd < 0) {
-        return ASCSAN_STATUS_ERROR_INVALID_VALUE;
+        return ACLSAN_STATUS_ERROR_INVALID_VALUE;
     }
     return WriteFull(fd, config, sizeof(*config));
 }
 
-AscsanStatus ApiCore::ImportLaunchConfigFromFd(int fd, AscsanLaunchConfig* config)
+AclsanStatus ApiCore::ImportLaunchConfigFromFd(int fd, AclsanLaunchConfig* config)
 {
     if (config == nullptr || fd < 0) {
-        return ASCSAN_STATUS_ERROR_INVALID_VALUE;
+        return ACLSAN_STATUS_ERROR_INVALID_VALUE;
     }
-    AscsanStatus status = ReadFull(fd, config, sizeof(*config));
+    AclsanStatus status = ReadFull(fd, config, sizeof(*config));
     close(fd);
-    if (status != ASCSAN_STATUS_SUCCESS) {
+    if (status != ACLSAN_STATUS_SUCCESS) {
         return status;
     }
-    if (config->version != ASCSAN_API_VERSION || config->size != sizeof(*config)) {
-        return ASCSAN_STATUS_ERROR_VERSION_MISMATCH;
+    if (config->version != ACLSAN_API_VERSION || config->size != sizeof(*config)) {
+        return ACLSAN_STATUS_ERROR_VERSION_MISMATCH;
     }
     std::lock_guard<std::recursive_mutex> lock(mutex_);
     config_ = *config;
-    return ASCSAN_STATUS_SUCCESS;
+    return ACLSAN_STATUS_SUCCESS;
 }
 
-AscsanStatus ApiCore::ApplyLaunchConfig(const AscsanLaunchConfig* config)
+AclsanStatus ApiCore::ApplyLaunchConfig(const AclsanLaunchConfig* config)
 {
     if (config == nullptr) {
-        return ASCSAN_STATUS_ERROR_INVALID_VALUE;
+        return ACLSAN_STATUS_ERROR_INVALID_VALUE;
     }
     std::lock_guard<std::recursive_mutex> lock(mutex_);
     if (!initialized_) {
-        return ASCSAN_STATUS_ERROR_NOT_INITIALIZED;
+        return ACLSAN_STATUS_ERROR_NOT_INITIALIZED;
     }
-    if (config->version != ASCSAN_API_VERSION || config->size != sizeof(*config)) {
-        return ASCSAN_STATUS_ERROR_VERSION_MISMATCH;
+    if (config->version != ACLSAN_API_VERSION || config->size != sizeof(*config)) {
+        return ACLSAN_STATUS_ERROR_VERSION_MISMATCH;
     }
     config_ = *config;
     EnsureDir(config_.workDir);
     EnsureDir(config_.probeCacheDir);
-    return ASCSAN_STATUS_SUCCESS;
+    return ACLSAN_STATUS_SUCCESS;
 }
 
-const AscsanLaunchConfig* ApiCore::GetLaunchConfig() const { return &config_; }
+const AclsanLaunchConfig* ApiCore::GetLaunchConfig() const { return &config_; }
 
-AscsanStatus ApiCore::ValidateInitialized() const
+AclsanStatus ApiCore::ValidateInitialized() const
 {
-    return initialized_ && !finalized_ ? ASCSAN_STATUS_SUCCESS : ASCSAN_STATUS_ERROR_NOT_INITIALIZED;
+    return initialized_ && !finalized_ ? ACLSAN_STATUS_SUCCESS : ACLSAN_STATUS_ERROR_NOT_INITIALIZED;
 }
 
 bool ApiCore::IsInsideCallback() const { return g_insideCallback; }
 
-void ApiCore::Dispatch(AscsanCallbackDomain domain, uint32_t cbid, const void* cbdata)
+void ApiCore::Dispatch(AclsanCallbackDomain domain, uint32_t cbid, const void* cbdata)
 {
     Subscriber target{};
     bool hasTarget = false;
@@ -206,7 +206,7 @@ void ApiCore::Dispatch(AscsanCallbackDomain domain, uint32_t cbid, const void* c
     target.callback(target.userdata, domain, cbid, cbdata);
 }
 
-AscsanStatus ApiCore::ReportError(const char* tool, const char* message)
+AclsanStatus ApiCore::ReportError(const char* tool, const char* message)
 {
     std::string report = "[";
     report += tool != nullptr ? tool : "unknown";
@@ -216,33 +216,33 @@ AscsanStatus ApiCore::ReportError(const char* tool, const char* message)
         std::lock_guard<std::recursive_mutex> lock(mutex_);
         reports_.push_back(report);
     }
-    std::cerr << "[ascsan-api] " << report << "\n";
+    std::cerr << "[aclsan-api] " << report << "\n";
 
-    AscsanReportData reportData{};
-    reportData.common.version = ASCSAN_API_VERSION;
+    AclsanReportData reportData{};
+    reportData.common.version = ACLSAN_API_VERSION;
     reportData.common.size = sizeof(reportData);
-    reportData.common.apiName = "ascsanReportError";
+    reportData.common.apiName = "aclsanReportError";
     reportData.tool = tool;
     reportData.message = message;
-    AscsanErrorData errorData{};
-    errorData.common.version = ASCSAN_API_VERSION;
+    AclsanErrorData errorData{};
+    errorData.common.version = ACLSAN_API_VERSION;
     errorData.common.size = sizeof(errorData);
-    errorData.common.apiName = "ascsanReportError";
+    errorData.common.apiName = "aclsanReportError";
     errorData.tool = tool;
     errorData.message = message;
-    Dispatch(ASCSAN_CB_DOMAIN_REPORT, ASCSAN_CBID_REPORT_RECORD, &reportData);
-    Dispatch(ASCSAN_CB_DOMAIN_ERROR, ASCSAN_CBID_ERROR_RECORD, &errorData);
-    return ASCSAN_STATUS_SUCCESS;
+    Dispatch(ACLSAN_CB_DOMAIN_REPORT, ACLSAN_CBID_REPORT_RECORD, &reportData);
+    Dispatch(ACLSAN_CB_DOMAIN_ERROR, ACLSAN_CBID_ERROR_RECORD, &errorData);
+    return ACLSAN_STATUS_SUCCESS;
 }
 
-AscsanStatus ApiCore::FlushReports()
+AclsanStatus ApiCore::FlushReports()
 {
     std::lock_guard<std::recursive_mutex> lock(mutex_);
-    std::cout << "[ascsan-api] summary: reports=" << reports_.size() << "\n";
+    std::cout << "[aclsan-api] summary: reports=" << reports_.size() << "\n";
     for (const auto& report : reports_) {
-        std::cout << "[ascsan-api] summary item: " << report << "\n";
+        std::cout << "[aclsan-api] summary item: " << report << "\n";
     }
-    return ASCSAN_STATUS_SUCCESS;
+    return ACLSAN_STATUS_SUCCESS;
 }
 
-} // namespace ascsan
+} // namespace aclsan

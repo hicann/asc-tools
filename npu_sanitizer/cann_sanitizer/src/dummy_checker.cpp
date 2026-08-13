@@ -14,12 +14,12 @@
 #include <cstdint>
 #include <sstream>
 
-namespace ascsan::cann {
+namespace aclsan::cann {
 namespace {
 
 uint64_t PointerValue(const void* ptr) { return static_cast<uint64_t>(reinterpret_cast<std::uintptr_t>(ptr)); }
 
-uint64_t EventPtr(const AscsanResourceData& resource) { return PointerValue(resource.ptr); }
+uint64_t EventPtr(const AclsanResourceData& resource) { return PointerValue(resource.ptr); }
 
 std::size_t WindowInstructionCount(const CheckWindow& window)
 {
@@ -87,50 +87,50 @@ void DummyChecker::Reset()
     reports_.clear();
 }
 
-void DummyChecker::Register(AscsanCallbackDomain domain, uint32_t cbid, Handler handler)
+void DummyChecker::Register(AclsanCallbackDomain domain, uint32_t cbid, Handler handler)
 {
     handlers_[HandlerKey{domain, cbid}] = handler;
 }
 
 void DummyChecker::RegisterMemcheck()
 {
-    Register(ASCSAN_CB_DOMAIN_RESOURCE, ASCSAN_CBID_RESOURCE_MEMORY_ALLOC, &DummyChecker::OnResourceAlloc);
-    Register(ASCSAN_CB_DOMAIN_RESOURCE, ASCSAN_CBID_RESOURCE_MEMORY_FREE, &DummyChecker::OnResourceFree);
-    Register(ASCSAN_CB_DOMAIN_MEMORY, ASCSAN_CBID_MEMORY_MEMCPY_BEGIN, &DummyChecker::OnMemoryOp);
-    Register(ASCSAN_CB_DOMAIN_MEMORY, ASCSAN_CBID_MEMORY_MEMCPY_END, &DummyChecker::OnMemoryOp);
-    Register(ASCSAN_CB_DOMAIN_MEMORY, ASCSAN_CBID_MEMORY_MEMSET_BEGIN, &DummyChecker::OnMemoryOp);
-    Register(ASCSAN_CB_DOMAIN_MEMORY, ASCSAN_CBID_MEMORY_MEMSET_END, &DummyChecker::OnMemoryOp);
-    Register(ASCSAN_CB_DOMAIN_PATCH, ASCSAN_CBID_PATCH_BEGIN, &DummyChecker::OnPatch);
-    Register(ASCSAN_CB_DOMAIN_PATCH, ASCSAN_CBID_PATCH_SITE_MAP_CREATED, &DummyChecker::OnPatch);
-    Register(ASCSAN_CB_DOMAIN_PATCH, ASCSAN_CBID_PATCH_END, &DummyChecker::OnPatch);
-    Register(ASCSAN_CB_DOMAIN_SYNCHRONIZE, ASCSAN_CBID_SYNCHRONIZE_STREAM_SYNC_END, &DummyChecker::OnSynchronize);
-    Register(ASCSAN_CB_DOMAIN_SYNCHRONIZE, ASCSAN_CBID_SYNCHRONIZE_DEVICE_SYNC_END, &DummyChecker::OnSynchronize);
-    Register(ASCSAN_CB_DOMAIN_DEVICE_INSTRUCTION, ASCSAN_CBID_DEVICE_MEMORY_ACCESS, &DummyChecker::OnInstruction);
+    Register(ACLSAN_CB_DOMAIN_RESOURCE, ACLSAN_CBID_RESOURCE_MEMORY_ALLOC, &DummyChecker::OnResourceAlloc);
+    Register(ACLSAN_CB_DOMAIN_RESOURCE, ACLSAN_CBID_RESOURCE_MEMORY_FREE, &DummyChecker::OnResourceFree);
+    Register(ACLSAN_CB_DOMAIN_MEMORY, ACLSAN_CBID_MEMORY_MEMCPY_BEGIN, &DummyChecker::OnMemoryOp);
+    Register(ACLSAN_CB_DOMAIN_MEMORY, ACLSAN_CBID_MEMORY_MEMCPY_END, &DummyChecker::OnMemoryOp);
+    Register(ACLSAN_CB_DOMAIN_MEMORY, ACLSAN_CBID_MEMORY_MEMSET_BEGIN, &DummyChecker::OnMemoryOp);
+    Register(ACLSAN_CB_DOMAIN_MEMORY, ACLSAN_CBID_MEMORY_MEMSET_END, &DummyChecker::OnMemoryOp);
+    Register(ACLSAN_CB_DOMAIN_PATCH, ACLSAN_CBID_PATCH_BEGIN, &DummyChecker::OnPatch);
+    Register(ACLSAN_CB_DOMAIN_PATCH, ACLSAN_CBID_PATCH_SITE_MAP_CREATED, &DummyChecker::OnPatch);
+    Register(ACLSAN_CB_DOMAIN_PATCH, ACLSAN_CBID_PATCH_END, &DummyChecker::OnPatch);
+    Register(ACLSAN_CB_DOMAIN_SYNCHRONIZE, ACLSAN_CBID_SYNCHRONIZE_STREAM_SYNC_END, &DummyChecker::OnSynchronize);
+    Register(ACLSAN_CB_DOMAIN_SYNCHRONIZE, ACLSAN_CBID_SYNCHRONIZE_DEVICE_SYNC_END, &DummyChecker::OnSynchronize);
+    Register(ACLSAN_CB_DOMAIN_DEVICE_INSTRUCTION, ACLSAN_CBID_DEVICE_MEMORY_ACCESS, &DummyChecker::OnInstruction);
 }
 
 void DummyChecker::RegisterRacecheck()
 {
-    Register(ASCSAN_CB_DOMAIN_RESOURCE, ASCSAN_CBID_RESOURCE_MEMORY_ALLOC, &DummyChecker::OnResourceAlloc);
-    Register(ASCSAN_CB_DOMAIN_RESOURCE, ASCSAN_CBID_RESOURCE_MEMORY_FREE, &DummyChecker::OnResourceFree);
-    Register(ASCSAN_CB_DOMAIN_PATCH, ASCSAN_CBID_PATCH_BEGIN, &DummyChecker::OnPatch);
-    Register(ASCSAN_CB_DOMAIN_PATCH, ASCSAN_CBID_PATCH_SITE_MAP_CREATED, &DummyChecker::OnPatch);
-    Register(ASCSAN_CB_DOMAIN_PATCH, ASCSAN_CBID_PATCH_END, &DummyChecker::OnPatch);
-    Register(ASCSAN_CB_DOMAIN_SYNCHRONIZE, ASCSAN_CBID_SYNCHRONIZE_STREAM_SYNC_END, &DummyChecker::OnSynchronize);
-    Register(ASCSAN_CB_DOMAIN_SYNCHRONIZE, ASCSAN_CBID_SYNCHRONIZE_DEVICE_SYNC_END, &DummyChecker::OnSynchronize);
-    Register(ASCSAN_CB_DOMAIN_DEVICE_INSTRUCTION, ASCSAN_CBID_DEVICE_SYNC, &DummyChecker::OnInstruction);
-    Register(ASCSAN_CB_DOMAIN_DEVICE_INSTRUCTION, ASCSAN_CBID_DEVICE_MEMORY_ACCESS, &DummyChecker::OnInstruction);
+    Register(ACLSAN_CB_DOMAIN_RESOURCE, ACLSAN_CBID_RESOURCE_MEMORY_ALLOC, &DummyChecker::OnResourceAlloc);
+    Register(ACLSAN_CB_DOMAIN_RESOURCE, ACLSAN_CBID_RESOURCE_MEMORY_FREE, &DummyChecker::OnResourceFree);
+    Register(ACLSAN_CB_DOMAIN_PATCH, ACLSAN_CBID_PATCH_BEGIN, &DummyChecker::OnPatch);
+    Register(ACLSAN_CB_DOMAIN_PATCH, ACLSAN_CBID_PATCH_SITE_MAP_CREATED, &DummyChecker::OnPatch);
+    Register(ACLSAN_CB_DOMAIN_PATCH, ACLSAN_CBID_PATCH_END, &DummyChecker::OnPatch);
+    Register(ACLSAN_CB_DOMAIN_SYNCHRONIZE, ACLSAN_CBID_SYNCHRONIZE_STREAM_SYNC_END, &DummyChecker::OnSynchronize);
+    Register(ACLSAN_CB_DOMAIN_SYNCHRONIZE, ACLSAN_CBID_SYNCHRONIZE_DEVICE_SYNC_END, &DummyChecker::OnSynchronize);
+    Register(ACLSAN_CB_DOMAIN_DEVICE_INSTRUCTION, ACLSAN_CBID_DEVICE_SYNC, &DummyChecker::OnInstruction);
+    Register(ACLSAN_CB_DOMAIN_DEVICE_INSTRUCTION, ACLSAN_CBID_DEVICE_MEMORY_ACCESS, &DummyChecker::OnInstruction);
 }
 
 void DummyChecker::RegisterInitcheck() { RegisterMemcheck(); }
 
 void DummyChecker::RegisterSynccheck()
 {
-    Register(ASCSAN_CB_DOMAIN_PATCH, ASCSAN_CBID_PATCH_BEGIN, &DummyChecker::OnPatch);
-    Register(ASCSAN_CB_DOMAIN_PATCH, ASCSAN_CBID_PATCH_SITE_MAP_CREATED, &DummyChecker::OnPatch);
-    Register(ASCSAN_CB_DOMAIN_PATCH, ASCSAN_CBID_PATCH_END, &DummyChecker::OnPatch);
-    Register(ASCSAN_CB_DOMAIN_SYNCHRONIZE, ASCSAN_CBID_SYNCHRONIZE_STREAM_SYNC_END, &DummyChecker::OnSynchronize);
-    Register(ASCSAN_CB_DOMAIN_SYNCHRONIZE, ASCSAN_CBID_SYNCHRONIZE_DEVICE_SYNC_END, &DummyChecker::OnSynchronize);
-    Register(ASCSAN_CB_DOMAIN_DEVICE_INSTRUCTION, ASCSAN_CBID_DEVICE_SYNC, &DummyChecker::OnInstruction);
+    Register(ACLSAN_CB_DOMAIN_PATCH, ACLSAN_CBID_PATCH_BEGIN, &DummyChecker::OnPatch);
+    Register(ACLSAN_CB_DOMAIN_PATCH, ACLSAN_CBID_PATCH_SITE_MAP_CREATED, &DummyChecker::OnPatch);
+    Register(ACLSAN_CB_DOMAIN_PATCH, ACLSAN_CBID_PATCH_END, &DummyChecker::OnPatch);
+    Register(ACLSAN_CB_DOMAIN_SYNCHRONIZE, ACLSAN_CBID_SYNCHRONIZE_STREAM_SYNC_END, &DummyChecker::OnSynchronize);
+    Register(ACLSAN_CB_DOMAIN_SYNCHRONIZE, ACLSAN_CBID_SYNCHRONIZE_DEVICE_SYNC_END, &DummyChecker::OnSynchronize);
+    Register(ACLSAN_CB_DOMAIN_DEVICE_INSTRUCTION, ACLSAN_CBID_DEVICE_SYNC, &DummyChecker::OnInstruction);
 }
 
 void DummyChecker::OnCallback(ToolContext& ctx, const ToolEvent& event)
@@ -235,27 +235,27 @@ void DummyChecker::OnInstruction(ToolContext& ctx, const ToolEvent& event)
     ++ctx.stats.checkerInstructions;
     auto& window = GetWindow(ctx, MakeWindowKey(event));
     switch (event.parsed.pipeline) {
-        case ASCSAN_PATCH_PIPELINE_MTE2:
+        case ACLSAN_PATCH_PIPELINE_MTE2:
             window.mte2.push_back(event);
             ++ctx.stats.memoryTransferEvents;
             break;
-        case ASCSAN_PATCH_PIPELINE_MTE3:
+        case ACLSAN_PATCH_PIPELINE_MTE3:
             window.mte3.push_back(event);
             ++ctx.stats.memoryTransferEvents;
             break;
-        case ASCSAN_PATCH_PIPELINE_FIXPIPE:
+        case ACLSAN_PATCH_PIPELINE_FIXPIPE:
             window.fixpipe.push_back(event);
             ++ctx.stats.fixpipeEvents;
             break;
-        case ASCSAN_PATCH_PIPELINE_SET_WAIT_FLAG:
+        case ACLSAN_PATCH_PIPELINE_SET_WAIT_FLAG:
             window.setWaitFlag.push_back(event);
             ++ctx.stats.syncEvents;
             break;
-        case ASCSAN_PATCH_PIPELINE_GET_RLS_BUF:
+        case ACLSAN_PATCH_PIPELINE_GET_RLS_BUF:
             window.getRlsBuf.push_back(event);
             ++ctx.stats.syncEvents;
             break;
-        case ASCSAN_PATCH_PIPELINE_INVALID:
+        case ACLSAN_PATCH_PIPELINE_INVALID:
             break;
     }
 
@@ -334,4 +334,4 @@ void DummyChecker::AddReport(ToolContext& ctx, const std::string& message)
     Log(ctx, std::string("[cann-sanitizer] checker-report ") + message);
 }
 
-} // namespace ascsan::cann
+} // namespace aclsan::cann

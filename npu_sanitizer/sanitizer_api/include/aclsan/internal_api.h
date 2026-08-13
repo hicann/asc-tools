@@ -8,10 +8,10 @@
  * See LICENSE in the root of the software repository for the full text of the License.
  */
 
-#ifndef ASCSAN_INTERNAL_API_H
-#define ASCSAN_INTERNAL_API_H
+#ifndef ACLSAN_INTERNAL_API_H
+#define ACLSAN_INTERNAL_API_H
 
-#include "ascsan/ascsan_types.h"
+#include "aclsan/aclsan_types.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -20,12 +20,12 @@ extern "C" {
 /*
  * Internal SPI for sanitizer_api.so providers.
  *
- * These entry points are intentionally separated from ascsan_api.h. They are
+ * These entry points are intentionally separated from aclsan_api.h. They are
  * used by in-repo provider modules such as injection.so, cann_sanitizer.so,
  * trace fetch backends, and tests. They are not part of the stable checker API.
  */
 
-typedef struct AscsanRuntimeMemoryAllocParams {
+typedef struct AclsanRuntimeMemoryAllocParams {
     uint32_t version;
     uint32_t size;
     void* ptr;
@@ -33,9 +33,9 @@ typedef struct AscsanRuntimeMemoryAllocParams {
     uint32_t memorySpace;
     uint32_t deviceId;
     uint64_t resourceId;
-} AscsanRuntimeMemoryAllocParams;
+} AclsanRuntimeMemoryAllocParams;
 
-typedef struct AscsanRuntimeMemoryFreeParams {
+typedef struct AclsanRuntimeMemoryFreeParams {
     uint32_t version;
     uint32_t size;
     void* ptr;
@@ -43,9 +43,9 @@ typedef struct AscsanRuntimeMemoryFreeParams {
     uint32_t memorySpace;
     uint32_t deviceId;
     uint64_t resourceId;
-} AscsanRuntimeMemoryFreeParams;
+} AclsanRuntimeMemoryFreeParams;
 
-typedef struct AscsanRuntimeMemcpyParams {
+typedef struct AclsanRuntimeMemcpyParams {
     uint32_t version;
     uint32_t size;
     void* dst;
@@ -54,9 +54,9 @@ typedef struct AscsanRuntimeMemcpyParams {
     uint64_t bytes;
     uint32_t kind;
     void* stream;
-} AscsanRuntimeMemcpyParams;
+} AclsanRuntimeMemcpyParams;
 
-typedef struct AscsanRuntimeMemsetParams {
+typedef struct AclsanRuntimeMemsetParams {
     uint32_t version;
     uint32_t size;
     void* dst;
@@ -64,39 +64,39 @@ typedef struct AscsanRuntimeMemsetParams {
     int32_t value;
     uint64_t bytes;
     void* stream;
-} AscsanRuntimeMemsetParams;
+} AclsanRuntimeMemsetParams;
 
-typedef struct AscsanRuntimeBinaryLoadFromFileParams {
+typedef struct AclsanRuntimeBinaryLoadFromFileParams {
     uint32_t version;
     uint32_t size;
     const char* path;
     const char* imageVersion;
     uint64_t binaryId;
-} AscsanRuntimeBinaryLoadFromFileParams;
+} AclsanRuntimeBinaryLoadFromFileParams;
 
-typedef struct AscsanRuntimeBinaryLoadFromDataParams {
+typedef struct AclsanRuntimeBinaryLoadFromDataParams {
     uint32_t version;
     uint32_t size;
     const void* imageData;
     uint64_t imageSize;
     const char* imageVersion;
     uint64_t binaryId;
-} AscsanRuntimeBinaryLoadFromDataParams;
+} AclsanRuntimeBinaryLoadFromDataParams;
 
-const char* ascsanGetVersionString(void);
+const char* aclsanGetVersionString(void);
 
-AscsanStatus ascsanExportLaunchConfigToFd(const AscsanLaunchConfig* config, int fd);
-AscsanStatus ascsanImportLaunchConfigFromFd(int fd, AscsanLaunchConfig* config);
-AscsanStatus ascsanApplyLaunchConfig(const AscsanLaunchConfig* config);
-const AscsanLaunchConfig* ascsanGetLaunchConfig(void);
+AclsanStatus aclsanExportLaunchConfigToFd(const AclsanLaunchConfig* config, int fd);
+AclsanStatus aclsanImportLaunchConfigFromFd(int fd, AclsanLaunchConfig* config);
+AclsanStatus aclsanApplyLaunchConfig(const AclsanLaunchConfig* config);
+const AclsanLaunchConfig* aclsanGetLaunchConfig(void);
 
-AscsanStatus ascsanOnRuntimeEvent(const AscsanRuntimeEvent* event);
-AscsanStatus ascsanConfigureRuntimeHook(const AscsanRuntimeHookPlan* plan);
-AscsanStatus ascsanGetRuntimeHookState(AscsanRuntimeHookState* state);
+AclsanStatus aclsanOnRuntimeEvent(const AclsanRuntimeEvent* event);
+AclsanStatus aclsanConfigureRuntimeHook(const AclsanRuntimeHookPlan* plan);
+AclsanStatus aclsanGetRuntimeHookState(AclsanRuntimeHookState* state);
 
-AscsanStatus ascsanIngestRawTraces(const AscsanRawTraceRecord* records, uint64_t count);
-AscsanStatus ascsanReportError(const char* tool, const char* message);
-AscsanStatus ascsanFlushReports(void);
+AclsanStatus aclsanIngestRawTraces(const AclsanRawTraceRecord* records, uint64_t count);
+AclsanStatus aclsanReportError(const char* tool, const char* message);
+AclsanStatus aclsanFlushReports(void);
 
 #ifdef __cplusplus
 }

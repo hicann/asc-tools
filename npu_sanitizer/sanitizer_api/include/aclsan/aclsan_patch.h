@@ -8,47 +8,47 @@
  * See LICENSE in the root of the software repository for the full text of the License.
  */
 
-#ifndef ASCSAN_PATCH_H
-#define ASCSAN_PATCH_H
+#ifndef ACLSAN_PATCH_H
+#define ACLSAN_PATCH_H
 
-#include "ascsan/ascsan_types.h"
+#include "aclsan/aclsan_types.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-typedef enum AscsanPatchImageKind {
-    ASCSAN_PATCH_IMAGE_BUILTIN = 1,
-    ASCSAN_PATCH_IMAGE_FILE = 2,
-    ASCSAN_PATCH_IMAGE_MEMORY = 3
-} AscsanPatchImageKind;
+typedef enum AclsanPatchImageKind {
+    ACLSAN_PATCH_IMAGE_BUILTIN = 1,
+    ACLSAN_PATCH_IMAGE_FILE = 2,
+    ACLSAN_PATCH_IMAGE_MEMORY = 3
+} AclsanPatchImageKind;
 
-typedef struct AscsanPatchImageDesc {
+typedef struct AclsanPatchImageDesc {
     uint32_t version;
     uint32_t size;
-    AscsanPatchImageKind kind;
+    AclsanPatchImageKind kind;
     const char* arch;
     const char* path;
     const void* imageData;
     uint64_t imageSize;
     const char* imageVersion;
     uint64_t flags;
-} AscsanPatchImageDesc;
+} AclsanPatchImageDesc;
 
-typedef struct AscsanPatchPipelineDesc {
+typedef struct AclsanPatchPipelineDesc {
     uint32_t version;
     uint32_t size;
-    AscsanPatchPipeline pipeline;
-    AscsanCallbackDomain callbackDomain;
+    AclsanPatchPipeline pipeline;
+    AclsanCallbackDomain callbackDomain;
     uint32_t callbackId;
     const char* name;
     const char* probeSymbol;
     const char* matcherName;
     uint32_t rawArgCount;
     uint64_t flags;
-} AscsanPatchPipelineDesc;
+} AclsanPatchPipelineDesc;
 
-typedef struct AscsanPatchOptions {
+typedef struct AclsanPatchOptions {
     uint32_t version;
     uint32_t size;
     uint32_t strict;
@@ -57,13 +57,13 @@ typedef struct AscsanPatchOptions {
     const char* cacheDir;
     const char* toolchainRoot;
     uint64_t flags;
-} AscsanPatchOptions;
+} AclsanPatchOptions;
 
-typedef struct AscsanPatchSiteInfo {
+typedef struct AclsanPatchSiteInfo {
     uint32_t version;
     uint32_t size;
     uint32_t siteId;
-    AscsanPatchPipeline pipeline;
+    AclsanPatchPipeline pipeline;
     uint64_t binaryId;
     uint64_t functionId;
     uint64_t pc;
@@ -71,19 +71,19 @@ typedef struct AscsanPatchSiteInfo {
     const char* opName;
     const char* sourceFile;
     uint32_t sourceLine;
-} AscsanPatchSiteInfo;
+} AclsanPatchSiteInfo;
 
-AscsanStatus ascsanRegisterBuiltinPatchPipelines(void);
-AscsanStatus ascsanRegisterPatchImage(const AscsanPatchImageDesc* desc, uint64_t* patchImageId);
-AscsanStatus ascsanRegisterPatchPipeline(const AscsanPatchPipelineDesc* desc);
-AscsanStatus ascsanSetPatchOptions(const AscsanPatchOptions* options);
-AscsanStatus ascsanBuildPatchPlanForBinary(AscsanBinaryHandle binary, AscsanPatchPlanHandle* plan);
-AscsanStatus ascsanPatchBinaryFromImage(
-    const AscsanPatchImageDesc* image, const AscsanPatchOptions* options, char* patchedPath, uint64_t patchedPathSize,
-    AscsanPatchPlanHandle* plan);
-AscsanStatus ascsanGetPatchSiteInfo(uint32_t siteId, AscsanPatchSiteInfo* info);
-AscsanStatus ascsanSetLaunchUserData(
-    AscsanLaunchHandle launch, void* function, void* stream, const void* deviceUserData, uint64_t deviceUserDataSize);
+AclsanStatus aclsanRegisterBuiltinPatchPipelines(void);
+AclsanStatus aclsanRegisterPatchImage(const AclsanPatchImageDesc* desc, uint64_t* patchImageId);
+AclsanStatus aclsanRegisterPatchPipeline(const AclsanPatchPipelineDesc* desc);
+AclsanStatus aclsanSetPatchOptions(const AclsanPatchOptions* options);
+AclsanStatus aclsanBuildPatchPlanForBinary(AclsanBinaryHandle binary, AclsanPatchPlanHandle* plan);
+AclsanStatus aclsanPatchBinaryFromImage(
+    const AclsanPatchImageDesc* image, const AclsanPatchOptions* options, char* patchedPath, uint64_t patchedPathSize,
+    AclsanPatchPlanHandle* plan);
+AclsanStatus aclsanGetPatchSiteInfo(uint32_t siteId, AclsanPatchSiteInfo* info);
+AclsanStatus aclsanSetLaunchUserData(
+    AclsanLaunchHandle launch, void* function, void* stream, const void* deviceUserData, uint64_t deviceUserDataSize);
 
 #ifdef __cplusplus
 }

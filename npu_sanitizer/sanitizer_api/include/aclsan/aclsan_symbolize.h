@@ -8,25 +8,25 @@
  * See LICENSE in the root of the software repository for the full text of the License.
  */
 
-#ifndef ASCSAN_SYMBOLIZE_H
-#define ASCSAN_SYMBOLIZE_H
+#ifndef ACLSAN_SYMBOLIZE_H
+#define ACLSAN_SYMBOLIZE_H
 
-#include "ascsan/ascsan_types.h"
+#include "aclsan/aclsan_types.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-typedef enum AscsanSymbolizeFlags {
-    ASCSAN_SYMBOLIZE_FLAG_NONE = 0,
-    ASCSAN_SYMBOLIZE_FLAG_FROM_SITE_MAP = 1u << 0u,
-    ASCSAN_SYMBOLIZE_FLAG_FROM_DEBUG_INFO = 1u << 1u,
-    ASCSAN_SYMBOLIZE_FLAG_INLINE = 1u << 2u,
-    ASCSAN_SYMBOLIZE_FLAG_DYNAMIC_CALL = 1u << 3u,
-    ASCSAN_SYMBOLIZE_FLAG_FALLBACK = 1u << 4u
-} AscsanSymbolizeFlags;
+typedef enum AclsanSymbolizeFlags {
+    ACLSAN_SYMBOLIZE_FLAG_NONE = 0,
+    ACLSAN_SYMBOLIZE_FLAG_FROM_SITE_MAP = 1u << 0u,
+    ACLSAN_SYMBOLIZE_FLAG_FROM_DEBUG_INFO = 1u << 1u,
+    ACLSAN_SYMBOLIZE_FLAG_INLINE = 1u << 2u,
+    ACLSAN_SYMBOLIZE_FLAG_DYNAMIC_CALL = 1u << 3u,
+    ACLSAN_SYMBOLIZE_FLAG_FALLBACK = 1u << 4u
+} AclsanSymbolizeFlags;
 
-typedef struct AscsanDevicePcQuery {
+typedef struct AclsanDevicePcQuery {
     uint32_t version;
     uint32_t size;
     uint64_t launchId;
@@ -37,9 +37,9 @@ typedef struct AscsanDevicePcQuery {
     uint64_t serialNo;
     uint64_t pc;
     uint64_t flags;
-} AscsanDevicePcQuery;
+} AclsanDevicePcQuery;
 
-typedef struct AscsanDeviceStackFrame {
+typedef struct AclsanDeviceStackFrame {
     uint32_t version;
     uint32_t size;
     uint64_t pc;
@@ -48,13 +48,13 @@ typedef struct AscsanDeviceStackFrame {
     uint32_t sourceLine;
     uint32_t sourceColumn;
     uint32_t flags;
-    char functionName[ASCSAN_SYMBOL_NAME_MAX];
-    char opName[ASCSAN_SYMBOL_NAME_MAX];
-    char sourceFile[ASCSAN_PATH_MAX];
-} AscsanDeviceStackFrame;
+    char functionName[ACLSAN_SYMBOL_NAME_MAX];
+    char opName[ACLSAN_SYMBOL_NAME_MAX];
+    char sourceFile[ACLSAN_PATH_MAX];
+} AclsanDeviceStackFrame;
 
-AscsanStatus ascsanSymbolizeDevicePc(
-    const AscsanDevicePcQuery* query, char* payload, uint64_t payloadSize, uint64_t* payloadBytes);
+AclsanStatus aclsanSymbolizeDevicePc(
+    const AclsanDevicePcQuery* query, char* payload, uint64_t payloadSize, uint64_t* payloadBytes);
 
 #ifdef __cplusplus
 }
