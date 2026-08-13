@@ -12,10 +12,10 @@
 
 #include <cstring>
 
-namespace ascsan {
+namespace aclsan {
 namespace {
 
-void AddRuleAction(AscsanRuntimeHookPlan& plan, uint32_t api, uint32_t actions)
+void AddRuleAction(AclsanRuntimeHookPlan& plan, uint32_t api, uint32_t actions)
 {
     for (uint32_t i = 0; i < plan.ruleCount; ++i) {
         if (plan.rules[i].api == api) {
@@ -23,7 +23,7 @@ void AddRuleAction(AscsanRuntimeHookPlan& plan, uint32_t api, uint32_t actions)
             return;
         }
     }
-    if (plan.ruleCount >= ASCSAN_HOOK_RULE_MAX) {
+    if (plan.ruleCount >= ACLSAN_HOOK_RULE_MAX) {
         return;
     }
     plan.rules[plan.ruleCount].api = api;
@@ -33,125 +33,125 @@ void AddRuleAction(AscsanRuntimeHookPlan& plan, uint32_t api, uint32_t actions)
 
 } // namespace
 
-const char* PipelineName(AscsanPatchPipeline pipeline)
+const char* PipelineName(AclsanPatchPipeline pipeline)
 {
     switch (pipeline) {
-        case ASCSAN_PATCH_PIPELINE_SET_WAIT_FLAG:
+        case ACLSAN_PATCH_PIPELINE_SET_WAIT_FLAG:
             return "SET_WAIT_FLAG";
-        case ASCSAN_PATCH_PIPELINE_GET_RLS_BUF:
+        case ACLSAN_PATCH_PIPELINE_GET_RLS_BUF:
             return "GET_RLS_BUF";
-        case ASCSAN_PATCH_PIPELINE_MTE2:
+        case ACLSAN_PATCH_PIPELINE_MTE2:
             return "MTE2";
-        case ASCSAN_PATCH_PIPELINE_MTE3:
+        case ACLSAN_PATCH_PIPELINE_MTE3:
             return "MTE3";
-        case ASCSAN_PATCH_PIPELINE_FIXPIPE:
+        case ACLSAN_PATCH_PIPELINE_FIXPIPE:
             return "FIXPIPE";
         default:
             return "INVALID";
     }
 }
 
-uint32_t PipelineMask(AscsanPatchPipeline pipeline)
+uint32_t PipelineMask(AclsanPatchPipeline pipeline)
 {
-    return pipeline == ASCSAN_PATCH_PIPELINE_INVALID ? 0u : (1u << static_cast<uint32_t>(pipeline));
+    return pipeline == ACLSAN_PATCH_PIPELINE_INVALID ? 0u : (1u << static_cast<uint32_t>(pipeline));
 }
 
-uint32_t PipelineToCbid(AscsanPatchPipeline pipeline)
+uint32_t PipelineToCbid(AclsanPatchPipeline pipeline)
 {
     switch (pipeline) {
-        case ASCSAN_PATCH_PIPELINE_SET_WAIT_FLAG:
-            return ASCSAN_CBID_DEVICE_SYNC;
-        case ASCSAN_PATCH_PIPELINE_GET_RLS_BUF:
-            return ASCSAN_CBID_DEVICE_SYNC;
-        case ASCSAN_PATCH_PIPELINE_MTE2:
-            return ASCSAN_CBID_DEVICE_MEMORY_ACCESS;
-        case ASCSAN_PATCH_PIPELINE_MTE3:
-            return ASCSAN_CBID_DEVICE_MEMORY_ACCESS;
-        case ASCSAN_PATCH_PIPELINE_FIXPIPE:
-            return ASCSAN_CBID_DEVICE_MEMORY_ACCESS;
+        case ACLSAN_PATCH_PIPELINE_SET_WAIT_FLAG:
+            return ACLSAN_CBID_DEVICE_SYNC;
+        case ACLSAN_PATCH_PIPELINE_GET_RLS_BUF:
+            return ACLSAN_CBID_DEVICE_SYNC;
+        case ACLSAN_PATCH_PIPELINE_MTE2:
+            return ACLSAN_CBID_DEVICE_MEMORY_ACCESS;
+        case ACLSAN_PATCH_PIPELINE_MTE3:
+            return ACLSAN_CBID_DEVICE_MEMORY_ACCESS;
+        case ACLSAN_PATCH_PIPELINE_FIXPIPE:
+            return ACLSAN_CBID_DEVICE_MEMORY_ACCESS;
         default:
             return 0;
     }
 }
 
-AscsanRuntimeHookPlan ApiCore::BuildHookPlanFromSubscriptions()
+AclsanRuntimeHookPlan ApiCore::BuildHookPlanFromSubscriptions()
 {
-    AscsanRuntimeHookPlan plan{};
-    plan.version = ASCSAN_API_VERSION;
+    AclsanRuntimeHookPlan plan{};
+    plan.version = ACLSAN_API_VERSION;
     plan.size = sizeof(plan);
     plan.generation = nextHookGeneration_++;
 
-    for (uint32_t domain = ASCSAN_CB_DOMAIN_RESOURCE; domain <= ASCSAN_CB_DOMAIN_ERROR; ++domain) {
-        if (HasEnabledDomainLocked(static_cast<AscsanCallbackDomain>(domain))) {
+    for (uint32_t domain = ACLSAN_CB_DOMAIN_RESOURCE; domain <= ACLSAN_CB_DOMAIN_ERROR; ++domain) {
+        if (HasEnabledDomainLocked(static_cast<AclsanCallbackDomain>(domain))) {
             plan.callbackDomainMask |= (1u << domain);
         }
     }
 
-    if (HasEnabledCallbackLocked(ASCSAN_CB_DOMAIN_RESOURCE, ASCSAN_CBID_RESOURCE_MEMORY_ALLOC)) {
+    if (HasEnabledCallbackLocked(ACLSAN_CB_DOMAIN_RESOURCE, ACLSAN_CBID_RESOURCE_MEMORY_ALLOC)) {
         AddRuleAction(
-            plan, ASCSAN_RT_API_ACLRT_MALLOC,
-            ASCSAN_HOOK_RECORD_POST | ASCSAN_HOOK_TRACK_RESOURCE | ASCSAN_HOOK_DISPATCH_CALLBACK);
+            plan, ACLSAN_RT_API_ACLRT_MALLOC,
+            ACLSAN_HOOK_RECORD_POST | ACLSAN_HOOK_TRACK_RESOURCE | ACLSAN_HOOK_DISPATCH_CALLBACK);
         AddRuleAction(
-            plan, ASCSAN_RT_API_ACLRT_MALLOC_HOST,
-            ASCSAN_HOOK_RECORD_POST | ASCSAN_HOOK_TRACK_RESOURCE | ASCSAN_HOOK_DISPATCH_CALLBACK);
+            plan, ACLSAN_RT_API_ACLRT_MALLOC_HOST,
+            ACLSAN_HOOK_RECORD_POST | ACLSAN_HOOK_TRACK_RESOURCE | ACLSAN_HOOK_DISPATCH_CALLBACK);
     }
-    if (HasEnabledCallbackLocked(ASCSAN_CB_DOMAIN_RESOURCE, ASCSAN_CBID_RESOURCE_MEMORY_FREE)) {
+    if (HasEnabledCallbackLocked(ACLSAN_CB_DOMAIN_RESOURCE, ACLSAN_CBID_RESOURCE_MEMORY_FREE)) {
         AddRuleAction(
-            plan, ASCSAN_RT_API_ACLRT_FREE,
-            ASCSAN_HOOK_RECORD_PRE | ASCSAN_HOOK_TRACK_RESOURCE | ASCSAN_HOOK_DISPATCH_CALLBACK);
+            plan, ACLSAN_RT_API_ACLRT_FREE,
+            ACLSAN_HOOK_RECORD_PRE | ACLSAN_HOOK_TRACK_RESOURCE | ACLSAN_HOOK_DISPATCH_CALLBACK);
         AddRuleAction(
-            plan, ASCSAN_RT_API_ACLRT_FREE_HOST,
-            ASCSAN_HOOK_RECORD_PRE | ASCSAN_HOOK_TRACK_RESOURCE | ASCSAN_HOOK_DISPATCH_CALLBACK);
+            plan, ACLSAN_RT_API_ACLRT_FREE_HOST,
+            ACLSAN_HOOK_RECORD_PRE | ACLSAN_HOOK_TRACK_RESOURCE | ACLSAN_HOOK_DISPATCH_CALLBACK);
     }
-    if (HasEnabledDomainLocked(ASCSAN_CB_DOMAIN_MEMORY) ||
-        HasEnabledCallbackLocked(ASCSAN_CB_DOMAIN_MEMORY, ASCSAN_CBID_MEMORY_MEMCPY_BEGIN) ||
-        HasEnabledCallbackLocked(ASCSAN_CB_DOMAIN_MEMORY, ASCSAN_CBID_MEMORY_MEMCPY_END)) {
+    if (HasEnabledDomainLocked(ACLSAN_CB_DOMAIN_MEMORY) ||
+        HasEnabledCallbackLocked(ACLSAN_CB_DOMAIN_MEMORY, ACLSAN_CBID_MEMORY_MEMCPY_BEGIN) ||
+        HasEnabledCallbackLocked(ACLSAN_CB_DOMAIN_MEMORY, ACLSAN_CBID_MEMORY_MEMCPY_END)) {
         AddRuleAction(
-            plan, ASCSAN_RT_API_ACLRT_MEMCPY,
-            ASCSAN_HOOK_RECORD_PRE | ASCSAN_HOOK_RECORD_POST | ASCSAN_HOOK_DISPATCH_CALLBACK);
+            plan, ACLSAN_RT_API_ACLRT_MEMCPY,
+            ACLSAN_HOOK_RECORD_PRE | ACLSAN_HOOK_RECORD_POST | ACLSAN_HOOK_DISPATCH_CALLBACK);
     }
-    if (HasEnabledCallbackLocked(ASCSAN_CB_DOMAIN_MEMORY, ASCSAN_CBID_MEMORY_MEMSET_BEGIN) ||
-        HasEnabledCallbackLocked(ASCSAN_CB_DOMAIN_MEMORY, ASCSAN_CBID_MEMORY_MEMSET_END)) {
+    if (HasEnabledCallbackLocked(ACLSAN_CB_DOMAIN_MEMORY, ACLSAN_CBID_MEMORY_MEMSET_BEGIN) ||
+        HasEnabledCallbackLocked(ACLSAN_CB_DOMAIN_MEMORY, ACLSAN_CBID_MEMORY_MEMSET_END)) {
         AddRuleAction(
-            plan, ASCSAN_RT_API_ACLRT_MEMSET,
-            ASCSAN_HOOK_RECORD_PRE | ASCSAN_HOOK_RECORD_POST | ASCSAN_HOOK_DISPATCH_CALLBACK);
+            plan, ACLSAN_RT_API_ACLRT_MEMSET,
+            ACLSAN_HOOK_RECORD_PRE | ACLSAN_HOOK_RECORD_POST | ACLSAN_HOOK_DISPATCH_CALLBACK);
     }
-    if (HasEnabledDomainLocked(ASCSAN_CB_DOMAIN_BINARY)) {
+    if (HasEnabledDomainLocked(ACLSAN_CB_DOMAIN_BINARY)) {
         AddRuleAction(
-            plan, ASCSAN_RT_API_ACLRT_BINARY_LOAD_FROM_FILE,
-            ASCSAN_HOOK_RECORD_PRE | ASCSAN_HOOK_RECORD_POST | ASCSAN_HOOK_DISPATCH_CALLBACK);
+            plan, ACLSAN_RT_API_ACLRT_BINARY_LOAD_FROM_FILE,
+            ACLSAN_HOOK_RECORD_PRE | ACLSAN_HOOK_RECORD_POST | ACLSAN_HOOK_DISPATCH_CALLBACK);
     }
-    if (HasEnabledDomainLocked(ASCSAN_CB_DOMAIN_PATCH)) {
+    if (HasEnabledDomainLocked(ACLSAN_CB_DOMAIN_PATCH)) {
         AddRuleAction(
-            plan, ASCSAN_RT_API_ACLRT_BINARY_LOAD_FROM_FILE, ASCSAN_HOOK_PATCH_BINARY | ASCSAN_HOOK_DISPATCH_CALLBACK);
+            plan, ACLSAN_RT_API_ACLRT_BINARY_LOAD_FROM_FILE, ACLSAN_HOOK_PATCH_BINARY | ACLSAN_HOOK_DISPATCH_CALLBACK);
     }
-    if (HasEnabledDomainLocked(ASCSAN_CB_DOMAIN_LAUNCH)) {
+    if (HasEnabledDomainLocked(ACLSAN_CB_DOMAIN_LAUNCH)) {
         AddRuleAction(
-            plan, ASCSAN_RT_API_ACLRT_LAUNCH_KERNEL_WITH_ARGS_ARRAY,
-            ASCSAN_HOOK_RECORD_PRE | ASCSAN_HOOK_RECORD_POST | ASCSAN_HOOK_DISPATCH_CALLBACK);
+            plan, ACLSAN_RT_API_ACLRT_LAUNCH_KERNEL_WITH_ARGS_ARRAY,
+            ACLSAN_HOOK_RECORD_PRE | ACLSAN_HOOK_RECORD_POST | ACLSAN_HOOK_DISPATCH_CALLBACK);
     }
-    if (HasEnabledDomainLocked(ASCSAN_CB_DOMAIN_SYNCHRONIZE)) {
+    if (HasEnabledDomainLocked(ACLSAN_CB_DOMAIN_SYNCHRONIZE)) {
         AddRuleAction(
-            plan, ASCSAN_RT_API_ACLRT_SYNCHRONIZE_STREAM,
-            ASCSAN_HOOK_RECORD_POST | ASCSAN_HOOK_FLUSH_TRACE | ASCSAN_HOOK_DISPATCH_CALLBACK);
+            plan, ACLSAN_RT_API_ACLRT_SYNCHRONIZE_STREAM,
+            ACLSAN_HOOK_RECORD_POST | ACLSAN_HOOK_FLUSH_TRACE | ACLSAN_HOOK_DISPATCH_CALLBACK);
         AddRuleAction(
-            plan, ASCSAN_RT_API_ACLRT_SYNCHRONIZE_DEVICE,
-            ASCSAN_HOOK_RECORD_POST | ASCSAN_HOOK_FLUSH_TRACE | ASCSAN_HOOK_DISPATCH_CALLBACK);
+            plan, ACLSAN_RT_API_ACLRT_SYNCHRONIZE_DEVICE,
+            ACLSAN_HOOK_RECORD_POST | ACLSAN_HOOK_FLUSH_TRACE | ACLSAN_HOOK_DISPATCH_CALLBACK);
     }
 
-    if (HasEnabledCallbackLocked(ASCSAN_CB_DOMAIN_DEVICE_INSTRUCTION, ASCSAN_CBID_DEVICE_MEMORY_ACCESS)) {
-        plan.patchPipelineMask |= PipelineMask(ASCSAN_PATCH_PIPELINE_MTE2);
-        plan.patchPipelineMask |= PipelineMask(ASCSAN_PATCH_PIPELINE_MTE3);
-        plan.patchPipelineMask |= PipelineMask(ASCSAN_PATCH_PIPELINE_FIXPIPE);
+    if (HasEnabledCallbackLocked(ACLSAN_CB_DOMAIN_DEVICE_INSTRUCTION, ACLSAN_CBID_DEVICE_MEMORY_ACCESS)) {
+        plan.patchPipelineMask |= PipelineMask(ACLSAN_PATCH_PIPELINE_MTE2);
+        plan.patchPipelineMask |= PipelineMask(ACLSAN_PATCH_PIPELINE_MTE3);
+        plan.patchPipelineMask |= PipelineMask(ACLSAN_PATCH_PIPELINE_FIXPIPE);
     }
-    if (HasEnabledCallbackLocked(ASCSAN_CB_DOMAIN_DEVICE_INSTRUCTION, ASCSAN_CBID_DEVICE_SYNC)) {
-        plan.patchPipelineMask |= PipelineMask(ASCSAN_PATCH_PIPELINE_SET_WAIT_FLAG);
-        plan.patchPipelineMask |= PipelineMask(ASCSAN_PATCH_PIPELINE_GET_RLS_BUF);
+    if (HasEnabledCallbackLocked(ACLSAN_CB_DOMAIN_DEVICE_INSTRUCTION, ACLSAN_CBID_DEVICE_SYNC)) {
+        plan.patchPipelineMask |= PipelineMask(ACLSAN_PATCH_PIPELINE_SET_WAIT_FLAG);
+        plan.patchPipelineMask |= PipelineMask(ACLSAN_PATCH_PIPELINE_GET_RLS_BUF);
     }
     if (plan.patchPipelineMask != 0) {
-        AddRuleAction(plan, ASCSAN_RT_API_ACLRT_BINARY_LOAD_FROM_FILE, ASCSAN_HOOK_PATCH_BINARY);
+        AddRuleAction(plan, ACLSAN_RT_API_ACLRT_BINARY_LOAD_FROM_FILE, ACLSAN_HOOK_PATCH_BINARY);
         AddRuleAction(
-            plan, ASCSAN_RT_API_ACLRT_SYNCHRONIZE_STREAM, ASCSAN_HOOK_FLUSH_TRACE | ASCSAN_HOOK_DISPATCH_CALLBACK);
+            plan, ACLSAN_RT_API_ACLRT_SYNCHRONIZE_STREAM, ACLSAN_HOOK_FLUSH_TRACE | ACLSAN_HOOK_DISPATCH_CALLBACK);
     }
     return plan;
 }
@@ -164,31 +164,31 @@ uint32_t ApiCore::ActivePatchPipelineMask() const
     return activeHookPlan_.patchPipelineMask;
 }
 
-AscsanStatus ApiCore::ConfigureRuntimeHook(const AscsanRuntimeHookPlan* plan)
+AclsanStatus ApiCore::ConfigureRuntimeHook(const AclsanRuntimeHookPlan* plan)
 {
     if (plan == nullptr) {
-        return ASCSAN_STATUS_ERROR_INVALID_VALUE;
+        return ACLSAN_STATUS_ERROR_INVALID_VALUE;
     }
     std::lock_guard<std::recursive_mutex> lock(mutex_);
-    if (plan->version != ASCSAN_API_VERSION || plan->size != sizeof(AscsanRuntimeHookPlan)) {
-        return ASCSAN_STATUS_ERROR_VERSION_MISMATCH;
+    if (plan->version != ACLSAN_API_VERSION || plan->size != sizeof(AclsanRuntimeHookPlan)) {
+        return ACLSAN_STATUS_ERROR_VERSION_MISMATCH;
     }
     activeHookPlan_ = *plan;
-    return ASCSAN_STATUS_SUCCESS;
+    return ACLSAN_STATUS_SUCCESS;
 }
 
-AscsanStatus ApiCore::GetRuntimeHookState(AscsanRuntimeHookState* state) const
+AclsanStatus ApiCore::GetRuntimeHookState(AclsanRuntimeHookState* state) const
 {
     if (state == nullptr) {
-        return ASCSAN_STATUS_ERROR_INVALID_VALUE;
+        return ACLSAN_STATUS_ERROR_INVALID_VALUE;
     }
     std::lock_guard<std::recursive_mutex> lock(mutex_);
     std::memset(state, 0, sizeof(*state));
-    state->version = ASCSAN_API_VERSION;
+    state->version = ACLSAN_API_VERSION;
     state->size = sizeof(*state);
     state->generation = activeHookPlan_.generation;
     state->activePlan = activeHookPlan_;
-    return ASCSAN_STATUS_SUCCESS;
+    return ACLSAN_STATUS_SUCCESS;
 }
 
-} // namespace ascsan
+} // namespace aclsan

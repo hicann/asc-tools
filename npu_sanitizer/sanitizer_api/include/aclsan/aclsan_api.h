@@ -8,12 +8,29 @@
  * See LICENSE in the root of the software repository for the full text of the License.
  */
 
-#include "api_core.h"
+#ifndef ACLSAN_API_H
+#define ACLSAN_API_H
 
-namespace aclsan {
+#include "aclsan/aclsan_callback.h"
+#include "aclsan/aclsan_memory.h"
+#include "aclsan/aclsan_patch.h"
+#include "aclsan/aclsan_symbolize.h"
 
-// P0 backend stubs are intentionally thin. They make the backend boundary
-// explicit without requiring runtime table replacement, DBI instrumentation,
-// GM trace buffers, or llvm-symbolizer integration.
+#ifdef __cplusplus
+extern "C" {
+#endif
 
-} // namespace aclsan
+typedef struct AclsanInitParams {
+    uint32_t version;
+    uint32_t size;
+    const AclsanLaunchConfig* launchConfig;
+} AclsanInitParams;
+
+AclsanStatus aclsanInitialize(const AclsanInitParams* params);
+AclsanStatus aclsanFinalize(void);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif
