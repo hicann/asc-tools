@@ -1,0 +1,364 @@
+/**
+ * Copyright (c) 2026 Huawei Technologies Co., Ltd.
+ * This program is free software, you can redistribute it and/or modify it under the terms and conditions of
+ * CANN Open Software License Agreement Version 2.0 (the "License").
+ * Please refer to the License for details. You may not use this file except in compliance with the License.
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
+ * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
+ * See LICENSE in the root of the software repository for the full text of the License.
+ */
+#include "hardware_info_collector.h"
+
+#include <atomic>
+#include <chrono>
+#include <condition_variable>
+#include <cstdint>
+#include <cstdio>
+#include <filesystem>
+#include <memory>
+#include <mutex>
+#include <string>
+#include <string_view>
+#include <thread>
+#include <utility>
+#include <vector>
+
+#include <cstdlib>
+
+namespace {
+
+#define CHECK(expression)                                                                 \
+    do {                                                                                  \
+        if (!(expression)) {                                                              \
+            std::fprintf(stderr, "check failed at line %d: %s\n", __LINE__, #expression); \
+            return false;                                                                 \
+        }                                                                                 \
+    } while (false)
+
+using namespace std::chrono_literals;
+
+class TempDirectory {
+public:
+    TempDirectory()
+    {
+        std::string pathTemplate =
+            (std::filesystem::temp_directory_path() / "npu-compute-collector-test-XXXXXX").string();
+        pathTemplate.push_back('\0');
+        char* created = ::mkdtemp(pathTemplate.data());
+        if (created != nullptr) {
+            path_ = created;
+        }
+    }
+
+    ~TempDirectory()
+    {
+        if (!path_.empty()) {
+            std::error_code error;
+            std::filesystem::remove_all(path_, error);
+        }
+    }
+
+    const std::filesystem::path& Path() const { return path_; }
+
+private:
+    std::filesystem::path path_;
+};
+
+struct SharedState {
+    std::atomic<int> hostCalls{0};
+    std::atomic<int> deviceCountCalls{0};
+    std::atomic<int> publishCalls{0};
+    std::atomic<bool> hostSuccess{true};
+    std::atomic<bool> publisherSuccess{true};
+    std::mutex mutex;
+    std::condition_variable condition;
+    bool blockHost = false;
+    bool hostStarted = false;
+    bool releaseHost = false;
+    std::string publishedJsonl;
+    std::vector<std::string> diagnostics;
+};
+
+class FakeHardwareDeviceApi final : public npu_compute::HardwareDeviceApi {
+public:
+    explicit FakeHardwareDeviceApi(std::shared_ptr<SharedState> state) : state_(std::move(state)) {}
+
+    bool GetDeviceCount(std::int32_t* value) override
+    {
+        ++state_->deviceCountCalls;
+        *value = 1;
+        return true;
+    }
+
+    bool GetSocName(std::string* value) override
+    {
+        *value = "Ascend950PR_9599";
+        return true;
+    }
+
+    bool GetDeviceAttribute(std::int32_t, std::int32_t attribute, std::int64_t* value) override
+    {
+        if (attribute == npu_compute::kDeviceAttributeNpuArch) {
+            *value = 3510;
+        } else {
+            *value = 1;
+        }
+        return true;
+    }
+
+    bool GetPlatformValue(std::int32_t type, std::string* value) override
+    {
+        *value = type == npu_compute::kPlatformMemorySize ? "16777216" : "1000";
+        return true;
+    }
+
+    bool GetControlCpuCount(std::int32_t, std::uint32_t* value) override
+    {
+        *value = 1;
+        return true;
+    }
+
+    bool GetAiCpuFrequency(std::int32_t, std::uint32_t* value) override
+    {
+        *value = 1500;
+        return true;
+    }
+
+    bool GetChipVersion(std::int32_t, std::string* value) override
+    {
+        *value = "V100";
+        return true;
+    }
+
+    bool GetHbmUsage(std::int32_t, std::uint64_t* freeBytes, std::uint64_t* totalBytes) override
+    {
+        *freeBytes = 8U * 1024U * 1024U;
+        *totalBytes = 16U * 1024U * 1024U;
+        return true;
+    }
+
+    bool GetHbmFrequency(std::int32_t, std::uint32_t* value) override
+    {
+        *value = 3200;
+        return true;
+    }
+
+private:
+    std::shared_ptr<SharedState> state_;
+};
+
+npu_compute::HardwareInfoDependencies MakeDependencies(const std::shared_ptr<SharedState>& state)
+{
+    npu_compute::HardwareInfoDependencies dependencies;
+    dependencies.collectHostInfo =
+        [state](const std::filesystem::path&, npu_compute::HostInfo* value, npu_compute::DiagnosticSink*) {
+            ++state->hostCalls;
+            {
+                std::unique_lock<std::mutex> lock(state->mutex);
+                state->hostStarted = true;
+                state->condition.notify_all();
+                state->condition.wait(lock, [state] { return !state->blockHost || state->releaseHost; });
+            }
+            if (!state->hostSuccess.load()) {
+                return false;
+            }
+            value->cpuPhysicalCount = 2;
+            value->cpuLogicalCount = 16;
+            value->memoryTotalSizeMb = 1024;
+            value->diskTotalSizeGb = 100;
+            return true;
+        };
+    dependencies.deviceApi = std::make_shared<FakeHardwareDeviceApi>(state);
+    dependencies.publish = [state](const std::filesystem::path&, std::string_view jsonl, std::string* error) {
+        ++state->publishCalls;
+        if (!state->publisherSuccess.load()) {
+            if (error != nullptr) {
+                *error = "injected publisher failure";
+            }
+            return npu_compute::PublishResult::Failed;
+        }
+        std::lock_guard<std::mutex> lock(state->mutex);
+        state->publishedJsonl = std::string(jsonl);
+        return npu_compute::PublishResult::Published;
+    };
+    dependencies.diagnostics = [state](std::string_view message) {
+        std::lock_guard<std::mutex> lock(state->mutex);
+        state->diagnostics.emplace_back(message);
+    };
+    return dependencies;
+}
+
+bool TestWaitsForFirstNotificationAndCollectsOnce()
+{
+    TempDirectory temporary;
+    CHECK(!temporary.Path().empty());
+    auto state = std::make_shared<SharedState>();
+    npu_compute::HardwareInfoCollector collector(MakeDependencies(state));
+    std::string error;
+
+    CHECK(collector.Initialize(temporary.Path(), &error));
+    CHECK(error.empty());
+    CHECK(collector.State() == npu_compute::HardwareCollectionState::WaitingRuntime);
+    std::this_thread::sleep_for(20ms);
+    CHECK(state->hostCalls.load() == 0);
+    CHECK(state->deviceCountCalls.load() == 0);
+    CHECK(state->publishCalls.load() == 0);
+
+    collector.NotifyRuntimeReady();
+    collector.Stop();
+    CHECK(collector.State() == npu_compute::HardwareCollectionState::Completed);
+    CHECK(state->hostCalls.load() == 1);
+    CHECK(state->deviceCountCalls.load() == 1);
+    CHECK(state->publishCalls.load() == 1);
+    {
+        std::lock_guard<std::mutex> lock(state->mutex);
+        CHECK(state->publishedJsonl.find("\"category\":\"Host Info\"") != std::string::npos);
+        CHECK(state->publishedJsonl.find("\"category\":\"Device Info\"") != std::string::npos);
+    }
+    collector.Stop();
+    return true;
+}
+
+bool TestConcurrentNotificationsStillCollectOnce()
+{
+    TempDirectory temporary;
+    CHECK(!temporary.Path().empty());
+    auto state = std::make_shared<SharedState>();
+    npu_compute::HardwareInfoCollector collector(MakeDependencies(state));
+    CHECK(collector.Initialize(temporary.Path(), nullptr));
+
+    std::vector<std::thread> notifiers;
+    for (int threadIndex = 0; threadIndex < 10; ++threadIndex) {
+        notifiers.emplace_back([&collector] {
+            for (int notification = 0; notification < 10; ++notification) {
+                collector.NotifyRuntimeReady();
+            }
+        });
+    }
+    for (auto& notifier : notifiers) {
+        notifier.join();
+    }
+    collector.Stop();
+
+    CHECK(collector.State() == npu_compute::HardwareCollectionState::Completed);
+    CHECK(state->hostCalls.load() == 1);
+    CHECK(state->deviceCountCalls.load() == 1);
+    CHECK(state->publishCalls.load() == 1);
+    return true;
+}
+
+bool TestStopWaitsForActiveCollection()
+{
+    TempDirectory temporary;
+    CHECK(!temporary.Path().empty());
+    auto state = std::make_shared<SharedState>();
+    state->blockHost = true;
+    npu_compute::HardwareInfoCollector collector(MakeDependencies(state));
+    CHECK(collector.Initialize(temporary.Path(), nullptr));
+    collector.NotifyRuntimeReady();
+
+    bool hostStarted = false;
+    {
+        std::unique_lock<std::mutex> lock(state->mutex);
+        hostStarted = state->condition.wait_for(lock, 10s, [state] { return state->hostStarted; });
+        if (!hostStarted) {
+            state->releaseHost = true;
+        }
+    }
+    if (!hostStarted) {
+        std::fprintf(
+            stderr, "collector state at timeout: %d, host calls: %d\n", static_cast<int>(collector.State()),
+            state->hostCalls.load());
+        {
+            std::lock_guard<std::mutex> lock(state->mutex);
+            for (const std::string& diagnostic : state->diagnostics) {
+                std::fprintf(stderr, "collector diagnostic: %s\n", diagnostic.c_str());
+            }
+        }
+        state->condition.notify_all();
+        collector.Stop();
+    }
+    CHECK(hostStarted);
+
+    std::atomic<bool> stopReturned{false};
+    std::thread stopper([&collector, &stopReturned] {
+        collector.Stop();
+        stopReturned = true;
+    });
+    std::this_thread::sleep_for(20ms);
+    const bool returnedBeforeRelease = stopReturned.load();
+    {
+        std::lock_guard<std::mutex> lock(state->mutex);
+        state->releaseHost = true;
+    }
+    state->condition.notify_all();
+    stopper.join();
+
+    CHECK(!returnedBeforeRelease);
+    CHECK(stopReturned.load());
+    CHECK(collector.State() == npu_compute::HardwareCollectionState::Completed);
+    return true;
+}
+
+bool TestStopWithoutNotificationDoesNotCollect()
+{
+    TempDirectory temporary;
+    CHECK(!temporary.Path().empty());
+    auto state = std::make_shared<SharedState>();
+    npu_compute::HardwareInfoCollector collector(MakeDependencies(state));
+    CHECK(collector.Initialize(temporary.Path(), nullptr));
+    collector.Stop();
+    collector.NotifyRuntimeReady();
+    collector.Stop();
+
+    CHECK(collector.State() == npu_compute::HardwareCollectionState::NoRuntimeReady);
+    CHECK(state->hostCalls.load() == 0);
+    CHECK(state->deviceCountCalls.load() == 0);
+    CHECK(state->publishCalls.load() == 0);
+    CHECK(std::filesystem::is_empty(temporary.Path()));
+    return true;
+}
+
+bool TestCollectionAndPublishFailuresSetFailedState()
+{
+    TempDirectory temporary;
+    CHECK(!temporary.Path().empty());
+    auto hostFailure = std::make_shared<SharedState>();
+    hostFailure->hostSuccess = false;
+    npu_compute::HardwareInfoCollector hostCollector(MakeDependencies(hostFailure));
+    CHECK(hostCollector.Initialize(temporary.Path(), nullptr));
+    hostCollector.NotifyRuntimeReady();
+    hostCollector.Stop();
+    CHECK(hostCollector.State() == npu_compute::HardwareCollectionState::Failed);
+    CHECK(hostFailure->hostCalls.load() == 1);
+    CHECK(hostFailure->deviceCountCalls.load() == 0);
+    CHECK(hostFailure->publishCalls.load() == 0);
+
+    auto publishFailure = std::make_shared<SharedState>();
+    publishFailure->publisherSuccess = false;
+    npu_compute::HardwareInfoCollector publishCollector(MakeDependencies(publishFailure));
+    CHECK(publishCollector.Initialize(temporary.Path(), nullptr));
+    publishCollector.NotifyRuntimeReady();
+    publishCollector.Stop();
+    CHECK(publishCollector.State() == npu_compute::HardwareCollectionState::Failed);
+    CHECK(publishFailure->hostCalls.load() == 1);
+    CHECK(publishFailure->deviceCountCalls.load() == 1);
+    CHECK(publishFailure->publishCalls.load() == 1);
+    {
+        std::lock_guard<std::mutex> lock(publishFailure->mutex);
+        CHECK(!publishFailure->diagnostics.empty());
+    }
+    return true;
+}
+
+} // namespace
+
+int main()
+{
+    if (!TestWaitsForFirstNotificationAndCollectsOnce() || !TestConcurrentNotificationsStillCollectOnce() ||
+        !TestStopWaitsForActiveCollection() || !TestStopWithoutNotificationDoesNotCollect() ||
+        !TestCollectionAndPublishFailuresSetFailedState()) {
+        return 1;
+    }
+    return 0;
+}

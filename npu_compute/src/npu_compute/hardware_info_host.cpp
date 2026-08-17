@@ -1,0 +1,227 @@
+/**
+ * Copyright (c) 2026 Huawei Technologies Co., Ltd.
+ * This program is free software, you can redistribute it and/or modify it under the terms and conditions of
+ * CANN Open Software License Agreement Version 2.0 (the "License").
+ * Please refer to the License for details. You may not use this file except in compliance with the License.
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
+ * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
+ * See LICENSE in the root of the software repository for the full text of the License.
+ */
+#include "hardware_info_host.h"
+
+#include <charconv>
+#include <cstdint>
+#include <fstream>
+#include <limits>
+#include <set>
+#include <string>
+#include <string_view>
+#include <vector>
+
+#include <cerrno>
+#include <cstring>
+#include <sys/statvfs.h>
+#include <sys/sysinfo.h>
+#include <unistd.h>
+
+namespace npu_compute {
+namespace {
+
+constexpr std::uint64_t kBytesPerMb = 1024ULL * 1024ULL;
+constexpr std::uint64_t kBytesPerGb = kBytesPerMb * 1024ULL;
+constexpr std::uint32_t kMaximumCpuId = 1024U * 1024U;
+
+void Diagnose(DiagnosticSink* diagnostics, const std::string& message)
+{
+    if (diagnostics != nullptr && *diagnostics) {
+        (*diagnostics)(message);
+    }
+}
+
+std::string_view Trim(std::string_view value)
+{
+    constexpr std::string_view whitespace = " \t\r\n";
+    const std::size_t first = value.find_first_not_of(whitespace);
+    if (first == std::string_view::npos) {
+        return {};
+    }
+    const std::size_t last = value.find_last_not_of(whitespace);
+    return value.substr(first, last - first + 1);
+}
+
+template <typename Integer>
+bool ParseInteger(std::string_view text, Integer* value)
+{
+    const std::string_view trimmed = Trim(text);
+    if (trimmed.empty()) {
+        return false;
+    }
+    const auto parsed = std::from_chars(trimmed.data(), trimmed.data() + trimmed.size(), *value);
+    return parsed.ec == std::errc{} && parsed.ptr == trimmed.data() + trimmed.size();
+}
+
+bool ReadFile(const std::filesystem::path& path, std::string* content)
+{
+    std::ifstream input(path);
+    if (!input.is_open()) {
+        return false;
+    }
+    content->assign(std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>());
+    return !input.bad();
+}
+
+bool ParseOnlineCpuList(std::string_view text, std::vector<std::uint32_t>* cpuIds)
+{
+    cpuIds->clear();
+    std::set<std::uint32_t> uniqueIds;
+    text = Trim(text);
+    if (text.empty()) {
+        return false;
+    }
+
+    std::size_t offset = 0;
+    while (offset < text.size()) {
+        const std::size_t separator = text.find(',', offset);
+        const std::size_t tokenLength = separator == std::string_view::npos ? text.size() - offset : separator - offset;
+        const std::string_view token = Trim(text.substr(offset, tokenLength));
+        if (token.empty()) {
+            return false;
+        }
+
+        const std::size_t rangeSeparator = token.find('-');
+        std::uint32_t first = 0;
+        std::uint32_t last = 0;
+        if (rangeSeparator == std::string_view::npos) {
+            if (!ParseInteger(token, &first)) {
+                return false;
+            }
+            last = first;
+        } else {
+            if (token.find('-', rangeSeparator + 1) != std::string_view::npos ||
+                !ParseInteger(token.substr(0, rangeSeparator), &first) ||
+                !ParseInteger(token.substr(rangeSeparator + 1), &last) || first > last) {
+                return false;
+            }
+        }
+        if (last > kMaximumCpuId) {
+            return false;
+        }
+        for (std::uint32_t cpuId = first; cpuId <= last; ++cpuId) {
+            uniqueIds.insert(cpuId);
+        }
+
+        if (separator == std::string_view::npos) {
+            break;
+        }
+        offset = separator + 1;
+    }
+
+    cpuIds->assign(uniqueIds.begin(), uniqueIds.end());
+    return !cpuIds->empty();
+}
+
+void CollectPhysicalCpuCount(const HostInfoCollectionOptions& options, HostInfo* result, DiagnosticSink* diagnostics)
+{
+    const std::filesystem::path onlinePath = options.cpuTopologyRoot / "online";
+    std::string online;
+    if (!ReadFile(onlinePath, &online)) {
+        Diagnose(diagnostics, "read CPU online list failed: " + onlinePath.string());
+        return;
+    }
+
+    std::vector<std::uint32_t> cpuIds;
+    if (!ParseOnlineCpuList(online, &cpuIds)) {
+        Diagnose(diagnostics, "parse CPU online list failed: " + onlinePath.string());
+        return;
+    }
+
+    std::set<std::int64_t> packageIds;
+    for (const std::uint32_t cpuId : cpuIds) {
+        const std::filesystem::path packagePath =
+            options.cpuTopologyRoot / ("cpu" + std::to_string(cpuId)) / "topology/physical_package_id";
+        std::string packageText;
+        if (!ReadFile(packagePath, &packageText)) {
+            Diagnose(diagnostics, "read CPU package ID failed: " + packagePath.string());
+            continue;
+        }
+        std::int64_t packageId = -1;
+        if (!ParseInteger(packageText, &packageId) || packageId < 0) {
+            Diagnose(diagnostics, "parse CPU package ID failed: " + packagePath.string());
+            continue;
+        }
+        packageIds.insert(packageId);
+    }
+
+    if (packageIds.size() > std::numeric_limits<std::uint32_t>::max()) {
+        Diagnose(diagnostics, "CPU package count exceeds supported range");
+        return;
+    }
+    result->cpuPhysicalCount = static_cast<std::uint32_t>(packageIds.size());
+}
+
+void CollectLogicalCpuCount(HostInfo* result, DiagnosticSink* diagnostics)
+{
+    const long count = ::sysconf(_SC_NPROCESSORS_CONF);
+    if (count <= 0 || static_cast<unsigned long>(count) > std::numeric_limits<std::uint32_t>::max()) {
+        Diagnose(diagnostics, "sysconf(_SC_NPROCESSORS_CONF) failed");
+        return;
+    }
+    result->cpuLogicalCount = static_cast<std::uint32_t>(count);
+}
+
+void CollectMemoryTotal(HostInfo* result, DiagnosticSink* diagnostics)
+{
+    struct sysinfo information {};
+    if (::sysinfo(&information) != 0) {
+        Diagnose(diagnostics, "sysinfo failed: " + std::string(std::strerror(errno)));
+        return;
+    }
+
+    const std::uint64_t totalRam = information.totalram;
+    const std::uint64_t memoryUnit = information.mem_unit;
+    if (memoryUnit != 0 && totalRam > std::numeric_limits<std::uint64_t>::max() / memoryUnit) {
+        Diagnose(diagnostics, "sysinfo total memory exceeds supported range");
+        return;
+    }
+    const std::uint64_t bytes = totalRam * memoryUnit;
+    result->memoryTotalSizeMb = static_cast<double>(bytes) / static_cast<double>(kBytesPerMb);
+}
+
+void CollectDiskTotal(const std::filesystem::path& outputDirectory, HostInfo* result, DiagnosticSink* diagnostics)
+{
+    struct statvfs information {};
+    if (::statvfs(outputDirectory.c_str(), &information) != 0) {
+        Diagnose(diagnostics, "statvfs failed for " + outputDirectory.string() + ": " + std::strerror(errno));
+        return;
+    }
+
+    const std::uint64_t blocks = information.f_blocks;
+    const std::uint64_t fragmentSize = information.f_frsize;
+    if (fragmentSize != 0 && blocks > std::numeric_limits<std::uint64_t>::max() / fragmentSize) {
+        Diagnose(diagnostics, "statvfs total size exceeds supported range");
+        return;
+    }
+    const std::uint64_t bytes = blocks * fragmentSize;
+    result->diskTotalSizeGb = static_cast<double>(bytes) / static_cast<double>(kBytesPerGb);
+}
+
+} // namespace
+
+bool CollectHostInfo(
+    const std::filesystem::path& outputDirectory, HostInfo* result, DiagnosticSink* diagnostics,
+    const HostInfoCollectionOptions& options)
+{
+    if (result == nullptr) {
+        Diagnose(diagnostics, "HostInfo result is null");
+        return false;
+    }
+
+    *result = {};
+    CollectPhysicalCpuCount(options, result, diagnostics);
+    CollectLogicalCpuCount(result, diagnostics);
+    CollectMemoryTotal(result, diagnostics);
+    CollectDiskTotal(outputDirectory, result, diagnostics);
+    return true;
+}
+
+} // namespace npu_compute
