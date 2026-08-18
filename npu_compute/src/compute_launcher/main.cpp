@@ -7,11 +7,14 @@
  * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
  * See LICENSE in the root of the software repository for the full text of the License.
  */
-#include "config.h"
-#include "launcher.h"
-
 #include <cstdio>
 #include <string>
+#include <vector>
+
+#include "config.h"
+#include "import_output_directory.h"
+#include "imported_profile_results.h"
+#include "launcher.h"
 
 int main(int argc, char** argv)
 {
@@ -32,15 +35,28 @@ int main(int argc, char** argv)
         return 0;
     }
 
-    if (config.import_path.has_value() || config.export_path.has_value()) {
-        std::fprintf(
-            stderr, "npu-compute: repo import/export is not available in this integration "
-                    "phase\n");
-        return 4;
+    if (config.import_path.has_value()) {
+        std::vector<npu_compute::compute_launcher::ImportedProfileEntry> results;
+        if (!npu_compute::compute_launcher::ReadImportedProfileResults(*config.import_path, &results, &error)) {
+            std::fprintf(stderr, "npu-compute: %s\n", error.c_str());
+            return 4;
+        }
+        npu_compute::compute_launcher::ImportOutputDirectory outputDirectory;
+        if (!npu_compute::compute_launcher::ImportOutputDirectory::Create(
+                *config.import_path, config.export_path, &outputDirectory, &error) ||
+            !npu_compute::compute_launcher::UnpackImportedProfileResults(
+                results, outputDirectory.TemporaryPath(), &error) ||
+            !outputDirectory.Publish(&error)) {
+            std::fprintf(stderr, "npu-compute: %s\n", error.c_str());
+            return 4;
+        }
+        std::fprintf(stderr, "npu-compute: unpacked=%s\n", outputDirectory.FinalPath().c_str());
+        return 0;
     }
 
     std::string staging_directory;
-    int result = npu_compute::compute_launcher::LaunchTarget(config, &staging_directory, &error);
+    std::string report_path;
+    int result = npu_compute::compute_launcher::LaunchTarget(config, &staging_directory, &report_path, &error);
     if (!staging_directory.empty()) {
         std::fprintf(stderr, "npu-compute: staging=%s\n", staging_directory.c_str());
     }
@@ -49,6 +65,9 @@ int main(int argc, char** argv)
             std::fprintf(stderr, "npu-compute: %s\n", error.c_str());
         }
         return result;
+    }
+    if (!report_path.empty()) {
+        std::fprintf(stderr, "npu-compute: report=%s\n", report_path.c_str());
     }
     return 0;
 }

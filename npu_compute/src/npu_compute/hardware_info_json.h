@@ -7,7 +7,8 @@
  * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
  * See LICENSE in the root of the software repository for the full text of the License.
  */
-#pragma once
+#ifndef NPU_COMPUTE_SRC_NPU_COMPUTE_HARDWARE_INFO_JSON_H_
+#define NPU_COMPUTE_SRC_NPU_COMPUTE_HARDWARE_INFO_JSON_H_
 
 #include "hardware_info_types.h"
 
@@ -18,3 +19,5 @@ namespace npu_compute {
 bool SerializeHardwareInfoJsonl(const HardwareInfoSnapshot& snapshot, std::string* jsonl, std::string* error);
 
 } // namespace npu_compute
+
+#endif // NPU_COMPUTE_SRC_NPU_COMPUTE_HARDWARE_INFO_JSON_H_

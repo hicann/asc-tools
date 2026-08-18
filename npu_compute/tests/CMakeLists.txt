@@ -15,6 +15,63 @@ set(NPU_COMPUTE_ACLPTI_TEST_BACKENDS
 
 find_package(Threads REQUIRED)
 
+add_executable(npu_compute_import_output_directory_test import_output_directory_test.cpp)
+target_link_libraries(npu_compute_import_output_directory_test PRIVATE npu_compute_launcher_core)
+add_test(NAME npu_compute.import_output_directory COMMAND npu_compute_import_output_directory_test)
+
+add_executable(npu_compute_rep_encoder_test
+  rep_encoder_test.cpp
+  rep_test_decoder.cpp
+)
+target_link_libraries(npu_compute_rep_encoder_test PRIVATE npu_compute_launcher_core)
+add_test(NAME npu_compute.rep_encoder COMMAND npu_compute_rep_encoder_test)
+
+add_executable(npu_compute_collection_file_validator_test collection_file_validator_test.cpp)
+target_link_libraries(npu_compute_collection_file_validator_test PRIVATE npu_compute_launcher_core)
+add_test(NAME npu_compute.collection_file_validator COMMAND npu_compute_collection_file_validator_test)
+
+add_executable(npu_compute_rep_directory_packer_test
+  rep_directory_packer_test.cpp
+  rep_test_decoder.cpp
+)
+target_link_libraries(npu_compute_rep_directory_packer_test PRIVATE npu_compute_launcher_core)
+add_test(NAME npu_compute.rep_directory_packer COMMAND npu_compute_rep_directory_packer_test)
+
+add_executable(npu_compute_report_name_test report_name_test.cpp)
+target_link_libraries(npu_compute_report_name_test PRIVATE npu_compute_launcher_core)
+add_test(NAME npu_compute.report_name COMMAND npu_compute_report_name_test)
+
+add_executable(npu_compute_rep_report_writer_test
+  rep_report_writer_test.cpp
+  rep_test_decoder.cpp
+)
+target_link_libraries(npu_compute_rep_report_writer_test PRIVATE npu_compute_launcher_core)
+add_test(NAME npu_compute.rep_report_writer COMMAND npu_compute_rep_report_writer_test)
+
+add_executable(npu_compute_cli_test cli_test.cpp)
+target_link_libraries(npu_compute_cli_test PRIVATE npu_compute_launcher_core)
+add_test(NAME npu_compute.cli COMMAND npu_compute_cli_test)
+
+add_executable(npu_compute_rep_decoder_test rep_decoder_test.cpp)
+target_link_libraries(npu_compute_rep_decoder_test PRIVATE npu_compute_launcher_core)
+add_test(NAME npu_compute.rep_decoder COMMAND npu_compute_rep_decoder_test)
+
+add_executable(npu_compute_imported_profile_results_test imported_profile_results_test.cpp)
+target_link_libraries(npu_compute_imported_profile_results_test PRIVATE npu_compute_launcher_core)
+add_test(NAME npu_compute.imported_profile_results
+  COMMAND npu_compute_imported_profile_results_test $<TARGET_FILE:npu_compute_cli>
+)
+
+add_executable(npu_compute_launcher_test launcher_test.cpp)
+target_link_libraries(npu_compute_launcher_test PRIVATE npu_compute_launcher_core)
+add_dependencies(npu_compute_launcher_test npu_compute)
+npu_compute_set_output(npu_compute_launcher_test)
+add_test(NAME npu_compute.launcher COMMAND npu_compute_launcher_test)
+
+add_executable(npu_compute_rep_fixture_app rep_fixture_app.cpp)
+add_dependencies(npu_compute_rep_fixture_app npu_compute_cli npu_compute)
+npu_compute_set_output(npu_compute_rep_fixture_app)
+
 add_executable(acl_pti_public_api_test public_api_test.cpp)
 target_link_libraries(acl_pti_public_api_test
   PRIVATE acl_pti ${NPU_COMPUTE_ACLPTI_TEST_BACKENDS}
@@ -336,6 +393,15 @@ if(NPU_COMPUTE_BUILD_REAL_HARDWARE_TESTS)
 endif()
 
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
+
+add_test(
+  NAME npu_compute.rep_packaging_integration
+  COMMAND ${CMAKE_COMMAND} -E env
+    "NPU_COMPUTE_TEST_CLI=$<TARGET_FILE:npu_compute_cli>"
+    "NPU_COMPUTE_REP_FIXTURE_APP=$<TARGET_FILE:npu_compute_rep_fixture_app>"
+    ${Python3_EXECUTABLE} -m pytest -q -p no:cacheprovider
+    ${CMAKE_CURRENT_SOURCE_DIR}/test_rep_packaging_integration.py
+)
 
 if(NPU_COMPUTE_BUILD_REAL_HARDWARE_TESTS)
   add_test(

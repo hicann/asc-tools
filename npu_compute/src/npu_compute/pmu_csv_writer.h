@@ -7,7 +7,8 @@
  * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
  * See LICENSE in the root of the software repository for the full text of the License.
  */
-#pragma once
+#ifndef NPU_COMPUTE_SRC_NPU_COMPUTE_PMU_CSV_WRITER_H_
+#define NPU_COMPUTE_SRC_NPU_COMPUTE_PMU_CSV_WRITER_H_
 
 #include "aclpti/aclpti_data.h"
 
@@ -30,3 +31,5 @@ public:
 };
 
 } // namespace npu_compute
+
+#endif // NPU_COMPUTE_SRC_NPU_COMPUTE_PMU_CSV_WRITER_H_

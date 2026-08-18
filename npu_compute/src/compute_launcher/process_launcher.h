@@ -7,7 +7,8 @@
  * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
  * See LICENSE in the root of the software repository for the full text of the License.
  */
-#pragma once
+#ifndef NPU_COMPUTE_SRC_COMPUTE_LAUNCHER_PROCESS_LAUNCHER_H_
+#define NPU_COMPUTE_SRC_COMPUTE_LAUNCHER_PROCESS_LAUNCHER_H_
 
 #include <string>
 #include <vector>
@@ -23,3 +24,5 @@ struct ProcessLaunchRequest {
 int LaunchProcessAndWait(const ProcessLaunchRequest& request, std::string* error);
 
 } // namespace npu_compute::compute_launcher
+
+#endif // NPU_COMPUTE_SRC_COMPUTE_LAUNCHER_PROCESS_LAUNCHER_H_

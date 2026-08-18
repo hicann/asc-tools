@@ -7,7 +7,8 @@
  * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
  * See LICENSE in the root of the software repository for the full text of the License.
  */
-#pragma once
+#ifndef NPU_COMPUTE_STUBS_RUNTIME_INCLUDE_ACL_ACL_RT_H_
+#define NPU_COMPUTE_STUBS_RUNTIME_INCLUDE_ACL_ACL_RT_H_
 
 #include_next "acl/acl_rt.h"
 
@@ -23,3 +24,5 @@ aclError aclrtApiInjectionGetFunc(const char* name, aclrtApiFunc* originFunc, ac
 #ifdef __cplusplus
 }
 #endif
+
+#endif // NPU_COMPUTE_STUBS_RUNTIME_INCLUDE_ACL_ACL_RT_H_

@@ -7,7 +7,8 @@
  * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
  * See LICENSE in the root of the software repository for the full text of the License.
  */
-#pragma once
+#ifndef NPU_COMPUTE_STUBS_PROF_API_INCLUDE_PROFILING_PROF_API_H_
+#define NPU_COMPUTE_STUBS_PROF_API_INCLUDE_PROFILING_PROF_API_H_
 
 #include "profiling/prof_common.h"
 
@@ -24,3 +25,5 @@ std::int32_t MsprofStop(std::uint32_t dataType, const void* data, std::uint32_t 
 #ifdef __cplusplus
 }
 #endif
+
+#endif // NPU_COMPUTE_STUBS_PROF_API_INCLUDE_PROFILING_PROF_API_H_

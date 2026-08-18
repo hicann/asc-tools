@@ -7,7 +7,8 @@
  * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
  * See LICENSE in the root of the software repository for the full text of the License.
  */
-#pragma once
+#ifndef NPU_COMPUTE_SRC_ACL_PTI_DATA_BOUNDED_QUEUE_H_
+#define NPU_COMPUTE_SRC_ACL_PTI_DATA_BOUNDED_QUEUE_H_
 
 #include <condition_variable>
 #include <cstddef>
@@ -76,3 +77,5 @@ private:
 };
 
 } // namespace npu_compute::aclpti::data::detail
+
+#endif // NPU_COMPUTE_SRC_ACL_PTI_DATA_BOUNDED_QUEUE_H_

@@ -7,7 +7,8 @@
  * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
  * See LICENSE in the root of the software repository for the full text of the License.
  */
-#pragma once
+#ifndef NPU_COMPUTE_STUBS_PROF_API_INCLUDE_PROFILING_PROF_COMMON_H_
+#define NPU_COMPUTE_STUBS_PROF_API_INCLUDE_PROFILING_PROF_COMMON_H_
 
 #include <cstddef>
 #include <cstdint>
@@ -86,3 +87,5 @@ struct MsprofRawData {
 };
 
 using MsprofRawDataCallback = std::int32_t (*)(MsprofRawData* rawData);
+
+#endif // NPU_COMPUTE_STUBS_PROF_API_INCLUDE_PROFILING_PROF_COMMON_H_

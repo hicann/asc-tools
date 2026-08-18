@@ -7,9 +7,12 @@
  * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
  * See LICENSE in the root of the software repository for the full text of the License.
  */
-#pragma once
+#ifndef NPU_COMPUTE_INCLUDE_NPU_COMPUTE_NPU_COMPUTE_H_
+#define NPU_COMPUTE_INCLUDE_NPU_COMPUTE_NPU_COMPUTE_H_
 
 #include "npu_compute/common.h"
 
 extern "C" NPU_COMPUTE_EXPORT int acltoolInitialize();
 extern "C" NPU_COMPUTE_EXPORT int acltoolShutdown();
+
+#endif // NPU_COMPUTE_INCLUDE_NPU_COMPUTE_NPU_COMPUTE_H_

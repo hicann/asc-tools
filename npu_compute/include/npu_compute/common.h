@@ -7,7 +7,8 @@
  * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
  * See LICENSE in the root of the software repository for the full text of the License.
  */
-#pragma once
+#ifndef NPU_COMPUTE_INCLUDE_NPU_COMPUTE_COMMON_H_
+#define NPU_COMPUTE_INCLUDE_NPU_COMPUTE_COMMON_H_
 
 #ifndef NPU_COMPUTE_EXPORT
 #if defined(_WIN32)
@@ -20,3 +21,5 @@
 #define NPU_COMPUTE_LOCAL
 #endif
 #endif
+
+#endif // NPU_COMPUTE_INCLUDE_NPU_COMPUTE_COMMON_H_

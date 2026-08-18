@@ -7,7 +7,8 @@
  * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
  * See LICENSE in the root of the software repository for the full text of the License.
  */
-#pragma once
+#ifndef NPU_COMPUTE_SRC_NPU_COMPUTE_HARDWARE_INFO_TYPES_H_
+#define NPU_COMPUTE_SRC_NPU_COMPUTE_HARDWARE_INFO_TYPES_H_
 
 #include <cstdint>
 #include <functional>
@@ -60,3 +61,5 @@ struct HardwareInfoSnapshot {
 using DiagnosticSink = std::function<void(std::string_view)>;
 
 } // namespace npu_compute
+
+#endif // NPU_COMPUTE_SRC_NPU_COMPUTE_HARDWARE_INFO_TYPES_H_

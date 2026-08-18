@@ -119,7 +119,7 @@ def test_installed_cli_uses_the_adjacent_injection_library(install_root):
     program = (
         "import os, pathlib; "
         "pathlib.Path(os.environ['NPU_COMPUTE_OUTPUT'], 'HardwareInfo.jsonl')"
-        ".write_text('{}\\n', encoding='utf-8'); "
+        ".write_text('{}\\n' * 5, encoding='utf-8'); "
         "print('ACL_API_INJECTION=' + os.environ['ACL_API_INJECTION'])"
     )
     result = subprocess.run(

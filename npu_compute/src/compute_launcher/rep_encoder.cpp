@@ -1,0 +1,170 @@
+/**
+ * Copyright (c) 2026 Huawei Technologies Co., Ltd.
+ * This program is free software, you can redistribute it and/or modify it under the terms and conditions of
+ * CANN Open Software License Agreement Version 2.0 (the "License").
+ * Please refer to the License for details. You may not use this file except in compliance with the License.
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
+ * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
+ * See LICENSE in the root of the software repository for the full text of the License.
+ */
+#include "rep_encoder.h"
+
+#include <algorithm>
+#include <cstring>
+#include <limits>
+#include <new>
+#include <unordered_set>
+
+namespace npu_compute::compute_launcher {
+namespace {
+
+bool Fail(const std::string& message, std::string* error)
+{
+    if (error != nullptr) {
+        *error = message;
+    }
+    return false;
+}
+
+void WriteLe16(std::uint16_t value, std::uint8_t* output)
+{
+    output[0] = static_cast<std::uint8_t>(value);
+    output[1] = static_cast<std::uint8_t>(value >> 8U);
+}
+
+void WriteLe32(std::uint32_t value, std::uint8_t* output)
+{
+    for (std::size_t index = 0; index < sizeof(value); ++index) {
+        output[index] = static_cast<std::uint8_t>(value >> (index * 8U));
+    }
+}
+
+void WriteLe64(std::uint64_t value, std::uint8_t* output)
+{
+    for (std::size_t index = 0; index < sizeof(value); ++index) {
+        output[index] = static_cast<std::uint8_t>(value >> (index * 8U));
+    }
+}
+
+bool IsKnownFileType(NpuRepFileType type)
+{
+    switch (type) {
+        case NpuRepFileType::NpuRep:
+        case NpuRepFileType::Json:
+        case NpuRepFileType::Jsonl:
+        case NpuRepFileType::Csv:
+        case NpuRepFileType::Sqlite3:
+        case NpuRepFileType::Protobuf:
+            return true;
+    }
+    return false;
+}
+
+bool ValidateFileName(const std::string& name, std::string* error)
+{
+    if (name.empty()) {
+        return Fail("rep entry file name is empty", error);
+    }
+    if (name.size() >= kNpuRepFileNameSize) {
+        return Fail("rep entry file name exceeds 127 bytes", error);
+    }
+    if (name.find('\0') != std::string::npos) {
+        return Fail("rep entry file name contains a null byte", error);
+    }
+    if (name.find('/') != std::string::npos || name.find('\\') != std::string::npos) {
+        return Fail("rep entry file name contains a path separator", error);
+    }
+    return true;
+}
+
+bool AddChecked(std::uint64_t value, std::uint64_t* total, std::string* error)
+{
+    if (value > std::numeric_limits<std::uint64_t>::max() - *total) {
+        return Fail("rep length exceeds uint64_t", error);
+    }
+    *total += value;
+    return true;
+}
+
+} // namespace
+
+bool EncodeRep(const std::vector<RepEntry>& entries, std::vector<std::uint8_t>* encoded, std::string* error)
+{
+    if (error != nullptr) {
+        error->clear();
+    }
+    if (encoded == nullptr) {
+        return Fail("encoded rep output is null", error);
+    }
+    encoded->clear();
+
+    try {
+        if (entries.size() > std::numeric_limits<std::uint32_t>::max()) {
+            return Fail("rep entry count exceeds uint32_t", error);
+        }
+
+        std::unordered_set<std::string> names;
+        names.reserve(entries.size());
+        std::uint64_t total_length = kNpuRepHeadSize;
+        const std::uint64_t entry_count = entries.size();
+        if (entry_count > (std::numeric_limits<std::uint64_t>::max() - total_length) / kNpuRepFileInfoSize) {
+            return Fail("rep file info table length overflows", error);
+        }
+        total_length += entry_count * kNpuRepFileInfoSize;
+
+        for (const RepEntry& entry : entries) {
+            if (!ValidateFileName(entry.file_name, error)) {
+                return false;
+            }
+            if (!IsKnownFileType(entry.file_type)) {
+                return Fail("rep entry has an unknown file type", error);
+            }
+            if (!names.insert(entry.file_name).second) {
+                return Fail("rep contains duplicate file names: " + entry.file_name, error);
+            }
+            if constexpr (sizeof(std::size_t) > sizeof(std::uint64_t)) {
+                if (entry.payload.size() > std::numeric_limits<std::uint64_t>::max()) {
+                    return Fail("rep entry payload length exceeds uint64_t", error);
+                }
+            }
+            if (!AddChecked(static_cast<std::uint64_t>(entry.payload.size()), &total_length, error)) {
+                return false;
+            }
+        }
+        if (total_length > std::numeric_limits<std::size_t>::max()) {
+            return Fail("rep length exceeds addressable memory", error);
+        }
+
+        encoded->assign(static_cast<std::size_t>(total_length), 0);
+        std::uint8_t* output = encoded->data();
+        std::copy(kNpuRepMagic.begin(), kNpuRepMagic.end(), output);
+        WriteLe32(kNpuRepVersion, output + 8);
+        WriteLe16(kNpuRepOrigin, output + 12);
+        WriteLe16(static_cast<std::uint16_t>(kNpuRepHeadSize), output + 14);
+        WriteLe32(static_cast<std::uint32_t>(entries.size()), output + 16);
+        WriteLe32(static_cast<std::uint32_t>(kNpuRepFileInfoSize), output + 20);
+        WriteLe32(0, output + 24);
+        WriteLe64(total_length, output + 28);
+
+        std::size_t payload_offset = kNpuRepHeadSize + entries.size() * kNpuRepFileInfoSize;
+        for (std::size_t index = 0; index < entries.size(); ++index) {
+            const RepEntry& entry = entries[index];
+            std::uint8_t* info = output + kNpuRepHeadSize + index * kNpuRepFileInfoSize;
+            std::copy(kNpuRepMagic.begin(), kNpuRepMagic.end(), info);
+            std::memcpy(info + 8, entry.file_name.data(), entry.file_name.size());
+            WriteLe16(static_cast<std::uint16_t>(entry.file_type), info + 136);
+            WriteLe16(0, info + 138);
+            WriteLe32(0, info + 140);
+            WriteLe64(static_cast<std::uint64_t>(entry.payload.size()), info + 144);
+            WriteLe64(static_cast<std::uint64_t>(payload_offset), info + 152);
+            std::copy(entry.payload.begin(), entry.payload.end(), output + payload_offset);
+            payload_offset += entry.payload.size();
+        }
+        return true;
+    } catch (const std::bad_alloc&) {
+        encoded->clear();
+        return Fail("allocate rep buffer failed", error);
+    }
+}
+
+} // namespace npu_compute::compute_launcher

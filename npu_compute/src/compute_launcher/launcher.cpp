@@ -11,6 +11,9 @@
 
 #include "injection_path.h"
 #include "process_launcher.h"
+#include "rep_directory_packer.h"
+#include "rep_report_writer.h"
+#include "report_name.h"
 #include "staging_directory.h"
 
 #include <cerrno>
@@ -95,12 +98,25 @@ bool ValidateHardwareInfoResult(const std::string& stagingDirectory, std::string
     return true;
 }
 
+void SetStageError(const std::string& stage, const std::string& detail, std::string* error)
+{
+    if (error != nullptr) {
+        *error = stage + ": " + detail;
+    }
+}
+
 } // namespace
 
-int LaunchTarget(const CliConfig& config, std::string* staging_directory, std::string* error)
+int LaunchTarget(const CliConfig& config, std::string* staging_directory, std::string* report_path, std::string* error)
 {
+    if (error != nullptr) {
+        error->clear();
+    }
     if (staging_directory != nullptr) {
         staging_directory->clear();
+    }
+    if (report_path != nullptr) {
+        report_path->clear();
     }
 
     StagingDirectory staging;
@@ -123,6 +139,26 @@ int LaunchTarget(const CliConfig& config, std::string* staging_directory, std::s
     }
     if (!ValidateHardwareInfoResult(staging.Path(), error)) {
         return kCollectionErrorExitCode;
+    }
+
+    std::vector<std::uint8_t> encoded;
+    std::string stage_error;
+    if (!PackDirectoryToRep(staging.Path(), &encoded, &stage_error)) {
+        SetStageError("pack collection results failed", stage_error, error);
+        return kReportErrorExitCode;
+    }
+
+    ReportTarget target;
+    if (!ResolveReportTarget(config.export_path, &target, &stage_error)) {
+        SetStageError("resolve report target failed", stage_error, error);
+        return kReportErrorExitCode;
+    }
+    if (!PublishRepReport(encoded, target, &stage_error)) {
+        SetStageError("publish report failed", stage_error, error);
+        return kReportErrorExitCode;
+    }
+    if (report_path != nullptr) {
+        *report_path = target.path.string();
     }
     return 0;
 }

@@ -7,7 +7,8 @@
  * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
  * See LICENSE in the root of the software repository for the full text of the License.
  */
-#pragma once
+#ifndef NPU_COMPUTE_SRC_ACL_PTI_DATA_RAW_DATA_DECODER_H_
+#define NPU_COMPUTE_SRC_ACL_PTI_DATA_RAW_DATA_DECODER_H_
 
 #include "acl_pti/data/module.h"
 
@@ -74,3 +75,5 @@ ResultOr<DecodedRecord> DecodeRawRecord(
     const std::byte* data, std::size_t size, std::uint64_t recordIndex, const PmuSlots& pmuEventIds);
 
 } // namespace npu_compute::aclpti::data::detail
+
+#endif // NPU_COMPUTE_SRC_ACL_PTI_DATA_RAW_DATA_DECODER_H_

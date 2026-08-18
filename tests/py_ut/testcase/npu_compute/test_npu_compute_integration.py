@@ -36,7 +36,14 @@ exit_code = int(sys.argv[2])
 hardware_info = output / "HardwareInfo.jsonl"
 
 if mode == "regular":
-    hardware_info.write_text('{"category":"Host Info"}\n', encoding="utf-8")
+    hardware_info.write_text(
+        '{"category":"Host Info"}\n'
+        '{"category":"Device Info"}\n'
+        '{"category":"CPU Information"}\n'
+        '{"category":"AI Core Information"}\n'
+        '{"category":"Memory Information"}\n',
+        encoding="utf-8",
+    )
 elif mode == "directory":
     hardware_info.mkdir()
 elif mode == "symlink":

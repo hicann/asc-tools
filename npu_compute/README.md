@@ -18,14 +18,16 @@ npu-compute
   -> hooked Runtime calls, shadow memory, and kernel replay
   -> first successful target Runtime EXIT triggers HardwareInfo collection
   -> Msprof raw callback and internal replay-data lifecycle
-  -> CLI validates HardwareInfo.jsonl after the target exits successfully
+  -> CLI waitpid observes a successful target exit
+  -> CLI validates HardwareInfo.jsonl and recursively packs the staging tree
+  -> CLI atomically publishes a report_<epoch_ms>_<random_id>.npu-rep report
 ```
 
 ## Components
 
 | Component | Integration artifact | Responsibility |
 | --- | --- | --- |
-| NPU Compute CLI | `npu-compute` | Validate options, prepare the child environment, launch and supervise the target process |
+| NPU Compute CLI | `npu-compute` | Validate options, launch and supervise the target, package collection files, and unpack imported reports |
 | NPU Compute library | `libnpu-compute.so` | Export `acltoolInitialize`/`acltoolShutdown`, configure ACLPTI, collect HardwareInfo, and write profiling CSV files |
 | ACLPTI | `libacl_pti.so` | Expand sections to PMU events, maintain shadow memory, and replay kernel launches |
 | Prof API stub | `libprofapi.so` | Register the Runtime table, load the injection library, and simulate direct Msprof calls |
@@ -87,8 +89,77 @@ status. Each collection command receives a unique staging directory. If the
 application exits successfully but `HardwareInfo.jsonl` is missing or is not a
 regular file, the CLI reports the staging path and returns collection error 3.
 
-Repo import/export options are parsed but intentionally report that the feature
-is not available.
+For a collection command, `--export` selects the report destination. A path
+ending in `.npu-rep` is the exact report file. An existing directory receives
+an automatically named report. Without `--export`, the CLI creates the report
+in the current directory:
+
+```text
+report_<epoch_ms>_<8-lowercase-hex-digits>.npu-rep
+```
+
+For an Import command, `--export` instead selects the output directory. The
+directory must not already exist. Without `--export`, the CLI removes
+`.npu-rep`, `.npu.rep`, or `.rep` from the input file name and creates that
+directory under the current directory.
+
+Examples:
+
+```bash
+# Collection: publish an automatically named report in the current directory.
+npu-compute --section PipeUtilization ./application
+
+# Collection: publish to the exact report path.
+npu-compute --section PipeUtilization \
+  --export result.npu-rep ./application
+
+# Import: restore files to ./result/.
+npu-compute --import result.npu-rep
+
+# Import: restore files to the specified new directory.
+npu-compute --import result.npu-rep --export restored-results
+```
+
+## Report Packaging And Import
+
+After the target exits successfully, the CLI validates the collection output
+and recursively packages the staging directory. Supported leaf files retain
+their original names and bytes. Every child directory is encoded as a
+`type=NpuRep` entry named `<directory>.npu.rep`; that payload is a complete
+nested REP with offsets starting from zero in its own byte space. This rule is
+applied recursively without a fixed depth limit.
+
+The packer accepts collection files with `.json`, `.jsonl`, `.csv`,
+`.sqlite3`, `.pb`, and `.protobuf` suffixes. It excludes
+`.hardware_info.lock`, rejects remaining temporary files and symbolic links,
+and validates JSONL and CSV completeness before reading their payloads.
+
+The report writer creates a temporary file in the report's destination
+directory, writes and synchronizes the complete REP, reads it back to verify
+the bytes and layout, then publishes it with a no-replace rename and
+synchronizes the destination directory. Existing report files are never
+overwritten. A successful collection prints both retained diagnostic paths:
+
+```text
+npu-compute: staging=<absolute-staging-directory>
+npu-compute: report=<absolute-report-path>
+```
+
+Import does not launch an application or initialize Runtime, ProfAPI, ACLPTI,
+or `libnpu-compute.so`. The CLI validates the outer REP and every nested REP,
+then restores leaf payloads without changing their bytes. A nested
+`<name>.npu.rep` or `<name>.rep` entry becomes the directory `<name>`.
+
+Import first writes into a private temporary directory beside the requested
+destination. Leaf files are created exclusively without following symbolic
+links and are synchronized before close. The complete directory is then
+published with a no-replace rename. Existing output paths are never
+overwritten, and a failed Import does not publish a partial final directory.
+A successful Import prints:
+
+```text
+npu-compute: unpacked=<absolute-output-directory>
+```
 
 ## HardwareInfo Collection
 

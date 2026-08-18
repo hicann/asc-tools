@@ -7,7 +7,8 @@
  * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
  * See LICENSE in the root of the software repository for the full text of the License.
  */
-#pragma once
+#ifndef NPU_COMPUTE_SRC_COMPUTE_LAUNCHER_CONFIG_H_
+#define NPU_COMPUTE_SRC_COMPUTE_LAUNCHER_CONFIG_H_
 
 #include <cstdio>
 #include <optional>
@@ -41,3 +42,5 @@ void PrintUsage(FILE* stream, const char* program);
 void PrintSections(FILE* stream);
 
 } // namespace npu_compute::compute_launcher
+
+#endif // NPU_COMPUTE_SRC_COMPUTE_LAUNCHER_CONFIG_H_

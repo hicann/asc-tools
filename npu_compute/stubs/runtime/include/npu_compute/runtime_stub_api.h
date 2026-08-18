@@ -7,7 +7,8 @@
  * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
  * See LICENSE in the root of the software repository for the full text of the License.
  */
-#pragma once
+#ifndef NPU_COMPUTE_STUBS_RUNTIME_INCLUDE_NPU_COMPUTE_RUNTIME_STUB_API_H_
+#define NPU_COMPUTE_STUBS_RUNTIME_INCLUDE_NPU_COMPUTE_RUNTIME_STUB_API_H_
 
 #include "acl/acl_rt.h"
 #include "npu_compute/common.h"
@@ -27,3 +28,5 @@ aclError RuntimeStubSetOriginFunction(const char* name, Function function)
     return RuntimeStubSetOrigin(name, reinterpret_cast<aclrtApiFunc>(function));
 }
 #endif
+
+#endif // NPU_COMPUTE_STUBS_RUNTIME_INCLUDE_NPU_COMPUTE_RUNTIME_STUB_API_H_

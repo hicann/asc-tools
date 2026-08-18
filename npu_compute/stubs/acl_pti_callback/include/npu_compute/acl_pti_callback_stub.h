@@ -7,7 +7,8 @@
  * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
  * See LICENSE in the root of the software repository for the full text of the License.
  */
-#pragma once
+#ifndef NPU_COMPUTE_STUBS_ACL_PTI_CALLBACK_INCLUDE_NPU_COMPUTE_ACL_PTI_CALLBACK_STUB_H_
+#define NPU_COMPUTE_STUBS_ACL_PTI_CALLBACK_INCLUDE_NPU_COMPUTE_ACL_PTI_CALLBACK_STUB_H_
 
 #include "aclpti/aclpti.h"
 
@@ -49,3 +50,5 @@ bool InvokeAclPtiRuntimeReady();
 } // namespace npu_compute::test
 
 extern "C" int AclPtiCallbackStubEmitRuntimeEvent(std::uint32_t cbid, std::uint32_t site, std::int32_t retval);
+
+#endif // NPU_COMPUTE_STUBS_ACL_PTI_CALLBACK_INCLUDE_NPU_COMPUTE_ACL_PTI_CALLBACK_STUB_H_
