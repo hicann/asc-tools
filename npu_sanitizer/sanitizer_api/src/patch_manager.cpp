@@ -174,24 +174,21 @@ AclsanStatus ApiCore::BuildPatchPlanForBinary(AclsanBinaryHandle, AclsanPatchPla
     return ACLSAN_STATUS_SUCCESS;
 }
 
-AclsanStatus ApiCore::BuildDummyPatchResult(const std::string& originalPath, uint32_t pipelineMask, PatchResult* result)
+AclsanStatus ApiCore::BuildDummyPatchResult(const std::string& originalPath, uint32_t pipelineMask, PatchResult& result)
 {
-    if (result == nullptr) {
-        return ACLSAN_STATUS_ERROR_INVALID_VALUE;
-    }
-    result->pipelineMask = pipelineMask;
-    result->patchPlanId = nextPatchPlan_++;
+    result.pipelineMask = pipelineMask;
+    result.patchPlanId = nextPatchPlan_++;
     if (pipelineMask == 0) {
-        result->patched = false;
-        result->patchedPath = originalPath;
+        result.patched = false;
+        result.patchedPath = originalPath;
         return ACLSAN_STATUS_SUCCESS;
     }
 
     const std::string cacheDir = SelectCacheDir(&patchOptions_, config_);
     EnsureDir(cacheDir);
-    result->patched = true;
-    result->patchedPath = cacheDir + "/aclsan_dummy_patched_" + BaseName(originalPath);
-    if (!CopyFileOrWriteManifest(originalPath, result->patchedPath, pipelineMask)) {
+    result.patched = true;
+    result.patchedPath = cacheDir + "/aclsan_dummy_patched_" + BaseName(originalPath);
+    if (!CopyFileOrWriteManifest(originalPath, result.patchedPath, pipelineMask)) {
         return ACLSAN_STATUS_ERROR_IO;
     }
 
@@ -210,7 +207,7 @@ AclsanStatus ApiCore::BuildDummyPatchResult(const std::string& originalPath, uin
         site.sourceFile = "<unknown>";
         site.info.version = ACLSAN_API_VERSION;
         site.info.size = sizeof(site.info);
-        site.info.siteId = static_cast<uint32_t>(patchSites_.size() + result->sites.size() + 1);
+        site.info.siteId = static_cast<uint32_t>(patchSites_.size() + result.sites.size() + 1);
         site.info.pipeline = pipeline;
         site.info.binaryId = binaryId;
         site.info.functionId = 0;
@@ -219,7 +216,7 @@ AclsanStatus ApiCore::BuildDummyPatchResult(const std::string& originalPath, uin
         site.info.opName = site.opName.c_str();
         site.info.sourceFile = site.sourceFile.c_str();
         site.info.sourceLine = 0;
-        result->sites.push_back(site);
+        result.sites.push_back(site);
     }
     return ACLSAN_STATUS_SUCCESS;
 }
@@ -296,7 +293,7 @@ AclsanStatus ApiCore::PatchBinaryFromImage(
     Dispatch(ACLSAN_CB_DOMAIN_PATCH, ACLSAN_CBID_PATCH_BEGIN, &data);
 
     PatchResult result{};
-    AclsanStatus status = BuildDummyPatchResult(originalPath.c_str(), pipelineMask, &result);
+    AclsanStatus status = BuildDummyPatchResult(originalPath, pipelineMask, result);
     if (status != ACLSAN_STATUS_SUCCESS) {
         data.common.result = static_cast<int>(status);
         Dispatch(ACLSAN_CB_DOMAIN_PATCH, ACLSAN_CBID_PATCH_END, &data);

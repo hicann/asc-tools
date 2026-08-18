@@ -13,6 +13,8 @@
 
 #include "aclsan/aclsan_types.h"
 
+#include <stddef.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -110,6 +112,119 @@ typedef struct AclsanDeviceInstructionData {
     uint64_t pc;
     uint64_t rawArgs[ACLSAN_RAW_ARG_MAX];
 } AclsanDeviceInstructionData;
+
+typedef enum AclsanDeviceSourceKind {
+    ACLSAN_DEVICE_SOURCE_UNKNOWN = 0,
+    ACLSAN_DEVICE_SOURCE_MTE2 = 1,
+    ACLSAN_DEVICE_SOURCE_MTE3 = 2,
+    ACLSAN_DEVICE_SOURCE_FIXPIPE = 3,
+    ACLSAN_DEVICE_SOURCE_SET_WAIT_FLAG = 4,
+    ACLSAN_DEVICE_SOURCE_GET_RLS_BUF = 5,
+    ACLSAN_DEVICE_SOURCE_LD = 6,
+    ACLSAN_DEVICE_SOURCE_ST = 7,
+    ACLSAN_DEVICE_SOURCE_VECTOR = 8,
+    ACLSAN_DEVICE_SOURCE_CUBE = 9,
+    ACLSAN_DEVICE_SOURCE_SCALAR = 10
+} AclsanDeviceSourceKind;
+
+typedef enum AclsanDeviceEventFlags {
+    ACLSAN_DEVICE_EVENT_FLAG_NONE = 0,
+    ACLSAN_DEVICE_EVENT_FLAG_EXACT = 1u << 0,
+    ACLSAN_DEVICE_EVENT_FLAG_ESTIMATED = 1u << 1,
+    ACLSAN_DEVICE_EVENT_FLAG_TRUNCATED = 1u << 2,
+    ACLSAN_DEVICE_EVENT_FLAG_PREDICATED = 1u << 3,
+    ACLSAN_DEVICE_EVENT_FLAG_DROPPED_PRIOR = 1u << 4
+} AclsanDeviceEventFlags;
+
+typedef enum AclsanDeviceMemorySpace {
+    ACLSAN_DEVICE_MEMORY_SPACE_UNKNOWN = 0,
+    ACLSAN_DEVICE_MEMORY_SPACE_GM = 1,
+    ACLSAN_DEVICE_MEMORY_SPACE_UB = 2,
+    ACLSAN_DEVICE_MEMORY_SPACE_L1 = 3,
+    ACLSAN_DEVICE_MEMORY_SPACE_L0A = 4,
+    ACLSAN_DEVICE_MEMORY_SPACE_L0B = 5,
+    ACLSAN_DEVICE_MEMORY_SPACE_L0C = 6,
+    ACLSAN_DEVICE_MEMORY_SPACE_BT = 7,
+    ACLSAN_DEVICE_MEMORY_SPACE_PRIVATE = 8
+} AclsanDeviceMemorySpace;
+
+typedef enum AclsanDeviceMemoryAccessMode {
+    ACLSAN_DEVICE_MEMORY_ACCESS_READ = 1,
+    ACLSAN_DEVICE_MEMORY_ACCESS_WRITE = 2,
+    ACLSAN_DEVICE_MEMORY_ACCESS_READ_WRITE = 3
+} AclsanDeviceMemoryAccessMode;
+
+typedef enum AclsanMemLayoutKind {
+    ACLSAN_MEM_LAYOUT_SCALAR = 1,
+    ACLSAN_MEM_LAYOUT_RANGE = 2,
+    ACLSAN_MEM_LAYOUT_BLOCK_REPEAT = 3,
+    ACLSAN_MEM_LAYOUT_ND_AFFINE = 4
+} AclsanMemLayoutKind;
+
+typedef struct AclsanDeviceEventHeader {
+    uint32_t version;
+    uint32_t size;
+    uint64_t launchId;
+    uint64_t pc;
+    uint32_t siteId;
+    uint32_t sourceKind;
+    uint64_t instrExecId;
+    uint64_t serialNo;
+    uint32_t deviceId;
+    uint32_t coreId;
+    uint32_t blockId;
+    uint32_t blockType;
+    uint32_t pipeline;
+    uint32_t flags;
+} AclsanDeviceEventHeader;
+
+typedef struct AclsanMemScalarLayout {
+    uint32_t bytes;
+    uint32_t reserved;
+} AclsanMemScalarLayout;
+
+typedef struct AclsanMemRangeLayout {
+    uint64_t bytes;
+} AclsanMemRangeLayout;
+
+typedef struct AclsanMemBlockRepeatLayout {
+    uint32_t blockNum;
+    uint32_t blockSize;
+    int64_t blockStride;
+    uint32_t repeatTimes;
+    uint32_t reserved;
+    int64_t repeatStride;
+} AclsanMemBlockRepeatLayout;
+
+typedef struct AclsanMemNdAffineLayout {
+    uint32_t rank;
+    uint32_t elementBytes;
+    uint64_t dims[5];
+    int64_t strides[5];
+} AclsanMemNdAffineLayout;
+
+typedef struct AclsanDeviceMemoryAccessData {
+    AclsanDeviceEventHeader header;
+    uint64_t address;
+    uint32_t memorySpace;
+    uint32_t accessMode;
+    uint32_t accessIndex;
+    uint32_t accessCount;
+    uint32_t dataBits;
+    uint32_t alignSize;
+    uint64_t vectorMask0;
+    uint64_t vectorMask1;
+    uint64_t predicateMask0;
+    uint64_t predicateMask1;
+    uint32_t layoutKind;
+    uint32_t memoryFlags;
+    union {
+        AclsanMemScalarLayout scalar;
+        AclsanMemRangeLayout range;
+        AclsanMemBlockRepeatLayout blockRepeat;
+        AclsanMemNdAffineLayout ndAffine;
+    } layout;
+} AclsanDeviceMemoryAccessData;
 
 typedef struct AclsanReportData {
     AclsanCallbackCommonData common;

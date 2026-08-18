@@ -105,10 +105,6 @@ AclsanStatus ApiCore::MemoryMemset(void* dst, uint64_t dstMax, int32_t value, ui
 AclsanStatus ApiCore::MemorySynchronizeStream(void*)
 {
     RuntimeGuard guard;
-    auto records = BuildSyntheticRecordsForSync();
-    if (!records.empty()) {
-        return IngestRawTraces(records.data(), records.size());
-    }
     return ACLSAN_STATUS_SUCCESS;
 }
 

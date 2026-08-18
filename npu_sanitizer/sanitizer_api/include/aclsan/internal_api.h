@@ -21,7 +21,7 @@ extern "C" {
  * Internal SPI for sanitizer_api.so providers.
  *
  * These entry points are intentionally separated from aclsan_api.h. They are
- * used by in-repo provider modules such as injection.so, cann_sanitizer.so,
+ * used by in-repo provider modules such as injection.so, npu_check.so,
  * trace fetch backends, and tests. They are not part of the stable checker API.
  */
 

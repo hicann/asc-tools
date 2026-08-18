@@ -61,6 +61,7 @@ struct CallbackCounters {
     int patchEnd = 0;
     int siteMap = 0;
     int mte2 = 0;
+    int typedMemoryAccess = 0;
     int resourceAlloc = 0;
     int memcpyEnd = 0;
     int binaryFileBegin = 0;
@@ -86,9 +87,18 @@ void Callback(void* userdata, AclsanCallbackDomain domain, uint32_t cbid, const 
         ++counters->patchEnd;
     }
     if (domain == ACLSAN_CB_DOMAIN_DEVICE_INSTRUCTION && cbid == ACLSAN_CBID_DEVICE_MEMORY_ACCESS) {
-        const auto* data = static_cast<const AclsanDeviceInstructionData*>(cbdata);
+        const auto* data = static_cast<const AclsanDeviceMemoryAccessData*>(cbdata);
         assert(data != nullptr);
-        if (data->pipeline == ACLSAN_PATCH_PIPELINE_MTE2) {
+        assert(data->header.version == ACLSAN_API_VERSION);
+        assert(data->header.size == sizeof(*data));
+        assert(data->memorySpace == ACLSAN_DEVICE_MEMORY_SPACE_GM);
+        assert(data->layoutKind == ACLSAN_MEM_LAYOUT_RANGE);
+        assert(data->address == 0x1000);
+        assert(data->layout.range.bytes == 16);
+        ++counters->typedMemoryAccess;
+        if (data->header.pipeline == ACLSAN_PATCH_PIPELINE_MTE2) {
+            assert(data->header.sourceKind == ACLSAN_DEVICE_SOURCE_MTE2);
+            assert(data->accessMode == ACLSAN_DEVICE_MEMORY_ACCESS_READ);
             ++counters->mte2;
         }
     }
@@ -330,7 +340,8 @@ int main()
     record.arg2 = 16;
     assert(aclsanIngestRawTraces(&record, 1) == ACLSAN_STATUS_SUCCESS);
     assert(aclsanStreamSynchronize(nullptr) == ACLSAN_STATUS_SUCCESS);
-    assert(counters.mte2 >= 2);
+    assert(counters.mte2 == 1);
+    assert(counters.typedMemoryAccess == 1);
     assert(counters.insideCallbackObserved == 1);
 
     void* dev = nullptr;

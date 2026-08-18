@@ -10,6 +10,8 @@
 
 #include "api_core.h"
 
+#include <utility>
+
 namespace aclsan {
 namespace {
 
@@ -47,10 +49,11 @@ AclsanStatus ApiCore::Subscribe(const AclsanSubscribeDesc* desc, AclsanSubscribe
 AclsanStatus ApiCore::Unsubscribe(AclsanSubscriberHandle subscriber)
 {
     std::lock_guard<std::recursive_mutex> lock(mutex_);
-    auto* token = ValidateSubscriberLocked(subscriber);
-    if (token == nullptr) {
+    auto* activeSubscriber = FindSubscriberLocked(subscriber);
+    if (activeSubscriber == nullptr) {
         return ACLSAN_STATUS_ERROR_NOT_FOUND;
     }
+    auto* token = activeSubscriber->handle;
     token->active = false;
     token->magic = 0;
     subscriber_.reset();
@@ -68,14 +71,15 @@ AclsanStatus ApiCore::EnableCallback(
     if (!IsKnownCbid(domain, cbid)) {
         return ACLSAN_STATUS_ERROR_INVALID_VALUE;
     }
-    if (ValidateSubscriberLocked(subscriber) == nullptr) {
+    auto* activeSubscriber = FindSubscriberLocked(subscriber);
+    if (activeSubscriber == nullptr) {
         return ACLSAN_STATUS_ERROR_NOT_FOUND;
     }
     const auto key = std::make_pair(domain, cbid);
     if (enable) {
-        subscriber_->enabledCallbacks.insert(key);
+        activeSubscriber->enabledCallbacks.insert(key);
     } else {
-        subscriber_->enabledCallbacks.erase(key);
+        activeSubscriber->enabledCallbacks.erase(key);
     }
     ReconfigureHookPlan();
     return ACLSAN_STATUS_SUCCESS;
@@ -87,13 +91,14 @@ AclsanStatus ApiCore::EnableDomain(AclsanSubscriberHandle subscriber, AclsanCall
     if (!IsSupportedDomain(domain)) {
         return ACLSAN_STATUS_ERROR_INVALID_VALUE;
     }
-    if (ValidateSubscriberLocked(subscriber) == nullptr) {
+    auto* activeSubscriber = FindSubscriberLocked(subscriber);
+    if (activeSubscriber == nullptr) {
         return ACLSAN_STATUS_ERROR_NOT_FOUND;
     }
     if (enable) {
-        subscriber_->enabledDomains.insert(domain);
+        activeSubscriber->enabledDomains.insert(domain);
     } else {
-        subscriber_->enabledDomains.erase(domain);
+        activeSubscriber->enabledDomains.erase(domain);
     }
     ReconfigureHookPlan();
     return ACLSAN_STATUS_SUCCESS;
@@ -106,11 +111,12 @@ AclsanStatus ApiCore::GetCallbackState(
         return ACLSAN_STATUS_ERROR_INVALID_VALUE;
     }
     std::lock_guard<std::recursive_mutex> lock(mutex_);
-    if (ValidateSubscriberLocked(subscriber) == nullptr) {
+    const auto* activeSubscriber = FindSubscriberLocked(subscriber);
+    if (activeSubscriber == nullptr) {
         return ACLSAN_STATUS_ERROR_NOT_FOUND;
     }
-    *enabled =
-        subscriber_->enabledDomains.count(domain) != 0 || subscriber_->enabledCallbacks.count({domain, cbid}) != 0;
+    *enabled = activeSubscriber->enabledDomains.count(domain) != 0 ||
+               activeSubscriber->enabledCallbacks.count({domain, cbid}) != 0;
     return ACLSAN_STATUS_SUCCESS;
 }
 
@@ -148,7 +154,12 @@ bool ApiCore::IsKnownCbid(AclsanCallbackDomain domain, uint32_t cbid) const
     }
 }
 
-AclsanSubscriberToken_st* ApiCore::ValidateSubscriberLocked(AclsanSubscriberHandle subscriber) const
+Subscriber* ApiCore::FindSubscriberLocked(AclsanSubscriberHandle subscriber)
+{
+    return const_cast<Subscriber*>(std::as_const(*this).FindSubscriberLocked(subscriber));
+}
+
+const Subscriber* ApiCore::FindSubscriberLocked(AclsanSubscriberHandle subscriber) const
 {
     if (subscriber == ACLSAN_INVALID_SUBSCRIBER_HANDLE) {
         return nullptr;
@@ -162,7 +173,7 @@ AclsanSubscriberToken_st* ApiCore::ValidateSubscriberLocked(AclsanSubscriberHand
     if (!subscriber->active || subscriber->magic != kSubscriberTokenMagic) {
         return nullptr;
     }
-    return subscriber;
+    return &*subscriber_;
 }
 
 bool ApiCore::HasEnabledCallbackLocked(AclsanCallbackDomain domain, uint32_t cbid) const

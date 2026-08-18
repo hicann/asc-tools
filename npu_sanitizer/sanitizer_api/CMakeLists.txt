@@ -37,10 +37,22 @@ set_target_properties(aclsan_api PROPERTIES
   OUTPUT_NAME sanitizer_api
 )
 
+set(ACLSAN_BUILD_TESTS OFF)
 if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
+  include(CTest)
+  if(BUILD_TESTING)
+    set(ACLSAN_BUILD_TESTS ON)
+  endif()
+elseif(ENABLE_TEST)
+  set(ACLSAN_BUILD_TESTS ON)
+endif()
+
+if(ACLSAN_BUILD_TESTS)
   add_executable(aclsan_api_smoke tests/api_smoke.cpp)
   target_compile_features(aclsan_api_smoke PRIVATE cxx_std_17)
   target_link_libraries(aclsan_api_smoke PRIVATE aclsan_api)
+  target_compile_options(aclsan_api_smoke PRIVATE -UNDEBUG)
+  add_test(NAME aclsan_api_smoke COMMAND aclsan_api_smoke)
 endif()
 
 install(TARGETS aclsan_api

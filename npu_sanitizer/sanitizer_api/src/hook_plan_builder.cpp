@@ -60,13 +60,10 @@ uint32_t PipelineToCbid(AclsanPatchPipeline pipeline)
 {
     switch (pipeline) {
         case ACLSAN_PATCH_PIPELINE_SET_WAIT_FLAG:
-            return ACLSAN_CBID_DEVICE_SYNC;
         case ACLSAN_PATCH_PIPELINE_GET_RLS_BUF:
             return ACLSAN_CBID_DEVICE_SYNC;
         case ACLSAN_PATCH_PIPELINE_MTE2:
-            return ACLSAN_CBID_DEVICE_MEMORY_ACCESS;
         case ACLSAN_PATCH_PIPELINE_MTE3:
-            return ACLSAN_CBID_DEVICE_MEMORY_ACCESS;
         case ACLSAN_PATCH_PIPELINE_FIXPIPE:
             return ACLSAN_CBID_DEVICE_MEMORY_ACCESS;
         default:

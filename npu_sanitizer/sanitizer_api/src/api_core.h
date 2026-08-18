@@ -126,12 +126,11 @@ private:
     bool HasEnabledDomainLocked(AclsanCallbackDomain domain) const;
     bool IsSupportedDomain(AclsanCallbackDomain domain) const;
     bool IsKnownCbid(AclsanCallbackDomain domain, uint32_t cbid) const;
-    AclsanSubscriberToken_st* ValidateSubscriberLocked(AclsanSubscriberHandle subscriber) const;
+    Subscriber* FindSubscriberLocked(AclsanSubscriberHandle subscriber);
+    const Subscriber* FindSubscriberLocked(AclsanSubscriberHandle subscriber) const;
     AclsanStatus ValidateInitialized() const;
-    AclsanStatus BuildDummyPatchResult(const std::string& originalPath, uint32_t pipelineMask, PatchResult* result);
+    AclsanStatus BuildDummyPatchResult(const std::string& originalPath, uint32_t pipelineMask, PatchResult& result);
     void StorePatchSites(uint64_t binaryId, const std::vector<PatchSiteRecord>& sites);
-    std::vector<AclsanRawTraceRecord> BuildSyntheticRecordsForSync() const;
-
     mutable std::recursive_mutex mutex_;
     bool initialized_ = false;
     bool finalized_ = false;
