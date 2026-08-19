@@ -42,6 +42,8 @@ typedef aclError (*aclrtLaunchKernelWithHostArgsFunc)(
     size_t argsSize, aclrtPlaceHolderInfo* placeHolderArray, size_t placeHolderNum);
 typedef aclError (*aclrtLaunchKernelFunc)(
     aclrtFuncHandle funcHandle, uint32_t numBlocks, const void* argsData, size_t argsSize, aclrtStream stream);
+typedef aclError (*aclrtGetFuncBySymbolFunc)(const void* symbol, aclrtFuncHandle* funcHandle);
+typedef aclError (*aclrtBinaryUnLoadFunc)(aclrtBinHandle binHandle);
 
 typedef enum {
     ACL_RT_API_aclrtLaunchKernelWithHostArgs = 0,
@@ -58,6 +60,8 @@ typedef enum {
     ACL_RT_API_aclrtSynchronizeStream = 11,
     ACL_RT_API_aclrtBinaryGetFunctionByEntry = 12,
     ACL_RT_API_aclrtLaunchKernel = 13,
+    ACL_RT_API_aclrtGetFuncBySymbol = 14,
+    ACL_RT_API_aclrtBinaryUnLoad = 15,
     ACL_RT_API_MAX
 } aclrtApiId;
 
@@ -83,6 +87,8 @@ NPU_COMPUTE_DECLARE_REGISTRATION(AclrtBinaryGetFunction, aclrtBinaryGetFunction)
 NPU_COMPUTE_DECLARE_REGISTRATION(AclrtBinaryGetFunctionByEntry, aclrtBinaryGetFunctionByEntry);
 NPU_COMPUTE_DECLARE_REGISTRATION(AclrtLaunchKernelWithHostArgs, aclrtLaunchKernelWithHostArgs);
 NPU_COMPUTE_DECLARE_REGISTRATION(AclrtLaunchKernel, aclrtLaunchKernel);
+NPU_COMPUTE_DECLARE_REGISTRATION(AclrtGetFuncBySymbol, aclrtGetFuncBySymbol);
+NPU_COMPUTE_DECLARE_REGISTRATION(AclrtBinaryUnLoad, aclrtBinaryUnLoad);
 
 #undef NPU_COMPUTE_DECLARE_REGISTRATION
 

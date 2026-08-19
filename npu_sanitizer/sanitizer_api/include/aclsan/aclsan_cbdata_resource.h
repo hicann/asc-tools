@@ -8,13 +8,18 @@
  * See LICENSE in the root of the software repository for the full text of the License.
  */
 
-#ifndef ACLSAN_CALLBACK_H
-#define ACLSAN_CALLBACK_H
+#ifndef ACLSAN_CBDATA_RESOURCE_H
+#define ACLSAN_CBDATA_RESOURCE_H
 
 #include "aclsan/aclsan_cbdata_common.h"
-#include "aclsan/aclsan_cbdata_device.h"
-#include "aclsan/aclsan_cbdata_resource.h"
-#include "aclsan/aclsan_cbdata_runtime.h"
-#include "aclsan/aclsan_cbdata_synchronize.h"
+
+typedef struct AclsanResourceData {
+    AclsanCallbackCommonData common;
+    void* ptr;            // malloc / free相关的指针
+    uint64_t bytes;       // 分配的内存大小
+    uint32_t memorySpace; // 区分是device / host
+    uint32_t deviceId;
+    uint64_t resourceId; // TODO: 确认是否有用
+} AclsanResourceData;
 
 #endif

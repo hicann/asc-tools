@@ -11,7 +11,8 @@
 #ifndef ACLSAN_PATCH_H
 #define ACLSAN_PATCH_H
 
-#include "aclsan/aclsan_types.h"
+#include "aclsan/aclsan_api.h"
+#include "internal/ascsan_types.h"
 
 #ifdef __cplusplus
 extern "C" {

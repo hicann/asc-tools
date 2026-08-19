@@ -8,13 +8,18 @@
  * See LICENSE in the root of the software repository for the full text of the License.
  */
 
-#ifndef ACLSAN_CALLBACK_H
-#define ACLSAN_CALLBACK_H
+#ifndef ACLSAN_CBDATA_COMMON_H
+#define ACLSAN_CBDATA_COMMON_H
 
-#include "aclsan/aclsan_cbdata_common.h"
-#include "aclsan/aclsan_cbdata_device.h"
-#include "aclsan/aclsan_cbdata_resource.h"
-#include "aclsan/aclsan_cbdata_runtime.h"
-#include "aclsan/aclsan_cbdata_synchronize.h"
+#include <stdint.h>
+
+typedef struct AclsanCallbackCommonData {
+    uint32_t version;
+    uint32_t size;
+    const char* apiName;    // 调用的api命名，例如AclsanResourceData可能传回aclrtMalloc
+    int result;             // 运行接口返回的结果
+    uint64_t correlationId; // TODO: 确认是否有用
+    uint64_t timestampNs;   // TODO: 确认是否有用
+} AclsanCallbackCommonData;
 
 #endif

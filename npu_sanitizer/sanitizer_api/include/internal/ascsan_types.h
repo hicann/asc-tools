@@ -13,6 +13,7 @@
 
 #include <stddef.h>
 #include <stdint.h>
+#include "aclsan/aclsan_api.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -26,23 +27,6 @@ extern "C" {
 #define ACLSAN_HOOK_RULE_MAX 64
 #define ACLSAN_RAW_ARG_MAX 6
 
-typedef enum AclsanStatus {
-    ACLSAN_STATUS_SUCCESS = 0,
-    ACLSAN_STATUS_ERROR_INVALID_VALUE = 1,
-    ACLSAN_STATUS_ERROR_NOT_INITIALIZED = 2,
-    ACLSAN_STATUS_ERROR_ALREADY_INITIALIZED = 3,
-    ACLSAN_STATUS_ERROR_VERSION_MISMATCH = 4,
-    ACLSAN_STATUS_ERROR_NOT_SUPPORTED = 5,
-    ACLSAN_STATUS_ERROR_OUT_OF_MEMORY = 6,
-    ACLSAN_STATUS_ERROR_IO = 7,
-    ACLSAN_STATUS_ERROR_RUNTIME = 8,
-    ACLSAN_STATUS_ERROR_PATCH_FAILED = 9,
-    ACLSAN_STATUS_ERROR_REENTRANT = 10,
-    ACLSAN_STATUS_ERROR_NOT_FOUND = 11,
-    ACLSAN_STATUS_ERROR_MAX_LIMIT_REACHED = 12
-} AclsanStatus;
-
-typedef struct AclsanSubscriberToken_st* AclsanSubscriberHandle;
 #define ACLSAN_INVALID_SUBSCRIBER_HANDLE ((AclsanSubscriberHandle)0)
 
 typedef uint64_t AclsanBinaryHandle;
@@ -50,72 +34,6 @@ typedef uint64_t AclsanPatchPlanHandle;
 typedef uint64_t AclsanPatchSiteHandle;
 typedef uint64_t AclsanLaunchHandle;
 typedef uint64_t AclsanMemoryHandle;
-
-typedef enum AclsanCallbackDomain {
-    ACLSAN_CB_DOMAIN_RESOURCE = 1,
-    ACLSAN_CB_DOMAIN_MEMORY = 2,
-    ACLSAN_CB_DOMAIN_BINARY = 3,
-    ACLSAN_CB_DOMAIN_PATCH = 4,
-    ACLSAN_CB_DOMAIN_LAUNCH = 5,
-    ACLSAN_CB_DOMAIN_SYNCHRONIZE = 6,
-    ACLSAN_CB_DOMAIN_DEVICE_INSTRUCTION = 7,
-    ACLSAN_CB_DOMAIN_REPORT = 8,
-    ACLSAN_CB_DOMAIN_ERROR = 9
-} AclsanCallbackDomain;
-
-typedef enum AclsanCallbackId {
-    ACLSAN_CBID_INVALID = 0,
-
-    ACLSAN_CBID_RESOURCE_INVALID = 0,
-    ACLSAN_CBID_RESOURCE_MEMORY_ALLOC = 1,
-    ACLSAN_CBID_RESOURCE_MEMORY_FREE = 2,
-    ACLSAN_CBID_RESOURCE_MODULE_LOAD = 3,
-    ACLSAN_CBID_RESOURCE_MODULE_UNLOAD = 4,
-    ACLSAN_CBID_RESOURCE_FUNCTION_GET = 5,
-
-    ACLSAN_CBID_MEMORY_INVALID = 0,
-    ACLSAN_CBID_MEMORY_MEMCPY_BEGIN = 1,
-    ACLSAN_CBID_MEMORY_MEMCPY_END = 2,
-    ACLSAN_CBID_MEMORY_MEMSET_BEGIN = 3,
-    ACLSAN_CBID_MEMORY_MEMSET_END = 4,
-
-    ACLSAN_CBID_BINARY_INVALID = 0,
-    ACLSAN_CBID_BINARY_LOAD_BEGIN = 1,
-    ACLSAN_CBID_BINARY_LOAD_END = 2,
-
-    ACLSAN_CBID_PATCH_INVALID = 0,
-    ACLSAN_CBID_PATCH_BEGIN = 1,
-    ACLSAN_CBID_PATCH_END = 2,
-    ACLSAN_CBID_PATCH_SITE_MAP_CREATED = 3,
-
-    ACLSAN_CBID_LAUNCH_INVALID = 0,
-    ACLSAN_CBID_LAUNCH_BEGIN = 1,
-    ACLSAN_CBID_LAUNCH_END = 2,
-
-    ACLSAN_CBID_SYNCHRONIZE_INVALID = 0,
-    ACLSAN_CBID_SYNCHRONIZE_STREAM_SYNC_END = 1,
-    ACLSAN_CBID_SYNCHRONIZE_DEVICE_SYNC_END = 2,
-    ACLSAN_CBID_SYNCHRONIZE_END = ACLSAN_CBID_SYNCHRONIZE_STREAM_SYNC_END,
-
-    ACLSAN_CBID_DEVICE_INSTRUCTION_INVALID = 0,
-    ACLSAN_CBID_DEVICE_MEMORY_ACCESS = 1,
-    ACLSAN_CBID_DEVICE_SYNC = 2,
-    ACLSAN_CBID_DEVICE_STATE = 3,
-    ACLSAN_CBID_DEVICE_CONTROL = 4,
-    ACLSAN_CBID_DEVICE_ERROR = 5,
-
-    ACLSAN_CBID_DEVICE_INSTRUCTION_MTE2 = ACLSAN_CBID_DEVICE_MEMORY_ACCESS,
-    ACLSAN_CBID_DEVICE_INSTRUCTION_MTE3 = ACLSAN_CBID_DEVICE_MEMORY_ACCESS,
-    ACLSAN_CBID_DEVICE_INSTRUCTION_FIXPIPE = ACLSAN_CBID_DEVICE_MEMORY_ACCESS,
-    ACLSAN_CBID_DEVICE_INSTRUCTION_SET_WAIT_FLAG = ACLSAN_CBID_DEVICE_SYNC,
-    ACLSAN_CBID_DEVICE_INSTRUCTION_GET_RLS_BUF = ACLSAN_CBID_DEVICE_SYNC,
-
-    ACLSAN_CBID_REPORT_INVALID = 0,
-    ACLSAN_CBID_REPORT_RECORD = 1,
-
-    ACLSAN_CBID_ERROR_INVALID = 0,
-    ACLSAN_CBID_ERROR_RECORD = 1
-} AclsanCallbackId;
 
 typedef enum AclsanPatchPipeline {
     ACLSAN_PATCH_PIPELINE_INVALID = 0,
@@ -125,6 +43,20 @@ typedef enum AclsanPatchPipeline {
     ACLSAN_PATCH_PIPELINE_MTE3 = 4,
     ACLSAN_PATCH_PIPELINE_FIXPIPE = 5
 } AclsanPatchPipeline;
+
+typedef enum AclsanDeviceSourceKind {
+    ACLSAN_DEVICE_SOURCE_UNKNOWN = 0,
+    ACLSAN_DEVICE_SOURCE_MTE2 = 1,
+    ACLSAN_DEVICE_SOURCE_MTE3 = 2,
+    ACLSAN_DEVICE_SOURCE_FIXPIPE = 3,
+    ACLSAN_DEVICE_SOURCE_SET_WAIT_FLAG = 4,
+    ACLSAN_DEVICE_SOURCE_GET_RLS_BUF = 5,
+    ACLSAN_DEVICE_SOURCE_LD = 6,
+    ACLSAN_DEVICE_SOURCE_ST = 7,
+    ACLSAN_DEVICE_SOURCE_VECTOR = 8,
+    ACLSAN_DEVICE_SOURCE_CUBE = 9,
+    ACLSAN_DEVICE_SOURCE_SCALAR = 10
+} AclsanDeviceSourceKind;
 
 typedef enum AclsanRuntimeApiId {
     ACLSAN_RT_API_ACL_INIT = 1,
@@ -190,6 +122,15 @@ typedef struct AclsanLaunchConfig {
     char readyPath[ACLSAN_PATH_MAX];
 } AclsanLaunchConfig;
 
+typedef struct AclsanSubscribeDesc {
+    uint32_t version;
+    uint32_t size;
+    const char* name;
+    AclsanCallbackFunc callback;
+    void* userdata;
+    uint64_t flags;
+} AclsanSubscribeDesc;
+
 typedef struct AclsanRuntimeHookRule {
     uint32_t api;
     uint32_t actions;
@@ -212,18 +153,6 @@ typedef struct AclsanRuntimeHookState {
     uint64_t generation;
     AclsanRuntimeHookPlan activePlan;
 } AclsanRuntimeHookState;
-
-typedef struct AclsanRuntimeApiTable {
-    uint32_t version;
-    uint32_t size;
-    int (*mallocDevice)(void** devPtr, size_t bytes, uint32_t policy);
-    int (*freeDevice)(void* devPtr);
-    int (*mallocHost)(void** hostPtr, size_t bytes);
-    int (*freeHost)(void* hostPtr);
-    int (*memcpy)(void* dst, size_t dstMax, const void* src, size_t bytes, int kind);
-    int (*memset)(void* dst, size_t dstMax, int32_t value, size_t bytes);
-    int (*synchronizeStream)(void* stream);
-} AclsanRuntimeApiTable;
 
 typedef struct AclsanRawTraceRecord {
     uint32_t magic;

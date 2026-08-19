@@ -23,7 +23,7 @@
 
 namespace {
 
-constexpr std::size_t kRuntimeApiCount = 14;
+constexpr std::size_t kRuntimeApiCount = 16;
 
 struct KernelArgs {
     std::uint8_t* value;
@@ -126,6 +126,20 @@ aclError RealAclrtLaunchKernel(aclrtFuncHandle, std::uint32_t, const void* argsD
     return ACL_SUCCESS;
 }
 
+aclError RealAclrtGetFuncBySymbol(const void* symbol, aclrtFuncHandle* funcHandle)
+{
+    if (symbol == nullptr || funcHandle == nullptr) {
+        return ACL_ERROR_INVALID_PARAM;
+    }
+    *funcHandle = const_cast<void*>(symbol);
+    return ACL_SUCCESS;
+}
+
+aclError RealAclrtBinaryUnLoad(aclrtBinHandle binHandle)
+{
+    return binHandle == nullptr ? ACL_ERROR_INVALID_PARAM : ACL_SUCCESS;
+}
+
 template <typename Function>
 aclrtApiFunc ToGenericFunction(Function function)
 {
@@ -158,6 +172,9 @@ std::array<RuntimeEntry, kRuntimeApiCount> g_runtimeEntries = {{
     {"aclrtBinaryGetFunctionByEntry", ToGenericFunction(&RealAclrtBinaryGetFunctionByEntry),
      ToGenericFunction(&RealAclrtBinaryGetFunctionByEntry)},
     {"aclrtLaunchKernel", ToGenericFunction(&RealAclrtLaunchKernel), ToGenericFunction(&RealAclrtLaunchKernel)},
+    {"aclrtGetFuncBySymbol", ToGenericFunction(&RealAclrtGetFuncBySymbol),
+     ToGenericFunction(&RealAclrtGetFuncBySymbol)},
+    {"aclrtBinaryUnLoad", ToGenericFunction(&RealAclrtBinaryUnLoad), ToGenericFunction(&RealAclrtBinaryUnLoad)},
 }};
 
 std::mutex g_runtimeMutex;
@@ -302,6 +319,16 @@ extern "C" aclError aclrtMemset(void* devPtr, std::size_t maxCount, std::int32_t
 extern "C" aclError aclrtSynchronizeStream(aclrtStream stream)
 {
     return CallCurrent<aclError (*)(aclrtStream)>("aclrtSynchronizeStream", stream);
+}
+
+extern "C" aclError aclrtGetFuncBySymbol(const void* symbol, aclrtFuncHandle* funcHandle)
+{
+    return CallCurrent<aclError (*)(const void*, aclrtFuncHandle*)>("aclrtGetFuncBySymbol", symbol, funcHandle);
+}
+
+extern "C" aclError aclrtBinaryUnLoad(aclrtBinHandle binHandle)
+{
+    return CallCurrent<aclError (*)(aclrtBinHandle)>("aclrtBinaryUnLoad", binHandle);
 }
 
 extern "C" aclError aclrtLaunchKernelWithHostArgs(

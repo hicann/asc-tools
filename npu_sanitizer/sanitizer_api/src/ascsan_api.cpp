@@ -8,237 +8,201 @@
  * See LICENSE in the root of the software repository for the full text of the License.
  */
 
-#include "api_core.h"
-#include "ascsan/internal_api.h"
+#include "internal/ascsan_api_core.h"
+#include "internal/ascsan_internal_api.h"
 
 #include <new>
 
-using ascsan::ApiCore;
+using aclsan::ApiCore;
 
 namespace {
 
 template <typename Fn>
-AscsanStatus GuardedStatusImpl(Fn&& fn) noexcept
+AclsanStatus GuardedStatusImpl(Fn&& fn) noexcept
 {
     try {
         return fn();
     } catch (const std::bad_alloc&) {
-        return ASCSAN_STATUS_ERROR_OUT_OF_MEMORY;
+        return ACLSAN_STATUS_ERROR_OUT_OF_MEMORY;
     } catch (...) {
-        return ASCSAN_STATUS_ERROR_RUNTIME;
+        return ACLSAN_STATUS_ERROR_RUNTIME;
     }
 }
 
 } // namespace
 
-#define ASCSAN_GUARDED_STATUS(expr) GuardedStatusImpl([&]() -> AscsanStatus { return (expr); })
+#define ACLSAN_GUARDED_STATUS(expr) GuardedStatusImpl([&]() -> AclsanStatus { return (expr); })
 
-extern "C" AscsanStatus ascsanInitialize(const AscsanInitParams* params)
+extern "C" const char* aclsanGetVersionString(void) { return ApiCore::Instance().VersionString(); }
+
+extern "C" AclsanStatus aclsanExportLaunchConfigToFd(const AclsanLaunchConfig* config, int fd)
 {
-    return ASCSAN_GUARDED_STATUS(ApiCore::Instance().Initialize(params));
+    return ACLSAN_GUARDED_STATUS(ApiCore::Instance().ExportLaunchConfigToFd(config, fd));
 }
 
-extern "C" AscsanStatus ascsanFinalize(void) { return ASCSAN_GUARDED_STATUS(ApiCore::Instance().Finalize()); }
-
-extern "C" const char* ascsanGetVersionString(void) { return ApiCore::Instance().VersionString(); }
-
-extern "C" AscsanStatus ascsanExportLaunchConfigToFd(const AscsanLaunchConfig* config, int fd)
+extern "C" AclsanStatus aclsanImportLaunchConfigFromFd(int fd, AclsanLaunchConfig* config)
 {
-    return ASCSAN_GUARDED_STATUS(ApiCore::Instance().ExportLaunchConfigToFd(config, fd));
+    return ACLSAN_GUARDED_STATUS(ApiCore::Instance().ImportLaunchConfigFromFd(fd, config));
 }
 
-extern "C" AscsanStatus ascsanImportLaunchConfigFromFd(int fd, AscsanLaunchConfig* config)
+extern "C" AclsanStatus aclsanApplyLaunchConfig(const AclsanLaunchConfig* config)
 {
-    return ASCSAN_GUARDED_STATUS(ApiCore::Instance().ImportLaunchConfigFromFd(fd, config));
+    return ACLSAN_GUARDED_STATUS(ApiCore::Instance().ApplyLaunchConfig(config));
 }
 
-extern "C" AscsanStatus ascsanApplyLaunchConfig(const AscsanLaunchConfig* config)
+extern "C" const AclsanLaunchConfig* aclsanGetLaunchConfig(void) { return ApiCore::Instance().GetLaunchConfig(); }
+
+extern "C" AclsanStatus aclsanRegisterBuiltinPatchPipelines(void)
 {
-    return ASCSAN_GUARDED_STATUS(ApiCore::Instance().ApplyLaunchConfig(config));
+    return ACLSAN_GUARDED_STATUS(ApiCore::Instance().RegisterBuiltinPatchPipelines());
 }
 
-extern "C" const AscsanLaunchConfig* ascsanGetLaunchConfig(void) { return ApiCore::Instance().GetLaunchConfig(); }
-
-extern "C" AscsanStatus ascsanSubscribe(const AscsanSubscribeDesc* desc, AscsanSubscriberHandle* subscriber)
+extern "C" AclsanStatus aclsanRegisterPatchImage(const AclsanPatchImageDesc* desc, uint64_t* patchImageId)
 {
-    return ASCSAN_GUARDED_STATUS(ApiCore::Instance().Subscribe(desc, subscriber));
+    return ACLSAN_GUARDED_STATUS(ApiCore::Instance().RegisterPatchImage(desc, patchImageId));
 }
 
-extern "C" AscsanStatus ascsanUnsubscribe(AscsanSubscriberHandle subscriber)
+extern "C" AclsanStatus aclsanRegisterPatchPipeline(const AclsanPatchPipelineDesc* desc)
 {
-    return ASCSAN_GUARDED_STATUS(ApiCore::Instance().Unsubscribe(subscriber));
+    return ACLSAN_GUARDED_STATUS(ApiCore::Instance().RegisterPatchPipeline(desc));
 }
 
-extern "C" AscsanStatus ascsanEnableCallback(
-    AscsanSubscriberHandle subscriber, AscsanCallbackDomain domain, uint32_t cbid, int enable)
+extern "C" AclsanStatus aclsanSetPatchOptions(const AclsanPatchOptions* options)
 {
-    return ASCSAN_GUARDED_STATUS(ApiCore::Instance().EnableCallback(subscriber, domain, cbid, enable != 0));
+    return ACLSAN_GUARDED_STATUS(ApiCore::Instance().SetPatchOptions(options));
 }
 
-extern "C" AscsanStatus ascsanEnableDomain(AscsanSubscriberHandle subscriber, AscsanCallbackDomain domain, int enable)
+extern "C" AclsanStatus aclsanBuildPatchPlanForBinary(AclsanBinaryHandle binary, AclsanPatchPlanHandle* plan)
 {
-    return ASCSAN_GUARDED_STATUS(ApiCore::Instance().EnableDomain(subscriber, domain, enable != 0));
+    return ACLSAN_GUARDED_STATUS(ApiCore::Instance().BuildPatchPlanForBinary(binary, plan));
 }
 
-extern "C" AscsanStatus ascsanGetCallbackState(
-    AscsanSubscriberHandle subscriber, AscsanCallbackDomain domain, uint32_t cbid, int* enabled)
+extern "C" AclsanStatus aclsanPatchBinaryFromImage(
+    const AclsanPatchImageDesc* image, const AclsanPatchOptions* options, char* patchedPath, uint64_t patchedPathSize,
+    AclsanPatchPlanHandle* plan)
 {
-    return ASCSAN_GUARDED_STATUS(ApiCore::Instance().GetCallbackState(subscriber, domain, cbid, enabled));
-}
-
-extern "C" int ascsanIsInsideCallback(void) { return ApiCore::Instance().IsInsideCallback() ? 1 : 0; }
-
-extern "C" AscsanStatus ascsanRegisterBuiltinPatchPipelines(void)
-{
-    return ASCSAN_GUARDED_STATUS(ApiCore::Instance().RegisterBuiltinPatchPipelines());
-}
-
-extern "C" AscsanStatus ascsanRegisterPatchImage(const AscsanPatchImageDesc* desc, uint64_t* patchImageId)
-{
-    return ASCSAN_GUARDED_STATUS(ApiCore::Instance().RegisterPatchImage(desc, patchImageId));
-}
-
-extern "C" AscsanStatus ascsanRegisterPatchPipeline(const AscsanPatchPipelineDesc* desc)
-{
-    return ASCSAN_GUARDED_STATUS(ApiCore::Instance().RegisterPatchPipeline(desc));
-}
-
-extern "C" AscsanStatus ascsanSetPatchOptions(const AscsanPatchOptions* options)
-{
-    return ASCSAN_GUARDED_STATUS(ApiCore::Instance().SetPatchOptions(options));
-}
-
-extern "C" AscsanStatus ascsanBuildPatchPlanForBinary(AscsanBinaryHandle binary, AscsanPatchPlanHandle* plan)
-{
-    return ASCSAN_GUARDED_STATUS(ApiCore::Instance().BuildPatchPlanForBinary(binary, plan));
-}
-
-extern "C" AscsanStatus ascsanPatchBinaryFromImage(
-    const AscsanPatchImageDesc* image, const AscsanPatchOptions* options, char* patchedPath, uint64_t patchedPathSize,
-    AscsanPatchPlanHandle* plan)
-{
-    return ASCSAN_GUARDED_STATUS(
+    return ACLSAN_GUARDED_STATUS(
         ApiCore::Instance().PatchBinaryFromImage(image, options, patchedPath, patchedPathSize, plan));
 }
 
-extern "C" AscsanStatus ascsanGetPatchSiteInfo(uint32_t siteId, AscsanPatchSiteInfo* info)
+extern "C" AclsanStatus aclsanGetPatchSiteInfo(uint32_t siteId, AclsanPatchSiteInfo* info)
 {
-    return ASCSAN_GUARDED_STATUS(ApiCore::Instance().GetPatchSiteInfo(siteId, info));
+    return ACLSAN_GUARDED_STATUS(ApiCore::Instance().GetPatchSiteInfo(siteId, info));
 }
 
-extern "C" AscsanStatus ascsanSymbolizeDevicePc(
-    const AscsanDevicePcQuery* query, char* payload, uint64_t payloadSize, uint64_t* payloadBytes)
+extern "C" AclsanStatus aclsanSymbolizeDevicePc(
+    const AclsanDevicePcQuery* query, char* payload, uint64_t payloadSize, uint64_t* payloadBytes)
 {
-    return ASCSAN_GUARDED_STATUS(ApiCore::Instance().SymbolizeDevicePc(query, payload, payloadSize, payloadBytes));
+    return ACLSAN_GUARDED_STATUS(ApiCore::Instance().SymbolizeDevicePc(query, payload, payloadSize, payloadBytes));
 }
 
-extern "C" AscsanStatus ascsanSetLaunchUserData(
-    AscsanLaunchHandle launch, void* function, void* stream, const void* deviceUserData, uint64_t deviceUserDataSize)
+extern "C" AclsanStatus aclsanSetLaunchUserData(
+    AclsanLaunchHandle launch, void* function, void* stream, const void* deviceUserData, uint64_t deviceUserDataSize)
 {
-    return ASCSAN_GUARDED_STATUS(
+    return ACLSAN_GUARDED_STATUS(
         ApiCore::Instance().SetLaunchUserData(launch, function, stream, deviceUserData, deviceUserDataSize));
 }
 
-extern "C" AscsanStatus ascsanMemoryAlloc(const AscsanMemoryAllocDesc* desc, void** ptr, AscsanMemoryHandle* memory)
+extern "C" AclsanStatus aclsanMemoryAlloc(const AclsanMemoryAllocDesc* desc, void** ptr, AclsanMemoryHandle* memory)
 {
-    return ASCSAN_GUARDED_STATUS(ApiCore::Instance().MemoryAlloc(desc, ptr, memory));
+    return ACLSAN_GUARDED_STATUS(ApiCore::Instance().MemoryAlloc(desc, ptr, memory));
 }
 
-extern "C" AscsanStatus ascsanMemoryFree(void* ptr)
+extern "C" AclsanStatus aclsanMemoryFree(void* ptr)
 {
-    return ASCSAN_GUARDED_STATUS(ApiCore::Instance().MemoryFree(ptr));
+    return ACLSAN_GUARDED_STATUS(ApiCore::Instance().MemoryFree(ptr));
 }
 
-extern "C" AscsanStatus ascsanMemoryMemcpy(
-    void* dst, uint64_t dstMax, const void* src, uint64_t bytes, AscsanMemcpyKind kind)
+extern "C" AclsanStatus aclsanMemoryMemcpy(
+    void* dst, uint64_t dstMax, const void* src, uint64_t bytes, AclsanMemcpyKind kind)
 {
-    return ASCSAN_GUARDED_STATUS(ApiCore::Instance().MemoryMemcpy(dst, dstMax, src, bytes, kind));
+    return ACLSAN_GUARDED_STATUS(ApiCore::Instance().MemoryMemcpy(dst, dstMax, src, bytes, kind));
 }
 
-extern "C" AscsanStatus ascsanMemoryMemcpyAsync(
-    void* dst, uint64_t dstMax, const void* src, uint64_t bytes, AscsanMemcpyKind kind, void*)
+extern "C" AclsanStatus aclsanMemoryMemcpyAsync(
+    void* dst, uint64_t dstMax, const void* src, uint64_t bytes, AclsanMemcpyKind kind, void*)
 {
-    return ASCSAN_GUARDED_STATUS(ApiCore::Instance().MemoryMemcpy(dst, dstMax, src, bytes, kind));
+    return ACLSAN_GUARDED_STATUS(ApiCore::Instance().MemoryMemcpy(dst, dstMax, src, bytes, kind));
 }
 
-extern "C" AscsanStatus ascsanMemoryMemset(void* dst, uint64_t dstMax, int32_t value, uint64_t bytes)
+extern "C" AclsanStatus aclsanMemoryMemset(void* dst, uint64_t dstMax, int32_t value, uint64_t bytes)
 {
-    return ASCSAN_GUARDED_STATUS(ApiCore::Instance().MemoryMemset(dst, dstMax, value, bytes));
+    return ACLSAN_GUARDED_STATUS(ApiCore::Instance().MemoryMemset(dst, dstMax, value, bytes));
 }
 
-extern "C" AscsanStatus ascsanMemoryMemsetAsync(void* dst, uint64_t dstMax, int32_t value, uint64_t bytes, void*)
+extern "C" AclsanStatus aclsanMemoryMemsetAsync(void* dst, uint64_t dstMax, int32_t value, uint64_t bytes, void*)
 {
-    return ASCSAN_GUARDED_STATUS(ApiCore::Instance().MemoryMemset(dst, dstMax, value, bytes));
+    return ACLSAN_GUARDED_STATUS(ApiCore::Instance().MemoryMemset(dst, dstMax, value, bytes));
 }
 
-extern "C" AscsanStatus ascsanMemorySynchronizeStream(void* stream)
+extern "C" AclsanStatus aclsanMemorySynchronizeStream(void* stream)
 {
-    return ASCSAN_GUARDED_STATUS(ApiCore::Instance().MemorySynchronizeStream(stream));
+    return ACLSAN_GUARDED_STATUS(ApiCore::Instance().MemorySynchronizeStream(stream));
 }
 
-extern "C" AscsanStatus ascsanMemoryGetInfo(const void* ptr, AscsanMemoryInfo* info)
+extern "C" AclsanStatus aclsanMemoryGetInfo(const void* ptr, AclsanMemoryInfo* info)
 {
-    return ASCSAN_GUARDED_STATUS(ApiCore::Instance().MemoryGetInfo(ptr, info));
+    return ACLSAN_GUARDED_STATUS(ApiCore::Instance().MemoryGetInfo(ptr, info));
 }
 
-extern "C" AscsanStatus ascsanDeviceMalloc(void** devPtr, uint64_t bytes)
+extern "C" AclsanStatus aclsanDeviceMalloc(void** devPtr, uint64_t bytes)
 {
-    AscsanMemoryAllocDesc desc{};
-    desc.version = ASCSAN_API_VERSION;
+    AclsanMemoryAllocDesc desc{};
+    desc.version = ACLSAN_API_VERSION;
     desc.size = sizeof(desc);
-    desc.space = ASCSAN_MEMORY_SPACE_DEVICE;
+    desc.space = ACLSAN_MEMORY_SPACE_DEVICE;
     desc.bytes = bytes;
-    desc.flags = ASCSAN_MEMORY_FLAG_INTERNAL;
-    return ASCSAN_GUARDED_STATUS(ApiCore::Instance().MemoryAlloc(&desc, devPtr, nullptr));
+    desc.flags = ACLSAN_MEMORY_FLAG_INTERNAL;
+    return ACLSAN_GUARDED_STATUS(ApiCore::Instance().MemoryAlloc(&desc, devPtr, nullptr));
 }
 
-extern "C" AscsanStatus ascsanDeviceFree(void* devPtr)
+extern "C" AclsanStatus aclsanDeviceFree(void* devPtr)
 {
-    return ASCSAN_GUARDED_STATUS(ApiCore::Instance().MemoryFree(devPtr));
+    return ACLSAN_GUARDED_STATUS(ApiCore::Instance().MemoryFree(devPtr));
 }
 
-extern "C" AscsanStatus ascsanMemcpyD2H(void* dstHost, const void* srcDevice, uint64_t bytes)
+extern "C" AclsanStatus aclsanMemcpyD2H(void* dstHost, const void* srcDevice, uint64_t bytes)
 {
-    return ASCSAN_GUARDED_STATUS(
-        ApiCore::Instance().MemoryMemcpy(dstHost, bytes, srcDevice, bytes, ASCSAN_MEMCPY_DEVICE_TO_HOST));
+    return ACLSAN_GUARDED_STATUS(
+        ApiCore::Instance().MemoryMemcpy(dstHost, bytes, srcDevice, bytes, ACLSAN_MEMCPY_DEVICE_TO_HOST));
 }
 
-extern "C" AscsanStatus ascsanMemcpyH2D(void* dstDevice, const void* srcHost, uint64_t bytes)
+extern "C" AclsanStatus aclsanMemcpyH2D(void* dstDevice, const void* srcHost, uint64_t bytes)
 {
-    return ASCSAN_GUARDED_STATUS(
-        ApiCore::Instance().MemoryMemcpy(dstDevice, bytes, srcHost, bytes, ASCSAN_MEMCPY_HOST_TO_DEVICE));
+    return ACLSAN_GUARDED_STATUS(
+        ApiCore::Instance().MemoryMemcpy(dstDevice, bytes, srcHost, bytes, ACLSAN_MEMCPY_HOST_TO_DEVICE));
 }
 
-extern "C" AscsanStatus ascsanStreamSynchronize(void* stream)
+extern "C" AclsanStatus aclsanStreamSynchronize(void* stream)
 {
-    return ASCSAN_GUARDED_STATUS(ApiCore::Instance().MemorySynchronizeStream(stream));
+    return ACLSAN_GUARDED_STATUS(ApiCore::Instance().MemorySynchronizeStream(stream));
 }
 
-extern "C" AscsanStatus ascsanOnRuntimeEvent(const AscsanRuntimeEvent* event)
+extern "C" AclsanStatus aclsanOnRuntimeEvent(const AclsanRuntimeEvent* event)
 {
-    return ASCSAN_GUARDED_STATUS(ApiCore::Instance().OnRuntimeEvent(event));
+    return ACLSAN_GUARDED_STATUS(ApiCore::Instance().OnRuntimeEvent(event));
 }
 
-extern "C" AscsanStatus ascsanConfigureRuntimeHook(const AscsanRuntimeHookPlan* plan)
+extern "C" AclsanStatus aclsanConfigureRuntimeHook(const AclsanRuntimeHookPlan* plan)
 {
-    return ASCSAN_GUARDED_STATUS(ApiCore::Instance().ConfigureRuntimeHook(plan));
+    return ACLSAN_GUARDED_STATUS(ApiCore::Instance().ConfigureRuntimeHook(plan));
 }
 
-extern "C" AscsanStatus ascsanGetRuntimeHookState(AscsanRuntimeHookState* state)
+extern "C" AclsanStatus aclsanGetRuntimeHookState(AclsanRuntimeHookState* state)
 {
-    return ASCSAN_GUARDED_STATUS(ApiCore::Instance().GetRuntimeHookState(state));
+    return ACLSAN_GUARDED_STATUS(ApiCore::Instance().GetRuntimeHookState(state));
 }
 
-extern "C" AscsanStatus ascsanIngestRawTraces(const AscsanRawTraceRecord* records, uint64_t count)
+extern "C" AclsanStatus aclsanIngestRawTraces(const AclsanRawTraceRecord* records, uint64_t count)
 {
-    return ASCSAN_GUARDED_STATUS(ApiCore::Instance().IngestRawTraces(records, count));
+    return ACLSAN_GUARDED_STATUS(ApiCore::Instance().IngestRawTraces(records, count));
 }
 
-extern "C" AscsanStatus ascsanReportError(const char* tool, const char* message)
+extern "C" AclsanStatus aclsanReportError(const char* tool, const char* message)
 {
-    return ASCSAN_GUARDED_STATUS(ApiCore::Instance().ReportError(tool, message));
+    return ACLSAN_GUARDED_STATUS(ApiCore::Instance().ReportError(tool, message));
 }
 
-extern "C" AscsanStatus ascsanFlushReports(void) { return ASCSAN_GUARDED_STATUS(ApiCore::Instance().FlushReports()); }
+extern "C" AclsanStatus aclsanFlushReports(void) { return ACLSAN_GUARDED_STATUS(ApiCore::Instance().FlushReports()); }
 
-#undef ASCSAN_GUARDED_STATUS
+#undef ACLSAN_GUARDED_STATUS

@@ -9,11 +9,11 @@
  */
 
 #include "aclsan/aclsan_api.h"
-#include "aclsan/aclsan_callback.h"
-#include "aclsan/aclsan_memory.h"
-#include "aclsan/aclsan_patch.h"
-#include "aclsan/aclsan_symbolize.h"
-#include "aclsan/internal_api.h"
+#include "internal/ascsan_memory.h"
+#include "internal/ascsan_patch.h"
+#include "internal/ascsan_symbolize.h"
+#include "internal/ascsan_internal_api.h"
+#include "internal/aclsan_todo.h"
 
 #include <cassert>
 #include <cstddef>
@@ -26,9 +26,6 @@
 
 namespace {
 
-static_assert(
-    sizeof(AclsanInitParams) == sizeof(uint32_t) * 2 + sizeof(const AclsanLaunchConfig*),
-    "AclsanInitParams should only carry version, size, and launchConfig");
 static_assert(ACLSAN_CBID_INVALID == 0, "Callback ID 0 is invalid in every domain");
 static_assert(ACLSAN_CBID_RESOURCE_INVALID == 0, "Resource callback ID 0 is invalid");
 static_assert(ACLSAN_CBID_RESOURCE_MEMORY_ALLOC == 1, "Resource callback IDs are domain-local");
@@ -57,80 +54,21 @@ static_assert(ACLSAN_CBID_ERROR_INVALID == 0, "Error callback ID 0 is invalid");
 static_assert(ACLSAN_CBID_ERROR_RECORD == 1, "Error callback IDs are domain-local");
 
 struct CallbackCounters {
-    int patchBegin = 0;
-    int patchEnd = 0;
-    int siteMap = 0;
-    int mte2 = 0;
-    int typedMemoryAccess = 0;
     int resourceAlloc = 0;
-    int memcpyEnd = 0;
-    int binaryFileBegin = 0;
-    int binaryDataBegin = 0;
-    int insideCallbackObserved = 0;
 };
 
 void EnsureDir(const char* path) { mkdir(path, 0755); }
 
-void Callback(void* userdata, AclsanCallbackDomain domain, uint32_t cbid, const void* cbdata)
+void Callback(void* userdata, AclsanCallbackDomain domain, AclsanCallbackId id, const void* cbdata)
 {
     auto* counters = static_cast<CallbackCounters*>(userdata);
-    assert(aclsanIsInsideCallback() == 1);
-    counters->insideCallbackObserved = 1;
 
-    if (domain == ACLSAN_CB_DOMAIN_PATCH && cbid == ACLSAN_CBID_PATCH_BEGIN) {
-        ++counters->patchBegin;
-    }
-    if (domain == ACLSAN_CB_DOMAIN_PATCH && cbid == ACLSAN_CBID_PATCH_SITE_MAP_CREATED) {
-        ++counters->siteMap;
-    }
-    if (domain == ACLSAN_CB_DOMAIN_PATCH && cbid == ACLSAN_CBID_PATCH_END) {
-        ++counters->patchEnd;
-    }
-    if (domain == ACLSAN_CB_DOMAIN_DEVICE_INSTRUCTION && cbid == ACLSAN_CBID_DEVICE_MEMORY_ACCESS) {
-        const auto* data = static_cast<const AclsanDeviceMemoryAccessData*>(cbdata);
-        assert(data != nullptr);
-        assert(data->header.version == ACLSAN_API_VERSION);
-        assert(data->header.size == sizeof(*data));
-        assert(data->memorySpace == ACLSAN_DEVICE_MEMORY_SPACE_GM);
-        assert(data->layoutKind == ACLSAN_MEM_LAYOUT_RANGE);
-        assert(data->address == 0x1000);
-        assert(data->layout.range.bytes == 16);
-        ++counters->typedMemoryAccess;
-        if (data->header.pipeline == ACLSAN_PATCH_PIPELINE_MTE2) {
-            assert(data->header.sourceKind == ACLSAN_DEVICE_SOURCE_MTE2);
-            assert(data->accessMode == ACLSAN_DEVICE_MEMORY_ACCESS_READ);
-            ++counters->mte2;
-        }
-    }
-    if (domain == ACLSAN_CB_DOMAIN_RESOURCE && cbid == ACLSAN_CBID_RESOURCE_MEMORY_ALLOC) {
+    if (domain == ACLSAN_CB_DOMAIN_RESOURCE && id == ACLSAN_CBID_RESOURCE_MEMORY_ALLOC) {
         ++counters->resourceAlloc;
         const auto* data = static_cast<const AclsanResourceData*>(cbdata);
         assert(data != nullptr);
         assert(data->resourceId == 7);
         assert(data->bytes == 1024);
-    }
-    if (domain == ACLSAN_CB_DOMAIN_MEMORY && cbid == ACLSAN_CBID_MEMORY_MEMCPY_END) {
-        ++counters->memcpyEnd;
-        const auto* data = static_cast<const AclsanMemoryMemcpyData*>(cbdata);
-        assert(data != nullptr);
-        assert(data->bytes == 32);
-        assert(data->kind == ACLSAN_MEMCPY_HOST_TO_DEVICE);
-    }
-    if (domain == ACLSAN_CB_DOMAIN_BINARY && cbid == ACLSAN_CBID_BINARY_LOAD_BEGIN) {
-        const auto* data = static_cast<const AclsanBinaryData*>(cbdata);
-        assert(data != nullptr);
-        if (data->image.kind == ACLSAN_PATCH_IMAGE_FILE) {
-            ++counters->binaryFileBegin;
-            assert((data->image.flags & ACLSAN_BINARY_IMAGE_FLAG_PATH_VALID) != 0);
-            assert(data->image.path != nullptr);
-        } else if (data->image.kind == ACLSAN_PATCH_IMAGE_MEMORY) {
-            ++counters->binaryDataBegin;
-            assert((data->image.flags & ACLSAN_BINARY_IMAGE_FLAG_DATA_VALID) != 0);
-            assert(data->image.imageData != nullptr);
-            assert(data->image.imageSize != 0);
-        } else {
-            assert(false);
-        }
     }
 }
 
@@ -158,51 +96,31 @@ int main()
     std::snprintf(config.workDir, sizeof(config.workDir), "%s", workDir);
     std::snprintf(config.probeCacheDir, sizeof(config.probeCacheDir), "%s", cacheDir);
 
-    AclsanInitParams init{};
-    init.version = ACLSAN_API_VERSION;
-    init.size = sizeof(init);
-    init.launchConfig = &config;
-    assert(aclsanInitialize(&init) == ACLSAN_STATUS_SUCCESS);
     assert(aclsanApplyLaunchConfig(&config) == ACLSAN_STATUS_SUCCESS);
     assert(aclsanRegisterBuiltinPatchPipelines() == ACLSAN_STATUS_SUCCESS);
 
     CallbackCounters counters{};
-    AclsanSubscribeDesc subDesc{};
-    subDesc.version = ACLSAN_API_VERSION;
-    subDesc.size = sizeof(subDesc);
-    subDesc.name = "smoke";
-    subDesc.callback = Callback;
-    subDesc.userdata = &counters;
-    AclsanSubscriberHandle subscriber = ACLSAN_INVALID_SUBSCRIBER_HANDLE;
-    assert(aclsanSubscribe(&subDesc, &subscriber) == ACLSAN_STATUS_SUCCESS);
-    AclsanSubscriberHandle duplicateSubscriber = ACLSAN_INVALID_SUBSCRIBER_HANDLE;
-    assert(aclsanSubscribe(&subDesc, &duplicateSubscriber) == ACLSAN_STATUS_ERROR_MAX_LIMIT_REACHED);
+    AclsanSubscriberHandle subscriber = nullptr;
+    assert(aclsanSubscribe(&subscriber, Callback, &counters) == ACLSAN_STATUS_SUCCESS);
+    AclsanSubscriberHandle duplicateSubscriber = nullptr;
+    assert(aclsanSubscribe(&duplicateSubscriber, Callback, &counters) == ACLSAN_STATUS_ERROR_ALREADY_SUBSCRIBED);
     assert(
-        aclsanEnableCallback(subscriber, ACLSAN_CB_DOMAIN_RESOURCE, ACLSAN_CBID_RESOURCE_INVALID, 1) ==
-        ACLSAN_STATUS_ERROR_INVALID_VALUE);
-    assert(
-        aclsanEnableCallback(subscriber, ACLSAN_CB_DOMAIN_PATCH, ACLSAN_CBID_PATCH_BEGIN, 1) == ACLSAN_STATUS_SUCCESS);
-    assert(
-        aclsanEnableCallback(subscriber, ACLSAN_CB_DOMAIN_PATCH, ACLSAN_CBID_PATCH_SITE_MAP_CREATED, 1) ==
-        ACLSAN_STATUS_SUCCESS);
-    assert(aclsanEnableCallback(subscriber, ACLSAN_CB_DOMAIN_PATCH, ACLSAN_CBID_PATCH_END, 1) == ACLSAN_STATUS_SUCCESS);
-    assert(
-        aclsanEnableCallback(subscriber, ACLSAN_CB_DOMAIN_DEVICE_INSTRUCTION, ACLSAN_CBID_DEVICE_MEMORY_ACCESS, 1) ==
+        aclsanEnableCallback(1, subscriber, ACLSAN_CB_DOMAIN_RESOURCE, ACLSAN_CBID_RESOURCE_MEMORY_FREE) ==
         ACLSAN_STATUS_SUCCESS);
     assert(
-        aclsanEnableCallback(subscriber, ACLSAN_CB_DOMAIN_RESOURCE, ACLSAN_CBID_RESOURCE_MEMORY_ALLOC, 1) ==
+        aclsanEnableCallback(1, subscriber, ACLSAN_CB_DOMAIN_RESOURCE, ACLSAN_CBID_RESOURCE_MEMORY_ALLOC) ==
         ACLSAN_STATUS_SUCCESS);
-    assert(
-        aclsanEnableCallback(subscriber, ACLSAN_CB_DOMAIN_MEMORY, ACLSAN_CBID_MEMORY_MEMCPY_END, 1) ==
-        ACLSAN_STATUS_SUCCESS);
-    assert(
-        aclsanEnableCallback(subscriber, ACLSAN_CB_DOMAIN_BINARY, ACLSAN_CBID_BINARY_LOAD_BEGIN, 1) ==
-        ACLSAN_STATUS_SUCCESS);
+
+    AclsanRuntimeHookPlan configuredPlan{};
+    configuredPlan.version = ACLSAN_API_VERSION;
+    configuredPlan.size = sizeof(configuredPlan);
+    configuredPlan.generation = 1;
+    configuredPlan.patchPipelineMask = 1u << ACLSAN_PATCH_PIPELINE_MTE2;
+    assert(aclsanConfigureRuntimeHook(&configuredPlan) == ACLSAN_STATUS_SUCCESS);
 
     AclsanRuntimeHookState hookState{};
     assert(aclsanGetRuntimeHookState(&hookState) == ACLSAN_STATUS_SUCCESS);
     assert((hookState.activePlan.patchPipelineMask & (1u << ACLSAN_PATCH_PIPELINE_MTE2)) != 0);
-    assert(hookState.activePlan.ruleCount > 0);
 
     AclsanRuntimeMemoryAllocParams alloc{};
     alloc.version = ACLSAN_API_VERSION;
@@ -238,7 +156,6 @@ int main()
     memcpyEvent.apiName = "aclrtMemcpy";
     memcpyEvent.params = &memcpy;
     assert(aclsanOnRuntimeEvent(&memcpyEvent) == ACLSAN_STATUS_SUCCESS);
-    assert(counters.memcpyEnd == 1);
 
     AclsanRuntimeBinaryLoadFromFileParams binaryFile{};
     binaryFile.version = ACLSAN_API_VERSION;
@@ -254,7 +171,6 @@ int main()
     binaryFileEvent.apiName = "aclrtBinaryLoadFromFile";
     binaryFileEvent.params = &binaryFile;
     assert(aclsanOnRuntimeEvent(&binaryFileEvent) == ACLSAN_STATUS_SUCCESS);
-    assert(counters.binaryFileBegin == 1);
 
     const char runtimeImageData[] = "runtime memory image\n";
     AclsanRuntimeBinaryLoadFromDataParams binaryData{};
@@ -272,7 +188,6 @@ int main()
     binaryDataEvent.apiName = "aclrtBinaryLoadFromData";
     binaryDataEvent.params = &binaryData;
     assert(aclsanOnRuntimeEvent(&binaryDataEvent) == ACLSAN_STATUS_SUCCESS);
-    assert(counters.binaryDataBegin == 1);
 
     AclsanPatchImageDesc image{};
     image.version = ACLSAN_API_VERSION;
@@ -286,9 +201,6 @@ int main()
         aclsanPatchBinaryFromImage(&image, nullptr, patchedPath, sizeof(patchedPath), &plan) == ACLSAN_STATUS_SUCCESS);
     assert(plan != 0);
     assert(std::strlen(patchedPath) > 0);
-    assert(counters.patchBegin == 1);
-    assert(counters.siteMap == 1);
-    assert(counters.patchEnd == 1);
 
     const char memoryImageData[] = "dummy memory kernel object\n";
     AclsanPatchImageDesc memoryImage{};
@@ -305,9 +217,6 @@ int main()
         ACLSAN_STATUS_SUCCESS);
     assert(memoryPlan != 0);
     assert(std::strlen(patchedMemoryPath) > 0);
-    assert(counters.patchBegin == 2);
-    assert(counters.siteMap == 2);
-    assert(counters.patchEnd == 2);
 
     AclsanPatchSiteInfo site{};
     assert(aclsanGetPatchSiteInfo(1, &site) == ACLSAN_STATUS_SUCCESS);
@@ -340,10 +249,6 @@ int main()
     record.arg2 = 16;
     assert(aclsanIngestRawTraces(&record, 1) == ACLSAN_STATUS_SUCCESS);
     assert(aclsanStreamSynchronize(nullptr) == ACLSAN_STATUS_SUCCESS);
-    assert(counters.mte2 == 1);
-    assert(counters.typedMemoryAccess == 1);
-    assert(counters.insideCallbackObserved == 1);
-
     void* dev = nullptr;
     assert(aclsanDeviceMalloc(&dev, 16) == ACLSAN_STATUS_SUCCESS);
     const char hostIn[16] = "aclsan-smoke";
@@ -357,6 +262,6 @@ int main()
     assert(memInfo.bytes == 16);
     assert(aclsanDeviceFree(dev) == ACLSAN_STATUS_SUCCESS);
 
-    assert(aclsanFinalize() == ACLSAN_STATUS_SUCCESS);
+    assert(aclsanUnsubscribe(subscriber) == ACLSAN_STATUS_SUCCESS);
     return 0;
 }

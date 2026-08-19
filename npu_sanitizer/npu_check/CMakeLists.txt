@@ -18,7 +18,7 @@ if(NOT TARGET npu_check_common)
     ${CMAKE_CURRENT_BINARY_DIR}/npu_check_common)
 endif()
 
-if(NOT TARGET aclsan_api)
+if(NOT TARGET acl_san)
   add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/../sanitizer_api
     ${CMAKE_CURRENT_BINARY_DIR}/sanitizer_api)
 endif()
@@ -38,7 +38,7 @@ target_include_directories(npu_check_core
 )
 target_link_libraries(npu_check_core
   PUBLIC npu_check_common
-  PRIVATE aclsan_api Threads::Threads
+  PRIVATE acl_san Threads::Threads
 )
 set_target_properties(npu_check_core PROPERTIES
   POSITION_INDEPENDENT_CODE ON
@@ -60,7 +60,7 @@ target_include_directories(npu_check
     ${CMAKE_CURRENT_LIST_DIR}/../sanitizer_api/include
 )
 target_link_libraries(npu_check
-  PRIVATE npu_check_core aclsan_api Threads::Threads
+  PRIVATE npu_check_core acl_san Threads::Threads
 )
 target_compile_options(npu_check PRIVATE -Wall -Wextra -Wpedantic)
 target_link_options(npu_check PRIVATE
@@ -106,7 +106,7 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR OR ENABLE_TEST)
     ${CMAKE_CURRENT_SOURCE_DIR}/src
     ${CMAKE_CURRENT_LIST_DIR}/../sanitizer_api/include
   )
-  target_link_libraries(npu_check_unit_tests PRIVATE npu_check_core aclsan_api Threads::Threads GTest::gtest)
+  target_link_libraries(npu_check_unit_tests PRIVATE npu_check_core acl_san Threads::Threads GTest::gtest)
   add_test(NAME npu_check_unit_tests COMMAND npu_check_unit_tests)
 
   add_executable(npu_check_source_resolver_tests

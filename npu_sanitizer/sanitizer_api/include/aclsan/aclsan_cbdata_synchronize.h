@@ -8,13 +8,14 @@
  * See LICENSE in the root of the software repository for the full text of the License.
  */
 
-#ifndef ACLSAN_CALLBACK_H
-#define ACLSAN_CALLBACK_H
+#ifndef ACLSAN_CBDATA_SYNCHRONIZE_H
+#define ACLSAN_CBDATA_SYNCHRONIZE_H
 
 #include "aclsan/aclsan_cbdata_common.h"
-#include "aclsan/aclsan_cbdata_device.h"
-#include "aclsan/aclsan_cbdata_resource.h"
-#include "aclsan/aclsan_cbdata_runtime.h"
-#include "aclsan/aclsan_cbdata_synchronize.h"
+
+typedef struct AclsanSynchronizeData {
+    AclsanCallbackCommonData common;
+    void* stream; // 对应aclrtStream
+} AclsanSynchronizeData;
 
 #endif

@@ -43,7 +43,9 @@ const std::map<std::string, aclrtApiId> aclrtApiNameMap = {
     {"aclrtResetDevice", ACL_RT_API_aclrtResetDevice},
     {"aclrtSynchronizeStream", ACL_RT_API_aclrtSynchronizeStream},
     {"aclrtBinaryGetFunctionByEntry", ACL_RT_API_aclrtBinaryGetFunctionByEntry},
-    {"aclrtLaunchKernel", ACL_RT_API_aclrtLaunchKernel}};
+    {"aclrtLaunchKernel", ACL_RT_API_aclrtLaunchKernel},
+    {"aclrtGetFuncBySymbol", ACL_RT_API_aclrtGetFuncBySymbol},
+    {"aclrtBinaryUnLoad", ACL_RT_API_aclrtBinaryUnLoad}};
 
 struct CallbackTable {
     aclrtApiFunc callbacks[ACL_RT_API_MAX];
@@ -370,6 +372,32 @@ extern "C" aclError aclrtLaunchKernelHook(
     return result;
 }
 
+extern "C" aclError aclrtGetFuncBySymbolHook(const void* symbol, aclrtFuncHandle* funcHandle)
+{
+    constexpr aclrtApiId id = ACL_RT_API_aclrtGetFuncBySymbol;
+    const auto callback = GetDispatchTarget<aclrtGetFuncBySymbolFunc>(id);
+    if (callback == nullptr) {
+        LogMissingCallback("aclrtGetFuncBySymbol", id);
+        return ACL_ERROR_UNINITIALIZE;
+    }
+    const aclError result = callback(symbol, funcHandle);
+    LogHookResult("aclrtGetFuncBySymbol", id, result);
+    return result;
+}
+
+extern "C" aclError aclrtBinaryUnLoadHook(aclrtBinHandle binHandle)
+{
+    constexpr aclrtApiId id = ACL_RT_API_aclrtBinaryUnLoad;
+    const auto callback = GetDispatchTarget<aclrtBinaryUnLoadFunc>(id);
+    if (callback == nullptr) {
+        LogMissingCallback("aclrtBinaryUnLoad", id);
+        return ACL_ERROR_UNINITIALIZE;
+    }
+    const aclError result = callback(binHandle);
+    LogHookResult("aclrtBinaryUnLoad", id, result);
+    return result;
+}
+
 namespace {
 
 const aclrtApiFunc kRuntimeHooks[ACL_RT_API_MAX] = {
@@ -386,7 +414,9 @@ const aclrtApiFunc kRuntimeHooks[ACL_RT_API_MAX] = {
     ToGenericFunction(&aclrtResetDeviceHook),
     ToGenericFunction(&aclrtSynchronizeStreamHook),
     ToGenericFunction(&aclrtBinaryGetFunctionByEntryHook),
-    ToGenericFunction(&aclrtLaunchKernelHook)};
+    ToGenericFunction(&aclrtLaunchKernelHook),
+    ToGenericFunction(&aclrtGetFuncBySymbolHook),
+    ToGenericFunction(&aclrtBinaryUnLoadHook)};
 
 } // namespace
 
@@ -570,4 +600,14 @@ acltoolRegisterAclrtLaunchKernelWithHostArgsCallbacks(aclrtLaunchKernelWithHostA
 extern "C" NPU_COMPUTE_EXPORT int32_t acltoolRegisterAclrtLaunchKernelCallbacks(aclrtLaunchKernelFunc callback)
 {
     return RegisterCallback(ACL_RT_API_aclrtLaunchKernel, ToGenericFunction(callback));
+}
+
+extern "C" NPU_COMPUTE_EXPORT int32_t acltoolRegisterAclrtGetFuncBySymbolCallbacks(aclrtGetFuncBySymbolFunc callback)
+{
+    return RegisterCallback(ACL_RT_API_aclrtGetFuncBySymbol, ToGenericFunction(callback));
+}
+
+extern "C" NPU_COMPUTE_EXPORT int32_t acltoolRegisterAclrtBinaryUnLoadCallbacks(aclrtBinaryUnLoadFunc callback)
+{
+    return RegisterCallback(ACL_RT_API_aclrtBinaryUnLoad, ToGenericFunction(callback));
 }

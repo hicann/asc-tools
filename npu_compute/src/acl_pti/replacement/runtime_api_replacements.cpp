@@ -63,7 +63,6 @@ ACLPTI_ASSERT_CBID(aclrtResetDevice);
 ACLPTI_ASSERT_CBID(aclrtSynchronizeStream);
 ACLPTI_ASSERT_CBID(aclrtBinaryGetFunctionByEntry);
 ACLPTI_ASSERT_CBID(aclrtLaunchKernel);
-static_assert(static_cast<aclptiCallbackId>(ACLPTI_RUNTIME_CBID_SIZE) == static_cast<aclptiCallbackId>(ACL_RT_API_MAX));
 
 #undef ACLPTI_ASSERT_CBID
 

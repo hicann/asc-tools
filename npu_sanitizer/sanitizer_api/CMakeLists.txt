@@ -11,62 +11,68 @@
 cmake_minimum_required(VERSION 3.16.0)
 project(aclsan_sanitizer_api)
 
-add_library(aclsan_api SHARED
-  src/api_core.cpp
+find_package(Threads REQUIRED)
+
+if(NOT TARGET npu_compute_integration_headers OR NOT TARGET acl_tool_injection)
+  message(FATAL_ERROR
+    "sanitizer_api requires npu_compute integration targets: npu_compute_integration_headers and acl_tool_injection")
+endif()
+
+add_library(acl_san SHARED
   src/aclsan_api.cpp
-  src/callback_registry.cpp
-  src/dummy_backends.cpp
-  src/hook_plan_builder.cpp
-  src/memory_service.cpp
-  src/patch_manager.cpp
-  src/trace_manager.cpp
+  src/aclsan_dispatch_cb.cpp
+  src/aclsan_hook_cbdata.cpp
+  src/aclsan_hook_aclrt.cpp
+  src/aclsan_translate_device_data.cpp
+  src/ascsan_api_core.cpp
+  src/ascsan_callback_registry.cpp
+  src/ascsan_api.cpp
+  src/ascsan_hook_plan_builder.cpp
+  src/ascsan_memory_service.cpp
+  src/ascsan_patch_manager.cpp
+  src/ascsan_trace_manager.cpp
 )
 
-target_compile_features(aclsan_api PUBLIC cxx_std_17)
-target_include_directories(aclsan_api
+target_compile_features(acl_san PUBLIC cxx_std_17)
+target_include_directories(acl_san
   PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>
+)
+target_link_libraries(acl_san
   PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/src
+    npu_compute_integration_headers
+    acl_tool_injection
+    ${CMAKE_DL_LIBS}
+    Threads::Threads
 )
 
-target_link_libraries(aclsan_api PRIVATE dl pthread)
-
-set_target_properties(aclsan_api PROPERTIES
-  OUTPUT_NAME sanitizer_api
+set_target_properties(acl_san PROPERTIES
+  BUILD_WITH_INSTALL_RPATH YES
+  INSTALL_RPATH "$ORIGIN"
+  CXX_VISIBILITY_PRESET hidden
+  VISIBILITY_INLINES_HIDDEN YES
+  OUTPUT_NAME acl_san
 )
 
-set(ACLSAN_BUILD_TESTS OFF)
-if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
-  include(CTest)
-  if(BUILD_TESTING)
-    set(ACLSAN_BUILD_TESTS ON)
-  endif()
-elseif(ENABLE_TEST)
-  set(ACLSAN_BUILD_TESTS ON)
+if(ENABLE_TEST)
+  add_executable(aclsan_callback_contract tests/aclsan_callback_contract.cpp)
+  target_compile_features(aclsan_callback_contract PRIVATE cxx_std_17)
+  target_link_libraries(aclsan_callback_contract PRIVATE acl_san)
+
+  add_executable(aclsan_lifecycle_api_removed tests/aclsan_lifecycle_api_removed.cpp)
+  target_compile_features(aclsan_lifecycle_api_removed PRIVATE cxx_std_17)
+  target_link_libraries(aclsan_lifecycle_api_removed PRIVATE ${CMAKE_DL_LIBS})
+  add_dependencies(aclsan_lifecycle_api_removed acl_san)
 endif()
 
-if(ACLSAN_BUILD_TESTS)
-  add_executable(aclsan_api_smoke tests/api_smoke.cpp)
-  target_compile_features(aclsan_api_smoke PRIVATE cxx_std_17)
-  target_link_libraries(aclsan_api_smoke PRIVATE aclsan_api)
-  target_compile_options(aclsan_api_smoke PRIVATE -UNDEBUG)
-  add_test(NAME aclsan_api_smoke COMMAND aclsan_api_smoke)
-endif()
-
-install(TARGETS aclsan_api
+install(TARGETS acl_san
   LIBRARY DESTINATION lib ${INSTALL_OPTIONAL}
   COMPONENT asc-tools
 )
 
-install(FILES
-  include/aclsan/aclsan_api.h
-  include/aclsan/aclsan_callback.h
-  include/aclsan/aclsan_memory.h
-  include/aclsan/aclsan_patch.h
-  include/aclsan/aclsan_symbolize.h
-  include/aclsan/aclsan_types.h
+install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/include/aclsan/"
   DESTINATION include/aclsan ${INSTALL_OPTIONAL}
   COMPONENT asc-tools
+  FILES_MATCHING PATTERN "*.h"
 )

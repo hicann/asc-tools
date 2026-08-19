@@ -11,7 +11,7 @@
 #ifndef ACLSAN_SYMBOLIZE_H
 #define ACLSAN_SYMBOLIZE_H
 
-#include "aclsan/aclsan_types.h"
+#include "internal/ascsan_types.h"
 
 #ifdef __cplusplus
 extern "C" {

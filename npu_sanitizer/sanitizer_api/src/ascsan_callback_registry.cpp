@@ -8,7 +8,7 @@
  * See LICENSE in the root of the software repository for the full text of the License.
  */
 
-#include "api_core.h"
+#include "internal/ascsan_api_core.h"
 
 #include <utility>
 
@@ -35,7 +35,7 @@ AclsanStatus ApiCore::Subscribe(const AclsanSubscribeDesc* desc, AclsanSubscribe
     token->active = true;
 
     Subscriber sub{};
-    sub.handle = token.get();
+    sub.handle = reinterpret_cast<AclsanSubscriberHandle>(token.get());
     sub.name = desc->name != nullptr ? desc->name : "";
     sub.callback = desc->callback;
     sub.userdata = desc->userdata;
@@ -53,7 +53,7 @@ AclsanStatus ApiCore::Unsubscribe(AclsanSubscriberHandle subscriber)
     if (activeSubscriber == nullptr) {
         return ACLSAN_STATUS_ERROR_NOT_FOUND;
     }
-    auto* token = activeSubscriber->handle;
+    auto* token = reinterpret_cast<AclsanSubscriberToken_st*>(activeSubscriber->handle);
     token->active = false;
     token->magic = 0;
     subscriber_.reset();
@@ -167,10 +167,11 @@ const Subscriber* ApiCore::FindSubscriberLocked(AclsanSubscriberHandle subscribe
     if (!subscriber_.has_value() || subscriber_->handle != subscriber) {
         return nullptr;
     }
-    if (!subscriberToken_ || subscriberToken_.get() != subscriber) {
+    if (!subscriberToken_ || subscriberToken_.get() != reinterpret_cast<AclsanSubscriberToken_st*>(subscriber)) {
         return nullptr;
     }
-    if (!subscriber->active || subscriber->magic != kSubscriberTokenMagic) {
+    auto* token = reinterpret_cast<AclsanSubscriberToken_st*>(subscriber);
+    if (!token->active || token->magic != kSubscriberTokenMagic) {
         return nullptr;
     }
     return &*subscriber_;

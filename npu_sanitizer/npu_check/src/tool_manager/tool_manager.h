@@ -48,8 +48,9 @@ private:
         ToolManager& service_;
     };
 
-    static void Callback(void* userdata, AclsanCallbackDomain domain, uint32_t cbid, const void* cbdata) noexcept;
-    void OnCallback(AclsanCallbackDomain domain, uint32_t cbid, const void* cbdata);
+    static void Callback(
+        void* userdata, AclsanCallbackDomain domain, AclsanCallbackId cbid, const void* cbdata) noexcept;
+    void OnCallback(AclsanCallbackDomain domain, AclsanCallbackId cbid, const void* cbdata);
     void OnCallbackException(const char* reason) noexcept;
     bool EnterCallback();
     void LeaveCallback();
@@ -58,7 +59,7 @@ private:
     bool EnableMemcheckCallbacks(std::string& error);
     void RollbackSanitizer();
     void PublishDiagnostics(std::vector<Diagnostic> diagnostics);
-    void PublishMalformed(AclsanCallbackDomain domain, uint32_t cbid, const char* reason);
+    void PublishMalformed(AclsanCallbackDomain domain, AclsanCallbackId cbid, const char* reason);
     std::string BuildReadyMessage() const;
     std::string BuildSummaryMessage() const;
 
@@ -94,7 +95,6 @@ private:
     uint64_t activeCallbacks_ = 0;
     bool stopping_ = false;
     bool initialized_ = false;
-    bool sanitizerInitialized_ = false;
     bool subscribed_ = false;
 
     ipc::ToolConfig config_{};

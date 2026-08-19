@@ -32,7 +32,7 @@ bool CopyString(char (&destination)[Capacity], const std::string& source)
 
 struct CallbackSpec {
     AclsanCallbackDomain domain;
-    uint32_t cbid;
+    AclsanCallbackId cbid;
 };
 
 constexpr std::array<CallbackSpec, 4> kMemcheckCallbacks{{
@@ -118,25 +118,8 @@ bool ToolManager::ConfigureSanitizer(std::string& error)
         return false;
     }
 
-    AclsanInitParams params{};
-    params.version = ACLSAN_API_VERSION;
-    params.size = sizeof(params);
-    params.launchConfig = &launchConfig_;
-    AclsanStatus status = aclsanInitialize(&params);
-    if (status != ACLSAN_STATUS_SUCCESS) {
-        error = StatusMessage("aclsanInitialize", status);
-        return false;
-    }
-    sanitizerInitialized_ = true;
-
     memcheck_ = std::make_unique<Memcheck>(launchConfig_.strict != 0);
-    AclsanSubscribeDesc description{};
-    description.version = ACLSAN_API_VERSION;
-    description.size = sizeof(description);
-    description.name = "npu_check-memcheck";
-    description.callback = &ToolManager::Callback;
-    description.userdata = this;
-    status = aclsanSubscribe(&description, &subscriber_);
+    AclsanStatus status = aclsanSubscribe(&subscriber_, &ToolManager::Callback, this);
     if (status != ACLSAN_STATUS_SUCCESS) {
         error = StatusMessage("aclsanSubscribe", status);
         return false;
@@ -148,7 +131,7 @@ bool ToolManager::ConfigureSanitizer(std::string& error)
 bool ToolManager::EnableMemcheckCallbacks(std::string& error)
 {
     for (const auto& callback : kMemcheckCallbacks) {
-        const AclsanStatus status = aclsanEnableCallback(subscriber_, callback.domain, callback.cbid, 1);
+        const AclsanStatus status = aclsanEnableCallback(1, subscriber_, callback.domain, callback.cbid);
         if (status != ACLSAN_STATUS_SUCCESS) {
             error = StatusMessage("aclsanEnableCallback", status);
             return false;
@@ -173,24 +156,21 @@ void ToolManager::RollbackSanitizer()
         callbacksDrained_.wait(callbackLock, [this] { return activeCallbacks_ == 0; });
     }
     memcheck_.reset();
-    if (sanitizerInitialized_) {
-        (void)aclsanFinalize();
-        sanitizerInitialized_ = false;
-    }
 }
 
 void ToolManager::Finalize()
 {
     std::lock_guard<std::mutex> lifecycleLock(lifecycleMutex_);
-    if (!initialized_ && !sanitizerInitialized_) {
+    if (!initialized_ && !subscribed_) {
         return;
     }
     {
         std::lock_guard<std::mutex> callbackLock(callbackMutex_);
         stopping_ = true;
     }
+    AclsanStatus unsubscribeStatus = ACLSAN_STATUS_SUCCESS;
     if (subscribed_) {
-        (void)aclsanUnsubscribe(subscriber_);
+        unsubscribeStatus = aclsanUnsubscribe(subscriber_);
         subscribed_ = false;
         subscriber_ = ACLSAN_INVALID_SUBSCRIBER_HANDLE;
     }
@@ -207,17 +187,12 @@ void ToolManager::Finalize()
         analysisComplete = stats.pendingDeviceOperations == 0 && stats.droppedDeviceOperations == 0 &&
                            malformedCallbacks_ == 0 && frameworkErrors_ == 0;
     }
-    AclsanStatus finalizeStatus = ACLSAN_STATUS_SUCCESS;
-    if (sanitizerInitialized_) {
-        finalizeStatus = aclsanFinalize();
-        sanitizerInitialized_ = false;
-    }
     std::ostringstream sessionEnd;
     const bool transportComplete = server_.TransportComplete() && server_.DroppedMessages() == 0;
     sessionEnd << "status="
-               << (finalizeStatus == ACLSAN_STATUS_SUCCESS && transportComplete && analysisComplete ? "complete" :
-                                                                                                      "incomplete")
-               << " aclsan_finalize=" << static_cast<int>(finalizeStatus)
+               << (unsubscribeStatus == ACLSAN_STATUS_SUCCESS && transportComplete && analysisComplete ? "complete" :
+                                                                                                         "incomplete")
+               << " aclsan_unsubscribe=" << static_cast<int>(unsubscribeStatus)
                << " dropped_messages=" << server_.DroppedMessages()
                << " analysis_complete=" << (analysisComplete ? "true" : "false");
     server_.Shutdown(summary, sessionEnd.str());
@@ -231,7 +206,8 @@ bool ToolManager::IsInitialized() const
     return initialized_;
 }
 
-void ToolManager::Callback(void* userdata, AclsanCallbackDomain domain, uint32_t cbid, const void* cbdata) noexcept
+void ToolManager::Callback(
+    void* userdata, AclsanCallbackDomain domain, AclsanCallbackId cbid, const void* cbdata) noexcept
 {
     auto* service = static_cast<ToolManager*>(userdata);
     if (service == nullptr) {
@@ -271,7 +247,7 @@ void ToolManager::LeaveCallback()
     }
 }
 
-void ToolManager::OnCallback(AclsanCallbackDomain domain, uint32_t cbid, const void* cbdata)
+void ToolManager::OnCallback(AclsanCallbackDomain domain, AclsanCallbackId cbid, const void* cbdata)
 {
     std::vector<Diagnostic> diagnostics;
     bool malformed = false;
@@ -346,7 +322,7 @@ void ToolManager::PublishDiagnostics(std::vector<Diagnostic> diagnostics)
     }
 }
 
-void ToolManager::PublishMalformed(AclsanCallbackDomain domain, uint32_t cbid, const char* reason)
+void ToolManager::PublishMalformed(AclsanCallbackDomain domain, AclsanCallbackId cbid, const char* reason)
 {
     std::ostringstream output;
     output << "[NPU-CHECK-MALFORMED-CALLBACK] domain=" << static_cast<uint32_t>(domain) << " cbid=" << cbid

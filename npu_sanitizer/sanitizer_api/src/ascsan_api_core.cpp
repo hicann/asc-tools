@@ -8,10 +8,10 @@
  * See LICENSE in the root of the software repository for the full text of the License.
  */
 
-#include "api_core.h"
+#include "internal/ascsan_api_core.h"
+#include "internal/aclsan_internal.h"
 
 #include <cerrno>
-#include <cstdlib>
 #include <cstring>
 #include <iostream>
 #include <sys/stat.h>
@@ -87,49 +87,6 @@ ApiCore& ApiCore::Instance()
     return core;
 }
 
-AclsanStatus ApiCore::Initialize(const AclsanInitParams* params)
-{
-    std::lock_guard<std::recursive_mutex> lock(mutex_);
-    if (initialized_) {
-        return ACLSAN_STATUS_SUCCESS;
-    }
-    if (params != nullptr) {
-        if (params->version != ACLSAN_API_VERSION || params->size < sizeof(AclsanInitParams)) {
-            return ACLSAN_STATUS_ERROR_VERSION_MISMATCH;
-        }
-        if (params->launchConfig != nullptr) {
-            config_ = *params->launchConfig;
-        }
-    }
-    if (config_.version == 0) {
-        config_.version = ACLSAN_API_VERSION;
-        config_.size = sizeof(config_);
-    }
-    EnsureDir(config_.workDir);
-    EnsureDir(config_.probeCacheDir);
-    initialized_ = true;
-    finalized_ = false;
-    return ACLSAN_STATUS_SUCCESS;
-}
-
-AclsanStatus ApiCore::Finalize()
-{
-    std::lock_guard<std::recursive_mutex> lock(mutex_);
-    FlushReports();
-    subscriber_.reset();
-    subscriberToken_.reset();
-    retiredSubscriberTokens_.clear();
-    patchSites_.clear();
-    reports_.clear();
-    for (auto& entry : memories_) {
-        std::free(entry.first);
-    }
-    memories_.clear();
-    initialized_ = false;
-    finalized_ = true;
-    return ACLSAN_STATUS_SUCCESS;
-}
-
 const char* ApiCore::VersionString() const { return "aclsan sanitizer_api p0"; }
 
 AclsanStatus ApiCore::ExportLaunchConfigToFd(const AclsanLaunchConfig* config, int fd)
@@ -164,9 +121,6 @@ AclsanStatus ApiCore::ApplyLaunchConfig(const AclsanLaunchConfig* config)
         return ACLSAN_STATUS_ERROR_INVALID_VALUE;
     }
     std::lock_guard<std::recursive_mutex> lock(mutex_);
-    if (!initialized_) {
-        return ACLSAN_STATUS_ERROR_NOT_INITIALIZED;
-    }
     if (config->version != ACLSAN_API_VERSION || config->size != sizeof(*config)) {
         return ACLSAN_STATUS_ERROR_VERSION_MISMATCH;
     }
@@ -177,13 +131,6 @@ AclsanStatus ApiCore::ApplyLaunchConfig(const AclsanLaunchConfig* config)
 }
 
 const AclsanLaunchConfig* ApiCore::GetLaunchConfig() const { return &config_; }
-
-AclsanStatus ApiCore::ValidateInitialized() const
-{
-    return initialized_ && !finalized_ ? ACLSAN_STATUS_SUCCESS : ACLSAN_STATUS_ERROR_NOT_INITIALIZED;
-}
-
-bool ApiCore::IsInsideCallback() const { return g_insideCallback; }
 
 void ApiCore::Dispatch(AclsanCallbackDomain domain, uint32_t cbid, const void* cbdata)
 {
@@ -203,7 +150,7 @@ void ApiCore::Dispatch(AclsanCallbackDomain domain, uint32_t cbid, const void* c
     }
 
     CallbackGuard guard;
-    target.callback(target.userdata, domain, cbid, cbdata);
+    target.callback(target.userdata, domain, static_cast<AclsanCallbackId>(cbid), cbdata);
 }
 
 AclsanStatus ApiCore::ReportError(const char* tool, const char* message)

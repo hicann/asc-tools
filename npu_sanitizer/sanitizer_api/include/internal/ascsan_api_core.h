@@ -13,9 +13,10 @@
 
 #include "aclsan/aclsan_api.h"
 #include "aclsan/aclsan_callback.h"
-#include "aclsan/aclsan_memory.h"
-#include "aclsan/aclsan_patch.h"
-#include "aclsan/internal_api.h"
+#include "internal/ascsan_memory.h"
+#include "internal/ascsan_patch.h"
+#include "internal/ascsan_symbolize.h"
+#include "internal/ascsan_internal_api.h"
 
 #include <map>
 #include <memory>
@@ -66,8 +67,6 @@ class ApiCore {
 public:
     static ApiCore& Instance();
 
-    AclsanStatus Initialize(const AclsanInitParams* params);
-    AclsanStatus Finalize();
     const char* VersionString() const;
 
     AclsanStatus ExportLaunchConfigToFd(const AclsanLaunchConfig* config, int fd);
@@ -82,8 +81,6 @@ public:
     AclsanStatus EnableDomain(AclsanSubscriberHandle subscriber, AclsanCallbackDomain domain, bool enable);
     AclsanStatus GetCallbackState(
         AclsanSubscriberHandle subscriber, AclsanCallbackDomain domain, uint32_t cbid, int* enabled) const;
-    bool IsInsideCallback() const;
-
     AclsanStatus RegisterBuiltinPatchPipelines();
     AclsanStatus RegisterPatchImage(const AclsanPatchImageDesc* desc, uint64_t* patchImageId);
     AclsanStatus RegisterPatchPipeline(const AclsanPatchPipelineDesc* desc);
@@ -128,12 +125,9 @@ private:
     bool IsKnownCbid(AclsanCallbackDomain domain, uint32_t cbid) const;
     Subscriber* FindSubscriberLocked(AclsanSubscriberHandle subscriber);
     const Subscriber* FindSubscriberLocked(AclsanSubscriberHandle subscriber) const;
-    AclsanStatus ValidateInitialized() const;
     AclsanStatus BuildDummyPatchResult(const std::string& originalPath, uint32_t pipelineMask, PatchResult& result);
     void StorePatchSites(uint64_t binaryId, const std::vector<PatchSiteRecord>& sites);
     mutable std::recursive_mutex mutex_;
-    bool initialized_ = false;
-    bool finalized_ = false;
     AclsanLaunchConfig config_{};
 
     uint64_t nextSubscriberGeneration_ = 1;

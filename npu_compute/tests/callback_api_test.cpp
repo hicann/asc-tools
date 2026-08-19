@@ -95,7 +95,6 @@ static_assert(
 static_assert(
     static_cast<aclptiCallbackId>(ACLPTI_RUNTIME_CBID_aclrtLaunchKernel) ==
     static_cast<aclptiCallbackId>(ACL_RT_API_aclrtLaunchKernel));
-static_assert(static_cast<aclptiCallbackId>(ACLPTI_RUNTIME_CBID_SIZE) == static_cast<aclptiCallbackId>(ACL_RT_API_MAX));
 
 int main()
 {

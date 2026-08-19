@@ -8,13 +8,15 @@
  * See LICENSE in the root of the software repository for the full text of the License.
  */
 
-#ifndef ACLSAN_CALLBACK_H
-#define ACLSAN_CALLBACK_H
+#include <cassert>
+#include <dlfcn.h>
 
-#include "aclsan/aclsan_cbdata_common.h"
-#include "aclsan/aclsan_cbdata_device.h"
-#include "aclsan/aclsan_cbdata_resource.h"
-#include "aclsan/aclsan_cbdata_runtime.h"
-#include "aclsan/aclsan_cbdata_synchronize.h"
-
-#endif
+int main()
+{
+    void* library = dlopen("./libacl_san.so", RTLD_NOW | RTLD_LOCAL);
+    assert(library != nullptr);
+    assert(dlsym(library, "aclsanInitialize") == nullptr);
+    assert(dlsym(library, "aclsanFinalize") == nullptr);
+    assert(dlclose(library) == 0);
+    return 0;
+}

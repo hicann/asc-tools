@@ -11,7 +11,7 @@
 #ifndef ACLSAN_INTERNAL_API_H
 #define ACLSAN_INTERNAL_API_H
 
-#include "aclsan/aclsan_types.h"
+#include "internal/ascsan_types.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -20,7 +20,7 @@ extern "C" {
 /*
  * Internal SPI for sanitizer_api.so providers.
  *
- * These entry points are intentionally separated from aclsan_api.h. They are
+ * These entry points are intentionally separated from the public ACLSan headers. They are
  * used by in-repo provider modules such as injection.so, npu_check.so,
  * trace fetch backends, and tests. They are not part of the stable checker API.
  */

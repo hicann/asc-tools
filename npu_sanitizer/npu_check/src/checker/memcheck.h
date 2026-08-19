@@ -10,6 +10,7 @@
 #define NPU_CHECK_CHECKER_MEMCHECK_H
 
 #include "aclsan/aclsan_callback.h"
+#include "internal/ascsan_types.h"
 #include "checker/allocation_registry.h"
 #include "diagnostic/diagnostic.h"
 

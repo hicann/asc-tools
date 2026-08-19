@@ -8,237 +8,443 @@
  * See LICENSE in the root of the software repository for the full text of the License.
  */
 
-#include "api_core.h"
-#include "aclsan/internal_api.h"
+#include "aclsan/aclsan_api.h"
+#include "internal/aclsan_internal.h"
+#include "npu_compute/injection_hook.h"
+#include "internal/aclsan_log.h"
 
+#include <map>
 #include <new>
-
-using aclsan::ApiCore;
+#include <set>
+#include <tuple>
+#include <vector>
 
 namespace {
 
-template <typename Fn>
-AclsanStatus GuardedStatusImpl(Fn&& fn) noexcept
-{
-    try {
-        return fn();
-    } catch (const std::bad_alloc&) {
-        return ACLSAN_STATUS_ERROR_OUT_OF_MEMORY;
-    } catch (...) {
-        return ACLSAN_STATUS_ERROR_RUNTIME;
+struct CallbackKey {
+    AclsanCallbackDomain domain;
+    AclsanCallbackId id;
+
+    bool operator<(const CallbackKey& other) const noexcept
+    {
+        return std::tie(domain, id) < std::tie(other.domain, other.id);
     }
-}
+};
+
+// 记录每组 domain + callback id 需要开启 Hook 的 Runtime API。
+const std::map<CallbackKey, std::vector<aclrtApiId>> kCallbackRoutes = {
+    {{ACLSAN_CB_DOMAIN_RESOURCE, ACLSAN_CBID_RESOURCE_MEMORY_ALLOC}, {ACL_RT_API_aclrtMalloc}},
+    {{ACLSAN_CB_DOMAIN_RESOURCE, ACLSAN_CBID_RESOURCE_MEMORY_FREE}, {ACL_RT_API_aclrtFree}},
+    {{ACLSAN_CB_DOMAIN_DEVICE_INSTRUCTION, ACLSAN_CBID_DEVICE_MEMORY_ACCESS},
+     {ACL_RT_API_aclrtSynchronizeStream, ACL_RT_API_aclrtGetFuncBySymbol, ACL_RT_API_aclrtBinaryUnLoad,
+      ACL_RT_API_aclrtResetDevice, ACL_RT_API_aclrtMalloc}},
+    {{ACLSAN_CB_DOMAIN_DEVICE_INSTRUCTION, ACLSAN_CBID_DEVICE_SYNC},
+     {ACL_RT_API_aclrtSynchronizeStream, ACL_RT_API_aclrtGetFuncBySymbol, ACL_RT_API_aclrtBinaryUnLoad,
+      ACL_RT_API_aclrtResetDevice}},
+    {{ACLSAN_CB_DOMAIN_SYNCHRONIZE, ACLSAN_CBID_SYNCHRONIZE_STREAM_SYNC_END}, {ACL_RT_API_aclrtSynchronizeStream}},
+};
 
 } // namespace
 
-#define ACLSAN_GUARDED_STATUS(expr) GuardedStatusImpl([&]() -> AclsanStatus { return (expr); })
+struct AclsanSubscriber final {
+public:
+    static AclsanSubscriber& Instance() noexcept;
 
-extern "C" AclsanStatus aclsanInitialize(const AclsanInitParams* params)
+    AclsanStatus Subscribe(AclsanSubscriberHandle* subscriber, AclsanCallbackFunc callback, void* userdata);
+    AclsanStatus EnableCallback(
+        uint32_t enable, AclsanSubscriberHandle subscriber, AclsanCallbackDomain domain, AclsanCallbackId id);
+    AclsanStatus Unsubscribe(AclsanSubscriberHandle subscriber) noexcept;
+    AclsanStatus EnableDomain(AclsanSubscriberHandle subscriber, AclsanCallbackDomain domain, uint32_t enable);
+    AclsanStatus GetCallbackState(
+        AclsanSubscriberHandle subscriber, AclsanCallbackDomain domain, uint32_t cbid,
+        uint32_t* enabled) const noexcept;
+    bool IsCallbackEnabled(AclsanCallbackDomain domain, AclsanCallbackId id) const noexcept;
+    bool InvokeCallback(AclsanCallbackDomain domain, AclsanCallbackId id, const void* callbackData) noexcept;
+
+private:
+    AclsanSubscriber() = default;
+    ~AclsanSubscriber() = default;
+    AclsanSubscriber(const AclsanSubscriber&) = delete;
+    AclsanSubscriber& operator=(const AclsanSubscriber&) = delete;
+    AclsanSubscriber(AclsanSubscriber&&) = delete;
+    AclsanSubscriber& operator=(AclsanSubscriber&&) = delete;
+
+    static bool IsValidCallbackId(AclsanCallbackDomain domain, AclsanCallbackId callbackId) noexcept;
+    static bool IsValidCallbackDomain(AclsanCallbackDomain domain) noexcept;
+    static bool HasCallbackRoute(const CallbackKey& key) noexcept;
+    static std::set<aclrtApiId> ComputeRequiredHooks(const std::set<CallbackKey>& enabledCallbacks);
+
+    bool IsActive(AclsanSubscriberHandle subscriber) const noexcept;
+    void LogConfigurationState(const char* operation, const char* stage) const noexcept;
+    void Reset(const char* operation) noexcept;
+    void ClearAfterException(AclsanStatus failure, const char* operation) noexcept;
+    AclsanStatus ApplyCallbackConfiguration(std::set<CallbackKey>& candidateCallbacks, const char* operation);
+    AclsanStatus UpdateCallbackConfiguration(const CallbackKey& key, bool shouldEnable);
+
+    AclsanSubscriberHandle activeHandle_ = nullptr;
+    AclsanCallbackFunc callback_ = nullptr;
+    void* userdata_ = nullptr;
+    std::set<CallbackKey> enabledCallbacks_;
+    std::set<aclrtApiId> requiredHooks_;
+};
+
+// 获取进程内唯一的AclsanSubscriber对象
+AclsanSubscriber& AclsanSubscriber::Instance() noexcept
 {
-    return ACLSAN_GUARDED_STATUS(ApiCore::Instance().Initialize(params));
+    static AclsanSubscriber subscriber;
+    return subscriber;
 }
 
-extern "C" AclsanStatus aclsanFinalize(void) { return ACLSAN_GUARDED_STATUS(ApiCore::Instance().Finalize()); }
-
-extern "C" const char* aclsanGetVersionString(void) { return ApiCore::Instance().VersionString(); }
-
-extern "C" AclsanStatus aclsanExportLaunchConfigToFd(const AclsanLaunchConfig* config, int fd)
+bool AclsanSubscriber::IsValidCallbackId(AclsanCallbackDomain domain, AclsanCallbackId callbackId) noexcept
 {
-    return ACLSAN_GUARDED_STATUS(ApiCore::Instance().ExportLaunchConfigToFd(config, fd));
+    switch (domain) {
+        case ACLSAN_CB_DOMAIN_RESOURCE:
+            return callbackId >= ACLSAN_CBID_RESOURCE_MEMORY_ALLOC && callbackId <= ACLSAN_CBID_RESOURCE_MEMORY_FREE;
+        case ACLSAN_CB_DOMAIN_DEVICE_INSTRUCTION:
+            return callbackId >= ACLSAN_CBID_DEVICE_MEMORY_ACCESS && callbackId <= ACLSAN_CBID_DEVICE_SYNC;
+        case ACLSAN_CB_DOMAIN_SYNCHRONIZE:
+            return callbackId == ACLSAN_CBID_SYNCHRONIZE_STREAM_SYNC_END;
+        default:
+            return false;
+    }
 }
 
-extern "C" AclsanStatus aclsanImportLaunchConfigFromFd(int fd, AclsanLaunchConfig* config)
+bool AclsanSubscriber::IsValidCallbackDomain(AclsanCallbackDomain domain) noexcept
 {
-    return ACLSAN_GUARDED_STATUS(ApiCore::Instance().ImportLaunchConfigFromFd(fd, config));
+    return domain == ACLSAN_CB_DOMAIN_RESOURCE || domain == ACLSAN_CB_DOMAIN_DEVICE_INSTRUCTION ||
+           domain == ACLSAN_CB_DOMAIN_SYNCHRONIZE;
 }
 
-extern "C" AclsanStatus aclsanApplyLaunchConfig(const AclsanLaunchConfig* config)
+// 根据(callback domain, callback id)查询该 callback 是否已有 Runtime Hook route。
+bool AclsanSubscriber::HasCallbackRoute(const CallbackKey& key) noexcept
 {
-    return ACLSAN_GUARDED_STATUS(ApiCore::Instance().ApplyLaunchConfig(config));
+    return kCallbackRoutes.find(key) != kCallbackRoutes.end();
 }
 
-extern "C" const AclsanLaunchConfig* aclsanGetLaunchConfig(void) { return ApiCore::Instance().GetLaunchConfig(); }
-
-extern "C" AclsanStatus aclsanSubscribe(const AclsanSubscribeDesc* desc, AclsanSubscriberHandle* subscriber)
+// 根据现在订阅的domain + id，确认哪些aclrt函数需要被hook
+std::set<aclrtApiId> AclsanSubscriber::ComputeRequiredHooks(const std::set<CallbackKey>& enabledCallbacks)
 {
-    return ACLSAN_GUARDED_STATUS(ApiCore::Instance().Subscribe(desc, subscriber));
+    std::set<aclrtApiId> requiredHooks;
+    for (const CallbackKey& key : enabledCallbacks) {
+        const auto route = kCallbackRoutes.find(key);
+        if (route == kCallbackRoutes.end()) {
+            continue;
+        }
+        for (aclrtApiId apiId : route->second) {
+            requiredHooks.insert(apiId);
+        }
+    }
+    return requiredHooks;
+}
+
+bool AclsanSubscriber::IsActive(AclsanSubscriberHandle subscriber) const noexcept
+{
+    return activeHandle_ != nullptr && subscriber == activeHandle_;
+}
+
+void AclsanSubscriber::LogConfigurationState(const char* operation, const char* stage) const noexcept
+{
+    ASC_SAN_DEBUG(
+        "%s: callback state stage=%s enabledCallbacks_=%zu requiredHooks_=%zu", operation, stage,
+        enabledCallbacks_.size(), requiredHooks_.size());
+    for (const CallbackKey& key : enabledCallbacks_) {
+        ASC_SAN_DEBUG(
+            "%s: enabledCallbacks_ domain=%u id=%u", operation, static_cast<uint32_t>(key.domain),
+            static_cast<uint32_t>(key.id));
+    }
+    for (aclrtApiId apiId : requiredHooks_) {
+        ASC_SAN_DEBUG("%s: requiredHooks_ apiId=%u", operation, static_cast<uint32_t>(apiId));
+    }
+}
+
+void AclsanSubscriber::Reset(const char* operation) noexcept
+{
+    LogConfigurationState(operation, "before-reset");
+    activeHandle_ = nullptr;
+    callback_ = nullptr;
+    userdata_ = nullptr;
+    enabledCallbacks_.clear();
+    requiredHooks_.clear();
+    LogConfigurationState(operation, "after-reset");
+}
+
+// 异常情况，还原所有aclrt接口变为原始的aclrt功能
+void AclsanSubscriber::ClearAfterException(AclsanStatus failure, const char* operation) noexcept
+{
+    ASC_SAN_ERROR("%s: failed with result=%u", operation, static_cast<uint32_t>(failure));
+    const AclsanStatus restoreResult = aclsan::ApplyRuntimeHooks({});
+    if (restoreResult != ACLSAN_STATUS_SUCCESS) {
+        ASC_SAN_ERROR("Failed to clear EnableCallback info, result=%u", static_cast<uint32_t>(restoreResult));
+    } else {
+        ASC_SAN_ERROR("All EnableCallback info is cleared, all Runtime function remains original");
+    }
+    Reset(operation);
+}
+
+AclsanStatus AclsanSubscriber::ApplyCallbackConfiguration(
+    std::set<CallbackKey>& candidateCallbacks, const char* operation)
+{
+    std::set<aclrtApiId> candidateRequiredHooks = ComputeRequiredHooks(candidateCallbacks);
+    const AclsanStatus result = aclsan::ApplyRuntimeHooks(candidateRequiredHooks);
+    if (result != ACLSAN_STATUS_SUCCESS) {
+        ASC_SAN_ERROR("%s: ApplyRuntimeHooks failed, result=%u", operation, static_cast<uint32_t>(result));
+        const AclsanStatus rollbackResult = aclsan::ApplyRuntimeHooks(requiredHooks_);
+        if (rollbackResult != ACLSAN_STATUS_SUCCESS) {
+            ASC_SAN_ERROR(
+                "%s: failed to restore previous Runtime Hooks, result=%u", operation,
+                static_cast<uint32_t>(rollbackResult));
+            Reset(operation);
+        } else {
+            LogConfigurationState(operation, "rollback-restored");
+        }
+        return result;
+    }
+    enabledCallbacks_.swap(candidateCallbacks);
+    requiredHooks_.swap(candidateRequiredHooks);
+    LogConfigurationState(operation, "committed");
+    return ACLSAN_STATUS_SUCCESS;
+}
+
+// 根据domain + id + enable更新subscriber状态，记录已启用的callback，计算哪些aclrt接口需要被hook
+AclsanStatus AclsanSubscriber::UpdateCallbackConfiguration(const CallbackKey& key, bool shouldEnable)
+{
+    try {
+        // 基于当前已启用的 domain + id 构建本次候选状态。
+        std::set<CallbackKey> candidateCallbacks = enabledCallbacks_;
+        if (shouldEnable) {
+            candidateCallbacks.insert(key);
+        } else {
+            candidateCallbacks.erase(key);
+        }
+
+        return ApplyCallbackConfiguration(candidateCallbacks, "aclsanEnableCallback");
+    } catch (const std::bad_alloc&) {
+        ClearAfterException(ACLSAN_STATUS_ERROR_OUT_OF_MEMORY, "aclsanEnableCallback");
+        return ACLSAN_STATUS_ERROR_OUT_OF_MEMORY;
+    } catch (...) {
+        ClearAfterException(ACLSAN_STATUS_ERROR_INTERNAL, "aclsanEnableCallback");
+        return ACLSAN_STATUS_ERROR_INTERNAL;
+    }
+}
+
+AclsanStatus AclsanSubscriber::Subscribe(
+    AclsanSubscriberHandle* subscriber, AclsanCallbackFunc callback, void* userdata)
+{
+    if (subscriber == nullptr || callback == nullptr) {
+        ASC_SAN_ERROR("aclsanSubscribe: subscriber / callback is nullptr");
+        return ACLSAN_STATUS_ERROR_INVALID_PARAMETER;
+    }
+    *subscriber = nullptr;
+
+    if (activeHandle_ != nullptr) {
+        ASC_SAN_ERROR("aclsanSubscribe: subscriber already exists");
+        return ACLSAN_STATUS_ERROR_ALREADY_SUBSCRIBED;
+    }
+    if (aclsan::IsRuntimeHookStatePoisoned()) {
+        ASC_SAN_ERROR("aclsanSubscribe: Runtime Hook state is poisoned");
+        return ACLSAN_STATUS_ERROR_INJECTION_FAILED;
+    }
+
+    if (acltoolHookInit() != 0) {
+        ASC_SAN_ERROR("aclsanSubscribe: acltoolHookInit failed");
+        return ACLSAN_STATUS_ERROR_INJECTION_FAILED;
+    }
+
+    activeHandle_ = this;
+    callback_ = callback;
+    userdata_ = userdata;
+    *subscriber = activeHandle_;
+    ASC_SAN_DEBUG("aclsanSubscribe succeed");
+    return ACLSAN_STATUS_SUCCESS;
+}
+
+AclsanStatus AclsanSubscriber::EnableCallback(
+    uint32_t enable, AclsanSubscriberHandle subscriber, AclsanCallbackDomain domain, AclsanCallbackId id)
+{
+    ASC_SAN_DEBUG(
+        "aclsanEnableCallback start: enable=%u domain=%u id=%u", enable, static_cast<uint32_t>(domain),
+        static_cast<uint32_t>(id));
+    if (!IsActive(subscriber)) {
+        ASC_SAN_ERROR("aclsanEnableCallback: subscriber is not initialized");
+        return ACLSAN_STATUS_ERROR_INVALID_PARAMETER;
+    }
+    if (!IsValidCallbackId(domain, id)) {
+        ASC_SAN_ERROR(
+            "aclsanEnableCallback: invalid domain + id combination, enable=%u domain=%u id=%u", enable,
+            static_cast<uint32_t>(domain), static_cast<uint32_t>(id));
+        return ACLSAN_STATUS_ERROR_INVALID_PARAMETER;
+    }
+
+    const CallbackKey key{domain, id};
+    // 已声明但尚无 producer 的 callback 不应被伪装成可用 route。
+    if (!HasCallbackRoute(key)) {
+        ASC_SAN_ERROR(
+            "aclsanEnableCallback: no supported callback route for domain=%u id=%u", static_cast<uint32_t>(domain),
+            static_cast<uint32_t>(id));
+        return ACLSAN_STATUS_ERROR_NOT_SUPPORTED;
+    }
+    return UpdateCallbackConfiguration(key, enable != 0);
+}
+
+AclsanStatus AclsanSubscriber::Unsubscribe(AclsanSubscriberHandle subscriber) noexcept
+{
+    if (!IsActive(subscriber)) {
+        ASC_SAN_ERROR("aclsanUnsubscribe: subscriber is not initialized");
+        return ACLSAN_STATUS_ERROR_INVALID_PARAMETER;
+    }
+
+    const AclsanStatus result = aclsan::ApplyRuntimeHooks({});
+    Reset("aclsanUnsubscribe");
+    if (result != ACLSAN_STATUS_SUCCESS) {
+        ASC_SAN_ERROR("aclsanUnsubscribe: ApplyRuntimeHooks failed, result=%u", static_cast<uint32_t>(result));
+    }
+    return result;
+}
+
+AclsanStatus AclsanSubscriber::EnableDomain(
+    AclsanSubscriberHandle subscriber, AclsanCallbackDomain domain, uint32_t enable)
+{
+    if (!IsActive(subscriber)) {
+        ASC_SAN_ERROR("aclsanEnableDomain: subscriber is not initialized");
+        return ACLSAN_STATUS_ERROR_INVALID_PARAMETER;
+    }
+    if (!IsValidCallbackDomain(domain)) {
+        ASC_SAN_ERROR("aclsanEnableDomain: invalid domain=%u", static_cast<uint32_t>(domain));
+        return ACLSAN_STATUS_ERROR_INVALID_PARAMETER;
+    }
+
+    try {
+        std::set<CallbackKey> candidateCallbacks = enabledCallbacks_;
+        bool hasRoute = false;
+        for (const auto& route : kCallbackRoutes) {
+            if (route.first.domain != domain) {
+                continue;
+            }
+            hasRoute = true;
+            if (enable != 0) {
+                candidateCallbacks.insert(route.first);
+            } else {
+                candidateCallbacks.erase(route.first);
+            }
+        }
+        if (!hasRoute) {
+            ASC_SAN_ERROR(
+                "aclsanEnableDomain: no supported callback route for domain=%u", static_cast<uint32_t>(domain));
+            return ACLSAN_STATUS_ERROR_NOT_SUPPORTED;
+        }
+        return ApplyCallbackConfiguration(candidateCallbacks, "aclsanEnableDomain");
+    } catch (const std::bad_alloc&) {
+        ASC_SAN_ERROR("aclsanEnableDomain: failed to allocate candidate callback state");
+        return ACLSAN_STATUS_ERROR_OUT_OF_MEMORY;
+    } catch (...) {
+        ASC_SAN_ERROR("aclsanEnableDomain: failed to build candidate callback state");
+        return ACLSAN_STATUS_ERROR_INTERNAL;
+    }
+}
+
+AclsanStatus AclsanSubscriber::GetCallbackState(
+    AclsanSubscriberHandle subscriber, AclsanCallbackDomain domain, uint32_t cbid, uint32_t* enabled) const noexcept
+{
+    if (enabled == nullptr) {
+        ASC_SAN_ERROR("aclsanGetCallbackState: enabled is nullptr");
+        return ACLSAN_STATUS_ERROR_INVALID_PARAMETER;
+    }
+    *enabled = 0;
+    if (!IsActive(subscriber)) {
+        ASC_SAN_ERROR("aclsanGetCallbackState: subscriber is not initialized");
+        return ACLSAN_STATUS_ERROR_INVALID_PARAMETER;
+    }
+
+    const AclsanCallbackId id = static_cast<AclsanCallbackId>(cbid);
+    if (!IsValidCallbackId(domain, id)) {
+        ASC_SAN_ERROR(
+            "aclsanGetCallbackState: invalid domain + id combination, domain=%u id=%u", static_cast<uint32_t>(domain),
+            cbid);
+        return ACLSAN_STATUS_ERROR_INVALID_PARAMETER;
+    }
+    const CallbackKey key{domain, id};
+    if (!HasCallbackRoute(key)) {
+        ASC_SAN_ERROR(
+            "aclsanGetCallbackState: no supported callback route for domain=%u id=%u", static_cast<uint32_t>(domain),
+            cbid);
+        return ACLSAN_STATUS_ERROR_NOT_SUPPORTED;
+    }
+    *enabled = IsCallbackEnabled(domain, id) ? 1 : 0;
+    return ACLSAN_STATUS_SUCCESS;
+}
+
+bool AclsanSubscriber::IsCallbackEnabled(AclsanCallbackDomain domain, AclsanCallbackId id) const noexcept
+{
+    return activeHandle_ != nullptr && enabledCallbacks_.count(CallbackKey{domain, id}) != 0;
+}
+
+bool AclsanSubscriber::InvokeCallback(
+    AclsanCallbackDomain domain, AclsanCallbackId id, const void* callbackData) noexcept
+{
+    if (callback_ == nullptr) {
+        ASC_SAN_ERROR("InvokeCallback: callback is nullptr");
+        return false;
+    }
+
+    // 如果对应domain和id用户没有主动订阅，那么就不传回cbdata
+    if (!IsCallbackEnabled(domain, id)) {
+        ASC_SAN_DEBUG(
+            "InvokeCallback: domain=%u id=%u is not enabled. No call for callback func", static_cast<uint32_t>(domain),
+            static_cast<uint32_t>(id));
+        return true;
+    }
+
+    try {
+        callback_(userdata_, domain, id, callbackData);
+    } catch (...) {
+        ASC_SAN_ERROR(
+            "InvokeCallback: domain=%u id=%u failed", static_cast<uint32_t>(domain), static_cast<uint32_t>(id));
+        return false;
+    }
+    return true;
+}
+
+// 创建唯一subscriber，更新callback函数。该步骤还会刷新aclrt的hook表
+extern "C" AclsanStatus aclsanSubscribe(AclsanSubscriberHandle* subscriber, AclsanCallbackFunc callback, void* userdata)
+{
+    return AclsanSubscriber::Instance().Subscribe(subscriber, callback, userdata);
+}
+
+// 更新显式callback route，并开启/关闭相关aclrt接口的hook
+extern "C" AclsanStatus aclsanEnableCallback(
+    uint32_t enable, AclsanSubscriberHandle subscriber, AclsanCallbackDomain domain, AclsanCallbackId id)
+{
+    return AclsanSubscriber::Instance().EnableCallback(enable, subscriber, domain, id);
 }
 
 extern "C" AclsanStatus aclsanUnsubscribe(AclsanSubscriberHandle subscriber)
 {
-    return ACLSAN_GUARDED_STATUS(ApiCore::Instance().Unsubscribe(subscriber));
+    return AclsanSubscriber::Instance().Unsubscribe(subscriber);
 }
 
-extern "C" AclsanStatus aclsanEnableCallback(
-    AclsanSubscriberHandle subscriber, AclsanCallbackDomain domain, uint32_t cbid, int enable)
+extern "C" AclsanStatus aclsanEnableDomain(
+    AclsanSubscriberHandle subscriber, AclsanCallbackDomain domain, uint32_t enable)
 {
-    return ACLSAN_GUARDED_STATUS(ApiCore::Instance().EnableCallback(subscriber, domain, cbid, enable != 0));
-}
-
-extern "C" AclsanStatus aclsanEnableDomain(AclsanSubscriberHandle subscriber, AclsanCallbackDomain domain, int enable)
-{
-    return ACLSAN_GUARDED_STATUS(ApiCore::Instance().EnableDomain(subscriber, domain, enable != 0));
+    return AclsanSubscriber::Instance().EnableDomain(subscriber, domain, enable);
 }
 
 extern "C" AclsanStatus aclsanGetCallbackState(
-    AclsanSubscriberHandle subscriber, AclsanCallbackDomain domain, uint32_t cbid, int* enabled)
+    AclsanSubscriberHandle subscriber, AclsanCallbackDomain domain, AclsanCallbackId cbid, uint32_t* enabled)
 {
-    return ACLSAN_GUARDED_STATUS(ApiCore::Instance().GetCallbackState(subscriber, domain, cbid, enabled));
+    return AclsanSubscriber::Instance().GetCallbackState(subscriber, domain, cbid, enabled);
 }
 
-extern "C" int aclsanIsInsideCallback(void) { return ApiCore::Instance().IsInsideCallback() ? 1 : 0; }
+namespace aclsan {
 
-extern "C" AclsanStatus aclsanRegisterBuiltinPatchPipelines(void)
+bool IsCallbackEnabled(AclsanCallbackDomain domain, AclsanCallbackId id) noexcept
 {
-    return ACLSAN_GUARDED_STATUS(ApiCore::Instance().RegisterBuiltinPatchPipelines());
+    return AclsanSubscriber::Instance().IsCallbackEnabled(domain, id);
 }
 
-extern "C" AclsanStatus aclsanRegisterPatchImage(const AclsanPatchImageDesc* desc, uint64_t* patchImageId)
+// 在 libsanitizer_api 内部通过 subscriber 保存的 callback 和 userdata 派发已启用键。
+bool InvokeCallback(AclsanCallbackDomain domain, AclsanCallbackId id, const void* callbackData) noexcept
 {
-    return ACLSAN_GUARDED_STATUS(ApiCore::Instance().RegisterPatchImage(desc, patchImageId));
+    return AclsanSubscriber::Instance().InvokeCallback(domain, id, callbackData);
 }
 
-extern "C" AclsanStatus aclsanRegisterPatchPipeline(const AclsanPatchPipelineDesc* desc)
-{
-    return ACLSAN_GUARDED_STATUS(ApiCore::Instance().RegisterPatchPipeline(desc));
-}
-
-extern "C" AclsanStatus aclsanSetPatchOptions(const AclsanPatchOptions* options)
-{
-    return ACLSAN_GUARDED_STATUS(ApiCore::Instance().SetPatchOptions(options));
-}
-
-extern "C" AclsanStatus aclsanBuildPatchPlanForBinary(AclsanBinaryHandle binary, AclsanPatchPlanHandle* plan)
-{
-    return ACLSAN_GUARDED_STATUS(ApiCore::Instance().BuildPatchPlanForBinary(binary, plan));
-}
-
-extern "C" AclsanStatus aclsanPatchBinaryFromImage(
-    const AclsanPatchImageDesc* image, const AclsanPatchOptions* options, char* patchedPath, uint64_t patchedPathSize,
-    AclsanPatchPlanHandle* plan)
-{
-    return ACLSAN_GUARDED_STATUS(
-        ApiCore::Instance().PatchBinaryFromImage(image, options, patchedPath, patchedPathSize, plan));
-}
-
-extern "C" AclsanStatus aclsanGetPatchSiteInfo(uint32_t siteId, AclsanPatchSiteInfo* info)
-{
-    return ACLSAN_GUARDED_STATUS(ApiCore::Instance().GetPatchSiteInfo(siteId, info));
-}
-
-extern "C" AclsanStatus aclsanSymbolizeDevicePc(
-    const AclsanDevicePcQuery* query, char* payload, uint64_t payloadSize, uint64_t* payloadBytes)
-{
-    return ACLSAN_GUARDED_STATUS(ApiCore::Instance().SymbolizeDevicePc(query, payload, payloadSize, payloadBytes));
-}
-
-extern "C" AclsanStatus aclsanSetLaunchUserData(
-    AclsanLaunchHandle launch, void* function, void* stream, const void* deviceUserData, uint64_t deviceUserDataSize)
-{
-    return ACLSAN_GUARDED_STATUS(
-        ApiCore::Instance().SetLaunchUserData(launch, function, stream, deviceUserData, deviceUserDataSize));
-}
-
-extern "C" AclsanStatus aclsanMemoryAlloc(const AclsanMemoryAllocDesc* desc, void** ptr, AclsanMemoryHandle* memory)
-{
-    return ACLSAN_GUARDED_STATUS(ApiCore::Instance().MemoryAlloc(desc, ptr, memory));
-}
-
-extern "C" AclsanStatus aclsanMemoryFree(void* ptr)
-{
-    return ACLSAN_GUARDED_STATUS(ApiCore::Instance().MemoryFree(ptr));
-}
-
-extern "C" AclsanStatus aclsanMemoryMemcpy(
-    void* dst, uint64_t dstMax, const void* src, uint64_t bytes, AclsanMemcpyKind kind)
-{
-    return ACLSAN_GUARDED_STATUS(ApiCore::Instance().MemoryMemcpy(dst, dstMax, src, bytes, kind));
-}
-
-extern "C" AclsanStatus aclsanMemoryMemcpyAsync(
-    void* dst, uint64_t dstMax, const void* src, uint64_t bytes, AclsanMemcpyKind kind, void*)
-{
-    return ACLSAN_GUARDED_STATUS(ApiCore::Instance().MemoryMemcpy(dst, dstMax, src, bytes, kind));
-}
-
-extern "C" AclsanStatus aclsanMemoryMemset(void* dst, uint64_t dstMax, int32_t value, uint64_t bytes)
-{
-    return ACLSAN_GUARDED_STATUS(ApiCore::Instance().MemoryMemset(dst, dstMax, value, bytes));
-}
-
-extern "C" AclsanStatus aclsanMemoryMemsetAsync(void* dst, uint64_t dstMax, int32_t value, uint64_t bytes, void*)
-{
-    return ACLSAN_GUARDED_STATUS(ApiCore::Instance().MemoryMemset(dst, dstMax, value, bytes));
-}
-
-extern "C" AclsanStatus aclsanMemorySynchronizeStream(void* stream)
-{
-    return ACLSAN_GUARDED_STATUS(ApiCore::Instance().MemorySynchronizeStream(stream));
-}
-
-extern "C" AclsanStatus aclsanMemoryGetInfo(const void* ptr, AclsanMemoryInfo* info)
-{
-    return ACLSAN_GUARDED_STATUS(ApiCore::Instance().MemoryGetInfo(ptr, info));
-}
-
-extern "C" AclsanStatus aclsanDeviceMalloc(void** devPtr, uint64_t bytes)
-{
-    AclsanMemoryAllocDesc desc{};
-    desc.version = ACLSAN_API_VERSION;
-    desc.size = sizeof(desc);
-    desc.space = ACLSAN_MEMORY_SPACE_DEVICE;
-    desc.bytes = bytes;
-    desc.flags = ACLSAN_MEMORY_FLAG_INTERNAL;
-    return ACLSAN_GUARDED_STATUS(ApiCore::Instance().MemoryAlloc(&desc, devPtr, nullptr));
-}
-
-extern "C" AclsanStatus aclsanDeviceFree(void* devPtr)
-{
-    return ACLSAN_GUARDED_STATUS(ApiCore::Instance().MemoryFree(devPtr));
-}
-
-extern "C" AclsanStatus aclsanMemcpyD2H(void* dstHost, const void* srcDevice, uint64_t bytes)
-{
-    return ACLSAN_GUARDED_STATUS(
-        ApiCore::Instance().MemoryMemcpy(dstHost, bytes, srcDevice, bytes, ACLSAN_MEMCPY_DEVICE_TO_HOST));
-}
-
-extern "C" AclsanStatus aclsanMemcpyH2D(void* dstDevice, const void* srcHost, uint64_t bytes)
-{
-    return ACLSAN_GUARDED_STATUS(
-        ApiCore::Instance().MemoryMemcpy(dstDevice, bytes, srcHost, bytes, ACLSAN_MEMCPY_HOST_TO_DEVICE));
-}
-
-extern "C" AclsanStatus aclsanStreamSynchronize(void* stream)
-{
-    return ACLSAN_GUARDED_STATUS(ApiCore::Instance().MemorySynchronizeStream(stream));
-}
-
-extern "C" AclsanStatus aclsanOnRuntimeEvent(const AclsanRuntimeEvent* event)
-{
-    return ACLSAN_GUARDED_STATUS(ApiCore::Instance().OnRuntimeEvent(event));
-}
-
-extern "C" AclsanStatus aclsanConfigureRuntimeHook(const AclsanRuntimeHookPlan* plan)
-{
-    return ACLSAN_GUARDED_STATUS(ApiCore::Instance().ConfigureRuntimeHook(plan));
-}
-
-extern "C" AclsanStatus aclsanGetRuntimeHookState(AclsanRuntimeHookState* state)
-{
-    return ACLSAN_GUARDED_STATUS(ApiCore::Instance().GetRuntimeHookState(state));
-}
-
-extern "C" AclsanStatus aclsanIngestRawTraces(const AclsanRawTraceRecord* records, uint64_t count)
-{
-    return ACLSAN_GUARDED_STATUS(ApiCore::Instance().IngestRawTraces(records, count));
-}
-
-extern "C" AclsanStatus aclsanReportError(const char* tool, const char* message)
-{
-    return ACLSAN_GUARDED_STATUS(ApiCore::Instance().ReportError(tool, message));
-}
-
-extern "C" AclsanStatus aclsanFlushReports(void) { return ACLSAN_GUARDED_STATUS(ApiCore::Instance().FlushReports()); }
-
-#undef ACLSAN_GUARDED_STATUS
+} // namespace aclsan
