@@ -19,11 +19,13 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 find_package(Threads REQUIRED)
 set(CMAKE_SKIP_RPATH FALSE)
 
-option(NPU_COMPUTE_BUILD_INTEGRATION_STUBS
-  "Build NPU Compute integration stubs" OFF)
 option(NPU_COMPUTE_BUILD_TESTS "Build NPU Compute tests" OFF)
 option(NPU_COMPUTE_BUILD_REAL_HARDWARE_TESTS
   "Build real HardwareInfo integration test" OFF)
+
+# Stubs are test-only. All non-test builds link against the installed CANN
+# Runtime and profiling libraries.
+set(NPU_COMPUTE_USE_STUB_BACKEND ${NPU_COMPUTE_BUILD_TESTS})
 
 set(NPUCOMPUTE_CANN_ROOT "" CACHE PATH
   "CANN architecture package root used by NPU Compute"
@@ -50,10 +52,6 @@ if(NOT NPUCOMPUTE_ACL_INCLUDE_DIR OR NOT NPUCOMPUTE_PROFILING_INCLUDE_DIR)
   )
 endif()
 
-if(NPU_COMPUTE_BUILD_TESTS AND NOT NPU_COMPUTE_BUILD_INTEGRATION_STUBS)
-  message(FATAL_ERROR
-    "NPU_COMPUTE_BUILD_TESTS requires NPU_COMPUTE_BUILD_INTEGRATION_STUBS")
-endif()
 if(NPU_COMPUTE_BUILD_REAL_HARDWARE_TESTS AND NOT NPU_COMPUTE_BUILD_TESTS)
   message(FATAL_ERROR
     "NPU_COMPUTE_BUILD_REAL_HARDWARE_TESTS requires NPU_COMPUTE_BUILD_TESTS")
@@ -78,27 +76,78 @@ target_include_directories(npu_compute_headers INTERFACE
   "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
   "$<BUILD_INTERFACE:${NPUCOMPUTE_ACL_INCLUDE_DIR}>"
   "$<BUILD_INTERFACE:${NPUCOMPUTE_PROFILING_INCLUDE_DIR}>"
+  "$<BUILD_INTERFACE:${NPUCOMPUTE_PROFILING_INCLUDE_DIR}/profiling>"
   "$<INSTALL_INTERFACE:include>"
 )
 
-if(NPU_COMPUTE_BUILD_INTEGRATION_STUBS)
+add_library(npu_compute_backend_headers INTERFACE)
+target_link_libraries(npu_compute_backend_headers INTERFACE
+  npu_compute_headers
+)
+
+if(NPU_COMPUTE_USE_STUB_BACKEND)
   add_library(npu_compute_integration_headers INTERFACE)
-  target_link_libraries(npu_compute_integration_headers INTERFACE npu_compute_headers)
-  target_include_directories(npu_compute_integration_headers BEFORE INTERFACE
+  target_link_libraries(npu_compute_integration_headers INTERFACE
+    npu_compute_backend_headers
+  )
+  target_include_directories(npu_compute_backend_headers BEFORE INTERFACE
     "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/stubs/runtime/include>"
     "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/stubs/prof_api/include>"
   )
 endif()
 
-if(NPU_COMPUTE_BUILD_INTEGRATION_STUBS)
-  add_library(acl_prof_api_backend INTERFACE)
-  add_subdirectory(stubs/prof_api)
-  target_link_libraries(acl_prof_api_backend INTERFACE acl_prof_api_stub)
+add_library(acl_runtime_backend INTERFACE)
+add_library(acl_prof_api_backend INTERFACE)
 
+if(NPU_COMPUTE_USE_STUB_BACKEND)
+  add_subdirectory(stubs/prof_api)
   add_subdirectory(stubs/runtime)
-  add_subdirectory(src/injection_hook)
+
+  target_link_libraries(acl_runtime_backend INTERFACE acl_runtime_stub)
+  target_link_libraries(acl_prof_api_backend INTERFACE acl_prof_api_stub)
+else()
+  get_filename_component(
+    NPUCOMPUTE_CANN_ARCH_ROOT "${NPUCOMPUTE_ACL_INCLUDE_DIR}" DIRECTORY)
+  find_library(NPUCOMPUTE_ACL_RT_LIBRARY
+    NAMES acl_rt
+    HINTS
+      "${NPUCOMPUTE_CANN_ROOT}/lib64"
+      "${NPUCOMPUTE_CANN_ARCH_ROOT}/lib64"
+      "${ASCEND_CANN_PACKAGE_PATH}/${CMAKE_SYSTEM_PROCESSOR}-linux/lib64"
+      "$ENV{ASCEND_HOME_PATH}/lib64"
+    NO_DEFAULT_PATH
+  )
+  find_library(NPUCOMPUTE_PROFAPI_LIBRARY
+    NAMES profapi
+    HINTS
+      "${NPUCOMPUTE_CANN_ROOT}/lib64"
+      "${NPUCOMPUTE_CANN_ARCH_ROOT}/lib64"
+      "${ASCEND_CANN_PACKAGE_PATH}/${CMAKE_SYSTEM_PROCESSOR}-linux/lib64"
+      "$ENV{ASCEND_HOME_PATH}/lib64"
+    NO_DEFAULT_PATH
+  )
+  if(NOT NPUCOMPUTE_ACL_RT_LIBRARY OR NOT NPUCOMPUTE_PROFAPI_LIBRARY)
+    message(FATAL_ERROR
+      "NPU Compute CANN libraries were not found. Set NPUCOMPUTE_CANN_ROOT "
+      "to the architecture package directory containing lib64/libacl_rt.so "
+      "and lib64/libprofapi.so."
+    )
+  endif()
+
+  add_library(CANN::acl_rt SHARED IMPORTED GLOBAL)
+  set_target_properties(CANN::acl_rt PROPERTIES
+    IMPORTED_LOCATION "${NPUCOMPUTE_ACL_RT_LIBRARY}"
+  )
+  add_library(CANN::profapi SHARED IMPORTED GLOBAL)
+  set_target_properties(CANN::profapi PROPERTIES
+    IMPORTED_LOCATION "${NPUCOMPUTE_PROFAPI_LIBRARY}"
+  )
+
+  target_link_libraries(acl_runtime_backend INTERFACE CANN::acl_rt)
+  target_link_libraries(acl_prof_api_backend INTERFACE CANN::profapi)
 endif()
 
+add_subdirectory(src/injection_hook)
 add_subdirectory(src/acl_pti)
 
 add_subdirectory(src/npu_compute)
@@ -109,7 +158,7 @@ install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/sections/"
   COMPONENT npu-compute-integration
 )
 
-if(NPU_COMPUTE_BUILD_INTEGRATION_STUBS)
+if(NPU_COMPUTE_USE_STUB_BACKEND)
   add_subdirectory(demo)
 endif()
 

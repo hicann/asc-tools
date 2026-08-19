@@ -221,7 +221,7 @@ int main()
     CHECK(aclptiSubscribe(&subscriber, nullptr, nullptr, nullptr) == ACLPTI_SUCCESS);
     CHECK(subscriber != nullptr);
     CHECK(g_registered_callback != nullptr);
-    CHECK(g_callback_type == 8);
+    CHECK(g_callback_type == 0);
     CHECK(reinterpret_cast<aclrtMallocFunc>(acltoolGetOriginalRuntimeApi(ACL_RT_API_aclrtMalloc)) == &RealMalloc);
     CHECK(reinterpret_cast<aclrtFreeFunc>(acltoolGetOriginalRuntimeApi(ACL_RT_API_aclrtFree)) == &RealFree);
     CHECK(reinterpret_cast<aclrtMemcpyFunc>(acltoolGetOriginalRuntimeApi(ACL_RT_API_aclrtMemcpy)) == &RealMemcpy);

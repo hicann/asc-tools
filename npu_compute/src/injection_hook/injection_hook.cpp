@@ -27,7 +27,7 @@ struct aclApiTable {
     pthread_rwlock_t lock;
 };
 
-constexpr uint32_t kMsprofDataCallbackType = 8U;
+constexpr uint32_t kMsprofDataCallbackType = 0U;
 
 const std::map<std::string, aclrtApiId> aclrtApiNameMap = {
     {"aclrtLaunchKernelWithHostArgs", ACL_RT_API_aclrtLaunchKernelWithHostArgs},

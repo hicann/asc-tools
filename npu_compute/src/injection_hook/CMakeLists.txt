@@ -16,11 +16,11 @@ target_include_directories(acl_tool_injection PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}/..
 )
 target_link_libraries(acl_tool_injection
-  PUBLIC npu_compute_integration_headers
+  PUBLIC npu_compute_backend_headers
   PRIVATE
     Threads::Threads
-    acl_runtime_stub
-    acl_prof_api_stub
+    acl_runtime_backend
+    acl_prof_api_backend
 )
 target_compile_options(acl_tool_injection PRIVATE -Wall -Wextra -Werror)
 target_link_options(acl_tool_injection PRIVATE -Wl,-z,defs)
