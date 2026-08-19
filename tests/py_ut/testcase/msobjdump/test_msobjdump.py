@@ -50,8 +50,54 @@ class TestMsObjdump(unittest.TestCase):
         self.assertEqual(result, 7)
 
     def test_unpack_buff_content_by_type_out_of_bounds(self):
-        with self.assertRaisesRegex(RuntimeError, "out of bound"):
+        with self.assertRaisesRegex(RuntimeError, "buffer access is out of bounds"):
             msobjdump_main.ObjDump._unpack_buff_content_by_type(b"\x00", 0, 4, "I")
+
+    @patch("msobjdump.msobjdump_main.mmap.mmap")
+    @patch("msobjdump.msobjdump_main.open")
+    @patch("msobjdump.msobjdump_main.os.path.getsize", return_value=4)
+    def test_get_segment_content_opens_read_only(
+        self, mock_getsize, mock_open, mock_mmap
+    ):
+        obj_dump = msobjdump_main.ObjDump.__new__(msobjdump_main.ObjDump)
+        obj_dump.obj = "input.o"
+        mapped_content = MagicMock()
+        mock_mmap.return_value = mapped_content
+
+        obj_dump._get_segment_content(1, 2)
+
+        mock_open.assert_called_once_with("input.o", "rb")
+        mock_mmap.assert_called_once_with(
+            mock_open.return_value.__enter__.return_value.fileno(),
+            4,
+            access=msobjdump_main.mmap.ACCESS_READ,
+        )
+
+    def test_parse_ascend_kernel_content_rejects_real_length_larger_than_allocated(
+        self,
+    ):
+        obj_dump = msobjdump_main.ObjDump.__new__(msobjdump_main.ObjDump)
+        obj_dump.tmp_dir = tempfile.mkdtemp()
+        # version=1, type_cnt=1, type=aiv, allocated length=2, actual length=3
+        content = struct.pack("5I", 1, 1, 1, 2, 3) + b"ab"
+
+        try:
+            with self.assertRaisesRegex(RuntimeError, "obj_name=kernel, kernel_id=0"):
+                obj_dump._parse_ascend_kernel_content(content, "kernel", "dump")
+        finally:
+            shutil.rmtree(obj_dump.tmp_dir)
+
+    def test_parse_ascend_kernel_content_rejects_truncated_payload(self):
+        obj_dump = msobjdump_main.ObjDump.__new__(msobjdump_main.ObjDump)
+        obj_dump.tmp_dir = tempfile.mkdtemp()
+        # version=1, type_cnt=1, type=aiv, allocated/actual length=3, payload has 2 bytes
+        content = struct.pack("5I", 1, 1, 1, 3, 3) + b"ab"
+
+        try:
+            with self.assertRaisesRegex(RuntimeError, "obj_name=kernel, kernel_id=0"):
+                obj_dump._parse_ascend_kernel_content(content, "kernel", "dump")
+        finally:
+            shutil.rmtree(obj_dump.tmp_dir)
 
     def test_file_action_only_parses_a_suffix_as_archive(self):
         action = msobjdump_main.FileAction([], "file")

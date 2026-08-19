@@ -172,7 +172,10 @@ class ObjDump:
     def _unpack_buff_content_by_type(
         content: bytes, start_idx: int, read_len: int, type_str: str
     ) -> int:
-        error_message = "[ERROR]: Parse ascend kernel content failed with out of bound."
+        error_message = (
+            "[ERROR]: Failed to parse Ascend kernel content: "
+            "buffer access is out of bounds."
+        )
         end_idx = start_idx + read_len
         if start_idx < 0 or read_len < 0 or end_idx > len(content):
             raise RuntimeError(error_message)
@@ -694,6 +697,9 @@ class ObjDump:
         """
         解析.ascend.kernel section的内容
         内容落盘, 返回生成的AscendKernelInfos信息
+
+        每个kernel条目包含缓冲区分配长度（kernel_len）和实际ELF文件长度（kernel_len_real）。
+        前者决定下一个条目的偏移，后者决定写出的字节数。
         """
         total_len = len(content)
         read_len = 0
@@ -721,6 +727,12 @@ class ObjDump:
                     content, read_len, 4, "I"
                 )
                 read_len += 4
+                if kernel_len_real > kernel_len or read_len + kernel_len > total_len:
+                    raise RuntimeError(
+                        "[ERROR]: Failed to parse Ascend kernel content: "
+                        "buffer access is out of bounds. "
+                        f"obj_name={obj_name}, kernel_id={kernel_id}"
+                    )
                 # parse buff
                 file_name = "_".join([obj_name, str(kernel_id), kernel_type]) + ".o"
                 if parse_type == "list":
@@ -741,9 +753,9 @@ class ObjDump:
         获取data段上指定偏移量和大小的内容
         """
         file_size = int(os.path.getsize(self.obj))
-        with open(self.obj, "r+b") as f:
-            mm = mmap.mmap(f.fileno(), file_size)
-            return mm[offset : (offset + size)]
+        with open(self.obj, "rb") as f:
+            with mmap.mmap(f.fileno(), file_size, access=mmap.ACCESS_READ) as mm:
+                return mm[offset : (offset + size)]
 
 
 def get_data_segment_range(filename: str):
