@@ -88,8 +88,15 @@ def test_prof_api_constants_are_private_to_the_stub():
     )
 
     assert not public_header.exists()
-    assert "COMPUTE_AICORE_METRICS_NUM = 10" in prof_common
-    assert "COMPUTE_INVALID_AICORE_METRIC_EVENT = 0xffffffffU" in prof_common
+    assert "#define COMPUTE_AICORE_METRICS_NUM 10" in prof_common
+    assert "#define MSPROF_INVALID_AICORE_METRIC UINT32_MAX" in prof_common
+    assert "PROF_CONFIG_ATTR_AICORE_METRICS = 0" in prof_common
+    assert "PROF_CONFIG_ATTR_INSTR = 1" in prof_common
+    assert "struct MsprofConfigAttr {\n    uint32_t id;" in prof_common
+    assert prof_common.count("struct MsprofConfigInfo {") == 1
+    assert "size_t numAttrs;\n    const struct MsprofConfigAttr* attrs;" in prof_common
+    assert "COMPUTE_INVALID_AICORE_METRIC_EVENT" not in prof_common
+    assert "MSPROF_AICOREMETRICS" not in prof_common
     assert "npu_compute::prof" not in prof_common
     assert "npu_compute::prof" not in prof_stub
 

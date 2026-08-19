@@ -115,6 +115,7 @@ int main()
     aclptiSubscribeHandle subscriber = nullptr;
     CHECK(aclptiSubscribe(&subscriber, nullptr, nullptr, nullptr) == ACLPTI_SUCCESS);
     CHECK(subscriber != nullptr);
+    CHECK(aclrtSetDevice(0) == ACL_SUCCESS);
 
     CHECK(aclrtLaunchKernel(nullptr, 1, nullptr, 0, nullptr) == 0);
     CHECK(g_launch_calls == 2);

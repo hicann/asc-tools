@@ -128,8 +128,13 @@ aclptiResult RangeProfiler::SetSections(const aclptiRangeProfilerSetConfigParams
 
 int RangeProfiler::ReplayKernel(
     const ReplayMemory& replayMemory, aclrtMemcpyFunc memcpyFunction, const ReplayLaunchFunction& launchFunction,
-    aclrtSynchronizeStreamFunc synchronizeFunction, aclrtStream stream)
+    aclrtSynchronizeStreamFunc synchronizeFunction, aclrtStream stream, std::int32_t deviceId)
 {
+    if (deviceId < 0) {
+        npu_compute::detail::DebugLog("aclpti", "replay rejected because no active device is set");
+        return ACLPTI_ERROR_INVALID_STATE;
+    }
+
     const auto finishReplay = [this](int replayStatus) {
         const aclptiResult shutdownStatus = dataModule_.Shutdown();
         npu_compute::detail::DebugLog(
@@ -151,13 +156,14 @@ int RangeProfiler::ReplayKernel(
         }
 
         const std::size_t firstEvent = round * COMPUTE_AICORE_METRICS_NUM;
-        const std::size_t eventCount =
-            std::min(pmuEvents_.size() - std::min(firstEvent, pmuEvents_.size()), COMPUTE_AICORE_METRICS_NUM);
+        const std::size_t eventCount = std::min(
+            pmuEvents_.size() - std::min(firstEvent, pmuEvents_.size()),
+            static_cast<std::size_t>(COMPUTE_AICORE_METRICS_NUM));
         const std::uint64_t replayId = round;
 
         MsprofConfigAttr attr{};
-        attr.id = MSPROF_AICOREMETRICS;
-        std::fill_n(attr.value.aicoreMetrics, COMPUTE_AICORE_METRICS_NUM, data::kInvalidPmuEvent);
+        attr.id = PROF_CONFIG_ATTR_AICORE_METRICS;
+        std::fill_n(attr.value.aicoreMetrics, COMPUTE_AICORE_METRICS_NUM, MSPROF_INVALID_AICORE_METRIC);
         data::ReplayPrepareInfo prepareInfo{};
         prepareInfo.replayId = replayId;
         prepareInfo.sectionName = sectionName_;
@@ -182,6 +188,8 @@ int RangeProfiler::ReplayKernel(
 
         MsprofConfig config{};
         config.profSwitch = kDefaultProfSwitch;
+        config.devNums = 1;
+        config.devIdList[0] = static_cast<std::uint32_t>(deviceId);
         config.configInfo.attrs = &attr;
         config.configInfo.numAttrs = 1;
 

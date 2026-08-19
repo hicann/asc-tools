@@ -30,13 +30,13 @@ using AcltoolInitializeFn = int (*)();
 std::size_t CountConfiguredPmus(const MsprofConfig& config)
 {
     if (config.configInfo.attrs == nullptr || config.configInfo.numAttrs != 1 ||
-        config.configInfo.attrs[0].id != MSPROF_AICOREMETRICS) {
+        config.configInfo.attrs[0].id != PROF_CONFIG_ATTR_AICORE_METRICS) {
         return 0;
     }
 
     std::size_t pmuCount = 0;
     for (std::uint32_t event : config.configInfo.attrs[0].value.aicoreMetrics) {
-        if (event != COMPUTE_INVALID_AICORE_METRIC_EVENT) {
+        if (event != MSPROF_INVALID_AICORE_METRIC) {
             ++pmuCount;
         }
     }

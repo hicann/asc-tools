@@ -131,6 +131,7 @@ int main()
     aclptiSubscribeHandle subscriber = nullptr;
     CHECK(aclptiSubscribe(&subscriber, nullptr, nullptr, nullptr) == ACLPTI_SUCCESS);
     CHECK(subscriber != nullptr);
+    CHECK(aclrtSetDevice(0) == ACL_SUCCESS);
     const char* sections[] = {"PipeUtilization"};
     aclptiRangeProfilerSetConfigParams config{sections, 1};
     CHECK(aclptiRangeProfilerSetConfig(&config) == ACLPTI_SUCCESS);

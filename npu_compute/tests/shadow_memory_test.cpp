@@ -118,6 +118,7 @@ int main()
     CHECK(RuntimeStubSetOriginFunction("aclrtSynchronizeStream", &RealSynchronize) == 0);
     aclptiSubscribeHandle subscriber = nullptr;
     CHECK(aclptiSubscribe(&subscriber, nullptr, nullptr, nullptr) == ACLPTI_SUCCESS);
+    CHECK(aclrtSetDevice(0) == ACL_SUCCESS);
     const char* sections[] = {"PipeUtilization", "ResourceConflictRatio"};
     aclptiRangeProfilerSetConfigParams config{sections, 2};
     CHECK(aclptiRangeProfilerSetConfig(&config) == ACLPTI_SUCCESS);

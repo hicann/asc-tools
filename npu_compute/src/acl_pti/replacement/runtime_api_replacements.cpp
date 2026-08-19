@@ -7,7 +7,7 @@
  * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
  * See LICENSE in the root of the software repository for the full text of the License.
  */
-#include "domain.h"
+#include "runtime_api_replacements.h"
 
 #include "acl_pti/callback/dispatcher.h"
 #include "common/debug_log.h"
@@ -15,7 +15,7 @@
 
 #include <utility>
 
-namespace npu_compute::aclpti::runtime_replacement {
+namespace npu_compute::aclpti::replacement {
 namespace {
 
 template <typename Function>
@@ -69,15 +69,15 @@ static_assert(static_cast<aclptiCallbackId>(ACLPTI_RUNTIME_CBID_SIZE) == static_
 
 } // namespace
 
-Domain& Domain::Instance() { return GetDomain(); }
+RuntimeApiReplacements& RuntimeApiReplacements::Instance() { return GetRuntimeApiReplacements(); }
 
-Domain& GetDomain()
+RuntimeApiReplacements& GetRuntimeApiReplacements()
 {
-    static Domain domain;
-    return domain;
+    static RuntimeApiReplacements replacements;
+    return replacements;
 }
 
-bool Domain::RegisterCallbacks(callback::Dispatcher& dispatcher)
+bool RuntimeApiReplacements::RegisterCallbacks(callback::Dispatcher& dispatcher)
 {
     return dispatcher.RegisterDomain(
         ACLPTI_CB_DOMAIN_RUNTIME_API,
@@ -90,7 +90,7 @@ bool Domain::RegisterCallbacks(callback::Dispatcher& dispatcher)
          ACLPTI_RUNTIME_CBID_aclrtLaunchKernel});
 }
 
-bool Domain::Initialize(profiling::ReplayMemory& replayMemory, profiling::RangeProfiler& rangeProfiler)
+bool RuntimeApiReplacements::Initialize(profiling::ReplayMemory& replayMemory, profiling::RangeProfiler& rangeProfiler)
 {
     if (initialized_) {
         return true;
@@ -107,29 +107,34 @@ bool Domain::Initialize(profiling::ReplayMemory& replayMemory, profiling::RangeP
     return true;
 }
 
-bool Domain::RegisterReplacements()
+bool RuntimeApiReplacements::RegisterReplacements()
 {
-    if (acltoolRegisterAclrtLaunchKernelWithHostArgsCallbacks(&Domain::AclrtLaunchKernelWithHostArgsReplacement) != 0 ||
-        acltoolRegisterAclrtMemcpyCallbacks(&Domain::AclrtMemcpyReplacement) != 0 ||
-        acltoolRegisterAclrtBinaryLoadFromDataCallbacks(&Domain::AclrtBinaryLoadFromDataReplacement) != 0 ||
-        acltoolRegisterAclrtBinaryGetFunctionCallbacks(&Domain::AclrtBinaryGetFunctionReplacement) != 0 ||
-        acltoolRegisterAclrtMallocCallbacks(&Domain::AclrtMallocReplacement) != 0 ||
-        acltoolRegisterAclrtMemsetCallbacks(&Domain::AclrtMemsetReplacement) != 0 ||
-        acltoolRegisterAclrtFreeCallbacks(&Domain::AclrtFreeReplacement) != 0 ||
-        acltoolRegisterAclrtCreateStreamCallbacks(&Domain::AclrtCreateStreamReplacement) != 0 ||
-        acltoolRegisterAclrtDestroyStreamCallbacks(&Domain::AclrtDestroyStreamReplacement) != 0 ||
-        acltoolRegisterAclrtSetDeviceCallbacks(&Domain::AclrtSetDeviceReplacement) != 0 ||
-        acltoolRegisterAclrtResetDeviceCallbacks(&Domain::AclrtResetDeviceReplacement) != 0 ||
-        acltoolRegisterAclrtSynchronizeStreamCallbacks(&Domain::AclrtSynchronizeStreamReplacement) != 0 ||
-        acltoolRegisterAclrtBinaryGetFunctionByEntryCallbacks(&Domain::AclrtBinaryGetFunctionByEntryReplacement) != 0 ||
-        acltoolRegisterAclrtLaunchKernelCallbacks(&Domain::AclrtLaunchKernelReplacement) != 0) {
+    if (acltoolRegisterAclrtLaunchKernelWithHostArgsCallbacks(
+            &RuntimeApiReplacements::AclrtLaunchKernelWithHostArgsReplacement) != 0 ||
+        acltoolRegisterAclrtMemcpyCallbacks(&RuntimeApiReplacements::AclrtMemcpyReplacement) != 0 ||
+        acltoolRegisterAclrtBinaryLoadFromDataCallbacks(&RuntimeApiReplacements::AclrtBinaryLoadFromDataReplacement) !=
+            0 ||
+        acltoolRegisterAclrtBinaryGetFunctionCallbacks(&RuntimeApiReplacements::AclrtBinaryGetFunctionReplacement) !=
+            0 ||
+        acltoolRegisterAclrtMallocCallbacks(&RuntimeApiReplacements::AclrtMallocReplacement) != 0 ||
+        acltoolRegisterAclrtMemsetCallbacks(&RuntimeApiReplacements::AclrtMemsetReplacement) != 0 ||
+        acltoolRegisterAclrtFreeCallbacks(&RuntimeApiReplacements::AclrtFreeReplacement) != 0 ||
+        acltoolRegisterAclrtCreateStreamCallbacks(&RuntimeApiReplacements::AclrtCreateStreamReplacement) != 0 ||
+        acltoolRegisterAclrtDestroyStreamCallbacks(&RuntimeApiReplacements::AclrtDestroyStreamReplacement) != 0 ||
+        acltoolRegisterAclrtSetDeviceCallbacks(&RuntimeApiReplacements::AclrtSetDeviceReplacement) != 0 ||
+        acltoolRegisterAclrtResetDeviceCallbacks(&RuntimeApiReplacements::AclrtResetDeviceReplacement) != 0 ||
+        acltoolRegisterAclrtSynchronizeStreamCallbacks(&RuntimeApiReplacements::AclrtSynchronizeStreamReplacement) !=
+            0 ||
+        acltoolRegisterAclrtBinaryGetFunctionByEntryCallbacks(
+            &RuntimeApiReplacements::AclrtBinaryGetFunctionByEntryReplacement) != 0 ||
+        acltoolRegisterAclrtLaunchKernelCallbacks(&RuntimeApiReplacements::AclrtLaunchKernelReplacement) != 0) {
         return false;
     }
     npu_compute::detail::DebugLog("aclpti", "runtime replacement registration complete");
     return true;
 }
 
-aclError Domain::AclrtLaunchKernelWithHostArgsReplacement(
+aclError RuntimeApiReplacements::AclrtLaunchKernelWithHostArgsReplacement(
     aclrtFuncHandle funcHandle, std::uint32_t numBlocks, aclrtStream stream, aclrtLaunchKernelCfg* cfg, void* hostArgs,
     std::size_t argsSize, aclrtPlaceHolderInfo* placeHolderArray, std::size_t placeHolderNum)
 {
@@ -147,21 +152,21 @@ aclError Domain::AclrtLaunchKernelWithHostArgsReplacement(
         if (result != ACL_SUCCESS) {
             return result;
         }
-        Domain& domain = Domain::Instance();
+        RuntimeApiReplacements& replacements = RuntimeApiReplacements::Instance();
         const auto synchronizeFunction =
             GetOriginalRuntimeFunction<aclrtSynchronizeStreamFunc>(ACL_RT_API_aclrtSynchronizeStream);
-        return domain.rangeProfiler_->ReplayKernel(
-            *domain.replayMemory_, GetOriginalRuntimeFunction<aclrtMemcpyFunc>(ACL_RT_API_aclrtMemcpy),
+        return replacements.rangeProfiler_->ReplayKernel(
+            *replacements.replayMemory_, GetOriginalRuntimeFunction<aclrtMemcpyFunc>(ACL_RT_API_aclrtMemcpy),
             [launchFunction, &params]() -> aclError {
                 return launchFunction(
                     params.funcHandle, params.numBlocks, params.stream, params.cfg, params.hostArgs, params.argsSize,
                     params.placeHolderArray, params.placeHolderNum);
             },
-            synchronizeFunction, params.stream);
+            synchronizeFunction, params.stream, replacements.currentDeviceId_.load());
     });
 }
 
-aclError Domain::AclrtMemcpyReplacement(
+aclError RuntimeApiReplacements::AclrtMemcpyReplacement(
     void* destination, std::size_t destinationSize, const void* source, std::size_t count, aclrtMemcpyKind kind)
 {
     aclptiAclrtMemcpyParams params{destination, destinationSize, source, count, kind};
@@ -174,12 +179,12 @@ aclError Domain::AclrtMemcpyReplacement(
         if (result != ACL_SUCCESS) {
             return result;
         }
-        return Domain::Instance().replayMemory_->MirrorMemcpy(
+        return RuntimeApiReplacements::Instance().replayMemory_->MirrorMemcpy(
             function, params.dst, params.destMax, params.src, params.count, params.kind);
     });
 }
 
-aclError Domain::AclrtBinaryLoadFromDataReplacement(
+aclError RuntimeApiReplacements::AclrtBinaryLoadFromDataReplacement(
     const void* data, std::size_t length, const aclrtBinaryLoadOptions* options, aclrtBinHandle* binHandle)
 {
     aclptiAclrtBinaryLoadFromDataParams params{data, length, options, binHandle};
@@ -190,7 +195,7 @@ aclError Domain::AclrtBinaryLoadFromDataReplacement(
         });
 }
 
-aclError Domain::AclrtBinaryGetFunctionReplacement(
+aclError RuntimeApiReplacements::AclrtBinaryGetFunctionReplacement(
     const aclrtBinHandle binHandle, const char* kernelName, aclrtFuncHandle* funcHandle)
 {
     aclptiAclrtBinaryGetFunctionParams params{binHandle, kernelName, funcHandle};
@@ -201,7 +206,7 @@ aclError Domain::AclrtBinaryGetFunctionReplacement(
         });
 }
 
-aclError Domain::AclrtMallocReplacement(void** devPtr, std::size_t size, aclrtMemMallocPolicy policy)
+aclError RuntimeApiReplacements::AclrtMallocReplacement(void** devPtr, std::size_t size, aclrtMemMallocPolicy policy)
 {
     aclptiAclrtMallocParams params{devPtr, size, policy};
     return InvokeRuntimeCallback(ACLPTI_RUNTIME_CBID_aclrtMalloc, params, [&params]() -> aclError {
@@ -214,12 +219,13 @@ aclError Domain::AclrtMallocReplacement(void** devPtr, std::size_t size, aclrtMe
         if (result != ACL_SUCCESS) {
             return result;
         }
-        return Domain::Instance().replayMemory_->MirrorMalloc(
+        return RuntimeApiReplacements::Instance().replayMemory_->MirrorMalloc(
             mallocFunction, freeFunction, params.devPtr, params.size, params.policy);
     });
 }
 
-aclError Domain::AclrtMemsetReplacement(void* devPtr, std::size_t maxCount, std::int32_t value, std::size_t count)
+aclError RuntimeApiReplacements::AclrtMemsetReplacement(
+    void* devPtr, std::size_t maxCount, std::int32_t value, std::size_t count)
 {
     aclptiAclrtMemsetParams params{devPtr, maxCount, value, count};
     return InvokeRuntimeCallback(ACLPTI_RUNTIME_CBID_aclrtMemset, params, [&params]() -> aclError {
@@ -231,12 +237,12 @@ aclError Domain::AclrtMemsetReplacement(void* devPtr, std::size_t maxCount, std:
         if (result != ACL_SUCCESS) {
             return result;
         }
-        return Domain::Instance().replayMemory_->MirrorMemset(
+        return RuntimeApiReplacements::Instance().replayMemory_->MirrorMemset(
             function, params.devPtr, params.maxCount, params.value, params.count);
     });
 }
 
-aclError Domain::AclrtFreeReplacement(void* devPtr)
+aclError RuntimeApiReplacements::AclrtFreeReplacement(void* devPtr)
 {
     aclptiAclrtFreeParams params{devPtr};
     return InvokeRuntimeCallback(ACLPTI_RUNTIME_CBID_aclrtFree, params, [&params]() -> aclError {
@@ -248,11 +254,11 @@ aclError Domain::AclrtFreeReplacement(void* devPtr)
         if (result != ACL_SUCCESS) {
             return result;
         }
-        return Domain::Instance().replayMemory_->MirrorFree(function, params.devPtr);
+        return RuntimeApiReplacements::Instance().replayMemory_->MirrorFree(function, params.devPtr);
     });
 }
 
-aclError Domain::AclrtCreateStreamReplacement(aclrtStream* stream)
+aclError RuntimeApiReplacements::AclrtCreateStreamReplacement(aclrtStream* stream)
 {
     aclptiAclrtCreateStreamParams params{stream};
     return ForwardRuntimeApi<aclrtCreateStreamFunc>(
@@ -260,7 +266,7 @@ aclError Domain::AclrtCreateStreamReplacement(aclrtStream* stream)
         [&params](aclrtCreateStreamFunc function) { return function(params.stream); });
 }
 
-aclError Domain::AclrtDestroyStreamReplacement(aclrtStream stream)
+aclError RuntimeApiReplacements::AclrtDestroyStreamReplacement(aclrtStream stream)
 {
     aclptiAclrtDestroyStreamParams params{stream};
     return ForwardRuntimeApi<aclrtDestroyStreamFunc>(
@@ -268,23 +274,40 @@ aclError Domain::AclrtDestroyStreamReplacement(aclrtStream stream)
         [&params](aclrtDestroyStreamFunc function) { return function(params.stream); });
 }
 
-aclError Domain::AclrtSetDeviceReplacement(std::int32_t deviceId)
+aclError RuntimeApiReplacements::AclrtSetDeviceReplacement(std::int32_t deviceId)
 {
     aclptiAclrtSetDeviceParams params{deviceId};
-    return ForwardRuntimeApi<aclrtSetDeviceFunc>(
-        ACLPTI_RUNTIME_CBID_aclrtSetDevice, ACL_RT_API_aclrtSetDevice, params,
-        [&params](aclrtSetDeviceFunc function) { return function(params.deviceId); });
+    return InvokeRuntimeCallback(ACLPTI_RUNTIME_CBID_aclrtSetDevice, params, [&params]() -> aclError {
+        const auto function = GetOriginalRuntimeFunction<aclrtSetDeviceFunc>(ACL_RT_API_aclrtSetDevice);
+        if (function == nullptr) {
+            return -1;
+        }
+        const aclError result = function(params.deviceId);
+        if (result == ACL_SUCCESS && params.deviceId >= 0) {
+            RuntimeApiReplacements::Instance().currentDeviceId_.store(params.deviceId);
+        }
+        return result;
+    });
 }
 
-aclError Domain::AclrtResetDeviceReplacement(std::int32_t deviceId)
+aclError RuntimeApiReplacements::AclrtResetDeviceReplacement(std::int32_t deviceId)
 {
     aclptiAclrtResetDeviceParams params{deviceId};
-    return ForwardRuntimeApi<aclrtResetDeviceFunc>(
-        ACLPTI_RUNTIME_CBID_aclrtResetDevice, ACL_RT_API_aclrtResetDevice, params,
-        [&params](aclrtResetDeviceFunc function) { return function(params.deviceId); });
+    return InvokeRuntimeCallback(ACLPTI_RUNTIME_CBID_aclrtResetDevice, params, [&params]() -> aclError {
+        const auto function = GetOriginalRuntimeFunction<aclrtResetDeviceFunc>(ACL_RT_API_aclrtResetDevice);
+        if (function == nullptr) {
+            return -1;
+        }
+        const aclError result = function(params.deviceId);
+        if (result == ACL_SUCCESS) {
+            std::int32_t expectedDeviceId = params.deviceId;
+            RuntimeApiReplacements::Instance().currentDeviceId_.compare_exchange_strong(expectedDeviceId, -1);
+        }
+        return result;
+    });
 }
 
-aclError Domain::AclrtSynchronizeStreamReplacement(aclrtStream stream)
+aclError RuntimeApiReplacements::AclrtSynchronizeStreamReplacement(aclrtStream stream)
 {
     aclptiAclrtSynchronizeStreamParams params{stream};
     return ForwardRuntimeApi<aclrtSynchronizeStreamFunc>(
@@ -292,7 +315,7 @@ aclError Domain::AclrtSynchronizeStreamReplacement(aclrtStream stream)
         [&params](aclrtSynchronizeStreamFunc function) { return function(params.stream); });
 }
 
-aclError Domain::AclrtBinaryGetFunctionByEntryReplacement(
+aclError RuntimeApiReplacements::AclrtBinaryGetFunctionByEntryReplacement(
     aclrtBinHandle binHandle, std::uint64_t funcEntry, aclrtFuncHandle* funcHandle)
 {
     aclptiAclrtBinaryGetFunctionByEntryParams params{binHandle, funcEntry, funcHandle};
@@ -303,7 +326,7 @@ aclError Domain::AclrtBinaryGetFunctionByEntryReplacement(
         });
 }
 
-aclError Domain::AclrtLaunchKernelReplacement(
+aclError RuntimeApiReplacements::AclrtLaunchKernelReplacement(
     aclrtFuncHandle function, std::uint32_t blockCount, const void* argsData, std::size_t argsSize, aclrtStream stream)
 {
     aclptiAclrtLaunchKernelParams params{function, blockCount, argsData, argsSize, stream};
@@ -317,17 +340,17 @@ aclError Domain::AclrtLaunchKernelReplacement(
         if (result != ACL_SUCCESS) {
             return result;
         }
-        Domain& domain = Domain::Instance();
+        RuntimeApiReplacements& replacements = RuntimeApiReplacements::Instance();
         const auto synchronizeFunction =
             GetOriginalRuntimeFunction<aclrtSynchronizeStreamFunc>(ACL_RT_API_aclrtSynchronizeStream);
-        return domain.rangeProfiler_->ReplayKernel(
-            *domain.replayMemory_, GetOriginalRuntimeFunction<aclrtMemcpyFunc>(ACL_RT_API_aclrtMemcpy),
+        return replacements.rangeProfiler_->ReplayKernel(
+            *replacements.replayMemory_, GetOriginalRuntimeFunction<aclrtMemcpyFunc>(ACL_RT_API_aclrtMemcpy),
             [launchFunction, &params]() -> aclError {
                 return launchFunction(
                     params.funcHandle, params.numBlocks, params.argsData, params.argsSize, params.stream);
             },
-            synchronizeFunction, params.stream);
+            synchronizeFunction, params.stream, replacements.currentDeviceId_.load());
     });
 }
 
-} // namespace npu_compute::aclpti::runtime_replacement
+} // namespace npu_compute::aclpti::replacement

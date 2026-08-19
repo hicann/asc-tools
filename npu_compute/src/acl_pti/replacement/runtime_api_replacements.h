@@ -7,27 +7,29 @@
  * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
  * See LICENSE in the root of the software repository for the full text of the License.
  */
-#ifndef NPU_COMPUTE_ACLPTI_RUNTIME_REPLACEMENT_DOMAIN_H_
-#define NPU_COMPUTE_ACLPTI_RUNTIME_REPLACEMENT_DOMAIN_H_
+#ifndef NPU_COMPUTE_ACLPTI_REPLACEMENT_RUNTIME_API_REPLACEMENTS_H_
+#define NPU_COMPUTE_ACLPTI_REPLACEMENT_RUNTIME_API_REPLACEMENTS_H_
 
 #include "acl_pti/profiling/range_profiler.h"
 #include "acl_pti/profiling/replay_memory.h"
 
 #include "aclpti/aclpti_runtime_api.h"
 
+#include <atomic>
+
 namespace npu_compute::aclpti::callback {
 class Dispatcher;
 }
 
-namespace npu_compute::aclpti::runtime_replacement {
+namespace npu_compute::aclpti::replacement {
 
-class Domain {
+class RuntimeApiReplacements {
 public:
     static bool RegisterCallbacks(callback::Dispatcher& dispatcher);
     bool Initialize(profiling::ReplayMemory& replayMemory, profiling::RangeProfiler& rangeProfiler);
 
 private:
-    static Domain& Instance();
+    static RuntimeApiReplacements& Instance();
     bool RegisterReplacements();
 
     static aclError AclrtLaunchKernelWithHostArgsReplacement(
@@ -55,11 +57,12 @@ private:
 
     profiling::ReplayMemory* replayMemory_ = nullptr;
     profiling::RangeProfiler* rangeProfiler_ = nullptr;
+    std::atomic<std::int32_t> currentDeviceId_{-1};
     bool initialized_ = false;
 };
 
-Domain& GetDomain();
+RuntimeApiReplacements& GetRuntimeApiReplacements();
 
-} // namespace npu_compute::aclpti::runtime_replacement
+} // namespace npu_compute::aclpti::replacement
 
-#endif // NPU_COMPUTE_ACLPTI_RUNTIME_REPLACEMENT_DOMAIN_H_
+#endif // NPU_COMPUTE_ACLPTI_REPLACEMENT_RUNTIME_API_REPLACEMENTS_H_

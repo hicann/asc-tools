@@ -21,48 +21,43 @@
 #define PROF_AICORE_METRICS_MASK 0x00000004ULL
 #define PROF_TASK_TIME_MASK 0x00000800ULL
 
-inline constexpr std::size_t COMPUTE_AICORE_METRICS_NUM = 10;
-inline constexpr std::uint32_t COMPUTE_INVALID_AICORE_METRIC_EVENT = 0xffffffffU;
+#define COMPUTE_AICORE_METRICS_NUM 10
+#define MSPROF_INVALID_AICORE_METRIC UINT32_MAX
+#define MSPROF_CONFIG_ATTR_MAX_NUM 16
 
-enum MsprofConfigAttrId {
-    MSPROF_AICOREMETRICS = 0,
-    MSPROF_COMPUTE_INSTR_MODE = 1,
-};
+enum MsprofConfigAttrId { PROF_CONFIG_ATTR_AICORE_METRICS = 0, PROF_CONFIG_ATTR_INSTR = 1 };
 
-enum MsprofComputeInstrMode {
-    COMPUTE_INSTR_MODE_BIU_PERF = 0x1,
-    COMPUTE_INSTR_MODE_PC_SAMPLING = 0x2,
-};
+enum MsprofComputeInstrMode { PROF_COMPUTE_BIU_PERF = 1, PROF_COMPUTE_PC_SAMPLING = 2 };
 
 union MsprofConfigAttrValue {
-    std::uint32_t aicoreMetrics[COMPUTE_AICORE_METRICS_NUM];
-    std::uint32_t instrMode;
+    uint32_t aicoreMetrics[COMPUTE_AICORE_METRICS_NUM];
+    uint32_t instrMode;
 };
 
 struct MsprofConfigAttr {
-    MsprofConfigAttrId id;
-    MsprofConfigAttrValue value;
+    uint32_t id;
+    union MsprofConfigAttrValue value;
 };
 
 struct MsprofConfigInfo {
-    MsprofConfigAttr* attrs;
-    std::size_t numAttrs;
+    size_t numAttrs;
+    const struct MsprofConfigAttr* attrs;
 };
 
 struct MsprofConfig {
-    std::uint64_t profSwitch;
-    std::uint64_t profSwitchHi;
-    std::uint32_t devNums;
-    std::uint32_t devIdList[MSPROF_MAX_DEV_NUM + 1];
-    std::uint32_t modelId;
-    std::uint32_t type;
-    std::uint32_t cacheFlag;
-    std::uint32_t storageLimit;
-    std::uint32_t metrics;
-    std::uintptr_t fd;
+    uint64_t profSwitch;
+    uint64_t profSwitchHi;
+    uint32_t devNums;
+    uint32_t devIdList[MSPROF_MAX_DEV_NUM + 1];
+    uint32_t modelId;
+    uint32_t type;
+    uint32_t cacheFlag;
+    uint32_t storageLimit;
+    uint32_t metrics;
+    uintptr_t fd;
     char dumpPath[MAX_DUMP_PATH_LEN];
     char sampleConfig[MAX_SAMPLE_CONFIG_LEN];
-    MsprofConfigInfo configInfo;
+    struct MsprofConfigInfo configInfo;
 };
 
 enum RawDataType {
@@ -76,16 +71,16 @@ enum RawDataType {
     PC_SAMPLING_DATA_TYPE = 9
 };
 
-struct MsprofRawData {
+typedef struct {
     bool isLastChunk;
-    std::size_t offset;
-    std::int32_t chunkModule;
-    std::int32_t deviceId;
-    RawDataType type;
-    std::size_t chunkSize;
+    size_t offset;
+    int32_t chunkModule;
+    int32_t deviceId;
+    enum RawDataType type;
+    size_t chunkSize;
     char chunk[RAW_DATA_MAXSIZE];
-};
+} MsprofRawData;
 
-using MsprofRawDataCallback = std::int32_t (*)(MsprofRawData* rawData);
+typedef int32_t (*MsprofRawDataCallback)(MsprofRawData* rawData);
 
 #endif // NPU_COMPUTE_STUBS_PROF_API_INCLUDE_PROFILING_PROF_COMMON_H_

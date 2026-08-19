@@ -10,7 +10,7 @@
 #include "manager.h"
 
 #include "acl_pti/callback/dispatcher.h"
-#include "acl_pti/runtime_replacement/domain.h"
+#include "acl_pti/replacement/runtime_api_replacements.h"
 #include "common/debug_log.h"
 #include "npu_compute/injection_hook.h"
 
@@ -34,8 +34,8 @@ aclptiResult Manager::Initialize()
     if (callbackStatus != ACLPTI_SUCCESS) {
         return callbackStatus;
     }
-    auto& domain = runtime_replacement::GetDomain();
-    if (!domain.Initialize(replayMemory_, rangeProfiler_)) {
+    auto& replacements = replacement::GetRuntimeApiReplacements();
+    if (!replacements.Initialize(replayMemory_, rangeProfiler_)) {
         return ACLPTI_ERROR_INITIALIZATION_FAILED;
     }
     initialized_ = true;
@@ -47,7 +47,7 @@ aclptiResult Manager::EnsureCallbackDomainsRegistered()
     if (callbacksRegistered_) {
         return ACLPTI_SUCCESS;
     }
-    if (!runtime_replacement::GetDomain().RegisterCallbacks(callback::GetDispatcher())) {
+    if (!replacement::GetRuntimeApiReplacements().RegisterCallbacks(callback::GetDispatcher())) {
         return ACLPTI_ERROR_INITIALIZATION_FAILED;
     }
     callbacksRegistered_ = true;

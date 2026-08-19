@@ -53,16 +53,15 @@ int main()
     CHECK(MsprofStart(8, &defaultConfig, sizeof(defaultConfig)) == 0);
 
     MsprofConfigAttr instrModeAttr{};
-    instrModeAttr.id = MSPROF_COMPUTE_INSTR_MODE;
+    instrModeAttr.id = PROF_CONFIG_ATTR_INSTR;
     MsprofConfig instrModeConfig{};
     instrModeConfig.configInfo.attrs = &instrModeAttr;
     instrModeConfig.configInfo.numAttrs = 1;
     CHECK(MsprofStart(8, &instrModeConfig, sizeof(instrModeConfig)) == 0);
 
     MsprofConfigAttr attr{};
-    attr.id = MSPROF_AICOREMETRICS;
-    std::fill(
-        std::begin(attr.value.aicoreMetrics), std::end(attr.value.aicoreMetrics), COMPUTE_INVALID_AICORE_METRIC_EVENT);
+    attr.id = PROF_CONFIG_ATTR_AICORE_METRICS;
+    std::fill(std::begin(attr.value.aicoreMetrics), std::end(attr.value.aicoreMetrics), MSPROF_INVALID_AICORE_METRIC);
     attr.value.aicoreMetrics[0] = 0;
 
     MsprofConfig config{};

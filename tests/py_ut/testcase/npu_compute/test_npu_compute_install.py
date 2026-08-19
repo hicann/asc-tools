@@ -107,7 +107,7 @@ def test_integration_component_installs_the_declared_layout(install_root):
         "callback",
         "data",
         "profiling",
-        "runtime_replacement",
+        "replacement",
     ):
         assert (
             f"npu_compute::aclpti::{internal_namespace}::" not in aclpti_symbols.stdout

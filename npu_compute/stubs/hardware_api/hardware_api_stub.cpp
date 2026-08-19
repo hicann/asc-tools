@@ -117,11 +117,6 @@ extern "C" int dsmi_get_chip_info(int deviceId, struct dsmi_chip_info_stru* info
     return 0;
 }
 
-extern "C" aclError aclrtSetDevice(std::int32_t deviceId)
-{
-    return deviceId == 0 ? ACL_SUCCESS : ACL_ERROR_INVALID_PARAM;
-}
-
 extern "C" aclError aclrtGetMemInfo(aclrtMemAttr attribute, std::size_t* freeBytes, std::size_t* totalBytes)
 {
     if (attribute != ACL_HBM_MEM || freeBytes == nullptr || totalBytes == nullptr) {

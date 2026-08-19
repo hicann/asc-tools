@@ -23,7 +23,7 @@ if(NPU_COMPUTE_BUILD_INTEGRATION_STUBS)
     profiling/api.cpp
     profiling/range_profiler.cpp
     profiling/replay_memory.cpp
-    runtime_replacement/domain.cpp
+    replacement/runtime_api_replacements.cpp
   )
   target_include_directories(acl_pti PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/..

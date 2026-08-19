@@ -85,6 +85,12 @@ int main(int argc, char** argv)
         return result;
     }
 
+    result = aclrtSetDevice(0);
+    if (result != 0) {
+        std::fprintf(stderr, "[demo] aclrtSetDevice failed: %d\n", result);
+        return result;
+    }
+
     void* dev_ptr = nullptr;
     result = aclrtMalloc(&dev_ptr, 4096, ACL_MEM_MALLOC_HUGE_FIRST);
     std::fprintf(stderr, "[demo] aclrtMalloc result=%d ptr=%p\n", result, dev_ptr);

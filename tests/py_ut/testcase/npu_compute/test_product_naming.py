@@ -106,3 +106,19 @@ def test_cmake_targets_use_component_prefixes_and_merge_data_module():
     assert "data/raw_data_decoder.cpp" in acl_pti_cmake
     assert "add_library(acl_pti_data_module_impl" not in cmake_content
     assert "OUTPUT_NAME pti_data_module_impl" not in cmake_content
+
+
+def test_runtime_replacements_use_specific_flat_names():
+    acl_pti_source = REPO_ROOT / "npu_compute" / "src" / "acl_pti"
+    replacement_source = acl_pti_source / "replacement"
+    header = replacement_source / "runtime_api_replacements.h"
+    source = replacement_source / "runtime_api_replacements.cpp"
+
+    assert not (acl_pti_source / "runtime_replacement").exists()
+    assert header.is_file()
+    assert source.is_file()
+
+    header_content = header.read_text(encoding="utf-8")
+    assert "namespace npu_compute::aclpti::replacement" in header_content
+    assert "class RuntimeApiReplacements" in header_content
+    assert "RuntimeApiReplacements& GetRuntimeApiReplacements();" in header_content

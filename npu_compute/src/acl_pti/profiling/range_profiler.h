@@ -31,7 +31,7 @@ public:
     aclptiResult SetSections(const aclptiRangeProfilerSetConfigParams* params);
     int ReplayKernel(
         const ReplayMemory& replayMemory, aclrtMemcpyFunc memcpyFunction, const ReplayLaunchFunction& launchFunction,
-        aclrtSynchronizeStreamFunc synchronizeFunction, aclrtStream stream);
+        aclrtSynchronizeStreamFunc synchronizeFunction, aclrtStream stream, std::int32_t deviceId);
 
 private:
     std::vector<std::uint32_t> pmuEvents_;
