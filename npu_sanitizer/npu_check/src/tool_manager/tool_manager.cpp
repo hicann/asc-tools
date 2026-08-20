@@ -8,27 +8,14 @@
 
 #include "tool_manager/tool_manager.h"
 
-#include "diagnostic/diagnostic.h"
-
 #include <array>
 #include <cstring>
 #include <exception>
-#include <iostream>
+#include <filesystem>
 #include <sstream>
 
 namespace npu::sanitizer {
 namespace {
-
-template <size_t Capacity>
-bool CopyString(char (&destination)[Capacity], const std::string& source)
-{
-    if (source.size() >= Capacity) {
-        return false;
-    }
-    std::memset(destination, 0, Capacity);
-    std::memcpy(destination, source.data(), source.size());
-    return true;
-}
 
 struct CallbackSpec {
     AclsanCallbackDomain domain;
@@ -72,37 +59,61 @@ int ToolManager::Initialize()
 
     std::string error;
     if (!server_.StartAndHandshake(config_, error)) {
-        std::cerr << "npu_check: UDS handshake failed: " << error << '\n';
+        LogHandshakeFailure(error);
         server_.Shutdown({}, {});
         return 1;
     }
+    if (!InitializeLogger(error)) {
+        server_.SendInitializationError(error);
+        server_.Shutdown({}, "status=initialization_failed");
+        return 1;
+    }
+    logger_.Info("UDS handshake completed");
+    std::ostringstream configMessage;
+    configMessage << "tool configuration tool=" << config_.toolName << " strict=" << (config_.strict ? "true" : "false")
+                  << " keep_temp=" << (config_.keepTemp ? "true" : "false") << " work_dir=" << config_.workDir
+                  << " probe_cache_dir=" << config_.probeCacheDir << " report_file=" << config_.logFile;
+    logger_.Info(configMessage.str());
     if (!ConfigureSanitizer(error)) {
+        logger_.Error(error);
         server_.SendInitializationError(error);
         RollbackSanitizer();
         server_.Shutdown({}, "status=initialization_failed");
         return 1;
     }
     if (!server_.SendReady(BuildReadyMessage(), error)) {
+        logger_.Error(error);
         RollbackSanitizer();
         server_.Shutdown({}, "status=transport_failed");
         return 1;
     }
+    logger_.SetErrorSink([this](const std::string& message) { server_.SendFlowError(message); });
     initialized_ = true;
+    logger_.Info("npu_check initialization completed");
     return 0;
 }
 
-bool ToolManager::BuildLaunchConfig(std::string& error)
+void ToolManager::LogHandshakeFailure(const std::string& reason) noexcept
 {
-    launchConfig_ = {};
-    launchConfig_.version = ACLSAN_API_VERSION;
-    launchConfig_.size = sizeof(launchConfig_);
-    launchConfig_.sessionId = server_.SessionId();
-    launchConfig_.strict = config_.strict ? 1u : 0u;
-    launchConfig_.keepTemp = config_.keepTemp ? 1u : 0u;
-    if (!CopyString(launchConfig_.toolName, config_.toolName) || !CopyString(launchConfig_.logFile, config_.logFile) ||
-        !CopyString(launchConfig_.workDir, config_.workDir) ||
-        !CopyString(launchConfig_.probeCacheDir, config_.probeCacheDir)) {
-        error = "tool configuration path exceeds sanitizer_api limits";
+    try {
+        std::string ignored;
+        const std::filesystem::path path = std::filesystem::current_path() / "npu_check.log";
+        if (logger_.Path().empty() && !logger_.Open(path.string(), logging::Logger::ConfiguredLevel(), ignored)) {
+            return;
+        }
+        logger_.Error("UDS handshake failed: " + reason);
+        logger_.Flush();
+    } catch (...) {
+        return;
+    }
+}
+
+bool ToolManager::InitializeLogger(std::string& error)
+{
+    const std::filesystem::path directory =
+        config_.workDir.empty() ? std::filesystem::current_path() : std::filesystem::path(config_.workDir);
+    const std::string path = (directory / "npu_check.log").string();
+    if (!logger_.Open(path, logging::Logger::ConfiguredLevel(), error)) {
         return false;
     }
     return true;
@@ -114,17 +125,15 @@ bool ToolManager::ConfigureSanitizer(std::string& error)
         error = "unsupported tool '" + config_.toolName + "'; current implementation supports memcheck";
         return false;
     }
-    if (!BuildLaunchConfig(error)) {
-        return false;
-    }
-
-    memcheck_ = std::make_unique<Memcheck>(launchConfig_.strict != 0);
+    memcheck_ = std::make_unique<Memcheck>(config_.strict);
+    logger_.Debug("memcheck instance created");
     AclsanStatus status = aclsanSubscribe(&subscriber_, &ToolManager::Callback, this);
     if (status != ACLSAN_STATUS_SUCCESS) {
         error = StatusMessage("aclsanSubscribe", status);
         return false;
     }
     subscribed_ = true;
+    logger_.Info("sanitizer callback subscriber registered");
     return EnableMemcheckCallbacks(error);
 }
 
@@ -136,6 +145,10 @@ bool ToolManager::EnableMemcheckCallbacks(std::string& error)
             error = StatusMessage("aclsanEnableCallback", status);
             return false;
         }
+        std::ostringstream message;
+        message << "callback enabled domain=" << static_cast<uint32_t>(callback.domain)
+                << " cbid=" << static_cast<uint32_t>(callback.cbid);
+        logger_.Debug(message.str());
     }
     return true;
 }
@@ -149,7 +162,7 @@ void ToolManager::RollbackSanitizer()
     if (subscribed_) {
         (void)aclsanUnsubscribe(subscriber_);
         subscribed_ = false;
-        subscriber_ = ACLSAN_INVALID_SUBSCRIBER_HANDLE;
+        subscriber_ = nullptr;
     }
     {
         std::unique_lock<std::mutex> callbackLock(callbackMutex_);
@@ -172,7 +185,7 @@ void ToolManager::Finalize()
     if (subscribed_) {
         unsubscribeStatus = aclsanUnsubscribe(subscriber_);
         subscribed_ = false;
-        subscriber_ = ACLSAN_INVALID_SUBSCRIBER_HANDLE;
+        subscriber_ = nullptr;
     }
     {
         std::unique_lock<std::mutex> callbackLock(callbackMutex_);
@@ -180,6 +193,7 @@ void ToolManager::Finalize()
     }
 
     const std::string summary = BuildSummaryMessage();
+    logger_.Info(summary);
     bool analysisComplete = false;
     {
         std::lock_guard<std::mutex> stateLock(stateMutex_);
@@ -196,6 +210,8 @@ void ToolManager::Finalize()
                << " dropped_messages=" << server_.DroppedMessages()
                << " analysis_complete=" << (analysisComplete ? "true" : "false");
     server_.Shutdown(summary, sessionEnd.str());
+    logger_.Info(sessionEnd.str());
+    logger_.Flush();
     memcheck_.reset();
     initialized_ = false;
 }
@@ -249,7 +265,8 @@ void ToolManager::LeaveCallback()
 
 void ToolManager::OnCallback(AclsanCallbackDomain domain, AclsanCallbackId cbid, const void* cbdata)
 {
-    std::vector<Diagnostic> diagnostics;
+    LogCallback(domain, cbid, cbdata);
+    std::vector<aclsan::cann::NpusanMemcheckReport> reports;
     bool malformed = false;
     {
         std::lock_guard<std::mutex> stateLock(stateMutex_);
@@ -259,8 +276,17 @@ void ToolManager::OnCallback(AclsanCallbackDomain domain, AclsanCallbackId cbid,
                 malformed = data == nullptr;
                 if (data != nullptr && cbid == ACLSAN_CBID_RESOURCE_MEMORY_ALLOC) {
                     memcheck_->OnAllocation(*data);
+                    std::ostringstream message;
+                    message << "memory alloc resource=" << data->resourceId << " device=" << data->deviceId
+                            << " address=" << data->ptr << " bytes=" << data->bytes
+                            << " result=" << data->common.result;
+                    logger_.Info(message.str());
                 } else if (data != nullptr && cbid == ACLSAN_CBID_RESOURCE_MEMORY_FREE) {
                     memcheck_->OnFree(*data);
+                    std::ostringstream message;
+                    message << "memory free resource=" << data->resourceId << " device=" << data->deviceId
+                            << " address=" << data->ptr << " result=" << data->common.result;
+                    logger_.Info(message.str());
                 }
                 break;
             }
@@ -269,6 +295,12 @@ void ToolManager::OnCallback(AclsanCallbackDomain domain, AclsanCallbackId cbid,
                     const auto* data = ValidateDeviceMemoryAccessData(cbdata);
                     if (data != nullptr) {
                         memcheck_->QueueDeviceMemoryAccess(*data);
+                        std::ostringstream message;
+                        message << "device memory access launch=" << data->header.launchId << " pc=0x" << std::hex
+                                << data->header.pc << std::dec << " device=" << data->header.deviceId
+                                << " core=" << data->header.coreId << " address=0x" << std::hex << data->address
+                                << std::dec << " access_mode=" << data->accessMode << " layout=" << data->layoutKind;
+                        logger_.Debug(message.str());
                     } else {
                         malformed = true;
                     }
@@ -279,7 +311,14 @@ void ToolManager::OnCallback(AclsanCallbackDomain domain, AclsanCallbackId cbid,
                 const auto* data = ValidateCallbackData<AclsanSynchronizeData>(cbdata);
                 malformed = data == nullptr;
                 if (data != nullptr && data->common.result == 0) {
-                    diagnostics = memcheck_->OnSynchronization();
+                    reports = memcheck_->OnSynchronization();
+                    std::ostringstream message;
+                    message << "synchronization completed reports=" << reports.size() << " stream=" << data->stream;
+                    logger_.Info(message.str());
+                } else if (data != nullptr) {
+                    std::ostringstream message;
+                    message << "synchronization failed result=" << data->common.result << " stream=" << data->stream;
+                    logger_.Warning(message.str());
                 }
                 break;
             }
@@ -288,10 +327,13 @@ void ToolManager::OnCallback(AclsanCallbackDomain domain, AclsanCallbackId cbid,
         }
     }
     if (malformed) {
-        ++malformedCallbacks_;
+        {
+            std::lock_guard<std::mutex> stateLock(stateMutex_);
+            ++malformedCallbacks_;
+        }
         PublishMalformed(domain, cbid, "null, truncated, or incompatible callback data");
     } else {
-        PublishDiagnostics(std::move(diagnostics));
+        PublishDiagnostics(std::move(reports));
     }
 }
 
@@ -304,21 +346,36 @@ void ToolManager::OnCallbackException(const char* reason) noexcept
         }
         std::string message = "npu_check callback failed: ";
         message += reason != nullptr ? reason : "unspecified exception";
-        (void)server_.Publish(ipc::MessageType::ERROR, message);
+        logger_.Error(message);
     } catch (...) {
         // Error reporting is best effort inside a noexcept runtime callback.
         return;
     }
 }
 
-void ToolManager::PublishDiagnostics(std::vector<Diagnostic> diagnostics)
+void ToolManager::PublishDiagnostics(std::vector<aclsan::cann::NpusanMemcheckReport> reports)
 {
-    for (auto& diagnostic : diagnostics) {
-        if (diagnostic.instruction.present) {
-            diagnostic.source = sourceResolver_.Resolve(diagnostic.instruction);
+    for (auto& report : reports) {
+        // Source locations belong to sanitizer_api. Once its public PC query contract is
+        // available, populate report.common.exec and the device call stack here before rendering.
+        std::string rendered;
+        const auto status =
+            aclsan::cann::RenderNpusanReportRecord(aclsan::cann::NpusanReportRecord::From(report), {}, &rendered);
+        if (status != aclsan::cann::ReportRenderStatus::kSuccess) {
+            std::ostringstream message;
+            message << "report rendering failed report_id=" << report.common.reportId
+                    << " status=" << static_cast<int>(status);
+            {
+                std::lock_guard<std::mutex> stateLock(stateMutex_);
+                ++frameworkErrors_;
+            }
+            logger_.Error(message.str());
+            continue;
         }
-        const uint64_t ordinal = ++diagnosticOrdinal_;
-        (void)server_.Publish(ipc::MessageType::DIAGNOSTIC, FormatDiagnostic(diagnostic, ordinal));
+        logger_.Info("diagnostic report generated report_id=" + std::to_string(report.common.reportId));
+        if (!server_.Publish(ipc::MessageType::DIAGNOSTIC, rendered)) {
+            logger_.Error("failed to queue diagnostic report for UDS delivery");
+        }
     }
 }
 
@@ -327,7 +384,16 @@ void ToolManager::PublishMalformed(AclsanCallbackDomain domain, AclsanCallbackId
     std::ostringstream output;
     output << "[NPU-CHECK-MALFORMED-CALLBACK] domain=" << static_cast<uint32_t>(domain) << " cbid=" << cbid
            << " reason=" << reason;
-    (void)server_.Publish(ipc::MessageType::ERROR, output.str());
+    logger_.Error(output.str());
+}
+
+void ToolManager::LogCallback(AclsanCallbackDomain domain, AclsanCallbackId cbid, const void* cbdata)
+{
+    const uint64_t count = ++callbackCount_;
+    std::ostringstream message;
+    message << "cbdata received count=" << count << " domain=" << static_cast<uint32_t>(domain)
+            << " cbid=" << static_cast<uint32_t>(cbid) << " address=" << cbdata;
+    logger_.Debug(message.str());
 }
 
 std::string ToolManager::BuildReadyMessage() const
@@ -348,7 +414,7 @@ std::string ToolManager::BuildSummaryMessage() const
            << " device_operations=" << stats.deviceOperations << " synchronizations=" << stats.synchronizationEvents
            << " errors=" << stats.errors << " warnings=" << stats.warnings
            << " pending_device_operations=" << stats.pendingDeviceOperations
-           << " dropped_device_operations=" << stats.droppedDeviceOperations
+           << " dropped_device_operations=" << stats.droppedDeviceOperations << " callbacks=" << callbackCount_.load()
            << " malformed_callbacks=" << malformedCallbacks_ << " framework_errors=" << frameworkErrors_
            << " dropped_messages=" << server_.DroppedMessages();
     return output.str();

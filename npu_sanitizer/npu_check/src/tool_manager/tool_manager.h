@@ -11,9 +11,9 @@
 
 #include "aclsan/aclsan_api.h"
 #include "checker/memcheck.h"
-#include "wire_protocol.h"
 #include "ipc/uds_server.h"
-#include "diagnostic/source_resolver.h"
+#include "logging/logger.h"
+#include "wire_protocol.h"
 
 #include <atomic>
 #include <condition_variable>
@@ -55,11 +55,13 @@ private:
     bool EnterCallback();
     void LeaveCallback();
     bool ConfigureSanitizer(std::string& error);
-    bool BuildLaunchConfig(std::string& error);
     bool EnableMemcheckCallbacks(std::string& error);
     void RollbackSanitizer();
-    void PublishDiagnostics(std::vector<Diagnostic> diagnostics);
+    void LogHandshakeFailure(const std::string& reason) noexcept;
+    void PublishDiagnostics(std::vector<aclsan::cann::NpusanMemcheckReport> reports);
     void PublishMalformed(AclsanCallbackDomain domain, AclsanCallbackId cbid, const char* reason);
+    bool InitializeLogger(std::string& error);
+    void LogCallback(AclsanCallbackDomain domain, AclsanCallbackId cbid, const void* cbdata);
     std::string BuildReadyMessage() const;
     std::string BuildSummaryMessage() const;
 
@@ -98,12 +100,11 @@ private:
     bool subscribed_ = false;
 
     ipc::ToolConfig config_{};
-    AclsanLaunchConfig launchConfig_{};
     ipc::UdsServer server_{};
-    AclsanSubscriberHandle subscriber_ = ACLSAN_INVALID_SUBSCRIBER_HANDLE;
+    AclsanSubscriberHandle subscriber_ = nullptr;
     std::unique_ptr<Memcheck> memcheck_;
-    SourceResolver sourceResolver_{};
-    std::atomic<uint64_t> diagnosticOrdinal_{0};
+    logging::Logger logger_{};
+    std::atomic<uint64_t> callbackCount_{0};
     uint64_t malformedCallbacks_ = 0;
     uint64_t frameworkErrors_ = 0;
 };

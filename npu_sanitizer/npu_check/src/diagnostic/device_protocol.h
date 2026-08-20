@@ -6,19 +6,23 @@
 // INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 // See LICENSE in the root of the software repository for the full text of the License.
 
-#ifndef NPU_CHECK_DIAGNOSTIC_SOURCE_RESOLVER_H
-#define NPU_CHECK_DIAGNOSTIC_SOURCE_RESOLVER_H
+#ifndef NPU_CHECK_DIAGNOSTIC_DEVICE_PROTOCOL_H
+#define NPU_CHECK_DIAGNOSTIC_DEVICE_PROTOCOL_H
 
-#include "diagnostic/diagnostic.h"
-
-#include <string>
+#include <cstdint>
 
 namespace npu::sanitizer {
 
-class SourceResolver {
-public:
-    std::string Resolve(const InstructionContext& instruction) const;
+enum class DeviceSourceKind : uint32_t {
+    MTE2 = 1,
+    MTE3 = 2,
+    FIXPIPE = 3,
+    SET_WAIT_FLAG = 4,
+    GET_RLS_BUF = 5,
 };
+
+constexpr uint32_t kDeviceEventFlagPredicated = 1u << 3u;
+constexpr uint32_t kDeviceMemorySpaceGm = 1;
 
 } // namespace npu::sanitizer
 

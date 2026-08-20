@@ -1,3 +1,11 @@
+// Copyright (c) 2025 Huawei Technologies Co., Ltd.
+// This program is free software, you can redistribute it and/or modify it under the terms and conditions of
+// CANN Open Software License Agreement Version 2.0 (the "License").
+// Please refer to the License for details. You may not use this file except in compliance with the License.
+// THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
+// INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
+// See LICENSE in the root of the software repository for the full text of the License.
+
 #include "ipc/uds_server.h"
 
 #include "uds_transport.h"
@@ -173,6 +181,7 @@ bool UdsServer::StartAndHandshake(ToolConfig& config, std::string& error)
 
 bool UdsServer::SendSynchronous(MessageType type, const std::vector<uint8_t>& payload, std::string& error)
 {
+    std::lock_guard<std::mutex> sendLock(sendMutex_);
     Frame frame{};
     frame.type = type;
     frame.sessionId = sessionId_;
@@ -259,6 +268,19 @@ void UdsServer::SendInitializationError(const std::string& message)
     }
     std::string ignored;
     (void)SendSynchronous(MessageType::ERROR, EncodeText(message), ignored);
+}
+
+void UdsServer::SendFlowError(const std::string& message) noexcept
+{
+    try {
+        if (clientFd_ < 0) {
+            return;
+        }
+        std::string ignored;
+        (void)SendSynchronous(MessageType::ERROR, EncodeText(message), ignored);
+    } catch (...) {
+        return;
+    }
 }
 
 void UdsServer::Shutdown(const std::string& summary, const std::string& sessionEnd)

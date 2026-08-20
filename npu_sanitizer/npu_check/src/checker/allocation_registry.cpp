@@ -1,7 +1,16 @@
+// Copyright (c) 2025 Huawei Technologies Co., Ltd.
+// This program is free software, you can redistribute it and/or modify it under the terms and conditions of
+// CANN Open Software License Agreement Version 2.0 (the "License").
+// Please refer to the License for details. You may not use this file except in compliance with the License.
+// THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
+// INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
+// See LICENSE in the root of the software repository for the full text of the License.
+
 #include "checker/allocation_registry.h"
 
 #include <algorithm>
 #include <limits>
+#include <vector>
 
 namespace npu::sanitizer {
 
@@ -23,34 +32,33 @@ bool AllocationRegistry::Overlaps(uint64_t firstBase, uint64_t firstBytes, uint6
     return firstBase < *secondEnd && secondBase < *firstEnd;
 }
 
-AllocationUpdateResult AllocationRegistry::Register(
+AllocationUpdateStatus AllocationRegistry::Register(
     uint64_t resourceId, uint64_t base, uint64_t bytes, uint32_t deviceId)
 {
     if (base == 0 || !RangeEnd(base, bytes)) {
-        return {AllocationUpdateStatus::INVALID_RANGE, std::nullopt};
+        return AllocationUpdateStatus::INVALID_RANGE;
     }
     const ResourceKey resourceKey{deviceId, resourceId};
     auto resource = liveByResource_.find(resourceKey);
     if (resourceId != 0 && resource != liveByResource_.end()) {
-        return {AllocationUpdateStatus::OVERLAP, resource->second};
+        return AllocationUpdateStatus::OVERLAP;
     }
 
     auto& deviceAllocations = live_[deviceId];
     auto next = deviceAllocations.lower_bound(base);
     if (next != deviceAllocations.end() && Overlaps(base, bytes, next->second.base, next->second.bytes)) {
-        return {AllocationUpdateStatus::OVERLAP, next->second};
+        return AllocationUpdateStatus::OVERLAP;
     }
     if (next != deviceAllocations.begin()) {
         const auto previous = std::prev(next);
         if (Overlaps(base, bytes, previous->second.base, previous->second.bytes)) {
-            return {AllocationUpdateStatus::OVERLAP, previous->second};
+            return AllocationUpdateStatus::OVERLAP;
         }
     }
 
     EraseReusedTombstones(base, bytes, deviceId);
     Allocation allocation{};
     allocation.resourceId = resourceId;
-    allocation.generation = nextGeneration_++;
     allocation.base = base;
     allocation.bytes = bytes;
     allocation.deviceId = deviceId;
@@ -59,10 +67,10 @@ AllocationUpdateResult AllocationRegistry::Register(
     if (resourceId != 0) {
         liveByResource_[resourceKey] = allocation;
     }
-    return {AllocationUpdateStatus::OK, allocation};
+    return AllocationUpdateStatus::OK;
 }
 
-AllocationUpdateResult AllocationRegistry::Release(uint64_t resourceId, uint64_t base, uint32_t deviceId)
+AllocationUpdateStatus AllocationRegistry::Release(uint64_t resourceId, uint64_t base, uint32_t deviceId)
 {
     std::optional<Allocation> selected;
     if (resourceId != 0) {
@@ -70,7 +78,7 @@ AllocationUpdateResult AllocationRegistry::Release(uint64_t resourceId, uint64_t
         auto resource = liveByResource_.find(resourceKey);
         if (resource != liveByResource_.end()) {
             if (base != 0 && resource->second.base != base) {
-                return {AllocationUpdateStatus::STALE_RESOURCE, resource->second};
+                return AllocationUpdateStatus::STALE_RESOURCE;
             }
             selected = resource->second;
         } else {
@@ -78,11 +86,11 @@ AllocationUpdateResult AllocationRegistry::Release(uint64_t resourceId, uint64_t
             if (device != tombstones_.end()) {
                 for (const auto& allocation : device->second) {
                     if (allocation.second.resourceId == resourceId) {
-                        return {AllocationUpdateStatus::DOUBLE_FREE, allocation.second};
+                        return AllocationUpdateStatus::DOUBLE_FREE;
                     }
                 }
             }
-            return {AllocationUpdateStatus::NOT_FOUND, std::nullopt};
+            return AllocationUpdateStatus::NOT_FOUND;
         }
     }
     if (resourceId == 0 && !selected.has_value()) {
@@ -97,9 +105,9 @@ AllocationUpdateResult AllocationRegistry::Release(uint64_t resourceId, uint64_t
     if (!selected.has_value()) {
         auto device = tombstones_.find(deviceId);
         if (device != tombstones_.end() && device->second.find(base) != device->second.end()) {
-            return {AllocationUpdateStatus::DOUBLE_FREE, device->second.at(base)};
+            return AllocationUpdateStatus::DOUBLE_FREE;
         }
-        return {AllocationUpdateStatus::NOT_FOUND, std::nullopt};
+        return AllocationUpdateStatus::NOT_FOUND;
     }
 
     auto& deviceAllocations = live_[selected->deviceId];
@@ -110,7 +118,7 @@ AllocationUpdateResult AllocationRegistry::Release(uint64_t resourceId, uint64_t
     selected->freeSequence = nextSequence_++;
     tombstones_[selected->deviceId][selected->base] = *selected;
     TrimTombstones();
-    return {AllocationUpdateStatus::OK, selected};
+    return AllocationUpdateStatus::OK;
 }
 
 std::optional<Allocation> AllocationRegistry::FindStartingAllocation(const AllocationMap& allocations, uint64_t address)
@@ -137,81 +145,16 @@ std::optional<Allocation> AllocationRegistry::FindCrossedAllocation(
     return std::nullopt;
 }
 
-RangeResult AllocationRegistry::Classify(uint64_t address, uint64_t bytes) const
+uint64_t AllocationRegistry::DistanceToAllocation(const Allocation& allocation, uint64_t address)
 {
-    if (bytes == 0) {
-        return {RangeStatus::VALID, std::nullopt};
+    if (address < allocation.base) {
+        return allocation.base - address;
     }
-    if (address > std::numeric_limits<uint64_t>::max() - bytes) {
-        return {RangeStatus::OVERFLOW, std::nullopt};
+    const auto end = RangeEnd(allocation.base, allocation.bytes);
+    if (end && address >= *end) {
+        return address - *end;
     }
-    const uint64_t end = address + bytes;
-    std::optional<Allocation> liveValid;
-    std::optional<Allocation> liveOutOfBounds;
-    std::optional<Allocation> freed;
-
-    for (const auto& device : live_) {
-        auto allocation = FindStartingAllocation(device.second, address);
-        if (allocation.has_value()) {
-            const auto allocationEnd = RangeEnd(allocation->base, allocation->bytes);
-            if (allocationEnd && end <= *allocationEnd) {
-                if (!liveValid.has_value()) {
-                    liveValid = allocation;
-                }
-                continue;
-            }
-            if (!liveOutOfBounds.has_value()) {
-                liveOutOfBounds = allocation;
-            }
-        } else {
-            auto crossed = FindCrossedAllocation(device.second, address, end);
-            if (crossed.has_value()) {
-                if (!liveOutOfBounds.has_value()) {
-                    liveOutOfBounds = crossed;
-                }
-            } else {
-                auto upper = device.second.lower_bound(address);
-                if (upper != device.second.begin()) {
-                    const auto previous = std::prev(upper);
-                    const auto previousEnd = RangeEnd(previous->second.base, previous->second.bytes);
-                    if (previousEnd && *previousEnd == address) {
-                        if (!liveOutOfBounds.has_value()) {
-                            liveOutOfBounds = previous->second;
-                        }
-                    }
-                }
-            }
-        }
-    }
-    for (const auto& device : tombstones_) {
-        auto allocation = FindStartingAllocation(device.second, address);
-        if (!allocation.has_value()) {
-            allocation = FindCrossedAllocation(device.second, address, end);
-        }
-        if (allocation.has_value()) {
-            freed = allocation;
-            break;
-        }
-    }
-
-    const unsigned matchedStates = static_cast<unsigned>(liveValid.has_value()) +
-                                   static_cast<unsigned>(liveOutOfBounds.has_value()) +
-                                   static_cast<unsigned>(freed.has_value());
-    if (matchedStates > 1) {
-        const auto representative =
-            liveOutOfBounds.has_value() ? liveOutOfBounds : (freed.has_value() ? freed : liveValid);
-        return {RangeStatus::AMBIGUOUS, representative};
-    }
-    if (liveValid.has_value()) {
-        return {RangeStatus::VALID, liveValid};
-    }
-    if (liveOutOfBounds.has_value()) {
-        return {RangeStatus::OUT_OF_BOUNDS, liveOutOfBounds};
-    }
-    if (freed.has_value()) {
-        return {RangeStatus::USE_AFTER_FREE, freed};
-    }
-    return {RangeStatus::UNKNOWN, std::nullopt};
+    return 0;
 }
 
 RangeResult AllocationRegistry::Classify(uint32_t deviceId, uint64_t address, uint64_t bytes) const
@@ -285,13 +228,23 @@ RangeResult AllocationRegistry::Classify(uint32_t deviceId, uint64_t address, ui
     return {RangeStatus::UNKNOWN, std::nullopt};
 }
 
-size_t AllocationRegistry::LiveCount() const
+std::optional<Allocation> AllocationRegistry::Nearest(uint32_t deviceId, uint64_t address) const
 {
-    size_t count = 0;
-    for (const auto& device : live_) {
-        count += device.second.size();
+    const auto device = live_.find(deviceId);
+    if (device == live_.end() || device->second.empty()) {
+        return std::nullopt;
     }
-    return count;
+
+    const auto next = device->second.lower_bound(address);
+    if (next == device->second.begin()) {
+        return next->second;
+    }
+    const auto previous = std::prev(next);
+    if (next == device->second.end() ||
+        DistanceToAllocation(previous->second, address) <= DistanceToAllocation(next->second, address)) {
+        return previous->second;
+    }
+    return next->second;
 }
 
 size_t AllocationRegistry::TombstoneCount() const

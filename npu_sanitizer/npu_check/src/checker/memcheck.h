@@ -9,14 +9,12 @@
 #ifndef NPU_CHECK_CHECKER_MEMCHECK_H
 #define NPU_CHECK_CHECKER_MEMCHECK_H
 
-#include "aclsan/aclsan_callback.h"
-#include "internal/ascsan_types.h"
+#include "aclsan/aclsan_api.h"
 #include "checker/allocation_registry.h"
-#include "diagnostic/diagnostic.h"
+#include "diagnostic/device_protocol.h"
+#include "diagnostic/report_renderer.h"
 
 #include <cstdint>
-#include <optional>
-#include <string>
 #include <vector>
 
 namespace npu::sanitizer {
@@ -39,20 +37,21 @@ public:
     void OnAllocation(const AclsanResourceData& data);
     void OnFree(const AclsanResourceData& data);
     void QueueDeviceMemoryAccess(const AclsanDeviceMemoryAccessData& data);
-    std::vector<Diagnostic> OnSynchronization();
+    std::vector<aclsan::cann::NpusanMemcheckReport> OnSynchronization();
     MemcheckStats Stats() const;
 
 private:
-    std::vector<Diagnostic> CheckAccess(
-        const std::string& operation, AccessKind kind, uint64_t address, uint64_t bytes,
-        const InstructionContext& instruction, uint32_t deviceId) const;
-    std::vector<Diagnostic> CheckDeviceMemoryAccess(const AclsanDeviceMemoryAccessData& data) const;
-    void Count(const std::vector<Diagnostic>& diagnostics);
+    std::vector<aclsan::cann::NpusanMemcheckReport> CheckAccess(
+        const AclsanDeviceMemoryAccessData& data, aclsan::cann::NpusanReportAccessMode accessMode, uint64_t address,
+        uint64_t bytes);
+    std::vector<aclsan::cann::NpusanMemcheckReport> CheckDeviceMemoryAccess(const AclsanDeviceMemoryAccessData& data);
+    void Count(const std::vector<aclsan::cann::NpusanMemcheckReport>& reports);
 
     bool strictUnknown_ = true;
     AllocationRegistry allocations_;
     std::vector<AclsanDeviceMemoryAccessData> pendingDeviceAccesses_;
     MemcheckStats stats_{};
+    uint64_t nextReportId_ = 1;
     static constexpr size_t kMaxPendingDeviceOperations = 1u << 20u;
 };
 

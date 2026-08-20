@@ -26,9 +26,8 @@ endif()
 add_library(npu_check_core STATIC
   src/checker/allocation_registry.cpp
   src/checker/memcheck.cpp
-  src/diagnostic/diagnostic.cpp
-  src/diagnostic/source_resolver.cpp
   src/ipc/uds_server.cpp
+  src/logging/logger.cpp
   src/tool_manager/tool_manager.cpp
 )
 target_compile_features(npu_check_core PUBLIC cxx_std_17)
@@ -97,8 +96,11 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR OR ENABLE_TEST)
   add_executable(npu_check_unit_tests
     tests/gtest_main.cpp
     tests/allocation_registry_test.cpp
+    tests/logger_test.cpp
     tests/memcheck_test.cpp
+    tests/uds_server_test.cpp
     tests/wire_protocol_test.cpp
+    src/diagnostic/report_renderer.cpp
   )
   target_compile_features(npu_check_unit_tests PRIVATE cxx_std_17)
   target_compile_definitions(npu_check_unit_tests PRIVATE _GLIBCXX_USE_CXX11_ABI=0)
@@ -108,20 +110,6 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR OR ENABLE_TEST)
   )
   target_link_libraries(npu_check_unit_tests PRIVATE npu_check_core acl_san Threads::Threads GTest::gtest)
   add_test(NAME npu_check_unit_tests COMMAND npu_check_unit_tests)
-
-  add_executable(npu_check_source_resolver_tests
-    tests/gtest_main.cpp
-    tests/source_resolver_test.cpp
-    src/diagnostic/source_resolver.cpp
-  )
-  target_compile_features(npu_check_source_resolver_tests PRIVATE cxx_std_17)
-  target_compile_definitions(npu_check_source_resolver_tests PRIVATE _GLIBCXX_USE_CXX11_ABI=0)
-  target_include_directories(npu_check_source_resolver_tests PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/src
-    ${CMAKE_CURRENT_LIST_DIR}/../sanitizer_api/include
-  )
-  target_link_libraries(npu_check_source_resolver_tests PRIVATE Threads::Threads GTest::gtest)
-  add_test(NAME npu_check_source_resolver_tests COMMAND npu_check_source_resolver_tests)
 
   add_executable(npu_check_report_renderer_smoke
     tests/report_renderer_smoke.cpp
