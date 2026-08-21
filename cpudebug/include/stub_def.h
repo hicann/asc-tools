@@ -71,6 +71,7 @@
 #define LAUNCH_BOUND(x)
 #define ASCENDC_HOST_AICORE
 #define __vector__
+#define __callee__
 
 namespace ConstantsInternal {
 #if defined(__NPU_ARCH__) && (__NPU_ARCH__ == 3103)
