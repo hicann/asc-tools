@@ -9,7 +9,10 @@
  */
 #include "pmu_csv_writer.h"
 
+#include "common/debug_log.h"
+
 #include <algorithm>
+#include <atomic>
 #include <cmath>
 #include <cstdint>
 #include <cstdlib>
@@ -22,6 +25,9 @@
 #include <optional>
 #include <sstream>
 #include <string_view>
+#include <system_error>
+
+#include <unistd.h>
 
 namespace npu_compute {
 namespace {
@@ -57,6 +63,15 @@ struct RowMetrics {
     TypeMetrics aiv;
 };
 
+struct CsvSectionStats {
+    std::size_t rows = 0;
+    std::size_t totalFields = 0;
+    std::size_t missingFields = 0;
+    std::size_t missingRows = 0;
+    std::size_t mismatchedRows = 0;
+    std::map<std::string, std::size_t> missingColumns;
+};
+
 std::string Number(double value)
 {
     if (!std::isfinite(value)) {
@@ -70,6 +85,16 @@ std::string Number(double value)
 std::string Number(const Metric& value) { return value.has_value() ? Number(*value) : "NA"; }
 
 std::string Integer(std::uint16_t value) { return std::to_string(value); }
+
+std::string CoreSubBlockLabel(const aclptiBlockKey& key)
+{
+    std::ostringstream output;
+    output << (key.coreType == ACLPTI_CORE_TYPE_AIC ? "cube" : "vector") << key.subBlockId;
+    if (key.coreId != static_cast<std::uint8_t>(key.subBlockId)) {
+        output << "_core" << static_cast<unsigned int>(key.coreId);
+    }
+    return output.str();
+}
 
 void AddValue(TypeMetrics& metrics, std::uint32_t eventId, double value, std::uint64_t count)
 {
@@ -272,7 +297,7 @@ double MaxBandwidth(std::string_view soc, std::string_view kind)
 void AppendCommon(std::vector<std::string>& values, const RowMetrics& row, double frequencyMhz)
 {
     values.push_back(Integer(row.key.blockId));
-    values.push_back(Integer(row.key.subBlockId));
+    values.push_back(CoreSubBlockLabel(row.key));
     const auto aicTime = Time(row.aic, frequencyMhz);
     const auto aivTime = Time(row.aiv, frequencyMhz);
     values.push_back(aicTime.has_value() ? Number(*aicTime) : "NA");
@@ -563,7 +588,7 @@ struct SectionWriter {
     std::function<std::vector<std::string>(const RowMetrics&, double, std::string_view)> row;
 };
 
-const SectionWriter* FindWriter(std::string_view section)
+const std::map<std::string_view, SectionWriter>& SectionWriters()
 {
     static const std::map<std::string_view, SectionWriter> writers = {
         {"L2Cache",
@@ -581,6 +606,12 @@ const SectionWriter* FindWriter(std::string_view section)
          {&PipeHeader,
           [](const RowMetrics& row, double frequency, std::string_view) { return PipeRow(row, frequency); }}},
     };
+    return writers;
+}
+
+const SectionWriter* FindWriter(std::string_view section)
+{
+    const auto& writers = SectionWriters();
     const auto it = writers.find(section);
     return it == writers.end() ? nullptr : &it->second;
 }
@@ -596,6 +627,54 @@ void WriteCsvLine(std::ostream& output, const std::vector<std::string>& values)
     output << '\n';
 }
 
+void UpdateMissingStats(
+    const std::vector<std::string>& header, const std::vector<std::string>& values, CsvSectionStats* stats)
+{
+    if (stats == nullptr) {
+        return;
+    }
+    ++stats->rows;
+    stats->totalFields += header.size();
+    bool rowMissing = false;
+    if (values.size() != header.size()) {
+        ++stats->mismatchedRows;
+    }
+    const std::size_t commonSize = std::min(header.size(), values.size());
+    for (std::size_t index = 0; index < commonSize; ++index) {
+        if (values[index] != "NA") {
+            continue;
+        }
+        ++stats->missingFields;
+        ++stats->missingColumns[header[index]];
+        rowMissing = true;
+    }
+    for (std::size_t index = values.size(); index < header.size(); ++index) {
+        ++stats->missingFields;
+        ++stats->missingColumns[header[index]];
+        rowMissing = true;
+    }
+    if (rowMissing) {
+        ++stats->missingRows;
+    }
+}
+
+std::string FormatMissingColumns(const std::map<std::string, std::size_t>& missingColumns)
+{
+    if (missingColumns.empty()) {
+        return "none";
+    }
+    std::ostringstream output;
+    bool first = true;
+    for (const auto& [column, count] : missingColumns) {
+        if (!first) {
+            output << ';';
+        }
+        output << column << ':' << count;
+        first = false;
+    }
+    return output.str();
+}
+
 std::string ResolveOutputDirectory(const PmuCsvConfig& config)
 {
     if (!config.outputDirectory.empty()) {
@@ -605,43 +684,135 @@ std::string ResolveOutputDirectory(const PmuCsvConfig& config)
     return environmentDirectory == nullptr ? "" : environmentDirectory;
 }
 
+bool IsEmptySuccessfulResult(const aclptiPmuDataResult& result)
+{
+    return result.status == ACLPTI_SUCCESS && result.taskLogs.empty() && result.blockLogs.empty() &&
+           result.pmuLogs.empty() && result.errorStats.failedRecordCount == 0;
+}
+
+bool HasRootSectionCsv(const std::filesystem::path& outputDirectory)
+{
+    for (const auto& [section, writer] : SectionWriters()) {
+        static_cast<void>(writer);
+        if (std::filesystem::exists(outputDirectory / (std::string(section) + ".csv"))) {
+            return true;
+        }
+    }
+    return false;
+}
+
+std::string CollectionDirectoryName(std::uint64_t sequence)
+{
+    std::ostringstream output;
+    output << "collection-p" << static_cast<long long>(::getpid()) << '-' << std::setw(4) << std::setfill('0')
+           << sequence;
+    return output.str();
+}
+
+std::filesystem::path CreateUniqueCollectionDirectory(const std::filesystem::path& outputDirectory)
+{
+    static std::atomic<std::uint64_t> sequence{0};
+    for (std::size_t attempt = 0; attempt < 1024; ++attempt) {
+        const std::filesystem::path collectionDirectory = outputDirectory / CollectionDirectoryName(++sequence);
+        if (std::filesystem::create_directory(collectionDirectory)) {
+            return collectionDirectory;
+        }
+    }
+    throw std::filesystem::filesystem_error(
+        "create unique CSV collection directory failed", outputDirectory, std::make_error_code(std::errc::file_exists));
+}
+
+std::filesystem::path ResolveCsvWriteDirectory(const std::filesystem::path& outputDirectory)
+{
+    if (!HasRootSectionCsv(outputDirectory)) {
+        return outputDirectory;
+    }
+    return CreateUniqueCollectionDirectory(outputDirectory);
+}
+
 } // namespace
 
 aclptiResult PmuCsvWriter::Write(
     const aclptiPmuDataResult& result, const std::vector<std::string>& sections, const PmuCsvConfig& config)
 {
     const std::string outputDirectory = ResolveOutputDirectory(config);
+    npu_compute::detail::DebugLog(
+        "npu-compute", "CSV write requested: output=%s sections=%zu pmuBlocks=%zu status=%d failedRecords=%llu",
+        outputDirectory.c_str(), sections.size(), result.pmuLogs.size(), static_cast<int>(result.status),
+        static_cast<unsigned long long>(result.errorStats.failedRecordCount));
+    if (IsEmptySuccessfulResult(result)) {
+        npu_compute::detail::DebugLog("npu-compute", "CSV write skipped: empty successful result");
+        return ACLPTI_SUCCESS;
+    }
+    if (result.pmuLogs.empty()) {
+        npu_compute::detail::DebugLog(
+            "npu-compute", "CSV write skipped: no PMU rows status=%d failedRecords=%llu",
+            static_cast<int>(result.status), static_cast<unsigned long long>(result.errorStats.failedRecordCount));
+        return ACLPTI_SUCCESS;
+    }
     if (outputDirectory.empty() || config.frequencyMhz <= 0.0 || !std::isfinite(config.frequencyMhz)) {
+        npu_compute::detail::DebugLog(
+            "npu-compute", "CSV write rejected: invalid config frequency=%f", config.frequencyMhz);
         return ACLPTI_ERROR_INVALID_PARAMETER;
     }
     try {
-        std::filesystem::create_directories(outputDirectory);
+        const std::filesystem::path rootDirectory(outputDirectory);
+        std::filesystem::create_directories(rootDirectory);
         for (const auto& section : sections) {
             if (FindWriter(section) == nullptr) {
+                npu_compute::detail::DebugLog(
+                    "npu-compute", "CSV write rejected: unsupported section=%s", section.c_str());
                 return ACLPTI_ERROR_NOT_SUPPORTED;
             }
         }
+        const std::filesystem::path writeDirectory = ResolveCsvWriteDirectory(rootDirectory);
+        if (writeDirectory != rootDirectory) {
+            npu_compute::detail::DebugLog(
+                "npu-compute", "CSV write routed to collection directory: path=%s", writeDirectory.c_str());
+        }
         for (const auto& section : sections) {
             const SectionWriter* writer = FindWriter(section);
-            const std::filesystem::path path = std::filesystem::path(outputDirectory) / (section + ".csv");
+            const std::filesystem::path path = writeDirectory / (section + ".csv");
+            npu_compute::detail::DebugLog(
+                "npu-compute", "CSV section write start: section=%s path=%s rows=%zu", section.c_str(), path.c_str(),
+                result.pmuLogs.size());
             std::ofstream output(path, std::ios::out | std::ios::trunc);
             if (!output.is_open()) {
+                npu_compute::detail::DebugLog("npu-compute", "CSV section write failed: open path=%s", path.c_str());
                 return ACLPTI_ERROR_CSV_WRITE;
             }
-            WriteCsvLine(output, writer->header());
+            const std::vector<std::string> header = writer->header();
+            CsvSectionStats stats;
+            WriteCsvLine(output, header);
             for (const auto& [key, row] : result.pmuLogs) {
-                WriteCsvLine(output, writer->row(MakeRowMetrics(key, row), config.frequencyMhz, config.socName));
+                const std::vector<std::string> values =
+                    writer->row(MakeRowMetrics(key, row), config.frequencyMhz, config.socName);
+                UpdateMissingStats(header, values, &stats);
+                WriteCsvLine(output, values);
             }
             output.flush();
             if (!output.good()) {
+                npu_compute::detail::DebugLog("npu-compute", "CSV section write failed: flush path=%s", path.c_str());
                 return ACLPTI_ERROR_CSV_WRITE;
             }
+            const std::string missingColumns = FormatMissingColumns(stats.missingColumns);
+            npu_compute::detail::DebugLog(
+                "npu-compute",
+                "CSV section data availability: section=%s rows=%zu fields=%zu missingFields=%zu missingRows=%zu "
+                "mismatchedRows=%zu missingColumns=%s",
+                section.c_str(), stats.rows, stats.totalFields, stats.missingFields, stats.missingRows,
+                stats.mismatchedRows, missingColumns.c_str());
+            npu_compute::detail::DebugLog(
+                "npu-compute", "CSV section write complete: section=%s path=%s", section.c_str(), path.c_str());
         }
     } catch (const std::filesystem::filesystem_error&) {
+        npu_compute::detail::DebugLog("npu-compute", "CSV write failed: filesystem error");
         return ACLPTI_ERROR_CSV_WRITE;
     } catch (const std::bad_alloc&) {
+        npu_compute::detail::DebugLog("npu-compute", "CSV write failed: out of memory");
         return ACLPTI_ERROR_INTERNAL;
     }
+    npu_compute::detail::DebugLog("npu-compute", "CSV write complete");
     return ACLPTI_SUCCESS;
 }
 

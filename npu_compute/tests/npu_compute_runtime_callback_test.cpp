@@ -75,6 +75,7 @@ private:
 
 bool SetScenarioEnvironment(const std::filesystem::path& output)
 {
+    ::unsetenv("NPU_COMPUTE_DISABLE_HARDWARE_INFO");
     return ::setenv("NPU_COMPUTE_OUTPUT", output.c_str(), 1) == 0 &&
            ::setenv("NPU_COMPUTE_SECTIONS", kSections, 1) == 0;
 }
@@ -235,6 +236,25 @@ bool RunConfigFailureChild(const std::filesystem::path& output)
     return true;
 }
 
+bool RunHardwareInfoDisabledChild(const std::filesystem::path& output)
+{
+    CHECK(SetScenarioEnvironment(output));
+    CHECK(::setenv("NPU_COMPUTE_DISABLE_HARDWARE_INFO", "1", 1) == 0);
+    npu_compute::test::ResetAclPtiCallbackStub();
+    CHECK(acltoolInitialize() == ACLPTI_SUCCESS);
+    CHECK(npu_compute::test::AclPtiSubscribeCount() == 1);
+    CHECK(npu_compute::test::CapturedAclPtiCallback() == nullptr);
+    CHECK(npu_compute::test::CapturedAclPtiUserData() == nullptr);
+    CHECK(npu_compute::test::CapturedAclPtiSubscriber() != nullptr);
+    CHECK(npu_compute::test::AclPtiEnableCount() == 0);
+    CHECK(npu_compute::test::AclPtiRangeConfigCount() == 1);
+    const std::vector<std::string> sections = npu_compute::test::CapturedAclPtiSections();
+    CHECK(sections == std::vector<std::string>({"PipeUtilization", "Memory"}));
+    CHECK(!npu_compute::test::InvokeAclPtiCallback(
+        ACLPTI_CB_DOMAIN_RUNTIME_API, ACLPTI_RUNTIME_CBID_aclrtSetDevice, ACLPTI_API_EXIT, ACL_SUCCESS, nullptr));
+    return true;
+}
+
 bool RunChildScenario(const std::string& scenario, const std::filesystem::path& output)
 {
     if (scenario == "success") {
@@ -257,6 +277,9 @@ bool RunChildScenario(const std::string& scenario, const std::filesystem::path& 
     }
     if (scenario == "config-failure") {
         return RunConfigFailureChild(output);
+    }
+    if (scenario == "hardware-info-disabled") {
+        return RunHardwareInfoDisabledChild(output);
     }
     std::fprintf(stderr, "unknown child scenario: %s\n", scenario.c_str());
     return false;
@@ -334,6 +357,16 @@ bool TestInitializationFailures(const char* executable)
     return true;
 }
 
+bool TestHardwareInfoDisabled(const char* executable)
+{
+    TempDirectory temporary;
+    CHECK(!temporary.Path().empty());
+    CHECK(LaunchChild(executable, "hardware-info-disabled", temporary.Path()));
+    CHECK(!std::filesystem::exists(temporary.Path() / kHardwareInfoFile));
+    CHECK(!std::filesystem::exists(temporary.Path() / kDeviceCountFile));
+    return true;
+}
+
 } // namespace
 
 extern "C" aclError aclrtGetDeviceCount(std::uint32_t* count)
@@ -366,6 +399,8 @@ int main(int argc, char** argv)
         std::fprintf(stderr, "unexpected runtime callback test arguments\n");
         return 2;
     }
-    return TestSuccessAndNormalExit(argv[0]) && TestIgnoredEvents(argv[0]) && TestInitializationFailures(argv[0]) ? 0 :
-                                                                                                                    1;
+    return TestSuccessAndNormalExit(argv[0]) && TestIgnoredEvents(argv[0]) && TestInitializationFailures(argv[0]) &&
+                   TestHardwareInfoDisabled(argv[0]) ?
+               0 :
+               1;
 }

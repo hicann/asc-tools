@@ -175,6 +175,7 @@ add_test(NAME npu_compute.acl_pti_data_module
 
 add_executable(npu_compute_pmu_data_consumer_test pmu_data_consumer_test.cpp)
 target_include_directories(npu_compute_pmu_data_consumer_test PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/../src
   ${CMAKE_CURRENT_SOURCE_DIR}/../src/npu_compute
 )
 target_link_libraries(npu_compute_pmu_data_consumer_test
@@ -189,6 +190,7 @@ add_test(NAME npu_compute.pmu_data_consumer
 
 add_executable(npu_compute_pmu_csv_writer_test pmu_csv_writer_test.cpp)
 target_include_directories(npu_compute_pmu_csv_writer_test PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/../src
   ${CMAKE_CURRENT_SOURCE_DIR}/../src/npu_compute
 )
 target_link_libraries(npu_compute_pmu_csv_writer_test
@@ -316,6 +318,7 @@ add_executable(npu_compute_runtime_callback_test
   ${NPU_COMPUTE_RUNTIME_IMPLEMENTATION_SOURCES}
 )
 target_include_directories(npu_compute_runtime_callback_test PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/../src
   ${CMAKE_CURRENT_SOURCE_DIR}/../src/npu_compute
 )
 target_link_libraries(npu_compute_runtime_callback_test PRIVATE
@@ -338,6 +341,7 @@ if(NPU_COMPUTE_BUILD_REAL_HARDWARE_TESTS)
   )
   target_include_directories(
     npu_compute_real_hardware_test_library PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/npu_compute
   )
   target_link_libraries(npu_compute_real_hardware_test_library PRIVATE

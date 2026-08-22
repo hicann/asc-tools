@@ -16,6 +16,7 @@
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
+#include <cstdlib>
 #include <cstdio>
 #include <cstring>
 #include <condition_variable>
@@ -25,6 +26,9 @@
 #include <string>
 #include <utility>
 #include <vector>
+
+#include <sys/mman.h>
+#include <unistd.h>
 
 #define CHECK(condition)                                                                         \
     do {                                                                                         \
@@ -127,6 +131,94 @@ private:
     std::condition_variable ready_;
     std::vector<std::shared_ptr<const aclptiPmuDataResult>> results_;
 };
+
+template <typename Function>
+bool CaptureStderr(Function function, std::string* output)
+{
+    FILE* capture = std::tmpfile();
+    if (capture == nullptr) {
+        return false;
+    }
+
+    const int savedStderr = dup(STDERR_FILENO);
+    if (savedStderr < 0) {
+        std::fclose(capture);
+        return false;
+    }
+
+    bool success = std::fflush(stderr) == 0 && dup2(fileno(capture), STDERR_FILENO) >= 0;
+    if (success) {
+        function();
+        success = std::fflush(stderr) == 0;
+    }
+    success = dup2(savedStderr, STDERR_FILENO) >= 0 && success;
+    close(savedStderr);
+
+    if (success) {
+        std::rewind(capture);
+        char buffer[256];
+        std::size_t count = 0;
+        while ((count = std::fread(buffer, 1, sizeof(buffer), capture)) != 0) {
+            output->append(buffer, count);
+        }
+        success = std::ferror(capture) == 0;
+    }
+
+    success = std::fclose(capture) == 0 && success;
+    return success;
+}
+
+struct GuardedRawData {
+    void* mapping = MAP_FAILED;
+    std::size_t mappingSize = 0;
+    MsprofRawData* raw = nullptr;
+
+    ~GuardedRawData()
+    {
+        if (mapping != MAP_FAILED) {
+            munmap(mapping, mappingSize);
+        }
+    }
+};
+
+static_assert(sizeof(MsprofRawData) == offsetof(MsprofRawData, chunk) + RAW_DATA_MAXSIZE);
+
+bool MakeGuardedRawData(std::size_t chunkSize, RawDataType type, GuardedRawData* guarded)
+{
+    if (guarded == nullptr) {
+        return false;
+    }
+
+    const long pageSizeValue = sysconf(_SC_PAGESIZE);
+    if (pageSizeValue <= 0) {
+        return false;
+    }
+
+    const std::size_t pageSize = static_cast<std::size_t>(pageSizeValue);
+    const std::size_t mappingSize = pageSize * 2;
+    void* mapping = mmap(nullptr, mappingSize, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    if (mapping == MAP_FAILED) {
+        return false;
+    }
+
+    if (mprotect(static_cast<char*>(mapping) + pageSize, pageSize, PROT_NONE) != 0) {
+        munmap(mapping, mappingSize);
+        return false;
+    }
+
+    guarded->mapping = mapping;
+    guarded->mappingSize = mappingSize;
+    guarded->raw = reinterpret_cast<MsprofRawData*>(
+        static_cast<char*>(mapping) + pageSize - (offsetof(MsprofRawData, chunk) + RAW_DATA_MAXSIZE));
+    guarded->raw->isLastChunk = false;
+    guarded->raw->offset = 0;
+    guarded->raw->chunkModule = 7;
+    guarded->raw->deviceId = 0;
+    guarded->raw->type = type;
+    guarded->raw->chunkSize = chunkSize;
+    std::memset(guarded->raw->chunk, 0, RAW_DATA_MAXSIZE);
+    return true;
+}
 
 int TestRawDataDecoder()
 {
@@ -284,7 +376,6 @@ int TestReplayLifecycle()
     CHECK(stopped.callbackStats.receivedBytes == 448);
     CHECK(stopped.callbackStats.offsetMismatchCount == 0);
     CHECK(stopped.callbackStats.lastChunkCount == 0);
-    CHECK(stopped.callbackStats.firstError == ACLPTI_SUCCESS);
     CHECK(module.ReleaseReplay(42) == ACLPTI_SUCCESS);
     CHECK(module.Shutdown() == ACLPTI_SUCCESS);
     CHECK(callbackCompleted.load(std::memory_order_acquire));
@@ -296,11 +387,11 @@ int TestReplayLifecycle()
     CHECK(result->blockLogs.at(aclptiBlockKey{0x1111, 0x2222}).size() == 1);
     CHECK(result->blockLogs.at(aclptiBlockKey{0x3333, 0x4444}).size() == 1);
     CHECK(result->pmuLogs.size() == 3);
-    CHECK(result->pmuLogs.at(aclptiBlockKey{2, 0}).values.at(0x701) == 1000.0);
-    CHECK(result->pmuLogs.at(aclptiBlockKey{2, 0}).values.at(0x22) == 1001.0);
-    CHECK(result->pmuLogs.at(aclptiBlockKey{3, 0}).values.at(0x701) == 2000.0);
-    CHECK(result->pmuLogs.at(aclptiBlockKey{3, 0}).values.at(0x22) == 2001.0);
-    CHECK(result->pmuLogs.at(aclptiBlockKey{4, 0}).values.at(0x701) == 3000.0);
+    CHECK(result->pmuLogs.at(aclptiBlockKey{2, 0, ACLPTI_CORE_TYPE_AIC, 3}).values.at(0x701) == 1000.0);
+    CHECK(result->pmuLogs.at(aclptiBlockKey{2, 0, ACLPTI_CORE_TYPE_AIC, 3}).values.at(0x22) == 1001.0);
+    CHECK(result->pmuLogs.at(aclptiBlockKey{3, 0, ACLPTI_CORE_TYPE_AIC, 3}).values.at(0x701) == 2000.0);
+    CHECK(result->pmuLogs.at(aclptiBlockKey{3, 0, ACLPTI_CORE_TYPE_AIC, 3}).values.at(0x22) == 2001.0);
+    CHECK(result->pmuLogs.at(aclptiBlockKey{4, 0, ACLPTI_CORE_TYPE_AIC, 3}).values.at(0x701) == 3000.0);
     CHECK(sink.Count() == 1);
     return 0;
 }
@@ -317,12 +408,14 @@ int TestFailedReplay()
     invalidType.type = static_cast<RawDataType>(0);
     CHECK(module.GetRawDataCallback()(&invalidType) == static_cast<std::int32_t>(ACLPTI_ERROR_INVALID_RAW_DATA));
     const auto stopped = module.RecordReplayStatus({7, ACLPTI_SUCCESS});
-    CHECK(stopped.status == ACLPTI_ERROR_INVALID_RAW_DATA);
+    CHECK(stopped.status == ACLPTI_SUCCESS);
     CHECK(module.ReleaseReplay(7) == ACLPTI_SUCCESS);
     CHECK(module.Shutdown() == ACLPTI_SUCCESS);
     const auto result = sink.Wait();
     CHECK(result != nullptr);
-    CHECK(result->status == ACLPTI_ERROR_INVALID_RAW_DATA);
+    CHECK(result->status == ACLPTI_SUCCESS);
+    CHECK(result->errorStats.failedRecordCount == 1);
+    CHECK(result->errorStats.failedRecordCountByReplay.at(7) == 1);
     CHECK(result->pmuLogs.empty());
     CHECK(sink.Count() == 1);
 
@@ -339,7 +432,9 @@ int TestFailedReplay()
     CHECK(decodeModule.Shutdown() == ACLPTI_SUCCESS);
     const auto decodeResult = decodeSink.Wait();
     CHECK(decodeResult != nullptr);
-    CHECK(decodeResult->status == ACLPTI_ERROR_DECODE);
+    CHECK(decodeResult->status == ACLPTI_SUCCESS);
+    CHECK(decodeResult->errorStats.failedRecordCount == 1);
+    CHECK(decodeResult->errorStats.failedRecordCountByReplay.at(8) == 1);
     CHECK(decodeResult->pmuLogs.empty());
 
     bool threw = false;
@@ -349,6 +444,42 @@ int TestFailedReplay()
         threw = true;
     }
     CHECK(threw);
+    return 0;
+}
+
+int TestInvalidChunkDiagnostics()
+{
+    const char* previousDebug = std::getenv("NPU_COMPUTE_DEBUG");
+    const std::string previousDebugValue = previousDebug == nullptr ? std::string() : std::string(previousDebug);
+
+    ResultSink sink;
+    data::Module module([&sink](const auto& result) { return sink.Accept(result); });
+    CHECK(module.Initialize() == ACLPTI_SUCCESS);
+    CHECK(module.PrepareReplay({9, "InvalidChunk", PmuEvents({0x55})}) == ACLPTI_SUCCESS);
+    const MsprofRawDataCallback callback = module.GetRawDataCallback();
+    CHECK(callback != nullptr);
+
+    CHECK(setenv("NPU_COMPUTE_DEBUG", "1", 1) == 0);
+
+    GuardedRawData guarded;
+    CHECK(MakeGuardedRawData(RAW_DATA_MAXSIZE + 1, PMU_DATA_TYPE, &guarded));
+
+    std::string output;
+    std::int32_t status = 0;
+    CHECK(CaptureStderr([&] { status = callback(guarded.raw); }, &output));
+    CHECK(status == static_cast<std::int32_t>(ACLPTI_ERROR_INVALID_RAW_DATA));
+    CHECK(output.find("[DEBUG-rawdata]") == std::string::npos);
+    CHECK(output.find("raw callback invalid chunk") != std::string::npos);
+
+    if (previousDebug == nullptr) {
+        CHECK(unsetenv("NPU_COMPUTE_DEBUG") == 0);
+    } else {
+        CHECK(setenv("NPU_COMPUTE_DEBUG", previousDebugValue.c_str(), 1) == 0);
+    }
+
+    CHECK(module.RecordReplayStatus({9, ACLPTI_SUCCESS}).status == ACLPTI_SUCCESS);
+    CHECK(module.ReleaseReplay(9) == ACLPTI_SUCCESS);
+    CHECK(module.Shutdown() == ACLPTI_SUCCESS);
     return 0;
 }
 
@@ -380,7 +511,8 @@ int TestProcessCallbackRegistration()
 
 int TestShutdownCallback()
 {
-    std::atomic<int> shutdownCalls{0};
+    static std::atomic<int> shutdownCalls{0};
+    shutdownCalls.store(0);
     data::Module module([](const auto&) { return ACLPTI_SUCCESS; });
     CHECK(
         aclptiRegisterDataModuleShutdownCallback(
@@ -398,6 +530,13 @@ int TestShutdownCallback()
     CHECK(shutdownCalls.load() == 1);
     CHECK(module.Shutdown() == ACLPTI_SUCCESS);
     CHECK(shutdownCalls.load() == 1);
+
+    ResultSink sink;
+    data::Module emptyModule([&sink](const auto& result) { return sink.Accept(result); });
+    CHECK(emptyModule.Initialize() == ACLPTI_SUCCESS);
+    CHECK(emptyModule.Shutdown() == ACLPTI_SUCCESS);
+    CHECK(shutdownCalls.load() == 2);
+    CHECK(sink.Count() == 0);
     return 0;
 }
 
@@ -446,26 +585,36 @@ int TestCrossReplayAggregate()
     CHECK(result->status == ACLPTI_SUCCESS);
     CHECK(result->taskLogs.at(7).size() == 1);
     CHECK(result->blockLogs.at(aclptiBlockKey{2, 3}).size() == 2);
-    const auto& row = result->pmuLogs.at(aclptiBlockKey{2, 3});
-    CHECK(row.totalCycles == 200.0);
-    CHECK(row.values.at(0x10) == 10.0);
-    CHECK(row.values.at(0x20) == 20.5);
-    CHECK(row.values.at(0x30) == 31.0);
-    CHECK(row.systemCounters.size() == 2);
-    CHECK(row.systemCounters[0].taskStartSystemCounter == 0x1111);
-    CHECK(row.systemCounters[1].taskEndSystemCounter == 0x4444);
-    CHECK(row.coreInfos.size() == 2);
-    CHECK(row.coreInfos[0].coreType == ACLPTI_CORE_TYPE_AIC);
-    CHECK(row.coreInfos[0].coreId == 1);
-    CHECK(row.coreInfos[0].count == 1);
-    CHECK(row.coreInfos[1].coreType == ACLPTI_CORE_TYPE_AIV);
-    CHECK(row.coreInfos[1].coreId == 2);
-    CHECK(row.coreInfos[1].count == 1);
+    CHECK(result->pmuLogs.size() == 2);
+    const auto& aicRow = result->pmuLogs.at(aclptiBlockKey{2, 3, ACLPTI_CORE_TYPE_AIC, 1});
+    CHECK(aicRow.totalCycles == 100.0);
+    CHECK(aicRow.values.at(0x10) == 10.0);
+    CHECK(aicRow.values.at(0x20) == 11.0);
+    CHECK(aicRow.systemCounters.size() == 1);
+    CHECK(aicRow.systemCounters[0].taskStartSystemCounter == 0x1111);
+    CHECK(aicRow.systemCounters[0].taskEndSystemCounter == 0x2222);
+    CHECK(aicRow.coreInfos.size() == 1);
+    CHECK(aicRow.coreInfos[0].coreType == ACLPTI_CORE_TYPE_AIC);
+    CHECK(aicRow.coreInfos[0].coreId == 1);
+    CHECK(aicRow.coreInfos[0].count == 1);
+
+    const auto& aivRow = result->pmuLogs.at(aclptiBlockKey{2, 3, ACLPTI_CORE_TYPE_AIV, 2});
+    CHECK(aivRow.totalCycles == 300.0);
+    CHECK(aivRow.values.at(0x20) == 30.0);
+    CHECK(aivRow.values.at(0x30) == 31.0);
+    CHECK(aivRow.systemCounters.size() == 1);
+    CHECK(aivRow.systemCounters[0].taskStartSystemCounter == 0x3333);
+    CHECK(aivRow.systemCounters[0].taskEndSystemCounter == 0x4444);
+    CHECK(aivRow.coreInfos.size() == 1);
+    CHECK(aivRow.coreInfos[0].coreType == ACLPTI_CORE_TYPE_AIV);
+    CHECK(aivRow.coreInfos[0].coreId == 2);
+    CHECK(aivRow.coreInfos[0].count == 1);
     return 0;
 }
 
 int TestFailedPackageIsDropped()
 {
+    constexpr std::size_t kMalformedRecordCount = 5000;
     ResultSink sink;
     data::Module module([&sink](const auto& result) { return sink.Accept(result); });
     CHECK(module.Initialize() == ACLPTI_SUCCESS);
@@ -477,8 +626,13 @@ int TestFailedPackageIsDropped()
     StoreWord(malformed.data(), 0, 0x0000002aU);
     auto validRaw = RawData(valid, PMU_DATA_TYPE);
     auto malformedRaw = RawData(malformed, PMU_DATA_TYPE);
-    CHECK(module.GetRawDataCallback()(&validRaw) == 0);
-    CHECK(module.GetRawDataCallback()(&malformedRaw) == 0);
+    const MsprofRawDataCallback callback = module.GetRawDataCallback();
+    CHECK(callback != nullptr);
+    CHECK(callback(&validRaw) == 0);
+    for (std::size_t index = 0; index < kMalformedRecordCount; ++index) {
+        malformedRaw.offset = static_cast<std::uint64_t>(index * malformedRaw.chunkSize);
+        CHECK(callback(&malformedRaw) == 0);
+    }
     CHECK(module.RecordReplayStatus({303, ACLPTI_SUCCESS}).status == ACLPTI_SUCCESS);
     CHECK(module.ReleaseReplay(303) == ACLPTI_SUCCESS);
     CHECK(module.Shutdown() == ACLPTI_SUCCESS);
@@ -486,10 +640,40 @@ int TestFailedPackageIsDropped()
     CHECK(sink.Count() == 1);
     const auto result = sink.Wait();
     CHECK(result != nullptr);
-    CHECK(result->status == ACLPTI_ERROR_DECODE);
-    CHECK(result->errorStats.failedRecordCount == 1);
-    CHECK(result->errorStats.failedRecordCountByReplay.at(303) == 1);
-    CHECK(result->pmuLogs.at(aclptiBlockKey{8, 9}).values.at(0x55) == 77.0);
+    CHECK(result->status == ACLPTI_SUCCESS);
+    CHECK(result->errorStats.failedRecordCount == kMalformedRecordCount);
+    CHECK(result->errorStats.failedRecordCountByReplay.at(303) == kMalformedRecordCount);
+    CHECK(result->pmuLogs.at(aclptiBlockKey{8, 9, ACLPTI_CORE_TYPE_AIC, 3}).values.at(0x55) == 77.0);
+    return 0;
+}
+
+int TestRawQueueBackpressure()
+{
+    ResultSink sink;
+    data::Module module([&sink](const auto& result) { return sink.Accept(result); });
+    CHECK(module.Initialize() == ACLPTI_SUCCESS);
+    CHECK(module.PrepareReplay({404, "Backpressure", PmuEvents({0x55})}) == ACLPTI_SUCCESS);
+
+    const MsprofRawDataCallback callback = module.GetRawDataCallback();
+    CHECK(callback != nullptr);
+
+    auto payload = PmuRecord(1, 2, 8, 77);
+    auto raw = RawData(payload, PMU_DATA_TYPE);
+    for (std::size_t index = 0; index < 1500; ++index) {
+        raw.offset = static_cast<std::uint64_t>(index * raw.chunkSize);
+        CHECK(callback(&raw) == 0);
+    }
+
+    CHECK(module.RecordReplayStatus({404, ACLPTI_SUCCESS}).status == ACLPTI_SUCCESS);
+    CHECK(module.ReleaseReplay(404) == ACLPTI_SUCCESS);
+    CHECK(module.Shutdown() == ACLPTI_SUCCESS);
+
+    CHECK(sink.Count() == 1);
+    const auto result = sink.Wait();
+    CHECK(result != nullptr);
+    CHECK(result->status == ACLPTI_SUCCESS);
+    CHECK(result->errorStats.failedRecordCount == 0);
+    CHECK(result->pmuLogs.at(aclptiBlockKey{8, 0, ACLPTI_CORE_TYPE_AIC, 3}).values.at(0x55) == 77.0);
     return 0;
 }
 
@@ -504,6 +688,9 @@ int main()
     if (TestFailedReplay() != 0) {
         return 1;
     }
+    if (TestInvalidChunkDiagnostics() != 0) {
+        return 1;
+    }
     if (TestProcessCallbackRegistration() != 0) {
         return 1;
     }
@@ -513,5 +700,8 @@ int main()
     if (TestCrossReplayAggregate() != 0) {
         return 1;
     }
-    return TestFailedPackageIsDropped();
+    if (TestFailedPackageIsDropped() != 0) {
+        return 1;
+    }
+    return TestRawQueueBackpressure();
 }

@@ -43,6 +43,12 @@ bool DebugEnabled()
     return value != nullptr && value[0] == '1' && value[1] == '\0';
 }
 
+bool EnvironmentFlagEnabled(const char* name)
+{
+    const char* value = std::getenv(name);
+    return value != nullptr && value[0] == '1' && value[1] == '\0';
+}
+
 bool LoadOutputDirectory(std::filesystem::path* outputDirectory, std::string* error)
 {
     const char* value = std::getenv("NPU_COMPUTE_OUTPUT");
@@ -147,45 +153,59 @@ int NpuComputeRuntime::Initialize()
     }
     pmu_consumer_ = std::move(consumer);
 
-    if (!hardware_info_collector_.Initialize(outputDirectory, &error)) {
-        std::fprintf(stderr, "[libnpu-compute] initialize HardwareInfo collector failed: %s\n", error.c_str());
-        pmu_consumer_->ShutdownAndDrain();
-        pmu_consumer_.reset();
-        return kInitializeFailed;
+    hardware_info_enabled_ = !EnvironmentFlagEnabled("NPU_COMPUTE_DISABLE_HARDWARE_INFO");
+    if (hardware_info_enabled_) {
+        if (!hardware_info_collector_.Initialize(outputDirectory, &error)) {
+            std::fprintf(stderr, "[libnpu-compute] initialize HardwareInfo collector failed: %s\n", error.c_str());
+            pmu_consumer_->ShutdownAndDrain();
+            pmu_consumer_.reset();
+            hardware_info_enabled_ = false;
+            return kInitializeFailed;
+        }
     }
 
-    aclptiResult result =
-        aclptiSubscribe(&subscriber_, &NpuComputeRuntime::RuntimeReadyCallback, &hardware_info_collector_, nullptr);
+    aclptiResult result = aclptiSubscribe(
+        &subscriber_, hardware_info_enabled_ ? &NpuComputeRuntime::RuntimeReadyCallback : nullptr,
+        hardware_info_enabled_ ? static_cast<void*>(&hardware_info_collector_) : nullptr, nullptr);
     if (result != ACLPTI_SUCCESS) {
         std::fprintf(stderr, "[libnpu-compute] aclptiSubscribe failed: %d\n", result);
         pmu_consumer_->ShutdownAndDrain();
         pmu_consumer_.reset();
-        hardware_info_collector_.Stop();
+        if (hardware_info_enabled_) {
+            hardware_info_collector_.Stop();
+            hardware_info_enabled_ = false;
+        }
         return result;
     }
     if (subscriber_ == nullptr) {
         std::fprintf(stderr, "[libnpu-compute] aclptiSubscribe returned a null handle\n");
         pmu_consumer_->ShutdownAndDrain();
         pmu_consumer_.reset();
-        hardware_info_collector_.Stop();
+        if (hardware_info_enabled_) {
+            hardware_info_collector_.Stop();
+            hardware_info_enabled_ = false;
+        }
         return kInitializeFailed;
     }
     std::fprintf(stderr, "[libnpu-compute] subscriber initialized\n");
 
     enabled_hardware_callback_count_ = 0;
-    for (aclptiCallbackId cbid : kHardwareReadyCallbackIds) {
-        result = aclptiEnableCallback(true, subscriber_, ACLPTI_CB_DOMAIN_RUNTIME_API, cbid);
-        if (result != ACLPTI_SUCCESS) {
-            std::fprintf(stderr, "[libnpu-compute] aclptiEnableCallback failed for cbid=%u: %d\n", cbid, result);
-            DisableHardwareCallbacks();
-            pmu_consumer_->ShutdownAndDrain();
-            pmu_consumer_.reset();
-            hardware_info_collector_.Stop();
-            return result;
-        }
-        ++enabled_hardware_callback_count_;
-        if (DebugEnabled()) {
-            std::fprintf(stderr, "[libnpu-compute] enabled ACL PTI callback cbid=%u\n", cbid);
+    if (hardware_info_enabled_) {
+        for (aclptiCallbackId cbid : kHardwareReadyCallbackIds) {
+            result = aclptiEnableCallback(true, subscriber_, ACLPTI_CB_DOMAIN_RUNTIME_API, cbid);
+            if (result != ACLPTI_SUCCESS) {
+                std::fprintf(stderr, "[libnpu-compute] aclptiEnableCallback failed for cbid=%u: %d\n", cbid, result);
+                DisableHardwareCallbacks();
+                pmu_consumer_->ShutdownAndDrain();
+                pmu_consumer_.reset();
+                hardware_info_collector_.Stop();
+                hardware_info_enabled_ = false;
+                return result;
+            }
+            ++enabled_hardware_callback_count_;
+            if (DebugEnabled()) {
+                std::fprintf(stderr, "[libnpu-compute] enabled ACL PTI callback cbid=%u\n", cbid);
+            }
         }
     }
 
@@ -195,7 +215,10 @@ int NpuComputeRuntime::Initialize()
         DisableHardwareCallbacks();
         pmu_consumer_->ShutdownAndDrain();
         pmu_consumer_.reset();
-        hardware_info_collector_.Stop();
+        if (hardware_info_enabled_) {
+            hardware_info_collector_.Stop();
+            hardware_info_enabled_ = false;
+        }
         return result;
     }
     std::fprintf(stderr, "[libnpu-compute] configured sections=%s\n", section_config_.JoinedSections().c_str());
@@ -206,7 +229,10 @@ void NpuComputeRuntime::Stop() noexcept
 {
     std::lock_guard<std::mutex> lock(mutex_);
     DisableHardwareCallbacks();
-    hardware_info_collector_.Stop();
+    if (hardware_info_enabled_) {
+        hardware_info_collector_.Stop();
+        hardware_info_enabled_ = false;
+    }
 }
 
 void NpuComputeRuntime::DisableHardwareCallbacks() noexcept
@@ -242,7 +268,8 @@ aclptiResult NpuComputeRuntime::ProcessPmuData(std::shared_ptr<const aclptiPmuDa
         return ACLPTI_ERROR_INVALID_PARAMETER;
     }
     for (const auto& [blockKey, row] : result->pmuLogs) {
-        if (blockKey.blockId != row.blockId || blockKey.subBlockId != row.subBlockId) {
+        if (blockKey.blockId != row.blockId || blockKey.subBlockId != row.subBlockId ||
+            blockKey.coreType != row.coreType || blockKey.coreId != row.coreId) {
             return ACLPTI_ERROR_ASSEMBLE;
         }
     }

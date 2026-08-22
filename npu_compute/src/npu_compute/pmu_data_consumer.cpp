@@ -9,6 +9,8 @@
  */
 #include "pmu_data_consumer.h"
 
+#include "common/debug_log.h"
+
 #include <condition_variable>
 #include <cstddef>
 #include <deque>
@@ -35,9 +37,11 @@ public:
     {
         std::lock_guard<std::mutex> lock(mutex_);
         if (state_ == ConsumerState::Running) {
+            npu_compute::detail::DebugLog("npu-compute", "PMU consumer start skipped: already running");
             return ACLPTI_SUCCESS;
         }
         if (state_ != ConsumerState::Created || !processor_) {
+            npu_compute::detail::DebugLog("npu-compute", "PMU consumer start rejected");
             return ACLPTI_ERROR_INVALID_STATE;
         }
         state_ = ConsumerState::Running;
@@ -45,27 +49,33 @@ public:
             worker_ = std::thread(&Impl::ConsumeLoop, this);
         } catch (...) {
             state_ = ConsumerState::Stopped;
+            npu_compute::detail::DebugLog("npu-compute", "PMU consumer start failed: worker thread");
             return ACLPTI_ERROR_INTERNAL;
         }
+        npu_compute::detail::DebugLog("npu-compute", "PMU consumer started");
         return ACLPTI_SUCCESS;
     }
 
     aclptiResult Submit(std::shared_ptr<const aclptiPmuDataResult> result)
     {
         if (!result) {
+            npu_compute::detail::DebugLog("npu-compute", "PMU consumer submit rejected: null result");
             return ACLPTI_ERROR_INVALID_PARAMETER;
         }
         std::lock_guard<std::mutex> lock(mutex_);
         if (state_ != ConsumerState::Running) {
+            npu_compute::detail::DebugLog("npu-compute", "PMU consumer submit rejected: not running");
             return ACLPTI_ERROR_INVALID_STATE;
         }
         if (queue_.size() == kQueueCapacity) {
-            if (firstError_ == ACLPTI_SUCCESS) {
-                firstError_ = ACLPTI_ERROR_QUEUE_FULL;
+            if (status_ == ACLPTI_SUCCESS) {
+                status_ = ACLPTI_ERROR_QUEUE_FULL;
             }
+            npu_compute::detail::DebugLog("npu-compute", "PMU consumer submit rejected: queue full");
             return ACLPTI_ERROR_QUEUE_FULL;
         }
         queue_.push_back(std::move(result));
+        npu_compute::detail::DebugLog("npu-compute", "PMU consumer submit accepted: queue=%zu", queue_.size());
         readable_.notify_one();
         return ACLPTI_SUCCESS;
     }
@@ -76,46 +86,58 @@ public:
             std::lock_guard<std::mutex> lock(mutex_);
             if (state_ == ConsumerState::Created) {
                 state_ = ConsumerState::Stopped;
+                npu_compute::detail::DebugLog("npu-compute", "PMU consumer shutdown skipped: never started");
                 return ACLPTI_SUCCESS;
             }
             if (state_ == ConsumerState::Stopped) {
-                return firstError_;
+                npu_compute::detail::DebugLog(
+                    "npu-compute", "PMU consumer shutdown skipped: stopped status=%d", static_cast<int>(status_));
+                return status_;
             }
             state_ = ConsumerState::Stopping;
+            npu_compute::detail::DebugLog("npu-compute", "PMU consumer shutdown requested: queue=%zu", queue_.size());
             readable_.notify_all();
         }
         if (worker_.joinable()) {
             worker_.join();
+            npu_compute::detail::DebugLog("npu-compute", "PMU consumer worker joined");
         }
         std::lock_guard<std::mutex> lock(mutex_);
         state_ = ConsumerState::Stopped;
-        return firstError_;
+        npu_compute::detail::DebugLog(
+            "npu-compute", "PMU consumer shutdown complete status=%d", static_cast<int>(status_));
+        return status_;
     }
 
 private:
     void ConsumeLoop()
     {
+        npu_compute::detail::DebugLog("npu-compute", "PMU consumer thread started");
         while (true) {
             std::shared_ptr<const aclptiPmuDataResult> result;
             {
                 std::unique_lock<std::mutex> lock(mutex_);
                 readable_.wait(lock, [this] { return state_ != ConsumerState::Running || !queue_.empty(); });
                 if (queue_.empty()) {
+                    npu_compute::detail::DebugLog("npu-compute", "PMU consumer thread stopped");
                     return;
                 }
                 result = std::move(queue_.front());
                 queue_.pop_front();
+                npu_compute::detail::DebugLog("npu-compute", "PMU consumer processing item: queue=%zu", queue_.size());
             }
 
             aclptiResult status = ACLPTI_ERROR_INTERNAL;
             try {
                 status = processor_(std::move(result));
             } catch (...) {
+                npu_compute::detail::DebugLog("npu-compute", "PMU consumer processor threw");
             }
+            npu_compute::detail::DebugLog("npu-compute", "PMU consumer processor status=%d", static_cast<int>(status));
             if (status != ACLPTI_SUCCESS) {
                 std::lock_guard<std::mutex> lock(mutex_);
-                if (firstError_ == ACLPTI_SUCCESS) {
-                    firstError_ = status;
+                if (status_ == ACLPTI_SUCCESS) {
+                    status_ = status;
                 }
             }
         }
@@ -126,7 +148,7 @@ private:
     std::condition_variable readable_;
     std::deque<std::shared_ptr<const aclptiPmuDataResult>> queue_;
     ConsumerState state_ = ConsumerState::Created;
-    aclptiResult firstError_ = ACLPTI_SUCCESS;
+    aclptiResult status_ = ACLPTI_SUCCESS;
     std::thread worker_;
 };
 

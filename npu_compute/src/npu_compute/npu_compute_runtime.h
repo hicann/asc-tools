@@ -44,6 +44,7 @@ private:
     std::shared_ptr<PmuDataConsumer> pmu_consumer_;
     aclptiSubscribeHandle subscriber_ = nullptr;
     std::size_t enabled_hardware_callback_count_ = 0;
+    bool hardware_info_enabled_ = false;
     SectionConfig section_config_;
     PmuCsvConfig csv_config_;
     HardwareInfoCollector hardware_info_collector_;

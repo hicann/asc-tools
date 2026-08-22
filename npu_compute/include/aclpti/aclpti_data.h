@@ -62,17 +62,29 @@ struct aclptiPmuDataRow {
 };
 
 struct aclptiBlockKey {
-    std::uint16_t blockId;
-    std::uint16_t subBlockId;
+    std::uint16_t blockId = 0;
+    std::uint16_t subBlockId = 0;
+    aclptiCoreType coreType = ACLPTI_CORE_TYPE_AIC;
+    std::uint8_t coreId = 0;
 
     bool operator<(const aclptiBlockKey& other) const
     {
-        return blockId < other.blockId || (blockId == other.blockId && subBlockId < other.subBlockId);
+        if (blockId != other.blockId) {
+            return blockId < other.blockId;
+        }
+        if (subBlockId != other.subBlockId) {
+            return subBlockId < other.subBlockId;
+        }
+        if (coreType != other.coreType) {
+            return coreType < other.coreType;
+        }
+        return coreId < other.coreId;
     }
 
     bool operator==(const aclptiBlockKey& other) const
     {
-        return blockId == other.blockId && subBlockId == other.subBlockId;
+        return blockId == other.blockId && subBlockId == other.subBlockId && coreType == other.coreType &&
+               coreId == other.coreId;
     }
 };
 
@@ -95,7 +107,6 @@ struct aclptiPmuDataResult {
     struct ErrorStats {
         std::uint64_t failedRecordCount = 0;
         std::map<std::uint64_t, std::uint64_t> failedRecordCountByReplay;
-        aclptiResult firstError = ACLPTI_SUCCESS;
     } errorStats;
 };
 

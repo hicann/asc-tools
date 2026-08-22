@@ -20,6 +20,9 @@ add_library(npu_compute SHARED
   pmu_csv_writer.cpp
   section_config.cpp
 )
+target_include_directories(npu_compute PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/..
+)
 set(NPU_COMPUTE_VERSION_SCRIPT "${CMAKE_CURRENT_SOURCE_DIR}/libnpu_compute.map")
 if(TARGET npu_compute_integration_headers)
   set(NPU_COMPUTE_LIBRARY_HEADERS npu_compute_integration_headers)

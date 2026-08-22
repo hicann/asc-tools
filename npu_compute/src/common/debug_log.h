@@ -14,6 +14,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <mutex>
 
 #if defined(__GNUC__) || defined(__clang__)
 #define NPU_COMPUTE_PRINTF_FORMAT(formatIndex, firstArgument) \
@@ -39,6 +40,8 @@ inline void DebugLog(const char* component, const char* format, ...)
 
     const char* componentText = component != nullptr ? component : "unknown";
     const char* formatText = format != nullptr ? format : "";
+    static std::mutex logMutex;
+    std::lock_guard<std::mutex> lock(logMutex);
     std::fprintf(stderr, "[%s] ", componentText);
     std::va_list arguments;
     va_start(arguments, format);

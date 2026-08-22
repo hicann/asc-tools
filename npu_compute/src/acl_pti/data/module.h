@@ -45,7 +45,6 @@ struct CallbackStats {
     std::uint64_t firstExpectedOffset;
     std::uint64_t firstActualOffset;
     std::uint32_t lastChunkCount;
-    aclptiResult firstError;
 };
 
 struct ReplayResult {
