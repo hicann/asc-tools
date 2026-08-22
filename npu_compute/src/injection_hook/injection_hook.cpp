@@ -13,47 +13,39 @@
 #include "common/debug_log.h"
 #include "profiling/prof_api.h"
 
-#include <map>
 #include <mutex>
 #include <pthread.h>
-#include <shared_mutex>
-#include <string>
 
 namespace {
 
 struct aclApiTable {
-    void* active[ACL_RT_API_MAX];
-    void* orig[ACL_RT_API_MAX];
+    void* hook[ACL_RT_API_MAX];
+    void* origin[ACL_RT_API_MAX];
+    void* callback[ACL_RT_API_MAX];
     pthread_rwlock_t lock;
 };
 
 constexpr uint32_t kMsprofDataCallbackType = 0U;
 
-const std::map<std::string, aclrtApiId> aclrtApiNameMap = {
-    {"aclrtLaunchKernelWithHostArgs", ACL_RT_API_aclrtLaunchKernelWithHostArgs},
-    {"aclrtMemcpy", ACL_RT_API_aclrtMemcpy},
-    {"aclrtBinaryLoadFromData", ACL_RT_API_aclrtBinaryLoadFromData},
-    {"aclrtBinaryGetFunction", ACL_RT_API_aclrtBinaryGetFunction},
-    {"aclrtMalloc", ACL_RT_API_aclrtMalloc},
-    {"aclrtMemset", ACL_RT_API_aclrtMemset},
-    {"aclrtFree", ACL_RT_API_aclrtFree},
-    {"aclrtCreateStream", ACL_RT_API_aclrtCreateStream},
-    {"aclrtDestroyStream", ACL_RT_API_aclrtDestroyStream},
-    {"aclrtSetDevice", ACL_RT_API_aclrtSetDevice},
-    {"aclrtResetDevice", ACL_RT_API_aclrtResetDevice},
-    {"aclrtSynchronizeStream", ACL_RT_API_aclrtSynchronizeStream},
-    {"aclrtBinaryGetFunctionByEntry", ACL_RT_API_aclrtBinaryGetFunctionByEntry},
-    {"aclrtLaunchKernel", ACL_RT_API_aclrtLaunchKernel},
-    {"aclrtGetFuncBySymbol", ACL_RT_API_aclrtGetFuncBySymbol},
-    {"aclrtBinaryUnLoad", ACL_RT_API_aclrtBinaryUnLoad}};
-
-struct CallbackTable {
-    aclrtApiFunc callbacks[ACL_RT_API_MAX];
-    mutable std::shared_mutex lock;
+constexpr const char* kRuntimeApiNames[ACL_RT_API_MAX] = {
+    "aclrtLaunchKernelWithHostArgs",
+    "aclrtMemcpy",
+    "aclrtBinaryLoadFromData",
+    "aclrtBinaryGetFunction",
+    "aclrtMalloc",
+    "aclrtMemset",
+    "aclrtFree",
+    "aclrtCreateStream",
+    "aclrtDestroyStream",
+    "aclrtSetDevice",
+    "aclrtResetDevice",
+    "aclrtSynchronizeStream",
+    "aclrtBinaryGetFunctionByEntry",
+    "aclrtLaunchKernel",
+    "aclrtGetFuncBySymbol",
+    "aclrtBinaryUnLoad",
 };
 
-aclApiTable g_aclApiTable = {{}, {}, PTHREAD_RWLOCK_INITIALIZER};
-CallbackTable g_callbackTable{};
 std::mutex g_initMutex;
 bool g_hookInstalled = false;
 
@@ -69,69 +61,35 @@ T AddressToFunction(void* address)
     return reinterpret_cast<T>(address);
 }
 
-template <typename T>
-aclrtApiFunc ToGenericFunction(T func)
-{
-    return AddressToFunction<aclrtApiFunc>(FunctionToAddress(func));
-}
-
 bool IsValidApiId(aclrtApiId id)
 {
     const auto value = static_cast<int32_t>(id);
     return value >= 0 && value < static_cast<int32_t>(ACL_RT_API_MAX);
 }
 
-const char* FindRuntimeApiName(aclrtApiId id);
+extern aclApiTable g_aclApiTable;
 
-bool SaveRuntimeEntry(aclrtApiId id, void* origin, void* active)
+const char* FindRuntimeApiName(aclrtApiId id)
+{
+    if (!IsValidApiId(id)) {
+        return nullptr;
+    }
+    return kRuntimeApiNames[static_cast<size_t>(id)];
+}
+
+bool SaveOriginalRuntimeEntry(aclrtApiId id, void* origin)
 {
     if (!IsValidApiId(id)) {
         return false;
     }
     const size_t index = static_cast<size_t>(id);
     pthread_rwlock_wrlock(&g_aclApiTable.lock);
-    g_aclApiTable.orig[index] = origin;
-    g_aclApiTable.active[index] = active;
+    g_aclApiTable.origin[index] = origin;
     pthread_rwlock_unlock(&g_aclApiTable.lock);
     return true;
 }
 
-template <typename Function>
-Function GetRegisteredCallback(aclrtApiId id)
-{
-    if (!IsValidApiId(id)) {
-        return nullptr;
-    }
-    const size_t index = static_cast<size_t>(id);
-    std::shared_lock<std::shared_mutex> lock(g_callbackTable.lock);
-    const aclrtApiFunc callback = g_callbackTable.callbacks[index];
-    return AddressToFunction<Function>(FunctionToAddress(callback));
-}
-
-template <typename Function>
-Function GetOriginalFromTable(aclrtApiId id)
-{
-    if (!IsValidApiId(id)) {
-        return nullptr;
-    }
-    const size_t index = static_cast<size_t>(id);
-    pthread_rwlock_rdlock(&g_aclApiTable.lock);
-    void* origin = g_aclApiTable.orig[index];
-    pthread_rwlock_unlock(&g_aclApiTable.lock);
-    return AddressToFunction<Function>(origin);
-}
-
-const char* FindRuntimeApiName(aclrtApiId id)
-{
-    for (const auto& entry : aclrtApiNameMap) {
-        if (entry.second == id) {
-            return entry.first.c_str();
-        }
-    }
-    return nullptr;
-}
-
-int32_t RegisterCallback(aclrtApiId id, aclrtApiFunc callback)
+int32_t RegisterCallback(aclrtApiId id, void* callback)
 {
     const char* name = FindRuntimeApiName(id);
     if (!IsValidApiId(id)) {
@@ -141,13 +99,14 @@ int32_t RegisterCallback(aclrtApiId id, aclrtApiFunc callback)
         return ACL_ERROR_INVALID_PARAM;
     }
     const size_t index = static_cast<size_t>(id);
-    std::unique_lock<std::shared_mutex> lock(g_callbackTable.lock);
-    const bool replaced = g_callbackTable.callbacks[index] != nullptr;
-    g_callbackTable.callbacks[index] = callback;
+    pthread_rwlock_wrlock(&g_aclApiTable.lock);
+    const bool replaced = g_aclApiTable.callback[index] != nullptr;
+    g_aclApiTable.callback[index] = callback;
+    pthread_rwlock_unlock(&g_aclApiTable.lock);
     npu_compute::detail::DebugLog(
         "tool_injection", "%s callback: name=%s id=%d callback=%p",
         callback == nullptr ? "clear" : (replaced ? "replace" : "register"), name == nullptr ? "unknown" : name,
-        static_cast<int>(id), FunctionToAddress(callback));
+        static_cast<int>(id), callback);
     return ACL_SUCCESS;
 }
 
@@ -155,12 +114,20 @@ template <typename Function>
 Function GetDispatchTarget(aclrtApiId id)
 {
     const char* name = FindRuntimeApiName(id);
-    Function target = GetRegisteredCallback<Function>(id);
-    const char* source = "callback";
-    if (target == nullptr) {
-        target = GetOriginalFromTable<Function>(id);
-        source = "origin";
+    void* targetAddress = nullptr;
+    const char* source = "origin";
+    if (IsValidApiId(id)) {
+        const size_t index = static_cast<size_t>(id);
+        pthread_rwlock_rdlock(&g_aclApiTable.lock);
+        targetAddress = g_aclApiTable.callback[index];
+        if (targetAddress == nullptr) {
+            targetAddress = g_aclApiTable.origin[index];
+        } else {
+            source = "callback";
+        }
+        pthread_rwlock_unlock(&g_aclApiTable.lock);
     }
+    const Function target = AddressToFunction<Function>(targetAddress);
     npu_compute::detail::DebugLog(
         "tool_injection", "dispatch runtime api: name=%s id=%d source=%s target=%p", name == nullptr ? "unknown" : name,
         static_cast<int>(id), source, FunctionToAddress(target));
@@ -400,23 +367,28 @@ extern "C" aclError aclrtBinaryUnLoadHook(aclrtBinHandle binHandle)
 
 namespace {
 
-const aclrtApiFunc kRuntimeHooks[ACL_RT_API_MAX] = {
-    ToGenericFunction(&aclrtLaunchKernelWithHostArgsHook),
-    ToGenericFunction(&aclrtMemcpyHook),
-    ToGenericFunction(&aclrtBinaryLoadFromDataHook),
-    ToGenericFunction(&aclrtBinaryGetFunctionHook),
-    ToGenericFunction(&aclrtMallocHook),
-    ToGenericFunction(&aclrtMemsetHook),
-    ToGenericFunction(&aclrtFreeHook),
-    ToGenericFunction(&aclrtCreateStreamHook),
-    ToGenericFunction(&aclrtDestroyStreamHook),
-    ToGenericFunction(&aclrtSetDeviceHook),
-    ToGenericFunction(&aclrtResetDeviceHook),
-    ToGenericFunction(&aclrtSynchronizeStreamHook),
-    ToGenericFunction(&aclrtBinaryGetFunctionByEntryHook),
-    ToGenericFunction(&aclrtLaunchKernelHook),
-    ToGenericFunction(&aclrtGetFuncBySymbolHook),
-    ToGenericFunction(&aclrtBinaryUnLoadHook)};
+aclApiTable g_aclApiTable = {
+    {
+        FunctionToAddress(&aclrtLaunchKernelWithHostArgsHook),
+        FunctionToAddress(&aclrtMemcpyHook),
+        FunctionToAddress(&aclrtBinaryLoadFromDataHook),
+        FunctionToAddress(&aclrtBinaryGetFunctionHook),
+        FunctionToAddress(&aclrtMallocHook),
+        FunctionToAddress(&aclrtMemsetHook),
+        FunctionToAddress(&aclrtFreeHook),
+        FunctionToAddress(&aclrtCreateStreamHook),
+        FunctionToAddress(&aclrtDestroyStreamHook),
+        FunctionToAddress(&aclrtSetDeviceHook),
+        FunctionToAddress(&aclrtResetDeviceHook),
+        FunctionToAddress(&aclrtSynchronizeStreamHook),
+        FunctionToAddress(&aclrtBinaryGetFunctionByEntryHook),
+        FunctionToAddress(&aclrtLaunchKernelHook),
+        FunctionToAddress(&aclrtGetFuncBySymbolHook),
+        FunctionToAddress(&aclrtBinaryUnLoadHook),
+    },
+    {},
+    {},
+    PTHREAD_RWLOCK_INITIALIZER};
 
 } // namespace
 
@@ -446,7 +418,7 @@ extern "C" NPU_COMPUTE_EXPORT int32_t acltoolHookInit(void)
         const auto id = static_cast<aclrtApiId>(value);
         const size_t index = static_cast<size_t>(id);
         const char* name = FindRuntimeApiName(id);
-        aclrtApiFunc hook = kRuntimeHooks[index];
+        const aclrtApiFunc hook = AddressToFunction<aclrtApiFunc>(g_aclApiTable.hook[index]);
         if (name == nullptr || hook == nullptr) {
             npu_compute::detail::DebugLog(
                 "tool_injection", "hook initialization failed: invalid entry id=%d name=%s hook=%p",
@@ -470,7 +442,7 @@ extern "C" NPU_COMPUTE_EXPORT int32_t acltoolHookInit(void)
                 "tool_injection", "hook initialization failed: empty runtime entry name=%s", name);
             return ACL_ERROR_UNINITIALIZE;
         }
-        if (!SaveRuntimeEntry(id, FunctionToAddress(origin), FunctionToAddress(current))) {
+        if (!SaveOriginalRuntimeEntry(id, FunctionToAddress(origin))) {
             npu_compute::detail::DebugLog(
                 "tool_injection", "hook initialization failed: save origin entry name=%s", name);
             return ACL_ERROR_INTERNAL_ERROR;
@@ -485,11 +457,6 @@ extern "C" NPU_COMPUTE_EXPORT int32_t acltoolHookInit(void)
                 "tool_injection", "hook initialization failed: set runtime hook name=%s result=%d", name,
                 static_cast<int>(ret));
             return ret;
-        }
-        if (!SaveRuntimeEntry(id, FunctionToAddress(origin), FunctionToAddress(hook))) {
-            npu_compute::detail::DebugLog(
-                "tool_injection", "hook initialization failed: save active entry name=%s", name);
-            return ACL_ERROR_INTERNAL_ERROR;
         }
     }
 
@@ -529,85 +496,85 @@ extern "C" NPU_COMPUTE_EXPORT void* acltoolGetOriginalRuntimeApi(aclrtApiId id)
 
 extern "C" NPU_COMPUTE_EXPORT int32_t acltoolRegisterAclrtSetDeviceCallbacks(aclrtSetDeviceFunc callback)
 {
-    return RegisterCallback(ACL_RT_API_aclrtSetDevice, ToGenericFunction(callback));
+    return RegisterCallback(ACL_RT_API_aclrtSetDevice, FunctionToAddress(callback));
 }
 
 extern "C" NPU_COMPUTE_EXPORT int32_t acltoolRegisterAclrtResetDeviceCallbacks(aclrtResetDeviceFunc callback)
 {
-    return RegisterCallback(ACL_RT_API_aclrtResetDevice, ToGenericFunction(callback));
+    return RegisterCallback(ACL_RT_API_aclrtResetDevice, FunctionToAddress(callback));
 }
 
 extern "C" NPU_COMPUTE_EXPORT int32_t acltoolRegisterAclrtCreateStreamCallbacks(aclrtCreateStreamFunc callback)
 {
-    return RegisterCallback(ACL_RT_API_aclrtCreateStream, ToGenericFunction(callback));
+    return RegisterCallback(ACL_RT_API_aclrtCreateStream, FunctionToAddress(callback));
 }
 
 extern "C" NPU_COMPUTE_EXPORT int32_t acltoolRegisterAclrtDestroyStreamCallbacks(aclrtDestroyStreamFunc callback)
 {
-    return RegisterCallback(ACL_RT_API_aclrtDestroyStream, ToGenericFunction(callback));
+    return RegisterCallback(ACL_RT_API_aclrtDestroyStream, FunctionToAddress(callback));
 }
 
 extern "C" NPU_COMPUTE_EXPORT int32_t acltoolRegisterAclrtMallocCallbacks(aclrtMallocFunc callback)
 {
-    return RegisterCallback(ACL_RT_API_aclrtMalloc, ToGenericFunction(callback));
+    return RegisterCallback(ACL_RT_API_aclrtMalloc, FunctionToAddress(callback));
 }
 
 extern "C" NPU_COMPUTE_EXPORT int32_t acltoolRegisterAclrtFreeCallbacks(aclrtFreeFunc callback)
 {
-    return RegisterCallback(ACL_RT_API_aclrtFree, ToGenericFunction(callback));
+    return RegisterCallback(ACL_RT_API_aclrtFree, FunctionToAddress(callback));
 }
 
 extern "C" NPU_COMPUTE_EXPORT int32_t acltoolRegisterAclrtMemcpyCallbacks(aclrtMemcpyFunc callback)
 {
-    return RegisterCallback(ACL_RT_API_aclrtMemcpy, ToGenericFunction(callback));
+    return RegisterCallback(ACL_RT_API_aclrtMemcpy, FunctionToAddress(callback));
 }
 
 extern "C" NPU_COMPUTE_EXPORT int32_t acltoolRegisterAclrtMemsetCallbacks(aclrtMemsetFunc callback)
 {
-    return RegisterCallback(ACL_RT_API_aclrtMemset, ToGenericFunction(callback));
+    return RegisterCallback(ACL_RT_API_aclrtMemset, FunctionToAddress(callback));
 }
 
 extern "C" NPU_COMPUTE_EXPORT int32_t
 acltoolRegisterAclrtSynchronizeStreamCallbacks(aclrtSynchronizeStreamFunc callback)
 {
-    return RegisterCallback(ACL_RT_API_aclrtSynchronizeStream, ToGenericFunction(callback));
+    return RegisterCallback(ACL_RT_API_aclrtSynchronizeStream, FunctionToAddress(callback));
 }
 
 extern "C" NPU_COMPUTE_EXPORT int32_t
 acltoolRegisterAclrtBinaryLoadFromDataCallbacks(aclrtBinaryLoadFromDataFunc callback)
 {
-    return RegisterCallback(ACL_RT_API_aclrtBinaryLoadFromData, ToGenericFunction(callback));
+    return RegisterCallback(ACL_RT_API_aclrtBinaryLoadFromData, FunctionToAddress(callback));
 }
 
 extern "C" NPU_COMPUTE_EXPORT int32_t
 acltoolRegisterAclrtBinaryGetFunctionCallbacks(aclrtBinaryGetFunctionFunc callback)
 {
-    return RegisterCallback(ACL_RT_API_aclrtBinaryGetFunction, ToGenericFunction(callback));
+    return RegisterCallback(ACL_RT_API_aclrtBinaryGetFunction, FunctionToAddress(callback));
 }
 
 extern "C" NPU_COMPUTE_EXPORT int32_t
 acltoolRegisterAclrtBinaryGetFunctionByEntryCallbacks(aclrtBinaryGetFunctionByEntryFunc callback)
 {
-    return RegisterCallback(ACL_RT_API_aclrtBinaryGetFunctionByEntry, ToGenericFunction(callback));
+    return RegisterCallback(ACL_RT_API_aclrtBinaryGetFunctionByEntry, FunctionToAddress(callback));
 }
 
 extern "C" NPU_COMPUTE_EXPORT int32_t
 acltoolRegisterAclrtLaunchKernelWithHostArgsCallbacks(aclrtLaunchKernelWithHostArgsFunc callback)
 {
-    return RegisterCallback(ACL_RT_API_aclrtLaunchKernelWithHostArgs, ToGenericFunction(callback));
+    return RegisterCallback(ACL_RT_API_aclrtLaunchKernelWithHostArgs, FunctionToAddress(callback));
 }
 
 extern "C" NPU_COMPUTE_EXPORT int32_t acltoolRegisterAclrtLaunchKernelCallbacks(aclrtLaunchKernelFunc callback)
 {
-    return RegisterCallback(ACL_RT_API_aclrtLaunchKernel, ToGenericFunction(callback));
+    return RegisterCallback(ACL_RT_API_aclrtLaunchKernel, FunctionToAddress(callback));
 }
 
 extern "C" NPU_COMPUTE_EXPORT int32_t acltoolRegisterAclrtGetFuncBySymbolCallbacks(aclrtGetFuncBySymbolFunc callback)
 {
-    return RegisterCallback(ACL_RT_API_aclrtGetFuncBySymbol, ToGenericFunction(callback));
+    return RegisterCallback(ACL_RT_API_aclrtGetFuncBySymbol, FunctionToAddress(callback));
 }
 
 extern "C" NPU_COMPUTE_EXPORT int32_t acltoolRegisterAclrtBinaryUnLoadCallbacks(aclrtBinaryUnLoadFunc callback)
 {
-    return RegisterCallback(ACL_RT_API_aclrtBinaryUnLoad, ToGenericFunction(callback));
+    return RegisterCallback(ACL_RT_API_aclrtBinaryUnLoad, FunctionToAddress(callback));
 }
