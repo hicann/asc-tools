@@ -23,7 +23,7 @@
 
 namespace {
 
-constexpr std::size_t kRuntimeApiCount = 16;
+constexpr std::size_t kRuntimeApiCount = 17;
 
 struct KernelArgs {
     std::uint8_t* value;
@@ -104,6 +104,8 @@ aclError RealAclrtResetDevice(std::int32_t) { return ACL_SUCCESS; }
 
 aclError RealAclrtSynchronizeStream(aclrtStream) { return ACL_SUCCESS; }
 
+aclError RealAclrtSynchronizeStreamWithTimeout(aclrtStream, std::int32_t) { return ACL_SUCCESS; }
+
 aclError RealAclrtBinaryGetFunctionByEntry(aclrtBinHandle, std::uint64_t, aclrtFuncHandle* funcHandle)
 {
     if (funcHandle == nullptr) {
@@ -175,6 +177,8 @@ std::array<RuntimeEntry, kRuntimeApiCount> g_runtimeEntries = {{
     {"aclrtGetFuncBySymbol", ToGenericFunction(&RealAclrtGetFuncBySymbol),
      ToGenericFunction(&RealAclrtGetFuncBySymbol)},
     {"aclrtBinaryUnLoad", ToGenericFunction(&RealAclrtBinaryUnLoad), ToGenericFunction(&RealAclrtBinaryUnLoad)},
+    {"aclrtSynchronizeStreamWithTimeout", ToGenericFunction(&RealAclrtSynchronizeStreamWithTimeout),
+     ToGenericFunction(&RealAclrtSynchronizeStreamWithTimeout)},
 }};
 
 std::mutex g_runtimeMutex;
@@ -319,6 +323,11 @@ extern "C" aclError aclrtMemset(void* devPtr, std::size_t maxCount, std::int32_t
 extern "C" aclError aclrtSynchronizeStream(aclrtStream stream)
 {
     return CallCurrent<aclError (*)(aclrtStream)>("aclrtSynchronizeStream", stream);
+}
+
+extern "C" aclError aclrtSynchronizeStreamWithTimeout(aclrtStream stream, std::int32_t timeout)
+{
+    return CallCurrent<aclError (*)(aclrtStream, std::int32_t)>("aclrtSynchronizeStreamWithTimeout", stream, timeout);
 }
 
 extern "C" aclError aclrtGetFuncBySymbol(const void* symbol, aclrtFuncHandle* funcHandle)

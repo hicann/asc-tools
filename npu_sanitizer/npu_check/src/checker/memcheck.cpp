@@ -142,7 +142,7 @@ Memcheck::Memcheck(bool strictUnknown) : strictUnknown_(strictUnknown) {}
 
 void Memcheck::OnAllocation(const AclsanResourceData& data)
 {
-    if (data.memorySpace != kDeviceMemorySpaceGm || data.common.result != 0) {
+    if (data.memorySpace != ACLSAN_MEMORY_SPACE_DEVICE || data.common.result != 0) {
         return;
     }
     const auto status =
@@ -154,7 +154,7 @@ void Memcheck::OnAllocation(const AclsanResourceData& data)
 
 void Memcheck::OnFree(const AclsanResourceData& data)
 {
-    if (data.memorySpace != kDeviceMemorySpaceGm || data.common.result != 0) {
+    if (data.memorySpace != ACLSAN_MEMORY_SPACE_DEVICE || data.common.result != 0) {
         return;
     }
     const auto status = allocations_.Release(data.resourceId, reinterpret_cast<uint64_t>(data.ptr), data.deviceId);
@@ -236,8 +236,8 @@ std::vector<NpusanMemcheckReport> Memcheck::CheckDeviceMemoryAccess(const Aclsan
             return {};
     }
 
-    if (data.memorySpace != kDeviceMemorySpaceGm || ((data.header.flags & kDeviceEventFlagPredicated) != 0 &&
-                                                     data.predicateMask0 == 0 && data.predicateMask1 == 0)) {
+    if (data.memorySpace != ACLSAN_DEVICE_MEMORY_SPACE_GM || ((data.header.flags & kDeviceEventFlagPredicated) != 0 &&
+                                                              data.predicateMask0 == 0 && data.predicateMask1 == 0)) {
         return {};
     }
 

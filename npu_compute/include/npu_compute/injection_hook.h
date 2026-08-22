@@ -31,6 +31,7 @@ typedef aclError (*aclrtFreeFunc)(void* devPtr);
 typedef aclError (*aclrtMemcpyFunc)(void* dst, size_t destMax, const void* src, size_t count, aclrtMemcpyKind kind);
 typedef aclError (*aclrtMemsetFunc)(void* devPtr, size_t maxCount, int32_t value, size_t count);
 typedef aclError (*aclrtSynchronizeStreamFunc)(aclrtStream stream);
+typedef aclError (*aclrtSynchronizeStreamWithTimeoutFunc)(aclrtStream stream, int32_t timeout);
 typedef aclError (*aclrtBinaryLoadFromDataFunc)(
     const void* data, size_t length, const aclrtBinaryLoadOptions* options, aclrtBinHandle* binHandle);
 typedef aclError (*aclrtBinaryGetFunctionFunc)(
@@ -62,6 +63,7 @@ typedef enum {
     ACL_RT_API_aclrtLaunchKernel = 13,
     ACL_RT_API_aclrtGetFuncBySymbol = 14,
     ACL_RT_API_aclrtBinaryUnLoad = 15,
+    ACL_RT_API_aclrtSynchronizeStreamWithTimeout = 16,
     ACL_RT_API_MAX
 } aclrtApiId;
 
@@ -82,6 +84,7 @@ NPU_COMPUTE_DECLARE_REGISTRATION(AclrtFree, aclrtFree);
 NPU_COMPUTE_DECLARE_REGISTRATION(AclrtMemcpy, aclrtMemcpy);
 NPU_COMPUTE_DECLARE_REGISTRATION(AclrtMemset, aclrtMemset);
 NPU_COMPUTE_DECLARE_REGISTRATION(AclrtSynchronizeStream, aclrtSynchronizeStream);
+NPU_COMPUTE_DECLARE_REGISTRATION(AclrtSynchronizeStreamWithTimeout, aclrtSynchronizeStreamWithTimeout);
 NPU_COMPUTE_DECLARE_REGISTRATION(AclrtBinaryLoadFromData, aclrtBinaryLoadFromData);
 NPU_COMPUTE_DECLARE_REGISTRATION(AclrtBinaryGetFunction, aclrtBinaryGetFunction);
 NPU_COMPUTE_DECLARE_REGISTRATION(AclrtBinaryGetFunctionByEntry, aclrtBinaryGetFunctionByEntry);

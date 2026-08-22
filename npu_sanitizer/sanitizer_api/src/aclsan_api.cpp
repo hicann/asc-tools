@@ -10,16 +10,40 @@
 
 #include "aclsan/aclsan_api.h"
 #include "internal/aclsan_internal.h"
-#include "npu_compute/injection_hook.h"
 #include "internal/aclsan_log.h"
+#include "npu_compute/injection_hook.h"
+#include "probe/device_symbolizer.h"
 
+#include <algorithm>
+#include <cstring>
 #include <map>
 #include <new>
 #include <set>
+#include <string>
 #include <tuple>
 #include <vector>
 
 namespace {
+
+template <size_t BufferBytes>
+bool CopyText(const std::string& text, char (&buffer)[BufferBytes])
+{
+    const size_t copyBytes = std::min(text.size(), BufferBytes - 1);
+    std::memcpy(buffer, text.data(), copyBytes);
+    buffer[copyBytes] = '\0';
+    return copyBytes == text.size();
+}
+
+AclsanStatus UnavailableStatus(const std::string& error)
+{
+    if (error == "invalid_state" || error == "invalid_configuration") {
+        return ACLSAN_STATUS_ERROR_INVALID_STATE;
+    }
+    if (error == "invalid_symbolizer_output") {
+        return ACLSAN_STATUS_ERROR_INTERNAL;
+    }
+    return ACLSAN_STATUS_ERROR_RUNTIME;
+}
 
 struct CallbackKey {
     AclsanCallbackDomain domain;
@@ -36,12 +60,17 @@ const std::map<CallbackKey, std::vector<aclrtApiId>> kCallbackRoutes = {
     {{ACLSAN_CB_DOMAIN_RESOURCE, ACLSAN_CBID_RESOURCE_MEMORY_ALLOC}, {ACL_RT_API_aclrtMalloc}},
     {{ACLSAN_CB_DOMAIN_RESOURCE, ACLSAN_CBID_RESOURCE_MEMORY_FREE}, {ACL_RT_API_aclrtFree}},
     {{ACLSAN_CB_DOMAIN_DEVICE_INSTRUCTION, ACLSAN_CBID_DEVICE_MEMORY_ACCESS},
-     {ACL_RT_API_aclrtSynchronizeStream, ACL_RT_API_aclrtGetFuncBySymbol, ACL_RT_API_aclrtBinaryUnLoad,
+     {ACL_RT_API_aclrtBinaryLoadFromData, ACL_RT_API_aclrtBinaryGetFunction, ACL_RT_API_aclrtBinaryGetFunctionByEntry,
+      ACL_RT_API_aclrtLaunchKernelWithHostArgs, ACL_RT_API_aclrtSynchronizeStream,
+      ACL_RT_API_aclrtSynchronizeStreamWithTimeout, ACL_RT_API_aclrtGetFuncBySymbol, ACL_RT_API_aclrtBinaryUnLoad,
       ACL_RT_API_aclrtResetDevice, ACL_RT_API_aclrtMalloc}},
     {{ACLSAN_CB_DOMAIN_DEVICE_INSTRUCTION, ACLSAN_CBID_DEVICE_SYNC},
-     {ACL_RT_API_aclrtSynchronizeStream, ACL_RT_API_aclrtGetFuncBySymbol, ACL_RT_API_aclrtBinaryUnLoad,
+     {ACL_RT_API_aclrtBinaryLoadFromData, ACL_RT_API_aclrtBinaryGetFunction, ACL_RT_API_aclrtBinaryGetFunctionByEntry,
+      ACL_RT_API_aclrtLaunchKernelWithHostArgs, ACL_RT_API_aclrtSynchronizeStream,
+      ACL_RT_API_aclrtSynchronizeStreamWithTimeout, ACL_RT_API_aclrtGetFuncBySymbol, ACL_RT_API_aclrtBinaryUnLoad,
       ACL_RT_API_aclrtResetDevice}},
-    {{ACLSAN_CB_DOMAIN_SYNCHRONIZE, ACLSAN_CBID_SYNCHRONIZE_STREAM_SYNC_END}, {ACL_RT_API_aclrtSynchronizeStream}},
+    {{ACLSAN_CB_DOMAIN_SYNCHRONIZE, ACLSAN_CBID_SYNCHRONIZE_STREAM_SYNC_END},
+     {ACL_RT_API_aclrtSynchronizeStream, ACL_RT_API_aclrtSynchronizeStreamWithTimeout}},
 };
 
 } // namespace
@@ -349,7 +378,7 @@ AclsanStatus AclsanSubscriber::GetCallbackState(
         ASC_SAN_ERROR("aclsanGetCallbackState: enabled is nullptr");
         return ACLSAN_STATUS_ERROR_INVALID_PARAMETER;
     }
-    *enabled = 0;
+
     if (!IsActive(subscriber)) {
         ASC_SAN_ERROR("aclsanGetCallbackState: subscriber is not initialized");
         return ACLSAN_STATUS_ERROR_INVALID_PARAMETER;
@@ -432,6 +461,43 @@ extern "C" AclsanStatus aclsanGetCallbackState(
     AclsanSubscriberHandle subscriber, AclsanCallbackDomain domain, AclsanCallbackId cbid, uint32_t* enabled)
 {
     return AclsanSubscriber::Instance().GetCallbackState(subscriber, domain, cbid, enabled);
+}
+
+extern "C" AclsanStatus aclsanGetDeviceCallStack(uint64_t pc, AclsanDeviceCallStack* result)
+{
+    if (result == nullptr) {
+        return ACLSAN_STATUS_ERROR_INVALID_PARAMETER;
+    }
+    *result = {};
+    result->pc = pc;
+
+    aclsan::probe::CallStackResult resolved;
+    const AclsanStatus resolveStatus = aclsan::ResolveActiveDeviceCallStack(pc, &resolved);
+    result->binaryId = resolved.binaryId;
+    if (resolveStatus != ACLSAN_STATUS_SUCCESS) {
+        return resolveStatus;
+    }
+    if (!resolved.available) {
+        return UnavailableStatus(resolved.error);
+    }
+
+    const size_t frameCount = std::min(resolved.frames.size(), static_cast<size_t>(ACLSAN_CALL_STACK_MAX_DEPTH));
+    result->depth = static_cast<uint32_t>(frameCount);
+    bool complete = frameCount == resolved.frames.size();
+    for (size_t index = 0; index < frameCount; ++index) {
+        const aclsan::probe::CallStackFrame& source = resolved.frames[index];
+        AclsanDeviceCallStackFrame& destination = result->frames[index];
+        destination.line = source.line;
+        destination.column = source.column;
+        destination.inlineDepth = source.inlineDepth;
+        complete = CopyText(source.functionName, destination.functionName) && complete;
+        complete = CopyText(source.fileName, destination.fileName) && complete;
+    }
+    if (!complete) {
+        result->flags |= ACLSAN_CALL_STACK_FLAG_TRUNCATED;
+        return ACLSAN_STATUS_ERROR_MAX_LIMIT_REACHED;
+    }
+    return ACLSAN_STATUS_SUCCESS;
 }
 
 namespace aclsan {

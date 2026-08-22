@@ -15,6 +15,32 @@
 
 #define ACLSAN_RAW_ARG_MAX 6
 
+typedef enum AclsanDevicePipeline {
+    ACLSAN_DEVICE_PIPE_INVALID = 0,
+    ACLSAN_DEVICE_PIPE_SCALAR = 1,
+    ACLSAN_DEVICE_PIPE_MTE1 = 3,
+    ACLSAN_DEVICE_PIPE_MTE2 = 3,
+    ACLSAN_DEVICE_PIPE_MTE3 = 4,
+    ACLSAN_DEVICE_PIPE_VECTOR = 5,
+    ACLSAN_DEVICE_PIPE_CUBE = 6,
+    ACLSAN_DEVICE_PIPE_FIXPIPE = 7
+} AclsanDevicePipeline;
+
+// TODO: 目前暂时没地方用到，需要看看能不能删掉
+typedef enum AclsanDeviceSourceKind {
+    ACLSAN_DEVICE_SOURCE_UNKNOWN = 0,
+    ACLSAN_DEVICE_SOURCE_MTE2 = 1,
+    ACLSAN_DEVICE_SOURCE_MTE3 = 2,
+    ACLSAN_DEVICE_SOURCE_FIXPIPE = 3,
+    ACLSAN_DEVICE_SOURCE_SET_WAIT_FLAG = 4,
+    ACLSAN_DEVICE_SOURCE_GET_RLS_BUF = 5,
+    ACLSAN_DEVICE_SOURCE_LD = 6,
+    ACLSAN_DEVICE_SOURCE_ST = 7,
+    ACLSAN_DEVICE_SOURCE_VECTOR = 8,
+    ACLSAN_DEVICE_SOURCE_CUBE = 9,
+    ACLSAN_DEVICE_SOURCE_SCALAR = 10
+} AclsanDeviceSourceKind;
+
 // device对应的物理位置
 typedef enum AclsanDeviceMemorySpace {
     ACLSAN_DEVICE_MEMORY_SPACE_UNKNOWN = 0,
@@ -34,6 +60,15 @@ typedef enum AclsanDeviceMemoryAccessMode {
     ACLSAN_DEVICE_MEMORY_ACCESS_READ_WRITE = 3
 } AclsanDeviceMemoryAccessMode;
 
+typedef enum AclsanDeviceEventFlags {
+    ACLSAN_DEVICE_EVENT_FLAG_NONE = 0,
+    ACLSAN_DEVICE_EVENT_FLAG_EXACT = 1u << 0u,
+    ACLSAN_DEVICE_EVENT_FLAG_ESTIMATED = 1u << 1u,
+    ACLSAN_DEVICE_EVENT_FLAG_TRUNCATED = 1u << 2u,
+    ACLSAN_DEVICE_EVENT_FLAG_PREDICATED = 1u << 3u,
+    ACLSAN_DEVICE_EVENT_FLAG_DROPPED_PRIOR = 1u << 4u
+} AclsanDeviceEventFlags;
+
 typedef struct AclsanDeviceEventHeader {
     uint32_t version;
     uint32_t size;
@@ -47,8 +82,8 @@ typedef struct AclsanDeviceEventHeader {
     uint32_t coreId;
     uint32_t blockId;
     uint32_t blockType;
-    uint32_t pipeline;
-    uint32_t flags;
+    uint32_t pipeline; // AclsanDevicePipeline
+    uint32_t flags;    // AclsanDeviceEventFlags
 } AclsanDeviceEventHeader;
 
 // TODO: 待确认这个结构体的作用是什么
@@ -104,7 +139,7 @@ typedef struct AclsanMemNdAffineLayout {
 typedef struct AclsanDeviceMemoryAccessData {
     AclsanDeviceEventHeader header;
     uint64_t address;
-    uint32_t memorySpace;
+    uint32_t memorySpace; // AclsanDeviceMemorySpace   TODO: 命名最好不要叫memorySpace，容易搞错
     uint32_t accessMode;
     uint32_t accessIndex;
     uint32_t accessCount;
@@ -155,7 +190,6 @@ typedef struct AclsanDeviceSyncData {
     uint64_t pc;
     uint64_t instrExecId;
     uint64_t launchId;
-    uint32_t instrType;
     uint32_t blockId;
     uint32_t phyCoreId;
     uint32_t syncKind;

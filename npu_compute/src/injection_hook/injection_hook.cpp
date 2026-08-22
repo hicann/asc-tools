@@ -44,6 +44,7 @@ constexpr const char* kRuntimeApiNames[ACL_RT_API_MAX] = {
     "aclrtLaunchKernel",
     "aclrtGetFuncBySymbol",
     "aclrtBinaryUnLoad",
+    "aclrtSynchronizeStreamWithTimeout",
 };
 
 std::mutex g_initMutex;
@@ -267,6 +268,19 @@ extern "C" aclError aclrtSynchronizeStreamHook(aclrtStream stream)
     return result;
 }
 
+extern "C" aclError aclrtSynchronizeStreamWithTimeoutHook(aclrtStream stream, int32_t timeout)
+{
+    constexpr aclrtApiId id = ACL_RT_API_aclrtSynchronizeStreamWithTimeout;
+    const auto callback = GetDispatchTarget<aclrtSynchronizeStreamWithTimeoutFunc>(id);
+    if (callback == nullptr) {
+        LogMissingCallback("aclrtSynchronizeStreamWithTimeout", id);
+        return ACL_ERROR_UNINITIALIZE;
+    }
+    const aclError result = callback(stream, timeout);
+    LogHookResult("aclrtSynchronizeStreamWithTimeout", id, result);
+    return result;
+}
+
 extern "C" aclError aclrtBinaryLoadFromDataHook(
     const void* binaryData, size_t length, const aclrtBinaryLoadOptions* options, aclrtBinHandle* binHandle)
 {
@@ -385,6 +399,7 @@ aclApiTable g_aclApiTable = {
         FunctionToAddress(&aclrtLaunchKernelHook),
         FunctionToAddress(&aclrtGetFuncBySymbolHook),
         FunctionToAddress(&aclrtBinaryUnLoadHook),
+        FunctionToAddress(&aclrtSynchronizeStreamWithTimeoutHook),
     },
     {},
     {},
@@ -538,6 +553,12 @@ extern "C" NPU_COMPUTE_EXPORT int32_t
 acltoolRegisterAclrtSynchronizeStreamCallbacks(aclrtSynchronizeStreamFunc callback)
 {
     return RegisterCallback(ACL_RT_API_aclrtSynchronizeStream, FunctionToAddress(callback));
+}
+
+extern "C" NPU_COMPUTE_EXPORT int32_t
+acltoolRegisterAclrtSynchronizeStreamWithTimeoutCallbacks(aclrtSynchronizeStreamWithTimeoutFunc callback)
+{
+    return RegisterCallback(ACL_RT_API_aclrtSynchronizeStreamWithTimeout, FunctionToAddress(callback));
 }
 
 extern "C" NPU_COMPUTE_EXPORT int32_t

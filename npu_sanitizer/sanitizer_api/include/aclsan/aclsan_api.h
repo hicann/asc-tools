@@ -16,6 +16,9 @@
 
 #define ACLSAN_EXPORT __attribute__((visibility("default")))
 #define ACLSAN_API_VERSION 1u
+#define ACLSAN_CALL_STACK_MAX_DEPTH 16U
+#define ACLSAN_FUNCTION_NAME_MAX_BYTES 4096U
+#define ACLSAN_FILE_NAME_MAX_BYTES 4096U
 
 extern "C" {
 
@@ -40,6 +43,27 @@ typedef enum AclsanStatusValue {
     ACLSAN_STATUS_ERROR_INJECTION_FAILED = 16,
     ACLSAN_STATUS_ERROR_INTERNAL = 17
 } AclsanStatusValue;
+
+typedef enum AclsanCallStackFlags {
+    ACLSAN_CALL_STACK_FLAG_NONE = 0,
+    ACLSAN_CALL_STACK_FLAG_TRUNCATED = 1 // 表明当前调用栈大于ACLSAN_CALL_STACK_MAX_DEPTH导致被截断
+} AclsanCallStackFlags;
+
+typedef struct AclsanDeviceCallStackFrame {
+    uint32_t line;
+    uint32_t column;
+    uint32_t inlineDepth; // 这一帧在静态 DWARF inline 调用链中的层级
+    char functionName[ACLSAN_FUNCTION_NAME_MAX_BYTES];
+    char fileName[ACLSAN_FILE_NAME_MAX_BYTES];
+} AclsanDeviceCallStackFrame;
+
+typedef struct AclsanDeviceCallStack {
+    uint64_t binaryId; // 进程内本次 binary load 的非零标识；无活动 binary 时为 0
+    uint64_t pc;       // 本次查询的 Device PC
+    uint32_t depth;    // frames 中有效元素的数量
+    uint32_t flags;    // AclsanCallStackFlags
+    AclsanDeviceCallStackFrame frames[ACLSAN_CALL_STACK_MAX_DEPTH]; // 有效范围为 [0, depth)
+} AclsanDeviceCallStack;
 
 typedef enum AclsanCallbackDomain {
     ACLSAN_CB_DOMAIN_INVALID = 0,
@@ -124,6 +148,13 @@ ACLSAN_EXPORT AclsanStatus
 aclsanEnableDomain(AclsanSubscriberHandle subscriber, AclsanCallbackDomain domain, uint32_t enable);
 ACLSAN_EXPORT AclsanStatus aclsanGetCallbackState(
     AclsanSubscriberHandle subscriber, AclsanCallbackDomain domain, AclsanCallbackId cbid, uint32_t* enabled);
+
+// TODO: 需要测试多binary的时候怎么处理
+// 查询当前活动 Device binary 中 pc 对应的静态 DWARF inline 调用栈。
+// result 由调用方分配；结构体较大，建议在堆上分配或复用。
+// binary unload 后重新 load 会获得新的 binaryId。
+// 返回 ACLSAN_STATUS_ERROR_MAX_LIMIT_REACHED 时，result 中保留截断后的有效帧并设置 TRUNCATED 标志。
+ACLSAN_EXPORT AclsanStatus aclsanGetDeviceCallStack(uint64_t pc, AclsanDeviceCallStack* result);
 }
 
 #endif

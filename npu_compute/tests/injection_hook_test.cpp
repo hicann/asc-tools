@@ -10,6 +10,7 @@
 #include "npu_compute/injection_hook.h"
 #include "npu_compute/runtime_stub_api.h"
 
+#include <cstdint>
 #include <cstdio>
 
 namespace {
@@ -30,6 +31,8 @@ int gReplacementMemsetCalls = 0;
 int gReplacementLaunchCalls = 0;
 int gReplacementGetFuncBySymbolCalls = 0;
 int gReplacementBinaryUnLoadCalls = 0;
+int gReplacementSynchronizeStreamWithTimeoutCalls = 0;
+int32_t gLastSynchronizeStreamTimeout = 0;
 
 int OriginalMalloc(void**, std::size_t, aclrtMemMallocPolicy)
 {
@@ -88,13 +91,21 @@ int ReplacementBinaryUnLoad(aclrtBinHandle binHandle)
     return binHandle == nullptr ? ACL_ERROR_INVALID_PARAM : 26;
 }
 
+int ReplacementSynchronizeStreamWithTimeout(aclrtStream, int32_t timeout)
+{
+    ++gReplacementSynchronizeStreamWithTimeoutCalls;
+    gLastSynchronizeStreamTimeout = timeout;
+    return 27;
+}
+
 } // namespace
 
 int main()
 {
     static_assert(ACL_RT_API_aclrtGetFuncBySymbol == 14);
     static_assert(ACL_RT_API_aclrtBinaryUnLoad == 15);
-    static_assert(ACL_RT_API_MAX == 16);
+    static_assert(ACL_RT_API_aclrtSynchronizeStreamWithTimeout == 16);
+    static_assert(ACL_RT_API_MAX == 17);
 
     CHECK(RuntimeStubSetOriginFunction("aclrtMalloc", &OriginalMalloc) == 0);
     CHECK(RuntimeStubSetOriginFunction("aclrtFree", &OriginalFree) == 0);
@@ -122,6 +133,7 @@ int main()
     CHECK(acltoolRegisterAclrtLaunchKernelCallbacks(nullptr) == 0);
     CHECK(acltoolRegisterAclrtGetFuncBySymbolCallbacks(nullptr) == 0);
     CHECK(acltoolRegisterAclrtBinaryUnLoadCallbacks(nullptr) == 0);
+    CHECK(acltoolRegisterAclrtSynchronizeStreamWithTimeoutCallbacks(nullptr) == 0);
 
     CHECK(acltoolRegisterAclrtMallocCallbacks(&ReplacementMalloc) == 0);
     CHECK(acltoolRegisterAclrtFreeCallbacks(&ReplacementFree) == 0);
@@ -130,6 +142,7 @@ int main()
     CHECK(acltoolRegisterAclrtLaunchKernelCallbacks(&ReplacementLaunch) == 0);
     CHECK(acltoolRegisterAclrtGetFuncBySymbolCallbacks(&ReplacementGetFuncBySymbol) == 0);
     CHECK(acltoolRegisterAclrtBinaryUnLoadCallbacks(&ReplacementBinaryUnLoad) == 0);
+    CHECK(acltoolRegisterAclrtSynchronizeStreamWithTimeoutCallbacks(&ReplacementSynchronizeStreamWithTimeout) == 0);
     CHECK(aclrtMalloc(&pointer, 1, ACL_MEM_MALLOC_HUGE_FIRST) == 17);
     CHECK(aclrtFree(pointer) == 21);
     CHECK(aclrtMemcpy(nullptr, 0, nullptr, 0, ACL_MEMCPY_HOST_TO_HOST) == 22);
@@ -140,6 +153,7 @@ int main()
     CHECK(aclrtGetFuncBySymbol(&symbol, &functionHandle) == 25);
     CHECK(functionHandle == &symbol);
     CHECK(aclrtBinaryUnLoad(functionHandle) == 26);
+    CHECK(aclrtSynchronizeStreamWithTimeout(nullptr, 1234) == 27);
     CHECK(gReplacementMallocCalls == 1);
     CHECK(gOriginalMallocCalls == 2);
     CHECK(gReplacementFreeCalls == 1);
@@ -148,6 +162,8 @@ int main()
     CHECK(gReplacementLaunchCalls == 1);
     CHECK(gReplacementGetFuncBySymbolCalls == 1);
     CHECK(gReplacementBinaryUnLoadCalls == 1);
+    CHECK(gReplacementSynchronizeStreamWithTimeoutCalls == 1);
+    CHECK(gLastSynchronizeStreamTimeout == 1234);
 
     CHECK(acltoolClearCallback(ACL_RT_API_aclrtMalloc) == 0);
     CHECK(acltoolClearCallback(ACL_RT_API_aclrtMalloc) == 0);
@@ -156,6 +172,7 @@ int main()
     CHECK(gReplacementMallocCalls == 1);
     CHECK(acltoolClearCallback(ACL_RT_API_aclrtGetFuncBySymbol) == 0);
     CHECK(acltoolClearCallback(ACL_RT_API_aclrtBinaryUnLoad) == 0);
+    CHECK(acltoolClearCallback(ACL_RT_API_aclrtSynchronizeStreamWithTimeout) == 0);
     CHECK(acltoolClearCallback(static_cast<aclrtApiId>(ACL_RT_API_MAX)) == ACL_ERROR_INVALID_PARAM);
 
     CHECK(
@@ -166,5 +183,8 @@ int main()
         nullptr);
     CHECK(acltoolGetOriginalRuntimeApi(ACL_RT_API_aclrtLaunchKernelWithHostArgs) != nullptr);
     CHECK(acltoolGetOriginalRuntimeApi(ACL_RT_API_aclrtBinaryLoadFromData) != nullptr);
+    CHECK(
+        reinterpret_cast<aclrtSynchronizeStreamWithTimeoutFunc>(
+            acltoolGetOriginalRuntimeApi(ACL_RT_API_aclrtSynchronizeStreamWithTimeout)) != nullptr);
     return 0;
 }

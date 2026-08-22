@@ -13,11 +13,16 @@
 
 #include "aclsan/aclsan_cbdata_common.h"
 
+typedef enum AclsanResourceMemorySpace {
+    ACLSAN_MEMORY_SPACE_DEVICE = 1,
+    ACLSAN_MEMORY_SPACE_HOST = 2
+} AclsanResourceMemorySpace;
+
 typedef struct AclsanResourceData {
     AclsanCallbackCommonData common;
     void* ptr;            // malloc / free相关的指针
     uint64_t bytes;       // 分配的内存大小
-    uint32_t memorySpace; // 区分是device / host
+    uint32_t memorySpace; // 区分是device / host 用AclsanResourceMemorySpace
     uint32_t deviceId;
     uint64_t resourceId; // TODO: 确认是否有用
 } AclsanResourceData;

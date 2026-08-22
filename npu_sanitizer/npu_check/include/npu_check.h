@@ -15,7 +15,7 @@
 extern "C" {
 #endif
 
-NPU_CHECK_API int acltoolInitalize(void);
+NPU_CHECK_API int acltoolInitialize(void);
 
 #ifdef __cplusplus
 }

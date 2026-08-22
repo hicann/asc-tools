@@ -1,6 +1,6 @@
 NPU_CHECK_1.0 {
     global:
-        acltoolInitalize;
+        acltoolInitialize;
     local:
         *;
 };

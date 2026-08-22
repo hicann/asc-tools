@@ -8,14 +8,111 @@
 
 #include "tool_manager/tool_manager.h"
 
+#include <algorithm>
 #include <array>
-#include <cstring>
 #include <exception>
 #include <filesystem>
+#include <iomanip>
+#include <memory>
 #include <sstream>
 
 namespace npu::sanitizer {
 namespace {
+
+std::string StatusReason(AclsanStatus status) { return "api_status_" + std::to_string(static_cast<uint32_t>(status)); }
+
+bool HasCallStackFrames(AclsanStatus status)
+{
+    return status == ACLSAN_STATUS_SUCCESS || status == ACLSAN_STATUS_ERROR_MAX_LIMIT_REACHED;
+}
+
+std::string FormatCallStackReport(AclsanStatus status, const AclsanDeviceCallStack& callStack)
+{
+    std::ostringstream output;
+    output << "[CALL-STACK] pc=0x" << std::hex << callStack.pc << std::dec;
+    if (!HasCallStackFrames(status) || callStack.depth == 0) {
+        output << " status=unavailable reason=" << StatusReason(status) << '\n';
+        return output.str();
+    }
+    output << " status=available binary_id=" << callStack.binaryId;
+    if ((callStack.flags & ACLSAN_CALL_STACK_FLAG_TRUNCATED) != 0) {
+        output << " truncated=true";
+    }
+    output << '\n';
+    for (uint32_t index = 0; index < callStack.depth; ++index) {
+        const AclsanDeviceCallStackFrame& frame = callStack.frames[index];
+        output << "  #" << index << ' ' << frame.functionName << " at " << frame.fileName << ':' << frame.line << ':'
+               << frame.column << '\n';
+    }
+    return output.str();
+}
+
+std::vector<aclsan::cann::ReportFrame> MakeReportFrames(const AclsanDeviceCallStack& callStack)
+{
+    const uint32_t depth = std::min(callStack.depth, static_cast<uint32_t>(ACLSAN_CALL_STACK_MAX_DEPTH));
+    std::vector<aclsan::cann::ReportFrame> frames;
+    frames.reserve(depth);
+    for (uint32_t index = 0; index < depth; ++index) {
+        const AclsanDeviceCallStackFrame& source = callStack.frames[index];
+        aclsan::cann::ReportFrame frame;
+        frame.pc = callStack.pc;
+        frame.function = source.functionName;
+        frame.file = source.fileName;
+        frame.line = source.line;
+        frame.column = source.column;
+        frame.inlineDepth = source.inlineDepth;
+        frames.push_back(std::move(frame));
+    }
+    return frames;
+}
+
+void PopulateDeviceCallStack(aclsan::cann::NpusanMemcheckReport& report) noexcept
+{
+    if (report.common.exec.pc == 0 || report.common.stackCount > aclsan::cann::kNpusanReportStackMax) {
+        return;
+    }
+
+    std::uint32_t stackIndex = report.common.stackCount;
+    for (std::uint32_t index = 0; index < report.common.stackCount && index < aclsan::cann::kNpusanReportStackMax;
+         ++index) {
+        if (report.common.stacks[index].role == aclsan::cann::ReportStackRole::kFaultDevice) {
+            stackIndex = index;
+            break;
+        }
+    }
+
+    if (stackIndex == report.common.stackCount && report.common.stackCount >= aclsan::cann::kNpusanReportStackMax) {
+        return;
+    }
+
+    try {
+        auto callStack = std::make_unique<AclsanDeviceCallStack>();
+        const AclsanStatus status = aclsanGetDeviceCallStack(report.common.exec.pc, callStack.get());
+        std::string callStackText = FormatCallStackReport(status, *callStack);
+        std::vector<aclsan::cann::ReportFrame> frames;
+        if (HasCallStackFrames(status)) {
+            frames = MakeReportFrames(*callStack);
+        }
+
+        auto& stack = report.common.stacks[stackIndex];
+        stack.rawText.swap(callStackText);
+        stack.role = aclsan::cann::ReportStackRole::kFaultDevice;
+        if (!frames.empty()) {
+            stack.frames.swap(frames);
+        }
+        const bool hasStructuredFrames = !stack.frames.empty();
+        stack.format =
+            hasStructuredFrames ? aclsan::cann::ReportStackFormat::kBoth : aclsan::cann::ReportStackFormat::kRawText;
+        if (callStack->binaryId != 0) {
+            report.common.exec.binaryId = callStack->binaryId;
+        }
+        if (stackIndex == report.common.stackCount) {
+            ++report.common.stackCount;
+        }
+    } catch (...) {
+        return;
+    }
+}
 
 struct CallbackSpec {
     AclsanCallbackDomain domain;
@@ -356,8 +453,7 @@ void ToolManager::OnCallbackException(const char* reason) noexcept
 void ToolManager::PublishDiagnostics(std::vector<aclsan::cann::NpusanMemcheckReport> reports)
 {
     for (auto& report : reports) {
-        // Source locations belong to sanitizer_api. Once its public PC query contract is
-        // available, populate report.common.exec and the device call stack here before rendering.
+        PopulateDeviceCallStack(report);
         std::string rendered;
         const auto status =
             aclsan::cann::RenderNpusanReportRecord(aclsan::cann::NpusanReportRecord::From(report), {}, &rendered);

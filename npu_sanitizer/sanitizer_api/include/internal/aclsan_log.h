@@ -28,7 +28,8 @@ inline AclsanLogLevel AclsanGetLogLevel() noexcept
 
 inline bool AclsanIsStdoutLogEnabled() noexcept
 {
-    const char* value = std::getenv("ASCEND_SLOG_PRINT_TO_STDOUT");
+    // const char* value = std::getenv("ASCEND_SLOG_PRINT_TO_STDOUT");
+    const char* value = std::getenv("NPU_SAN_DEBUG");
     return value != nullptr && value[0] == '1' && value[1] == '\0';
 }
 

@@ -8,6 +8,7 @@
  * See LICENSE in the root of the software repository for the full text of the License.
  */
 
+#include "internal/aclsan_dispatch_cb.h"
 #include "internal/aclsan_internal.h"
 #include "internal/aclsan_log.h"
 
@@ -15,46 +16,65 @@
 
 namespace aclsan {
 
-void DispatchDeviceMemoryAccessData(const DeviceMemoryAccessDataArray& callbackData) noexcept
+bool AclsanCallbackDispatcher::IsSupportedResourceCallback(AclsanCallbackId callbackId) noexcept
+{
+    return callbackId == ACLSAN_CBID_RESOURCE_MEMORY_ALLOC || callbackId == ACLSAN_CBID_RESOURCE_MEMORY_FREE;
+}
+
+void AclsanCallbackDispatcher::Dispatch(
+    AclsanCallbackDomain domain, AclsanCallbackId callbackId, const void* callbackData, const char* eventName) noexcept
+{
+    if (callbackData == nullptr) {
+        ASC_SAN_ERROR(
+            "acl_san dispatch rejected null callback data: event=%s domain=%u id=%u",
+            eventName == nullptr ? "unknown" : eventName, static_cast<uint32_t>(domain),
+            static_cast<uint32_t>(callbackId));
+        return;
+    }
+    if (!IsCallbackEnabled(domain, callbackId)) {
+        return;
+    }
+    if (!InvokeCallback(domain, callbackId, callbackData)) {
+        ASC_SAN_ERROR(
+            "acl_san dispatch failed: event=%s domain=%u id=%u", eventName == nullptr ? "unknown" : eventName,
+            static_cast<uint32_t>(domain), static_cast<uint32_t>(callbackId));
+    }
+}
+
+void AclsanCallbackDispatcher::DispatchResource(
+    AclsanCallbackId callbackId, const AclsanResourceData& callbackData) noexcept
+{
+    if (!IsSupportedResourceCallback(callbackId)) {
+        ASC_SAN_ERROR("acl_san dispatch rejected resource callback id=%u", static_cast<uint32_t>(callbackId));
+        return;
+    }
+    Dispatch(ACLSAN_CB_DOMAIN_RESOURCE, callbackId, &callbackData, callbackData.common.apiName);
+}
+
+void AclsanCallbackDispatcher::DispatchSynchronizeEnd(const AclsanSynchronizeData& callbackData) noexcept
+{
+    Dispatch(
+        ACLSAN_CB_DOMAIN_SYNCHRONIZE, ACLSAN_CBID_SYNCHRONIZE_STREAM_SYNC_END, &callbackData,
+        "SYNCHRONIZE_STREAM_SYNC_END");
+}
+
+void AclsanCallbackDispatcher::DispatchDeviceMemoryAccess(const AclsanDeviceMemoryAccessData& callbackData) noexcept
 {
     constexpr AclsanCallbackDomain domain = ACLSAN_CB_DOMAIN_DEVICE_INSTRUCTION;
     constexpr AclsanCallbackId callbackId = ACLSAN_CBID_DEVICE_MEMORY_ACCESS;
-    if (!IsCallbackEnabled(domain, callbackId)) {
-        return;
-    }
+    Dispatch(domain, callbackId, &callbackData, "DEVICE_MEMORY_ACCESS");
+}
+
+void AclsanCallbackDispatcher::DispatchDeviceMemoryAccess(const DeviceMemoryAccessDataArray& callbackData) noexcept
+{
     for (const AclsanDeviceMemoryAccessData& data : callbackData) {
-        if (!InvokeCallback(domain, callbackId, &data)) {
-            ASC_SAN_ERROR("acl_san hook: DEVICE_MEMORY_ACCESS callback failed");
-        }
+        DispatchDeviceMemoryAccess(data);
     }
 }
 
-void DispatchDeviceSyncData(const AclsanDeviceSyncData& callbackData) noexcept
+void AclsanCallbackDispatcher::DispatchDeviceSync(const AclsanDeviceSyncData& callbackData) noexcept
 {
-    constexpr AclsanCallbackDomain domain = ACLSAN_CB_DOMAIN_DEVICE_INSTRUCTION;
-    constexpr AclsanCallbackId callbackId = ACLSAN_CBID_DEVICE_SYNC;
-    if (!IsCallbackEnabled(domain, callbackId)) {
-        return;
-    }
-    if (!InvokeCallback(domain, callbackId, &callbackData)) {
-        ASC_SAN_ERROR("acl_san hook: DEVICE_SYNC callback failed");
-    }
-}
-
-void DispatchSynchronizeEnd(void* stream, int result) noexcept
-{
-    constexpr AclsanCallbackDomain domain = ACLSAN_CB_DOMAIN_SYNCHRONIZE;
-    constexpr AclsanCallbackId callbackId = ACLSAN_CBID_SYNCHRONIZE_STREAM_SYNC_END;
-    if (!IsCallbackEnabled(domain, callbackId)) {
-        return;
-    }
-    const AclsanSynchronizeData callbackData{
-        {ACLSAN_API_VERSION, static_cast<uint32_t>(sizeof(AclsanSynchronizeData)), "aclrtSynchronizeStream", result, 0,
-         0},
-        stream};
-    if (!InvokeCallback(domain, callbackId, &callbackData)) {
-        ASC_SAN_ERROR("acl_san hook: STREAM_SYNC_END callback failed");
-    }
+    Dispatch(ACLSAN_CB_DOMAIN_DEVICE_INSTRUCTION, ACLSAN_CBID_DEVICE_SYNC, &callbackData, "DEVICE_SYNC");
 }
 
 } // namespace aclsan

@@ -1,0 +1,11 @@
+ACLSAN_1.0 {
+    global:
+        aclsanSubscribe;
+        aclsanUnsubscribe;
+        aclsanEnableCallback;
+        aclsanEnableDomain;
+        aclsanGetCallbackState;
+        aclsanGetDeviceCallStack;
+    local:
+        *;
+};

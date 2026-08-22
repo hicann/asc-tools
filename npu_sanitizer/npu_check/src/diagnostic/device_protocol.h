@@ -22,7 +22,6 @@ enum class DeviceSourceKind : uint32_t {
 };
 
 constexpr uint32_t kDeviceEventFlagPredicated = 1u << 3u;
-constexpr uint32_t kDeviceMemorySpaceGm = 1;
 
 } // namespace npu::sanitizer
 

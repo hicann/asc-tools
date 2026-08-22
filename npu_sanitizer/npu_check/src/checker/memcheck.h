@@ -10,6 +10,7 @@
 #define NPU_CHECK_CHECKER_MEMCHECK_H
 
 #include "aclsan/aclsan_api.h"
+#include "aclsan/aclsan_callback.h"
 #include "checker/allocation_registry.h"
 #include "diagnostic/device_protocol.h"
 #include "diagnostic/report_renderer.h"

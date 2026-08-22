@@ -32,7 +32,7 @@ void FinalizeService() noexcept
 
 } // namespace
 
-extern "C" NPU_CHECK_API int acltoolInitalize(void)
+extern "C" NPU_CHECK_API int acltoolInitialize(void)
 {
     try {
         std::lock_guard<std::mutex> lock(g_serviceMutex);

@@ -37,7 +37,7 @@ AclsanResourceData AllocationEvent(uint64_t base, uint64_t bytes, uint64_t id, u
     InitCommon(data);
     data.ptr = reinterpret_cast<void*>(base);
     data.bytes = bytes;
-    data.memorySpace = kDeviceMemorySpaceGm;
+    data.memorySpace = ACLSAN_MEMORY_SPACE_DEVICE;
     data.deviceId = deviceId;
     data.resourceId = id;
     return data;
@@ -100,6 +100,19 @@ TEST(MemcheckTest, ReportsOutOfBoundsReadAtSynchronization)
     EXPECT_EQ(checker.Stats().pendingDeviceOperations, 0U);
     EXPECT_EQ(checker.Stats().errors, 1U);
     EXPECT_TRUE(checker.OnSynchronization().empty());
+}
+
+TEST(MemcheckTest, IgnoresHostResourceEvents)
+{
+    Memcheck checker(true);
+    auto hostResource = AllocationEvent(0x180000, 256, 2);
+    hostResource.memorySpace = ACLSAN_MEMORY_SPACE_HOST;
+
+    checker.OnAllocation(hostResource);
+    checker.OnFree(hostResource);
+
+    EXPECT_EQ(checker.Stats().allocations, 0U);
+    EXPECT_EQ(checker.Stats().frees, 0U);
 }
 
 TEST(MemcheckTest, ReportsOutOfBoundsWriteAndIgnoresNonGmAccesses)
@@ -180,11 +193,11 @@ TEST(MemcheckTest, HonorsStrictModeAndFreedRanges)
     checker.OnAllocation(released);
     checker.OnFree(released);
     checker.QueueDeviceMemoryAccess(Access(DeviceSourceKind::MTE2, 0x300010, 16));
-    const auto reports = checker.OnSynchronization();
+    const auto diagnostics = checker.OnSynchronization();
 
-    ASSERT_EQ(reports.size(), 1U);
-    EXPECT_EQ(reports.front().common.pattern, static_cast<uint32_t>(NpusanMemcheckPattern::kUseAfterFree));
-    EXPECT_EQ(reports.front().allocation.state, 2U);
+    ASSERT_EQ(diagnostics.size(), 1U);
+    EXPECT_EQ(diagnostics.front().common.pattern, static_cast<uint32_t>(NpusanMemcheckPattern::kUseAfterFree));
+    EXPECT_EQ(diagnostics.front().allocation.state, 2U);
 }
 
 TEST(MemcheckTest, UsesDeviceSpecificAllocationRanges)

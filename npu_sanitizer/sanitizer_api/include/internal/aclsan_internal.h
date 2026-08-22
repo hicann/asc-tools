@@ -12,29 +12,50 @@
 #define ACLSAN_ACL_SAN_INTERNAL_H
 
 #include "aclsan/aclsan_api.h"
+#include "cce_instr/cce_instr_struct_dma.h"
+#include "cce_instr/cce_instr_struct_sync.h"
 #include "internal/aclsan_device_record.h"
+#include "internal/aclsan_dispatch_cb.h"
 #include "npu_compute/injection_hook.h"
 
-#include <array>
-#include <cstddef>
+#include <optional>
 #include <set>
+#include <variant>
+
+namespace sanitizer {
+struct ProbeParseResult;
+}
 
 namespace aclsan {
+namespace probe {
+struct CallStackResult;
+}
+
+using CceInstructionParamField = std::variant<
+    sanitizer::CopyGmToUbufAlignV2ParamField, sanitizer::CopyGmToCbufAlignV2ParamField,
+    sanitizer::CopyUbufToGmAlignV2ParamField, sanitizer::CopyGmToCbufV2ParamField, sanitizer::FlagParamField>;
+
+using CceTraceCallbackData = std::variant<DeviceMemoryAccessDataArray, AclsanDeviceSyncData>;
+
+struct TraceCallbackContext {
+    uint64_t transferBytes;
+    uint64_t instrExecId;
+    uint64_t serialNo;
+    uint32_t coreId;
+};
 
 AclsanStatus ApplyRuntimeHooks(const std::set<aclrtApiId>& requiredHooks) noexcept;
+AclsanStatus ResolveActiveDeviceCallStack(uint64_t pc, probe::CallStackResult* result) noexcept;
 bool IsRuntimeHookStatePoisoned() noexcept;
 bool IsCallbackEnabled(AclsanCallbackDomain domain, AclsanCallbackId id) noexcept;
 bool InvokeCallback(AclsanCallbackDomain domain, AclsanCallbackId id, const void* callbackData) noexcept;
 
-constexpr std::size_t kDataCopyAccessCount = 2;
-using DeviceMemoryAccessDataArray = std::array<AclsanDeviceMemoryAccessData, kDataCopyAccessCount>;
-
 DeviceMemoryAccessDataArray TranslateDeviceMemoryAccessData(const DeviceRecord& record) noexcept;
 AclsanDeviceSyncData TranslateDeviceSyncData(const DeviceRecord& record) noexcept;
-void DispatchDeviceMemoryAccessData(const DeviceMemoryAccessDataArray& callbackData) noexcept;
-void DispatchDeviceSyncData(const AclsanDeviceSyncData& callbackData) noexcept;
-void DispatchMockDeviceRecords() noexcept;
-void DispatchSynchronizeEnd(void* stream, int result) noexcept;
+std::optional<CceInstructionParamField> TranslateRawTraceRecord(const sanitizer::AscsanRawTraceRecord& record) noexcept;
+std::optional<CceTraceCallbackData> TranslateRawTraceToCallbackData(
+    const sanitizer::AscsanRawTraceRecord& record, const TraceCallbackContext& context) noexcept;
+void DispatchProbeRecords(const sanitizer::ProbeParseResult& parseResult) noexcept;
 
 } // namespace aclsan
 
