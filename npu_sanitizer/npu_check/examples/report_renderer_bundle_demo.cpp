@@ -31,14 +31,6 @@ void AddFrameStack(NpusanReportCommon* common, std::uint32_t index, ReportStackR
     common->stackCount = index + 1;
 }
 
-void AddRawStack(NpusanReportCommon* common, std::uint32_t index, ReportStackRole role, const char* rawText)
-{
-    common->stacks[index].role = role;
-    common->stacks[index].format = ReportStackFormat::kRawText;
-    common->stacks[index].rawText = rawText;
-    common->stackCount = index + 1;
-}
-
 NpusanMemcheckReport MakeInvalidAccessReport()
 {
     NpusanMemcheckReport report{};
@@ -61,10 +53,9 @@ NpusanMemcheckReport MakeInvalidAccessReport()
     AddFrameStack(
         &report.common, 0, ReportStackRole::kFaultDevice,
         MakeFrame(0x4012, 0x12, "VectorAddKernel", "/workspace/vector_add.cpp", 87));
-    AddRawStack(
-        &report.common, 1, ReportStackRole::kHostLaunch,
-        "Host Frame: aclrtLaunchKernel [0x7f012345] in libascendcl.so\n"
-        "Host Frame: RunVectorAdd [0x4012ab] in npusan_demo\n");
+    AddFrameStack(
+        &report.common, 1, ReportStackRole::kHostLaunch, MakeFrame(0x7f012345, 0, "aclrtLaunchKernel", "", 0));
+    report.common.stacks[1].frames.push_back(MakeFrame(0x4012ab, 0, "RunVectorAdd", "", 0));
 
     report.access.memorySpace = NpusanReportMemorySpace::kGm;
     report.access.accessMode = NpusanReportAccessMode::kRead;
@@ -92,10 +83,9 @@ NpusanMemcheckReport MakeApiErrorReport()
     report.apiErrorName = "ACL_ERROR_RT_PARAM_INVALID";
     report.apiErrorCode = 107002;
     report.apiErrorMessage = "destination pointer is not device-accessible";
-    AddRawStack(
-        &report.common, 0, ReportStackRole::kHostLaunch,
-        "Host Frame: aclrtMemcpyAsync [0x7f0188a0] in libascendcl.so\n"
-        "Host Frame: CopyOutput [0x401420] in npusan_demo\n");
+    AddFrameStack(
+        &report.common, 0, ReportStackRole::kHostApiCall, MakeFrame(0x7f0188a0, 0, "aclrtMemcpyAsync", "", 0));
+    report.common.stacks[0].frames.push_back(MakeFrame(0x401420, 0, "CopyOutput", "", 0));
     return report;
 }
 

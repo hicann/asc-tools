@@ -13,6 +13,16 @@ project(npu_check_tool LANGUAGES C CXX)
 
 find_package(Threads REQUIRED)
 
+set(NPU_CHECK_REPORT_RENDERER_SOURCES
+  src/diagnostic/report_renderer.cpp
+  src/diagnostic/report/report_catalog.cpp
+  src/diagnostic/report/report_fields.cpp
+  src/diagnostic/report/report_normalizer.cpp
+  src/diagnostic/report/report_summary.cpp
+  src/diagnostic/report/report_text_renderer.cpp
+  src/diagnostic/report/synccheck_adapter.cpp
+)
+
 if(NOT TARGET npu_check_common)
   add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/../common
     ${CMAKE_CURRENT_BINARY_DIR}/npu_check_common)
@@ -47,7 +57,7 @@ set_target_properties(npu_check_core PROPERTIES
 
 add_library(npu_check SHARED
   src/tool_manager/entry.cpp
-  src/diagnostic/report_renderer.cpp
+  ${NPU_CHECK_REPORT_RENDERER_SOURCES}
 )
 target_compile_features(npu_check PRIVATE cxx_std_17)
 target_include_directories(npu_check
@@ -100,7 +110,7 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR OR ENABLE_TEST)
     tests/memcheck_test.cpp
     tests/uds_server_test.cpp
     tests/wire_protocol_test.cpp
-    src/diagnostic/report_renderer.cpp
+    ${NPU_CHECK_REPORT_RENDERER_SOURCES}
   )
   target_compile_features(npu_check_unit_tests PRIVATE cxx_std_17)
   target_compile_definitions(npu_check_unit_tests PRIVATE _GLIBCXX_USE_CXX11_ABI=0)
@@ -113,7 +123,7 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR OR ENABLE_TEST)
 
   add_executable(npu_check_report_renderer_smoke
     tests/report_renderer_smoke.cpp
-    src/diagnostic/report_renderer.cpp
+    ${NPU_CHECK_REPORT_RENDERER_SOURCES}
   )
   target_compile_features(npu_check_report_renderer_smoke PRIVATE cxx_std_17)
   target_compile_definitions(npu_check_report_renderer_smoke PRIVATE _GLIBCXX_USE_CXX11_ABI=0)

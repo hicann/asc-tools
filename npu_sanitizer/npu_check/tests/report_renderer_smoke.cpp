@@ -7,6 +7,7 @@
 // See LICENSE in the root of the software repository for the full text of the License.
 
 #include "diagnostic/report_renderer.h"
+#include "diagnostic/report/report_catalog.h"
 
 #include <gtest/gtest.h>
 
@@ -69,6 +70,19 @@ template <typename Report>
 struct CanCreateNpusanRecordFrom<Report, std::void_t<decltype(NpusanReportRecord::From(std::declval<Report>()))>>
     : std::true_type {};
 
+template <typename Descriptor, typename = void>
+struct HasDefaultSeverity : std::false_type {};
+
+template <typename Descriptor>
+struct HasDefaultSeverity<Descriptor, std::void_t<decltype(std::declval<Descriptor>().defaultSeverity)>>
+    : std::true_type {};
+
+template <typename Descriptor, typename = void>
+struct HasSummaryTag : std::false_type {};
+
+template <typename Descriptor>
+struct HasSummaryTag<Descriptor, std::void_t<decltype(std::declval<Descriptor>().summaryTag)>> : std::true_type {};
+
 static_assert(
     !CanCreateNpusanRecordFrom<NpusanMemcheckReport&&>::value, "NpusanReportRecord must not borrow a temporary report");
 static_assert(
@@ -79,6 +93,9 @@ static_assert(static_cast<int>(NpusanSynccheckPattern::kParticipantMismatch) == 
 static_assert(static_cast<int>(NpusanSynccheckPattern::kDeadlock) == 6);
 static_assert(static_cast<int>(NpusanSynccheckPattern::kObjectNotInitialized) == 7);
 static_assert(static_cast<int>(NpusanSynccheckPattern::kInstructionSequenceMismatch) == 8);
+static_assert(std::is_same_v<aclsan::cann::detail::PatternCatalog::key_type, ReportTemplateKey>);
+static_assert(!HasDefaultSeverity<aclsan::cann::detail::PatternDescriptor>::value);
+static_assert(!HasSummaryTag<aclsan::cann::detail::PatternDescriptor>::value);
 
 std::string ReadFile(const std::string& path)
 {
@@ -371,6 +388,30 @@ TEST(ReportRendererTest, ListsAndRendersBuiltinTemplates)
     EXPECT_NE(rendered.find("========= FATAL: SOC register mismatch detected."), std::string::npos);
 }
 
+TEST(ReportRendererTest, CatalogOwnsCompletePatternMetadata)
+{
+    using aclsan::cann::detail::FindPatternDescriptor;
+    using aclsan::cann::detail::GetPatternCatalog;
+
+    const auto* invalidAccess =
+        FindPatternDescriptor(ReportTool::kMemcheck, static_cast<std::uint32_t>(NpusanMemcheckPattern::kInvalidAccess));
+    ASSERT_NE(invalidAccess, nullptr);
+    EXPECT_FALSE(invalidAccess->reportTemplate.text.empty());
+    EXPECT_EQ(invalidAccess, FindPatternDescriptor(ReportTemplateKey{ReportTool::kMemcheck, "invalid_access"}));
+
+    const auto* unused = FindPatternDescriptor(ReportTemplateKey{ReportTool::kInitcheck, "unused_memory"});
+    ASSERT_NE(unused, nullptr);
+    EXPECT_FALSE(unused->reportTemplate.text.empty());
+
+    const auto& catalog = GetPatternCatalog();
+    EXPECT_EQ(catalog.size(), 34U);
+    for (const auto& [key, descriptor] : catalog) {
+        EXPECT_FALSE(key.pattern.empty());
+        EXPECT_FALSE(descriptor.reportTemplate.text.empty()) << key.pattern;
+        EXPECT_EQ(&descriptor, FindPatternDescriptor(key.tool, descriptor.value)) << key.pattern;
+    }
+}
+
 TEST(ReportRendererTest, AppendsStructuredCallStacks)
 {
     ReportRecord record = MakeMemcheckInvalidAccessRecord();
@@ -378,25 +419,63 @@ TEST(ReportRendererTest, AppendsStructuredCallStacks)
     ReportCallStack rawStack{};
     rawStack.role = ReportStackRole::kHostLaunch;
     rawStack.format = ReportStackFormat::kRawText;
-    rawStack.rawText = "=========         Host Frame: aclrtLaunchKernel [0x400123] in libacl.so\n";
+    rawStack.rawText = "aclrtLaunchKernel [0x400123] in libacl.so\n";
     record.stacks.push_back(rawStack);
 
     ReportCallStack frameStack{};
     frameStack.role = ReportStackRole::kFaultDevice;
     frameStack.format = ReportStackFormat::kFrames;
-    frameStack.frames.push_back(ReportFrame{0x100, 0x10, "kernel", "kernel.cpp", 42, 0, 0, 0});
+    ReportFrame deviceFrame{};
+    deviceFrame.pc = 0x100;
+    deviceFrame.offset = 0x10;
+    deviceFrame.function = "kernel";
+    deviceFrame.file = "kernel.cpp";
+    deviceFrame.line = 42;
+    frameStack.frames.push_back(deviceFrame);
+    ReportFrame callerFrame{};
+    callerFrame.pc = 0x80;
+    callerFrame.function = "launch_kernel";
+    callerFrame.file = "launch.cpp";
+    callerFrame.line = 18;
+    frameStack.frames.push_back(callerFrame);
     record.stacks.push_back(frameStack);
 
     std::string rendered;
     EXPECT_EQ(aclsan::cann::RenderReportRecord(record, {}, &rendered), ReportRenderStatus::kSuccess);
     EXPECT_NE(
-        rendered.find("=========     Saved host backtrace up to runtime launch entry point\n"
-                      "=========         Host Frame: aclrtLaunchKernel [0x400123] in libacl.so\n"),
+        rendered.find("=========  Host Frames:\n"
+                      "=========     aclrtLaunchKernel [0x400123] in libacl.so\n"),
         std::string::npos);
     EXPECT_NE(
-        rendered.find("=========     Device Frame\n"
-                      "=========         Device Frame: kernel+0x10 [0x100] in kernel.cpp:42\n"),
+        rendered.find("=========  Device Frames:\n"
+                      "=========     #0 kernel [0x100] in kernel.cpp:42\n"
+                      "=========     #1 launch_kernel [0x80] in launch.cpp:18\n"),
         std::string::npos);
+    EXPECT_EQ(rendered.find("Device Frame:"), std::string::npos);
+    EXPECT_EQ(rendered.find("Host Frame:"), std::string::npos);
+}
+
+TEST(ReportRendererTest, UsesOnlyDeviceOrHostCallStackHeadings)
+{
+    const std::array<ReportStackRole, 4> hostRoles = {
+        ReportStackRole::kHostLaunch,
+        ReportStackRole::kHostAlloc,
+        ReportStackRole::kHostFree,
+        ReportStackRole::kHostApiCall,
+    };
+    for (const ReportStackRole role : hostRoles) {
+        EXPECT_STREQ(aclsan::cann::ReportStackRoleTitle(role), "Host Frames:");
+    }
+
+    const std::array<ReportStackRole, 11> deviceRoles = {
+        ReportStackRole::kNone,           ReportStackRole::kFaultDevice,   ReportStackRole::kRelatedAccessA,
+        ReportStackRole::kRelatedAccessB, ReportStackRole::kSyncProducer,  ReportStackRole::kSyncConsumer,
+        ReportStackRole::kStateProducer,  ReportStackRole::kStateConsumer, ReportStackRole::kPeerDevice,
+        ReportStackRole::kSyncTrigger,    ReportStackRole::kSyncRelated,
+    };
+    for (const ReportStackRole role : deviceRoles) {
+        EXPECT_STREQ(aclsan::cann::ReportStackRoleTitle(role), "Device Frames:");
+    }
 }
 
 TEST(ReportRendererTest, RendersOnlyActiveCommonCallStackPrefix)
@@ -457,7 +536,7 @@ TEST(ReportRendererTest, PrefersStructuredFaultFrameForSourceLocation)
         aclsan::cann::RenderNpusanReportRecord(NpusanReportRecord::From(report), {}, &rendered),
         ReportRenderStatus::kSuccess);
     EXPECT_NE(rendered.find("at symbolized_function+0x20 in symbolized.cpp:42"), std::string::npos);
-    EXPECT_EQ(CountOccurrences(rendered, "Saved host backtrace up to runtime launch entry point"), 1U);
+    EXPECT_EQ(CountOccurrences(rendered, "=========  Host Frames:"), 1U);
     EXPECT_EQ(rendered.find("Host Frame: <unknown>"), std::string::npos);
     EXPECT_NE(rendered.find("real host frame"), std::string::npos);
 }
@@ -782,16 +861,6 @@ TEST(ReportRendererTest, RendersBundleSummaries)
         std::string::npos);
 }
 
-TEST(ReportRendererTest, ProvidesDefaultSeverities)
-{
-    EXPECT_EQ(aclsan::cann::DefaultReportSeverity(ReportTool::kInitcheck, "unused_memory"), ReportSeverity::kWarning);
-    EXPECT_EQ(
-        aclsan::cann::DefaultReportSeverity(ReportTool::kSynccheck, "participant_mismatch"), ReportSeverity::kWarning);
-    EXPECT_EQ(
-        aclsan::cann::DefaultReportSeverity(ReportTool::kSoccheck, "state_not_restored"), ReportSeverity::kWarning);
-    EXPECT_EQ(aclsan::cann::DefaultReportSeverity(ReportTool::kMemcheck, "invalid_access"), ReportSeverity::kError);
-}
-
 TEST(ReportRendererTest, RendersPairingMismatchReasonForDifferentOperationKinds)
 {
     struct Case {
@@ -863,8 +932,11 @@ TEST(ReportRendererTest, RendersStructuredPairingMismatchEvidence)
         rendered.find("related point: previous SET_FLAG at FirstSet+0x10 in sync.cpp:24 is still pending"),
         std::string::npos);
     EXPECT_NE(rendered.find("expected WAIT_FLAG before another SET_FLAG"), std::string::npos);
-    EXPECT_NE(rendered.find("Trigger Point Device Backtrace:"), std::string::npos);
-    EXPECT_NE(rendered.find("Related Point Device Backtrace:"), std::string::npos);
+    EXPECT_EQ(CountOccurrences(rendered, "=========  Device Frames:"), 2U);
+    EXPECT_EQ(CountOccurrences(rendered, "=========     #0 "), 2U);
+    EXPECT_EQ(CountOccurrences(rendered, "=========     #1 "), 0U);
+    EXPECT_EQ(rendered.find("Trigger Point Device Backtrace:"), std::string::npos);
+    EXPECT_EQ(rendered.find("Related Point Device Backtrace:"), std::string::npos);
 }
 
 TEST(ReportRendererTest, RendersUnconsumedGetBufferWithExpectedRelatedPoint)
