@@ -15,6 +15,7 @@
 #include "aclsan/aclsan_callback.h"
 #include "aclsan/aclsan_api.h"
 
+#include <cstddef>
 #include <cstdint>
 #include <type_traits>
 
@@ -30,13 +31,19 @@ static_assert(std::is_standard_layout_v<AclsanResourceData>);
 static_assert(std::is_standard_layout_v<AclsanSynchronizeData>);
 static_assert(std::is_standard_layout_v<AclsanDeviceMemoryAccessData>);
 static_assert(std::is_standard_layout_v<AclsanDeviceSyncData>);
-static_assert(ACLSAN_DEVICE_PIPE_INVALID == 0);
-static_assert(ACLSAN_DEVICE_PIPE_SCALAR == 1);
+static_assert(ACLSAN_DEVICE_PIPE_INVALID == 100);
+static_assert(ACLSAN_DEVICE_PIPE_SCALAR == 0);
+static_assert(ACLSAN_DEVICE_PIPE_VECTOR == 1);
 static_assert(ACLSAN_DEVICE_PIPE_MTE2 == 3);
-static_assert(ACLSAN_DEVICE_PIPE_MTE3 == 4);
-static_assert(ACLSAN_DEVICE_PIPE_FIXPIPE == 5);
+static_assert(ACLSAN_DEVICE_PIPE_MTE3 == 5);
+static_assert(ACLSAN_DEVICE_PIPE_FIXPIPE == 10);
 static_assert(!HasInstrType<AclsanDeviceSyncData>::value);
-static_assert(sizeof(AclsanDeviceSyncData) == 72);
+static_assert(std::is_same_v<decltype(AclsanDeviceSyncData::header), AclsanDeviceEventHeader>);
+static_assert(offsetof(AclsanDeviceSyncData, header) == 0);
+static_assert(offsetof(AclsanDeviceSyncData, syncKind) == sizeof(AclsanDeviceEventHeader));
+static_assert(offsetof(AclsanDeviceSyncData, objectId) == 96);
+static_assert(offsetof(AclsanDeviceSyncData, reserved) == 104);
+static_assert(sizeof(AclsanDeviceSyncData) == 112);
 static_assert(
     std::is_same_v<decltype(&aclsanSubscribe), AclsanStatus (*)(AclsanSubscriberHandle*, AclsanCallbackFunc, void*)>);
 static_assert(std::is_same_v<decltype(&aclsanUnsubscribe), AclsanStatus (*)(AclsanSubscriberHandle)>);

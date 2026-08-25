@@ -16,14 +16,18 @@
 #define ACLSAN_RAW_ARG_MAX 6
 
 typedef enum AclsanDevicePipeline {
-    ACLSAN_DEVICE_PIPE_INVALID = 0,
-    ACLSAN_DEVICE_PIPE_SCALAR = 1,
+    ACLSAN_DEVICE_PIPE_SCALAR = 0,
+    ACLSAN_DEVICE_PIPE_VECTOR = 1,
+    ACLSAN_DEVICE_PIPE_MATRIX = 2,
     ACLSAN_DEVICE_PIPE_MTE1 = 3,
-    ACLSAN_DEVICE_PIPE_MTE2 = 3,
-    ACLSAN_DEVICE_PIPE_MTE3 = 4,
-    ACLSAN_DEVICE_PIPE_VECTOR = 5,
-    ACLSAN_DEVICE_PIPE_CUBE = 6,
-    ACLSAN_DEVICE_PIPE_FIXPIPE = 7
+    ACLSAN_DEVICE_PIPE_MTE2 = 4,
+    ACLSAN_DEVICE_PIPE_MTE3 = 5,
+    ACLSAN_DEVICE_PIPE_ALL = 6,
+    // ACLSAN_DEVICE_PIPE_MTE4 = 7,
+    // ACLSAN_DEVICE_PIPE_MTE5 = 8,
+    // ACLSAN_DEVICE_PIPE_V2 = 9,
+    ACLSAN_DEVICE_PIPE_FIXPIPE = 10,
+    ACLSAN_DEVICE_PIPE_INVALID = 100,
 } AclsanDevicePipeline;
 
 // TODO: 目前暂时没地方用到，需要看看能不能删掉
@@ -187,11 +191,7 @@ typedef enum AclsanDeviceSyncScope {
 } AclsanDeviceSyncScope;
 
 typedef struct AclsanDeviceSyncData {
-    uint64_t pc;
-    uint64_t instrExecId;
-    uint64_t launchId;
-    uint32_t blockId;
-    uint32_t phyCoreId;
+    AclsanDeviceEventHeader header;
     uint32_t syncKind;
     uint32_t action;
     uint32_t scope;

@@ -236,7 +236,7 @@ void TestDispatchesParsedProbeRecords()
     assert(gmDestination.accessIndex == 1);
 
     assert(g_deviceSyncCallbacks[0].action == ACLSAN_DEVICE_SYNC_ACTION_SET);
-    assert(g_deviceSyncCallbacks[0].instrExecId == 5);
+    assert(g_deviceSyncCallbacks[0].header.instrExecId == 5);
     assert(g_deviceSyncCallbacks[0].srcPipe == 2);
     assert(g_deviceSyncCallbacks[0].dstPipe == 3);
     assert(g_deviceSyncCallbacks[0].objectId == 7);

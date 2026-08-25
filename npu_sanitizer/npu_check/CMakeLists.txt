@@ -36,6 +36,7 @@ endif()
 add_library(npu_check_core STATIC
   src/checker/allocation_registry.cpp
   src/checker/memcheck.cpp
+  src/checker/synccheck.cpp
   src/ipc/uds_server.cpp
   src/logging/logger.cpp
   src/tool_manager/tool_manager.cpp
@@ -129,6 +130,7 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR OR ENABLE_TEST)
   target_compile_definitions(npu_check_report_renderer_smoke PRIVATE _GLIBCXX_USE_CXX11_ABI=0)
   target_include_directories(npu_check_report_renderer_smoke PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src
+    ${CMAKE_CURRENT_LIST_DIR}/../sanitizer_api/include
   )
   target_link_libraries(npu_check_report_renderer_smoke PRIVATE GTest::gtest)
   add_test(NAME npu_check_report_renderer_smoke COMMAND npu_check_report_renderer_smoke)

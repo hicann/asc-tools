@@ -9,6 +9,7 @@
 #include "diagnostic/report_renderer.h"
 #include "diagnostic/report/report_catalog.h"
 
+#include "aclsan/aclsan_cbdata_device.h"
 #include <gtest/gtest.h>
 
 #include <algorithm>
@@ -200,7 +201,7 @@ ReportRecord MakeSyncRecord()
             {"relatedPointLine", "=========     related point: expected SET_FLAG\n"},
             {"expectedOperationLine", ""},
             {"pairKind", "SET_WAIT_FLAG"},
-            {"pairKey", "srcPipe=pipe(1), dstPipe=pipe(4), id=7"},
+            {"pairKey", "srcPipe=PIPE_V, dstPipe=PIPE_MTE2, id=7"},
         }};
 }
 
@@ -243,8 +244,10 @@ NpusanSynccheckReport MakePairingReport(NpusanSyncMismatchReason reason, NpusanS
         report.triggerPoint.operation = open;
         report.relatedPoint.operation = close;
     }
-    report.detail = setWait ? NpusanSyncPairingError{reason, {pairKind, 1, 4, 0, 42}} :
-                              NpusanSyncPairingError{reason, {pairKind, 0, 0, 3, 42}};
+    report.detail =
+        setWait ?
+            NpusanSyncPairingError{reason, {pairKind, ACLSAN_DEVICE_PIPE_VECTOR, ACLSAN_DEVICE_PIPE_MTE2, 0, 42}} :
+            NpusanSyncPairingError{reason, {pairKind, 0, ACLSAN_DEVICE_PIPE_MTE2, 3, 42}};
     return report;
 }
 
@@ -932,6 +935,8 @@ TEST(ReportRendererTest, RendersStructuredPairingMismatchEvidence)
         rendered.find("related point: previous SET_FLAG at FirstSet+0x10 in sync.cpp:24 is still pending"),
         std::string::npos);
     EXPECT_NE(rendered.find("expected WAIT_FLAG before another SET_FLAG"), std::string::npos);
+    EXPECT_NE(
+        rendered.find("pair kind SET_WAIT_FLAG, key (srcPipe=PIPE_V, dstPipe=PIPE_MTE2, id=42)"), std::string::npos);
     EXPECT_EQ(CountOccurrences(rendered, "=========  Device Frames:"), 2U);
     EXPECT_EQ(CountOccurrences(rendered, "=========     #0 "), 2U);
     EXPECT_EQ(CountOccurrences(rendered, "=========     #1 "), 0U);
@@ -962,7 +967,7 @@ TEST(ReportRendererTest, RendersUnconsumedGetBufferWithExpectedRelatedPoint)
     report.relatedPoint.operation = "RLS_BUF";
     report.detail = NpusanSyncPairingError{
         NpusanSyncMismatchReason::kUnconsumedOpen,
-        {NpusanSyncPairKind::kGetRlsBuf, 0, 0, 3, 42},
+        {NpusanSyncPairKind::kGetRlsBuf, 0, ACLSAN_DEVICE_PIPE_MTE2, 3, 42},
     };
 
     std::string rendered;
@@ -971,7 +976,7 @@ TEST(ReportRendererTest, RendersUnconsumedGetBufferWithExpectedRelatedPoint)
         ReportRenderStatus::kSuccess);
     EXPECT_NE(rendered.find("Synchronization pairing mismatch: redundant GET_BUF."), std::string::npos);
     EXPECT_NE(rendered.find("related point: expected RLS_BUF, but no matching point was observed"), std::string::npos);
-    EXPECT_NE(rendered.find("pair kind GET_RLS_BUF, key (id=42, mode=3)"), std::string::npos);
+    EXPECT_NE(rendered.find("pair kind GET_RLS_BUF, key (pipe=PIPE_MTE2, id=42, mode=3)"), std::string::npos);
 }
 
 TEST(ReportRendererTest, RejectsInvalidPairingMismatchMetadata)

@@ -9,8 +9,17 @@
 | 目录 | 源文件 | 生成的可执行文件 | 说明 |
 | --- | --- | --- | --- |
 | `examples/add` | `add.asc` | `aclsan_demo_add` | AscendC 向量加法示例，校验计算结果。 |
+| `examples/synccheck` | 每个场景一个独立目录 | `aclsan_demo_synccheck_<场景名>` | 同步指令配对的正常与异常样例。 |
 | `examples/matmul_basic_api` | `matmul_basic_api.asc` | `aclsan_demo_matmul_basic_api` | 基础矩阵乘样例。 |
 | `examples/matmul_leakyrelu_basic_api` | `matmul_leakyrelu_basic_api.asc` | `aclsan_demo_matmul_leakyrelu_basic_api` | Matmul 与 LeakyRelu 融合样例。 |
+
+`examples/synccheck` 中每个用例目录都包含独立的 `.asc`、CMake、runner 和结果验证器；
+`.asc` 包含完整的 AscendC kernel、ACL 初始化、内存管理、kernel launch 和清理逻辑。
+`wait_without_set` 会故意执行没有对应
+SET_FLAG 的 WAIT_FLAG。目录同时使用 `AscendC::Mutex::Lock/Unlock` 覆盖 GET_BUF/RLS_BUF 的
+正常与异常配对，以及 SET/WAIT 和 GET/RLS 的多 block 隔离。`wait_without_set` 和重复 Lock
+场景必须用 `aclrtSynchronizeStreamWithTimeout` 限制等待时间，并用 `aclrtDestroyStreamForce`
+销毁仍包含阻塞 kernel 的 stream，才能正常结束进程。
 
 ## 构建与产物
 
@@ -61,6 +70,8 @@ bash /home/cty/asc-tools-aclsan/npu_sanitizer/demo/run.sh
 
 ```bash
 bash /home/cty/asc-tools-aclsan/npu_sanitizer/demo/run.sh add
+bash /home/cty/asc-tools-aclsan/npu_sanitizer/demo/run.sh synccheck/single_pair
+bash /home/cty/asc-tools-aclsan/npu_sanitizer/demo/run.sh synccheck/single_unconsumed
 bash /home/cty/asc-tools-aclsan/npu_sanitizer/demo/run.sh matmul_basic_api
 bash /home/cty/asc-tools-aclsan/npu_sanitizer/demo/run.sh matmul_leakyrelu_basic_api
 ```
@@ -120,9 +131,6 @@ memcheck 分析和计算结果：add、基础 matmul、融合 matmul 分别回�
 
 仍有以下未完成项：
 
-- 产品级 CLI 和 `ToolManager` 当前只接受单个 `--tool memcheck`。`report_renderer` 虽然
-  已有 `synccheck` 报告格式支持，但 `synccheck` 尚未接入可执行工具链，demo 也不传递或
-  验证 `synccheck`。
 - 当前 probe E2E 只覆盖三个示例实际触发的 CCE 指令；若要声明更完整的指令覆盖，需要
   增加其他 CCE 指令的用例、record 解析断言和真实 Device E2E。
 - 尚未验证并发、callback 重入和共享库卸载安全；若这些属于产品支持范围，需要增加相应的

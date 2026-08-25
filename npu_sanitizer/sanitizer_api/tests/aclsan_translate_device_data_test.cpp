@@ -211,13 +211,16 @@ void TestTranslateRawTraceToCallbackData()
     assert(setCallback.has_value());
     const auto* setSync = std::get_if<AclsanDeviceSyncData>(&*setCallback);
     assert(setSync != nullptr);
-    assert(setSync->launchId == 0);
+    assert(setSync->header.version == ACLSAN_API_VERSION);
+    assert(setSync->header.size == sizeof(AclsanDeviceSyncData));
+    assert(setSync->header.launchId == 0);
+    assert(setSync->header.sourceKind == ACLSAN_DEVICE_SOURCE_SET_WAIT_FLAG);
     assert(setSync->action == ACLSAN_DEVICE_SYNC_ACTION_SET);
     assert(setSync->srcPipe == 2);
     assert(setSync->dstPipe == 3);
     assert(setSync->objectId == 7);
-    assert(setSync->instrExecId == callbackContext.instrExecId);
-    assert(setSync->phyCoreId == callbackContext.coreId);
+    assert(setSync->header.instrExecId == callbackContext.instrExecId);
+    assert(setSync->header.coreId == callbackContext.coreId);
 
     record.instrId = kWaitFlagId;
     const auto waitCallback = aclsan::TranslateRawTraceToCallbackData(record, callbackContext);
@@ -225,6 +228,7 @@ void TestTranslateRawTraceToCallbackData()
     const auto* waitSync = std::get_if<AclsanDeviceSyncData>(&*waitCallback);
     assert(waitSync != nullptr);
     assert(waitSync->action == ACLSAN_DEVICE_SYNC_ACTION_WAIT);
+    assert(waitSync->header.sourceKind == ACLSAN_DEVICE_SOURCE_SET_WAIT_FLAG);
 }
 
 std::string CaptureTranslateDebugLogs(
@@ -277,7 +281,7 @@ void TestTranslateDebugLogsShowSyncConversion()
     assert(logs.find("type=AscsanRawTraceRecord") != std::string::npos);
     assert(logs.find("blockId=4 pc=0x1234") != std::string::npos);
     assert(logs.find("instrId=440") != std::string::npos);
-    assert(logs.find("siteId=5 pipeline=1") != std::string::npos);
+    assert(logs.find("siteId=5 pipeline=" + std::to_string(ACLSAN_DEVICE_PIPE_SCALAR)) != std::string::npos);
     assert(logs.find("args=[0x2,0x3,0x7,0x0,0x0,0x0]") != std::string::npos);
     assert(logs.find("transferBytes=0 instrExecId=9 serialNo=8 coreId=6") != std::string::npos);
     assert(logs.find("[param]") != std::string::npos);
@@ -285,7 +289,7 @@ void TestTranslateDebugLogsShowSyncConversion()
     assert(logs.find("srcPipe=2 dstPipe=3 eventId=7") != std::string::npos);
     assert(logs.find("[cbdata]") != std::string::npos);
     assert(logs.find("type=AclsanDeviceSyncData") != std::string::npos);
-    assert(logs.find("pc=0x1234 instrExecId=9 launchId=0 blockId=4 phyCoreId=6") != std::string::npos);
+    assert(logs.find("pc=0x1234 instrExecId=9 launchId=0 blockId=4 coreId=6") != std::string::npos);
     assert(logs.find("action=1") != std::string::npos);
     assert(logs.find("objectId=7") != std::string::npos);
 }
@@ -306,7 +310,7 @@ void TestTranslateDebugLogsShowUbufToGmConversion()
 
     const std::string logs = CaptureTranslateDebugLogs(record, context);
     assert(logs.find("[raw] type=AscsanRawTraceRecord") != std::string::npos);
-    assert(logs.find("instrId=83 siteId=4 pipeline=4") != std::string::npos);
+    assert(logs.find("instrId=83 siteId=4 pipeline=" + std::to_string(ACLSAN_DEVICE_PIPE_MTE3)) != std::string::npos);
     assert(logs.find("[param] type=CopyUbufToGmAlignV2ParamField") != std::string::npos);
     assert(logs.find("burstNum=2 burstLen=64") != std::string::npos);
     assert(

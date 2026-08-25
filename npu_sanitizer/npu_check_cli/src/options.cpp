@@ -138,8 +138,9 @@ bool ParseOptions(int argc, char** argv, Options& options, std::string& error)
         error = "--tool is required";
         return false;
     }
-    if (options.toolConfig.toolName != "memcheck") {
-        error = "unsupported tool '" + options.toolConfig.toolName + "'; current implementation supports memcheck";
+    if (options.toolConfig.toolName != "memcheck" && options.toolConfig.toolName != "synccheck") {
+        error = "unsupported tool '" + options.toolConfig.toolName +
+                "'; current implementation supports memcheck and synccheck";
         return false;
     }
     if (options.toolConfig.compileOptions.size() > ipc::kMaxCompileOptions) {
@@ -186,7 +187,7 @@ bool ResolveLibraryPath(const std::string& requested, std::string& resolved, std
 
 std::string Usage()
 {
-    return "Usage: npu_check --tool memcheck [options] -- <application> [args...]\n"
+    return "Usage: npu_check --tool {memcheck|synccheck} [options] -- <application> [args...]\n"
            "Options:\n"
            "  --library PATH              libnpu_check.so path\n"
            "  --log-file PATH             combined npu_check and application log\n"

@@ -25,7 +25,36 @@ constexpr uint32_t kDefaultDeviceId = 0;
 constexpr uint32_t kBlockTypeAiv = 1;
 constexpr uint32_t kPipeMte2 = 2;
 
-using DecodedOperand = std::variant<sanitizer::CopyOperand, sanitizer::NdDmaOperand, sanitizer::FlagOperand>;
+using DecodedOperand =
+    std::variant<sanitizer::CopyOperand, sanitizer::NdDmaOperand, sanitizer::FlagOperand, sanitizer::BufferParamField>;
+
+uint32_t ToSyncAction(uint32_t instrId) noexcept
+{
+    switch (static_cast<sanitizer::CceInstructionId>(instrId)) {
+        case sanitizer::CceInstructionId::SetFlag:
+        case sanitizer::CceInstructionId::SetFlagI:
+        case sanitizer::CceInstructionId::SetFlagV:
+        case sanitizer::CceInstructionId::SetFlagIV:
+            return ACLSAN_DEVICE_SYNC_ACTION_SET;
+        case sanitizer::CceInstructionId::WaitFlag:
+        case sanitizer::CceInstructionId::WaitFlagI:
+        case sanitizer::CceInstructionId::WaitFlagV:
+        case sanitizer::CceInstructionId::WaitFlagIV:
+            return ACLSAN_DEVICE_SYNC_ACTION_WAIT;
+        case sanitizer::CceInstructionId::GetBuf:
+        case sanitizer::CceInstructionId::GetBufI:
+        case sanitizer::CceInstructionId::GetBufV:
+        case sanitizer::CceInstructionId::GetBufIV:
+            return ACLSAN_DEVICE_SYNC_ACTION_GET;
+        case sanitizer::CceInstructionId::RlsBuf:
+        case sanitizer::CceInstructionId::RlsBufI:
+        case sanitizer::CceInstructionId::RlsBufV:
+        case sanitizer::CceInstructionId::RlsBufIV:
+            return ACLSAN_DEVICE_SYNC_ACTION_RELEASE;
+        default:
+            return ACLSAN_DEVICE_SYNC_ACTION_UNKNOWN;
+    }
+}
 
 void LogRawRecord(const sanitizer::AscsanRawTraceRecord& record, const TraceCallbackContext& context) noexcept
 {
@@ -89,6 +118,12 @@ void LogParamField(const CceInstructionParamField& params) noexcept
         ASC_SAN_DEBUG(
             "[param] type=FlagParamField instr_id=%u srcPipe=%u dstPipe=%u eventId=%llu", value->instr_id,
             value->srcPipe, value->dstPipe, static_cast<unsigned long long>(value->eventId));
+        return;
+    }
+    if (const auto* value = std::get_if<sanitizer::BufferParamField>(&params)) {
+        ASC_SAN_DEBUG(
+            "[param] type=SyncBufParamField instr_id=%u pipe=%u bufId=%llu mode=%u", value->instr_id, value->pipe,
+            static_cast<unsigned long long>(value->bufId), value->mode);
     }
 }
 
@@ -116,10 +151,10 @@ void LogCallbackData(const CceTraceCallbackData& callbackData) noexcept
     if (const auto* sync = std::get_if<AclsanDeviceSyncData>(&callbackData)) {
         ASC_SAN_DEBUG(
             "[cbdata] type=AclsanDeviceSyncData pc=0x%llx instrExecId=%llu launchId=%llu "
-            "blockId=%u phyCoreId=%u syncKind=%u action=%u scope=%u srcPipe=%u dstPipe=%u mode=%u objectId=%llu",
-            static_cast<unsigned long long>(sync->pc), static_cast<unsigned long long>(sync->instrExecId),
-            static_cast<unsigned long long>(sync->launchId), sync->blockId, sync->phyCoreId, sync->syncKind,
-            sync->action, sync->scope, sync->srcPipe, sync->dstPipe, sync->mode,
+            "blockId=%u coreId=%u syncKind=%u action=%u scope=%u srcPipe=%u dstPipe=%u mode=%u objectId=%llu",
+            static_cast<unsigned long long>(sync->header.pc), static_cast<unsigned long long>(sync->header.instrExecId),
+            static_cast<unsigned long long>(sync->header.launchId), sync->header.blockId, sync->header.coreId,
+            sync->syncKind, sync->action, sync->scope, sync->srcPipe, sync->dstPipe, sync->mode,
             static_cast<unsigned long long>(sync->objectId));
     }
 }
@@ -156,6 +191,9 @@ public:
         if (const auto* flag = std::get_if<sanitizer::FlagParamField>(&params)) {
             return MakeDeviceSyncData(record, context, *flag);
         }
+        if (const auto* buffer = std::get_if<sanitizer::BufferParamField>(&params)) {
+            return MakeDeviceSyncData(record, context, *buffer);
+        }
         return std::nullopt;
     }
 
@@ -171,12 +209,8 @@ private:
 
     static const TranslationRoute* FindRoute(uint64_t instrId) noexcept
     {
-        if (instrId > UINT32_MAX) {
-            return nullptr;
-        }
-
         const auto instructionId = static_cast<sanitizer::CceInstructionId>(instrId);
-        static constexpr std::array<TranslationRoute, 15> kRoutes = {{
+        static constexpr std::array<TranslationRoute, 23> kRoutes = {{
             {sanitizer::CceInstructionId::CopyGmToUbufAlignV2B8, ParseCopyOperand, ConvertCopyGmToUbufAlignV2},
             {sanitizer::CceInstructionId::CopyGmToUbufAlignV2B16, ParseCopyOperand, ConvertCopyGmToUbufAlignV2},
             {sanitizer::CceInstructionId::CopyGmToUbufAlignV2B32, ParseCopyOperand, ConvertCopyGmToUbufAlignV2},
@@ -192,6 +226,14 @@ private:
             {sanitizer::CceInstructionId::SetFlagIV, ParseFlagOperand, ConvertFlag},
             {sanitizer::CceInstructionId::WaitFlagV, ParseFlagOperand, ConvertFlag},
             {sanitizer::CceInstructionId::WaitFlagIV, ParseFlagOperand, ConvertFlag},
+            {sanitizer::CceInstructionId::GetBuf, ParseBufferOperand, ConvertBuffer},
+            {sanitizer::CceInstructionId::GetBufI, ParseBufferOperand, ConvertBuffer},
+            {sanitizer::CceInstructionId::RlsBuf, ParseBufferOperand, ConvertBuffer},
+            {sanitizer::CceInstructionId::RlsBufI, ParseBufferOperand, ConvertBuffer},
+            {sanitizer::CceInstructionId::GetBufV, ParseBufferOperand, ConvertBuffer},
+            {sanitizer::CceInstructionId::GetBufIV, ParseBufferOperand, ConvertBuffer},
+            {sanitizer::CceInstructionId::RlsBufV, ParseBufferOperand, ConvertBuffer},
+            {sanitizer::CceInstructionId::RlsBufIV, ParseBufferOperand, ConvertBuffer},
         }};
         for (const TranslationRoute& route : kRoutes) {
             if (route.instructionId == instructionId) {
@@ -209,12 +251,16 @@ private:
 
     static std::optional<DecodedOperand> ParseFlagOperand(const sanitizer::AscsanRawTraceRecord& record) noexcept
     {
-        if (record.args[0] > UINT32_MAX || record.args[1] > UINT32_MAX) {
-            return std::nullopt;
-        }
         return DecodedOperand{sanitizer::FlagOperand{
             static_cast<uint32_t>(record.instrId), static_cast<uint32_t>(record.args[0]),
             static_cast<uint32_t>(record.args[1]), record.args[2]}};
+    }
+
+    static std::optional<DecodedOperand> ParseBufferOperand(const sanitizer::AscsanRawTraceRecord& record) noexcept
+    {
+        return DecodedOperand{sanitizer::BufferParamField{
+            static_cast<uint32_t>(record.instrId), static_cast<uint32_t>(record.args[0]), record.args[1],
+            static_cast<uint8_t>(record.args[2])}};
     }
 
     static std::optional<CceInstructionParamField> ConvertCopyGmToUbufAlignV2(const DecodedOperand& operand) noexcept
@@ -254,12 +300,22 @@ private:
             flagOperand->instr_id, flagOperand->srcPipe, flagOperand->dstPipe, flagOperand->eventId}};
     }
 
-    static AclsanDeviceEventHeader MakeDeviceEventHeader(
-        const sanitizer::AscsanRawTraceRecord& record, const TraceCallbackContext& context) noexcept
+    static std::optional<CceInstructionParamField> ConvertBuffer(const DecodedOperand& operand) noexcept
     {
-        return {ACLSAN_API_VERSION,  static_cast<uint32_t>(sizeof(AclsanDeviceMemoryAccessData)),
+        const auto* bufferOperand = std::get_if<sanitizer::BufferParamField>(&operand);
+        if (bufferOperand == nullptr) {
+            return std::nullopt;
+        }
+        return CceInstructionParamField{*bufferOperand};
+    }
+
+    static AclsanDeviceEventHeader MakeDeviceEventHeader(
+        const sanitizer::AscsanRawTraceRecord& record, const TraceCallbackContext& context, uint32_t callbackDataSize,
+        uint32_t sourceKind) noexcept
+    {
+        return {ACLSAN_API_VERSION,  callbackDataSize,
                 kUnknownLaunchId,    record.pc,
-                record.siteId,       0,
+                record.siteId,       sourceKind,
                 context.instrExecId, context.serialNo,
                 kDefaultDeviceId,    context.coreId,
                 record.blockId,      kBlockTypeAiv,
@@ -287,7 +343,8 @@ private:
         const sanitizer::AscsanRawTraceRecord& record, const TraceCallbackContext& context,
         const ParamField& params) noexcept
     {
-        const AclsanDeviceEventHeader header = MakeDeviceEventHeader(record, context);
+        const AclsanDeviceEventHeader header =
+            MakeDeviceEventHeader(record, context, static_cast<uint32_t>(sizeof(AclsanDeviceMemoryAccessData)), 0);
         return DeviceMemoryAccessDataArray{
             MakeDeviceMemoryAccessData(
                 header, params.srcAddr, ParamField::srcPos, ACLSAN_DEVICE_MEMORY_ACCESS_READ, 0, context.transferBytes),
@@ -301,7 +358,8 @@ private:
         const sanitizer::AscsanRawTraceRecord& record, const TraceCallbackContext& context,
         const sanitizer::CopyUbufToGmAlignV2ParamField& params) noexcept
     {
-        const AclsanDeviceEventHeader header = MakeDeviceEventHeader(record, context);
+        const AclsanDeviceEventHeader header =
+            MakeDeviceEventHeader(record, context, static_cast<uint32_t>(sizeof(AclsanDeviceMemoryAccessData)), 0);
         return DeviceMemoryAccessDataArray{
             MakeDeviceMemoryAccessData(
                 header, params.srcAddr, ACLSAN_DEVICE_MEMORY_SPACE_UB, ACLSAN_DEVICE_MEMORY_ACCESS_READ, 0,
@@ -316,25 +374,34 @@ private:
         const sanitizer::AscsanRawTraceRecord& record, const TraceCallbackContext& context,
         const sanitizer::FlagParamField& params) noexcept
     {
-        const auto instructionId = static_cast<sanitizer::CceInstructionId>(params.instr_id);
-        const bool isSet = instructionId == sanitizer::CceInstructionId::SetFlag ||
-                           instructionId == sanitizer::CceInstructionId::SetFlagI ||
-                           instructionId == sanitizer::CceInstructionId::SetFlagV ||
-                           instructionId == sanitizer::CceInstructionId::SetFlagIV;
-        const uint32_t action = isSet ? ACLSAN_DEVICE_SYNC_ACTION_SET : ACLSAN_DEVICE_SYNC_ACTION_WAIT;
         return AclsanDeviceSyncData{
-            record.pc,
-            context.instrExecId,
-            kUnknownLaunchId,
-            record.blockId,
-            context.coreId,
+            MakeDeviceEventHeader(
+                record, context, static_cast<uint32_t>(sizeof(AclsanDeviceSyncData)),
+                ACLSAN_DEVICE_SOURCE_SET_WAIT_FLAG),
             ACLSAN_DEVICE_SYNC_KIND_SET_WAIT_FLAG,
-            action,
+            ToSyncAction(params.instr_id),
             ACLSAN_DEVICE_SYNC_SCOPE_BLOCK,
             params.srcPipe,
             params.dstPipe,
             0,
             params.eventId,
+            {0, 0}};
+    }
+
+    static CceTraceCallbackData MakeDeviceSyncData(
+        const sanitizer::AscsanRawTraceRecord& record, const TraceCallbackContext& context,
+        const sanitizer::BufferParamField& params) noexcept
+    {
+        return AclsanDeviceSyncData{
+            MakeDeviceEventHeader(
+                record, context, static_cast<uint32_t>(sizeof(AclsanDeviceSyncData)), ACLSAN_DEVICE_SOURCE_GET_RLS_BUF),
+            ACLSAN_DEVICE_SYNC_KIND_GET_RLS_BUF,
+            ToSyncAction(params.instr_id),
+            ACLSAN_DEVICE_SYNC_SCOPE_PIPE,
+            0,
+            params.pipe,
+            params.mode,
+            params.bufId,
             {0, 0}};
     }
 };
@@ -388,10 +455,26 @@ AclsanDeviceSyncData TranslateDeviceSyncData(const DeviceRecord& record) noexcep
     const DeviceSyncRecord& source = record.sync;
     const uint32_t scope = source.syncKind == ACLSAN_DEVICE_SYNC_KIND_SET_WAIT_FLAG ? ACLSAN_DEVICE_SYNC_SCOPE_BLOCK :
                                                                                       ACLSAN_DEVICE_SYNC_SCOPE_PIPE;
-    return {record.pc,      source.instrExecId, kUnknownLaunchId, record.blockId,
-            UINT32_MAX,     source.syncKind,    source.action,    scope,
-            source.srcPipe, source.dstPipe,     source.mode,      source.objectId,
-            {0, 0}};
+    const uint32_t sourceKind = source.syncKind == ACLSAN_DEVICE_SYNC_KIND_SET_WAIT_FLAG ?
+                                    ACLSAN_DEVICE_SOURCE_SET_WAIT_FLAG :
+                                    ACLSAN_DEVICE_SOURCE_GET_RLS_BUF;
+    const AclsanDeviceEventHeader header{
+        ACLSAN_API_VERSION,
+        static_cast<uint32_t>(sizeof(AclsanDeviceSyncData)),
+        kUnknownLaunchId,
+        record.pc,
+        static_cast<uint32_t>(record.sequence),
+        sourceKind,
+        source.instrExecId,
+        record.serialNo,
+        kDefaultDeviceId,
+        UINT32_MAX,
+        record.blockId,
+        kBlockTypeAiv,
+        ACLSAN_DEVICE_PIPE_SCALAR,
+        0};
+    return {header,         source.syncKind, source.action,   scope, source.srcPipe,
+            source.dstPipe, source.mode,     source.objectId, {0, 0}};
 }
 
 std::optional<CceInstructionParamField> TranslateRawTraceRecord(const sanitizer::AscsanRawTraceRecord& record) noexcept

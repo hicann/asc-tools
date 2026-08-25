@@ -11,6 +11,7 @@
 
 #include "aclsan/aclsan_api.h"
 #include "checker/memcheck.h"
+#include "checker/synccheck.h"
 #include "ipc/uds_server.h"
 #include "logging/logger.h"
 #include "wire_protocol.h"
@@ -55,10 +56,11 @@ private:
     bool EnterCallback();
     void LeaveCallback();
     bool ConfigureSanitizer(std::string& error);
-    bool EnableMemcheckCallbacks(std::string& error);
+    bool EnableCallbacks(std::string& error);
     void RollbackSanitizer();
     void LogHandshakeFailure(const std::string& reason) noexcept;
     void PublishDiagnostics(std::vector<aclsan::cann::NpusanMemcheckReport> reports);
+    void PublishSynccheckReports(std::vector<aclsan::cann::NpusanSynccheckReport> reports);
     void PublishMalformed(AclsanCallbackDomain domain, AclsanCallbackId cbid, const char* reason);
     bool InitializeLogger(std::string& error);
     void LogCallback(AclsanCallbackDomain domain, AclsanCallbackId cbid, const void* cbdata);
@@ -103,6 +105,7 @@ private:
     ipc::UdsServer server_{};
     AclsanSubscriberHandle subscriber_ = nullptr;
     std::unique_ptr<Memcheck> memcheck_;
+    std::unique_ptr<Synccheck> synccheck_;
     logging::Logger logger_{};
     std::atomic<uint64_t> callbackCount_{0};
     uint64_t malformedCallbacks_ = 0;

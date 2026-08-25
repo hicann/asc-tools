@@ -8,6 +8,7 @@
 
 #include "diagnostic/report/synccheck_adapter.h"
 
+#include "aclsan/aclsan_cbdata_device.h"
 #include "diagnostic/report/report_catalog.h"
 #include "diagnostic/report/report_fields.h"
 
@@ -84,6 +85,28 @@ const char* PairKindName(NpusanSyncPairKind pairKind)
     return "UNKNOWN";
 }
 
+std::string PairKeyPipeName(AclsanDevicePipeline pipe)
+{
+    switch (pipe) {
+        case ACLSAN_DEVICE_PIPE_SCALAR:
+            return "PIPE_S";
+        case ACLSAN_DEVICE_PIPE_VECTOR:
+            return "PIPE_V";
+        case ACLSAN_DEVICE_PIPE_MATRIX:
+            return "PIPE_M";
+        case ACLSAN_DEVICE_PIPE_MTE1:
+            return "PIPE_MTE1";
+        case ACLSAN_DEVICE_PIPE_MTE2:
+            return "PIPE_MTE2";
+        case ACLSAN_DEVICE_PIPE_MTE3:
+            return "PIPE_MTE3";
+        case ACLSAN_DEVICE_PIPE_FIXPIPE:
+            return "PIPE_FIXPIP";
+        default:
+            return "PIPE_UNKNOWN(" + std::to_string(static_cast<std::uint32_t>(pipe)) + ")";
+    }
+}
+
 const char* PrimitiveKindName(NpusanSyncPrimitiveKind primitiveKind)
 {
     switch (primitiveKind) {
@@ -156,8 +179,7 @@ bool ValidatePairingReport(const NpusanSynccheckReport& report, const NpusanSync
         return false;
     }
     if ((detail.key.pairKind == NpusanSyncPairKind::kSetWaitFlag && detail.key.mode != 0) ||
-        (detail.key.pairKind == NpusanSyncPairKind::kGetRlsBuf &&
-         (detail.key.srcPipe != 0 || detail.key.dstPipe != 0))) {
+        (detail.key.pairKind == NpusanSyncPairKind::kGetRlsBuf && detail.key.srcPipe != 0)) {
         return false;
     }
     if ((detail.key.pairKind == NpusanSyncPairKind::kSetWaitFlag &&
@@ -240,9 +262,11 @@ std::string FormatPairKey(const NpusanSyncPairKey& key)
 {
     std::ostringstream os;
     if (key.pairKind == NpusanSyncPairKind::kSetWaitFlag) {
-        os << "srcPipe=pipe(" << key.srcPipe << "), dstPipe=pipe(" << key.dstPipe << "), id=" << key.id;
+        os << "srcPipe=" << PairKeyPipeName(static_cast<AclsanDevicePipeline>(key.srcPipe))
+           << ", dstPipe=" << PairKeyPipeName(static_cast<AclsanDevicePipeline>(key.dstPipe)) << ", id=" << key.id;
     } else {
-        os << "id=" << key.id << ", mode=" << key.mode;
+        os << "pipe=" << PairKeyPipeName(static_cast<AclsanDevicePipeline>(key.dstPipe)) << ", id=" << key.id
+           << ", mode=" << key.mode;
     }
     return os.str();
 }

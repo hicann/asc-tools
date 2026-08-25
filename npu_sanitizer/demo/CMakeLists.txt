@@ -29,3 +29,4 @@ add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../npu_check" npu_check)
 add_dependencies(npu_check_cli npu_check)
 
 add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/examples/add" examples_add)
+add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/examples/synccheck" examples_synccheck)

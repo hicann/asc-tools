@@ -14,8 +14,10 @@ set -euo pipefail
 demo_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 build_dir="${demo_dir}/build"
 bin_dir="${build_dir}/npu_compute/bin"
-default_cann_root="/home/cty/cann_0819/cann-9.2.0/x86_64-linux"
+default_cann_root="/usr/local/Ascend/cann-9.2.0/x86_64-linux"
 example_name=${1:-add}
+example_tool="memcheck"
+probe_symbol_ordering="${demo_dir}/../sanitizer_api/probe/symbol_ordering.txt"
 
 case "${example_name}" in
     add)
@@ -36,6 +38,20 @@ case "${example_name}" in
         example_work_dir="${demo_dir}/examples/matmul_leakyrelu_basic_api/build/run"
         asc_architecture="dav-3510"
         ;;
+    synccheck/*)
+        synccheck_example=${example_name#synccheck/}
+        if [[ ! "${synccheck_example}" =~ ^[a-z0-9_]+$ ||
+            ! -f "${demo_dir}/examples/synccheck/${synccheck_example}.asc" ]]; then
+            printf 'unsupported example: %s\n' "${example_name}" >&2
+            exit 2
+        fi
+        example_target="aclsan_demo_synccheck_${synccheck_example}"
+        example_executable="${bin_dir}/${example_target}"
+        example_work_dir="${demo_dir}"
+        example_tool="synccheck"
+        probe_symbol_ordering="${demo_dir}/examples/synccheck/symbol_ordering.txt"
+        asc_architecture="dav-3510"
+        ;;
     *)
         printf 'unsupported example: %s\n' "${example_name}" >&2
         exit 2
@@ -43,7 +59,8 @@ case "${example_name}" in
 esac
 
 if [[ $# -gt 1 ]]; then
-    printf 'usage: %s [add|matmul_basic_api|matmul_leakyrelu_basic_api]\n' "${BASH_SOURCE[0]}" >&2
+    printf 'usage: %s [add|matmul_basic_api|matmul_leakyrelu_basic_api|synccheck/<sample>]\n' \
+        "${BASH_SOURCE[0]}" >&2
     exit 2
 fi
 
@@ -75,7 +92,7 @@ source "${cann_install_dir}/set_env.sh"
 set -u
 cmake_args+=("-DNPUCOMPUTE_CANN_ROOT=${NPUCOMPUTE_CANN_ROOT}")
 cmake "${cmake_args[@]}"
-if [[ "${example_name}" == "add" ]]; then
+if [[ "${example_name}" == "add" || "${example_name}" == synccheck/* ]]; then
     cmake --build "${build_dir}" --target npu_check_cli "${example_target}" --parallel
 else
     cmake --build "${build_dir}" --target npu_check_cli --parallel
@@ -120,13 +137,13 @@ export NPU_SAN_DEBUG=1                       # npu_check的日志开启
 
 export ACLSAN_PROBE_OBJECT="${build_dir}/sanitizer_api/probe_resources/probe.o"
 export ACLSAN_PROBE_CTRL_BINARY="${build_dir}/sanitizer_api/probe_resources/ctrl.bin"
-export ACLSAN_PROBE_SYMBOL_ORDERING="${demo_dir}/../sanitizer_api/probe/symbol_ordering.txt"
+export ACLSAN_PROBE_SYMBOL_ORDERING="${probe_symbol_ordering}"
 export ACLSAN_PROBE_WORK_ROOT="${build_dir}/probe_runtime"
 export ACLSAN_PROBE_ARGUMENT_BYTES=24
 export LD_LIBRARY_PATH="${bin_dir}:${cann_lib_dir}${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
 
-(cd "${example_work_dir}" && "${bin_dir}/npu_check" --tool memcheck -- "${example_executable}")
-if [[ "${example_name}" != "add" ]]; then
+(cd "${example_work_dir}" && "${bin_dir}/npu_check" --tool "${example_tool}" -- "${example_executable}")
+if [[ "${example_name}" == "matmul_basic_api" || "${example_name}" == "matmul_leakyrelu_basic_api" ]]; then
     python3 "${demo_dir}/examples/${example_name}/scripts/verify_result.py" \
         "${example_work_dir}/output/output.bin" \
         "${example_work_dir}/output/golden.bin"

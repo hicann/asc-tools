@@ -114,6 +114,59 @@ void PopulateDeviceCallStack(aclsan::cann::NpusanMemcheckReport& report) noexcep
     }
 }
 
+void PopulateSyncPointCallStack(
+    aclsan::cann::NpusanReportCommon& common, aclsan::cann::NpusanSyncPoint& point,
+    aclsan::cann::ReportStackRole role) noexcept
+{
+    if (!point.hasExecContext || point.exec.pc == 0 || common.stackCount > aclsan::cann::kNpusanReportStackMax) {
+        return;
+    }
+
+    std::uint32_t stackIndex = common.stackCount;
+    for (std::uint32_t index = 0; index < common.stackCount && index < aclsan::cann::kNpusanReportStackMax; ++index) {
+        if (common.stacks[index].role == role) {
+            stackIndex = index;
+            break;
+        }
+    }
+    if (stackIndex == common.stackCount && common.stackCount >= aclsan::cann::kNpusanReportStackMax) {
+        return;
+    }
+
+    try {
+        auto callStack = std::make_unique<AclsanDeviceCallStack>();
+        const AclsanStatus status = aclsanGetDeviceCallStack(point.exec.pc, callStack.get());
+        std::string callStackText = FormatCallStackReport(status, *callStack);
+        std::vector<aclsan::cann::ReportFrame> frames;
+        if (HasCallStackFrames(status)) {
+            frames = MakeReportFrames(*callStack);
+        }
+
+        auto& stack = common.stacks[stackIndex];
+        stack.rawText.swap(callStackText);
+        stack.role = role;
+        stack.frames.swap(frames);
+        stack.format =
+            stack.frames.empty() ? aclsan::cann::ReportStackFormat::kRawText : aclsan::cann::ReportStackFormat::kBoth;
+        if (callStack->binaryId != 0) {
+            point.exec.binaryId = callStack->binaryId;
+        }
+        point.stackRole = role;
+        if (stackIndex == common.stackCount) {
+            ++common.stackCount;
+        }
+    } catch (...) {
+        return;
+    }
+}
+
+void PopulateDeviceCallStack(aclsan::cann::NpusanSynccheckReport& report) noexcept
+{
+    PopulateSyncPointCallStack(report.common, report.triggerPoint, aclsan::cann::ReportStackRole::kSyncTrigger);
+    report.common.exec = report.triggerPoint.exec;
+    PopulateSyncPointCallStack(report.common, report.relatedPoint, aclsan::cann::ReportStackRole::kSyncRelated);
+}
+
 struct CallbackSpec {
     AclsanCallbackDomain domain;
     AclsanCallbackId cbid;
@@ -123,6 +176,11 @@ constexpr std::array<CallbackSpec, 4> kMemcheckCallbacks{{
     {ACLSAN_CB_DOMAIN_RESOURCE, ACLSAN_CBID_RESOURCE_MEMORY_ALLOC},
     {ACLSAN_CB_DOMAIN_RESOURCE, ACLSAN_CBID_RESOURCE_MEMORY_FREE},
     {ACLSAN_CB_DOMAIN_DEVICE_INSTRUCTION, ACLSAN_CBID_DEVICE_MEMORY_ACCESS},
+    {ACLSAN_CB_DOMAIN_SYNCHRONIZE, ACLSAN_CBID_SYNCHRONIZE_STREAM_SYNC_END},
+}};
+
+constexpr std::array<CallbackSpec, 2> kSynccheckCallbacks{{
+    {ACLSAN_CB_DOMAIN_DEVICE_INSTRUCTION, ACLSAN_CBID_DEVICE_SYNC},
     {ACLSAN_CB_DOMAIN_SYNCHRONIZE, ACLSAN_CBID_SYNCHRONIZE_STREAM_SYNC_END},
 }};
 
@@ -218,12 +276,17 @@ bool ToolManager::InitializeLogger(std::string& error)
 
 bool ToolManager::ConfigureSanitizer(std::string& error)
 {
-    if (config_.toolName != "memcheck") {
-        error = "unsupported tool '" + config_.toolName + "'; current implementation supports memcheck";
+    if (config_.toolName != "memcheck" && config_.toolName != "synccheck") {
+        error = "unsupported tool '" + config_.toolName + "'; current implementation supports memcheck and synccheck";
         return false;
     }
-    memcheck_ = std::make_unique<Memcheck>(config_.strict);
-    logger_.Debug("memcheck instance created");
+    if (config_.toolName == "memcheck") {
+        memcheck_ = std::make_unique<Memcheck>(config_.strict);
+        logger_.Debug("memcheck instance created");
+    } else {
+        synccheck_ = std::make_unique<Synccheck>(&logger_);
+        logger_.Debug("synccheck instance created");
+    }
     AclsanStatus status = aclsanSubscribe(&subscriber_, &ToolManager::Callback, this);
     if (status != ACLSAN_STATUS_SUCCESS) {
         error = StatusMessage("aclsanSubscribe", status);
@@ -231,23 +294,26 @@ bool ToolManager::ConfigureSanitizer(std::string& error)
     }
     subscribed_ = true;
     logger_.Info("sanitizer callback subscriber registered");
-    return EnableMemcheckCallbacks(error);
+    return EnableCallbacks(error);
 }
 
-bool ToolManager::EnableMemcheckCallbacks(std::string& error)
+bool ToolManager::EnableCallbacks(std::string& error)
 {
-    for (const auto& callback : kMemcheckCallbacks) {
-        const AclsanStatus status = aclsanEnableCallback(1, subscriber_, callback.domain, callback.cbid);
-        if (status != ACLSAN_STATUS_SUCCESS) {
-            error = StatusMessage("aclsanEnableCallback", status);
-            return false;
+    const auto enable = [this, &error](const auto& callbacks) {
+        for (const auto& callback : callbacks) {
+            const AclsanStatus status = aclsanEnableCallback(1, subscriber_, callback.domain, callback.cbid);
+            if (status != ACLSAN_STATUS_SUCCESS) {
+                error = StatusMessage("aclsanEnableCallback", status);
+                return false;
+            }
+            std::ostringstream message;
+            message << "callback enabled domain=" << static_cast<uint32_t>(callback.domain)
+                    << " cbid=" << static_cast<uint32_t>(callback.cbid);
+            logger_.Debug(message.str());
         }
-        std::ostringstream message;
-        message << "callback enabled domain=" << static_cast<uint32_t>(callback.domain)
-                << " cbid=" << static_cast<uint32_t>(callback.cbid);
-        logger_.Debug(message.str());
-    }
-    return true;
+        return true;
+    };
+    return config_.toolName == "memcheck" ? enable(kMemcheckCallbacks) : enable(kSynccheckCallbacks);
 }
 
 void ToolManager::RollbackSanitizer()
@@ -266,6 +332,7 @@ void ToolManager::RollbackSanitizer()
         callbacksDrained_.wait(callbackLock, [this] { return activeCallbacks_ == 0; });
     }
     memcheck_.reset();
+    synccheck_.reset();
 }
 
 void ToolManager::Finalize()
@@ -294,9 +361,14 @@ void ToolManager::Finalize()
     bool analysisComplete = false;
     {
         std::lock_guard<std::mutex> stateLock(stateMutex_);
-        const MemcheckStats stats = memcheck_ != nullptr ? memcheck_->Stats() : MemcheckStats{};
-        analysisComplete = stats.pendingDeviceOperations == 0 && stats.droppedDeviceOperations == 0 &&
-                           malformedCallbacks_ == 0 && frameworkErrors_ == 0;
+        if (memcheck_ != nullptr) {
+            const MemcheckStats stats = memcheck_->Stats();
+            analysisComplete = stats.pendingDeviceOperations == 0 && stats.droppedDeviceOperations == 0;
+        } else if (synccheck_ != nullptr) {
+            const SynccheckStats stats = synccheck_->Stats();
+            analysisComplete = stats.pendingOpens == 0 && stats.invalidEvents == 0;
+        }
+        analysisComplete = analysisComplete && malformedCallbacks_ == 0 && frameworkErrors_ == 0;
     }
     std::ostringstream sessionEnd;
     const bool transportComplete = server_.TransportComplete() && server_.DroppedMessages() == 0;
@@ -310,6 +382,7 @@ void ToolManager::Finalize()
     logger_.Info(sessionEnd.str());
     logger_.Flush();
     memcheck_.reset();
+    synccheck_.reset();
     initialized_ = false;
 }
 
@@ -364,6 +437,7 @@ void ToolManager::OnCallback(AclsanCallbackDomain domain, AclsanCallbackId cbid,
 {
     LogCallback(domain, cbid, cbdata);
     std::vector<aclsan::cann::NpusanMemcheckReport> reports;
+    std::vector<aclsan::cann::NpusanSynccheckReport> syncReports;
     bool malformed = false;
     {
         std::lock_guard<std::mutex> stateLock(stateMutex_);
@@ -371,14 +445,14 @@ void ToolManager::OnCallback(AclsanCallbackDomain domain, AclsanCallbackId cbid,
             case ACLSAN_CB_DOMAIN_RESOURCE: {
                 const auto* data = ValidateCallbackData<AclsanResourceData>(cbdata);
                 malformed = data == nullptr;
-                if (data != nullptr && cbid == ACLSAN_CBID_RESOURCE_MEMORY_ALLOC) {
+                if (data != nullptr && memcheck_ != nullptr && cbid == ACLSAN_CBID_RESOURCE_MEMORY_ALLOC) {
                     memcheck_->OnAllocation(*data);
                     std::ostringstream message;
                     message << "memory alloc resource=" << data->resourceId << " device=" << data->deviceId
                             << " address=" << data->ptr << " bytes=" << data->bytes
                             << " result=" << data->common.result;
                     logger_.Info(message.str());
-                } else if (data != nullptr && cbid == ACLSAN_CBID_RESOURCE_MEMORY_FREE) {
+                } else if (data != nullptr && memcheck_ != nullptr && cbid == ACLSAN_CBID_RESOURCE_MEMORY_FREE) {
                     memcheck_->OnFree(*data);
                     std::ostringstream message;
                     message << "memory free resource=" << data->resourceId << " device=" << data->deviceId
@@ -390,7 +464,7 @@ void ToolManager::OnCallback(AclsanCallbackDomain domain, AclsanCallbackId cbid,
             case ACLSAN_CB_DOMAIN_DEVICE_INSTRUCTION: {
                 if (cbid == ACLSAN_CBID_DEVICE_MEMORY_ACCESS) {
                     const auto* data = ValidateDeviceMemoryAccessData(cbdata);
-                    if (data != nullptr) {
+                    if (data != nullptr && memcheck_ != nullptr) {
                         memcheck_->QueueDeviceMemoryAccess(*data);
                         std::ostringstream message;
                         message << "device memory access launch=" << data->header.launchId << " pc=0x" << std::hex
@@ -401,18 +475,33 @@ void ToolManager::OnCallback(AclsanCallbackDomain domain, AclsanCallbackId cbid,
                     } else {
                         malformed = true;
                     }
+                } else if (cbid == ACLSAN_CBID_DEVICE_SYNC) {
+                    const auto* data = static_cast<const AclsanDeviceSyncData*>(cbdata);
+                    if (data != nullptr && synccheck_ != nullptr) {
+                        syncReports = synccheck_->OnDeviceSync(*data);
+                    } else {
+                        malformed = true;
+                    }
                 }
                 break;
             }
             case ACLSAN_CB_DOMAIN_SYNCHRONIZE: {
                 const auto* data = ValidateCallbackData<AclsanSynchronizeData>(cbdata);
                 malformed = data == nullptr;
-                if (data != nullptr && data->common.result == 0) {
+                if (data != nullptr && memcheck_ != nullptr && data->common.result == 0) {
                     reports = memcheck_->OnSynchronization();
                     std::ostringstream message;
                     message << "synchronization completed reports=" << reports.size() << " stream=" << data->stream;
                     logger_.Info(message.str());
-                } else if (data != nullptr) {
+                }
+                if (data != nullptr && synccheck_ != nullptr) {
+                    syncReports = synccheck_->OnSynchronization();
+                    std::ostringstream message;
+                    message << "synchronization observed reports=" << syncReports.size() << " stream=" << data->stream
+                            << " result=" << data->common.result;
+                    logger_.Info(message.str());
+                }
+                if (data != nullptr && data->common.result != 0) {
                     std::ostringstream message;
                     message << "synchronization failed result=" << data->common.result << " stream=" << data->stream;
                     logger_.Warning(message.str());
@@ -431,6 +520,7 @@ void ToolManager::OnCallback(AclsanCallbackDomain domain, AclsanCallbackId cbid,
         PublishMalformed(domain, cbid, "null, truncated, or incompatible callback data");
     } else {
         PublishDiagnostics(std::move(reports));
+        PublishSynccheckReports(std::move(syncReports));
     }
 }
 
@@ -475,6 +565,31 @@ void ToolManager::PublishDiagnostics(std::vector<aclsan::cann::NpusanMemcheckRep
     }
 }
 
+void ToolManager::PublishSynccheckReports(std::vector<aclsan::cann::NpusanSynccheckReport> reports)
+{
+    for (auto& report : reports) {
+        PopulateDeviceCallStack(report);
+        std::string rendered;
+        const auto status =
+            aclsan::cann::RenderNpusanReportRecord(aclsan::cann::NpusanReportRecord::From(report), {}, &rendered);
+        if (status != aclsan::cann::ReportRenderStatus::kSuccess) {
+            std::ostringstream message;
+            message << "synccheck report rendering failed report_id=" << report.common.reportId
+                    << " status=" << static_cast<int>(status);
+            {
+                std::lock_guard<std::mutex> stateLock(stateMutex_);
+                ++frameworkErrors_;
+            }
+            logger_.Error(message.str());
+            continue;
+        }
+        logger_.Info("synccheck diagnostic report generated report_id=" + std::to_string(report.common.reportId));
+        if (!server_.Publish(ipc::MessageType::DIAGNOSTIC, rendered)) {
+            logger_.Error("failed to queue synccheck diagnostic report for UDS delivery");
+        }
+    }
+}
+
 void ToolManager::PublishMalformed(AclsanCallbackDomain domain, AclsanCallbackId cbid, const char* reason)
 {
     std::ostringstream output;
@@ -495,24 +610,36 @@ void ToolManager::LogCallback(AclsanCallbackDomain domain, AclsanCallbackId cbid
 std::string ToolManager::BuildReadyMessage() const
 {
     std::ostringstream output;
-    output << "tool=memcheck session=" << server_.SessionId() << " api_version=" << ACLSAN_API_VERSION
-           << " callbacks=" << kMemcheckCallbacks.size() << " compile_options=" << config_.compileOptions.size();
+    const size_t callbackCount =
+        config_.toolName == "memcheck" ? kMemcheckCallbacks.size() : kSynccheckCallbacks.size();
+    output << "tool=" << config_.toolName << " session=" << server_.SessionId() << " api_version=" << ACLSAN_API_VERSION
+           << " callbacks=" << callbackCount << " compile_options=" << config_.compileOptions.size();
     return output.str();
 }
 
 std::string ToolManager::BuildSummaryMessage() const
 {
     std::lock_guard<std::mutex> stateLock(stateMutex_);
-    const MemcheckStats stats = memcheck_ != nullptr ? memcheck_->Stats() : MemcheckStats{};
     std::ostringstream output;
-    output << "tool=memcheck"
-           << " allocations=" << stats.allocations << " frees=" << stats.frees
-           << " device_operations=" << stats.deviceOperations << " synchronizations=" << stats.synchronizationEvents
-           << " errors=" << stats.errors << " warnings=" << stats.warnings
-           << " pending_device_operations=" << stats.pendingDeviceOperations
-           << " dropped_device_operations=" << stats.droppedDeviceOperations << " callbacks=" << callbackCount_.load()
-           << " malformed_callbacks=" << malformedCallbacks_ << " framework_errors=" << frameworkErrors_
-           << " dropped_messages=" << server_.DroppedMessages();
+    output << "tool=" << config_.toolName;
+    if (memcheck_ != nullptr) {
+        const MemcheckStats stats = memcheck_->Stats();
+        output << " allocations=" << stats.allocations << " frees=" << stats.frees
+               << " device_operations=" << stats.deviceOperations << " synchronizations=" << stats.synchronizationEvents
+               << " errors=" << stats.errors << " warnings=" << stats.warnings
+               << " pending_device_operations=" << stats.pendingDeviceOperations
+               << " dropped_device_operations=" << stats.droppedDeviceOperations;
+    } else {
+        const SynccheckStats stats = synccheck_ != nullptr ? synccheck_->Stats() : SynccheckStats{};
+        const uint64_t errors = stats.duplicateOpens + stats.unmatchedCloses + stats.unconsumedOpens;
+        output << " sync_events=" << stats.syncEvents << " synchronizations=" << stats.synchronizationEvents
+               << " matched_pairs=" << stats.matchedPairs << " duplicate_opens=" << stats.duplicateOpens
+               << " unmatched_closes=" << stats.unmatchedCloses << " unconsumed_opens=" << stats.unconsumedOpens
+               << " invalid_events=" << stats.invalidEvents << " pending_opens=" << stats.pendingOpens
+               << " errors=" << errors << " warnings=0";
+    }
+    output << " callbacks=" << callbackCount_.load() << " malformed_callbacks=" << malformedCallbacks_
+           << " framework_errors=" << frameworkErrors_ << " dropped_messages=" << server_.DroppedMessages();
     return output.str();
 }
 

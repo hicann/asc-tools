@@ -33,7 +33,8 @@ struct CallStackResult;
 
 using CceInstructionParamField = std::variant<
     sanitizer::CopyGmToUbufAlignV2ParamField, sanitizer::CopyGmToCbufAlignV2ParamField,
-    sanitizer::CopyUbufToGmAlignV2ParamField, sanitizer::CopyGmToCbufV2ParamField, sanitizer::FlagParamField>;
+    sanitizer::CopyUbufToGmAlignV2ParamField, sanitizer::CopyGmToCbufV2ParamField, sanitizer::FlagParamField,
+    sanitizer::BufferParamField>;
 
 using CceTraceCallbackData = std::variant<DeviceMemoryAccessDataArray, AclsanDeviceSyncData>;
 

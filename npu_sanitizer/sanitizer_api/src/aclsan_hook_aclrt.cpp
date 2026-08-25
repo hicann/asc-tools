@@ -247,6 +247,13 @@ void CollectProbeRecords(aclrtStream stream) noexcept
     }
 }
 
+void CompleteStreamSynchronization(const char* apiName, aclrtStream stream, aclError result) noexcept
+{
+    CollectProbeRecords(stream);
+    const AclsanSynchronizeData callbackData = MakeSynchronizeData(apiName, stream, result);
+    aclsan::AclsanCallbackDispatcher::DispatchSynchronizeEnd(callbackData);
+}
+
 aclError aclrtMallocHook(void** deviceAddress, std::size_t size, aclrtMemMallocPolicy policy) noexcept
 {
     const auto original = GetOriginalRuntimeFunction<ACL_RT_API_aclrtMalloc>();
@@ -348,43 +355,26 @@ aclError aclrtSynchronizeStreamHook(aclrtStream stream) noexcept
 {
     const auto original = GetOriginalRuntimeFunction<ACL_RT_API_aclrtSynchronizeStream>();
     if (original == nullptr) {
-        const AclsanSynchronizeData callbackData =
-            MakeSynchronizeData("aclrtSynchronizeStream", stream, ACL_ERROR_RT_INTERNAL_ERROR);
-        aclsan::AclsanCallbackDispatcher::DispatchSynchronizeEnd(callbackData);
+        CompleteStreamSynchronization("aclrtSynchronizeStream", stream, ACL_ERROR_RT_INTERNAL_ERROR);
         return ACL_ERROR_RT_INTERNAL_ERROR;
     }
 
     const aclError result = original(stream);
-    if (result == ACL_SUCCESS) {
-        CollectProbeRecords(stream);
-    }
-    const AclsanSynchronizeData callbackData = MakeSynchronizeData("aclrtSynchronizeStream", stream, result);
-    aclsan::AclsanCallbackDispatcher::DispatchSynchronizeEnd(callbackData);
+    CompleteStreamSynchronization("aclrtSynchronizeStream", stream, result);
     return result;
 }
 
 aclError aclrtSynchronizeStreamWithTimeoutHook(aclrtStream stream, int32_t timeout) noexcept
 {
-    printf("HERE first original aclrtSynchronizeStreamWithTimeoutHook ====================\n");
     const auto original = GetOriginalRuntimeFunction<ACL_RT_API_aclrtSynchronizeStreamWithTimeout>();
-    printf("HERE SSSSSS original aclrtSynchronizeStreamWithTimeoutHook ====================\n");
     if (original == nullptr) {
-        const AclsanSynchronizeData callbackData =
-            MakeSynchronizeData("aclrtSynchronizeStreamWithTimeout", stream, ACL_ERROR_RT_INTERNAL_ERROR);
-        aclsan::AclsanCallbackDispatcher::DispatchSynchronizeEnd(callbackData);
+        CompleteStreamSynchronization("aclrtSynchronizeStreamWithTimeout", stream, ACL_ERROR_RT_INTERNAL_ERROR);
         return ACL_ERROR_RT_INTERNAL_ERROR;
     }
 
-    printf("HERE before original aclrtSynchronizeStreamWithTimeoutHook ====================\n");
     const aclError result = original(stream, timeout);
-    printf("HERE after original aclrtSynchronizeStreamWithTimeoutHook ====================\n");
-    if (result == ACL_SUCCESS) {
-        CollectProbeRecords(stream);
-    }
-    const AclsanSynchronizeData callbackData = MakeSynchronizeData("aclrtSynchronizeStreamWithTimeout", stream, result);
-    aclsan::AclsanCallbackDispatcher::DispatchSynchronizeEnd(callbackData);
+    CompleteStreamSynchronization("aclrtSynchronizeStreamWithTimeout", stream, result);
     return result;
-    // return 0;
 }
 
 aclError aclrtBinaryUnLoadHook(aclrtBinHandle binHandle) noexcept
