@@ -49,6 +49,6 @@ bool InvokeAclPtiRuntimeReady();
 
 } // namespace npu_compute::test
 
-extern "C" int AclPtiCallbackStubEmitRuntimeEvent(std::uint32_t cbid, std::uint32_t site, std::int32_t retval);
+extern "C" int AclPtiCallbackStubEmitRuntimeEvent(uint32_t cbid, uint32_t site, std::int32_t retval);
 
 #endif // NPU_COMPUTE_STUBS_ACL_PTI_CALLBACK_INCLUDE_NPU_COMPUTE_ACL_PTI_CALLBACK_STUB_H_

@@ -27,9 +27,9 @@
 namespace npu_compute {
 namespace {
 
-constexpr std::uint64_t kBytesPerMb = 1024ULL * 1024ULL;
-constexpr std::uint64_t kBytesPerGb = kBytesPerMb * 1024ULL;
-constexpr std::uint32_t kMaximumCpuId = 1024U * 1024U;
+constexpr uint64_t kBytesPerMb = 1024ULL * 1024ULL;
+constexpr uint64_t kBytesPerGb = kBytesPerMb * 1024ULL;
+constexpr uint32_t kMaximumCpuId = 1024U * 1024U;
 
 void Diagnose(DiagnosticSink* diagnostics, const std::string& message)
 {
@@ -70,10 +70,10 @@ bool ReadFile(const std::filesystem::path& path, std::string* content)
     return !input.bad();
 }
 
-bool ParseOnlineCpuList(std::string_view text, std::vector<std::uint32_t>* cpuIds)
+bool ParseOnlineCpuList(std::string_view text, std::vector<uint32_t>* cpuIds)
 {
     cpuIds->clear();
-    std::set<std::uint32_t> uniqueIds;
+    std::set<uint32_t> uniqueIds;
     text = Trim(text);
     if (text.empty()) {
         return false;
@@ -89,8 +89,8 @@ bool ParseOnlineCpuList(std::string_view text, std::vector<std::uint32_t>* cpuId
         }
 
         const std::size_t rangeSeparator = token.find('-');
-        std::uint32_t first = 0;
-        std::uint32_t last = 0;
+        uint32_t first = 0;
+        uint32_t last = 0;
         if (rangeSeparator == std::string_view::npos) {
             if (!ParseInteger(token, &first)) {
                 return false;
@@ -106,7 +106,7 @@ bool ParseOnlineCpuList(std::string_view text, std::vector<std::uint32_t>* cpuId
         if (last > kMaximumCpuId) {
             return false;
         }
-        for (std::uint32_t cpuId = first; cpuId <= last; ++cpuId) {
+        for (uint32_t cpuId = first; cpuId <= last; ++cpuId) {
             uniqueIds.insert(cpuId);
         }
 
@@ -129,14 +129,14 @@ void CollectPhysicalCpuCount(const HostInfoCollectionOptions& options, HostInfo*
         return;
     }
 
-    std::vector<std::uint32_t> cpuIds;
+    std::vector<uint32_t> cpuIds;
     if (!ParseOnlineCpuList(online, &cpuIds)) {
         Diagnose(diagnostics, "parse CPU online list failed: " + onlinePath.string());
         return;
     }
 
     std::set<std::int64_t> packageIds;
-    for (const std::uint32_t cpuId : cpuIds) {
+    for (const uint32_t cpuId : cpuIds) {
         const std::filesystem::path packagePath =
             options.cpuTopologyRoot / ("cpu" + std::to_string(cpuId)) / "topology/physical_package_id";
         std::string packageText;
@@ -152,21 +152,21 @@ void CollectPhysicalCpuCount(const HostInfoCollectionOptions& options, HostInfo*
         packageIds.insert(packageId);
     }
 
-    if (packageIds.size() > std::numeric_limits<std::uint32_t>::max()) {
+    if (packageIds.size() > std::numeric_limits<uint32_t>::max()) {
         Diagnose(diagnostics, "CPU package count exceeds supported range");
         return;
     }
-    result->cpuPhysicalCount = static_cast<std::uint32_t>(packageIds.size());
+    result->cpuPhysicalCount = static_cast<uint32_t>(packageIds.size());
 }
 
 void CollectLogicalCpuCount(HostInfo* result, DiagnosticSink* diagnostics)
 {
     const long count = ::sysconf(_SC_NPROCESSORS_CONF);
-    if (count <= 0 || static_cast<unsigned long>(count) > std::numeric_limits<std::uint32_t>::max()) {
+    if (count <= 0 || static_cast<unsigned long>(count) > std::numeric_limits<uint32_t>::max()) {
         Diagnose(diagnostics, "sysconf(_SC_NPROCESSORS_CONF) failed");
         return;
     }
-    result->cpuLogicalCount = static_cast<std::uint32_t>(count);
+    result->cpuLogicalCount = static_cast<uint32_t>(count);
 }
 
 void CollectMemoryTotal(HostInfo* result, DiagnosticSink* diagnostics)
@@ -177,13 +177,13 @@ void CollectMemoryTotal(HostInfo* result, DiagnosticSink* diagnostics)
         return;
     }
 
-    const std::uint64_t totalRam = information.totalram;
-    const std::uint64_t memoryUnit = information.mem_unit;
-    if (memoryUnit != 0 && totalRam > std::numeric_limits<std::uint64_t>::max() / memoryUnit) {
+    const uint64_t totalRam = information.totalram;
+    const uint64_t memoryUnit = information.mem_unit;
+    if (memoryUnit != 0 && totalRam > std::numeric_limits<uint64_t>::max() / memoryUnit) {
         Diagnose(diagnostics, "sysinfo total memory exceeds supported range");
         return;
     }
-    const std::uint64_t bytes = totalRam * memoryUnit;
+    const uint64_t bytes = totalRam * memoryUnit;
     result->memoryTotalSizeMb = static_cast<double>(bytes) / static_cast<double>(kBytesPerMb);
 }
 
@@ -195,13 +195,13 @@ void CollectDiskTotal(const std::filesystem::path& outputDirectory, HostInfo* re
         return;
     }
 
-    const std::uint64_t blocks = information.f_blocks;
-    const std::uint64_t fragmentSize = information.f_frsize;
-    if (fragmentSize != 0 && blocks > std::numeric_limits<std::uint64_t>::max() / fragmentSize) {
+    const uint64_t blocks = information.f_blocks;
+    const uint64_t fragmentSize = information.f_frsize;
+    if (fragmentSize != 0 && blocks > std::numeric_limits<uint64_t>::max() / fragmentSize) {
         Diagnose(diagnostics, "statvfs total size exceeds supported range");
         return;
     }
-    const std::uint64_t bytes = blocks * fragmentSize;
+    const uint64_t bytes = blocks * fragmentSize;
     result->diskTotalSizeGb = static_cast<double>(bytes) / static_cast<double>(kBytesPerGb);
 }
 

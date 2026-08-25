@@ -26,23 +26,23 @@ bool Fail(const std::string& message, std::string* error)
     return false;
 }
 
-void WriteLe16(std::uint16_t value, std::uint8_t* output)
+void WriteLe16(uint16_t value, uint8_t* output)
 {
-    output[0] = static_cast<std::uint8_t>(value);
-    output[1] = static_cast<std::uint8_t>(value >> 8U);
+    output[0] = static_cast<uint8_t>(value);
+    output[1] = static_cast<uint8_t>(value >> 8U);
 }
 
-void WriteLe32(std::uint32_t value, std::uint8_t* output)
+void WriteLe32(uint32_t value, uint8_t* output)
 {
     for (std::size_t index = 0; index < sizeof(value); ++index) {
-        output[index] = static_cast<std::uint8_t>(value >> (index * 8U));
+        output[index] = static_cast<uint8_t>(value >> (index * 8U));
     }
 }
 
-void WriteLe64(std::uint64_t value, std::uint8_t* output)
+void WriteLe64(uint64_t value, uint8_t* output)
 {
     for (std::size_t index = 0; index < sizeof(value); ++index) {
-        output[index] = static_cast<std::uint8_t>(value >> (index * 8U));
+        output[index] = static_cast<uint8_t>(value >> (index * 8U));
     }
 }
 
@@ -77,9 +77,9 @@ bool ValidateFileName(const std::string& name, std::string* error)
     return true;
 }
 
-bool AddChecked(std::uint64_t value, std::uint64_t* total, std::string* error)
+bool AddChecked(uint64_t value, uint64_t* total, std::string* error)
 {
-    if (value > std::numeric_limits<std::uint64_t>::max() - *total) {
+    if (value > std::numeric_limits<uint64_t>::max() - *total) {
         return Fail("rep length exceeds uint64_t", error);
     }
     *total += value;
@@ -88,7 +88,7 @@ bool AddChecked(std::uint64_t value, std::uint64_t* total, std::string* error)
 
 } // namespace
 
-bool EncodeRep(const std::vector<RepEntry>& entries, std::vector<std::uint8_t>* encoded, std::string* error)
+bool EncodeRep(const std::vector<RepEntry>& entries, std::vector<uint8_t>* encoded, std::string* error)
 {
     if (error != nullptr) {
         error->clear();
@@ -99,15 +99,15 @@ bool EncodeRep(const std::vector<RepEntry>& entries, std::vector<std::uint8_t>* 
     encoded->clear();
 
     try {
-        if (entries.size() > std::numeric_limits<std::uint32_t>::max()) {
+        if (entries.size() > std::numeric_limits<uint32_t>::max()) {
             return Fail("rep entry count exceeds uint32_t", error);
         }
 
         std::unordered_set<std::string> names;
         names.reserve(entries.size());
-        std::uint64_t total_length = kNpuRepHeadSize;
-        const std::uint64_t entry_count = entries.size();
-        if (entry_count > (std::numeric_limits<std::uint64_t>::max() - total_length) / kNpuRepFileInfoSize) {
+        uint64_t total_length = kNpuRepHeadSize;
+        const uint64_t entry_count = entries.size();
+        if (entry_count > (std::numeric_limits<uint64_t>::max() - total_length) / kNpuRepFileInfoSize) {
             return Fail("rep file info table length overflows", error);
         }
         total_length += entry_count * kNpuRepFileInfoSize;
@@ -122,12 +122,12 @@ bool EncodeRep(const std::vector<RepEntry>& entries, std::vector<std::uint8_t>* 
             if (!names.insert(entry.file_name).second) {
                 return Fail("rep contains duplicate file names: " + entry.file_name, error);
             }
-            if constexpr (sizeof(std::size_t) > sizeof(std::uint64_t)) {
-                if (entry.payload.size() > std::numeric_limits<std::uint64_t>::max()) {
+            if constexpr (sizeof(std::size_t) > sizeof(uint64_t)) {
+                if (entry.payload.size() > std::numeric_limits<uint64_t>::max()) {
                     return Fail("rep entry payload length exceeds uint64_t", error);
                 }
             }
-            if (!AddChecked(static_cast<std::uint64_t>(entry.payload.size()), &total_length, error)) {
+            if (!AddChecked(static_cast<uint64_t>(entry.payload.size()), &total_length, error)) {
                 return false;
             }
         }
@@ -136,27 +136,27 @@ bool EncodeRep(const std::vector<RepEntry>& entries, std::vector<std::uint8_t>* 
         }
 
         encoded->assign(static_cast<std::size_t>(total_length), 0);
-        std::uint8_t* output = encoded->data();
+        uint8_t* output = encoded->data();
         std::copy(kNpuRepMagic.begin(), kNpuRepMagic.end(), output);
         WriteLe32(kNpuRepVersion, output + 8);
         WriteLe16(kNpuRepOrigin, output + 12);
-        WriteLe16(static_cast<std::uint16_t>(kNpuRepHeadSize), output + 14);
-        WriteLe32(static_cast<std::uint32_t>(entries.size()), output + 16);
-        WriteLe32(static_cast<std::uint32_t>(kNpuRepFileInfoSize), output + 20);
+        WriteLe16(static_cast<uint16_t>(kNpuRepHeadSize), output + 14);
+        WriteLe32(static_cast<uint32_t>(entries.size()), output + 16);
+        WriteLe32(static_cast<uint32_t>(kNpuRepFileInfoSize), output + 20);
         WriteLe32(0, output + 24);
         WriteLe64(total_length, output + 28);
 
         std::size_t payload_offset = kNpuRepHeadSize + entries.size() * kNpuRepFileInfoSize;
         for (std::size_t index = 0; index < entries.size(); ++index) {
             const RepEntry& entry = entries[index];
-            std::uint8_t* info = output + kNpuRepHeadSize + index * kNpuRepFileInfoSize;
+            uint8_t* info = output + kNpuRepHeadSize + index * kNpuRepFileInfoSize;
             std::copy(kNpuRepMagic.begin(), kNpuRepMagic.end(), info);
             std::memcpy(info + 8, entry.file_name.data(), entry.file_name.size());
-            WriteLe16(static_cast<std::uint16_t>(entry.file_type), info + 136);
+            WriteLe16(static_cast<uint16_t>(entry.file_type), info + 136);
             WriteLe16(0, info + 138);
             WriteLe32(0, info + 140);
-            WriteLe64(static_cast<std::uint64_t>(entry.payload.size()), info + 144);
-            WriteLe64(static_cast<std::uint64_t>(payload_offset), info + 152);
+            WriteLe64(static_cast<uint64_t>(entry.payload.size()), info + 144);
+            WriteLe64(static_cast<uint64_t>(payload_offset), info + 152);
             std::copy(entry.payload.begin(), entry.payload.end(), output + payload_offset);
             payload_offset += entry.payload.size();
         }

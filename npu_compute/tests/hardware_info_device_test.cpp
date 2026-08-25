@@ -80,7 +80,7 @@ public:
         return true;
     }
 
-    bool GetControlCpuCount(std::int32_t deviceId, std::uint32_t* value) override
+    bool GetControlCpuCount(std::int32_t deviceId, uint32_t* value) override
     {
         deviceIds.push_back(deviceId);
         if (failControlCpuCount) {
@@ -90,7 +90,7 @@ public:
         return true;
     }
 
-    bool GetAiCpuFrequency(std::int32_t deviceId, std::uint32_t* value) override
+    bool GetAiCpuFrequency(std::int32_t deviceId, uint32_t* value) override
     {
         deviceIds.push_back(deviceId);
         if (failAiCpuFrequency) {
@@ -110,7 +110,7 @@ public:
         return true;
     }
 
-    bool GetHbmUsage(std::int32_t deviceId, std::uint64_t* freeBytes, std::uint64_t* totalBytes) override
+    bool GetHbmUsage(std::int32_t deviceId, uint64_t* freeBytes, uint64_t* totalBytes) override
     {
         deviceIds.push_back(deviceId);
         if (failHbmUsage) {
@@ -121,7 +121,7 @@ public:
         return true;
     }
 
-    bool GetHbmFrequency(std::int32_t deviceId, std::uint32_t* value) override
+    bool GetHbmFrequency(std::int32_t deviceId, uint32_t* value) override
     {
         deviceIds.push_back(deviceId);
         if (failHbmFrequency) {
@@ -140,11 +140,11 @@ public:
     std::int32_t deviceCount = 1;
     std::string socName = "Ascend950PR_9599";
     std::string chipVersion = "V100";
-    std::uint32_t controlCpuCount = 1;
-    std::uint32_t aiCpuFrequency = 1500;
-    std::uint64_t hbmFreeBytes = 10ULL * 1024ULL * 1024ULL;
-    std::uint64_t hbmTotalBytes = 16ULL * 1024ULL * 1024ULL;
-    std::uint32_t hbmFrequency = 3200;
+    uint32_t controlCpuCount = 1;
+    uint32_t aiCpuFrequency = 1500;
+    uint64_t hbmFreeBytes = 10ULL * 1024ULL * 1024ULL;
+    uint64_t hbmTotalBytes = 16ULL * 1024ULL * 1024ULL;
+    uint32_t hbmFrequency = 3200;
     std::map<std::int32_t, std::int64_t> deviceAttributeValues = {
         {npu_compute::kDeviceAttributeNpuArch, 3510},       {npu_compute::kDeviceAttributeAiCpuCoreCount, 6},
         {npu_compute::kDeviceAttributeAiCoreCount, 36},     {npu_compute::kDeviceAttributeCubeCoreCount, 36},

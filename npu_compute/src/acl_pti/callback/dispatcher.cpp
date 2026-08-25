@@ -22,9 +22,9 @@ bool Dispatcher::RegisterDomain(aclptiCallbackDomain domain, std::initializer_li
     return registry_.RegisterDomain(domain, callbackIds);
 }
 
-std::uint64_t Dispatcher::MakeCallbackKey(aclptiCallbackDomain domain, aclptiCallbackId cbid)
+uint64_t Dispatcher::MakeCallbackKey(aclptiCallbackDomain domain, aclptiCallbackId cbid)
 {
-    return (static_cast<std::uint64_t>(domain) << 32U) | static_cast<std::uint64_t>(cbid);
+    return (static_cast<uint64_t>(domain) << 32U) | static_cast<uint64_t>(cbid);
 }
 
 void Dispatcher::Configure(aclptiCallbackFunc callback, void* userData)

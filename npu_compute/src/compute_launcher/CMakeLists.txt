@@ -31,7 +31,7 @@ set_target_properties(npu_compute_cli PROPERTIES OUTPUT_NAME npu-compute)
 npu_compute_set_output(npu_compute_cli)
 
 install(TARGETS npu_compute_cli
-  RUNTIME DESTINATION bin
+  RUNTIME DESTINATION "${NPU_COMPUTE_INSTALL_BINDIR}"
   PERMISSIONS OWNER_READ OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE
-  COMPONENT npu-compute-integration
+  COMPONENT asc-tools
 )

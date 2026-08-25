@@ -134,7 +134,7 @@ bool RuntimeApiReplacements::RegisterReplacements()
 }
 
 aclError RuntimeApiReplacements::AclrtLaunchKernelWithHostArgsReplacement(
-    aclrtFuncHandle funcHandle, std::uint32_t numBlocks, aclrtStream stream, aclrtLaunchKernelCfg* cfg, void* hostArgs,
+    aclrtFuncHandle funcHandle, uint32_t numBlocks, aclrtStream stream, aclrtLaunchKernelCfg* cfg, void* hostArgs,
     std::size_t argsSize, aclrtPlaceHolderInfo* placeHolderArray, std::size_t placeHolderNum)
 {
     aclptiAclrtLaunchKernelWithHostArgsParams params{funcHandle, numBlocks, stream,           cfg,
@@ -315,7 +315,7 @@ aclError RuntimeApiReplacements::AclrtSynchronizeStreamReplacement(aclrtStream s
 }
 
 aclError RuntimeApiReplacements::AclrtBinaryGetFunctionByEntryReplacement(
-    aclrtBinHandle binHandle, std::uint64_t funcEntry, aclrtFuncHandle* funcHandle)
+    aclrtBinHandle binHandle, uint64_t funcEntry, aclrtFuncHandle* funcHandle)
 {
     aclptiAclrtBinaryGetFunctionByEntryParams params{binHandle, funcEntry, funcHandle};
     return ForwardRuntimeApi<aclrtBinaryGetFunctionByEntryFunc>(
@@ -326,7 +326,7 @@ aclError RuntimeApiReplacements::AclrtBinaryGetFunctionByEntryReplacement(
 }
 
 aclError RuntimeApiReplacements::AclrtLaunchKernelReplacement(
-    aclrtFuncHandle function, std::uint32_t blockCount, const void* argsData, std::size_t argsSize, aclrtStream stream)
+    aclrtFuncHandle function, uint32_t blockCount, const void* argsData, std::size_t argsSize, aclrtStream stream)
 {
     aclptiAclrtLaunchKernelParams params{function, blockCount, argsData, argsSize, stream};
     return InvokeRuntimeCallback(ACLPTI_RUNTIME_CBID_aclrtLaunchKernel, params, [&params]() -> aclError {

@@ -38,41 +38,41 @@ private:
 };
 
 struct TaskLog32 {
-    std::uint8_t funcType;
-    std::uint16_t taskId;
-    std::uint16_t rtStreamId;
-    std::uint64_t systemCounter;
-    std::uint16_t blockId;
-    std::uint16_t subBlockId;
+    uint8_t funcType;
+    uint16_t taskId;
+    uint16_t rtStreamId;
+    uint64_t systemCounter;
+    uint16_t blockId;
+    uint16_t subBlockId;
     aclptiCoreType coreType;
-    std::uint8_t coreTypeId;
+    uint8_t coreTypeId;
 };
 
 struct PmuRecord128 {
-    std::uint16_t taskId;
-    std::uint16_t rtStreamId;
-    std::uint64_t totalCycles;
-    std::uint64_t taskStartSystemCounter;
-    std::uint64_t taskEndSystemCounter;
+    uint16_t taskId;
+    uint16_t rtStreamId;
+    uint64_t totalCycles;
+    uint64_t taskStartSystemCounter;
+    uint64_t taskEndSystemCounter;
     bool overflow;
     aclptiCoreType coreType;
-    std::uint8_t coreId;
-    std::uint16_t blockId;
-    std::uint16_t subBlockId;
-    std::map<std::uint32_t, double> pmuValues;
+    uint8_t coreId;
+    uint16_t blockId;
+    uint16_t subBlockId;
+    std::map<uint32_t, double> pmuValues;
 };
 
 using DecodedPayload = std::variant<TaskLog32, PmuRecord128>;
 
 struct DecodedRecord {
-    std::uint64_t recordIndex;
+    uint64_t recordIndex;
     DecodedPayload payload;
 };
 
-ResultOr<DecodedRecord> DecodeRawRecord(const std::byte* data, std::size_t size, std::uint64_t recordIndex);
+ResultOr<DecodedRecord> DecodeRawRecord(const std::byte* data, std::size_t size, uint64_t recordIndex);
 
 ResultOr<DecodedRecord> DecodeRawRecord(
-    const std::byte* data, std::size_t size, std::uint64_t recordIndex, const PmuSlots& pmuEventIds);
+    const std::byte* data, std::size_t size, uint64_t recordIndex, const PmuSlots& pmuEventIds);
 
 } // namespace npu_compute::aclpti::data::detail
 

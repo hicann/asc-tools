@@ -43,7 +43,7 @@ int OriginalMalloc(void**, std::size_t, aclrtMemMallocPolicy)
 int OriginalFree(void*) { return 0; }
 int OriginalMemcpy(void*, std::size_t, const void*, std::size_t, aclrtMemcpyKind) { return 0; }
 int OriginalMemset(void*, std::size_t, int, std::size_t) { return 0; }
-int OriginalLaunch(void*, std::uint32_t, const void*, std::size_t, void*) { return 0; }
+int OriginalLaunch(void*, uint32_t, const void*, std::size_t, void*) { return 0; }
 int ReplacementMalloc(void** pointer, std::size_t size, aclrtMemMallocPolicy policy)
 {
     ++gReplacementMallocCalls;
@@ -69,7 +69,7 @@ int ReplacementMemset(void*, std::size_t, int, std::size_t)
     return 23;
 }
 
-int ReplacementLaunch(void*, std::uint32_t, const void*, std::size_t, void*)
+int ReplacementLaunch(void*, uint32_t, const void*, std::size_t, void*)
 {
     ++gReplacementLaunchCalls;
     return 24;

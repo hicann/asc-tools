@@ -79,7 +79,7 @@ bool WriteFile(const std::filesystem::path& path, std::string_view content)
     return output.good();
 }
 
-std::vector<std::uint8_t> Bytes(std::string_view content) { return {content.begin(), content.end()}; }
+std::vector<uint8_t> Bytes(std::string_view content) { return {content.begin(), content.end()}; }
 
 std::string HardwareInfo()
 {
@@ -92,7 +92,7 @@ std::string HardwareInfo()
 
 bool ExpectPackFailure(const std::filesystem::path& directory, std::string_view error_fragment)
 {
-    std::vector<std::uint8_t> encoded = {1U, 2U, 3U};
+    std::vector<uint8_t> encoded = {1U, 2U, 3U};
     std::string error;
     if (PackDirectoryToRep(directory, &encoded, &error) || !encoded.empty() ||
         error.find(error_fragment) == std::string::npos) {
@@ -123,7 +123,7 @@ int TestRecursivePacking()
     CHECK(WriteFile(device / "Memory.csv", memory));
     CHECK(WriteFile(details / "L2Cache.csv", l2));
 
-    std::vector<std::uint8_t> encoded;
+    std::vector<uint8_t> encoded;
     std::string error;
     CHECK(PackDirectoryToRep(root, &encoded, &error));
     CHECK(error.empty());

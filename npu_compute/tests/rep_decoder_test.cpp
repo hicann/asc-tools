@@ -41,29 +41,29 @@ using npu_compute::compute_launcher::EncodeRep;
 using npu_compute::compute_launcher::NpuRepFileType;
 using npu_compute::compute_launcher::RepEntry;
 
-std::vector<std::uint8_t> Bytes(std::string_view value) { return {value.begin(), value.end()}; }
+std::vector<uint8_t> Bytes(std::string_view value) { return {value.begin(), value.end()}; }
 
-void WriteLe16(std::uint16_t value, std::uint8_t* output)
+void WriteLe16(uint16_t value, uint8_t* output)
 {
-    output[0] = static_cast<std::uint8_t>(value);
-    output[1] = static_cast<std::uint8_t>(value >> 8U);
+    output[0] = static_cast<uint8_t>(value);
+    output[1] = static_cast<uint8_t>(value >> 8U);
 }
 
-void WriteLe32(std::uint32_t value, std::uint8_t* output)
+void WriteLe32(uint32_t value, uint8_t* output)
 {
     for (std::size_t index = 0; index < sizeof(value); ++index) {
-        output[index] = static_cast<std::uint8_t>(value >> (index * 8U));
+        output[index] = static_cast<uint8_t>(value >> (index * 8U));
     }
 }
 
-void WriteLe64(std::uint64_t value, std::uint8_t* output)
+void WriteLe64(uint64_t value, uint8_t* output)
 {
     for (std::size_t index = 0; index < sizeof(value); ++index) {
-        output[index] = static_cast<std::uint8_t>(value >> (index * 8U));
+        output[index] = static_cast<uint8_t>(value >> (index * 8U));
     }
 }
 
-bool BuildRep(std::vector<std::uint8_t>* encoded)
+bool BuildRep(std::vector<uint8_t>* encoded)
 {
     std::string error;
     return EncodeRep(
@@ -74,7 +74,7 @@ bool BuildRep(std::vector<std::uint8_t>* encoded)
 
 int TestDecodesValidRep()
 {
-    std::vector<std::uint8_t> encoded;
+    std::vector<uint8_t> encoded;
     CHECK(BuildRep(&encoded));
     DecodedRep decoded;
     std::string error = "old error";
@@ -92,12 +92,12 @@ int TestDecodesValidRep()
 
 int TestRejectsInvalidHeader()
 {
-    std::vector<std::uint8_t> encoded;
+    std::vector<uint8_t> encoded;
     CHECK(BuildRep(&encoded));
     DecodedRep decoded;
     std::string error;
 
-    std::vector<std::uint8_t> invalid = encoded;
+    std::vector<uint8_t> invalid = encoded;
     invalid[0] = 'x';
     CHECK(!DecodeRep(invalid, &decoded, &error));
     CHECK(error.find("magic") != std::string::npos);
@@ -121,14 +121,14 @@ int TestRejectsInvalidHeader()
 
 int TestRejectsInvalidFileInfo()
 {
-    std::vector<std::uint8_t> encoded;
+    std::vector<uint8_t> encoded;
     CHECK(BuildRep(&encoded));
     DecodedRep decoded;
     std::string error;
     constexpr std::size_t kFirstInfo = 36U;
     constexpr std::size_t kSecondInfo = 36U + 160U;
 
-    std::vector<std::uint8_t> invalid = encoded;
+    std::vector<uint8_t> invalid = encoded;
     const std::string duplicate = "HardwareInfo.jsonl";
     std::fill(invalid.begin() + kSecondInfo + 8U, invalid.begin() + kSecondInfo + 8U + 128U, 0U);
     std::copy(duplicate.begin(), duplicate.end(), invalid.begin() + kSecondInfo + 8U);
@@ -170,15 +170,15 @@ int TestRejectsInvalidFileInfo()
 
 int TestRejectsInvalidPayloadRanges()
 {
-    std::vector<std::uint8_t> encoded;
+    std::vector<uint8_t> encoded;
     CHECK(BuildRep(&encoded));
     DecodedRep decoded;
     std::string error;
     constexpr std::size_t kFirstInfo = 36U;
     constexpr std::size_t kSecondInfo = 36U + 160U;
-    constexpr std::uint64_t kPayloadStart = 36U + 2U * 160U;
+    constexpr uint64_t kPayloadStart = 36U + 2U * 160U;
 
-    std::vector<std::uint8_t> invalid = encoded;
+    std::vector<uint8_t> invalid = encoded;
     WriteLe64(kPayloadStart - 1U, invalid.data() + kFirstInfo + 152U);
     CHECK(!DecodeRep(invalid, &decoded, &error));
     CHECK(error.find("payload") != std::string::npos);
@@ -189,7 +189,7 @@ int TestRejectsInvalidPayloadRanges()
     CHECK(error.find("payload") != std::string::npos);
 
     invalid = encoded;
-    WriteLe64(static_cast<std::uint64_t>(encoded.size()), invalid.data() + kSecondInfo + 144U);
+    WriteLe64(static_cast<uint64_t>(encoded.size()), invalid.data() + kSecondInfo + 144U);
     CHECK(!DecodeRep(invalid, &decoded, &error));
     CHECK(error.find("payload") != std::string::npos);
 

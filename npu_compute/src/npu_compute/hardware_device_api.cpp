@@ -154,15 +154,14 @@ bool DynamicHardwareDeviceApi::GetDeviceCount(std::int32_t* value)
     if (value == nullptr) {
         return false;
     }
-    using Function = aclError (*)(std::uint32_t*);
+    using Function = aclError (*)(uint32_t*);
     const Function function = ToFunction<Function>(impl_->Resolve("aclrtGetDeviceCount", kAclLibrary));
     if (function == nullptr) {
         return false;
     }
 
-    std::uint32_t count = 0;
-    if (function(&count) != ACL_SUCCESS ||
-        count > static_cast<std::uint32_t>(std::numeric_limits<std::int32_t>::max())) {
+    uint32_t count = 0;
+    if (function(&count) != ACL_SUCCESS || count > static_cast<uint32_t>(std::numeric_limits<std::int32_t>::max())) {
         return false;
     }
     *value = static_cast<std::int32_t>(count);
@@ -192,10 +191,10 @@ bool DynamicHardwareDeviceApi::GetDeviceAttribute(std::int32_t deviceId, std::in
     if (deviceId < 0 || value == nullptr) {
         return false;
     }
-    using Function = aclError (*)(std::uint32_t, aclrtDevAttr, std::int64_t*);
+    using Function = aclError (*)(uint32_t, aclrtDevAttr, std::int64_t*);
     const Function function = ToFunction<Function>(impl_->Resolve("aclrtGetDeviceInfo", kAclLibrary));
     return function != nullptr &&
-           function(static_cast<std::uint32_t>(deviceId), static_cast<aclrtDevAttr>(attribute), value) == ACL_SUCCESS;
+           function(static_cast<uint32_t>(deviceId), static_cast<aclrtDevAttr>(attribute), value) == ACL_SUCCESS;
 }
 
 bool DynamicHardwareDeviceApi::GetPlatformValue(std::int32_t type, std::string* value)
@@ -203,14 +202,14 @@ bool DynamicHardwareDeviceApi::GetPlatformValue(std::int32_t type, std::string* 
     if (value == nullptr) {
         return false;
     }
-    using Function = aclError (*)(aclplatformDevInfo, char*, std::uint32_t);
+    using Function = aclError (*)(aclplatformDevInfo, char*, uint32_t);
     const Function function = ToFunction<Function>(impl_->Resolve("aclplatformGetDeviceInfo", kPlatformLibrary));
     if (function == nullptr) {
         return false;
     }
 
     std::array<char, kPlatformValueSize> buffer{};
-    if (function(static_cast<aclplatformDevInfo>(type), buffer.data(), static_cast<std::uint32_t>(buffer.size())) !=
+    if (function(static_cast<aclplatformDevInfo>(type), buffer.data(), static_cast<uint32_t>(buffer.size())) !=
         ACL_SUCCESS) {
         return false;
     }
@@ -222,27 +221,27 @@ bool DynamicHardwareDeviceApi::GetPlatformValue(std::int32_t type, std::string* 
     return true;
 }
 
-bool DynamicHardwareDeviceApi::GetControlCpuCount(std::int32_t deviceId, std::uint32_t* value)
+bool DynamicHardwareDeviceApi::GetControlCpuCount(std::int32_t deviceId, uint32_t* value)
 {
     if (deviceId < 0 || value == nullptr) {
         return false;
     }
-    using Function = drvError_t (*)(std::uint32_t, std::int32_t, std::int32_t, std::int64_t*);
+    using Function = drvError_t (*)(uint32_t, std::int32_t, std::int32_t, std::int64_t*);
     const Function function = ToFunction<Function>(impl_->Resolve("halGetDeviceInfo", kHalLibrary));
     if (function == nullptr) {
         return false;
     }
 
     std::int64_t count = 0;
-    if (function(static_cast<std::uint32_t>(deviceId), MODULE_TYPE_CCPU, INFO_TYPE_CORE_NUM, &count) != 0 ||
-        count < 0 || static_cast<std::uint64_t>(count) > std::numeric_limits<std::uint32_t>::max()) {
+    if (function(static_cast<uint32_t>(deviceId), MODULE_TYPE_CCPU, INFO_TYPE_CORE_NUM, &count) != 0 || count < 0 ||
+        static_cast<uint64_t>(count) > std::numeric_limits<uint32_t>::max()) {
         return false;
     }
-    *value = static_cast<std::uint32_t>(count);
+    *value = static_cast<uint32_t>(count);
     return true;
 }
 
-bool DynamicHardwareDeviceApi::GetAiCpuFrequency(std::int32_t deviceId, std::uint32_t* value)
+bool DynamicHardwareDeviceApi::GetAiCpuFrequency(std::int32_t deviceId, uint32_t* value)
 {
     if (deviceId < 0 || value == nullptr) {
         return false;
@@ -280,7 +279,7 @@ bool DynamicHardwareDeviceApi::GetChipVersion(std::int32_t deviceId, std::string
     return true;
 }
 
-bool DynamicHardwareDeviceApi::GetHbmUsage(std::int32_t deviceId, std::uint64_t* freeBytes, std::uint64_t* totalBytes)
+bool DynamicHardwareDeviceApi::GetHbmUsage(std::int32_t deviceId, uint64_t* freeBytes, uint64_t* totalBytes)
 {
     if (deviceId < 0 || freeBytes == nullptr || totalBytes == nullptr) {
         return false;
@@ -299,12 +298,12 @@ bool DynamicHardwareDeviceApi::GetHbmUsage(std::int32_t deviceId, std::uint64_t*
     if (getMemInfo(ACL_HBM_MEM, &freeValue, &totalValue) != ACL_SUCCESS) {
         return false;
     }
-    *freeBytes = static_cast<std::uint64_t>(freeValue);
-    *totalBytes = static_cast<std::uint64_t>(totalValue);
+    *freeBytes = static_cast<uint64_t>(freeValue);
+    *totalBytes = static_cast<uint64_t>(totalValue);
     return true;
 }
 
-bool DynamicHardwareDeviceApi::GetHbmFrequency(std::int32_t deviceId, std::uint32_t* value)
+bool DynamicHardwareDeviceApi::GetHbmFrequency(std::int32_t deviceId, uint32_t* value)
 {
     if (deviceId < 0 || value == nullptr) {
         return false;

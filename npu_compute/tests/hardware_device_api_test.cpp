@@ -52,12 +52,12 @@ struct FakeDsmiAiCpuInfo {
 };
 
 struct Calls {
-    std::vector<std::uint32_t> deviceInfoDeviceIds;
+    std::vector<uint32_t> deviceInfoDeviceIds;
     std::vector<std::int32_t> deviceAttributes;
     std::vector<std::int32_t> platformTypes;
     std::vector<std::int32_t> setDeviceIds;
     std::vector<std::int32_t> memoryAttributes;
-    std::vector<std::uint32_t> halDeviceIds;
+    std::vector<uint32_t> halDeviceIds;
     std::vector<std::int32_t> halModuleTypes;
     std::vector<std::int32_t> halInfoTypes;
     std::vector<std::int32_t> dsmiAiCpuDeviceIds;
@@ -70,7 +70,7 @@ Calls g_calls;
 
 void ResetCalls() { g_calls = {}; }
 
-extern "C" std::int32_t StubAclrtGetDeviceCount(std::uint32_t* value)
+extern "C" std::int32_t StubAclrtGetDeviceCount(uint32_t* value)
 {
     *value = 2;
     return kAclSuccess;
@@ -78,7 +78,7 @@ extern "C" std::int32_t StubAclrtGetDeviceCount(std::uint32_t* value)
 
 extern "C" const char* StubAclrtGetSocName() { return "Ascend950PR_9599"; }
 
-extern "C" std::int32_t StubAclrtGetDeviceInfo(std::uint32_t deviceId, std::int32_t attribute, std::int64_t* value)
+extern "C" std::int32_t StubAclrtGetDeviceInfo(uint32_t deviceId, std::int32_t attribute, std::int64_t* value)
 {
     g_calls.deviceInfoDeviceIds.push_back(deviceId);
     g_calls.deviceAttributes.push_back(attribute);
@@ -86,7 +86,7 @@ extern "C" std::int32_t StubAclrtGetDeviceInfo(std::uint32_t deviceId, std::int3
     return kAclSuccess;
 }
 
-extern "C" std::int32_t StubAclplatformGetDeviceInfo(std::int32_t type, char* value, std::uint32_t maxLength)
+extern "C" std::int32_t StubAclplatformGetDeviceInfo(std::int32_t type, char* value, uint32_t maxLength)
 {
     g_calls.platformTypes.push_back(type);
     constexpr char kResult[] = "1800";
@@ -112,7 +112,7 @@ extern "C" std::int32_t StubAclrtGetMemInfo(std::int32_t attribute, std::size_t*
 }
 
 extern "C" std::int32_t StubHalGetDeviceInfo(
-    std::uint32_t deviceId, std::int32_t moduleType, std::int32_t infoType, std::int64_t* value)
+    uint32_t deviceId, std::int32_t moduleType, std::int32_t infoType, std::int64_t* value)
 {
     g_calls.halDeviceIds.push_back(deviceId);
     g_calls.halModuleTypes.push_back(moduleType);
@@ -268,9 +268,9 @@ bool TestLoadedSymbolsAndExactArguments()
         std::int32_t count = 0;
         std::string text;
         std::int64_t attributeValue = 0;
-        std::uint32_t unsignedValue = 0;
-        std::uint64_t freeBytes = 0;
-        std::uint64_t totalBytes = 0;
+        uint32_t unsignedValue = 0;
+        uint64_t freeBytes = 0;
+        uint64_t totalBytes = 0;
 
         CHECK(api.GetDeviceCount(&count));
         CHECK(count == 2);
@@ -292,12 +292,12 @@ bool TestLoadedSymbolsAndExactArguments()
         CHECK(api.GetHbmFrequency(0, &unsignedValue));
         CHECK(unsignedValue == 3200);
 
-        CHECK(g_calls.deviceInfoDeviceIds == std::vector<std::uint32_t>{0});
+        CHECK(g_calls.deviceInfoDeviceIds == std::vector<uint32_t>{0});
         CHECK(g_calls.deviceAttributes == std::vector<std::int32_t>{npu_compute::kDeviceAttributeNpuArch});
         CHECK(g_calls.platformTypes == std::vector<std::int32_t>{npu_compute::kPlatformCubeFrequency});
         CHECK(g_calls.setDeviceIds == std::vector<std::int32_t>{0});
         CHECK(g_calls.memoryAttributes == std::vector<std::int32_t>{kAclHbmMem});
-        CHECK(g_calls.halDeviceIds == std::vector<std::uint32_t>{0});
+        CHECK(g_calls.halDeviceIds == std::vector<uint32_t>{0});
         CHECK(g_calls.halModuleTypes == std::vector<std::int32_t>{kHalModuleTypeCcpu});
         CHECK(g_calls.halInfoTypes == std::vector<std::int32_t>{kHalInfoTypeCoreNum});
         CHECK(g_calls.dsmiAiCpuDeviceIds == std::vector<std::int32_t>{0});
@@ -324,8 +324,8 @@ bool TestSonameFallbackAndHandleLifetime()
         std::int32_t count = 0;
         std::string value;
         std::int64_t attributeValue = 0;
-        std::uint64_t freeBytes = 0;
-        std::uint64_t totalBytes = 0;
+        uint64_t freeBytes = 0;
+        uint64_t totalBytes = 0;
         CHECK(api.GetDeviceCount(&count));
         CHECK(api.GetSocName(&value));
         CHECK(api.GetDeviceAttribute(0, npu_compute::kDeviceAttributeNpuArch, &attributeValue));
@@ -346,7 +346,7 @@ bool TestMissingDriverLibrariesAreIndependent()
     auto resolver = std::make_shared<FakeDynamicSymbolResolver>();
     resolver->AddLoadedAclSymbols();
     npu_compute::DynamicHardwareDeviceApi api(resolver);
-    std::uint32_t value = 0;
+    uint32_t value = 0;
     std::string text;
     std::int32_t count = 0;
 
@@ -379,9 +379,9 @@ bool TestMissingSingleAndAllSymbols()
     auto emptyResolver = std::make_shared<FakeDynamicSymbolResolver>();
     npu_compute::DynamicHardwareDeviceApi emptyApi(emptyResolver);
     std::string text;
-    std::uint32_t value = 0;
-    std::uint64_t freeBytes = 0;
-    std::uint64_t totalBytes = 0;
+    uint32_t value = 0;
+    uint64_t freeBytes = 0;
+    uint64_t totalBytes = 0;
     CHECK(!emptyApi.GetDeviceCount(&count));
     CHECK(!emptyApi.GetSocName(&text));
     CHECK(!emptyApi.GetDeviceAttribute(0, npu_compute::kDeviceAttributeNpuArch, &attributeValue));

@@ -21,16 +21,16 @@ namespace npu_compute::compute_launcher {
 struct DecodedRepEntry {
     std::string file_name;
     NpuRepFileType file_type = NpuRepFileType::NpuRep;
-    std::vector<std::uint8_t> payload;
+    std::vector<uint8_t> payload;
 };
 
 struct DecodedRep {
-    std::uint32_t version = 0;
-    std::uint16_t origin = 0;
+    uint32_t version = 0;
+    uint16_t origin = 0;
     std::vector<DecodedRepEntry> entries;
 };
 
-bool DecodeRep(const std::vector<std::uint8_t>& encoded, DecodedRep* decoded, std::string* error);
+bool DecodeRep(const std::vector<uint8_t>& encoded, DecodedRep* decoded, std::string* error);
 
 } // namespace npu_compute::compute_launcher
 

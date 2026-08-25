@@ -33,7 +33,7 @@ set_target_properties(acl_tool_injection PROPERTIES
 npu_compute_set_output(acl_tool_injection)
 
 install(TARGETS acl_tool_injection
-  LIBRARY DESTINATION lib64
+  LIBRARY DESTINATION "${NPU_COMPUTE_INSTALL_LIBDIR}"
   PERMISSIONS OWNER_READ OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE
-  COMPONENT npu-compute-integration
+  COMPONENT asc-tools
 )

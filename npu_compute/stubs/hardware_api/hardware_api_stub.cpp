@@ -22,7 +22,7 @@ namespace {
 
 constexpr std::size_t kGigabyte = 1024ULL * 1024ULL * 1024ULL;
 
-aclError CopyPlatformValue(std::string_view value, char* output, std::uint32_t maximumLength)
+aclError CopyPlatformValue(std::string_view value, char* output, uint32_t maximumLength)
 {
     if (output == nullptr || maximumLength <= value.size()) {
         return ACL_ERROR_INVALID_PARAM;
@@ -34,7 +34,7 @@ aclError CopyPlatformValue(std::string_view value, char* output, std::uint32_t m
 
 } // namespace
 
-extern "C" aclError aclrtGetDeviceCount(std::uint32_t* count)
+extern "C" aclError aclrtGetDeviceCount(uint32_t* count)
 {
     if (count == nullptr) {
         return ACL_ERROR_INVALID_PARAM;
@@ -46,7 +46,7 @@ extern "C" aclError aclrtGetDeviceCount(std::uint32_t* count)
 
 extern "C" const char* aclrtGetSocName() { return "Ascend950PR_9599"; }
 
-extern "C" aclError aclrtGetDeviceInfo(std::uint32_t deviceId, aclrtDevAttr attribute, std::int64_t* value)
+extern "C" aclError aclrtGetDeviceInfo(uint32_t deviceId, aclrtDevAttr attribute, std::int64_t* value)
 {
     if (deviceId != 0 || value == nullptr) {
         return ACL_ERROR_INVALID_PARAM;
@@ -73,7 +73,7 @@ extern "C" aclError aclrtGetDeviceInfo(std::uint32_t deviceId, aclrtDevAttr attr
     return ACL_SUCCESS;
 }
 
-extern "C" aclError aclplatformGetDeviceInfo(aclplatformDevInfo information, char* value, std::uint32_t maximumLength)
+extern "C" aclError aclplatformGetDeviceInfo(aclplatformDevInfo information, char* value, uint32_t maximumLength)
 {
     switch (information) {
         case ACL_PLATFORM_MEMORY_SIZE:
@@ -87,7 +87,7 @@ extern "C" aclError aclplatformGetDeviceInfo(aclplatformDevInfo information, cha
     }
 }
 
-extern "C" drvError_t halGetDeviceInfo(std::uint32_t deviceId, std::int32_t, std::int32_t, std::int64_t* value)
+extern "C" drvError_t halGetDeviceInfo(uint32_t deviceId, std::int32_t, std::int32_t, std::int64_t* value)
 {
     if (deviceId != 0 || value == nullptr) {
         return static_cast<drvError_t>(-1);

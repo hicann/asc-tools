@@ -27,27 +27,24 @@ bool Fail(const std::string& message, std::string* error)
     return false;
 }
 
-std::uint16_t ReadLe16(const std::uint8_t* data)
+uint16_t ReadLe16(const uint8_t* data) { return static_cast<uint16_t>(data[0]) | static_cast<uint16_t>(data[1]) << 8U; }
+
+uint32_t ReadLe32(const uint8_t* data)
 {
-    return static_cast<std::uint16_t>(data[0]) | static_cast<std::uint16_t>(data[1]) << 8U;
+    return static_cast<uint32_t>(data[0]) | static_cast<uint32_t>(data[1]) << 8U |
+           static_cast<uint32_t>(data[2]) << 16U | static_cast<uint32_t>(data[3]) << 24U;
 }
 
-std::uint32_t ReadLe32(const std::uint8_t* data)
+uint64_t ReadLe64(const uint8_t* data)
 {
-    return static_cast<std::uint32_t>(data[0]) | static_cast<std::uint32_t>(data[1]) << 8U |
-           static_cast<std::uint32_t>(data[2]) << 16U | static_cast<std::uint32_t>(data[3]) << 24U;
-}
-
-std::uint64_t ReadLe64(const std::uint8_t* data)
-{
-    std::uint64_t value = 0;
+    uint64_t value = 0;
     for (std::size_t index = 0; index < sizeof(value); ++index) {
-        value |= static_cast<std::uint64_t>(data[index]) << (index * 8U);
+        value |= static_cast<uint64_t>(data[index]) << (index * 8U);
     }
     return value;
 }
 
-bool HasMagic(const std::uint8_t* data) { return std::equal(kNpuRepMagic.begin(), kNpuRepMagic.end(), data); }
+bool HasMagic(const uint8_t* data) { return std::equal(kNpuRepMagic.begin(), kNpuRepMagic.end(), data); }
 
 bool IsKnownFileType(NpuRepFileType type)
 {
@@ -63,7 +60,7 @@ bool IsKnownFileType(NpuRepFileType type)
     return false;
 }
 
-bool ReadFileName(const std::uint8_t* data, std::string* name, std::string* error)
+bool ReadFileName(const uint8_t* data, std::string* name, std::string* error)
 {
     const char* begin = reinterpret_cast<const char*>(data);
     const char* end = static_cast<const char*>(std::memchr(begin, '\0', kNpuRepFileNameSize));
@@ -85,7 +82,7 @@ bool ReadFileName(const std::uint8_t* data, std::string* name, std::string* erro
 
 } // namespace
 
-bool DecodeRep(const std::vector<std::uint8_t>& encoded, DecodedRep* decoded, std::string* error)
+bool DecodeRep(const std::vector<uint8_t>& encoded, DecodedRep* decoded, std::string* error)
 {
     if (error != nullptr) {
         error->clear();
@@ -99,17 +96,17 @@ bool DecodeRep(const std::vector<std::uint8_t>& encoded, DecodedRep* decoded, st
         if (encoded.size() < kNpuRepHeadSize) {
             return Fail("rep is shorter than its header", error);
         }
-        const std::uint8_t* head = encoded.data();
+        const uint8_t* head = encoded.data();
         if (!HasMagic(head)) {
             return Fail("invalid rep header magic", error);
         }
-        const std::uint32_t version = ReadLe32(head + 8U);
-        const std::uint16_t origin = ReadLe16(head + 12U);
-        const std::uint16_t head_length = ReadLe16(head + 14U);
-        const std::uint32_t file_count = ReadLe32(head + 16U);
-        const std::uint32_t file_info_length = ReadLe32(head + 20U);
-        const std::uint32_t reserved = ReadLe32(head + 24U);
-        const std::uint64_t rep_length = ReadLe64(head + 28U);
+        const uint32_t version = ReadLe32(head + 8U);
+        const uint16_t origin = ReadLe16(head + 12U);
+        const uint16_t head_length = ReadLe16(head + 14U);
+        const uint32_t file_count = ReadLe32(head + 16U);
+        const uint32_t file_info_length = ReadLe32(head + 20U);
+        const uint32_t reserved = ReadLe32(head + 24U);
+        const uint64_t rep_length = ReadLe64(head + 28U);
 
         if (version != kNpuRepVersion) {
             return Fail("unsupported rep version", error);
@@ -130,10 +127,10 @@ bool DecodeRep(const std::vector<std::uint8_t>& encoded, DecodedRep* decoded, st
             return Fail("rep length does not match input size", error);
         }
 
-        if (file_count > (std::numeric_limits<std::uint64_t>::max() - head_length) / file_info_length) {
+        if (file_count > (std::numeric_limits<uint64_t>::max() - head_length) / file_info_length) {
             return Fail("rep file info table length overflows", error);
         }
-        const std::uint64_t payload_start = head_length + static_cast<std::uint64_t>(file_count) * file_info_length;
+        const uint64_t payload_start = head_length + static_cast<uint64_t>(file_count) * file_info_length;
         if (payload_start > encoded.size()) {
             return Fail("rep file info table exceeds input", error);
         }
@@ -143,10 +140,10 @@ bool DecodeRep(const std::vector<std::uint8_t>& encoded, DecodedRep* decoded, st
         decoded->entries.reserve(file_count);
         std::unordered_set<std::string> names;
         names.reserve(file_count);
-        std::uint64_t expected_payload_offset = payload_start;
-        for (std::uint32_t index = 0; index < file_count; ++index) {
-            const std::uint64_t info_offset = head_length + static_cast<std::uint64_t>(index) * file_info_length;
-            const std::uint8_t* info = encoded.data() + info_offset;
+        uint64_t expected_payload_offset = payload_start;
+        for (uint32_t index = 0; index < file_count; ++index) {
+            const uint64_t info_offset = head_length + static_cast<uint64_t>(index) * file_info_length;
+            const uint8_t* info = encoded.data() + info_offset;
             if (!HasMagic(info)) {
                 *decoded = {};
                 return Fail("invalid rep file info magic", error);
@@ -172,8 +169,8 @@ bool DecodeRep(const std::vector<std::uint8_t>& encoded, DecodedRep* decoded, st
                 return Fail("rep file info reserved field is not zero", error);
             }
 
-            const std::uint64_t file_length = ReadLe64(info + 144U);
-            const std::uint64_t file_offset = ReadLe64(info + 152U);
+            const uint64_t file_length = ReadLe64(info + 144U);
+            const uint64_t file_offset = ReadLe64(info + 152U);
             if (file_offset != expected_payload_offset || file_offset > encoded.size() ||
                 file_length > encoded.size() - file_offset) {
                 *decoded = {};

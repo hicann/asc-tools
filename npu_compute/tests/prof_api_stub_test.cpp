@@ -79,7 +79,7 @@ int main()
     CHECK(g_rawData.offset == 0);
     CHECK(g_rawData.chunkModule == 0);
     CHECK(g_rawData.chunkSize == 128);
-    std::uint32_t magic = 0;
+    uint32_t magic = 0;
     std::memcpy(&magic, g_rawData.chunk, sizeof(magic));
     CHECK(magic == 0x6bd3002aU);
     return 0;

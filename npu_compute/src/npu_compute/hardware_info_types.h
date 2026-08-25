@@ -18,36 +18,36 @@
 namespace npu_compute {
 
 struct HostInfo {
-    std::uint32_t cpuPhysicalCount = 0;
-    std::uint32_t cpuLogicalCount = 0;
+    uint32_t cpuPhysicalCount = 0;
+    uint32_t cpuLogicalCount = 0;
     double memoryTotalSizeMb = 0;
     double diskTotalSizeGb = 0;
 };
 
 struct DeviceInfo {
-    std::uint32_t npuCount = 0;
+    uint32_t npuCount = 0;
     std::string chipInfo;
     std::string archInfo;
 };
 
 struct CpuInfo {
-    std::uint32_t controlCpuCount = 0;
-    std::uint32_t aiCpuCount = 0;
-    std::uint32_t aiCpuFrequencyMhz = 0;
+    uint32_t controlCpuCount = 0;
+    uint32_t aiCpuCount = 0;
+    uint32_t aiCpuFrequencyMhz = 0;
 };
 
 struct AiCoreInfo {
-    std::uint32_t aiCoreCount = 0;
-    std::uint32_t aiCubeCount = 0;
-    std::uint32_t aiVectorCount = 0;
-    std::uint32_t aiCubeFrequencyMhz = 0;
-    std::uint32_t aiVectorFrequencyMhz = 0;
+    uint32_t aiCoreCount = 0;
+    uint32_t aiCubeCount = 0;
+    uint32_t aiVectorCount = 0;
+    uint32_t aiCubeFrequencyMhz = 0;
+    uint32_t aiVectorFrequencyMhz = 0;
 };
 
 struct MemoryInfo {
     double hbmTotalMb = 0;
     double hbmUsedMb = 0;
-    std::uint32_t hbmFrequencyMhz = 0;
+    uint32_t hbmFrequencyMhz = 0;
 };
 
 struct HardwareInfoSnapshot {

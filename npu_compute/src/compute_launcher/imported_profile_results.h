@@ -22,7 +22,7 @@ namespace npu_compute::compute_launcher {
 struct ImportedProfileEntry {
     std::string name;
     NpuRepFileType type = NpuRepFileType::NpuRep;
-    std::vector<std::uint8_t> payload;
+    std::vector<uint8_t> payload;
     std::vector<ImportedProfileEntry> children;
 };
 

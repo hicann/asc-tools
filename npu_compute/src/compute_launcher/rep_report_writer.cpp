@@ -34,7 +34,7 @@ namespace npu_compute::compute_launcher {
 namespace {
 
 constexpr std::size_t kMaximumTemporaryAttempts = 128U;
-std::atomic<std::uint64_t> g_temporary_sequence{0U};
+std::atomic<uint64_t> g_temporary_sequence{0U};
 
 bool Fail(const std::string& message, std::string* error)
 {
@@ -49,51 +49,48 @@ bool FailErrno(const std::string& message, int error_number, std::string* error)
     return Fail(message + ": " + std::error_code(error_number, std::generic_category()).message(), error);
 }
 
-std::uint16_t ReadLe16(const std::uint8_t* data)
+uint16_t ReadLe16(const uint8_t* data) { return static_cast<uint16_t>(data[0]) | static_cast<uint16_t>(data[1]) << 8U; }
+
+uint32_t ReadLe32(const uint8_t* data)
 {
-    return static_cast<std::uint16_t>(data[0]) | static_cast<std::uint16_t>(data[1]) << 8U;
+    return static_cast<uint32_t>(data[0]) | static_cast<uint32_t>(data[1]) << 8U |
+           static_cast<uint32_t>(data[2]) << 16U | static_cast<uint32_t>(data[3]) << 24U;
 }
 
-std::uint32_t ReadLe32(const std::uint8_t* data)
+uint64_t ReadLe64(const uint8_t* data)
 {
-    return static_cast<std::uint32_t>(data[0]) | static_cast<std::uint32_t>(data[1]) << 8U |
-           static_cast<std::uint32_t>(data[2]) << 16U | static_cast<std::uint32_t>(data[3]) << 24U;
-}
-
-std::uint64_t ReadLe64(const std::uint8_t* data)
-{
-    std::uint64_t value = 0;
+    uint64_t value = 0;
     for (std::size_t index = 0; index < sizeof(value); ++index) {
-        value |= static_cast<std::uint64_t>(data[index]) << (index * 8U);
+        value |= static_cast<uint64_t>(data[index]) << (index * 8U);
     }
     return value;
 }
 
-bool HasMagic(const std::uint8_t* data) { return std::equal(kNpuRepMagic.begin(), kNpuRepMagic.end(), data); }
+bool HasMagic(const uint8_t* data) { return std::equal(kNpuRepMagic.begin(), kNpuRepMagic.end(), data); }
 
-bool ValidateRepBytes(const std::vector<std::uint8_t>& encoded, std::string* error)
+bool ValidateRepBytes(const std::vector<uint8_t>& encoded, std::string* error)
 {
     if (encoded.size() < kNpuRepHeadSize || !HasMagic(encoded.data())) {
         return Fail("invalid rep header", error);
     }
-    const std::uint16_t head_length = ReadLe16(encoded.data() + 14U);
-    const std::uint32_t file_count = ReadLe32(encoded.data() + 16U);
-    const std::uint32_t file_info_length = ReadLe32(encoded.data() + 20U);
-    const std::uint64_t rep_length = ReadLe64(encoded.data() + 28U);
+    const uint16_t head_length = ReadLe16(encoded.data() + 14U);
+    const uint32_t file_count = ReadLe32(encoded.data() + 16U);
+    const uint32_t file_info_length = ReadLe32(encoded.data() + 20U);
+    const uint64_t rep_length = ReadLe64(encoded.data() + 28U);
     if (head_length != kNpuRepHeadSize || file_info_length != kNpuRepFileInfoSize || rep_length != encoded.size()) {
         return Fail("invalid rep header lengths", error);
     }
 
-    const std::uint64_t table_length = static_cast<std::uint64_t>(file_count) * file_info_length;
-    const std::uint64_t payload_start = head_length + table_length;
+    const uint64_t table_length = static_cast<uint64_t>(file_count) * file_info_length;
+    const uint64_t payload_start = head_length + table_length;
     if (payload_start > encoded.size()) {
         return Fail("rep file info table exceeds input", error);
     }
 
-    std::uint64_t expected_offset = payload_start;
-    for (std::uint32_t index = 0; index < file_count; ++index) {
-        const std::uint64_t info_offset = head_length + static_cast<std::uint64_t>(index) * file_info_length;
-        const std::uint8_t* info = encoded.data() + info_offset;
+    uint64_t expected_offset = payload_start;
+    for (uint32_t index = 0; index < file_count; ++index) {
+        const uint64_t info_offset = head_length + static_cast<uint64_t>(index) * file_info_length;
+        const uint8_t* info = encoded.data() + info_offset;
         if (!HasMagic(info)) {
             return Fail("invalid rep file info magic", error);
         }
@@ -102,8 +99,8 @@ bool ValidateRepBytes(const std::vector<std::uint8_t>& encoded, std::string* err
         if (name_end == nullptr || name_end == name) {
             return Fail("invalid rep file info name", error);
         }
-        const std::uint64_t file_length = ReadLe64(info + 144U);
-        const std::uint64_t file_offset = ReadLe64(info + 152U);
+        const uint64_t file_length = ReadLe64(info + 144U);
+        const uint64_t file_offset = ReadLe64(info + 152U);
         if (file_offset != expected_offset || file_offset > encoded.size() ||
             file_length > encoded.size() - file_offset) {
             return Fail("invalid rep file payload range", error);
@@ -197,8 +194,7 @@ bool ReadStatus(const std::filesystem::path& path, std::filesystem::file_status*
 }
 
 bool WriteAll(
-    int descriptor, const std::vector<std::uint8_t>& encoded, const ReportFileOperations& operations,
-    std::string* error)
+    int descriptor, const std::vector<uint8_t>& encoded, const ReportFileOperations& operations, std::string* error)
 {
     std::size_t offset = 0;
     while (offset < encoded.size()) {
@@ -231,7 +227,7 @@ bool SyncDescriptor(
     return true;
 }
 
-bool ReadFile(const std::filesystem::path& path, std::vector<std::uint8_t>* content, std::string* error)
+bool ReadFile(const std::filesystem::path& path, std::vector<uint8_t>* content, std::string* error)
 {
     std::ifstream input(path, std::ios::binary);
     if (!input.is_open()) {
@@ -250,7 +246,7 @@ bool CreateTemporaryFile(
     int* descriptor, std::string* error)
 {
     for (std::size_t attempt = 0; attempt < kMaximumTemporaryAttempts; ++attempt) {
-        const std::uint64_t sequence = g_temporary_sequence.fetch_add(1U, std::memory_order_relaxed);
+        const uint64_t sequence = g_temporary_sequence.fetch_add(1U, std::memory_order_relaxed);
         *temporary_path =
             directory / ("." + target_name + ".tmp." + std::to_string(::getpid()) + "." + std::to_string(sequence));
         const int value =
@@ -268,7 +264,7 @@ bool CreateTemporaryFile(
 
 } // namespace
 
-bool PublishRepReport(const std::vector<std::uint8_t>& encoded, const ReportTarget& target, std::string* error)
+bool PublishRepReport(const std::vector<uint8_t>& encoded, const ReportTarget& target, std::string* error)
 {
     ReportFileOperations operations;
     operations.write = &SystemWrite;
@@ -279,7 +275,7 @@ bool PublishRepReport(const std::vector<std::uint8_t>& encoded, const ReportTarg
 }
 
 bool PublishRepReportWithOperations(
-    const std::vector<std::uint8_t>& encoded, const ReportTarget& target, const ReportFileOperations& operations,
+    const std::vector<uint8_t>& encoded, const ReportTarget& target, const ReportFileOperations& operations,
     std::string* error)
 {
     if (error != nullptr) {
@@ -334,7 +330,7 @@ bool PublishRepReportWithOperations(
             return false;
         }
 
-        std::vector<std::uint8_t> readback;
+        std::vector<uint8_t> readback;
         if (!ReadFile(temporary_path, &readback, error) || readback != encoded) {
             if (error != nullptr && error->empty()) {
                 *error = "temporary rep verification does not match input";

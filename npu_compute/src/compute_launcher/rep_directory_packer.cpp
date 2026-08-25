@@ -57,7 +57,7 @@ bool StoredNameLess(const DirectoryItem& left, const DirectoryItem& right)
         [](unsigned char left_byte, unsigned char right_byte) { return left_byte < right_byte; });
 }
 
-bool ReadFile(const std::filesystem::path& path, std::vector<std::uint8_t>* payload, std::string* error)
+bool ReadFile(const std::filesystem::path& path, std::vector<uint8_t>* payload, std::string* error)
 {
     std::ifstream input(path, std::ios::binary);
     if (!input.is_open()) {
@@ -138,8 +138,7 @@ bool CollectDirectoryItems(
     return true;
 }
 
-bool PackDirectoryInternal(
-    const std::filesystem::path& directory, std::vector<std::uint8_t>* encoded, std::string* error)
+bool PackDirectoryInternal(const std::filesystem::path& directory, std::vector<uint8_t>* encoded, std::string* error)
 {
     std::vector<DirectoryItem> items;
     if (!CollectDirectoryItems(directory, &items, error)) {
@@ -166,7 +165,7 @@ bool PackDirectoryInternal(
         entries.push_back(std::move(entry));
     }
 
-    std::vector<std::uint8_t> complete_rep;
+    std::vector<uint8_t> complete_rep;
     if (!EncodeRep(entries, &complete_rep, error)) {
         return false;
     }
@@ -176,7 +175,7 @@ bool PackDirectoryInternal(
 
 } // namespace
 
-bool PackDirectoryToRep(const std::filesystem::path& directory, std::vector<std::uint8_t>* encoded, std::string* error)
+bool PackDirectoryToRep(const std::filesystem::path& directory, std::vector<uint8_t>* encoded, std::string* error)
 {
     if (error != nullptr) {
         error->clear();

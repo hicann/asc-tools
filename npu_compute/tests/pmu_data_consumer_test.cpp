@@ -26,12 +26,12 @@
         }                                                                                        \
     } while (false)
 
-std::shared_ptr<const aclptiPmuDataResult> Result(std::uint64_t replayId)
+std::shared_ptr<const aclptiPmuDataResult> Result(uint64_t replayId)
 {
     auto result = std::make_shared<aclptiPmuDataResult>();
     result->status = ACLPTI_SUCCESS;
     aclptiPmuDataRow row{};
-    row.blockId = static_cast<std::uint16_t>(replayId);
+    row.blockId = static_cast<uint16_t>(replayId);
     row.systemCounters.push_back({0x1122334455667788ULL, 0x8877665544332211ULL});
     result->pmuLogs.emplace(aclptiBlockKey{row.blockId, 0}, row);
     return result;
@@ -41,9 +41,9 @@ int main()
 {
     std::mutex mutex;
     std::condition_variable ready;
-    std::vector<std::uint64_t> processed;
-    std::vector<std::uint64_t> startCounters;
-    std::vector<std::uint64_t> endCounters;
+    std::vector<uint64_t> processed;
+    std::vector<uint64_t> startCounters;
+    std::vector<uint64_t> endCounters;
     const std::thread::id submitThread = std::this_thread::get_id();
     std::atomic<bool> usedSubmitThread{false};
 
@@ -69,9 +69,9 @@ int main()
         CHECK(ready.wait_for(lock, std::chrono::seconds(3), [&] { return processed.size() == 2; }));
     }
     CHECK(!usedSubmitThread.load());
-    CHECK((processed == std::vector<std::uint64_t>{1, 2}));
-    CHECK((startCounters == std::vector<std::uint64_t>{0x1122334455667788ULL, 0x1122334455667788ULL}));
-    CHECK((endCounters == std::vector<std::uint64_t>{0x8877665544332211ULL, 0x8877665544332211ULL}));
+    CHECK((processed == std::vector<uint64_t>{1, 2}));
+    CHECK((startCounters == std::vector<uint64_t>{0x1122334455667788ULL, 0x1122334455667788ULL}));
+    CHECK((endCounters == std::vector<uint64_t>{0x8877665544332211ULL, 0x8877665544332211ULL}));
     CHECK(consumer->ShutdownAndDrain() == ACLPTI_SUCCESS);
     CHECK(consumer->Submit(Result(3)) == ACLPTI_ERROR_INVALID_STATE);
     CHECK(consumer->ShutdownAndDrain() == ACLPTI_SUCCESS);

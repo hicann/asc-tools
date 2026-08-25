@@ -29,7 +29,7 @@ namespace {
 std::size_t g_launch_calls = 0;
 std::size_t g_start_calls = 0;
 std::size_t g_stop_calls = 0;
-std::uint64_t g_prof_switch = 0;
+uint64_t g_prof_switch = 0;
 
 int RealMalloc(void** pointer, std::size_t size, aclrtMemMallocPolicy)
 {
@@ -61,7 +61,7 @@ int RealMemset(void* destination, std::size_t destination_size, int value, std::
     return 0;
 }
 
-int RealLaunch(void*, std::uint32_t, const void*, std::size_t, void*)
+int RealLaunch(void*, uint32_t, const void*, std::size_t, void*)
 {
     ++g_launch_calls;
     return 0;
@@ -69,7 +69,7 @@ int RealLaunch(void*, std::uint32_t, const void*, std::size_t, void*)
 
 int RealSynchronize(void*) { return 0; }
 
-int ProfilerStart(std::uint32_t, const void* config, std::uint32_t length)
+int ProfilerStart(uint32_t, const void* config, uint32_t length)
 {
     ++g_start_calls;
     if (config == nullptr || length != sizeof(MsprofConfig)) {
@@ -79,26 +79,26 @@ int ProfilerStart(std::uint32_t, const void* config, std::uint32_t length)
     return 0;
 }
 
-int ProfilerStop(std::uint32_t, const void* config, std::uint32_t length)
+int ProfilerStop(uint32_t, const void* config, uint32_t length)
 {
     ++g_stop_calls;
     return config != nullptr && length == sizeof(MsprofConfig) ? 0 : -1;
 }
-int RegisterRawData(std::uint32_t, MsprofRawDataCallback callback) { return callback == nullptr ? -1 : 0; }
+int RegisterRawData(uint32_t, MsprofRawDataCallback callback) { return callback == nullptr ? -1 : 0; }
 
 } // namespace
 
-std::int32_t MsprofStart(std::uint32_t data_type, const void* config, std::uint32_t length)
+std::int32_t MsprofStart(uint32_t data_type, const void* config, uint32_t length)
 {
     return ProfilerStart(data_type, config, length);
 }
 
-std::int32_t MsprofStop(std::uint32_t data_type, const void* config, std::uint32_t length)
+std::int32_t MsprofStop(uint32_t data_type, const void* config, uint32_t length)
 {
     return ProfilerStop(data_type, config, length);
 }
 
-std::int32_t MsprofRegisterDataCallback(std::uint32_t type, void* function)
+std::int32_t MsprofRegisterDataCallback(uint32_t type, void* function)
 {
     return RegisterRawData(type, reinterpret_cast<MsprofRawDataCallback>(function));
 }

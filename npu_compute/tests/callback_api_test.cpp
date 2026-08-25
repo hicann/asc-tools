@@ -83,11 +83,11 @@ void RuntimeCallback(
 
 } // namespace
 
-std::int32_t MsprofStart(std::uint32_t, const void*, std::uint32_t) { return 0; }
+std::int32_t MsprofStart(uint32_t, const void*, uint32_t) { return 0; }
 
-std::int32_t MsprofStop(std::uint32_t, const void*, std::uint32_t) { return 0; }
+std::int32_t MsprofStop(uint32_t, const void*, uint32_t) { return 0; }
 
-std::int32_t MsprofRegisterDataCallback(std::uint32_t, void* function) { return function == nullptr ? -1 : 0; }
+std::int32_t MsprofRegisterDataCallback(uint32_t, void* function) { return function == nullptr ? -1 : 0; }
 
 static_assert(
     static_cast<aclptiCallbackId>(ACLPTI_RUNTIME_CBID_aclrtLaunchKernelWithHostArgs) ==

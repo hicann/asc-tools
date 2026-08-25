@@ -58,15 +58,15 @@ struct ReplaySession {
     std::mutex mutex;
     ReplayState state = ReplayState::Accepting;
     CallbackStats stats{0, 0, 0, 0, 0, 0, 0};
-    std::uint64_t nextRecordIndex = 0;
-    std::atomic<std::uint64_t> failedRecordCount{0};
+    uint64_t nextRecordIndex = 0;
+    std::atomic<uint64_t> failedRecordCount{0};
 };
 
 struct RawRecord {
     std::shared_ptr<ReplaySession> session;
     std::array<std::byte, 128> bytes{};
     std::size_t size = 0;
-    std::uint64_t recordIndex = 0;
+    uint64_t recordIndex = 0;
 };
 
 struct ReplayEnd {
@@ -135,7 +135,7 @@ const char* RawDataTypeName(RawDataType type)
 std::size_t CountConfiguredPmuEvents(const PmuSlots& events)
 {
     std::size_t count = 0;
-    for (const std::uint32_t event : events) {
+    for (const uint32_t event : events) {
         if (event == kInvalidPmuEvent) {
             break;
         }
@@ -144,7 +144,7 @@ std::size_t CountConfiguredPmuEvents(const PmuSlots& events)
     return count;
 }
 
-void LogCallbackStats(const char* action, std::uint64_t replayId, const CallbackStats& stats, aclptiResult status)
+void LogCallbackStats(const char* action, uint64_t replayId, const CallbackStats& stats, aclptiResult status)
 {
     npu_compute::detail::DebugLog(
         "aclpti-data", "%s: replay=%llu status=%d copiedRecords=%llu copiedBytes=%llu receivedBytes=%llu",
@@ -153,19 +153,19 @@ void LogCallbackStats(const char* action, std::uint64_t replayId, const Callback
         static_cast<unsigned long long>(stats.copiedBytes), static_cast<unsigned long long>(stats.receivedBytes));
 }
 
-std::uint32_t LittleEndianWord(const char* data, std::size_t size, std::size_t offset)
+uint32_t LittleEndianWord(const char* data, std::size_t size, std::size_t offset)
 {
-    if (data == nullptr || offset + sizeof(std::uint32_t) > size) {
+    if (data == nullptr || offset + sizeof(uint32_t) > size) {
         return 0;
     }
-    std::uint32_t value = 0;
+    uint32_t value = 0;
     for (std::size_t index = 0; index < sizeof(value); ++index) {
-        value |= static_cast<std::uint32_t>(static_cast<unsigned char>(data[offset + index])) << (index * 8U);
+        value |= static_cast<uint32_t>(static_cast<unsigned char>(data[offset + index])) << (index * 8U);
     }
     return value;
 }
 
-void LogRawPayloadLine(std::uint64_t replayId, const MsprofRawData& rawData, std::size_t offset)
+void LogRawPayloadLine(uint64_t replayId, const MsprofRawData& rawData, std::size_t offset)
 {
     constexpr std::size_t kBytesPerLine = 16;
     char hex[kBytesPerLine * 3 + 1]{};
@@ -194,16 +194,16 @@ void LogRawPayloadLine(std::uint64_t replayId, const MsprofRawData& rawData, std
 }
 
 void LogDecodedCandidate(
-    std::uint64_t replayId, const ReplayPrepareInfo& info, const char* name, const char* data, std::size_t chunkSize,
+    uint64_t replayId, const ReplayPrepareInfo& info, const char* name, const char* data, std::size_t chunkSize,
     std::size_t offset, std::size_t size)
 {
-    const std::uint32_t word0 = LittleEndianWord(data, chunkSize, offset);
-    const std::uint32_t word1 = LittleEndianWord(data, chunkSize, offset + sizeof(std::uint32_t));
-    const std::uint32_t word2 = LittleEndianWord(data, chunkSize, offset + sizeof(std::uint32_t) * 2);
-    const std::uint32_t word3 = LittleEndianWord(data, chunkSize, offset + sizeof(std::uint32_t) * 3);
-    const std::uint32_t function = word0 & 0x3fU;
-    const auto taskId = static_cast<std::uint16_t>(word1 >> 16U);
-    const auto streamId = static_cast<std::uint16_t>(word1);
+    const uint32_t word0 = LittleEndianWord(data, chunkSize, offset);
+    const uint32_t word1 = LittleEndianWord(data, chunkSize, offset + sizeof(uint32_t));
+    const uint32_t word2 = LittleEndianWord(data, chunkSize, offset + sizeof(uint32_t) * 2);
+    const uint32_t word3 = LittleEndianWord(data, chunkSize, offset + sizeof(uint32_t) * 3);
+    const uint32_t function = word0 & 0x3fU;
+    const auto taskId = static_cast<uint16_t>(word1 >> 16U);
+    const auto streamId = static_cast<uint16_t>(word1);
     const auto decoded =
         DecodeRawRecord(reinterpret_cast<const std::byte*>(data + offset), size, offset / size, info.pmuEventIds);
     npu_compute::detail::DebugLog(
@@ -243,7 +243,7 @@ void LogRawDataDiagnostics(const ReplaySession& session, const MsprofRawData& ra
         return;
     }
 
-    const std::uint64_t replayId = session.info.replayId;
+    const uint64_t replayId = session.info.replayId;
     npu_compute::detail::DebugLog(
         "aclpti-data",
         "[DEBUG-rawdata] struct replay=%llu raw=%p isLastChunk=%d offset=%zu chunkModule=%d deviceId=%d type=%d(%s) "
@@ -279,16 +279,16 @@ void LogRawDataDiagnostics(const ReplaySession& session, const MsprofRawData& ra
 
 struct PmuValueAccumulator {
     long double sum = 0.0L;
-    std::uint64_t count = 0;
+    uint64_t count = 0;
 };
 
 struct CorePmuAccumulator {
     aclptiCoreType coreType = ACLPTI_CORE_TYPE_AIC;
-    std::uint8_t coreId = 0;
-    std::uint64_t sampleCount = 0;
+    uint8_t coreId = 0;
+    uint64_t sampleCount = 0;
     bool overflow = false;
     long double totalCyclesSum = 0.0L;
-    std::map<std::uint32_t, PmuValueAccumulator> values;
+    std::map<uint32_t, PmuValueAccumulator> values;
     std::vector<aclptiPmuDataRow::SystemCounter> systemCounters;
 
     void Add(const PmuRecord128& record)
@@ -330,13 +330,13 @@ struct CorePmuAccumulator {
 struct PmuAccumulator {
     bool initialized = false;
     aclptiCoreType coreType = ACLPTI_CORE_TYPE_AIC;
-    std::uint8_t coreId = 0;
-    std::map<std::pair<aclptiCoreType, std::uint8_t>, std::uint64_t> coreInfoCounts;
-    std::map<std::pair<aclptiCoreType, std::uint8_t>, CorePmuAccumulator> coreData;
+    uint8_t coreId = 0;
+    std::map<std::pair<aclptiCoreType, uint8_t>, uint64_t> coreInfoCounts;
+    std::map<std::pair<aclptiCoreType, uint8_t>, CorePmuAccumulator> coreData;
     bool overflow = false;
     long double totalCyclesSum = 0.0L;
-    std::uint64_t totalCyclesCount = 0;
-    std::map<std::uint32_t, PmuValueAccumulator> values;
+    uint64_t totalCyclesCount = 0;
+    std::map<uint32_t, PmuValueAccumulator> values;
     std::vector<aclptiPmuDataRow::SystemCounter> systemCounters;
 
     void Add(const PmuRecord128& record)
@@ -392,7 +392,7 @@ struct PmuAccumulator {
 };
 
 struct AggregateState {
-    std::map<std::uint16_t, std::vector<aclptiTaskLogRow>> taskLogs;
+    std::map<uint16_t, std::vector<aclptiTaskLogRow>> taskLogs;
     std::map<aclptiBlockKey, std::vector<aclptiTaskLogRow>> blockLogs;
     std::map<aclptiBlockKey, PmuAccumulator> pmuLogs;
 
@@ -420,7 +420,7 @@ struct AggregateState {
         aclptiPmuDataResult::ErrorStats result;
         for (const auto& session : sessions) {
             std::lock_guard<std::mutex> lock(session->mutex);
-            const std::uint64_t failedRecordCount = session->failedRecordCount.load();
+            const uint64_t failedRecordCount = session->failedRecordCount.load();
             result.failedRecordCount += failedRecordCount;
             if (failedRecordCount != 0) {
                 result.failedRecordCountByReplay[session->info.replayId] = failedRecordCount;
@@ -453,7 +453,7 @@ bool IsValidReplayInfo(const ReplayPrepareInfo& info)
     }
 
     bool unusedSlotSeen = false;
-    for (const std::uint32_t eventId : info.pmuEventIds) {
+    for (const uint32_t eventId : info.pmuEventIds) {
         if (eventId == kInvalidPmuEvent) {
             unusedSlotSeen = true;
             continue;
@@ -649,7 +649,7 @@ public:
         return result;
     }
 
-    aclptiResult ReleaseReplay(std::uint64_t replayId)
+    aclptiResult ReleaseReplay(uint64_t replayId)
     {
         std::lock_guard<std::mutex> lock(mutex_);
         npu_compute::detail::DebugLog(
@@ -808,7 +808,7 @@ private:
             return static_cast<std::int32_t>(ACLPTI_ERROR_INVALID_STATE);
         }
         const auto fail = [this](aclptiResult status) {
-            const std::uint64_t failedRecordCount = active_->failedRecordCount.fetch_add(1) + 1;
+            const uint64_t failedRecordCount = active_->failedRecordCount.fetch_add(1) + 1;
             npu_compute::detail::DebugLog(
                 "aclpti-data", "raw callback failed: replay=%llu status=%d failedRecords=%llu",
                 static_cast<unsigned long long>(active_->info.replayId), static_cast<int>(status),
@@ -961,7 +961,7 @@ private:
     ModuleState state_ = ModuleState::Created;
     aclptiResult shutdownStatus_ = ACLPTI_SUCCESS;
     std::shared_ptr<ReplaySession> active_;
-    std::unordered_set<std::uint64_t> replayIds_;
+    std::unordered_set<uint64_t> replayIds_;
     std::vector<std::shared_ptr<ReplaySession>> sessions_;
     AggregateState aggregate_;
     BoundedQueue<RawItem> rawQueue_{kQueueCapacity};
@@ -1013,7 +1013,7 @@ aclptiResult Module::Initialize() { return impl_->Initialize(); }
 MsprofRawDataCallback Module::GetRawDataCallback() { return impl_->GetRawDataCallback(); }
 aclptiResult Module::PrepareReplay(const ReplayPrepareInfo& info) { return impl_->PrepareReplay(info); }
 ReplayResult Module::RecordReplayStatus(const ReplayStopInfo& info) { return impl_->RecordReplayStatus(info); }
-aclptiResult Module::ReleaseReplay(std::uint64_t replayId) { return impl_->ReleaseReplay(replayId); }
+aclptiResult Module::ReleaseReplay(uint64_t replayId) { return impl_->ReleaseReplay(replayId); }
 aclptiResult Module::Shutdown() { return impl_->Shutdown(); }
 
 } // namespace npu_compute::aclpti::data

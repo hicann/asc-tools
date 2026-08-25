@@ -33,10 +33,10 @@ struct ReportFileOperations {
     void* context = nullptr;
 };
 
-bool PublishRepReport(const std::vector<std::uint8_t>& encoded, const ReportTarget& target, std::string* error);
+bool PublishRepReport(const std::vector<uint8_t>& encoded, const ReportTarget& target, std::string* error);
 
 bool PublishRepReportWithOperations(
-    const std::vector<std::uint8_t>& encoded, const ReportTarget& target, const ReportFileOperations& operations,
+    const std::vector<uint8_t>& encoded, const ReportTarget& target, const ReportFileOperations& operations,
     std::string* error);
 
 } // namespace npu_compute::compute_launcher

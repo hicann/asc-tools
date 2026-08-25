@@ -35,7 +35,7 @@ constexpr std::array<int, 3> kForwardedSignals = {SIGINT, SIGTERM, SIGHUP};
 
 volatile sig_atomic_t g_app_process_group = 0;
 
-enum class ChildErrorStage : std::uint32_t {
+enum class ChildErrorStage : uint32_t {
     SetProcessGroup = 1,
     Exec = 2,
 };
@@ -139,7 +139,7 @@ int UnblockParentSignals(SignalState* state)
 void WriteChildError(int file_descriptor, ChildErrorStage stage, int error_number)
 {
     const ChildError child_error{stage, error_number};
-    const auto* data = reinterpret_cast<const std::uint8_t*>(&child_error);
+    const auto* data = reinterpret_cast<const uint8_t*>(&child_error);
     std::size_t written = 0;
     while (written < sizeof(child_error)) {
         const ssize_t result = write(file_descriptor, data + written, sizeof(child_error) - written);
@@ -156,7 +156,7 @@ void WriteChildError(int file_descriptor, ChildErrorStage stage, int error_numbe
 
 bool ReadChildError(int file_descriptor, ChildError* child_error, bool* has_error, std::string* error)
 {
-    auto* data = reinterpret_cast<std::uint8_t*>(child_error);
+    auto* data = reinterpret_cast<uint8_t*>(child_error);
     std::size_t received = 0;
     while (received < sizeof(*child_error)) {
         const ssize_t result = read(file_descriptor, data + received, sizeof(*child_error) - received);

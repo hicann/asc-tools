@@ -40,14 +40,14 @@ int Check(bool condition, const char* expression, int line)
     } while (false)
 
 struct KernelArgs {
-    std::uint8_t* value;
+    uint8_t* value;
 };
 
 struct ObservedConfig {
-    std::uint64_t profSwitch;
-    std::uint32_t devNums;
-    std::uint32_t deviceId;
-    std::array<std::uint32_t, COMPUTE_AICORE_METRICS_NUM> pmuEvents;
+    uint64_t profSwitch;
+    uint32_t devNums;
+    uint32_t deviceId;
+    std::array<uint32_t, COMPUTE_AICORE_METRICS_NUM> pmuEvents;
 };
 
 std::size_t g_malloc_calls = 0;
@@ -62,10 +62,10 @@ std::size_t g_get_device_calls = 0;
 std::size_t g_soc_name_calls = 0;
 std::size_t g_start_calls = 0;
 std::size_t g_stop_calls = 0;
-std::uint32_t g_start_data_type = 0;
-std::uint32_t g_stop_data_type = 0;
-std::uint32_t g_callback_type = 0;
-std::vector<std::uint8_t> g_kernel_inputs;
+uint32_t g_start_data_type = 0;
+uint32_t g_stop_data_type = 0;
+uint32_t g_callback_type = 0;
+std::vector<uint8_t> g_kernel_inputs;
 std::vector<ObservedConfig> g_configs;
 const void* g_expected_args_data = nullptr;
 const void* g_started_config = nullptr;
@@ -104,7 +104,7 @@ int RealMemset(void* destination, std::size_t destination_size, int value, std::
     return 0;
 }
 
-int RealLaunch(void*, std::uint32_t, const void* args_data, std::size_t args_size, void*)
+int RealLaunch(void*, uint32_t, const void* args_data, std::size_t args_size, void*)
 {
     ++g_launch_calls;
     if (args_data == nullptr || args_data != g_expected_args_data || args_size != sizeof(KernelArgs)) {
@@ -117,7 +117,7 @@ int RealLaunch(void*, std::uint32_t, const void* args_data, std::size_t args_siz
 }
 
 int RealLaunchWithHostArgs(
-    aclrtFuncHandle, std::uint32_t, aclrtStream, aclrtLaunchKernelCfg*, void*, std::size_t, aclrtPlaceHolderInfo*,
+    aclrtFuncHandle, uint32_t, aclrtStream, aclrtLaunchKernelCfg*, void*, std::size_t, aclrtPlaceHolderInfo*,
     std::size_t)
 {
     ++g_launch_with_host_args_calls;
@@ -142,7 +142,7 @@ int RealResetDevice(std::int32_t deviceId)
     return deviceId < 0 ? -1 : 0;
 }
 
-int ProfilerStart(std::uint32_t, const void* config, std::uint32_t length)
+int ProfilerStart(uint32_t, const void* config, uint32_t length)
 {
     ++g_start_calls;
     if (config == nullptr || length != sizeof(MsprofConfig)) {
@@ -161,7 +161,7 @@ int ProfilerStart(std::uint32_t, const void* config, std::uint32_t length)
     return 0;
 }
 
-int ProfilerStop(std::uint32_t, const void* config, std::uint32_t length)
+int ProfilerStop(uint32_t, const void* config, uint32_t length)
 {
     ++g_stop_calls;
     if (config == nullptr || config != g_started_config || length != sizeof(MsprofConfig)) {
@@ -171,15 +171,15 @@ int ProfilerStop(std::uint32_t, const void* config, std::uint32_t length)
     return 0;
 }
 
-int RegisterRawData(std::uint32_t, MsprofRawDataCallback callback)
+int RegisterRawData(uint32_t, MsprofRawDataCallback callback)
 {
     g_registered_callback = callback;
     return callback == nullptr ? -1 : 0;
 }
 
-std::array<std::uint32_t, COMPUTE_AICORE_METRICS_NUM> ExpectedPmus(std::initializer_list<std::uint32_t> events)
+std::array<uint32_t, COMPUTE_AICORE_METRICS_NUM> ExpectedPmus(std::initializer_list<uint32_t> events)
 {
-    std::array<std::uint32_t, COMPUTE_AICORE_METRICS_NUM> result{};
+    std::array<uint32_t, COMPUTE_AICORE_METRICS_NUM> result{};
     result.fill(MSPROF_INVALID_AICORE_METRIC);
     std::copy(events.begin(), events.end(), result.begin());
     return result;
@@ -187,19 +187,19 @@ std::array<std::uint32_t, COMPUTE_AICORE_METRICS_NUM> ExpectedPmus(std::initiali
 
 } // namespace
 
-std::int32_t MsprofStart(std::uint32_t data_type, const void* config, std::uint32_t length)
+std::int32_t MsprofStart(uint32_t data_type, const void* config, uint32_t length)
 {
     g_start_data_type = data_type;
     return ProfilerStart(data_type, config, length);
 }
 
-std::int32_t MsprofStop(std::uint32_t data_type, const void* config, std::uint32_t length)
+std::int32_t MsprofStop(uint32_t data_type, const void* config, uint32_t length)
 {
     g_stop_data_type = data_type;
     return ProfilerStop(data_type, config, length);
 }
 
-std::int32_t MsprofRegisterDataCallback(std::uint32_t type, void* function)
+std::int32_t MsprofRegisterDataCallback(uint32_t type, void* function)
 {
     g_callback_type = type;
     return RegisterRawData(type, reinterpret_cast<MsprofRawDataCallback>(function));
@@ -257,10 +257,10 @@ int main()
 
     void* allocation = nullptr;
     CHECK(aclrtMalloc(&allocation, 1, ACL_MEM_MALLOC_HUGE_FIRST) == 0);
-    std::uint8_t initial_value = 5;
+    uint8_t initial_value = 5;
     CHECK(aclrtMemcpy(allocation, 1, &initial_value, 1, ACL_MEMCPY_HOST_TO_DEVICE) == 0);
 
-    KernelArgs args{static_cast<std::uint8_t*>(allocation)};
+    KernelArgs args{static_cast<uint8_t*>(allocation)};
     g_expected_args_data = &args;
 
     CHECK(aclrtLaunchKernel(nullptr, 1, &args, sizeof(args), nullptr) == static_cast<int>(ACLPTI_ERROR_INVALID_STATE));
@@ -279,8 +279,8 @@ int main()
     CHECK(g_sync_calls == 3);
     CHECK(g_get_device_calls == 0);
     CHECK(g_soc_name_calls == 0);
-    CHECK((g_kernel_inputs == std::vector<std::uint8_t>{5, 6, 5, 5, 5}));
-    CHECK(*static_cast<std::uint8_t*>(allocation) == 6);
+    CHECK((g_kernel_inputs == std::vector<uint8_t>{5, 6, 5, 5, 5}));
+    CHECK(*static_cast<uint8_t*>(allocation) == 6);
 
     CHECK(g_configs.size() == 3);
     const auto expected_first = ExpectedPmus({0, 1, 10, 36, 52, 53, 514, 515, 810, 1281});
@@ -309,7 +309,7 @@ int main()
     CHECK(g_sync_calls == syncs_after_first_launch);
     CHECK(g_launch_calls == 6);
     CHECK(g_kernel_inputs.back() == 10);
-    CHECK(*static_cast<std::uint8_t*>(allocation) == 10);
+    CHECK(*static_cast<uint8_t*>(allocation) == 10);
 
     const std::size_t starts_before_host_args = g_start_calls;
     const std::size_t syncs_before_host_args = g_sync_calls;

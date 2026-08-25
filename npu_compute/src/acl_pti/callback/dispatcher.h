@@ -23,7 +23,7 @@ struct aclptiSubscriber_st {
     bool activityEnabled = false;
     aclptiCallbackFunc callback = nullptr;
     void* userData = nullptr;
-    std::unordered_set<std::uint64_t> enabledCallbacks;
+    std::unordered_set<uint64_t> enabledCallbacks;
     std::mutex callbackMutex;
 };
 
@@ -44,7 +44,7 @@ public:
     void SetActivityEnabled(aclptiSubscribeHandle subscriber, bool enabled);
 
 private:
-    static std::uint64_t MakeCallbackKey(aclptiCallbackDomain domain, aclptiCallbackId cbid);
+    static uint64_t MakeCallbackKey(aclptiCallbackDomain domain, aclptiCallbackId cbid);
 
     Registry registry_;
     aclptiSubscriber_st subscriber_;

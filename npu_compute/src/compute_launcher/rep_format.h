@@ -16,14 +16,14 @@
 
 namespace npu_compute::compute_launcher {
 
-inline constexpr std::array<std::uint8_t, 8> kNpuRepMagic = {'n', 'p', 'u', '-', 'r', 'e', 'p', '\0'};
-inline constexpr std::uint32_t kNpuRepVersion = 0x00010000U;
-inline constexpr std::uint16_t kNpuRepOrigin = 1U;
+inline constexpr std::array<uint8_t, 8> kNpuRepMagic = {'n', 'p', 'u', '-', 'r', 'e', 'p', '\0'};
+inline constexpr uint32_t kNpuRepVersion = 0x00010000U;
+inline constexpr uint16_t kNpuRepOrigin = 1U;
 inline constexpr std::size_t kNpuRepHeadSize = 36U;
 inline constexpr std::size_t kNpuRepFileInfoSize = 160U;
 inline constexpr std::size_t kNpuRepFileNameSize = 128U;
 
-enum class NpuRepFileType : std::uint16_t {
+enum class NpuRepFileType : uint16_t {
     NpuRep = 1,
     Json = 2,
     Jsonl = 3,

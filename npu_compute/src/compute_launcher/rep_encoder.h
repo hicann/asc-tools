@@ -21,10 +21,10 @@ namespace npu_compute::compute_launcher {
 struct RepEntry {
     std::string file_name;
     NpuRepFileType file_type = NpuRepFileType::NpuRep;
-    std::vector<std::uint8_t> payload;
+    std::vector<uint8_t> payload;
 };
 
-bool EncodeRep(const std::vector<RepEntry>& entries, std::vector<std::uint8_t>* encoded, std::string* error);
+bool EncodeRep(const std::vector<RepEntry>& entries, std::vector<uint8_t>* encoded, std::string* error);
 
 } // namespace npu_compute::compute_launcher
 

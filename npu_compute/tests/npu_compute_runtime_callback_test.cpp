@@ -369,7 +369,7 @@ bool TestHardwareInfoDisabled(const char* executable)
 
 } // namespace
 
-extern "C" aclError aclrtGetDeviceCount(std::uint32_t* count)
+extern "C" aclError aclrtGetDeviceCount(uint32_t* count)
 {
     if (count == nullptr) {
         return ACL_ERROR_INVALID_PARAM;

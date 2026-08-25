@@ -43,7 +43,7 @@ using npu_compute::compute_launcher::test::DecodeRep;
 
 int TestEmptyRep()
 {
-    std::vector<std::uint8_t> encoded;
+    std::vector<uint8_t> encoded;
     std::string error;
     CHECK(EncodeRep({}, &encoded, &error));
     CHECK(error.empty());
@@ -61,13 +61,13 @@ int TestEmptyRep()
 
 int TestMultipleEntries()
 {
-    const std::vector<std::uint8_t> jsonl = {'{', '}', '\n'};
-    const std::vector<std::uint8_t> csv = {'a', ',', 'b', '\n', '1', ',', '2', '\n'};
+    const std::vector<uint8_t> jsonl = {'{', '}', '\n'};
+    const std::vector<uint8_t> csv = {'a', ',', 'b', '\n', '1', ',', '2', '\n'};
     const std::vector<RepEntry> entries = {
         {"HardwareInfo.jsonl", NpuRepFileType::Jsonl, jsonl},
         {"PipeUtilization.csv", NpuRepFileType::Csv, csv},
     };
-    std::vector<std::uint8_t> encoded;
+    std::vector<uint8_t> encoded;
     std::string error;
     CHECK(EncodeRep(entries, &encoded, &error));
 
@@ -86,7 +86,7 @@ int TestMultipleEntries()
 
 int TestInvalidEntries()
 {
-    std::vector<std::uint8_t> encoded = {1, 2, 3};
+    std::vector<uint8_t> encoded = {1, 2, 3};
     std::string error;
     CHECK(!EncodeRep({{"", NpuRepFileType::Csv, {1}}}, &encoded, &error));
     CHECK(encoded.empty());

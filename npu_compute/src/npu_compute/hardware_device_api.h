@@ -43,11 +43,11 @@ public:
     bool GetSocName(std::string* value) override;
     bool GetDeviceAttribute(std::int32_t deviceId, std::int32_t attribute, std::int64_t* value) override;
     bool GetPlatformValue(std::int32_t type, std::string* value) override;
-    bool GetControlCpuCount(std::int32_t deviceId, std::uint32_t* value) override;
-    bool GetAiCpuFrequency(std::int32_t deviceId, std::uint32_t* value) override;
+    bool GetControlCpuCount(std::int32_t deviceId, uint32_t* value) override;
+    bool GetAiCpuFrequency(std::int32_t deviceId, uint32_t* value) override;
     bool GetChipVersion(std::int32_t deviceId, std::string* value) override;
-    bool GetHbmUsage(std::int32_t deviceId, std::uint64_t* freeBytes, std::uint64_t* totalBytes) override;
-    bool GetHbmFrequency(std::int32_t deviceId, std::uint32_t* value) override;
+    bool GetHbmUsage(std::int32_t deviceId, uint64_t* freeBytes, uint64_t* totalBytes) override;
+    bool GetHbmFrequency(std::int32_t deviceId, uint32_t* value) override;
 
 private:
     class Impl;

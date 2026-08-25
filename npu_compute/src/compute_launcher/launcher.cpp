@@ -70,6 +70,7 @@ bool BuildChildEnvironment(
     SetEnvironmentValue("NPU_COMPUTE_SECTIONS", sections, environment);
     SetEnvironmentValue("NPU_COMPUTE_REPLAY_MODE", ReplayModeName(config.replay_mode), environment);
     SetEnvironmentValue("NPU_COMPUTE_OUTPUT", staging_directory, environment);
+    SetEnvironmentValue("NPU_COMPUTE_CSV_OUTPUT_DIR", staging_directory, environment);
     return true;
 }
 
@@ -141,7 +142,7 @@ int LaunchTarget(const CliConfig& config, std::string* staging_directory, std::s
         return kCollectionErrorExitCode;
     }
 
-    std::vector<std::uint8_t> encoded;
+    std::vector<uint8_t> encoded;
     std::string stage_error;
     if (!PackDirectoryToRep(staging.Path(), &encoded, &stage_error)) {
         SetStageError("pack collection results failed", stage_error, error);

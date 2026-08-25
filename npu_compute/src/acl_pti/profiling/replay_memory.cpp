@@ -26,7 +26,7 @@ int ReplayMemory::MirrorMalloc(
     if (result != 0 || shadow == nullptr) {
         return result == 0 ? -1 : result;
     }
-    const std::uintptr_t origin = reinterpret_cast<std::uintptr_t>(*devPtr);
+    const uintptr_t origin = reinterpret_cast<uintptr_t>(*devPtr);
     const auto inserted = shadowBuffers_.emplace(origin, ShadowBuffer{shadow, size});
     if (!inserted.second) {
         freeFunction(shadow);
@@ -42,7 +42,7 @@ int ReplayMemory::MirrorFree(aclrtFreeFunc freeFunction, void* devPtr)
         return -1;
     }
 
-    const auto iterator = shadowBuffers_.find(reinterpret_cast<std::uintptr_t>(devPtr));
+    const auto iterator = shadowBuffers_.find(reinterpret_cast<uintptr_t>(devPtr));
     if (iterator == shadowBuffers_.end()) {
         return 0;
     }
@@ -70,7 +70,7 @@ int ReplayMemory::MirrorMemcpy(
         return 0;
     }
 
-    void* shadowDestination = static_cast<std::uint8_t*>(destinationBuffer.shadow) + destinationOffset;
+    void* shadowDestination = static_cast<uint8_t*>(destinationBuffer.shadow) + destinationOffset;
     const int result =
         memcpyFunction(shadowDestination, destinationBuffer.size - destinationOffset, source, count, kind);
     npu_compute::detail::DebugLog(
@@ -91,7 +91,7 @@ int ReplayMemory::MirrorMemset(
     if (!FindShadowBuffer(devPtr, count, &buffer, &offset)) {
         return 0;
     }
-    void* shadow = static_cast<std::uint8_t*>(buffer.shadow) + offset;
+    void* shadow = static_cast<uint8_t*>(buffer.shadow) + offset;
     const int result = memsetFunction(shadow, buffer.size - offset, value, count);
     npu_compute::detail::DebugLog(
         "aclpti", "mirror memset origin=%p shadow=%p value=%d count=%zu result=%d", devPtr, shadow, value, count,
@@ -124,7 +124,7 @@ bool ReplayMemory::FindShadowBuffer(
         return false;
     }
 
-    const std::uintptr_t address = reinterpret_cast<std::uintptr_t>(pointer);
+    const uintptr_t address = reinterpret_cast<uintptr_t>(pointer);
     auto iterator = shadowBuffers_.upper_bound(address);
     if (iterator == shadowBuffers_.begin()) {
         return false;

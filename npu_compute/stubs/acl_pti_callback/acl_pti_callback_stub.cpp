@@ -33,16 +33,16 @@ void* g_userData = nullptr;
 aclptiSubscribeHandle g_capturedSubscriber = nullptr;
 std::vector<npu_compute::test::AclPtiEnableCall> g_enableCalls;
 std::unordered_map<aclptiCallbackId, aclptiResult> g_enableResults;
-std::unordered_set<std::uint64_t> g_enabledCallbacks;
+std::unordered_set<uint64_t> g_enabledCallbacks;
 std::size_t g_callSequence = 0;
 std::size_t g_subscribeSequence = 0;
 std::size_t g_rangeConfigCount = 0;
 std::size_t g_rangeConfigSequence = 0;
 std::vector<std::string> g_sections;
 
-std::uint64_t CallbackKey(aclptiCallbackDomain domain, aclptiCallbackId cbid)
+uint64_t CallbackKey(aclptiCallbackDomain domain, aclptiCallbackId cbid)
 {
-    return (static_cast<std::uint64_t>(domain) << 32U) | static_cast<std::uint64_t>(cbid);
+    return (static_cast<uint64_t>(domain) << 32U) | static_cast<uint64_t>(cbid);
 }
 
 } // namespace
@@ -175,7 +175,7 @@ bool InvokeAclPtiRuntimeReady()
 
 } // namespace npu_compute::test
 
-extern "C" int AclPtiCallbackStubEmitRuntimeEvent(std::uint32_t cbid, std::uint32_t site, std::int32_t retval)
+extern "C" int AclPtiCallbackStubEmitRuntimeEvent(uint32_t cbid, uint32_t site, std::int32_t retval)
 {
     if (cbid >= ACLPTI_RUNTIME_CBID_SIZE || site > ACLPTI_API_EXIT) {
         return 0;
@@ -236,7 +236,7 @@ extern "C" aclptiResult aclptiEnableCallback(
 
     g_enableCalls.push_back({++g_callSequence, enable, subscriber, domain, cbid, result});
     if (result == ACLPTI_SUCCESS) {
-        const std::uint64_t key = CallbackKey(domain, cbid);
+        const uint64_t key = CallbackKey(domain, cbid);
         if (enable) {
             g_enabledCallbacks.insert(key);
         } else {

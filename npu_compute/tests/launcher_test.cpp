@@ -93,7 +93,7 @@ CliConfig ShellConfig(const std::string& command, const std::filesystem::path& o
 
 std::string ValidCollectionCommand()
 {
-    return R"(printf '{}\n{}\n{}\n{}\n{}\n' > "$NPU_COMPUTE_OUTPUT/HardwareInfo.jsonl" && printf 'name,value\npipe,1\n' > "$NPU_COMPUTE_OUTPUT/PipeUtilization.csv")";
+    return R"(test "$NPU_COMPUTE_CSV_OUTPUT_DIR" = "$NPU_COMPUTE_OUTPUT" && printf '{}\n{}\n{}\n{}\n{}\n' > "$NPU_COMPUTE_OUTPUT/HardwareInfo.jsonl" && printf 'name,value\npipe,1\n' > "$NPU_COMPUTE_OUTPUT/PipeUtilization.csv")";
 }
 
 int TestSuccessfulAppPublishesReport()

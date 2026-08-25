@@ -33,8 +33,8 @@ private:
     bool RegisterReplacements();
 
     static aclError AclrtLaunchKernelWithHostArgsReplacement(
-        aclrtFuncHandle funcHandle, std::uint32_t numBlocks, aclrtStream stream, aclrtLaunchKernelCfg* cfg,
-        void* hostArgs, std::size_t argsSize, aclrtPlaceHolderInfo* placeHolderArray, std::size_t placeHolderNum);
+        aclrtFuncHandle funcHandle, uint32_t numBlocks, aclrtStream stream, aclrtLaunchKernelCfg* cfg, void* hostArgs,
+        std::size_t argsSize, aclrtPlaceHolderInfo* placeHolderArray, std::size_t placeHolderNum);
     static aclError AclrtMemcpyReplacement(
         void* destination, std::size_t destinationSize, const void* source, std::size_t count, aclrtMemcpyKind kind);
     static aclError AclrtBinaryLoadFromDataReplacement(
@@ -50,10 +50,9 @@ private:
     static aclError AclrtResetDeviceReplacement(std::int32_t deviceId);
     static aclError AclrtSynchronizeStreamReplacement(aclrtStream stream);
     static aclError AclrtBinaryGetFunctionByEntryReplacement(
-        aclrtBinHandle binHandle, std::uint64_t funcEntry, aclrtFuncHandle* funcHandle);
+        aclrtBinHandle binHandle, uint64_t funcEntry, aclrtFuncHandle* funcHandle);
     static aclError AclrtLaunchKernelReplacement(
-        aclrtFuncHandle function, std::uint32_t blockCount, const void* argsData, std::size_t argsSize,
-        aclrtStream stream);
+        aclrtFuncHandle function, uint32_t blockCount, const void* argsData, std::size_t argsSize, aclrtStream stream);
 
     profiling::ReplayMemory* replayMemory_ = nullptr;
     profiling::RangeProfiler* rangeProfiler_ = nullptr;

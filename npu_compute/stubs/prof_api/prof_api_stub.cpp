@@ -35,7 +35,7 @@ std::size_t CountConfiguredPmus(const MsprofConfig& config)
     }
 
     std::size_t pmuCount = 0;
-    for (std::uint32_t event : config.configInfo.attrs[0].value.aicoreMetrics) {
+    for (uint32_t event : config.configInfo.attrs[0].value.aicoreMetrics) {
         if (event != MSPROF_INVALID_AICORE_METRIC) {
             ++pmuCount;
         }
@@ -94,7 +94,7 @@ extern "C" NPU_COMPUTE_EXPORT int ProfApiLoadApiInjectionFromEnv()
     return result;
 }
 
-extern "C" NPU_COMPUTE_EXPORT std::int32_t MsprofRegisterDataCallback(std::uint32_t type, void* callback)
+extern "C" NPU_COMPUTE_EXPORT std::int32_t MsprofRegisterDataCallback(uint32_t type, void* callback)
 {
     npu_compute::detail::DebugLog("prof_api_stub", "MsprofRegisterDataCallback type=%u callback=%p", type, callback);
     if (callback == nullptr) {
@@ -104,7 +104,7 @@ extern "C" NPU_COMPUTE_EXPORT std::int32_t MsprofRegisterDataCallback(std::uint3
     return 0;
 }
 
-extern "C" NPU_COMPUTE_EXPORT std::int32_t MsprofStart(std::uint32_t dataType, const void* data, std::uint32_t length)
+extern "C" NPU_COMPUTE_EXPORT std::int32_t MsprofStart(uint32_t dataType, const void* data, uint32_t length)
 {
     if (data == nullptr || length != sizeof(MsprofConfig)) {
         npu_compute::detail::DebugLog(
@@ -121,7 +121,7 @@ extern "C" NPU_COMPUTE_EXPORT std::int32_t MsprofStart(std::uint32_t dataType, c
     return 0;
 }
 
-extern "C" NPU_COMPUTE_EXPORT std::int32_t MsprofStop(std::uint32_t dataType, const void*, std::uint32_t length)
+extern "C" NPU_COMPUTE_EXPORT std::int32_t MsprofStop(uint32_t dataType, const void*, uint32_t length)
 {
     npu_compute::detail::DebugLog("prof_api_stub", "MsprofStop type=%u length=%u", dataType, length);
 
@@ -132,7 +132,7 @@ extern "C" NPU_COMPUTE_EXPORT std::int32_t MsprofStop(std::uint32_t dataType, co
     rawData.type = PMU_DATA_TYPE;
     // Emit one structurally valid PMU record so the integration stub exercises
     // the same decoder path as the production data module.
-    std::array<std::uint32_t, 32> record{};
+    std::array<uint32_t, 32> record{};
     record[0] = 0x6bd3002aU;
     record[1] = (1U << 16U) | 1U;
     record[2] = 100U;

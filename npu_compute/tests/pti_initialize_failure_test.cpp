@@ -39,7 +39,7 @@ int DummyFree(void* pointer)
 
 int DummyMemcpy(void*, std::size_t, const void*, std::size_t, aclrtMemcpyKind) { return 0; }
 int DummyMemset(void*, std::size_t, int, std::size_t) { return 0; }
-int DummyLaunch(void*, std::uint32_t, const void*, std::size_t, void*) { return 0; }
+int DummyLaunch(void*, uint32_t, const void*, std::size_t, void*) { return 0; }
 int DummySynchronize(void*) { return 0; }
 
 } // namespace

@@ -39,15 +39,15 @@ constexpr double kBytesPerKb = 1024.0;
 
 struct TypeMetrics {
     bool present = false;
-    std::uint64_t sampleCount = 0;
+    uint64_t sampleCount = 0;
     double totalCyclesSum = 0.0;
     bool overflow = false;
-    std::map<std::uint32_t, double> valueSums;
-    std::map<std::uint32_t, std::uint64_t> valueCounts;
+    std::map<uint32_t, double> valueSums;
+    std::map<uint32_t, uint64_t> valueCounts;
 
     double Cycles() const { return sampleCount == 0 ? 0.0 : totalCyclesSum / static_cast<double>(sampleCount); }
 
-    Metric Value(std::uint32_t eventId) const
+    Metric Value(uint32_t eventId) const
     {
         const auto count = valueCounts.find(eventId);
         if (count == valueCounts.end() || count->second == 0) {
@@ -84,19 +84,19 @@ std::string Number(double value)
 
 std::string Number(const Metric& value) { return value.has_value() ? Number(*value) : "NA"; }
 
-std::string Integer(std::uint16_t value) { return std::to_string(value); }
+std::string Integer(uint16_t value) { return std::to_string(value); }
 
 std::string CoreSubBlockLabel(const aclptiBlockKey& key)
 {
     std::ostringstream output;
     output << (key.coreType == ACLPTI_CORE_TYPE_AIC ? "cube" : "vector") << key.subBlockId;
-    if (key.coreId != static_cast<std::uint8_t>(key.subBlockId)) {
+    if (key.coreId != static_cast<uint8_t>(key.subBlockId)) {
         output << "_core" << static_cast<unsigned int>(key.coreId);
     }
     return output.str();
 }
 
-void AddValue(TypeMetrics& metrics, std::uint32_t eventId, double value, std::uint64_t count)
+void AddValue(TypeMetrics& metrics, uint32_t eventId, double value, uint64_t count)
 {
     metrics.valueSums[eventId] += value * static_cast<double>(count);
     metrics.valueCounts[eventId] += count;
@@ -104,14 +104,14 @@ void AddValue(TypeMetrics& metrics, std::uint32_t eventId, double value, std::ui
 
 void AddCore(TypeMetrics& metrics, const aclptiPmuDataRow::CoreData& core)
 {
-    const std::uint64_t sampleCount = core.sampleCount == 0 ? 1 : core.sampleCount;
+    const uint64_t sampleCount = core.sampleCount == 0 ? 1 : core.sampleCount;
     metrics.present = true;
     metrics.sampleCount += sampleCount;
     metrics.totalCyclesSum += core.totalCycles * static_cast<double>(sampleCount);
     metrics.overflow = metrics.overflow || core.overflow;
     for (const auto& [eventId, value] : core.values) {
         const auto countIt = core.valueCounts.find(eventId);
-        const std::uint64_t count =
+        const uint64_t count =
             countIt == core.valueCounts.end() || countIt->second == 0 ? sampleCount : countIt->second;
         AddValue(metrics, eventId, value, count);
     }
@@ -159,7 +159,7 @@ std::optional<double> Time(const TypeMetrics& metrics, double frequencyMhz)
     return metrics.Cycles() / frequencyMhz;
 }
 
-std::optional<double> ValueRatio(const TypeMetrics& metrics, std::uint32_t eventId)
+std::optional<double> ValueRatio(const TypeMetrics& metrics, uint32_t eventId)
 {
     const auto value = metrics.Value(eventId);
     if (!metrics.present || !value.has_value()) {
@@ -178,7 +178,7 @@ std::optional<double> IcacheMissRate(const TypeMetrics& metrics)
     return Ratio(*numerator, *denominator);
 }
 
-std::optional<double> EventTime(const TypeMetrics& metrics, std::uint32_t eventId, double frequencyMhz)
+std::optional<double> EventTime(const TypeMetrics& metrics, uint32_t eventId, double frequencyMhz)
 {
     const auto value = metrics.Value(eventId);
     if (!metrics.present || !value.has_value() || frequencyMhz <= 0.0) {
@@ -196,7 +196,7 @@ std::optional<double> Bandwidth(double bytes, double durationUs)
 }
 
 std::optional<double> EventBandwidth(
-    const TypeMetrics& metrics, std::uint32_t eventId, double bytesPerEvent, double frequencyMhz)
+    const TypeMetrics& metrics, uint32_t eventId, double bytesPerEvent, double frequencyMhz)
 {
     const auto value = metrics.Value(eventId);
     const auto duration = Time(metrics, frequencyMhz);
@@ -214,7 +214,7 @@ std::optional<double> ActiveBandwidth(double bytes, double activeCycles, double 
     return Bandwidth(bytes, activeCycles / frequencyMhz);
 }
 
-Metric EventSum(const TypeMetrics& first, const TypeMetrics& second, std::uint32_t eventId)
+Metric EventSum(const TypeMetrics& first, const TypeMetrics& second, uint32_t eventId)
 {
     const auto firstValue = first.Value(eventId);
     const auto secondValue = second.Value(eventId);
@@ -224,10 +224,10 @@ Metric EventSum(const TypeMetrics& first, const TypeMetrics& second, std::uint32
     return *firstValue + *secondValue;
 }
 
-Metric SumEvents(const TypeMetrics& metrics, std::initializer_list<std::uint32_t> events)
+Metric SumEvents(const TypeMetrics& metrics, std::initializer_list<uint32_t> events)
 {
     double sum = 0.0;
-    for (const std::uint32_t event : events) {
+    for (const uint32_t event : events) {
         const auto value = metrics.Value(event);
         if (!value.has_value()) {
             return std::nullopt;
@@ -237,15 +237,14 @@ Metric SumEvents(const TypeMetrics& metrics, std::initializer_list<std::uint32_t
     return sum;
 }
 
-Metric NonNegativeDifference(
-    const TypeMetrics& metrics, std::uint32_t minuend, std::initializer_list<std::uint32_t> subtrahends)
+Metric NonNegativeDifference(const TypeMetrics& metrics, uint32_t minuend, std::initializer_list<uint32_t> subtrahends)
 {
     const auto first = metrics.Value(minuend);
     if (!first.has_value()) {
         return std::nullopt;
     }
     double result = *first;
-    for (const std::uint32_t event : subtrahends) {
+    for (const uint32_t event : subtrahends) {
         const auto value = metrics.Value(event);
         if (!value.has_value()) {
             return std::nullopt;
@@ -332,7 +331,7 @@ std::vector<std::string> L2Row(const RowMetrics& row, double frequencyMhz)
     std::vector<std::string> values;
     AppendCommon(values, row, frequencyMhz);
     for (const TypeMetrics* metrics : {&row.aic, &row.aiv}) {
-        for (const std::uint32_t event : {0x424U, 0x425U, 0x426U, 0x427U, 0x428U, 0x429U}) {
+        for (const uint32_t event : {0x424U, 0x425U, 0x426U, 0x427U, 0x428U, 0x429U}) {
             values.push_back(Number(metrics->Value(event)));
         }
         const auto readHit = SumEvents(*metrics, {0x424U, 0x427U});
@@ -341,7 +340,7 @@ std::vector<std::string> L2Row(const RowMetrics& row, double frequencyMhz)
             values, !readHit.has_value() || !readTotal.has_value() ? std::nullopt :
                     *readTotal == 0.0                              ? Metric(0.0) :
                                                                      Metric(100.0 * *readHit / *readTotal));
-        for (const std::uint32_t event : {0x42aU, 0x42bU, 0x42cU, 0x42dU, 0x42eU, 0x42fU}) {
+        for (const uint32_t event : {0x42aU, 0x42bU, 0x42cU, 0x42dU, 0x42eU, 0x42fU}) {
             values.push_back(Number(metrics->Value(event)));
         }
         const auto writeHit = SumEvents(*metrics, {0x42aU, 0x42dU});
@@ -463,7 +462,7 @@ std::vector<std::string> MemoryL0Row(const RowMetrics& row, double frequencyMhz)
 {
     std::vector<std::string> values;
     AppendCommon(values, row, frequencyMhz);
-    for (const auto& [event, bytes] : std::initializer_list<std::pair<std::uint32_t, double>>{
+    for (const auto& [event, bytes] : std::initializer_list<std::pair<uint32_t, double>>{
              {0x304U, 64.0}, {0x703U, 256.0}, {0x306U, 256.0}, {0x705U, 256.0}, {0x30aU, 1024.0}, {0x308U, 1024.0}}) {
         AppendMetric(values, EventBandwidth(row.aic, event, bytes, frequencyMhz));
     }
@@ -701,7 +700,7 @@ bool HasRootSectionCsv(const std::filesystem::path& outputDirectory)
     return false;
 }
 
-std::string CollectionDirectoryName(std::uint64_t sequence)
+std::string CollectionDirectoryName(uint64_t sequence)
 {
     std::ostringstream output;
     output << "collection-p" << static_cast<long long>(::getpid()) << '-' << std::setw(4) << std::setfill('0')
@@ -711,7 +710,7 @@ std::string CollectionDirectoryName(std::uint64_t sequence)
 
 std::filesystem::path CreateUniqueCollectionDirectory(const std::filesystem::path& outputDirectory)
 {
-    static std::atomic<std::uint64_t> sequence{0};
+    static std::atomic<uint64_t> sequence{0};
     for (std::size_t attempt = 0; attempt < 1024; ++attempt) {
         const std::filesystem::path collectionDirectory = outputDirectory / CollectionDirectoryName(++sequence);
         if (std::filesystem::create_directory(collectionDirectory)) {

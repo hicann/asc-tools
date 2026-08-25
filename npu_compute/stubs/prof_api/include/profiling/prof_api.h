@@ -18,9 +18,9 @@
 extern "C" {
 #endif
 
-std::int32_t MsprofRegisterDataCallback(std::uint32_t type, void* func);
-std::int32_t MsprofStart(std::uint32_t dataType, const void* data, std::uint32_t length);
-std::int32_t MsprofStop(std::uint32_t dataType, const void* data, std::uint32_t length);
+std::int32_t MsprofRegisterDataCallback(uint32_t type, void* func);
+std::int32_t MsprofStart(uint32_t dataType, const void* data, uint32_t length);
+std::int32_t MsprofStop(uint32_t dataType, const void* data, uint32_t length);
 
 #ifdef __cplusplus
 }

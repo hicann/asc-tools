@@ -31,18 +31,18 @@ bool Fail(const std::string& message, std::string* error)
     return false;
 }
 
-bool SystemEpochMilliseconds(std::uint64_t* value, void*, std::string* error)
+bool SystemEpochMilliseconds(uint64_t* value, void*, std::string* error)
 {
     const auto milliseconds =
         std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch());
     if (milliseconds.count() < 0) {
         return Fail("system time is before the Unix epoch", error);
     }
-    *value = static_cast<std::uint64_t>(milliseconds.count());
+    *value = static_cast<uint64_t>(milliseconds.count());
     return true;
 }
 
-bool SystemRandomBytes(std::array<std::uint8_t, 4>* value, void*, std::string* error)
+bool SystemRandomBytes(std::array<uint8_t, 4>* value, void*, std::string* error)
 {
     std::size_t offset = 0;
     while (offset < value->size()) {
@@ -90,7 +90,7 @@ bool ReadStatus(const std::filesystem::path& path, std::filesystem::file_status*
     return true;
 }
 
-std::string FormatRandomId(const std::array<std::uint8_t, 4>& bytes)
+std::string FormatRandomId(const std::array<uint8_t, 4>& bytes)
 {
     static constexpr char kHex[] = "0123456789abcdef";
     std::string result(8U, '0');
@@ -112,12 +112,12 @@ bool GenerateTargetInDirectory(
         return Fail("report output path is not a directory: " + directory.string(), error);
     }
 
-    std::uint64_t epoch_milliseconds = 0;
+    uint64_t epoch_milliseconds = 0;
     if (!sources.epoch_milliseconds(&epoch_milliseconds, sources.context, error)) {
         return false;
     }
     for (std::size_t attempt = 0; attempt < kMaximumNameAttempts; ++attempt) {
-        std::array<std::uint8_t, 4> random_bytes{};
+        std::array<uint8_t, 4> random_bytes{};
         if (!sources.random_bytes(&random_bytes, sources.context, error)) {
             return false;
         }

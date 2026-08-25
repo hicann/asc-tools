@@ -41,7 +41,7 @@
 namespace data = npu_compute::aclpti::data;
 namespace data_detail = npu_compute::aclpti::data::detail;
 
-void StoreWord(std::byte* data, std::size_t index, std::uint32_t value)
+void StoreWord(std::byte* data, std::size_t index, uint32_t value)
 {
     const std::size_t offset = index * sizeof(value);
     for (std::size_t byte = 0; byte < sizeof(value); ++byte) {
@@ -63,37 +63,36 @@ MsprofRawData RawData(const std::array<std::byte, Size>& bytes, RawDataType type
 }
 
 std::array<std::byte, 32> TaskLog(
-    std::uint8_t funcType, std::uint16_t taskId, std::uint16_t streamId, std::uint64_t systemCounter,
-    std::uint16_t blockId, std::uint16_t subBlockId, aclptiCoreType coreType, std::uint8_t coreTypeId)
+    uint8_t funcType, uint16_t taskId, uint16_t streamId, uint64_t systemCounter, uint16_t blockId, uint16_t subBlockId,
+    aclptiCoreType coreType, uint8_t coreTypeId)
 {
     std::array<std::byte, 32> bytes{};
     StoreWord(bytes.data(), 0, 0x6bd30000U | funcType);
-    StoreWord(bytes.data(), 1, (std::uint32_t(taskId) << 16U) | streamId);
-    StoreWord(bytes.data(), 2, static_cast<std::uint32_t>(systemCounter));
-    StoreWord(bytes.data(), 3, static_cast<std::uint32_t>(systemCounter >> 32U));
-    StoreWord(bytes.data(), 5, (std::uint32_t(coreTypeId) << 1U) | (coreType == ACLPTI_CORE_TYPE_AIV ? 1U : 0U));
-    StoreWord(bytes.data(), 6, (std::uint32_t(blockId) << 16U) | subBlockId);
+    StoreWord(bytes.data(), 1, (uint32_t(taskId) << 16U) | streamId);
+    StoreWord(bytes.data(), 2, static_cast<uint32_t>(systemCounter));
+    StoreWord(bytes.data(), 3, static_cast<uint32_t>(systemCounter >> 32U));
+    StoreWord(bytes.data(), 5, (uint32_t(coreTypeId) << 1U) | (coreType == ACLPTI_CORE_TYPE_AIV ? 1U : 0U));
+    StoreWord(bytes.data(), 6, (uint32_t(blockId) << 16U) | subBlockId);
     return bytes;
 }
 
-std::array<std::byte, 128> PmuRecord(
-    std::uint16_t taskId, std::uint16_t streamId, std::uint16_t blockId, std::uint64_t firstCounter)
+std::array<std::byte, 128> PmuRecord(uint16_t taskId, uint16_t streamId, uint16_t blockId, uint64_t firstCounter)
 {
     std::array<std::byte, 128> bytes{};
     StoreWord(bytes.data(), 0, 0x6bd3002aU);
-    StoreWord(bytes.data(), 1, (std::uint32_t(taskId) << 16U) | streamId);
+    StoreWord(bytes.data(), 1, (uint32_t(taskId) << 16U) | streamId);
     StoreWord(bytes.data(), 2, 100U);
     StoreWord(bytes.data(), 5, 3U << 8U);
-    StoreWord(bytes.data(), 6, std::uint32_t(blockId) << 16U);
+    StoreWord(bytes.data(), 6, uint32_t(blockId) << 16U);
     for (std::size_t index = 0; index < data::kMaxPmuSlots; ++index) {
-        const std::uint64_t value = firstCounter + index;
-        StoreWord(bytes.data(), 8 + index * 2, static_cast<std::uint32_t>(value));
-        StoreWord(bytes.data(), 9 + index * 2, static_cast<std::uint32_t>(value >> 32U));
+        const uint64_t value = firstCounter + index;
+        StoreWord(bytes.data(), 8 + index * 2, static_cast<uint32_t>(value));
+        StoreWord(bytes.data(), 9 + index * 2, static_cast<uint32_t>(value >> 32U));
     }
     return bytes;
 }
 
-data::PmuSlots PmuEvents(std::initializer_list<std::uint32_t> events)
+data::PmuSlots PmuEvents(std::initializer_list<uint32_t> events)
 {
     data::PmuSlots slots{};
     slots.fill(data::kInvalidPmuEvent);
@@ -271,9 +270,9 @@ int TestRawDataDecoder()
     StoreWord(pmu.data(), 30, 0x90a0b0c0U);
     StoreWord(pmu.data(), 31, 0xd0e0f000U);
     for (std::size_t index = 0; index < data::kMaxPmuSlots; ++index) {
-        const std::uint64_t value = 0x100000000ULL + index;
-        StoreWord(pmu.data(), 8 + index * 2, static_cast<std::uint32_t>(value));
-        StoreWord(pmu.data(), 9 + index * 2, static_cast<std::uint32_t>(value >> 32U));
+        const uint64_t value = 0x100000000ULL + index;
+        StoreWord(pmu.data(), 8 + index * 2, static_cast<uint32_t>(value));
+        StoreWord(pmu.data(), 9 + index * 2, static_cast<uint32_t>(value >> 32U));
     }
 
     const auto decoded = data_detail::DecodeRawRecord(
@@ -630,7 +629,7 @@ int TestFailedPackageIsDropped()
     CHECK(callback != nullptr);
     CHECK(callback(&validRaw) == 0);
     for (std::size_t index = 0; index < kMalformedRecordCount; ++index) {
-        malformedRaw.offset = static_cast<std::uint64_t>(index * malformedRaw.chunkSize);
+        malformedRaw.offset = static_cast<uint64_t>(index * malformedRaw.chunkSize);
         CHECK(callback(&malformedRaw) == 0);
     }
     CHECK(module.RecordReplayStatus({303, ACLPTI_SUCCESS}).status == ACLPTI_SUCCESS);
@@ -660,7 +659,7 @@ int TestRawQueueBackpressure()
     auto payload = PmuRecord(1, 2, 8, 77);
     auto raw = RawData(payload, PMU_DATA_TYPE);
     for (std::size_t index = 0; index < 1500; ++index) {
-        raw.offset = static_cast<std::uint64_t>(index * raw.chunkSize);
+        raw.offset = static_cast<uint64_t>(index * raw.chunkSize);
         CHECK(callback(&raw) == 0);
     }
 

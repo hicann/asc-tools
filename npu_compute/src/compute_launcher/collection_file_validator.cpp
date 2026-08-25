@@ -122,7 +122,7 @@ bool ValidateCollectionFile(const std::filesystem::path& path, NpuRepFileType ty
     }
 
     std::error_code size_error;
-    const std::uintmax_t size = std::filesystem::file_size(path, size_error);
+    const uintmax_t size = std::filesystem::file_size(path, size_error);
     if (size_error) {
         return Fail("read collection file size failed: " + path.string() + ": " + size_error.message(), error);
     }

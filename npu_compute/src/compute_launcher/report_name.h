@@ -22,8 +22,8 @@ struct ReportTarget {
     std::filesystem::path path;
 };
 
-using EpochMillisecondsSource = bool (*)(std::uint64_t* value, void* context, std::string* error);
-using RandomBytesSource = bool (*)(std::array<std::uint8_t, 4>* value, void* context, std::string* error);
+using EpochMillisecondsSource = bool (*)(uint64_t* value, void* context, std::string* error);
+using RandomBytesSource = bool (*)(std::array<uint8_t, 4>* value, void* context, std::string* error);
 
 struct ReportNameSources {
     std::filesystem::path current_directory;

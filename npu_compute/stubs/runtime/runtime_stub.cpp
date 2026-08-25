@@ -26,11 +26,11 @@ namespace {
 constexpr std::size_t kRuntimeApiCount = 17;
 
 struct KernelArgs {
-    std::uint8_t* value;
+    uint8_t* value;
 };
 
 aclError RealAclrtLaunchKernelWithHostArgs(
-    aclrtFuncHandle, std::uint32_t, aclrtStream, aclrtLaunchKernelCfg*, void*, std::size_t, aclrtPlaceHolderInfo*,
+    aclrtFuncHandle, uint32_t, aclrtStream, aclrtLaunchKernelCfg*, void*, std::size_t, aclrtPlaceHolderInfo*,
     std::size_t)
 {
     return ACL_SUCCESS;
@@ -106,7 +106,7 @@ aclError RealAclrtSynchronizeStream(aclrtStream) { return ACL_SUCCESS; }
 
 aclError RealAclrtSynchronizeStreamWithTimeout(aclrtStream, std::int32_t) { return ACL_SUCCESS; }
 
-aclError RealAclrtBinaryGetFunctionByEntry(aclrtBinHandle, std::uint64_t, aclrtFuncHandle* funcHandle)
+aclError RealAclrtBinaryGetFunctionByEntry(aclrtBinHandle, uint64_t, aclrtFuncHandle* funcHandle)
 {
     if (funcHandle == nullptr) {
         return ACL_ERROR_INVALID_PARAM;
@@ -115,7 +115,7 @@ aclError RealAclrtBinaryGetFunctionByEntry(aclrtBinHandle, std::uint64_t, aclrtF
     return ACL_SUCCESS;
 }
 
-aclError RealAclrtLaunchKernel(aclrtFuncHandle, std::uint32_t, const void* argsData, std::size_t argsSize, aclrtStream)
+aclError RealAclrtLaunchKernel(aclrtFuncHandle, uint32_t, const void* argsData, std::size_t argsSize, aclrtStream)
 {
     if (argsData == nullptr || argsSize != sizeof(KernelArgs)) {
         return ACL_ERROR_INVALID_PARAM;
@@ -183,7 +183,7 @@ std::array<RuntimeEntry, kRuntimeApiCount> g_runtimeEntries = {{
 
 std::mutex g_runtimeMutex;
 
-using EmitCallbackEvent = int (*)(std::uint32_t, std::uint32_t, std::int32_t);
+using EmitCallbackEvent = int (*)(uint32_t, uint32_t, std::int32_t);
 
 void EmitTestCallbackEvent(aclptiCallbackId cbid, aclptiCallbackSite site, aclError retval)
 {
@@ -193,7 +193,7 @@ void EmitTestCallbackEvent(aclptiCallbackId cbid, aclptiCallbackSite site, aclEr
     }
     auto emit = reinterpret_cast<EmitCallbackEvent>(::dlsym(RTLD_DEFAULT, "AclPtiCallbackStubEmitRuntimeEvent"));
     if (emit != nullptr) {
-        emit(cbid, static_cast<std::uint32_t>(site), static_cast<std::int32_t>(retval));
+        emit(cbid, static_cast<uint32_t>(site), static_cast<std::int32_t>(retval));
     }
 }
 
@@ -341,23 +341,22 @@ extern "C" aclError aclrtBinaryUnLoad(aclrtBinHandle binHandle)
 }
 
 extern "C" aclError aclrtLaunchKernelWithHostArgs(
-    aclrtFuncHandle funcHandle, std::uint32_t numBlocks, aclrtStream stream, aclrtLaunchKernelCfg* cfg, void* hostArgs,
+    aclrtFuncHandle funcHandle, uint32_t numBlocks, aclrtStream stream, aclrtLaunchKernelCfg* cfg, void* hostArgs,
     std::size_t argsSize, aclrtPlaceHolderInfo* placeHolderArray, std::size_t placeHolderNum)
 {
     return CallCurrent<aclError (*)(
-        aclrtFuncHandle, std::uint32_t, aclrtStream, aclrtLaunchKernelCfg*, void*, std::size_t, aclrtPlaceHolderInfo*,
+        aclrtFuncHandle, uint32_t, aclrtStream, aclrtLaunchKernelCfg*, void*, std::size_t, aclrtPlaceHolderInfo*,
         std::size_t)>(
         "aclrtLaunchKernelWithHostArgs", funcHandle, numBlocks, stream, cfg, hostArgs, argsSize, placeHolderArray,
         placeHolderNum);
 }
 
 extern "C" aclError aclrtLaunchKernel(
-    aclrtFuncHandle funcHandle, std::uint32_t numBlocks, const void* argsData, std::size_t argsSize, aclrtStream stream)
+    aclrtFuncHandle funcHandle, uint32_t numBlocks, const void* argsData, std::size_t argsSize, aclrtStream stream)
 {
     EmitTestCallbackEvent(ACLPTI_RUNTIME_CBID_aclrtLaunchKernel, ACLPTI_API_ENTER, ACL_SUCCESS);
-    const aclError result =
-        CallCurrent<aclError (*)(aclrtFuncHandle, std::uint32_t, const void*, std::size_t, aclrtStream)>(
-            "aclrtLaunchKernel", funcHandle, numBlocks, argsData, argsSize, stream);
+    const aclError result = CallCurrent<aclError (*)(aclrtFuncHandle, uint32_t, const void*, std::size_t, aclrtStream)>(
+        "aclrtLaunchKernel", funcHandle, numBlocks, argsData, argsSize, stream);
     EmitTestCallbackEvent(ACLPTI_RUNTIME_CBID_aclrtLaunchKernel, ACLPTI_API_EXIT, result);
     return result;
 }

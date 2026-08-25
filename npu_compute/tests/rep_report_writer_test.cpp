@@ -79,12 +79,12 @@ private:
     std::filesystem::path path_;
 };
 
-std::vector<std::uint8_t> Bytes(std::string_view content) { return {content.begin(), content.end()}; }
+std::vector<uint8_t> Bytes(std::string_view content) { return {content.begin(), content.end()}; }
 
-bool BuildNestedRep(std::vector<std::uint8_t>* encoded)
+bool BuildNestedRep(std::vector<uint8_t>* encoded)
 {
     std::string error;
-    std::vector<std::uint8_t> child;
+    std::vector<uint8_t> child;
     if (!EncodeRep({{"PipeUtilization.csv", NpuRepFileType::Csv, Bytes("block_id\n0\n")}}, &child, &error)) {
         return false;
     }
@@ -98,7 +98,7 @@ bool WriteFile(const std::filesystem::path& path, std::string_view content)
     return output.good();
 }
 
-bool ReadFile(const std::filesystem::path& path, std::vector<std::uint8_t>* content)
+bool ReadFile(const std::filesystem::path& path, std::vector<uint8_t>* content)
 {
     std::ifstream input(path, std::ios::binary);
     if (!input.is_open()) {
@@ -123,14 +123,14 @@ int TestPublishesCompleteRep()
 {
     TempDirectory temporary;
     CHECK(!temporary.Path().empty());
-    std::vector<std::uint8_t> encoded;
+    std::vector<uint8_t> encoded;
     CHECK(BuildNestedRep(&encoded));
     const ReportTarget target{temporary.Path() / "result.npu-rep"};
     std::string error;
 
     CHECK(PublishRepReport(encoded, target, &error));
     CHECK(error.empty());
-    std::vector<std::uint8_t> actual;
+    std::vector<uint8_t> actual;
     CHECK(ReadFile(target.path, &actual));
     CHECK(actual == encoded);
     DecodedRep top;
@@ -151,12 +151,12 @@ int TestExistingTargetIsNotOverwritten()
     const std::filesystem::path path = temporary.Path() / "result.npu-rep";
     const std::string original = "original";
     CHECK(WriteFile(path, original));
-    std::vector<std::uint8_t> encoded;
+    std::vector<uint8_t> encoded;
     CHECK(BuildNestedRep(&encoded));
     std::string error;
 
     CHECK(!PublishRepReport(encoded, ReportTarget{path}, &error));
-    std::vector<std::uint8_t> actual;
+    std::vector<uint8_t> actual;
     CHECK(ReadFile(path, &actual));
     CHECK(actual == Bytes(original));
     CHECK(!HasTemporaryFile(temporary.Path()));
@@ -174,15 +174,15 @@ int TestRejectsInvalidRepAndUnwritableDirectory()
     CHECK(!std::filesystem::exists(invalid_target.path));
     CHECK(!HasTemporaryFile(temporary.Path()));
 
-    std::vector<std::uint8_t> encoded;
+    std::vector<uint8_t> encoded;
     CHECK(BuildNestedRep(&encoded));
-    std::vector<std::uint8_t> invalid_length = encoded;
+    std::vector<uint8_t> invalid_length = encoded;
     invalid_length[28U] ^= 0x01U;
     const ReportTarget invalid_length_target{temporary.Path() / "invalid-length.npu-rep"};
     CHECK(!PublishRepReport(invalid_length, invalid_length_target, &error));
     CHECK(!std::filesystem::exists(invalid_length_target.path));
 
-    std::vector<std::uint8_t> invalid_offset = encoded;
+    std::vector<uint8_t> invalid_offset = encoded;
     invalid_offset[36U + 152U] = 0U;
     invalid_offset[36U + 153U] = 0U;
     const ReportTarget invalid_offset_target{temporary.Path() / "invalid-offset.npu-rep"};
@@ -266,7 +266,7 @@ int TestShortWritesAreRetried()
 {
     TempDirectory temporary;
     CHECK(!temporary.Path().empty());
-    std::vector<std::uint8_t> encoded;
+    std::vector<uint8_t> encoded;
     CHECK(BuildNestedRep(&encoded));
     OperationState state;
     state.short_write = true;
@@ -275,7 +275,7 @@ int TestShortWritesAreRetried()
 
     CHECK(PublishRepReportWithOperations(encoded, target, Operations(&state), &error));
     CHECK(state.write_calls > 1U);
-    std::vector<std::uint8_t> actual;
+    std::vector<uint8_t> actual;
     CHECK(ReadFile(target.path, &actual));
     CHECK(actual == encoded);
     CHECK(!HasTemporaryFile(temporary.Path()));
@@ -284,7 +284,7 @@ int TestShortWritesAreRetried()
 
 int TestInjectedFailuresLeaveNoPartialReport()
 {
-    std::vector<std::uint8_t> encoded;
+    std::vector<uint8_t> encoded;
     CHECK(BuildNestedRep(&encoded));
 
     for (int failure = 0; failure < 2; ++failure) {
@@ -310,7 +310,7 @@ int TestInjectedFailuresLeaveNoPartialReport()
     state.fail_rename = true;
     std::string error;
     CHECK(!PublishRepReportWithOperations(encoded, ReportTarget{path}, Operations(&state), &error));
-    std::vector<std::uint8_t> actual;
+    std::vector<uint8_t> actual;
     CHECK(ReadFile(path, &actual));
     CHECK(actual == Bytes(original));
     CHECK(!HasTemporaryFile(temporary.Path()));

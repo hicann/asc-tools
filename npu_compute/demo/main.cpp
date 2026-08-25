@@ -20,7 +20,7 @@ extern "C" int aclrtInit();
 namespace {
 
 struct KernelArgs {
-    std::uint8_t* value;
+    uint8_t* value;
 };
 
 bool ParseInteger(const char* value, int* result)
@@ -104,21 +104,21 @@ int main(int argc, char** argv)
         return ReleaseAndReturn(dev_ptr, result);
     }
 
-    std::uint8_t initial_value = 5;
+    uint8_t initial_value = 5;
     result = aclrtMemcpy(dev_ptr, 4096, &initial_value, 1, ACL_MEMCPY_HOST_TO_DEVICE);
     if (result != 0) {
         std::fprintf(stderr, "[demo] aclrtMemcpy H2D failed: %d\n", result);
         return ReleaseAndReturn(dev_ptr, result);
     }
 
-    KernelArgs args{static_cast<std::uint8_t*>(dev_ptr)};
+    KernelArgs args{static_cast<uint8_t*>(dev_ptr)};
     result = aclrtLaunchKernel(nullptr, 1, &args, sizeof(args), nullptr);
     if (result != 0) {
         std::fprintf(stderr, "[demo] aclrtLaunchKernel failed: %d\n", result);
         return ReleaseAndReturn(dev_ptr, result);
     }
 
-    std::uint8_t output = 0;
+    uint8_t output = 0;
     result = aclrtMemcpy(&output, sizeof(output), dev_ptr, 1, ACL_MEMCPY_DEVICE_TO_HOST);
     if (result == 0 && output != 6) {
         std::fprintf(stderr, "[demo] unexpected kernel output: %u\n", static_cast<unsigned>(output));

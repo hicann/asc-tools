@@ -202,7 +202,7 @@ private:
 };
 
 bool WriteAll(
-    int descriptor, const std::vector<std::uint8_t>& payload, const std::filesystem::path& path, std::string* error)
+    int descriptor, const std::vector<uint8_t>& payload, const std::filesystem::path& path, std::string* error)
 {
     std::size_t offset = 0;
     while (offset < payload.size()) {
@@ -234,7 +234,7 @@ bool SyncDescriptor(int descriptor, const std::string& description, std::string*
     return true;
 }
 
-bool WriteImportedFile(const std::filesystem::path& path, const std::vector<std::uint8_t>& payload, std::string* error)
+bool WriteImportedFile(const std::filesystem::path& path, const std::vector<uint8_t>& payload, std::string* error)
 {
     FileDescriptor descriptor(
         ::open(path.c_str(), O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC | O_NOFOLLOW, S_IRUSR | S_IWUSR));
@@ -288,7 +288,7 @@ bool UnpackImportedEntries(
     return SyncDirectory(output_directory, error);
 }
 
-bool ReadInputFile(const std::filesystem::path& path, std::vector<std::uint8_t>* content, std::string* error)
+bool ReadInputFile(const std::filesystem::path& path, std::vector<uint8_t>* content, std::string* error)
 {
     std::error_code status_error;
     const std::filesystem::file_status status = std::filesystem::symlink_status(path, status_error);
@@ -312,8 +312,8 @@ bool ReadInputFile(const std::filesystem::path& path, std::vector<std::uint8_t>*
 }
 
 bool DecodeImportedEntries(
-    const std::vector<std::uint8_t>& encoded, const std::string& logical_path,
-    std::vector<ImportedProfileEntry>* results, std::string* error)
+    const std::vector<uint8_t>& encoded, const std::string& logical_path, std::vector<ImportedProfileEntry>* results,
+    std::string* error)
 {
     DecodedRep decoded;
     std::string decode_error;
@@ -355,7 +355,7 @@ bool ReadImportedProfileResults(
     results->clear();
 
     try {
-        std::vector<std::uint8_t> encoded;
+        std::vector<uint8_t> encoded;
         if (!ReadInputFile(input_path, &encoded, error) ||
             !DecodeImportedEntries(encoded, input_path.string(), results, error)) {
             results->clear();

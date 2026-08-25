@@ -24,9 +24,3 @@ set_target_properties(acl_prof_api_stub PROPERTIES
   VISIBILITY_INLINES_HIDDEN YES
 )
 npu_compute_set_output(acl_prof_api_stub)
-
-install(TARGETS acl_prof_api_stub
-  LIBRARY DESTINATION lib64
-  PERMISSIONS OWNER_READ OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE
-  COMPONENT npu-compute-integration
-)

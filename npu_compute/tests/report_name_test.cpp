@@ -71,14 +71,14 @@ private:
 };
 
 struct FixedSources {
-    std::uint64_t epoch_milliseconds = 1700000000123ULL;
-    std::vector<std::array<std::uint8_t, 4>> random_values;
+    uint64_t epoch_milliseconds = 1700000000123ULL;
+    std::vector<std::array<uint8_t, 4>> random_values;
     std::size_t random_index = 0;
     bool fail_epoch = false;
     bool fail_random = false;
 };
 
-bool FixedEpoch(std::uint64_t* value, void* context, std::string* error)
+bool FixedEpoch(uint64_t* value, void* context, std::string* error)
 {
     auto* sources = static_cast<FixedSources*>(context);
     if (sources->fail_epoch) {
@@ -91,7 +91,7 @@ bool FixedEpoch(std::uint64_t* value, void* context, std::string* error)
     return true;
 }
 
-bool FixedRandom(std::array<std::uint8_t, 4>* value, void* context, std::string* error)
+bool FixedRandom(std::array<uint8_t, 4>* value, void* context, std::string* error)
 {
     auto* sources = static_cast<FixedSources*>(context);
     if (sources->fail_random || sources->random_index >= sources->random_values.size()) {

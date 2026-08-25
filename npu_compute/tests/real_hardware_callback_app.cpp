@@ -106,7 +106,7 @@ bool PrepareEnvironment(const std::filesystem::path& outputDirectory)
 bool EmitSuccessfulExit(aclptiCallbackId cbid)
 {
     return AclPtiCallbackStubEmitRuntimeEvent(
-               static_cast<std::uint32_t>(cbid), static_cast<std::uint32_t>(ACLPTI_API_EXIT),
+               static_cast<uint32_t>(cbid), static_cast<uint32_t>(ACLPTI_API_EXIT),
                static_cast<std::int32_t>(ACL_SUCCESS)) == 1;
 }
 

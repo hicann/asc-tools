@@ -31,7 +31,7 @@
 namespace {
 
 aclptiPmuDataRow::CoreData Core(
-    aclptiCoreType type, std::uint8_t id, double cycles, std::initializer_list<std::pair<std::uint32_t, double>> values)
+    aclptiCoreType type, uint8_t id, double cycles, std::initializer_list<std::pair<uint32_t, double>> values)
 {
     aclptiPmuDataRow::CoreData core{};
     core.coreType = type;

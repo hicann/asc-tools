@@ -56,7 +56,7 @@ bool ParseUnsigned(std::string_view text, Integer* value)
 }
 
 bool ReadCountAttribute(
-    HardwareDeviceApi& api, std::int32_t attribute, std::string_view fieldName, std::uint32_t* result,
+    HardwareDeviceApi& api, std::int32_t attribute, std::string_view fieldName, uint32_t* result,
     DiagnosticSink* diagnostics)
 {
     std::int64_t value = 0;
@@ -64,11 +64,11 @@ bool ReadCountAttribute(
         Diagnose(diagnostics, "GetDeviceAttribute failed for Device 0: " + std::string(fieldName));
         return false;
     }
-    if (value < 0 || static_cast<std::uint64_t>(value) > std::numeric_limits<std::uint32_t>::max()) {
+    if (value < 0 || static_cast<uint64_t>(value) > std::numeric_limits<uint32_t>::max()) {
         Diagnose(diagnostics, "invalid " + std::string(fieldName) + " returned for Device 0");
         return false;
     }
-    *result = static_cast<std::uint32_t>(value);
+    *result = static_cast<uint32_t>(value);
     return true;
 }
 
@@ -115,7 +115,7 @@ void CollectCpuInfo(HardwareDeviceApi& api, CpuInfo* cpu, DiagnosticSink* diagno
 }
 
 void ReadFrequency(
-    HardwareDeviceApi& api, std::int32_t type, std::string_view fieldName, std::uint32_t* result,
+    HardwareDeviceApi& api, std::int32_t type, std::string_view fieldName, uint32_t* result,
     DiagnosticSink* diagnostics)
 {
     std::string text;
@@ -140,7 +140,7 @@ void CollectAiCoreInfo(HardwareDeviceApi& api, AiCoreInfo* aiCore, DiagnosticSin
 void CollectMemoryInfo(HardwareDeviceApi& api, MemoryInfo* memory, DiagnosticSink* diagnostics)
 {
     std::string totalBytesText;
-    std::uint64_t totalBytes = 0;
+    uint64_t totalBytes = 0;
     if (!api.GetPlatformValue(kPlatformMemorySize, &totalBytesText)) {
         Diagnose(diagnostics, "GetPlatformValue failed: HBM total size");
     } else if (!ParseUnsigned(totalBytesText, &totalBytes)) {
@@ -149,8 +149,8 @@ void CollectMemoryInfo(HardwareDeviceApi& api, MemoryInfo* memory, DiagnosticSin
         memory->hbmTotalMb = static_cast<double>(totalBytes) / kBytesPerMb;
     }
 
-    std::uint64_t freeBytes = 0;
-    std::uint64_t allocatableBytes = 0;
+    uint64_t freeBytes = 0;
+    uint64_t allocatableBytes = 0;
     if (!api.GetHbmUsage(kDeviceId, &freeBytes, &allocatableBytes)) {
         Diagnose(diagnostics, "GetHbmUsage failed for Device 0");
     } else if (freeBytes > allocatableBytes) {
@@ -189,7 +189,7 @@ bool CollectDevice0Info(
         Diagnose(diagnostics, "invalid device count");
         return true;
     }
-    device->npuCount = static_cast<std::uint32_t>(deviceCount);
+    device->npuCount = static_cast<uint32_t>(deviceCount);
     if (deviceCount == 0) {
         return true;
     }

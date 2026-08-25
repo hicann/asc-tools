@@ -112,13 +112,13 @@ public:
         return true;
     }
 
-    bool GetControlCpuCount(std::int32_t, std::uint32_t* value) override
+    bool GetControlCpuCount(std::int32_t, uint32_t* value) override
     {
         *value = 1;
         return true;
     }
 
-    bool GetAiCpuFrequency(std::int32_t, std::uint32_t* value) override
+    bool GetAiCpuFrequency(std::int32_t, uint32_t* value) override
     {
         *value = 1500;
         return true;
@@ -130,14 +130,14 @@ public:
         return true;
     }
 
-    bool GetHbmUsage(std::int32_t, std::uint64_t* freeBytes, std::uint64_t* totalBytes) override
+    bool GetHbmUsage(std::int32_t, uint64_t* freeBytes, uint64_t* totalBytes) override
     {
         *freeBytes = 8U * 1024U * 1024U;
         *totalBytes = 16U * 1024U * 1024U;
         return true;
     }
 
-    bool GetHbmFrequency(std::int32_t, std::uint32_t* value) override
+    bool GetHbmFrequency(std::int32_t, uint32_t* value) override
     {
         *value = 3200;
         return true;

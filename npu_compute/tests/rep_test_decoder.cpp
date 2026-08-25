@@ -24,31 +24,27 @@ void SetError(std::string* error, const std::string& message)
     }
 }
 
-std::uint16_t ReadLe16(const std::uint8_t* data)
+template <typename Value>
+Value ReadLittleEndian(const uint8_t* data)
 {
-    return static_cast<std::uint16_t>(data[0]) | static_cast<std::uint16_t>(data[1]) << 8U;
-}
-
-std::uint32_t ReadLe32(const std::uint8_t* data)
-{
-    return static_cast<std::uint32_t>(data[0]) | static_cast<std::uint32_t>(data[1]) << 8U |
-           static_cast<std::uint32_t>(data[2]) << 16U | static_cast<std::uint32_t>(data[3]) << 24U;
-}
-
-std::uint64_t ReadLe64(const std::uint8_t* data)
-{
-    std::uint64_t value = 0;
-    for (std::size_t index = 0; index < sizeof(value); ++index) {
-        value |= static_cast<std::uint64_t>(data[index]) << (index * 8U);
+    Value value = 0;
+    for (std::size_t index = 0; index < sizeof(Value); ++index) {
+        value |= static_cast<Value>(data[index]) << (index * 8U);
     }
     return value;
 }
 
-bool HasMagic(const std::uint8_t* data) { return std::equal(kNpuRepMagic.begin(), kNpuRepMagic.end(), data); }
+uint16_t ReadLe16(const uint8_t* data) { return ReadLittleEndian<uint16_t>(data); }
+
+uint32_t ReadLe32(const uint8_t* data) { return ReadLittleEndian<uint32_t>(data); }
+
+uint64_t ReadLe64(const uint8_t* data) { return ReadLittleEndian<uint64_t>(data); }
+
+bool HasMagic(const uint8_t* data) { return std::equal(kNpuRepMagic.begin(), kNpuRepMagic.end(), data); }
 
 } // namespace
 
-bool DecodeRep(const std::vector<std::uint8_t>& encoded, DecodedRep* decoded, std::string* error)
+bool DecodeRep(const std::vector<uint8_t>& encoded, DecodedRep* decoded, std::string* error)
 {
     if (decoded == nullptr) {
         SetError(error, "decoded rep is null");
@@ -72,19 +68,18 @@ bool DecodeRep(const std::vector<std::uint8_t>& encoded, DecodedRep* decoded, st
         return false;
     }
 
-    const std::uint64_t table_size = static_cast<std::uint64_t>(decoded->file_info_count) * decoded->file_info_length;
-    const std::uint64_t payload_start = decoded->head_length + table_size;
+    const uint64_t table_size = static_cast<uint64_t>(decoded->file_info_count) * decoded->file_info_length;
+    const uint64_t payload_start = decoded->head_length + table_size;
     if (payload_start > encoded.size()) {
         SetError(error, "rep file info table exceeds input");
         return false;
     }
 
-    std::uint64_t expected_offset = payload_start;
+    uint64_t expected_offset = payload_start;
     decoded->entries.reserve(decoded->file_info_count);
-    for (std::uint32_t index = 0; index < decoded->file_info_count; ++index) {
-        const std::uint64_t info_offset =
-            decoded->head_length + static_cast<std::uint64_t>(index) * decoded->file_info_length;
-        const std::uint8_t* info = encoded.data() + info_offset;
+    for (uint32_t index = 0; index < decoded->file_info_count; ++index) {
+        const uint64_t info_offset = decoded->head_length + static_cast<uint64_t>(index) * decoded->file_info_length;
+        const uint8_t* info = encoded.data() + info_offset;
         if (!HasMagic(info)) {
             SetError(error, "invalid file info magic");
             return false;

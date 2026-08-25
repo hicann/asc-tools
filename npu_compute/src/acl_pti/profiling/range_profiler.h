@@ -34,7 +34,7 @@ public:
         aclrtSynchronizeStreamFunc synchronizeFunction, aclrtStream stream, std::int32_t deviceId);
 
 private:
-    std::vector<std::uint32_t> pmuEvents_;
+    std::vector<uint32_t> pmuEvents_;
     std::string sectionName_ = "default";
     data::Module dataModule_;
 };

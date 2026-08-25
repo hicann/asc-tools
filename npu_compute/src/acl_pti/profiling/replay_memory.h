@@ -39,7 +39,7 @@ private:
 
     bool FindShadowBuffer(const void* pointer, std::size_t count, ShadowBuffer* buffer, std::size_t* offset) const;
 
-    std::map<std::uintptr_t, ShadowBuffer> shadowBuffers_;
+    std::map<uintptr_t, ShadowBuffer> shadowBuffers_;
 };
 
 } // namespace npu_compute::aclpti::profiling

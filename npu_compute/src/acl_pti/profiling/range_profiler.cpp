@@ -24,21 +24,21 @@ namespace {
 
 struct SectionDefinition {
     std::string_view name;
-    const std::uint32_t* events;
+    const uint32_t* events;
     std::size_t eventCount;
 };
 
-constexpr std::uint32_t kArithmeticUtilization[] = {768, 789, 790, 808, 809, 810, 1281, 1282, 1283, 1284};
-constexpr std::uint32_t kPipeUtilization[] = {0, 1, 10, 36, 52, 53, 514, 515, 810, 1281, 1794, 1812, 1813};
-constexpr std::uint32_t kResourceConflictRatio[] = {11, 12, 13, 14, 15, 1344, 1366, 1376, 1377, 1378, 1379};
-constexpr std::uint32_t kMemory[] = {512,  513,  514,  515,  516,  518,  1058, 1059, 1391, 1395, 1396, 1397,
-                                     1398, 1400, 1404, 1407, 1408, 1792, 1794, 1799, 1801, 1804, 1806, 1815};
-constexpr std::uint32_t kMemoryL0[] = {772, 774, 776, 778, 1795, 1797};
-constexpr std::uint32_t kMemoryUb[] = {1058, 1059, 1393, 1394, 1397, 1398, 1407, 1408};
-constexpr std::uint32_t kL2Cache[] = {1060, 1061, 1062, 1063, 1064, 1065, 1066, 1067, 1068, 1069, 1070, 1071};
+constexpr uint32_t kArithmeticUtilization[] = {768, 789, 790, 808, 809, 810, 1281, 1282, 1283, 1284};
+constexpr uint32_t kPipeUtilization[] = {0, 1, 10, 36, 52, 53, 514, 515, 810, 1281, 1794, 1812, 1813};
+constexpr uint32_t kResourceConflictRatio[] = {11, 12, 13, 14, 15, 1344, 1366, 1376, 1377, 1378, 1379};
+constexpr uint32_t kMemory[] = {512,  513,  514,  515,  516,  518,  1058, 1059, 1391, 1395, 1396, 1397,
+                                1398, 1400, 1404, 1407, 1408, 1792, 1794, 1799, 1801, 1804, 1806, 1815};
+constexpr uint32_t kMemoryL0[] = {772, 774, 776, 778, 1795, 1797};
+constexpr uint32_t kMemoryUb[] = {1058, 1059, 1393, 1394, 1397, 1398, 1407, 1408};
+constexpr uint32_t kL2Cache[] = {1060, 1061, 1062, 1063, 1064, 1065, 1066, 1067, 1068, 1069, 1070, 1071};
 
-constexpr std::uint32_t kMsprofCollectionType = 8;
-constexpr std::uint64_t kDefaultProfSwitch = PROF_AICORE_METRICS_MASK | PROF_TASK_TIME_MASK;
+constexpr uint32_t kMsprofCollectionType = 8;
+constexpr uint64_t kDefaultProfSwitch = PROF_AICORE_METRICS_MASK | PROF_TASK_TIME_MASK;
 
 constexpr SectionDefinition kSectionCatalog[] = {
     {"ArithmeticUtilization", kArithmeticUtilization, std::size(kArithmeticUtilization)},
@@ -88,8 +88,8 @@ aclptiResult RangeProfiler::SetSections(const aclptiRangeProfilerSetConfigParams
     }
 
     try {
-        std::vector<std::uint32_t> events;
-        std::unordered_set<std::uint32_t> seen;
+        std::vector<uint32_t> events;
+        std::unordered_set<uint32_t> seen;
         std::string sectionName;
         for (std::size_t index = 0; index < params->numSections; ++index) {
             const char* name = params->sections[index];
@@ -110,7 +110,7 @@ aclptiResult RangeProfiler::SetSections(const aclptiRangeProfilerSetConfigParams
             }
             npu_compute::detail::DebugLog("aclpti", "selected section name=%.*s", static_cast<int>(length), name);
             for (std::size_t eventIndex = 0; eventIndex < section->eventCount; ++eventIndex) {
-                const std::uint32_t event = section->events[eventIndex];
+                const uint32_t event = section->events[eventIndex];
                 if (seen.insert(event).second) {
                     events.push_back(event);
                 }
@@ -159,7 +159,7 @@ int RangeProfiler::ReplayKernel(
         const std::size_t eventCount = std::min(
             pmuEvents_.size() - std::min(firstEvent, pmuEvents_.size()),
             static_cast<std::size_t>(COMPUTE_AICORE_METRICS_NUM));
-        const std::uint64_t replayId = round;
+        const uint64_t replayId = round;
 
         MsprofConfigAttr attr{};
         attr.id = PROF_CONFIG_ATTR_AICORE_METRICS;
@@ -169,7 +169,7 @@ int RangeProfiler::ReplayKernel(
         prepareInfo.sectionName = sectionName_;
         prepareInfo.pmuEventIds.fill(data::kInvalidPmuEvent);
         for (std::size_t index = 0; index < eventCount; ++index) {
-            const std::uint32_t event = pmuEvents_[firstEvent + index];
+            const uint32_t event = pmuEvents_[firstEvent + index];
             attr.value.aicoreMetrics[index] = event;
             prepareInfo.pmuEventIds[index] = event;
         }
@@ -189,7 +189,7 @@ int RangeProfiler::ReplayKernel(
         MsprofConfig config{};
         config.profSwitch = kDefaultProfSwitch;
         config.devNums = 1;
-        config.devIdList[0] = static_cast<std::uint32_t>(deviceId);
+        config.devIdList[0] = static_cast<uint32_t>(deviceId);
         config.configInfo.attrs = &attr;
         config.configInfo.numAttrs = 1;
 

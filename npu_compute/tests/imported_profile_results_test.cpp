@@ -78,16 +78,16 @@ private:
     std::filesystem::path path_;
 };
 
-std::vector<std::uint8_t> Bytes(std::string_view value) { return {value.begin(), value.end()}; }
+std::vector<uint8_t> Bytes(std::string_view value) { return {value.begin(), value.end()}; }
 
-bool WriteFile(const std::filesystem::path& path, const std::vector<std::uint8_t>& content)
+bool WriteFile(const std::filesystem::path& path, const std::vector<uint8_t>& content)
 {
     std::ofstream output(path, std::ios::binary | std::ios::trunc);
     output.write(reinterpret_cast<const char*>(content.data()), static_cast<std::streamsize>(content.size()));
     return output.good();
 }
 
-bool ReadFile(const std::filesystem::path& path, std::vector<std::uint8_t>* content)
+bool ReadFile(const std::filesystem::path& path, std::vector<uint8_t>* content)
 {
     std::ifstream input(path, std::ios::binary);
     if (!input.is_open()) {
@@ -97,10 +97,10 @@ bool ReadFile(const std::filesystem::path& path, std::vector<std::uint8_t>* cont
     return !input.bad();
 }
 
-bool BuildNestedRep(std::vector<std::uint8_t>* encoded)
+bool BuildNestedRep(std::vector<uint8_t>* encoded)
 {
     std::string error;
-    std::vector<std::uint8_t> child;
+    std::vector<uint8_t> child;
     if (!EncodeRep({{"Memory.csv", NpuRepFileType::Csv, Bytes("name,value\nmemory,2\n")}}, &child, &error)) {
         return false;
     }
@@ -110,17 +110,17 @@ bool BuildNestedRep(std::vector<std::uint8_t>* encoded)
         encoded, &error);
 }
 
-const std::vector<std::uint8_t>& HardwareInfoBytes()
+const std::vector<uint8_t>& HardwareInfoBytes()
 {
-    static const std::vector<std::uint8_t> content = Bytes("{\"category\":\"Host Info\"}\n"
-                                                           "{\"category\":\"Device Info\"}\n"
-                                                           "{\"category\":\"CPU Information\"}\n"
-                                                           "{\"category\":\"AI Core Information\"}\n"
-                                                           "{\"category\":\"Memory Information\"}\n");
+    static const std::vector<uint8_t> content = Bytes("{\"category\":\"Host Info\"}\n"
+                                                      "{\"category\":\"Device Info\"}\n"
+                                                      "{\"category\":\"CPU Information\"}\n"
+                                                      "{\"category\":\"AI Core Information\"}\n"
+                                                      "{\"category\":\"Memory Information\"}\n");
     return content;
 }
 
-bool BuildRecursiveFixture(const std::filesystem::path& fixture, std::vector<std::uint8_t>* encoded)
+bool BuildRecursiveFixture(const std::filesystem::path& fixture, std::vector<uint8_t>* encoded)
 {
     if (!std::filesystem::create_directories(fixture / "device_0" / "details") ||
         !WriteFile(fixture / "HardwareInfo.jsonl", HardwareInfoBytes()) ||
@@ -158,8 +158,8 @@ bool SameDirectoryTrees(const std::filesystem::path& left, const std::filesystem
         if (!entry.is_regular_file()) {
             continue;
         }
-        std::vector<std::uint8_t> leftContent;
-        std::vector<std::uint8_t> rightContent;
+        std::vector<uint8_t> leftContent;
+        std::vector<uint8_t> rightContent;
         if (!ReadFile(entry.path(), &leftContent) ||
             !ReadFile(right / std::filesystem::relative(entry.path(), left), &rightContent) ||
             leftContent != rightContent) {
@@ -173,7 +173,7 @@ int TestReadsNestedProfileResults()
 {
     TempDirectory temporary;
     CHECK(!temporary.Path().empty());
-    std::vector<std::uint8_t> encoded;
+    std::vector<uint8_t> encoded;
     CHECK(BuildNestedRep(&encoded));
     const std::filesystem::path input = temporary.Path() / "input.npu-rep";
     CHECK(WriteFile(input, encoded));
@@ -200,7 +200,7 @@ int TestUnpacksRecursiveProfileResults()
     TempDirectory temporary;
     CHECK(!temporary.Path().empty());
     const std::filesystem::path fixture = temporary.Path() / "fixture";
-    std::vector<std::uint8_t> encoded;
+    std::vector<uint8_t> encoded;
     CHECK(BuildRecursiveFixture(fixture, &encoded));
     const std::filesystem::path input = temporary.Path() / "input.npu-rep";
     CHECK(WriteFile(input, encoded));
@@ -213,15 +213,15 @@ int TestUnpacksRecursiveProfileResults()
     CHECK(UnpackImportedProfileResults(results, output, &error));
     CHECK(error.empty());
 
-    std::vector<std::uint8_t> actual;
+    std::vector<uint8_t> actual;
     CHECK(ReadFile(output / "HardwareInfo.jsonl", &actual));
     CHECK(actual == HardwareInfoBytes());
     CHECK(ReadFile(output / "metadata.json", &actual));
     CHECK(actual == Bytes("{\"version\":1}\n"));
     CHECK(ReadFile(output / "profile.sqlite3", &actual));
-    CHECK(actual == std::vector<std::uint8_t>({0x53U, 0x51U, 0x4cU, 0x00U, 0xffU}));
+    CHECK(actual == std::vector<uint8_t>({0x53U, 0x51U, 0x4cU, 0x00U, 0xffU}));
     CHECK(ReadFile(output / "trace.pb", &actual));
-    CHECK(actual == std::vector<std::uint8_t>({0x08U, 0x96U, 0x01U, 0x00U}));
+    CHECK(actual == std::vector<uint8_t>({0x08U, 0x96U, 0x01U, 0x00U}));
     CHECK(ReadFile(output / "device_0" / "Memory.csv", &actual));
     CHECK(actual == Bytes("name,value\nmemory,2\n"));
     CHECK(ReadFile(output / "device_0" / "details" / "L2Cache.csv", &actual));
@@ -244,7 +244,7 @@ int TestUnpacksShortRepSuffix()
          {{"L2Cache.csv", NpuRepFileType::Csv, Bytes("name,value\nl2,3\n"), {}}}}};
     std::string error;
     CHECK(UnpackImportedProfileResults(results, output, &error));
-    std::vector<std::uint8_t> actual;
+    std::vector<uint8_t> actual;
     CHECK(ReadFile(output / "details" / "L2Cache.csv", &actual));
     CHECK(actual == Bytes("name,value\nl2,3\n"));
     return 0;
@@ -255,7 +255,7 @@ int TestRejectsExistingOutputWithoutPartialWrites()
     TempDirectory temporary;
     CHECK(!temporary.Path().empty());
     const std::filesystem::path fixture = temporary.Path() / "fixture";
-    std::vector<std::uint8_t> encoded;
+    std::vector<uint8_t> encoded;
     CHECK(BuildRecursiveFixture(fixture, &encoded));
     const std::filesystem::path input = temporary.Path() / "input.npu-rep";
     CHECK(WriteFile(input, encoded));
@@ -265,13 +265,13 @@ int TestRejectsExistingOutputWithoutPartialWrites()
 
     const std::filesystem::path output = temporary.Path() / "unpacked";
     CHECK(std::filesystem::create_directory(output));
-    const std::vector<std::uint8_t> existing = Bytes("keep-existing");
+    const std::vector<uint8_t> existing = Bytes("keep-existing");
     CHECK(WriteFile(output / "trace.pb", existing));
     CHECK(!UnpackImportedProfileResults(results, output, &error));
     CHECK(error.find("exists") != std::string::npos);
     CHECK(!std::filesystem::exists(output / "HardwareInfo.jsonl"));
     CHECK(!std::filesystem::exists(output / "device_0"));
-    std::vector<std::uint8_t> actual;
+    std::vector<uint8_t> actual;
     CHECK(ReadFile(output / "trace.pb", &actual));
     CHECK(actual == existing);
     return 0;
@@ -314,8 +314,8 @@ int TestRejectsInvalidInputAndChildRep()
     CHECK(!ReadImportedProfileResults(temporary.Path(), &results, &error));
     CHECK(error.find("regular file") != std::string::npos);
 
-    std::vector<std::uint8_t> child = Bytes("not-a-rep");
-    std::vector<std::uint8_t> parent;
+    std::vector<uint8_t> child = Bytes("not-a-rep");
+    std::vector<uint8_t> parent;
     CHECK(EncodeRep({{"broken.npu.rep", NpuRepFileType::NpuRep, child}}, &parent, &error));
     const std::filesystem::path input = temporary.Path() / "broken.npu-rep";
     CHECK(WriteFile(input, parent));
@@ -403,7 +403,7 @@ int TestCliImportUnpacksResults(const std::filesystem::path& cli)
     const std::filesystem::path fixture = temporary.Path() / "fixture";
     CHECK(std::filesystem::create_directory(runtime_tmp));
     CHECK(std::filesystem::create_directory(work));
-    std::vector<std::uint8_t> encoded;
+    std::vector<uint8_t> encoded;
     CHECK(BuildRecursiveFixture(fixture, &encoded));
     const std::filesystem::path input = temporary.Path() / "input.npu-rep";
     CHECK(WriteFile(input, encoded));
@@ -435,7 +435,7 @@ int TestCliImportUnpacksResults(const std::filesystem::path& cli)
         cli, {"--import", input.string(), "--export", existingOutput.string()}, runtime_tmp, work, &existingResult));
     CHECK(existingResult.exit_code == 4);
     CHECK(existingResult.standard_error.find("already exists") != std::string::npos);
-    std::vector<std::uint8_t> actual;
+    std::vector<uint8_t> actual;
     CHECK(ReadFile(existingOutput / "keep.txt", &actual));
     CHECK(actual == Bytes("keep"));
 

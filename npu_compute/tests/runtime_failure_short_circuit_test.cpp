@@ -91,7 +91,7 @@ int RealMemset(void* destination, std::size_t destinationSize, int value, std::s
     return 0;
 }
 
-int RealLaunch(void*, std::uint32_t, const void*, std::size_t, void*)
+int RealLaunch(void*, uint32_t, const void*, std::size_t, void*)
 {
     ++gLaunchCalls;
     if (gFailNextLaunch) {
@@ -105,7 +105,7 @@ int RealSynchronize(void*) { return 0; }
 
 } // namespace
 
-std::int32_t MsprofStart(std::uint32_t, const void*, std::uint32_t)
+std::int32_t MsprofStart(uint32_t, const void*, uint32_t)
 {
     ++gStartCalls;
     if (gFailNextStart) {
@@ -115,9 +115,9 @@ std::int32_t MsprofStart(std::uint32_t, const void*, std::uint32_t)
     return 0;
 }
 
-std::int32_t MsprofStop(std::uint32_t, const void*, std::uint32_t) { return 0; }
+std::int32_t MsprofStop(uint32_t, const void*, uint32_t) { return 0; }
 
-std::int32_t MsprofRegisterDataCallback(std::uint32_t, void* callback) { return callback == nullptr ? -1 : 0; }
+std::int32_t MsprofRegisterDataCallback(uint32_t, void* callback) { return callback == nullptr ? -1 : 0; }
 
 int main()
 {
@@ -146,7 +146,7 @@ int main()
     void* allocation = nullptr;
     CHECK(aclrtMalloc(&allocation, 8, ACL_MEM_MALLOC_HUGE_FIRST) == 0);
     CHECK(allocation != nullptr);
-    const std::uint8_t value = 7;
+    const uint8_t value = 7;
 
     gFailNextMemcpy = true;
     const std::size_t memcpyCallsBeforeFailure = gMemcpyCalls;

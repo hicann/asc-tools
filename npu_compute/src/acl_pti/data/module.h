@@ -23,32 +23,32 @@
 namespace npu_compute::aclpti::data {
 
 inline constexpr std::size_t kMaxPmuSlots = 10;
-inline constexpr std::uint32_t kInvalidPmuEvent = 0xffffffffU;
-using PmuSlots = std::array<std::uint32_t, kMaxPmuSlots>;
+inline constexpr uint32_t kInvalidPmuEvent = 0xffffffffU;
+using PmuSlots = std::array<uint32_t, kMaxPmuSlots>;
 
 struct ReplayPrepareInfo {
-    std::uint64_t replayId;
+    uint64_t replayId;
     std::string sectionName;
     PmuSlots pmuEventIds;
 };
 
 struct ReplayStopInfo {
-    std::uint64_t replayId;
+    uint64_t replayId;
     aclptiResult stopStatus;
 };
 
 struct CallbackStats {
-    std::uint64_t copiedRecordCount;
-    std::uint64_t copiedBytes;
-    std::uint64_t receivedBytes;
-    std::uint64_t offsetMismatchCount;
-    std::uint64_t firstExpectedOffset;
-    std::uint64_t firstActualOffset;
-    std::uint32_t lastChunkCount;
+    uint64_t copiedRecordCount;
+    uint64_t copiedBytes;
+    uint64_t receivedBytes;
+    uint64_t offsetMismatchCount;
+    uint64_t firstExpectedOffset;
+    uint64_t firstActualOffset;
+    uint32_t lastChunkCount;
 };
 
 struct ReplayResult {
-    std::uint64_t replayId;
+    uint64_t replayId;
     aclptiResult status;
     CallbackStats callbackStats;
 };
@@ -60,7 +60,7 @@ public:
     virtual MsprofRawDataCallback GetRawDataCallback() = 0;
     virtual aclptiResult PrepareReplay(const ReplayPrepareInfo& info) = 0;
     virtual ReplayResult RecordReplayStatus(const ReplayStopInfo& info) = 0;
-    virtual aclptiResult ReleaseReplay(std::uint64_t replayId) = 0;
+    virtual aclptiResult ReleaseReplay(uint64_t replayId) = 0;
     virtual aclptiResult Shutdown() = 0;
 };
 
@@ -77,7 +77,7 @@ public:
     MsprofRawDataCallback GetRawDataCallback() override;
     aclptiResult PrepareReplay(const ReplayPrepareInfo& info) override;
     ReplayResult RecordReplayStatus(const ReplayStopInfo& info) override;
-    aclptiResult ReleaseReplay(std::uint64_t replayId) override;
+    aclptiResult ReleaseReplay(uint64_t replayId) override;
     aclptiResult Shutdown() override;
 
 private:

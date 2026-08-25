@@ -17,7 +17,7 @@
 
 namespace npu_compute::compute_launcher {
 
-bool PackDirectoryToRep(const std::filesystem::path& directory, std::vector<std::uint8_t>* encoded, std::string* error);
+bool PackDirectoryToRep(const std::filesystem::path& directory, std::vector<uint8_t>* encoded, std::string* error);
 
 } // namespace npu_compute::compute_launcher
 
