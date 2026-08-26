@@ -13,7 +13,10 @@ project(aclsan_sanitizer_api)
 
 find_package(Threads REQUIRED)
 
-option(ACLSAN_BUILD_DEVICE_PROBE_RESOURCES "Build ACLSan Device probe resources" OFF)
+if(NOT TARGET npu_check_dbi_engine)
+  add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/../dbi
+    ${CMAKE_CURRENT_BINARY_DIR}/npu_check_dbi)
+endif()
 
 if(NOT TARGET npu_compute_integration_headers OR NOT TARGET acl_tool_injection)
   message(FATAL_ERROR
@@ -21,15 +24,16 @@ if(NOT TARGET npu_compute_integration_headers OR NOT TARGET acl_tool_injection)
 endif()
 
 add_library(acl_san SHARED
-  probe/device_symbolizer.cpp
-  probe/image_transformer.cpp
-  probe/probe_parser.cpp
-  probe/probe_runtime.cpp
+  src/device_runtime/device_binary_registry.cpp
+  src/device_runtime/device_symbolizer.cpp
+  src/aclsan_active_probe_plan.cpp
   src/cce_instr_struct_dma.cpp
   src/cce_instr_types.cpp
   src/aclsan_api.cpp
   src/aclsan_dispatch_cb.cpp
   src/aclsan_hook_aclrt.cpp
+  src/aclsan_trace_buffer.cpp
+  src/aclsan_trace_runtime.cpp
   src/aclsan_translate_device_data.cpp
 )
 
@@ -45,9 +49,11 @@ target_link_libraries(acl_san
   PRIVATE
     npu_compute_integration_headers
     acl_tool_injection
+    npu_check_dbi_engine
     ${CMAKE_DL_LIBS}
     Threads::Threads
 )
+target_link_options(acl_san PRIVATE "LINKER:--exclude-libs,ALL")
 
 set(ACLSAN_VERSION_SCRIPT "${CMAKE_CURRENT_SOURCE_DIR}/cmake/acl_san.map")
 target_link_options(acl_san PRIVATE
@@ -65,72 +71,44 @@ set_target_properties(acl_san PROPERTIES
   OUTPUT_NAME acl_san
 )
 
-if(ACLSAN_BUILD_DEVICE_PROBE_RESOURCES)
-  find_program(ACLSAN_BISHENG_EXECUTABLE bisheng REQUIRED)
-  if(NOT CMAKE_ASC_ARCHITECTURES)
-    message(FATAL_ERROR "ACLSAN_BUILD_DEVICE_PROBE_RESOURCES requires CMAKE_ASC_ARCHITECTURES")
-  endif()
-
-  set(ACLSAN_PROBE_RESOURCE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/probe_resources")
-  set(ACLSAN_PROBE_OBJECT "${ACLSAN_PROBE_RESOURCE_DIRECTORY}/probe.o")
-  set(ACLSAN_PROBE_CTRL_BINARY "${ACLSAN_PROBE_RESOURCE_DIRECTORY}/ctrl.bin")
-
-  add_executable(aclsan_probe_ctrlgen
-    probe/gen_ctrlbin.cpp
-    probe/msbit/MSBit.cpp
-  )
-  target_compile_features(aclsan_probe_ctrlgen PRIVATE cxx_std_17)
-  target_compile_options(aclsan_probe_ctrlgen PRIVATE -Wall -Wextra -Werror)
-  target_include_directories(aclsan_probe_ctrlgen PRIVATE probe/msbit)
-
-  add_custom_command(
-    OUTPUT "${ACLSAN_PROBE_OBJECT}"
-    COMMAND ${CMAKE_COMMAND} -E make_directory "${ACLSAN_PROBE_RESOURCE_DIRECTORY}"
-    COMMAND "${ACLSAN_BISHENG_EXECUTABLE}"
-      "--npu-arch=${CMAKE_ASC_ARCHITECTURES}"
-      --cce-aicore-only
-      -std=c++17
-      -O2
-      -mllvm -cce-aicore-record-overflow=false
-      -mllvm -cce-aicore-record-stack-size=false
-      -mllvm -cce-aicore-addr-transform
-      -DBUILD_DYNAMIC_PROBE
-      "-I${CMAKE_CURRENT_SOURCE_DIR}/probe"
-      -c "${CMAKE_CURRENT_SOURCE_DIR}/probe/probe.asc"
-      -o "${ACLSAN_PROBE_OBJECT}"
-    DEPENDS probe/probe.asc probe/probe_record.h
-    VERBATIM
-  )
-
-  add_custom_command(
-    OUTPUT "${ACLSAN_PROBE_CTRL_BINARY}"
-    COMMAND ${CMAKE_COMMAND} -E make_directory "${ACLSAN_PROBE_RESOURCE_DIRECTORY}"
-    COMMAND $<TARGET_FILE:aclsan_probe_ctrlgen> "${ACLSAN_PROBE_CTRL_BINARY}"
-    DEPENDS aclsan_probe_ctrlgen probe/gen_ctrlbin.cpp
-    VERBATIM
-  )
-
-  add_custom_target(aclsan_probe_resources ALL
-    DEPENDS "${ACLSAN_PROBE_OBJECT}" "${ACLSAN_PROBE_CTRL_BINARY}"
-  )
-  add_dependencies(acl_san aclsan_probe_resources)
-endif()
-
 if(ENABLE_TEST)
   enable_testing()
   add_test(NAME acl_san_exports
     COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/tests/check_acl_san_exports.sh" $<TARGET_FILE:acl_san>)
+  add_test(NAME aclsan.no_binary_load_from_file_hook
+    COMMAND ${CMAKE_COMMAND}
+      -DSOURCE_ROOT=${CMAKE_SOURCE_DIR}
+      -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/check_no_binary_load_from_file_hook.cmake)
 
+  target_compile_definitions(acl_san PRIVATE ACLSAN_ENABLE_TEST_API=1)
   add_executable(aclsan_callback_contract tests/aclsan_callback_contract.cpp)
   target_compile_features(aclsan_callback_contract PRIVATE cxx_std_17)
   target_link_libraries(aclsan_callback_contract PRIVATE acl_san)
 
+  add_executable(aclsan_probe_plan_callback_test
+    tests/aclsan_probe_plan_callback_test.cpp
+    src/aclsan_active_probe_plan.cpp
+    src/aclsan_api.cpp
+  )
+  target_compile_features(aclsan_probe_plan_callback_test PRIVATE cxx_std_17)
+  target_compile_options(aclsan_probe_plan_callback_test PRIVATE -Wall -Wextra -Werror)
+  target_include_directories(aclsan_probe_plan_callback_test PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+    ${CMAKE_CURRENT_LIST_DIR}/../dbi/include)
+  target_link_libraries(aclsan_probe_plan_callback_test PRIVATE
+    npu_compute_integration_headers
+    npu_check_dbi_engine
+    Threads::Threads)
+  add_test(NAME aclsan_probe_plan_callback_test COMMAND aclsan_probe_plan_callback_test)
+
   add_executable(aclsan_hook_cbdata_test
     tests/aclsan_hook_cbdata_test.cpp
-    probe/device_symbolizer.cpp
-    probe/image_transformer.cpp
-    probe/probe_parser.cpp
-    probe/probe_runtime.cpp
+    src/aclsan_active_probe_plan.cpp
+    src/device_runtime/device_binary_registry.cpp
+    src/device_runtime/device_symbolizer.cpp
+    src/aclsan_trace_buffer.cpp
+    src/aclsan_trace_runtime.cpp
     src/aclsan_translate_device_data.cpp
     src/cce_instr_struct_dma.cpp
     src/cce_instr_types.cpp
@@ -139,50 +117,32 @@ if(ENABLE_TEST)
   target_compile_options(aclsan_hook_cbdata_test PRIVATE -Wall -Wextra -Werror)
   target_include_directories(aclsan_hook_cbdata_test PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}
-    ${CMAKE_CURRENT_SOURCE_DIR}/include)
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+    ${CMAKE_CURRENT_LIST_DIR}/../dbi/include)
   target_link_libraries(aclsan_hook_cbdata_test PRIVATE
     npu_compute_integration_headers
+    npu_check_dbi_engine
     ${CMAKE_DL_LIBS}
     Threads::Threads)
 
-  add_executable(aclsan_probe_parser_test
-    tests/probe_parser_test.cpp
-    probe/probe_parser.cpp
-    src/cce_instr_types.cpp
-  )
-  target_compile_features(aclsan_probe_parser_test PRIVATE cxx_std_17)
-  target_compile_options(aclsan_probe_parser_test PRIVATE -Wall -Wextra -Werror)
-  target_include_directories(aclsan_probe_parser_test PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/probe
-    ${CMAKE_CURRENT_SOURCE_DIR}/include)
-
-  add_executable(aclsan_probe_runtime_test
-    tests/probe_runtime_test.cpp
-    probe/device_symbolizer.cpp
-    probe/image_transformer.cpp
-    probe/probe_parser.cpp
-    probe/probe_runtime.cpp
-    src/cce_instr_types.cpp
-  )
-  target_compile_features(aclsan_probe_runtime_test PRIVATE cxx_std_17)
-  target_compile_options(aclsan_probe_runtime_test PRIVATE -Wall -Wextra -Werror)
-  target_include_directories(aclsan_probe_runtime_test PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/probe
-    ${CMAKE_CURRENT_SOURCE_DIR}/include)
-  target_link_libraries(aclsan_probe_runtime_test PRIVATE
-    npu_compute_integration_headers
-    Threads::Threads)
-  add_test(NAME aclsan_probe_runtime_test COMMAND aclsan_probe_runtime_test)
-
   add_executable(aclsan_device_symbolizer_test
     tests/device_symbolizer_test.cpp
-    probe/device_symbolizer.cpp
-    probe/image_transformer.cpp
+    src/device_runtime/device_symbolizer.cpp
   )
   target_compile_features(aclsan_device_symbolizer_test PRIVATE cxx_std_17)
   target_compile_options(aclsan_device_symbolizer_test PRIVATE -Wall -Wextra -Werror)
-  target_include_directories(aclsan_device_symbolizer_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/probe)
+  target_include_directories(aclsan_device_symbolizer_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/device_runtime)
   add_test(NAME aclsan_device_symbolizer_test COMMAND aclsan_device_symbolizer_test)
+
+  add_executable(aclsan_device_binary_registry_test
+    tests/device_binary_registry_test.cpp
+    src/device_runtime/device_binary_registry.cpp
+    src/device_runtime/device_symbolizer.cpp
+  )
+  target_compile_features(aclsan_device_binary_registry_test PRIVATE cxx_std_17)
+  target_compile_options(aclsan_device_binary_registry_test PRIVATE -Wall -Wextra -Werror)
+  target_include_directories(aclsan_device_binary_registry_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+  add_test(NAME aclsan_device_binary_registry_test COMMAND aclsan_device_binary_registry_test)
 
   add_executable(aclsan_translate_device_data_test
     tests/aclsan_translate_device_data_test.cpp
@@ -210,17 +170,87 @@ if(ENABLE_TEST)
   target_include_directories(cce_instruction_pipeline_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
   add_test(NAME cce_instruction_pipeline_test COMMAND cce_instruction_pipeline_test)
 
+  add_executable(aclsan_trace_buffer_test
+    tests/aclsan_trace_buffer.cpp
+    src/aclsan_trace_buffer.cpp
+  )
+  target_compile_features(aclsan_trace_buffer_test PRIVATE cxx_std_17)
+  target_include_directories(aclsan_trace_buffer_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
+  target_link_libraries(aclsan_trace_buffer_test PRIVATE npu_check_dbi_engine)
+  add_test(NAME aclsan.trace_buffer COMMAND aclsan_trace_buffer_test)
+
+  if(TARGET acl_runtime_stub)
+    add_executable(aclsan_trace_d2h_hook tests/aclsan_trace_d2h_hook.cpp)
+    target_compile_features(aclsan_trace_d2h_hook PRIVATE cxx_std_17)
+    target_include_directories(aclsan_trace_d2h_hook PRIVATE
+      ${CMAKE_CURRENT_LIST_DIR}/../dbi/include
+    )
+    target_link_libraries(aclsan_trace_d2h_hook
+      PRIVATE acl_san acl_tool_injection acl_runtime_stub
+    )
+    add_test(NAME aclsan.trace_d2h_hook COMMAND aclsan_trace_d2h_hook)
+
+    add_executable(npu_check_fake_dbi_tool
+      ${CMAKE_CURRENT_LIST_DIR}/../dbi/test/fake_dbi_tool.cpp
+    )
+    target_compile_features(npu_check_fake_dbi_tool PRIVATE cxx_std_17)
+    target_compile_options(npu_check_fake_dbi_tool PRIVATE -Wall -Wextra -Werror)
+
+    add_executable(aclsan_full_flow_host_sample
+      ${CMAKE_CURRENT_LIST_DIR}/../dbi/test/full_flow_host_sample.cpp
+    )
+    target_compile_features(aclsan_full_flow_host_sample PRIVATE cxx_std_17)
+    target_include_directories(aclsan_full_flow_host_sample PRIVATE
+      ${CMAKE_CURRENT_LIST_DIR}/../dbi/include
+    )
+    target_link_libraries(aclsan_full_flow_host_sample
+      PRIVATE acl_san acl_tool_injection acl_runtime_stub
+    )
+    add_dependencies(aclsan_full_flow_host_sample npu_check_fake_dbi_tool)
+    add_test(NAME aclsan.full_flow_host_sample
+      COMMAND ${CMAKE_COMMAND}
+        -DSAMPLE=$<TARGET_FILE:aclsan_full_flow_host_sample>
+        -DFAKE_TOOL=$<TARGET_FILE:npu_check_fake_dbi_tool>
+        -DSOURCE_ROOT=${CMAKE_CURRENT_LIST_DIR}/../dbi
+        -DTEST_ROOT=${CMAKE_CURRENT_BINARY_DIR}/full-flow-host
+        -P ${CMAKE_CURRENT_LIST_DIR}/../dbi/test/run_full_flow_host_sample.cmake
+    )
+
+    add_executable(aclsan_launch_with_host_args_hook tests/aclsan_launch_with_host_args_hook.cpp)
+    target_compile_features(aclsan_launch_with_host_args_hook PRIVATE cxx_std_17)
+    target_link_libraries(aclsan_launch_with_host_args_hook
+      PRIVATE acl_san acl_tool_injection acl_runtime_stub
+    )
+    add_test(NAME aclsan.launch_with_host_args_hook COMMAND aclsan_launch_with_host_args_hook)
+
+    add_executable(aclsan_binary_load_dbi_hook tests/aclsan_binary_load_dbi_hook.cpp)
+    target_compile_features(aclsan_binary_load_dbi_hook PRIVATE cxx_std_17)
+    target_link_libraries(aclsan_binary_load_dbi_hook
+      PRIVATE acl_san acl_tool_injection acl_runtime_stub
+    )
+    add_test(NAME aclsan.binary_load_dbi_hook COMMAND aclsan_binary_load_dbi_hook)
+    set_tests_properties(aclsan.binary_load_dbi_hook PROPERTIES TIMEOUT 10)
+  endif()
+endif()
+
+if(ENABLE_TEST)
   add_executable(aclsan_lifecycle_api_removed tests/aclsan_lifecycle_api_removed.cpp)
   target_compile_features(aclsan_lifecycle_api_removed PRIVATE cxx_std_17)
   target_link_libraries(aclsan_lifecycle_api_removed PRIVATE ${CMAKE_DL_LIBS})
   add_dependencies(aclsan_lifecycle_api_removed acl_san)
-
   add_executable(aclsan_symbolizer_api_test tests/aclsan_symbolizer_api_test.cpp)
   target_compile_features(aclsan_symbolizer_api_test PRIVATE cxx_std_17)
   target_compile_options(aclsan_symbolizer_api_test PRIVATE -Wall -Wextra -Werror)
   target_include_directories(aclsan_symbolizer_api_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
   target_link_libraries(aclsan_symbolizer_api_test PRIVATE acl_san)
   add_test(NAME aclsan_symbolizer_api_test COMMAND aclsan_symbolizer_api_test)
+  set_tests_properties(aclsan_symbolizer_api_test PROPERTIES
+    ENVIRONMENT "LD_LIBRARY_PATH=$<TARGET_FILE_DIR:acl_tool_injection>")
+  add_test(NAME aclsan.lifecycle_api_removed COMMAND aclsan_lifecycle_api_removed)
+  set_tests_properties(aclsan.lifecycle_api_removed PROPERTIES
+    ENVIRONMENT "LD_LIBRARY_PATH=$<TARGET_FILE_DIR:acl_tool_injection>"
+    WORKING_DIRECTORY $<TARGET_FILE_DIR:acl_san>
+  )
 endif()
 
 install(TARGETS acl_san

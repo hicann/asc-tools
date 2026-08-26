@@ -1,0 +1,267 @@
+/**
+ * Copyright (c) 2026 Huawei Technologies Co., Ltd.
+ * This program is free software, you can redistribute it and/or modify it under the terms and conditions of
+ * CANN Open Software License Agreement Version 2.0 (the "License").
+ * Please refer to the License for details. You may not use this file except in compliance with the License.
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
+ * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
+ * See LICENSE in the root of the software repository for the full text of the License.
+ */
+
+#include "aclsan/aclsan_api.h"
+#include "aclsan/aclsan_cbdata_device.h"
+#include "npu_compute/injection_hook.h"
+#include "npu_compute/runtime_stub_api.h"
+#include "trace_buffer_abi.h"
+
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#include <vector>
+
+extern "C" void aclsanTestMarkInstrumentedFunction(aclrtFuncHandle function);
+
+namespace {
+
+#define CHECK(expression)                                                                 \
+    do {                                                                                  \
+        if (!(expression)) {                                                              \
+            std::fprintf(stderr, "check failed at line %d: %s\n", __LINE__, #expression); \
+            return 1;                                                                     \
+        }                                                                                 \
+    } while (false)
+
+struct CapturedRecord {
+    uint32_t blockId;
+    uint64_t pc;
+    uint32_t srcPipe;
+    uint32_t dstPipe;
+    uint64_t objectId;
+};
+
+struct CapturedMemoryAccess {
+    uint64_t address;
+    uint64_t bytes;
+    uint32_t memorySpace;
+    uint32_t accessMode;
+};
+
+std::vector<CapturedRecord> g_records;
+std::vector<CapturedMemoryAccess> g_memoryAccesses;
+size_t g_mallocCalls = 0;
+size_t g_freeCalls = 0;
+size_t g_d2hCalls = 0;
+bool g_failLaunch = false;
+bool g_failSync = false;
+bool g_writeRecord = true;
+bool g_writeMemoryRecord = false;
+uint32_t g_expectedHiddenOffset = 16;
+uint32_t g_expectedPlaceholderDataOffset = 0;
+
+aclError OriginalMalloc(void** pointer, size_t bytes, aclrtMemMallocPolicy)
+{
+    ++g_mallocCalls;
+    *pointer = std::malloc(bytes);
+    return *pointer == nullptr ? ACL_ERROR_BAD_ALLOC : ACL_SUCCESS;
+}
+
+aclError OriginalFree(void* pointer)
+{
+    ++g_freeCalls;
+    std::free(pointer);
+    return ACL_SUCCESS;
+}
+
+aclError OriginalMemcpy(void* dst, size_t dstMax, const void* src, size_t bytes, aclrtMemcpyKind kind)
+{
+    if (dst == nullptr || src == nullptr || bytes > dstMax) {
+        return ACL_ERROR_INVALID_PARAM;
+    }
+    if (kind == ACL_MEMCPY_DEVICE_TO_HOST) {
+        ++g_d2hCalls;
+    }
+    std::memcpy(dst, src, bytes);
+    return ACL_SUCCESS;
+}
+
+aclError OriginalLaunch(
+    aclrtFuncHandle, uint32_t blocks, aclrtStream, aclrtLaunchKernelCfg*, void* hostArgs, size_t argsSize,
+    aclrtPlaceHolderInfo* placeholders, size_t placeholderCount)
+{
+    if (g_failLaunch) {
+        return ACL_ERROR_FAILURE;
+    }
+    if (hostArgs == nullptr || argsSize != 24 || blocks != 2) {
+        return ACL_ERROR_INVALID_PARAM;
+    }
+    if (g_expectedPlaceholderDataOffset != 0 && (placeholderCount != 1 || placeholders == nullptr ||
+                                                 placeholders[0].dataOffset != g_expectedPlaceholderDataOffset)) {
+        return ACL_ERROR_INVALID_PARAM;
+    }
+
+    void* deviceBuffer = nullptr;
+    std::memcpy(&deviceBuffer, static_cast<const uint8_t*>(hostArgs) + g_expectedHiddenOffset, sizeof(deviceBuffer));
+    if (deviceBuffer == nullptr) {
+        return ACL_ERROR_INVALID_PARAM;
+    }
+    if (!g_writeRecord) {
+        return ACL_SUCCESS;
+    }
+
+    auto* bytes = static_cast<uint8_t*>(deviceBuffer);
+    auto* header = reinterpret_cast<aclsan::AscsanTraceBufferHeader*>(bytes);
+    size_t sliceBytes = 0;
+    if (header->magic != aclsan::ASCSAN_TRACE_BUFFER_MAGIC_V1 || header->blockCount != blocks ||
+        !aclsan::TraceSliceBytes(header->recordsPerBlock, &sliceBytes)) {
+        return ACL_ERROR_INVALID_PARAM;
+    }
+    auto* slice = reinterpret_cast<aclsan::AscsanTraceSliceHeader*>(bytes + sizeof(*header) + sliceBytes);
+    auto* record = reinterpret_cast<aclsan::AscsanRawTraceRecord*>(reinterpret_cast<uint8_t*>(slice) + sizeof(*slice));
+    record->pc = 0x1234;
+    if (g_writeMemoryRecord) {
+        record->args[0] = 0;
+        record->args[1] = 0x120000025000ULL;
+        record->args[2] = (1ULL << 4) | (8256ULL << 25);
+        record->args[3] = 0;
+        record->args[4] = 0;
+        record->instrId = 86;
+        record->siteId = 38;
+        record->pipeline = ACLSAN_DEVICE_PIPE_MTE2;
+    } else {
+        record->args[0] = 2;
+        record->args[1] = 3;
+        record->args[2] = 7;
+        record->args[3] = 0;
+        record->args[4] = 0;
+        record->instrId = 440;
+        record->siteId = 37;
+        record->pipeline = ACLSAN_DEVICE_PIPE_SCALAR;
+    }
+    slice->recordCount = 1;
+    return ACL_SUCCESS;
+}
+
+aclError OriginalSync(aclrtStream) { return g_failSync ? ACL_ERROR_FAILURE : ACL_SUCCESS; }
+
+void Callback(void*, AclsanCallbackDomain domain, AclsanCallbackId id, const void* data)
+{
+    if (domain != ACLSAN_CB_DOMAIN_DEVICE_INSTRUCTION || data == nullptr) {
+        return;
+    }
+    if (id == ACLSAN_CBID_DEVICE_MEMORY_ACCESS) {
+        const auto* access = static_cast<const AclsanDeviceMemoryAccessData*>(data);
+        g_memoryAccesses.push_back(
+            {access->address, access->layout.range.bytes, access->memorySpace, access->accessMode});
+        return;
+    }
+    if (id == ACLSAN_CBID_DEVICE_SYNC) {
+        const auto* sync = static_cast<const AclsanDeviceSyncData*>(data);
+        g_records.push_back({sync->header.blockId, sync->header.pc, sync->srcPipe, sync->dstPipe, sync->objectId});
+    }
+}
+
+} // namespace
+
+int main()
+{
+    setenv("NPU_CHECK_DBI_ARG_SIZE", "16", 1);
+    setenv("NPU_CHECK_TRACE_RECORDS_PER_BLOCK", "2", 1);
+    CHECK(RuntimeStubSetOriginFunction("aclrtMalloc", &OriginalMalloc) == ACL_SUCCESS);
+    CHECK(RuntimeStubSetOriginFunction("aclrtFree", &OriginalFree) == ACL_SUCCESS);
+    CHECK(RuntimeStubSetOriginFunction("aclrtMemcpy", &OriginalMemcpy) == ACL_SUCCESS);
+    CHECK(RuntimeStubSetOriginFunction("aclrtLaunchKernelWithHostArgs", &OriginalLaunch) == ACL_SUCCESS);
+    CHECK(RuntimeStubSetOriginFunction("aclrtSynchronizeStream", &OriginalSync) == ACL_SUCCESS);
+    CHECK(acltoolHookInit() == ACL_SUCCESS);
+
+    AclsanSubscriberHandle subscriber = nullptr;
+    CHECK(aclsanSubscribe(&subscriber, &Callback, nullptr) == ACLSAN_STATUS_SUCCESS);
+    CHECK(
+        aclsanEnableCallback(1, subscriber, ACLSAN_CB_DOMAIN_DEVICE_INSTRUCTION, ACLSAN_CBID_DEVICE_SYNC) ==
+        ACLSAN_STATUS_SUCCESS);
+    CHECK(
+        aclsanEnableCallback(1, subscriber, ACLSAN_CB_DOMAIN_DEVICE_INSTRUCTION, ACLSAN_CBID_DEVICE_MEMORY_ACCESS) ==
+        ACLSAN_STATUS_SUCCESS);
+
+    int functionStorage = 0;
+    int ordinaryFunctionStorage = 0;
+    int streamStorage1 = 0;
+    int streamStorage2 = 0;
+    const auto function = reinterpret_cast<aclrtFuncHandle>(&functionStorage);
+    const auto ordinaryFunction = reinterpret_cast<aclrtFuncHandle>(&ordinaryFunctionStorage);
+    const auto stream1 = reinterpret_cast<aclrtStream>(&streamStorage1);
+    const auto stream2 = reinterpret_cast<aclrtStream>(&streamStorage2);
+    aclsanTestMarkInstrumentedFunction(function);
+
+    uint64_t arguments[2] = {1, 2};
+    CHECK(
+        aclrtLaunchKernelWithHostArgs(function, 2, stream1, nullptr, arguments, sizeof(arguments), nullptr, 0) ==
+        ACL_SUCCESS);
+    CHECK(g_records.empty());
+    CHECK(g_d2hCalls == 0);
+
+    CHECK(
+        aclrtLaunchKernelWithHostArgs(function, 2, stream2, nullptr, arguments, sizeof(arguments), nullptr, 0) ==
+        ACL_SUCCESS);
+    CHECK(aclrtSynchronizeStream(stream1) == ACL_SUCCESS);
+    CHECK(g_records.size() == 1);
+    CHECK(g_records[0].blockId == 1);
+    CHECK(g_records[0].pc == 0x1234);
+    CHECK(g_records[0].srcPipe == 2);
+    CHECK(g_records[0].dstPipe == 3);
+    CHECK(g_records[0].objectId == 7);
+    CHECK(aclrtSynchronizeStream(stream2) == ACL_SUCCESS);
+    CHECK(g_records.size() == 2);
+
+    g_writeMemoryRecord = true;
+    CHECK(
+        aclrtLaunchKernelWithHostArgs(function, 2, stream1, nullptr, arguments, sizeof(arguments), nullptr, 0) ==
+        ACL_SUCCESS);
+    CHECK(aclrtSynchronizeStream(stream1) == ACL_SUCCESS);
+    CHECK(g_memoryAccesses.size() == 2);
+    CHECK(g_memoryAccesses[0].address == 0x120000025000ULL);
+    CHECK(g_memoryAccesses[0].bytes == 8256);
+    CHECK(g_memoryAccesses[0].memorySpace == ACLSAN_DEVICE_MEMORY_SPACE_GM);
+    CHECK(g_memoryAccesses[0].accessMode == ACLSAN_DEVICE_MEMORY_ACCESS_READ);
+    g_writeMemoryRecord = false;
+
+    g_failSync = true;
+    CHECK(
+        aclrtLaunchKernelWithHostArgs(function, 2, stream1, nullptr, arguments, sizeof(arguments), nullptr, 0) ==
+        ACL_SUCCESS);
+    CHECK(aclrtSynchronizeStream(stream1) == ACL_ERROR_FAILURE);
+    CHECK(g_records.size() == 2);
+    g_failSync = false;
+    CHECK(aclrtSynchronizeStream(stream1) == ACL_SUCCESS);
+    CHECK(g_records.size() == 3);
+
+    const size_t freesBeforeFailedLaunch = g_freeCalls;
+    g_failLaunch = true;
+    CHECK(
+        aclrtLaunchKernelWithHostArgs(function, 2, stream1, nullptr, arguments, sizeof(arguments), nullptr, 0) ==
+        ACL_ERROR_FAILURE);
+    CHECK(g_freeCalls == freesBeforeFailedLaunch + 1);
+    g_failLaunch = false;
+
+    setenv("NPU_CHECK_DBI_ARG_SIZE", "8", 1);
+    g_expectedHiddenOffset = 8;
+    g_expectedPlaceholderDataOffset = 16;
+    aclrtPlaceHolderInfo placeholder{0, 8};
+    CHECK(
+        aclrtLaunchKernelWithHostArgs(function, 2, stream1, nullptr, arguments, sizeof(arguments), &placeholder, 1) ==
+        ACL_SUCCESS);
+    CHECK(placeholder.dataOffset == 8);
+    CHECK(aclrtSynchronizeStream(stream1) == ACL_SUCCESS);
+
+    g_writeRecord = false;
+    void* ordinaryArgs = arguments;
+    CHECK(
+        aclrtLaunchKernelWithHostArgs(
+            ordinaryFunction, 2, stream1, nullptr, ordinaryArgs, sizeof(arguments), &placeholder, 1) ==
+        ACL_ERROR_INVALID_PARAM);
+    CHECK(g_mallocCalls == g_freeCalls);
+
+    CHECK(aclsanUnsubscribe(subscriber) == ACLSAN_STATUS_SUCCESS);
+    unsetenv("NPU_CHECK_DBI_ARG_SIZE");
+    unsetenv("NPU_CHECK_TRACE_RECORDS_PER_BLOCK");
+    return 0;
+}

@@ -9,16 +9,20 @@
  */
 
 #include "aclsan/aclsan_api.h"
+#include "internal/aclsan_active_probe_plan.h"
 #include "internal/aclsan_internal.h"
 #include "internal/aclsan_log.h"
 #include "npu_compute/injection_hook.h"
-#include "probe/device_symbolizer.h"
+#include "device_runtime/device_symbolizer.h"
 
 #include <algorithm>
+#include <condition_variable>
 #include <cstring>
 #include <map>
+#include <mutex>
 #include <new>
 #include <set>
+#include <shared_mutex>
 #include <string>
 #include <tuple>
 #include <vector>
@@ -102,6 +106,7 @@ private:
     static bool IsValidCallbackDomain(AclsanCallbackDomain domain) noexcept;
     static bool HasCallbackRoute(const CallbackKey& key) noexcept;
     static std::set<aclrtApiId> ComputeRequiredHooks(const std::set<CallbackKey>& enabledCallbacks);
+    static uint32_t ComputeRequiredProbeGroups(const std::set<CallbackKey>& enabledCallbacks) noexcept;
 
     bool IsActive(AclsanSubscriberHandle subscriber) const noexcept;
     void LogConfigurationState(const char* operation, const char* stage) const noexcept;
@@ -115,6 +120,11 @@ private:
     void* userdata_ = nullptr;
     std::set<CallbackKey> enabledCallbacks_;
     std::set<aclrtApiId> requiredHooks_;
+    mutable std::recursive_mutex mutex_;
+    std::condition_variable_any callbacksDrained_;
+    size_t activeCallbackInvocations_ = 0;
+    bool acceptingCallbacks_ = false;
+    bool unsubscribeInProgress_ = false;
 };
 
 // 获取进程内唯一的AclsanSubscriber对象
@@ -166,6 +176,15 @@ std::set<aclrtApiId> AclsanSubscriber::ComputeRequiredHooks(const std::set<Callb
     return requiredHooks;
 }
 
+uint32_t AclsanSubscriber::ComputeRequiredProbeGroups(const std::set<CallbackKey>& enabledCallbacks) noexcept
+{
+    uint32_t probeGroupMask = 0;
+    for (const CallbackKey& key : enabledCallbacks) {
+        probeGroupMask |= aclsan::ProbeGroupMaskForCallback(key.domain, key.id);
+    }
+    return probeGroupMask;
+}
+
 bool AclsanSubscriber::IsActive(AclsanSubscriberHandle subscriber) const noexcept
 {
     return activeHandle_ != nullptr && subscriber == activeHandle_;
@@ -194,6 +213,8 @@ void AclsanSubscriber::Reset(const char* operation) noexcept
     userdata_ = nullptr;
     enabledCallbacks_.clear();
     requiredHooks_.clear();
+    acceptingCallbacks_ = false;
+    aclsan::CommitActiveProbePlan(0);
     LogConfigurationState(operation, "after-reset");
 }
 
@@ -214,8 +235,12 @@ AclsanStatus AclsanSubscriber::ApplyCallbackConfiguration(
     std::set<CallbackKey>& candidateCallbacks, const char* operation)
 {
     std::set<aclrtApiId> candidateRequiredHooks = ComputeRequiredHooks(candidateCallbacks);
+    const uint32_t candidateProbeGroupMask = ComputeRequiredProbeGroups(candidateCallbacks);
+    const uint32_t previousProbeGroupMask = aclsan::SnapshotActiveProbePlan();
+    aclsan::CommitActiveProbePlan(candidateProbeGroupMask);
     const AclsanStatus result = aclsan::ApplyRuntimeHooks(candidateRequiredHooks);
     if (result != ACLSAN_STATUS_SUCCESS) {
+        aclsan::CommitActiveProbePlan(previousProbeGroupMask);
         ASC_SAN_ERROR("%s: ApplyRuntimeHooks failed, result=%u", operation, static_cast<uint32_t>(result));
         const AclsanStatus rollbackResult = aclsan::ApplyRuntimeHooks(requiredHooks_);
         if (rollbackResult != ACLSAN_STATUS_SUCCESS) {
@@ -259,13 +284,15 @@ AclsanStatus AclsanSubscriber::UpdateCallbackConfiguration(const CallbackKey& ke
 AclsanStatus AclsanSubscriber::Subscribe(
     AclsanSubscriberHandle* subscriber, AclsanCallbackFunc callback, void* userdata)
 {
+    std::unique_lock<std::shared_mutex> planLock(aclsan::ActiveProbePlanMutex());
+    std::lock_guard<std::recursive_mutex> stateLock(mutex_);
     if (subscriber == nullptr || callback == nullptr) {
         ASC_SAN_ERROR("aclsanSubscribe: subscriber / callback is nullptr");
         return ACLSAN_STATUS_ERROR_INVALID_PARAMETER;
     }
     *subscriber = nullptr;
 
-    if (activeHandle_ != nullptr) {
+    if (activeHandle_ != nullptr || unsubscribeInProgress_) {
         ASC_SAN_ERROR("aclsanSubscribe: subscriber already exists");
         return ACLSAN_STATUS_ERROR_ALREADY_SUBSCRIBED;
     }
@@ -282,6 +309,7 @@ AclsanStatus AclsanSubscriber::Subscribe(
     activeHandle_ = this;
     callback_ = callback;
     userdata_ = userdata;
+    acceptingCallbacks_ = true;
     *subscriber = activeHandle_;
     ASC_SAN_DEBUG("aclsanSubscribe succeed");
     return ACLSAN_STATUS_SUCCESS;
@@ -290,6 +318,8 @@ AclsanStatus AclsanSubscriber::Subscribe(
 AclsanStatus AclsanSubscriber::EnableCallback(
     uint32_t enable, AclsanSubscriberHandle subscriber, AclsanCallbackDomain domain, AclsanCallbackId id)
 {
+    std::unique_lock<std::shared_mutex> planLock(aclsan::ActiveProbePlanMutex());
+    std::lock_guard<std::recursive_mutex> stateLock(mutex_);
     ASC_SAN_DEBUG(
         "aclsanEnableCallback start: enable=%u domain=%u id=%u", enable, static_cast<uint32_t>(domain),
         static_cast<uint32_t>(id));
@@ -317,13 +347,26 @@ AclsanStatus AclsanSubscriber::EnableCallback(
 
 AclsanStatus AclsanSubscriber::Unsubscribe(AclsanSubscriberHandle subscriber) noexcept
 {
-    if (!IsActive(subscriber)) {
-        ASC_SAN_ERROR("aclsanUnsubscribe: subscriber is not initialized");
-        return ACLSAN_STATUS_ERROR_INVALID_PARAMETER;
+    AclsanStatus result = ACLSAN_STATUS_SUCCESS;
+    {
+        std::unique_lock<std::shared_mutex> planLock(aclsan::ActiveProbePlanMutex());
+        std::lock_guard<std::recursive_mutex> stateLock(mutex_);
+        if (!IsActive(subscriber)) {
+            ASC_SAN_ERROR("aclsanUnsubscribe: subscriber is not initialized");
+            return ACLSAN_STATUS_ERROR_INVALID_PARAMETER;
+        }
+
+        acceptingCallbacks_ = false;
+        unsubscribeInProgress_ = true;
+        result = aclsan::ApplyRuntimeHooks({});
+        Reset("aclsanUnsubscribe");
     }
 
-    const AclsanStatus result = aclsan::ApplyRuntimeHooks({});
-    Reset("aclsanUnsubscribe");
+    {
+        std::unique_lock<std::recursive_mutex> stateLock(mutex_);
+        callbacksDrained_.wait(stateLock, [this] { return activeCallbackInvocations_ == 0; });
+        unsubscribeInProgress_ = false;
+    }
     if (result != ACLSAN_STATUS_SUCCESS) {
         ASC_SAN_ERROR("aclsanUnsubscribe: ApplyRuntimeHooks failed, result=%u", static_cast<uint32_t>(result));
     }
@@ -333,6 +376,8 @@ AclsanStatus AclsanSubscriber::Unsubscribe(AclsanSubscriberHandle subscriber) no
 AclsanStatus AclsanSubscriber::EnableDomain(
     AclsanSubscriberHandle subscriber, AclsanCallbackDomain domain, uint32_t enable)
 {
+    std::unique_lock<std::shared_mutex> planLock(aclsan::ActiveProbePlanMutex());
+    std::lock_guard<std::recursive_mutex> stateLock(mutex_);
     if (!IsActive(subscriber)) {
         ASC_SAN_ERROR("aclsanEnableDomain: subscriber is not initialized");
         return ACLSAN_STATUS_ERROR_INVALID_PARAMETER;
@@ -374,6 +419,7 @@ AclsanStatus AclsanSubscriber::EnableDomain(
 AclsanStatus AclsanSubscriber::GetCallbackState(
     AclsanSubscriberHandle subscriber, AclsanCallbackDomain domain, uint32_t cbid, uint32_t* enabled) const noexcept
 {
+    std::lock_guard<std::recursive_mutex> stateLock(mutex_);
     if (enabled == nullptr) {
         ASC_SAN_ERROR("aclsanGetCallbackState: enabled is nullptr");
         return ACLSAN_STATUS_ERROR_INVALID_PARAMETER;
@@ -404,33 +450,52 @@ AclsanStatus AclsanSubscriber::GetCallbackState(
 
 bool AclsanSubscriber::IsCallbackEnabled(AclsanCallbackDomain domain, AclsanCallbackId id) const noexcept
 {
+    std::lock_guard<std::recursive_mutex> stateLock(mutex_);
     return activeHandle_ != nullptr && enabledCallbacks_.count(CallbackKey{domain, id}) != 0;
 }
 
 bool AclsanSubscriber::InvokeCallback(
     AclsanCallbackDomain domain, AclsanCallbackId id, const void* callbackData) noexcept
 {
-    if (callback_ == nullptr) {
-        ASC_SAN_ERROR("InvokeCallback: callback is nullptr");
-        return false;
+    AclsanCallbackFunc callback = nullptr;
+    void* userdata = nullptr;
+    {
+        std::lock_guard<std::recursive_mutex> stateLock(mutex_);
+        if (!acceptingCallbacks_ || callback_ == nullptr) {
+            ASC_SAN_ERROR("InvokeCallback: callback is nullptr or subscriber is stopping");
+            return false;
+        }
+
+        // 如果对应domain和id用户没有主动订阅，那么就不传回cbdata
+        if (enabledCallbacks_.count(CallbackKey{domain, id}) == 0) {
+            ASC_SAN_DEBUG(
+                "InvokeCallback: domain=%u id=%u is not enabled. No call for callback func",
+                static_cast<uint32_t>(domain), static_cast<uint32_t>(id));
+            return true;
+        }
+        callback = callback_;
+        userdata = userdata_;
+        ++activeCallbackInvocations_;
     }
 
-    // 如果对应domain和id用户没有主动订阅，那么就不传回cbdata
-    if (!IsCallbackEnabled(domain, id)) {
-        ASC_SAN_DEBUG(
-            "InvokeCallback: domain=%u id=%u is not enabled. No call for callback func", static_cast<uint32_t>(domain),
-            static_cast<uint32_t>(id));
-        return true;
-    }
-
+    bool success = true;
     try {
-        callback_(userdata_, domain, id, callbackData);
+        callback(userdata, domain, id, callbackData);
     } catch (...) {
         ASC_SAN_ERROR(
             "InvokeCallback: domain=%u id=%u failed", static_cast<uint32_t>(domain), static_cast<uint32_t>(id));
-        return false;
+        success = false;
     }
-    return true;
+    {
+        std::lock_guard<std::recursive_mutex> stateLock(mutex_);
+        if (activeCallbackInvocations_ != 0) {
+            --activeCallbackInvocations_;
+        }
+        if (activeCallbackInvocations_ == 0) {
+            callbacksDrained_.notify_all();
+        }
+    }
+    return success;
 }
 
 // 创建唯一subscriber，更新callback函数。该步骤还会刷新aclrt的hook表
@@ -471,7 +536,7 @@ extern "C" AclsanStatus aclsanGetDeviceCallStack(uint64_t pc, AclsanDeviceCallSt
     *result = {};
     result->pc = pc;
 
-    aclsan::probe::CallStackResult resolved;
+    aclsan::device_runtime::CallStackResult resolved;
     const AclsanStatus resolveStatus = aclsan::ResolveActiveDeviceCallStack(pc, &resolved);
     result->binaryId = resolved.binaryId;
     if (resolveStatus != ACLSAN_STATUS_SUCCESS) {
@@ -485,7 +550,7 @@ extern "C" AclsanStatus aclsanGetDeviceCallStack(uint64_t pc, AclsanDeviceCallSt
     result->depth = static_cast<uint32_t>(frameCount);
     bool complete = frameCount == resolved.frames.size();
     for (size_t index = 0; index < frameCount; ++index) {
-        const aclsan::probe::CallStackFrame& source = resolved.frames[index];
+        const aclsan::device_runtime::CallStackFrame& source = resolved.frames[index];
         AclsanDeviceCallStackFrame& destination = result->frames[index];
         destination.line = source.line;
         destination.column = source.column;

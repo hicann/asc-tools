@@ -19,6 +19,7 @@ if(NOT TARGET npu_check_common)
 endif()
 
 add_executable(npu_check_cli
+  src/dbi_environment.cpp
   src/main.cpp
   src/options.cpp
   src/process_runner.cpp
@@ -44,7 +45,9 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR OR ENABLE_TEST)
 
   add_executable(npu_check_cli_unit_tests
     tests/gtest_main.cpp
+    tests/dbi_environment_test.cpp
     tests/options_test.cpp
+    src/dbi_environment.cpp
     src/options.cpp
   )
   target_compile_features(npu_check_cli_unit_tests PRIVATE cxx_std_17)

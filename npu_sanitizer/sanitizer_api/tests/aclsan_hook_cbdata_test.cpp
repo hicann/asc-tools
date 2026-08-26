@@ -156,92 +156,6 @@ void TestSynchronizeStreamWithTimeoutCallbackData()
     assert(g_callbackCapture.synchronize.stream == stream);
 }
 
-void TestDispatchesParsedProbeRecords()
-{
-    ResetCapture();
-    sanitizer::ProbeParseResult result;
-    sanitizer::ParsedProbeRecord copy{};
-    copy.record.blockId = 1;
-    copy.record.pc = 0x108;
-    copy.record.instrId = 85;
-    copy.record.args[0] = 0x200040;
-    copy.record.args[1] = 0x100040;
-    copy.record.args[2] = (1ULL << 4) | (128ULL << 25);
-    copy.record.pipeline = ACLSAN_DEVICE_PIPE_MTE2;
-    copy.transferBytes = 128;
-    copy.serialNo = 2;
-    copy.coreId = 1;
-    result.records.push_back(copy);
-
-    sanitizer::ParsedProbeRecord ubToGm{};
-    ubToGm.record.blockId = 1;
-    ubToGm.record.pc = 0x110;
-    ubToGm.record.instrId = 83;
-    ubToGm.record.args[0] = 0x300040;
-    ubToGm.record.args[1] = 0x200040;
-    ubToGm.record.args[2] = (1ULL << 4) | (128ULL << 25);
-    ubToGm.record.pipeline = ACLSAN_DEVICE_PIPE_MTE3;
-    ubToGm.transferBytes = 128;
-    ubToGm.serialNo = 3;
-    ubToGm.coreId = 1;
-    result.records.push_back(ubToGm);
-
-    sanitizer::ParsedProbeRecord flag{};
-    flag.record.blockId = 0;
-    flag.record.pc = 0x1000;
-    flag.record.instrId = 440;
-    flag.record.args[0] = 2;
-    flag.record.args[1] = 3;
-    flag.record.args[2] = 7;
-    flag.record.pipeline = ACLSAN_DEVICE_PIPE_SCALAR;
-    flag.serialNo = 4;
-    result.records.push_back(flag);
-
-    aclsan::DispatchProbeRecords(result);
-    assert(g_deviceMemoryCallbackCount == 4);
-    assert(g_deviceSyncCallbackCount == 1);
-    assert(g_callbackCapture.calls == 5);
-
-    const AclsanDeviceMemoryAccessData& source = g_deviceMemoryCallbacks[0];
-    assert(source.address == 0x100040);
-    assert(source.memorySpace == ACLSAN_DEVICE_MEMORY_SPACE_GM);
-    assert(source.accessMode == ACLSAN_DEVICE_MEMORY_ACCESS_READ);
-    assert(source.accessIndex == 0);
-    assert(source.accessCount == 2);
-    assert(source.header.siteId == 0);
-    assert(source.header.instrExecId == 3);
-    assert(source.header.serialNo == 2);
-    assert(source.header.coreId == 1);
-    assert(source.header.pipeline == ACLSAN_DEVICE_PIPE_MTE2);
-    assert(source.layout.range.bytes == 128);
-
-    const AclsanDeviceMemoryAccessData& destination = g_deviceMemoryCallbacks[1];
-    assert(destination.address == 0x200040);
-    assert(destination.memorySpace == ACLSAN_DEVICE_MEMORY_SPACE_UB);
-    assert(destination.accessMode == ACLSAN_DEVICE_MEMORY_ACCESS_WRITE);
-    assert(destination.accessIndex == 1);
-    assert(destination.accessCount == 2);
-
-    const AclsanDeviceMemoryAccessData& ubSource = g_deviceMemoryCallbacks[2];
-    assert(ubSource.address == 0x200040);
-    assert(ubSource.memorySpace == ACLSAN_DEVICE_MEMORY_SPACE_UB);
-    assert(ubSource.accessMode == ACLSAN_DEVICE_MEMORY_ACCESS_READ);
-    assert(ubSource.accessIndex == 0);
-    assert(ubSource.header.pipeline == ACLSAN_DEVICE_PIPE_MTE3);
-
-    const AclsanDeviceMemoryAccessData& gmDestination = g_deviceMemoryCallbacks[3];
-    assert(gmDestination.address == 0x300040);
-    assert(gmDestination.memorySpace == ACLSAN_DEVICE_MEMORY_SPACE_GM);
-    assert(gmDestination.accessMode == ACLSAN_DEVICE_MEMORY_ACCESS_WRITE);
-    assert(gmDestination.accessIndex == 1);
-
-    assert(g_deviceSyncCallbacks[0].action == ACLSAN_DEVICE_SYNC_ACTION_SET);
-    assert(g_deviceSyncCallbacks[0].header.instrExecId == 5);
-    assert(g_deviceSyncCallbacks[0].srcPipe == 2);
-    assert(g_deviceSyncCallbacks[0].dstPipe == 3);
-    assert(g_deviceSyncCallbacks[0].objectId == 7);
-}
-
 void TestDisabledCallbackIsNotInvoked()
 {
     ResetCapture();
@@ -327,7 +241,6 @@ int main()
     TestFreeCallbackData();
     TestSynchronizeStreamCallbackData();
     TestSynchronizeStreamWithTimeoutCallbackData();
-    TestDispatchesParsedProbeRecords();
     TestDisabledCallbackIsNotInvoked();
     return 0;
 }

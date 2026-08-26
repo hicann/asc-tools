@@ -22,6 +22,15 @@ set(NPU_CHECK_REPORT_RENDERER_SOURCES
   src/diagnostic/report/report_text_renderer.cpp
   src/diagnostic/report/synccheck_adapter.cpp
 )
+set(NPU_CHECK_DBI_ROOT "${CMAKE_CURRENT_LIST_DIR}/../dbi")
+set(NPU_CHECK_DBI_SOURCE_DIR "${NPU_CHECK_DBI_ROOT}/src")
+set(NPU_CHECK_DBI_INCLUDE_DIR "${NPU_CHECK_DBI_ROOT}/include")
+set(NPU_CHECK_DBI_TEST_DIR "${NPU_CHECK_DBI_ROOT}/test")
+
+if(NOT TARGET npu_check_dbi_engine)
+  add_subdirectory(${NPU_CHECK_DBI_ROOT}
+    ${CMAKE_CURRENT_BINARY_DIR}/npu_check_dbi)
+endif()
 
 if(NOT TARGET npu_check_common)
   add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/../common
@@ -40,6 +49,37 @@ add_library(npu_check_core STATIC
   src/ipc/uds_server.cpp
   src/logging/logger.cpp
   src/tool_manager/tool_manager.cpp
+)
+
+add_executable(gen_ctrlbin
+  ${NPU_CHECK_DBI_SOURCE_DIR}/dynamic_bind.cpp
+  ${NPU_CHECK_DBI_SOURCE_DIR}/msbit/MSBit.cpp
+)
+target_compile_features(gen_ctrlbin PRIVATE cxx_std_17)
+target_include_directories(gen_ctrlbin PRIVATE
+  ${NPU_CHECK_DBI_INCLUDE_DIR}
+  ${NPU_CHECK_DBI_SOURCE_DIR}/msbit
+)
+target_compile_options(gen_ctrlbin PRIVATE -Wall -Wextra -Werror)
+set_source_files_properties(${NPU_CHECK_DBI_SOURCE_DIR}/msbit/MSBit.cpp
+  PROPERTIES COMPILE_OPTIONS -Wno-missing-field-initializers)
+
+install(TARGETS gen_ctrlbin
+  RUNTIME DESTINATION libexec/aclsan ${INSTALL_OPTIONAL}
+  COMPONENT asc-tools
+)
+install(DIRECTORY ${NPU_CHECK_DBI_SOURCE_DIR}/probes
+  DESTINATION share/aclsan/dbi
+  COMPONENT asc-tools
+  FILES_MATCHING PATTERN "*.cpp"
+  ${INSTALL_OPTIONAL}
+)
+install(FILES
+  ${NPU_CHECK_DBI_INCLUDE_DIR}/trace_record.h
+  ${NPU_CHECK_DBI_INCLUDE_DIR}/trace_buffer_abi.h
+  DESTINATION share/aclsan/dbi
+  COMPONENT asc-tools
+  ${INSTALL_OPTIONAL}
 )
 target_compile_features(npu_check_core PUBLIC cxx_std_17)
 target_include_directories(npu_check_core
@@ -102,6 +142,8 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR OR ENABLE_TEST)
 
   target_compile_definitions(npu_check_common PRIVATE _GLIBCXX_USE_CXX11_ABI=0)
   target_compile_definitions(npu_check_core PRIVATE _GLIBCXX_USE_CXX11_ABI=0)
+  target_compile_definitions(npu_check_dbi_ctrlbin PRIVATE _GLIBCXX_USE_CXX11_ABI=0)
+  target_compile_definitions(npu_check_dbi_engine PRIVATE _GLIBCXX_USE_CXX11_ABI=0)
   target_compile_definitions(npu_check PRIVATE _GLIBCXX_USE_CXX11_ABI=0)
 
   add_executable(npu_check_unit_tests
@@ -134,4 +176,54 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR OR ENABLE_TEST)
   )
   target_link_libraries(npu_check_report_renderer_smoke PRIVATE GTest::gtest)
   add_test(NAME npu_check_report_renderer_smoke COMMAND npu_check_report_renderer_smoke)
+
+  add_test(NAME npu_check_dbi_ctrlbin
+    COMMAND ${CMAKE_COMMAND}
+      -DGEN_CTRLBIN=$<TARGET_FILE:gen_ctrlbin>
+      -DOUTPUT=${CMAKE_CURRENT_BINARY_DIR}/ascsan-test.ctrl.bin
+      -P ${NPU_CHECK_DBI_TEST_DIR}/generate_ctrlbin_test.cmake
+  )
+
+  add_executable(npu_check_dbi_pipeline_tests
+    tests/gtest_main.cpp
+    ${NPU_CHECK_DBI_TEST_DIR}/dbi_pipeline_test.cpp
+    ${NPU_CHECK_DBI_SOURCE_DIR}/dbi_pipeline.cpp
+    ${NPU_CHECK_DBI_SOURCE_DIR}/tool_runner.cpp
+  )
+  target_compile_features(npu_check_dbi_pipeline_tests PRIVATE cxx_std_17)
+  target_compile_definitions(npu_check_dbi_pipeline_tests PRIVATE _GLIBCXX_USE_CXX11_ABI=0)
+  target_compile_options(npu_check_dbi_pipeline_tests PRIVATE -Wall -Wextra -Werror)
+  target_include_directories(npu_check_dbi_pipeline_tests PRIVATE ${NPU_CHECK_DBI_INCLUDE_DIR})
+  target_link_libraries(npu_check_dbi_pipeline_tests PRIVATE npu_check_dbi_ctrlbin GTest::gtest)
+  add_test(NAME npu_check_dbi_pipeline COMMAND npu_check_dbi_pipeline_tests)
+
+  add_executable(npu_check_dbi_integration_tests
+    tests/gtest_main.cpp
+    ${NPU_CHECK_DBI_TEST_DIR}/dbi_integration_test.cpp
+    ${NPU_CHECK_DBI_SOURCE_DIR}/dbi_pipeline.cpp
+    ${NPU_CHECK_DBI_SOURCE_DIR}/tool_runner.cpp
+  )
+  target_compile_features(npu_check_dbi_integration_tests PRIVATE cxx_std_17)
+  target_compile_definitions(npu_check_dbi_integration_tests PRIVATE _GLIBCXX_USE_CXX11_ABI=0)
+  target_compile_options(npu_check_dbi_integration_tests PRIVATE -Wall -Wextra -Werror)
+  target_include_directories(npu_check_dbi_integration_tests PRIVATE ${NPU_CHECK_DBI_INCLUDE_DIR})
+  target_link_libraries(npu_check_dbi_integration_tests PRIVATE npu_check_dbi_ctrlbin GTest::gtest)
+  add_test(NAME npu_check_dbi_integration COMMAND npu_check_dbi_integration_tests)
+
+  if(NPU_CHECK_HAS_ACL_DBI_HOOK)
+    add_executable(npu_check_dbi_acl_hook_tests
+      tests/gtest_main.cpp
+      ${NPU_CHECK_DBI_TEST_DIR}/acl_hook_test.cpp
+    )
+    target_compile_features(npu_check_dbi_acl_hook_tests PRIVATE cxx_std_17)
+    target_compile_definitions(npu_check_dbi_acl_hook_tests PRIVATE _GLIBCXX_USE_CXX11_ABI=0)
+    target_include_directories(npu_check_dbi_acl_hook_tests PRIVATE
+      ${NPU_CHECK_DBI_INCLUDE_DIR}
+      ${NPU_CHECK_ACL_INCLUDE_DIR}
+    )
+    target_link_libraries(npu_check_dbi_acl_hook_tests PRIVATE npu_check_dbi_engine GTest::gtest)
+    set_target_properties(npu_check_dbi_acl_hook_tests PROPERTIES ENABLE_EXPORTS ON)
+    add_test(NAME npu_check_dbi_acl_hook COMMAND npu_check_dbi_acl_hook_tests)
+  endif()
+
 endif()

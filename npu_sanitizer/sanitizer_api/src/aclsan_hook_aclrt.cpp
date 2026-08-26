@@ -9,22 +9,20 @@
  */
 
 #include "aclsan/aclsan_api.h"
+#include "acl_hook.h"
+#include "internal/aclsan_active_probe_plan.h"
 #include "internal/aclsan_dispatch_cb.h"
 #include "internal/aclsan_internal.h"
 #include "internal/aclsan_log.h"
+#include "internal/aclsan_trace_runtime.h"
 #include "npu_compute/injection_hook.h"
-#include "probe/image_transformer.h"
-#include "probe/probe_runtime.h"
+#include "device_runtime/device_symbolizer.h"
 
 #include <array>
-#include <cerrno>
 #include <cstdint>
-#include <cstdlib>
-#include <dlfcn.h>
-#include <limits>
+#include <shared_mutex>
 #include <set>
-#include <string>
-#include <variant>
+#include <utility>
 
 namespace aclsan {
 namespace {
@@ -36,36 +34,9 @@ bool IsHookRequired(const std::set<aclrtApiId>& requiredHooks, aclrtApiId apiId)
 
 } // namespace
 
-void DispatchProbeRecords(const sanitizer::ProbeParseResult& parseResult) noexcept
-{
-    ASC_SAN_DEBUG("[probe] readback records=%zu", parseResult.records.size());
-    for (const sanitizer::ParsedProbeRecord& parsed : parseResult.records) {
-        const TraceCallbackContext context{parsed.transferBytes, parsed.serialNo + 1, parsed.serialNo, parsed.coreId};
-        const auto callbackData = TranslateRawTraceToCallbackData(parsed.record, context);
-        if (!callbackData.has_value()) {
-            ASC_SAN_ERROR(
-                "[probe] unsupported raw trace: instrId=%llu pc=0x%llx block=%u",
-                static_cast<unsigned long long>(parsed.record.instrId),
-                static_cast<unsigned long long>(parsed.record.pc), parsed.record.blockId);
-            continue;
-        }
-        if (const auto* memory = std::get_if<DeviceMemoryAccessDataArray>(&*callbackData)) {
-            AclsanCallbackDispatcher::DispatchDeviceMemoryAccess(*memory);
-        } else if (const auto* sync = std::get_if<AclsanDeviceSyncData>(&*callbackData)) {
-            AclsanCallbackDispatcher::DispatchDeviceSync(*sync);
-        }
-    }
-}
-
 } // namespace aclsan
 
 namespace {
-
-constexpr char kProbeObjectEnv[] = "ACLSAN_PROBE_OBJECT";
-constexpr char kProbeCtrlBinaryEnv[] = "ACLSAN_PROBE_CTRL_BINARY";
-constexpr char kProbeSymbolOrderingEnv[] = "ACLSAN_PROBE_SYMBOL_ORDERING";
-constexpr char kProbeWorkRootEnv[] = "ACLSAN_PROBE_WORK_ROOT";
-constexpr char kProbeArgumentBytesEnv[] = "ACLSAN_PROBE_ARGUMENT_BYTES";
 
 bool g_hookStateValid = true;
 
@@ -75,11 +46,6 @@ struct RuntimeFunctionTraits;
 template <>
 struct RuntimeFunctionTraits<ACL_RT_API_aclrtLaunchKernelWithHostArgs> {
     using Type = aclrtLaunchKernelWithHostArgsFunc;
-};
-
-template <>
-struct RuntimeFunctionTraits<ACL_RT_API_aclrtMemcpy> {
-    using Type = aclrtMemcpyFunc;
 };
 
 template <>
@@ -143,74 +109,6 @@ typename RuntimeFunctionTraits<ApiId>::Type GetOriginalRuntimeFunction() noexcep
     return function;
 }
 
-aclsan::probe::AclrtBinaryGetGlobalFunc ResolveBinaryGetGlobal() noexcept
-{
-    static const auto function =
-        reinterpret_cast<aclsan::probe::AclrtBinaryGetGlobalFunc>(dlsym(RTLD_DEFAULT, "aclrtBinaryGetGlobal"));
-    return function;
-}
-
-aclsan::probe::AclrtGetFunctionAttributeFunc ResolveGetFunctionAttribute() noexcept
-{
-    static const auto function = reinterpret_cast<aclsan::probe::AclrtGetFunctionAttributeFunc>(
-        dlsym(RTLD_DEFAULT, "aclrtGetFunctionAttribute"));
-    return function;
-}
-
-aclsan::probe::ProbeRuntimeApi MakeProbeRuntimeApi() noexcept
-{
-    return {
-        GetOriginalRuntimeFunction<ACL_RT_API_aclrtBinaryLoadFromData>(),
-        GetOriginalRuntimeFunction<ACL_RT_API_aclrtBinaryGetFunction>(),
-        GetOriginalRuntimeFunction<ACL_RT_API_aclrtBinaryGetFunctionByEntry>(),
-        ResolveBinaryGetGlobal(),
-        ResolveGetFunctionAttribute(),
-        GetOriginalRuntimeFunction<ACL_RT_API_aclrtMalloc>(),
-        GetOriginalRuntimeFunction<ACL_RT_API_aclrtFree>(),
-        GetOriginalRuntimeFunction<ACL_RT_API_aclrtMemcpy>(),
-    };
-}
-
-aclsan::probe::ProbeRuntime& Runtime() noexcept
-{
-    static aclsan::probe::ProbeRuntime runtime;
-    return runtime;
-}
-
-const char* RequiredEnvironment(const char* name) noexcept
-{
-    const char* value = std::getenv(name);
-    if (value == nullptr || value[0] == '\0') {
-        ASC_SAN_ERROR("[probe] missing environment variable: %s", name);
-        return nullptr;
-    }
-    return value;
-}
-
-bool MakeTransformConfig(aclsan::probe::ImageTransformConfig& config) noexcept
-{
-    const char* probeObject = RequiredEnvironment(kProbeObjectEnv);
-    const char* ctrlBinary = RequiredEnvironment(kProbeCtrlBinaryEnv);
-    const char* symbolOrdering = RequiredEnvironment(kProbeSymbolOrderingEnv);
-    const char* workRoot = RequiredEnvironment(kProbeWorkRootEnv);
-    const char* argumentBytesText = RequiredEnvironment(kProbeArgumentBytesEnv);
-    if (probeObject == nullptr || ctrlBinary == nullptr || symbolOrdering == nullptr || workRoot == nullptr ||
-        argumentBytesText == nullptr) {
-        return false;
-    }
-
-    errno = 0;
-    char* end = nullptr;
-    const unsigned long argumentBytes = std::strtoul(argumentBytesText, &end, 10);
-    if (errno != 0 || end == argumentBytesText || *end != '\0' || argumentBytes == 0 ||
-        argumentBytes > std::numeric_limits<uint32_t>::max()) {
-        ASC_SAN_ERROR("[probe] invalid %s=%s", kProbeArgumentBytesEnv, argumentBytesText);
-        return false;
-    }
-    config = {probeObject, ctrlBinary, symbolOrdering, workRoot, static_cast<uint32_t>(argumentBytes)};
-    return true;
-}
-
 AclsanCallbackCommonData MakeCallbackCommonData(const char* apiName, int result, uint32_t size) noexcept
 {
     return {ACLSAN_API_VERSION, size, apiName, result, 0, 0};
@@ -230,28 +128,6 @@ AclsanResourceData MakeDeviceResourceData(const char* apiName, int result, void*
 AclsanSynchronizeData MakeSynchronizeData(const char* apiName, aclrtStream stream, int result) noexcept
 {
     return {MakeCallbackCommonData(apiName, result, static_cast<uint32_t>(sizeof(AclsanSynchronizeData))), stream};
-}
-
-void CollectProbeRecords(aclrtStream stream) noexcept
-{
-    if (!Runtime().HasPending(stream)) {
-        return;
-    }
-    sanitizer::ProbeParseResult parseResult;
-    const aclError collectResult = Runtime().Collect(stream, MakeProbeRuntimeApi(), parseResult);
-    if (collectResult != ACL_SUCCESS) {
-        ASC_SAN_ERROR("[probe] GM readback/parse failed: result=%d", collectResult);
-    } else if (!parseResult.records.empty()) {
-        aclsan::DispatchProbeRecords(parseResult);
-        ASC_SAN_DEBUG("[probe] records=PASS count=%zu", parseResult.records.size());
-    }
-}
-
-void CompleteStreamSynchronization(const char* apiName, aclrtStream stream, aclError result) noexcept
-{
-    CollectProbeRecords(stream);
-    const AclsanSynchronizeData callbackData = MakeSynchronizeData(apiName, stream, result);
-    aclsan::AclsanCallbackDispatcher::DispatchSynchronizeEnd(callbackData);
 }
 
 aclError aclrtMallocHook(void** deviceAddress, std::size_t size, aclrtMemMallocPolicy policy) noexcept
@@ -286,31 +162,50 @@ aclError aclrtFreeHook(void* deviceAddress) noexcept
 aclError aclrtBinaryLoadFromDataHook(
     const void* data, size_t length, const aclrtBinaryLoadOptions* options, aclrtBinHandle* binHandle) noexcept
 {
-    aclsan::probe::ImageTransformConfig config;
-    if (!MakeTransformConfig(config)) {
-        return ACL_ERROR_RT_INTERNAL_ERROR;
+    const auto original = GetOriginalRuntimeFunction<ACL_RT_API_aclrtBinaryLoadFromData>();
+    if (original == nullptr) {
+        return ACL_ERROR_UNINITIALIZE;
     }
-    std::string error;
-    const aclError result = Runtime().LoadBinary(
-        data, length, options, binHandle, config, MakeProbeRuntimeApi(), aclsan::probe::TransformDeviceImage, error);
-    if (result != ACL_SUCCESS) {
-        ASC_SAN_ERROR("[probe] binary transform/load failed: result=%d error=%s", result, error.c_str());
-    } else {
-        ASC_SAN_DEBUG("[probe] instrumented binary load=PASS bytes=%zu", length);
+
+    std::shared_lock<std::shared_mutex> planLock;
+    if (!aclsan::IsBinaryLoadHookReentrant()) {
+        planLock = std::shared_lock<std::shared_mutex>(aclsan::ActiveProbePlanMutex());
+    }
+    bool loadedPatched = false;
+    const aclError result = aclsan::HandleBinaryLoadFromDataWithDefaultConfig(
+        data, length, options, binHandle, original, aclsan::SnapshotActiveProbePlan(), &loadedPatched);
+    if (result == ACL_SUCCESS && binHandle != nullptr) {
+        aclsan::RecordTraceBinaryLoadFromData(*binHandle, loadedPatched, data, length);
     }
     return result;
 }
 
 aclError aclrtBinaryGetFunctionHook(
-    const aclrtBinHandle binHandle, const char* kernelName, aclrtFuncHandle* funcHandle) noexcept
+    const aclrtBinHandle binary, const char* kernelName, aclrtFuncHandle* function) noexcept
 {
-    return Runtime().GetFunction(binHandle, kernelName, funcHandle, MakeProbeRuntimeApi());
+    const auto original = GetOriginalRuntimeFunction<ACL_RT_API_aclrtBinaryGetFunction>();
+    if (original == nullptr) {
+        return ACL_ERROR_UNINITIALIZE;
+    }
+    const aclError result = original(binary, kernelName, function);
+    if (result == ACL_SUCCESS && function != nullptr) {
+        aclsan::RecordTraceBinaryFunctionLookup(binary, *function);
+    }
+    return result;
 }
 
 aclError aclrtBinaryGetFunctionByEntryHook(
-    aclrtBinHandle binHandle, uint64_t functionEntry, aclrtFuncHandle* funcHandle) noexcept
+    aclrtBinHandle binary, uint64_t functionEntry, aclrtFuncHandle* function) noexcept
 {
-    return Runtime().GetFunctionByEntry(binHandle, functionEntry, funcHandle, MakeProbeRuntimeApi());
+    const auto original = GetOriginalRuntimeFunction<ACL_RT_API_aclrtBinaryGetFunctionByEntry>();
+    if (original == nullptr) {
+        return ACL_ERROR_UNINITIALIZE;
+    }
+    const aclError result = original(binary, functionEntry, function);
+    if (result == ACL_SUCCESS && function != nullptr) {
+        aclsan::RecordTraceBinaryFunctionLookup(binary, *function);
+    }
+    return result;
 }
 
 aclError aclrtGetFuncBySymbolHook(const void* symbol, aclrtFuncHandle* funcHandle) noexcept
@@ -319,9 +214,10 @@ aclError aclrtGetFuncBySymbolHook(const void* symbol, aclrtFuncHandle* funcHandl
     if (original == nullptr) {
         return ACL_ERROR_RT_INTERNAL_ERROR;
     }
+    ASC_SAN_DEBUG("[HOOK aclrtGetFuncBySymbol] symbol=%p", symbol);
     const aclError result = original(symbol, funcHandle);
     if (result == ACL_SUCCESS && funcHandle != nullptr) {
-        Runtime().RecordFunction(*funcHandle);
+        aclsan::RecordTraceFunctionLookup(*funcHandle);
     }
     return result;
 }
@@ -334,20 +230,21 @@ aclError aclrtLaunchKernelWithHostArgsHook(
     if (original == nullptr) {
         return ACL_ERROR_RT_INTERNAL_ERROR;
     }
-    const bool target = Runtime().IsTargetFunction(funcHandle);
-    if (target) {
-        const aclError prepareResult = Runtime().PrepareLaunch(funcHandle, numBlocks, stream, MakeProbeRuntimeApi());
-        if (prepareResult != ACL_SUCCESS) {
-            ASC_SAN_ERROR("[probe] launch preparation failed: result=%d", prepareResult);
-            return prepareResult;
-        }
+    aclsan::PreparedTraceLaunch prepared;
+    const aclError prepareStatus = aclsan::PrepareTraceLaunch(
+        funcHandle, numBlocks, hostArgs, argsSize, placeHolderArray, placeHolderNum, prepared);
+    if (prepareStatus != ACL_SUCCESS) {
+        return prepareStatus;
     }
-    const aclError result =
-        original(funcHandle, numBlocks, stream, config, hostArgs, argsSize, placeHolderArray, placeHolderNum);
-    if (target) {
-        Runtime().RecordLaunchResult(funcHandle, stream, result);
-        ASC_SAN_DEBUG("[probe] origin launch result=%d blocks=%u argsSize=%zu", result, numBlocks, argsSize);
-    }
+    void* launchArgs = prepared.instrumented ? prepared.arguments.data() : hostArgs;
+    const size_t launchArgsSize = prepared.instrumented ? prepared.arguments.size() : argsSize;
+    aclrtPlaceHolderInfo* launchPlaceholders =
+        prepared.instrumented && !prepared.placeholders.empty() ? prepared.placeholders.data() : placeHolderArray;
+    const size_t launchPlaceholderCount = prepared.instrumented ? prepared.placeholders.size() : placeHolderNum;
+
+    const aclError result = original(
+        funcHandle, numBlocks, stream, config, launchArgs, launchArgsSize, launchPlaceholders, launchPlaceholderCount);
+    aclsan::CompleteTraceLaunch(std::move(prepared), funcHandle, stream, result);
     return result;
 }
 
@@ -355,12 +252,18 @@ aclError aclrtSynchronizeStreamHook(aclrtStream stream) noexcept
 {
     const auto original = GetOriginalRuntimeFunction<ACL_RT_API_aclrtSynchronizeStream>();
     if (original == nullptr) {
-        CompleteStreamSynchronization("aclrtSynchronizeStream", stream, ACL_ERROR_RT_INTERNAL_ERROR);
+        const AclsanSynchronizeData callbackData =
+            MakeSynchronizeData("aclrtSynchronizeStream", stream, ACL_ERROR_RT_INTERNAL_ERROR);
+        aclsan::AclsanCallbackDispatcher::DispatchSynchronizeEnd(callbackData);
         return ACL_ERROR_RT_INTERNAL_ERROR;
     }
 
     const aclError result = original(stream);
-    CompleteStreamSynchronization("aclrtSynchronizeStream", stream, result);
+    if (result == ACL_SUCCESS) {
+        aclsan::CollectTraceStream(stream);
+    }
+    const AclsanSynchronizeData callbackData = MakeSynchronizeData("aclrtSynchronizeStream", stream, result);
+    aclsan::AclsanCallbackDispatcher::DispatchSynchronizeEnd(callbackData);
     return result;
 }
 
@@ -368,12 +271,18 @@ aclError aclrtSynchronizeStreamWithTimeoutHook(aclrtStream stream, int32_t timeo
 {
     const auto original = GetOriginalRuntimeFunction<ACL_RT_API_aclrtSynchronizeStreamWithTimeout>();
     if (original == nullptr) {
-        CompleteStreamSynchronization("aclrtSynchronizeStreamWithTimeout", stream, ACL_ERROR_RT_INTERNAL_ERROR);
+        const AclsanSynchronizeData callbackData =
+            MakeSynchronizeData("aclrtSynchronizeStreamWithTimeout", stream, ACL_ERROR_RT_INTERNAL_ERROR);
+        aclsan::AclsanCallbackDispatcher::DispatchSynchronizeEnd(callbackData);
         return ACL_ERROR_RT_INTERNAL_ERROR;
     }
 
     const aclError result = original(stream, timeout);
-    CompleteStreamSynchronization("aclrtSynchronizeStreamWithTimeout", stream, result);
+    if (result == ACL_SUCCESS) {
+        aclsan::CollectTraceStream(stream);
+    }
+    const AclsanSynchronizeData callbackData = MakeSynchronizeData("aclrtSynchronizeStreamWithTimeout", stream, result);
+    aclsan::AclsanCallbackDispatcher::DispatchSynchronizeEnd(callbackData);
     return result;
 }
 
@@ -383,12 +292,12 @@ aclError aclrtBinaryUnLoadHook(aclrtBinHandle binHandle) noexcept
     if (original == nullptr) {
         return ACL_ERROR_RT_INTERNAL_ERROR;
     }
-    if (!Runtime().OwnsBinary(binHandle)) {
-        return original(binHandle);
-    }
-    const aclError clearResult = Runtime().Clear(MakeProbeRuntimeApi());
+    ASC_SAN_DEBUG("[HOOK aclrtBinaryUnLoad] handle=%p", binHandle);
     const aclError result = original(binHandle);
-    return result != ACL_SUCCESS ? result : clearResult;
+    if (result == ACL_SUCCESS) {
+        aclsan::RecordTraceBinaryUnload(binHandle);
+    }
+    return result;
 }
 
 aclError aclrtResetDeviceHook(int32_t deviceId) noexcept
@@ -397,9 +306,12 @@ aclError aclrtResetDeviceHook(int32_t deviceId) noexcept
     if (original == nullptr) {
         return ACL_ERROR_RT_INTERNAL_ERROR;
     }
-    const aclError clearResult = Runtime().Clear(MakeProbeRuntimeApi());
+    ASC_SAN_DEBUG("[HOOK aclrtResetDevice] device=%d", deviceId);
     const aclError result = original(deviceId);
-    return result != ACL_SUCCESS ? result : clearResult;
+    if (result == ACL_SUCCESS) {
+        aclsan::ResetTraceRuntimeState();
+    }
+    return result;
 }
 
 using ConfigureHook = int32_t (*)(bool enable) noexcept;
@@ -466,17 +378,13 @@ bool ApplyRuntimeHookConfiguration(const std::set<aclrtApiId>& requiredHooks) no
 
 namespace aclsan {
 
-AclsanStatus ResolveActiveDeviceCallStack(uint64_t pc, probe::CallStackResult* result) noexcept
+AclsanStatus ResolveActiveDeviceCallStack(uint64_t pc, device_runtime::CallStackResult* result) noexcept
 {
     if (result == nullptr) {
         return ACLSAN_STATUS_ERROR_INVALID_PARAMETER;
     }
-    try {
-        *result = Runtime().ResolveCallStack(pc);
-        return ACLSAN_STATUS_SUCCESS;
-    } catch (...) {
-        return ACLSAN_STATUS_ERROR_INTERNAL;
-    }
+    *result = ResolveTraceDeviceCallStack(pc);
+    return ACLSAN_STATUS_SUCCESS;
 }
 
 AclsanStatus ApplyRuntimeHooks(const std::set<aclrtApiId>& requiredHooks) noexcept

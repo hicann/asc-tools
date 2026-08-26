@@ -14,10 +14,9 @@ set -euo pipefail
 demo_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 build_dir="${demo_dir}/build"
 bin_dir="${build_dir}/npu_compute/bin"
-default_cann_root="/usr/local/Ascend/cann-9.2.0/x86_64-linux"
+default_cann_root="/usr/local/Ascend/cann/x86_64-linux"
 example_name=${1:-add}
 example_tool="memcheck"
-probe_symbol_ordering="${demo_dir}/../sanitizer_api/probe/symbol_ordering.txt"
 
 case "${example_name}" in
     add)
@@ -49,11 +48,20 @@ case "${example_name}" in
         example_executable="${bin_dir}/${example_target}"
         example_work_dir="${demo_dir}"
         example_tool="synccheck"
-        probe_symbol_ordering="${demo_dir}/examples/synccheck/symbol_ordering.txt"
         asc_architecture="dav-3510"
         ;;
     *)
         printf 'unsupported example: %s\n' "${example_name}" >&2
+        exit 2
+        ;;
+esac
+
+case "${asc_architecture}" in
+    dav-3510)
+        dbi_architecture="dav-c310"
+        ;;
+    *)
+        printf 'unsupported ASC architecture for DBI: %s\n' "${asc_architecture}" >&2
         exit 2
         ;;
 esac
@@ -103,9 +111,7 @@ for artifact in \
     "${bin_dir}/libacl_san.so" \
     "${bin_dir}/libacl_tool_injection.so" \
     "${bin_dir}/libnpu_check.so" \
-    "${bin_dir}/npu_check" \
-    "${build_dir}/sanitizer_api/probe_resources/probe.o" \
-    "${build_dir}/sanitizer_api/probe_resources/ctrl.bin"; do
+    "${bin_dir}/npu_check"; do
     if [[ ! -f "${artifact}" ]]; then
         printf 'missing demo artifact: %s\n' "${artifact}" >&2
         exit 1
@@ -135,14 +141,15 @@ export ASCEND_GLOBAL_LOG_LEVEL=0
 export NPU_SAN_DEBUG=1                       # npu_check的日志开启
 # export NPU_COMPUTE_DEBUG=1                 # lib_acl_tool_injection.so的日志开启
 
-export ACLSAN_PROBE_OBJECT="${build_dir}/sanitizer_api/probe_resources/probe.o"
-export ACLSAN_PROBE_CTRL_BINARY="${build_dir}/sanitizer_api/probe_resources/ctrl.bin"
-export ACLSAN_PROBE_SYMBOL_ORDERING="${probe_symbol_ordering}"
-export ACLSAN_PROBE_WORK_ROOT="${build_dir}/probe_runtime"
-export ACLSAN_PROBE_ARGUMENT_BYTES=24
+export NPU_CHECK_DBI_ARCH="${dbi_architecture}"
+export NPU_CHECK_DBI_ARG_SIZE=24
+export NPU_CHECK_DBI_TOOLCHAIN_ROOT="${cann_install_dir}"
+export NPU_CHECK_DBI_SOURCE_ROOT="${build_dir}/dbi_runtime_sources"
 export LD_LIBRARY_PATH="${bin_dir}:${cann_lib_dir}${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
 
-(cd "${example_work_dir}" && "${bin_dir}/npu_check" --tool "${example_tool}" -- "${example_executable}")
+(cd "${example_work_dir}" && "${bin_dir}/npu_check" --tool "${example_tool}" --strict --keep-temp \
+    --work-dir "${build_dir}/probe_runtime" \
+    --probe-cache-dir "${build_dir}/probe_cache" -- "${example_executable}")
 if [[ "${example_name}" == "matmul_basic_api" || "${example_name}" == "matmul_leakyrelu_basic_api" ]]; then
     python3 "${demo_dir}/examples/${example_name}/scripts/verify_result.py" \
         "${example_work_dir}/output/output.bin" \

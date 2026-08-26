@@ -11,6 +11,9 @@
 #include "device_symbolizer.h"
 
 #include <cassert>
+#include <cerrno>
+#include <cstdlib>
+#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <string>
@@ -20,9 +23,38 @@ namespace fs = std::filesystem;
 
 namespace {
 
-using aclsan::probe::CallStackResult;
-using aclsan::probe::DeviceSymbolizer;
-using aclsan::probe::DeviceSymbolizerConfig;
+using aclsan::device_runtime::CallStackResult;
+using aclsan::device_runtime::DeviceSymbolizer;
+using aclsan::device_runtime::DeviceSymbolizerConfig;
+
+class ScopedEnvironmentVariable {
+public:
+    explicit ScopedEnvironmentVariable(const char* name) : name_(name)
+    {
+        const char* value = std::getenv(name_);
+        if (value != nullptr) {
+            wasSet_ = true;
+            value_ = value;
+        }
+    }
+
+    ~ScopedEnvironmentVariable()
+    {
+        if (wasSet_) {
+            setenv(name_, value_.c_str(), 1);
+        } else {
+            unsetenv(name_);
+        }
+    }
+
+    ScopedEnvironmentVariable(const ScopedEnvironmentVariable&) = delete;
+    ScopedEnvironmentVariable& operator=(const ScopedEnvironmentVariable&) = delete;
+
+private:
+    const char* name_;
+    bool wasSet_ = false;
+    std::string value_;
+};
 
 fs::path TestDirectory(const char* name)
 {
@@ -133,6 +165,54 @@ void TestReportsRunnerFailure()
     fs::remove_all(directory);
 }
 
+void TestRealRunnerFindsBareToolOnPath()
+{
+    const fs::path directory = TestDirectory("aclsan-device-symbolizer-real-runner-test");
+    const fs::path tool = directory / "fake-symbolizer";
+    {
+        std::ofstream script(tool);
+        script << "#!/bin/sh\n"
+               << "printf 'RealFunction\\n/src/kernel.asc:21:4\\n'\n";
+    }
+    fs::permissions(
+        tool, fs::perms::owner_read | fs::perms::owner_write | fs::perms::owner_exec, fs::perm_options::replace);
+
+    ScopedEnvironmentVariable pathGuard("PATH");
+    std::string path = directory.string();
+    if (const char* currentPath = std::getenv("PATH"); currentPath != nullptr && currentPath[0] != '\0') {
+        path += ":" + std::string(currentPath);
+    }
+    assert(setenv("PATH", path.c_str(), 1) == 0);
+
+    const DeviceSymbolizerConfig config{"fake-symbolizer", (directory / "kernel.elf").string(), directory.string()};
+    DeviceSymbolizer symbolizer(config);
+    const CallStackResult result = symbolizer.ResolveCallStack(0x1b0);
+
+    assert(result.available);
+    assert(result.error.empty());
+    assert(result.frames.size() == 1);
+    assert(result.frames[0].functionName == "RealFunction");
+    assert(result.frames[0].fileName == "/src/kernel.asc");
+    assert(result.frames[0].line == 21);
+    assert(result.frames[0].column == 4);
+    fs::remove_all(directory);
+}
+
+void TestRealRunnerReportsSpawnFailure()
+{
+    const fs::path directory = TestDirectory("aclsan-device-symbolizer-spawn-failure-test");
+    const DeviceSymbolizerConfig config{
+        "aclsan-symbolizer-that-does-not-exist", (directory / "kernel.elf").string(), directory.string()};
+    DeviceSymbolizer symbolizer(config);
+
+    const CallStackResult result = symbolizer.ResolveCallStack(0x1c0);
+
+    assert(!result.available);
+    assert(result.error.find("posix_spawnp") != std::string::npos);
+    assert(result.error.find(std::strerror(ENOENT)) != std::string::npos);
+    fs::remove_all(directory);
+}
+
 } // namespace
 
 int main()
@@ -141,5 +221,7 @@ int main()
     TestRejectsInvalidSymbolizerOutput();
     TestParsesLocationFromTheRight();
     TestReportsRunnerFailure();
+    TestRealRunnerFindsBareToolOnPath();
+    TestRealRunnerReportsSpawnFailure();
     return 0;
 }

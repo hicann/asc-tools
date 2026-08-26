@@ -1,0 +1,306 @@
+/**
+ * Copyright (c) 2026 Huawei Technologies Co., Ltd.
+ * This program is free software, you can redistribute it and/or modify it under the terms and conditions of
+ * CANN Open Software License Agreement Version 2.0 (the "License").
+ * Please refer to the License for details. You may not use this file except in compliance with the License.
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
+ * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
+ * See LICENSE in the root of the software repository for the full text of the License.
+ */
+
+#include "device_binary_registry.h"
+
+#include <cstdlib>
+#include <filesystem>
+#include <fstream>
+#include <mutex>
+#include <string>
+#include <unordered_map>
+#include <unordered_set>
+#include <utility>
+#include <vector>
+
+#include <unistd.h>
+
+namespace aclsan::device_runtime {
+namespace {
+
+namespace fs = std::filesystem;
+
+std::string SymbolizerPath()
+{
+    if (const char* configured = std::getenv("ACLSAN_SYMBOLIZER"); configured != nullptr && configured[0] != '\0') {
+        return configured;
+    }
+    if (const char* ascendHome = std::getenv("ASCEND_HOME_PATH"); ascendHome != nullptr && ascendHome[0] != '\0') {
+        const fs::path root(ascendHome);
+        const std::vector<fs::path> candidates{
+            root / "tools/mssanitizer/bin/llvm-symbolizer", root / "tools/msopprof/bin/llvm-symbolizer"};
+        for (const fs::path& candidate : candidates) {
+            if (access(candidate.c_str(), X_OK) == 0) {
+                return candidate.string();
+            }
+        }
+    }
+    return "llvm-symbolizer";
+}
+
+fs::path WorkRoot()
+{
+    if (const char* configured = std::getenv("NPU_CHECK_DBI_WORK_DIR");
+        configured != nullptr && configured[0] != '\0') {
+        return configured;
+    }
+    return fs::temp_directory_path();
+}
+
+bool WriteImage(const fs::path& destination, const void* image, size_t imageBytes)
+{
+    if (image == nullptr || imageBytes == 0) {
+        return false;
+    }
+    std::ofstream output(destination, std::ios::binary | std::ios::trunc);
+    output.write(static_cast<const char*>(image), static_cast<std::streamsize>(imageBytes));
+    return output.good();
+}
+
+void RemoveDirectory(const std::string& directory) noexcept
+{
+    if (directory.empty()) {
+        return;
+    }
+    std::error_code error;
+    fs::remove_all(directory, error);
+}
+
+} // namespace
+
+struct DeviceBinaryRegistry::Impl {
+    struct BinaryEntry {
+        uint64_t binaryId = 0;
+        bool instrumented = false;
+        std::string sessionDirectory;
+        std::unique_ptr<DeviceSymbolizer> symbolizer;
+        std::string symbolizerError = "invalid_state";
+    };
+
+    mutable std::mutex mutex;
+    uint64_t nextBinaryId = 1;
+    uintptr_t latestBinary = 0;
+    std::unordered_map<uintptr_t, BinaryEntry> binaries;
+    std::unordered_set<uintptr_t> binaryInstrumentedFunctions;
+    std::unordered_set<uintptr_t> manuallyInstrumentedFunctions;
+    std::unordered_map<uintptr_t, uintptr_t> functionBinaries;
+
+    uint64_t AllocateBinaryId() noexcept
+    {
+        const uint64_t id = nextBinaryId++;
+        if (nextBinaryId == 0) {
+            nextBinaryId = 1;
+        }
+        return id;
+    }
+
+    void RemoveOwnedFunctions(uintptr_t binary) noexcept
+    {
+        for (auto it = functionBinaries.begin(); it != functionBinaries.end();) {
+            if (it->second == binary) {
+                binaryInstrumentedFunctions.erase(it->first);
+                it = functionBinaries.erase(it);
+            } else {
+                ++it;
+            }
+        }
+    }
+
+    void RemoveFunctionOwnership(uintptr_t function) noexcept
+    {
+        binaryInstrumentedFunctions.erase(function);
+        functionBinaries.erase(function);
+    }
+};
+
+DeviceBinaryRegistry::DeviceBinaryRegistry() : impl_(std::make_unique<Impl>()) {}
+
+DeviceBinaryRegistry::~DeviceBinaryRegistry() { Reset(); }
+
+bool DeviceBinaryRegistry::RecordBinaryLoadFromData(
+    uintptr_t binary, bool instrumented, const void* image, size_t imageBytes) noexcept
+{
+    if (binary == 0) {
+        return false;
+    }
+    try {
+        std::lock_guard<std::mutex> lock(impl_->mutex);
+        Impl::BinaryEntry entry;
+        entry.binaryId = impl_->AllocateBinaryId();
+        entry.instrumented = instrumented;
+        if (instrumented) {
+            const fs::path session =
+                WorkRoot() / ("aclsan-symbolizer-" + std::to_string(static_cast<unsigned long long>(getpid())) + "-" +
+                              std::to_string(entry.binaryId));
+            std::error_code error;
+            fs::create_directories(session, error);
+            const fs::path sourceImage = session / "original_device.elf";
+            if (!error && WriteImage(sourceImage, image, imageBytes)) {
+                entry.sessionDirectory = session.string();
+                entry.symbolizer = std::make_unique<DeviceSymbolizer>(
+                    DeviceSymbolizerConfig{SymbolizerPath(), sourceImage.string(), session.string()});
+                entry.symbolizerError.clear();
+            } else {
+                RemoveDirectory(session.string());
+                entry.symbolizerError = "source_image_unavailable";
+            }
+        }
+
+        const auto existing = impl_->binaries.find(binary);
+        if (existing != impl_->binaries.end()) {
+            RemoveDirectory(existing->second.sessionDirectory);
+            impl_->RemoveOwnedFunctions(binary);
+        }
+        impl_->binaries[binary] = std::move(entry);
+        impl_->latestBinary = binary;
+        return impl_->binaries[binary].symbolizer != nullptr || !instrumented;
+    } catch (...) {
+        return false;
+    }
+}
+
+void DeviceBinaryRegistry::RecordBinaryUnload(uintptr_t binary) noexcept
+{
+    if (binary == 0) {
+        return;
+    }
+    try {
+        std::lock_guard<std::mutex> lock(impl_->mutex);
+        const auto found = impl_->binaries.find(binary);
+        if (found == impl_->binaries.end()) {
+            return;
+        }
+        RemoveDirectory(found->second.sessionDirectory);
+        impl_->binaries.erase(found);
+        impl_->RemoveOwnedFunctions(binary);
+        if (impl_->latestBinary == binary) {
+            impl_->latestBinary = 0;
+        }
+    } catch (...) {
+    }
+}
+
+void DeviceBinaryRegistry::RecordBinaryFunctionLookup(uintptr_t binary, uintptr_t function) noexcept
+{
+    if (binary == 0 || function == 0) {
+        return;
+    }
+    try {
+        std::lock_guard<std::mutex> lock(impl_->mutex);
+        impl_->RemoveFunctionOwnership(function);
+        const auto loaded = impl_->binaries.find(binary);
+        if (loaded != impl_->binaries.end() && loaded->second.instrumented) {
+            impl_->binaryInstrumentedFunctions.insert(function);
+            impl_->functionBinaries[function] = binary;
+        }
+    } catch (...) {
+    }
+}
+
+void DeviceBinaryRegistry::RecordLatestBinaryFunctionLookup(uintptr_t function) noexcept
+{
+    if (function == 0) {
+        return;
+    }
+    try {
+        std::lock_guard<std::mutex> lock(impl_->mutex);
+        impl_->RemoveFunctionOwnership(function);
+        const auto loaded = impl_->binaries.find(impl_->latestBinary);
+        if (loaded != impl_->binaries.end() && loaded->second.instrumented) {
+            impl_->binaryInstrumentedFunctions.insert(function);
+            impl_->functionBinaries[function] = impl_->latestBinary;
+        }
+    } catch (...) {
+    }
+}
+
+void DeviceBinaryRegistry::MarkFunctionInstrumented(uintptr_t function) noexcept
+{
+    if (function == 0) {
+        return;
+    }
+    try {
+        std::lock_guard<std::mutex> lock(impl_->mutex);
+        impl_->manuallyInstrumentedFunctions.insert(function);
+    } catch (...) {
+    }
+}
+
+bool DeviceBinaryRegistry::IsFunctionInstrumented(uintptr_t function) const noexcept
+{
+    if (function == 0) {
+        return false;
+    }
+    try {
+        std::lock_guard<std::mutex> lock(impl_->mutex);
+        return impl_->binaryInstrumentedFunctions.find(function) != impl_->binaryInstrumentedFunctions.end() ||
+               impl_->manuallyInstrumentedFunctions.find(function) != impl_->manuallyInstrumentedFunctions.end();
+    } catch (...) {
+        return false;
+    }
+}
+
+void DeviceBinaryRegistry::Reset() noexcept
+{
+    try {
+        std::lock_guard<std::mutex> lock(impl_->mutex);
+        for (const auto& [binary, entry] : impl_->binaries) {
+            (void)binary;
+            RemoveDirectory(entry.sessionDirectory);
+        }
+        impl_->binaries.clear();
+        impl_->binaryInstrumentedFunctions.clear();
+        impl_->manuallyInstrumentedFunctions.clear();
+        impl_->functionBinaries.clear();
+        impl_->latestBinary = 0;
+    } catch (...) {
+    }
+}
+
+CallStackResult DeviceBinaryRegistry::ResolveCallStack(uint64_t pc) const noexcept
+{
+    try {
+        std::lock_guard<std::mutex> lock(impl_->mutex);
+        const auto active = impl_->binaries.find(impl_->latestBinary);
+        if (active == impl_->binaries.end()) {
+            return {pc, 0, false, "invalid_state", {}};
+        }
+        if (active->second.symbolizer == nullptr) {
+            return {pc, active->second.binaryId, false, active->second.symbolizerError, {}};
+        }
+        CallStackResult result = active->second.symbolizer->ResolveCallStack(pc);
+        result.binaryId = active->second.binaryId;
+        return result;
+    } catch (...) {
+        return {pc, 0, false, "symbolizer_runtime_failure", {}};
+    }
+}
+
+CallStackResult DeviceBinaryRegistry::ResolveCallStackWithRunner(
+    uint64_t pc, const CommandRunner& runner) const noexcept
+{
+    try {
+        std::lock_guard<std::mutex> lock(impl_->mutex);
+        const auto active = impl_->binaries.find(impl_->latestBinary);
+        if (active == impl_->binaries.end()) {
+            return {pc, 0, false, "invalid_state", {}};
+        }
+        if (active->second.symbolizer == nullptr) {
+            return {pc, active->second.binaryId, false, active->second.symbolizerError, {}};
+        }
+        CallStackResult result = active->second.symbolizer->ResolveCallStackWithRunner(pc, runner);
+        result.binaryId = active->second.binaryId;
+        return result;
+    } catch (...) {
+        return {pc, 0, false, "symbolizer_runtime_failure", {}};
+    }
+}
+
+} // namespace aclsan::device_runtime

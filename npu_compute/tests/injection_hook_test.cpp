@@ -33,6 +33,7 @@ int gReplacementGetFuncBySymbolCalls = 0;
 int gReplacementBinaryUnLoadCalls = 0;
 int gReplacementSynchronizeStreamWithTimeoutCalls = 0;
 int32_t gLastSynchronizeStreamTimeout = 0;
+int gReplacementBinaryGetFunctionCalls = 0;
 
 int OriginalMalloc(void**, std::size_t, aclrtMemMallocPolicy)
 {
@@ -44,6 +45,15 @@ int OriginalFree(void*) { return 0; }
 int OriginalMemcpy(void*, std::size_t, const void*, std::size_t, aclrtMemcpyKind) { return 0; }
 int OriginalMemset(void*, std::size_t, int, std::size_t) { return 0; }
 int OriginalLaunch(void*, uint32_t, const void*, std::size_t, void*) { return 0; }
+int OriginalBinaryGetFunction(aclrtBinHandle binary, const char* name, aclrtFuncHandle* function)
+{
+    if (binary == nullptr || name == nullptr || function == nullptr) {
+        return ACL_ERROR_INVALID_PARAM;
+    }
+    *function = reinterpret_cast<aclrtFuncHandle>(0x41);
+    return 41;
+}
+
 int ReplacementMalloc(void** pointer, std::size_t size, aclrtMemMallocPolicy policy)
 {
     ++gReplacementMallocCalls;
@@ -98,6 +108,14 @@ int ReplacementSynchronizeStreamWithTimeout(aclrtStream, int32_t timeout)
     return 27;
 }
 
+int ReplacementBinaryGetFunction(aclrtBinHandle binary, const char* name, aclrtFuncHandle* function)
+{
+    ++gReplacementBinaryGetFunctionCalls;
+    const auto original =
+        reinterpret_cast<aclrtBinaryGetFunctionFunc>(acltoolGetOriginalRuntimeApi(ACL_RT_API_aclrtBinaryGetFunction));
+    return original == nullptr ? ACL_ERROR_UNINITIALIZE : original(binary, name, function);
+}
+
 } // namespace
 
 int main()
@@ -112,6 +130,7 @@ int main()
     CHECK(RuntimeStubSetOriginFunction("aclrtMemcpy", &OriginalMemcpy) == 0);
     CHECK(RuntimeStubSetOriginFunction("aclrtMemset", &OriginalMemset) == 0);
     CHECK(RuntimeStubSetOriginFunction("aclrtLaunchKernel", &OriginalLaunch) == 0);
+    CHECK(RuntimeStubSetOriginFunction("aclrtBinaryGetFunction", &OriginalBinaryGetFunction) == 0);
 
     CHECK(reinterpret_cast<aclrtMallocFunc>(acltoolGetOriginalRuntimeApi(ACL_RT_API_aclrtMalloc)) == &OriginalMalloc);
     CHECK(acltoolClearCallback(ACL_RT_API_aclrtMalloc) == 0);
@@ -134,6 +153,7 @@ int main()
     CHECK(acltoolRegisterAclrtGetFuncBySymbolCallbacks(nullptr) == 0);
     CHECK(acltoolRegisterAclrtBinaryUnLoadCallbacks(nullptr) == 0);
     CHECK(acltoolRegisterAclrtSynchronizeStreamWithTimeoutCallbacks(nullptr) == 0);
+    CHECK(acltoolRegisterAclrtBinaryGetFunctionCallbacks(nullptr) == 0);
 
     CHECK(acltoolRegisterAclrtMallocCallbacks(&ReplacementMalloc) == 0);
     CHECK(acltoolRegisterAclrtFreeCallbacks(&ReplacementFree) == 0);
@@ -143,6 +163,7 @@ int main()
     CHECK(acltoolRegisterAclrtGetFuncBySymbolCallbacks(&ReplacementGetFuncBySymbol) == 0);
     CHECK(acltoolRegisterAclrtBinaryUnLoadCallbacks(&ReplacementBinaryUnLoad) == 0);
     CHECK(acltoolRegisterAclrtSynchronizeStreamWithTimeoutCallbacks(&ReplacementSynchronizeStreamWithTimeout) == 0);
+    CHECK(acltoolRegisterAclrtBinaryGetFunctionCallbacks(&ReplacementBinaryGetFunction) == 0);
     CHECK(aclrtMalloc(&pointer, 1, ACL_MEM_MALLOC_HUGE_FIRST) == 17);
     CHECK(aclrtFree(pointer) == 21);
     CHECK(aclrtMemcpy(nullptr, 0, nullptr, 0, ACL_MEMCPY_HOST_TO_HOST) == 22);
@@ -154,6 +175,10 @@ int main()
     CHECK(functionHandle == &symbol);
     CHECK(aclrtBinaryUnLoad(functionHandle) == 26);
     CHECK(aclrtSynchronizeStreamWithTimeout(nullptr, 1234) == 27);
+    aclrtBinHandle binaryHandle = reinterpret_cast<aclrtBinHandle>(0x31);
+    functionHandle = nullptr;
+    CHECK(aclrtBinaryGetFunction(binaryHandle, "FullFlowKernel", &functionHandle) == 41);
+    CHECK(functionHandle == reinterpret_cast<aclrtFuncHandle>(0x41));
     CHECK(gReplacementMallocCalls == 1);
     CHECK(gOriginalMallocCalls == 2);
     CHECK(gReplacementFreeCalls == 1);
@@ -164,6 +189,7 @@ int main()
     CHECK(gReplacementBinaryUnLoadCalls == 1);
     CHECK(gReplacementSynchronizeStreamWithTimeoutCalls == 1);
     CHECK(gLastSynchronizeStreamTimeout == 1234);
+    CHECK(gReplacementBinaryGetFunctionCalls == 1);
 
     CHECK(acltoolClearCallback(ACL_RT_API_aclrtMalloc) == 0);
     CHECK(acltoolClearCallback(ACL_RT_API_aclrtMalloc) == 0);
@@ -173,6 +199,7 @@ int main()
     CHECK(acltoolClearCallback(ACL_RT_API_aclrtGetFuncBySymbol) == 0);
     CHECK(acltoolClearCallback(ACL_RT_API_aclrtBinaryUnLoad) == 0);
     CHECK(acltoolClearCallback(ACL_RT_API_aclrtSynchronizeStreamWithTimeout) == 0);
+    CHECK(acltoolClearCallback(ACL_RT_API_aclrtBinaryGetFunction) == 0);
     CHECK(acltoolClearCallback(static_cast<aclrtApiId>(ACL_RT_API_MAX)) == ACL_ERROR_INVALID_PARAM);
 
     CHECK(

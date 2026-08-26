@@ -330,6 +330,20 @@ extern "C" aclError aclrtSynchronizeStreamWithTimeout(aclrtStream stream, std::i
     return CallCurrent<aclError (*)(aclrtStream, std::int32_t)>("aclrtSynchronizeStreamWithTimeout", stream, timeout);
 }
 
+extern "C" aclError aclrtBinaryLoadFromData(
+    const void* data, std::size_t length, const aclrtBinaryLoadOptions* options, aclrtBinHandle* binHandle)
+{
+    return CallCurrent<aclError (*)(const void*, std::size_t, const aclrtBinaryLoadOptions*, aclrtBinHandle*)>(
+        "aclrtBinaryLoadFromData", data, length, options, binHandle);
+}
+
+extern "C" aclError aclrtBinaryGetFunction(
+    aclrtBinHandle binHandle, const char* kernelName, aclrtFuncHandle* funcHandle)
+{
+    return CallCurrent<aclError (*)(aclrtBinHandle, const char*, aclrtFuncHandle*)>(
+        "aclrtBinaryGetFunction", binHandle, kernelName, funcHandle);
+}
+
 extern "C" aclError aclrtGetFuncBySymbol(const void* symbol, aclrtFuncHandle* funcHandle)
 {
     return CallCurrent<aclError (*)(const void*, aclrtFuncHandle*)>("aclrtGetFuncBySymbol", symbol, funcHandle);

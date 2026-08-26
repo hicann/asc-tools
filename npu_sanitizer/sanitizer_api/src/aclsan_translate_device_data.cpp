@@ -442,6 +442,24 @@ AclsanDeviceMemoryAccessData MakeDeviceMemoryAccessData(
 
 } // namespace
 
+uint64_t DecodeRawTraceTransferBytes(const sanitizer::AscsanRawTraceRecord& record) noexcept
+{
+    const std::optional<CceInstructionParamField> params = Translator::Translate(record);
+    if (!params.has_value()) {
+        return 0;
+    }
+    if (const auto* copy = std::get_if<sanitizer::CopyGmToUbufAlignV2ParamField>(&*params)) {
+        return static_cast<uint64_t>(copy->burstNum) * copy->burstLen;
+    }
+    if (const auto* copy = std::get_if<sanitizer::CopyGmToCbufAlignV2ParamField>(&*params)) {
+        return static_cast<uint64_t>(copy->burstNum) * copy->burstLen;
+    }
+    if (const auto* copy = std::get_if<sanitizer::CopyUbufToGmAlignV2ParamField>(&*params)) {
+        return static_cast<uint64_t>(copy->burstNum) * copy->burstLen;
+    }
+    return 0;
+}
+
 DeviceMemoryAccessDataArray TranslateDeviceMemoryAccessData(const DeviceRecord& record) noexcept
 {
     return {

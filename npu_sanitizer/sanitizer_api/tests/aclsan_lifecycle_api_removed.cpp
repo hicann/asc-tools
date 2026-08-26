@@ -17,6 +17,8 @@ int main()
     assert(library != nullptr);
     assert(dlsym(library, "aclsanInitialize") == nullptr);
     assert(dlsym(library, "aclsanFinalize") == nullptr);
+    assert(dlsym(library, "NpuCheckInstallAclHooks") == nullptr);
+    assert(dlsym(library, "NpuCheckUninstallAclHooks") == nullptr);
     assert(dlclose(library) == 0);
     return 0;
 }

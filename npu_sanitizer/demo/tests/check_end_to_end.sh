@@ -23,18 +23,22 @@ fi
 grep -Fq 'set(NPU_COMPUTE_BUILD_TESTS OFF CACHE BOOL "" FORCE)' "${demo_dir}/CMakeLists.txt"
 grep -Fq -- '--target npu_check_cli "${example_target}"' "${demo_dir}/run.sh"
 
+set +e
 bash "${demo_dir}/run.sh" add >"${output}" 2>&1
+run_status=$?
+set -e
+if [[ ${run_status} -ne 2 ]]; then
+    printf 'expected npu_check exit status 2 for the intentional add OOB, got %d\n' "${run_status}" >&2
+    exit 1
+fi
 
 grep -F 'npu_check: handshake=ready tool=memcheck' "${output}"
-grep -E 'npu_check: SUMMARY .*errors=0' "${output}"
+grep -F 'npu_check: DIAGNOSTIC' "${output}"
+grep -E 'Invalid GM read of size 8256 bytes' "${output}"
+grep -E 'npu_check: SUMMARY .*[[:space:]]errors=[1-9][0-9]*([[:space:]]|$)' "${output}"
 grep -F 'npu_check: SESSION_END status=complete' "${output}"
 grep -F 'npu_check: child_exit=0 handshake=ready session_end=complete' "${output}"
 grep -F 'test pass!' "${output}"
-
-if grep -Fq 'npu_check: DIAGNOSTIC' "${output}"; then
-    printf 'unexpected memcheck diagnostic in the valid add example\n' >&2
-    exit 1
-fi
 
 test -x "${bin_dir}/npu_check"
 test ! -e "${bin_dir}/npucheck"

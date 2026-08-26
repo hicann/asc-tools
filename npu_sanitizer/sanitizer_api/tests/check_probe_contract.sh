@@ -25,28 +25,46 @@ grep -Fq '#include "aclsan/aclsan_cbdata_device.h"' \
 grep -Fq '#include "aclsan/aclsan_callback.h"' \
     "${api_dir}/../npu_check/src/checker/memcheck.h"
 
-grep -Fq 'g_sanitizerOutput' "${api_dir}/probe/probe.asc"
-grep -Fq '__sanitizer_report_copy_gm_to_ubuf_align_v2_b16' "${api_dir}/probe/probe.asc"
-grep -Fq '__sanitizer_report_copy_ubuf_to_gm_align_v2' "${api_dir}/probe/probe.asc"
-grep -Fq '__sanitizer_report_set_flag' "${api_dir}/probe/probe.asc"
-grep -Fq '__sanitizer_report_wait_flag' "${api_dir}/probe/probe.asc"
-grep -Fq 'GetCceInstructionPipeline(instructionId)' "${api_dir}/probe/probe_parser.cpp"
+legacy_probe_resources=(
+    probe
+)
+for resource in "${legacy_probe_resources[@]}"; do
+    if [[ -e "${api_dir}/${resource}" ]]; then
+        printf 'legacy Probe resource is still present: %s\n' "${resource}" >&2
+        exit 1
+    fi
+done
+
+dbi_probe_resources=(
+    src/probes/mte1.cpp
+    src/probes/mte2.cpp
+    src/probes/mte3.cpp
+    src/probes/fixpipe.cpp
+    src/probes/sync.cpp
+    include/trace_record.h
+)
+for resource in "${dbi_probe_resources[@]}"; do
+    if [[ ! -f "${api_dir}/../dbi/${resource}" ]]; then
+        printf 'required DBI probe resource is missing: %s\n' "${resource}" >&2
+        exit 1
+    fi
+done
+
 grep -Fq 'ACLSAN_DEVICE_PIPE_MTE2' "${api_dir}/src/cce_instr_types.cpp"
 grep -Fq 'ACLSAN_DEVICE_PIPE_MTE3' "${api_dir}/src/cce_instr_types.cpp"
 grep -Fq 'ACLSAN_DEVICE_PIPE_SCALAR' "${api_dir}/src/cce_instr_types.cpp"
-grep -Fq 'InstrType::COPY_UBUF_TO_GM_ALIGN_V2' "${api_dir}/probe/gen_ctrlbin.cpp"
-grep -Fq '_Z43__sanitizer_report_copy_ubuf_to_gm_align_v2PU3AS1hljPU3AS1vPU3AS6vmm.vector' \
-    "${api_dir}/probe/symbol_ordering.txt"
-grep -Fq 'DispatchProbeRecords(parseResult)' "${api_dir}/src/aclsan_hook_aclrt.cpp"
 if grep -Rq 'MakeMockRawTraceRecords' "${api_dir}/src" "${api_dir}/include"; then
     printf 'mock raw trace producer is still present\n' >&2
     exit 1
 fi
-grep -Fq 'aclsan_probe_resources' "${api_dir}/CMakeLists.txt"
-grep -Fq 'ACLSAN_PROBE_OBJECT' "${api_dir}/../demo/run.sh"
+if rg -q 'ACLSAN_PROBE_OBJECT|ACLSAN_BUILD_DEVICE_PROBE_RESOURCES|aclsan_probe_resources' \
+    "${api_dir}/CMakeLists.txt" "${api_dir}/src"; then
+    printf 'legacy Probe build reference is still present in sanitizer_api\n' >&2
+    exit 1
+fi
 
 if rg -q '\bAclsanPatchPipeline\b|\bACLSAN_PATCH_PIPELINE_' \
-    "${api_dir}/include" "${api_dir}/probe" "${api_dir}/src" "${api_dir}/tests" "${api_dir}/../npu_check" \
+    "${api_dir}/include" "${api_dir}/src" "${api_dir}/tests" "${api_dir}/../npu_check" \
     -g '*.{h,cpp,asc}' -g '!check_probe_contract.sh'; then
     printf 'legacy patch pipeline name is still present\n' >&2
     exit 1

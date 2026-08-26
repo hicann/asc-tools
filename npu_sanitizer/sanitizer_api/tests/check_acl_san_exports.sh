@@ -24,6 +24,9 @@ expected_symbols=(
     aclsanGetCallbackState@@ACLSAN_1.0
     aclsanGetDeviceCallStack@@ACLSAN_1.0
     aclsanSubscribe@@ACLSAN_1.0
+    aclsanTestMarkInstrumentedFunction@@ACLSAN_1.0
+    aclsanTestRecordDeviceBinarySource@@ACLSAN_1.0
+    aclsanTestResetTraceRuntimeState@@ACLSAN_1.0
     aclsanUnsubscribe@@ACLSAN_1.0
 )
 

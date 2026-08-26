@@ -10,6 +10,7 @@
 
 #include "process_runner.h"
 
+#include "dbi_environment.h"
 #include "uds_client.h"
 
 #include <array>
@@ -413,6 +414,11 @@ int RunApplication(const Options& inputOptions, const std::string& libraryPath)
         (void)setenv(ipc::kSessionNonceEnv, nonce.c_str(), 1);
         (void)setenv(ipc::kCliPidEnv, parentText.c_str(), 1);
         (void)setenv(ipc::kHandshakeTimeoutEnv, timeoutText.c_str(), 1);
+        std::string environmentError;
+        if (!ApplyEnvironment(BuildDbiEnvironment(options.toolConfig), environmentError)) {
+            dprintf(STDERR_FILENO, "npu_check: %s\n", environmentError.c_str());
+            _exit(126);
+        }
         auto argv = BuildArgv(options.application);
         execvp(argv[0], argv.data());
         dprintf(STDERR_FILENO, "npu_check: execvp failed: %s\n", std::strerror(errno));

@@ -6,6 +6,9 @@ ACLSAN_1.0 {
         aclsanEnableDomain;
         aclsanGetCallbackState;
         aclsanGetDeviceCallStack;
+        aclsanTestMarkInstrumentedFunction;
+        aclsanTestRecordDeviceBinarySource;
+        aclsanTestResetTraceRuntimeState;
     local:
         *;
 };

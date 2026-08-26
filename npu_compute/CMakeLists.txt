@@ -86,15 +86,12 @@ target_include_directories(npu_compute_headers INTERFACE
 )
 
 add_library(npu_compute_backend_headers INTERFACE)
-target_link_libraries(npu_compute_backend_headers INTERFACE
-  npu_compute_headers
-)
+target_link_libraries(npu_compute_backend_headers INTERFACE npu_compute_headers)
+
+add_library(npu_compute_integration_headers INTERFACE)
+target_link_libraries(npu_compute_integration_headers INTERFACE npu_compute_backend_headers)
 
 if(NPU_COMPUTE_USE_STUB_BACKEND)
-  add_library(npu_compute_integration_headers INTERFACE)
-  target_link_libraries(npu_compute_integration_headers INTERFACE
-    npu_compute_backend_headers
-  )
   target_include_directories(npu_compute_backend_headers BEFORE INTERFACE
     "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/stubs/runtime/include>"
     "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/stubs/prof_api/include>"

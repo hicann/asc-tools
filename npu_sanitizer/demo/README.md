@@ -60,29 +60,29 @@ Runtime/Profiling stub。若显式构建 `npu_compute` 的其他常规 target，
 
 ## 运行
 
-在本目录或任意工作目录执行下列命令：
+在仓库根目录执行下列命令：
 
 ```bash
-bash /home/cty/asc-tools-aclsan/npu_sanitizer/demo/run.sh
+bash ./npu_sanitizer/demo/run.sh
 ```
 
 无参数时运行 `examples/add`。显式选择示例：
 
 ```bash
-bash /home/cty/asc-tools-aclsan/npu_sanitizer/demo/run.sh add
-bash /home/cty/asc-tools-aclsan/npu_sanitizer/demo/run.sh synccheck/single_pair
-bash /home/cty/asc-tools-aclsan/npu_sanitizer/demo/run.sh synccheck/single_unconsumed
-bash /home/cty/asc-tools-aclsan/npu_sanitizer/demo/run.sh matmul_basic_api
-bash /home/cty/asc-tools-aclsan/npu_sanitizer/demo/run.sh matmul_leakyrelu_basic_api
+bash ./npu_sanitizer/demo/run.sh add
+bash ./npu_sanitizer/demo/run.sh synccheck/single_pair
+bash ./npu_sanitizer/demo/run.sh synccheck/single_unconsumed
+bash ./npu_sanitizer/demo/run.sh matmul_basic_api
+bash ./npu_sanitizer/demo/run.sh matmul_leakyrelu_basic_api
 ```
 
 `run.sh` 每次运行都会删除并重建固定目录 `npu_sanitizer/demo/build`，自动加载
 `${NPUCOMPUTE_CANN_ROOT}/../set_env.sh`；默认的 `NPUCOMPUTE_CANN_ROOT` 为
-`/home/cty/cann_0819/cann-9.2.0/x86_64-linux`。若 CANN 安装位置不同，可在运行前覆盖：
+`/usr/local/Ascend/cann/x86_64-linux`。若 CANN 安装位置不同，可在运行前覆盖：
 
 ```bash
 NPUCOMPUTE_CANN_ROOT=/path/to/cann/x86_64-linux \
-    bash /home/cty/asc-tools-aclsan/npu_sanitizer/demo/run.sh add
+    bash ./npu_sanitizer/demo/run.sh add
 ```
 
 构建完成后，`npu_check` 会以 `memcheck` 启动所选示例。两个 matmul 目录中的

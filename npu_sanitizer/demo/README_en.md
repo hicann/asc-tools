@@ -67,32 +67,32 @@ legacy `npucheck` executable.
 
 ## Running Examples
 
-Run the following command from this directory or any other working directory:
+Run the following command from the repository root:
 
 ```bash
-bash /home/cty/asc-tools-aclsan/npu_sanitizer/demo/run.sh
+bash ./npu_sanitizer/demo/run.sh
 ```
 
 With no argument, the runner executes `examples/add`. Select an example explicitly
 with one of the following commands:
 
 ```bash
-bash /home/cty/asc-tools-aclsan/npu_sanitizer/demo/run.sh add
-bash /home/cty/asc-tools-aclsan/npu_sanitizer/demo/run.sh synccheck/single_pair
-bash /home/cty/asc-tools-aclsan/npu_sanitizer/demo/run.sh synccheck/single_unconsumed
-bash /home/cty/asc-tools-aclsan/npu_sanitizer/demo/run.sh matmul_basic_api
-bash /home/cty/asc-tools-aclsan/npu_sanitizer/demo/run.sh matmul_leakyrelu_basic_api
+bash ./npu_sanitizer/demo/run.sh add
+bash ./npu_sanitizer/demo/run.sh synccheck/single_pair
+bash ./npu_sanitizer/demo/run.sh synccheck/single_unconsumed
+bash ./npu_sanitizer/demo/run.sh matmul_basic_api
+bash ./npu_sanitizer/demo/run.sh matmul_leakyrelu_basic_api
 ```
 
 On each run, `run.sh` deletes and rebuilds the fixed `npu_sanitizer/demo/build`
 directory and automatically sources `${NPUCOMPUTE_CANN_ROOT}/../set_env.sh`.
 The default `NPUCOMPUTE_CANN_ROOT` is
-`/home/cty/cann_0819/cann-9.2.0/x86_64-linux`. Override it before running if CANN
+`/usr/local/Ascend/cann/x86_64-linux`. Override it before running if CANN
 is installed elsewhere:
 
 ```bash
 NPUCOMPUTE_CANN_ROOT=/path/to/cann/x86_64-linux \
-    bash /home/cty/asc-tools-aclsan/npu_sanitizer/demo/run.sh add
+    bash ./npu_sanitizer/demo/run.sh add
 ```
 
 After the build completes, `npu_check` launches the selected example with memcheck.

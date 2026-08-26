@@ -22,6 +22,7 @@ namespace {
 
 constexpr uint64_t kCopyGmToCbufAlignV2B16Id = 75;
 constexpr uint64_t kCopyGmToCbufV2Id = 73;
+constexpr uint64_t kCopyGmToUbufAlignV2B32Id = 86;
 constexpr uint64_t kCopyUbufToGmAlignV2Id = 83;
 constexpr uint64_t kSetFlagId = 440;
 constexpr uint64_t kSetFlagIId = 441;
@@ -31,6 +32,31 @@ constexpr uint64_t kSetFlagVId = 456;
 constexpr uint64_t kSetFlagIVId = 457;
 constexpr uint64_t kWaitFlagVId = 458;
 constexpr uint64_t kWaitFlagIVId = 459;
+
+void TestDecodeRawTraceTransferBytes()
+{
+    sanitizer::AscsanRawTraceRecord record{};
+    record.args[2] = (1ULL << 4) | (8256ULL << 25);
+
+    for (uint64_t instructionId : {74ULL, 75ULL, 76ULL, 84ULL, 85ULL, 86ULL, 83ULL}) {
+        record.instrId = instructionId;
+        assert(aclsan::DecodeRawTraceTransferBytes(record) == 8256);
+    }
+
+    record.instrId = kSetFlagId;
+    assert(aclsan::DecodeRawTraceTransferBytes(record) == 0);
+
+    record.instrId = kCopyGmToUbufAlignV2B32Id;
+    record.args[2] = 8256ULL << 25;
+    assert(aclsan::DecodeRawTraceTransferBytes(record) == 0);
+
+    record.args[2] = 1ULL << 4;
+    assert(aclsan::DecodeRawTraceTransferBytes(record) == 0);
+
+    constexpr uint64_t maximum = (1ULL << 20) - 1;
+    record.args[2] = (maximum << 4) | (maximum << 25);
+    assert(aclsan::DecodeRawTraceTransferBytes(record) == maximum * maximum);
+}
 
 void TestTranslateMovOutToL1AlignV2()
 {
@@ -335,6 +361,7 @@ void TestRejectUnsupportedInstruction()
 
 int main()
 {
+    TestDecodeRawTraceTransferBytes();
     TestTranslateMovOutToL1AlignV2();
     TestTranslateSetAndWaitFlag();
     TestTranslateAllFlagVariantsToCorrectActions();

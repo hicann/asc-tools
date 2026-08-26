@@ -22,12 +22,8 @@
 #include <set>
 #include <variant>
 
-namespace sanitizer {
-struct ProbeParseResult;
-}
-
 namespace aclsan {
-namespace probe {
+namespace device_runtime {
 struct CallStackResult;
 }
 
@@ -46,18 +42,17 @@ struct TraceCallbackContext {
 };
 
 AclsanStatus ApplyRuntimeHooks(const std::set<aclrtApiId>& requiredHooks) noexcept;
-AclsanStatus ResolveActiveDeviceCallStack(uint64_t pc, probe::CallStackResult* result) noexcept;
+AclsanStatus ResolveActiveDeviceCallStack(uint64_t pc, device_runtime::CallStackResult* result) noexcept;
 bool IsRuntimeHookStatePoisoned() noexcept;
 bool IsCallbackEnabled(AclsanCallbackDomain domain, AclsanCallbackId id) noexcept;
 bool InvokeCallback(AclsanCallbackDomain domain, AclsanCallbackId id, const void* callbackData) noexcept;
 
 DeviceMemoryAccessDataArray TranslateDeviceMemoryAccessData(const DeviceRecord& record) noexcept;
 AclsanDeviceSyncData TranslateDeviceSyncData(const DeviceRecord& record) noexcept;
+uint64_t DecodeRawTraceTransferBytes(const sanitizer::AscsanRawTraceRecord& record) noexcept;
 std::optional<CceInstructionParamField> TranslateRawTraceRecord(const sanitizer::AscsanRawTraceRecord& record) noexcept;
 std::optional<CceTraceCallbackData> TranslateRawTraceToCallbackData(
     const sanitizer::AscsanRawTraceRecord& record, const TraceCallbackContext& context) noexcept;
-void DispatchProbeRecords(const sanitizer::ProbeParseResult& parseResult) noexcept;
-
 } // namespace aclsan
 
 #endif

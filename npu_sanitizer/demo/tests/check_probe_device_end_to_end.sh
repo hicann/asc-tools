@@ -15,10 +15,39 @@ demo_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 output=$(mktemp)
 trap 'status=$?; if [[ ${status} -ne 0 ]]; then cat "${output}" >&2; fi; rm -f -- "${output}"' EXIT
 
+set +e
 bash "${demo_dir}/run.sh" add >"${output}" 2>&1
+run_status=$?
+set -e
+if [[ ${run_status} -ne 2 ]]; then
+    printf 'expected npu_check exit status 2 for the intentional add OOB, got %d\n' "${run_status}" >&2
+    exit 1
+fi
 
-grep -E '\[probe\] readback records=[1-9][0-9]*' "${output}"
-grep -E '\[probe\] records=PASS count=[1-9][0-9]*' "${output}"
+grep -m 1 -E '\[raw\] type=AscsanRawTraceRecord .*transferBytes=[1-9][0-9]*' "${output}"
+grep -E 'npu_check: SUMMARY .*[[:space:]]device_operations=[1-9][0-9]*([[:space:]]|$)' "${output}"
 grep -F 'test pass!' "${output}"
-grep -E 'npu_check: SUMMARY .*errors=0' "${output}"
+grep -F 'npu_check: DIAGNOSTIC' "${output}"
+grep -E 'Invalid GM read of size 8256 bytes' "${output}"
+grep -E 'npu_check: SUMMARY .*[[:space:]]errors=[1-9][0-9]*([[:space:]]|$)' "${output}"
 grep -F 'npu_check: child_exit=0 handshake=ready session_end=complete' "${output}"
+
+mapfile -t probe_objects < <(find "${demo_dir}/build/probe_cache" -mindepth 2 -maxdepth 2 -type f -name probe.o)
+if [[ ${#probe_objects[@]} -ne 1 ]]; then
+    printf 'expected exactly one cached probe.o, got %d\n' "${#probe_objects[@]}" >&2
+    exit 1
+fi
+cann_root=$(sed -n 's/^NPUCOMPUTE_CANN_ROOT:PATH=//p' "${demo_dir}/build/CMakeCache.txt")
+llvm_objdump=$(cd "${cann_root}/.." && pwd)/tools/bisheng_compiler/bin/llvm-objdump
+probe_symbols=$("${llvm_objdump}" --syms "${probe_objects[0]}")
+for expected_symbol in \
+    __sanitizer_report_copy_cbuf_to_ubuf \
+    __sanitizer_report_copy_gm_to_ubuf_align_v2 \
+    __sanitizer_report_copy_ubuf_to_gm_align_v2 \
+    __sanitizer_report_copy_cbuf_to_fbuf; do
+    grep -Fq "${expected_symbol}" <<<"${probe_symbols}"
+done
+if grep -Eq '__sanitizer_report_(set|wait)_flag' <<<"${probe_symbols}"; then
+    printf 'memcheck probe.o unexpectedly contains sync probes\n' >&2
+    exit 1
+fi
