@@ -25,8 +25,10 @@ int main(int argc, char** argv)
         std::cout << npu::sanitizer::cli::Usage();
         return 0;
     }
+    // 注入库定位不再有命令行入口；覆盖走 NPU_CHECK_LIBRARY_PATH，
+    // 后续改为基于 ASCEND_TOOLKIT_PATH 推导安装路径。
     std::string libraryPath;
-    if (!npu::sanitizer::cli::ResolveLibraryPath(options.libraryPath, libraryPath, error)) {
+    if (!npu::sanitizer::cli::ResolveLibraryPath(std::string{}, libraryPath, error)) {
         std::cerr << "npu_check: " << error << '\n';
         return 64;
     }

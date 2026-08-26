@@ -18,12 +18,14 @@
 
 namespace npu::sanitizer::cli {
 
+// 命令行解析结果。ToolId / OptionValue / ToolRequest 的唯一定义见 common/wire_protocol.h。
 struct Options {
-    ipc::ToolConfig toolConfig;
-    std::string libraryPath;
-    int handshakeTimeoutMs = 10000;
+    std::vector<ipc::ToolRequest> tools; // 本次启用的工具及各自子选项，已按注册表规则规范化排序
+    std::string logFile;                 // 用户指定的日志目录或文件；空表示写 stdout
+    int handshakeTimeoutMs = 10000;      // [内部] 建连 + 握手 + Configure + Ready 的总超时
+    int errorExitCode = 0;               // [内部] 0 表示不覆盖应用退出码
     bool showHelp = false;
-    std::vector<std::string> application;
+    std::vector<std::string> application; // application[0] 为程序，其余为原样 argv
 };
 
 bool ParseOptions(int argc, char** argv, Options& options, std::string& error);

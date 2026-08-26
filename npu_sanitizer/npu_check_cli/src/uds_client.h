@@ -27,16 +27,20 @@ public:
     UdsClient(const UdsClient&) = delete;
     UdsClient& operator=(const UdsClient&) = delete;
 
+    // timeoutMs 是本次会话唯一一次"时长 → 时刻"的换算入口：内部立刻算出绝对 deadline，
+    // 之后 connect 重试、Hello 往返、Configure 发送、Ready 接收共用同一个值，
+    // 而不是每步各给一份完整超时。
     bool ConnectAndConfigure(
-        const std::string& socketPath, uint64_t sessionId, const std::string& nonce, uint32_t childPid, int timeoutMs,
-        const ipc::ToolConfig& config, std::string& ready, std::string& error);
-    ipc::IoStatus Receive(ipc::Frame& frame, std::string& error);
+        const std::string& udsName, uint64_t sessionId, uint32_t childPid, int timeoutMs, const ipc::ToolConfig& config,
+        std::string& ready, std::string& error);
+    // 采集阶段读取后续帧。deadline 传 ipc::kNoDeadline 表示不设超时 —— 应用可能跑数小时。
+    ipc::IoStatus Receive(ipc::Frame& frame, ipc::DeadlineMs deadline, std::string& error);
     void Close();
 
 private:
-    bool ConnectWithRetry(const std::string& socketPath, int timeoutMs, pid_t childPid, std::string& error);
-    bool CheckServerIdentity(uint32_t childPid, const std::string& nonce, std::string& error);
-    bool Send(ipc::MessageType type, const std::vector<uint8_t>& payload, std::string& error);
+    bool ConnectWithRetry(const std::string& udsName, ipc::DeadlineMs deadline, pid_t childPid, std::string& error);
+    bool CheckServerIdentity(uint32_t childPid, ipc::DeadlineMs deadline, std::string& error);
+    bool Send(ipc::MessageType type, const std::vector<uint8_t>& payload, ipc::DeadlineMs deadline, std::string& error);
 
     int fd_ = -1;
     uint64_t sessionId_ = 0;

@@ -24,55 +24,97 @@
 namespace npu::sanitizer::cli {
 UdsClient::~UdsClient() { Close(); }
 
-bool UdsClient::ConnectWithRetry(const std::string& socketPath, int timeoutMs, pid_t childPid, std::string& error)
+namespace {
+
+// connect 重试节奏：首次 20 ms，指数退避至上限 100 ms。
+constexpr int kInitialBackoffMs = 20;
+constexpr int kMaxBackoffMs = 100;
+
+// connect 失败后是否值得重试。抽象命名空间下这三个 errno 分别对应目标进程启动过程中的
+// 不同阶段，都属于"还没准备好"而不是"失败"：
+//   ECONNREFUSED —— 地址尚未被 bind，或已 bind 但还没 listen；
+//   EAGAIN       —— 已经 listen，但 backlog 暂时排满；
+//   EINTR        —— 被 CLI 自己安装的信号转发器打断。
+// 注意这里没有 ENOENT：那是文件路径 socket 才会出现的错误，地址不经过文件系统查找之后
+// "还没 bind"与"bind 了还没 listen"就合并成同一个 ECONNREFUSED，无法再从 errno 区分。
+bool IsRetryableConnectErrno(int value)
 {
-    if (socketPath.size() >= sizeof(sockaddr_un::sun_path)) {
-        error = "UDS path exceeds sockaddr_un limit";
+    return value == ECONNREFUSED || value == EAGAIN || value == EWOULDBLOCK || value == EINTR;
+}
+
+} // namespace
+
+bool UdsClient::ConnectWithRetry(
+    const std::string& udsName, ipc::DeadlineMs deadline, pid_t childPid, std::string& error)
+{
+    sockaddr_un address{};
+    socklen_t addrLen = 0;
+    if (!ipc::BuildAbstractAddress(udsName, address, addrLen, error)) {
         return false;
     }
-    const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(timeoutMs);
-    int lastError = ENOENT;
-    while (std::chrono::steady_clock::now() < deadline) {
+
+    int backoffMs = kInitialBackoffMs;
+    int lastError = ECONNREFUSED;
+    while (true) {
+        if (ipc::MonotonicNowMs() >= deadline) {
+            error = std::string("connect timed out: ") + std::strerror(lastError);
+            return false;
+        }
+
+        // 建连阶段是整个流程里唯一需要显式探测子进程的地方：此时还没有 fd 可以 poll，
+        // 对端的死亡不会以 POLLHUP 的形式浮现出来。连上之后就不再需要这段探测。
+        //
+        // 两个细节不能省：waitid 的 flags 必须含 WEXITED，否则直接返回 EINVAL，这段
+        // 提前退出的优化会静默失效（正确性不受影响，表现只是每次都白等满整个超时）；
+        // siginfo_t 必须预清零并检查 si_pid，因为带 WNOHANG 且无状态变化时 waitid 返回
+        // 0 却不填充 info，只看返回值会把每一轮都误判成"子进程已退出"。
         siginfo_t childInfo{};
+        childInfo.si_pid = 0;
         if (waitid(P_PID, static_cast<id_t>(childPid), &childInfo, WEXITED | WNOHANG | WNOWAIT) == 0 &&
             childInfo.si_pid == childPid) {
             error = "child exited before injection handshake";
             return false;
         }
-        fd_ = socket(AF_UNIX, SOCK_SEQPACKET | SOCK_CLOEXEC, 0);
+
+        // 每次尝试都用全新的 fd：connect 失败后 socket 的状态是未定义的，复用不可移植。
+        fd_ = ipc::CreateSeqpacketSocket(error);
         if (fd_ < 0) {
-            error = std::string("socket: ") + std::strerror(errno);
             return false;
         }
-        sockaddr_un address{};
-        address.sun_family = AF_UNIX;
-        std::memcpy(address.sun_path, socketPath.c_str(), socketPath.size() + 1);
-        if (connect(fd_, reinterpret_cast<const sockaddr*>(&address), sizeof(address)) == 0) {
-            return ipc::SetSocketTimeouts(fd_, timeoutMs, error);
+        if (connect(fd_, reinterpret_cast<const sockaddr*>(&address), addrLen) == 0) {
+            return true;
         }
         lastError = errno;
         Close();
-        if (lastError != ENOENT && lastError != ECONNREFUSED) {
+        if (!IsRetryableConnectErrno(lastError)) {
             error = std::string("connect: ") + std::strerror(lastError);
             return false;
         }
-        std::this_thread::sleep_for(std::chrono::milliseconds(20));
+
+        // 退避同样受同一个 deadline 约束，不能睡过头。
+        const int64_t remain = deadline - ipc::MonotonicNowMs();
+        if (remain <= 0) {
+            error = std::string("connect timed out: ") + std::strerror(lastError);
+            return false;
+        }
+        const auto napMs = static_cast<int>(std::min<int64_t>(remain, backoffMs));
+        std::this_thread::sleep_for(std::chrono::milliseconds(napMs));
+        backoffMs = std::min(backoffMs * 2, kMaxBackoffMs);
     }
-    error = std::string("connect timeout: ") + std::strerror(lastError);
-    return false;
 }
 
-bool UdsClient::Send(ipc::MessageType type, const std::vector<uint8_t>& payload, std::string& error)
+bool UdsClient::Send(
+    ipc::MessageType type, const std::vector<uint8_t>& payload, ipc::DeadlineMs deadline, std::string& error)
 {
     ipc::Frame frame{};
     frame.type = type;
     frame.sessionId = sessionId_;
     frame.sequence = sendSequence_++;
     frame.payload = payload;
-    return ipc::SendFrame(fd_, frame, error) == ipc::IoStatus::OK;
+    return ipc::SendFrame(fd_, frame, deadline, error) == ipc::IoStatus::OK;
 }
 
-bool UdsClient::CheckServerIdentity(uint32_t childPid, const std::string& nonce, std::string& error)
+bool UdsClient::CheckServerIdentity(uint32_t childPid, ipc::DeadlineMs deadline, std::string& error)
 {
     ucred peer{};
     socklen_t peerSize = sizeof(peer);
@@ -85,7 +127,7 @@ bool UdsClient::CheckServerIdentity(uint32_t childPid, const std::string& nonce,
         return false;
     }
     ipc::Frame response{};
-    if (Receive(response, error) != ipc::IoStatus::OK) {
+    if (Receive(response, deadline, error) != ipc::IoStatus::OK) {
         return false;
     }
     if (response.type != ipc::MessageType::SERVER_HELLO) {
@@ -96,7 +138,9 @@ bool UdsClient::CheckServerIdentity(uint32_t childPid, const std::string& nonce,
     if (!ipc::DecodeHello(response.payload, hello, error)) {
         return false;
     }
-    if (hello.pid != childPid || hello.uid != getuid() || hello.nonce != nonce) {
+    // Hello 里的 pid/uid 必须与 SO_PEERCRED 的结果交叉比对：前者是对端自行声明的，
+    // 后者由内核填写。两者不一致说明对端实现有问题或存在冒充，按协议错误断连。
+    if (hello.pid != childPid || hello.uid != getuid()) {
         error = "server hello identity mismatch";
         return false;
     }
@@ -104,21 +148,26 @@ bool UdsClient::CheckServerIdentity(uint32_t childPid, const std::string& nonce,
 }
 
 bool UdsClient::ConnectAndConfigure(
-    const std::string& socketPath, uint64_t sessionId, const std::string& nonce, uint32_t childPid, int timeoutMs,
-    const ipc::ToolConfig& config, std::string& ready, std::string& error)
+    const std::string& udsName, uint64_t sessionId, uint32_t childPid, int timeoutMs, const ipc::ToolConfig& config,
+    std::string& ready, std::string& error)
 {
     sessionId_ = sessionId;
     sendSequence_ = 1;
     receiveSequence_ = 1;
-    if (!ConnectWithRetry(socketPath, timeoutMs, static_cast<pid_t>(childPid), error)) {
+
+    // 全流程唯一的一次换算。从这里往下传的都是同一个绝对时刻，覆盖 connect 重试、
+    // Hello 往返、Configure 发送、Ready 接收的全过程，而不是每步各算一次 —— 后者
+    // 最坏会把用户设定的超时放大到步数倍，破坏该值"总时长"的语义。
+    const ipc::DeadlineMs deadline = ipc::DeadlineAfterMs(timeoutMs);
+
+    if (!ConnectWithRetry(udsName, deadline, static_cast<pid_t>(childPid), error)) {
         return false;
     }
     ipc::HelloPayload hello{};
     hello.pid = static_cast<uint32_t>(getpid());
     hello.uid = static_cast<uint32_t>(getuid());
-    hello.nonce = nonce;
-    if (!Send(ipc::MessageType::CLIENT_HELLO, ipc::EncodeHello(hello), error) ||
-        !CheckServerIdentity(childPid, nonce, error)) {
+    if (!Send(ipc::MessageType::CLIENT_HELLO, ipc::EncodeHello(hello), deadline, error) ||
+        !CheckServerIdentity(childPid, deadline, error)) {
         return false;
     }
     const auto encodedConfig = ipc::EncodeToolConfig(config);
@@ -126,11 +175,11 @@ bool UdsClient::ConnectAndConfigure(
         error = "cannot encode tool configuration";
         return false;
     }
-    if (!Send(ipc::MessageType::CONFIGURE, encodedConfig, error)) {
+    if (!Send(ipc::MessageType::CONFIGURE, encodedConfig, deadline, error)) {
         return false;
     }
     ipc::Frame response{};
-    if (Receive(response, error) != ipc::IoStatus::OK) {
+    if (Receive(response, deadline, error) != ipc::IoStatus::OK) {
         return false;
     }
     if (response.type == ipc::MessageType::ERROR) {
@@ -150,12 +199,13 @@ bool UdsClient::ConnectAndConfigure(
     if (!ipc::DecodeText(response.payload, ready, error)) {
         return false;
     }
-    return ipc::SetSocketTimeouts(fd_, 500, error);
+    // 握手到此结束，deadline 使命完成。之后进入采集阶段，等待由调用方按 kNoDeadline 驱动。
+    return true;
 }
 
-ipc::IoStatus UdsClient::Receive(ipc::Frame& frame, std::string& error)
+ipc::IoStatus UdsClient::Receive(ipc::Frame& frame, ipc::DeadlineMs deadline, std::string& error)
 {
-    ipc::IoStatus status = ipc::ReceiveFrame(fd_, frame, error);
+    ipc::IoStatus status = ipc::ReceiveFrame(fd_, frame, deadline, error);
     if (status != ipc::IoStatus::OK) {
         return status;
     }

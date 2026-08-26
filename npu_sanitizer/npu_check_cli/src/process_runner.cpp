@@ -260,19 +260,21 @@ bool RandomBytes(void* output, size_t size)
     return true;
 }
 
-std::string HexNonce()
+// 生成 32 个十六进制字符（16 字节随机数）。失败返回空串。
+// 唯一用途是 UDS 抽象地址的随机段；会话 nonce 已随协议简化删除。
+std::string HexRandom()
 {
     std::array<unsigned char, 16> bytes{};
     if (!RandomBytes(bytes.data(), bytes.size())) {
         return {};
     }
     constexpr char kHexDigits[] = "0123456789abcdef";
-    std::string nonce(bytes.size() * 2, '0');
+    std::string text(bytes.size() * 2, '0');
     for (size_t index = 0; index < bytes.size(); ++index) {
-        nonce[index * 2] = kHexDigits[bytes[index] >> 4u];
-        nonce[index * 2 + 1] = kHexDigits[bytes[index] & 0x0fu];
+        text[index * 2] = kHexDigits[bytes[index] >> 4u];
+        text[index * 2 + 1] = kHexDigits[bytes[index] & 0x0fu];
     }
-    return nonce;
+    return text;
 }
 
 bool CreateSessionDirectory(std::string& directory, std::string& error)
@@ -339,37 +341,64 @@ int ChildExitCode(int status)
 
 } // namespace
 
-int RunApplication(const Options& inputOptions, const std::string& libraryPath)
+// TODO(configure-registry): Configure 迁移到选项注册表编码后删除本函数。
+// 注入库当前仍消费字符串式的 ipc::ToolConfig，这里由新的 Options 派生出来，
+// 使参数解析可以先行改造完毕，而不必同时改动线路格式。
+ipc::ToolConfig LegacyToolConfig(const Options& options, const std::string& sessionDirectory)
 {
-    Options options = inputOptions;
+    ipc::ToolConfig config;
+    if (!options.tools.empty()) {
+        config.toolName = ipc::ToolName(options.tools.front().toolId);
+    }
+    config.strict = true;
+    config.keepTemp = false;
+    config.logFile = options.logFile;
+    config.workDir = sessionDirectory;
+    config.probeCacheDir = sessionDirectory + "/probe-cache";
+    return config;
+}
+
+int RunApplication(const Options& options, const std::string& libraryPath)
+{
+    // 旧 Configure 只能承载单个工具名。解析层已经支持多工具，这里在下发前拦下，
+    // 避免静默地只启用第一个工具、让用户以为其余工具也在生效。
+    if (options.tools.size() > 1) {
+        std::cerr << "npu_check: the current injection library accepts a single --tool; "
+                     "multi-tool Configure requires the registry encoding\n";
+        return 125;
+    }
+
     std::string sessionDirectory;
     std::string error;
     if (!CreateSessionDirectory(sessionDirectory, error)) {
         std::cerr << "npu_check: " << error << '\n';
         return 125;
     }
-    if (options.toolConfig.workDir.empty()) {
-        options.toolConfig.workDir = sessionDirectory;
-    }
-    if (options.toolConfig.probeCacheDir.empty()) {
-        options.toolConfig.probeCacheDir = sessionDirectory + "/probe-cache";
-    }
-    if (!EnsureDirectory(options.toolConfig.workDir, error) ||
-        !EnsureDirectory(options.toolConfig.probeCacheDir, error)) {
+    const ipc::ToolConfig toolConfig = LegacyToolConfig(options, sessionDirectory);
+    if (!EnsureDirectory(toolConfig.workDir, error) || !EnsureDirectory(toolConfig.probeCacheDir, error)) {
         std::cerr << "npu_check: " << error << '\n';
         return 125;
     }
 
     const std::string consolePath = sessionDirectory + "/console.log";
-    const std::string socketPath = sessionDirectory + "/control.sock";
-    OutputSink output(consolePath, options.toolConfig.logFile);
+    // UDS 地址走抽象命名空间，不在会话目录里创建 socket 文件。前导 '@' 是与注入库
+    // 之间的书写约定，两端填 sockaddr_un 时会把它换成 '\0'（见 BuildAbstractAddress）。
+    // 随机部分保证并发实例之间不撞车；它不是秘密 —— /proc/net/unix 任何 UID 都能读到，
+    // 身份校验完全由 SO_PEERCRED 承担。
+    const std::string udsName = "@npu_check-" + HexRandom();
+    if (udsName.size() <= 11) {
+        std::cerr << "npu_check: cannot generate a UDS address\n";
+        return 125;
+    }
+    OutputSink output(consolePath, toolConfig.logFile);
     if (!output.Good()) {
         std::cerr << "npu_check: cannot open console or log output\n";
         return 125;
     }
-    const std::string nonce = HexNonce();
+    // 会话标识只剩 session_id 一个：它在每一帧都被校验，覆盖面严格大于原先只在 Hello
+    // 校验一次的 nonce，因此 nonce 已删除（见 wire_protocol.h 的说明）。
     uint64_t sessionId = 0;
-    if (nonce.empty() || !RandomBytes(&sessionId, sizeof(sessionId)) || sessionId == 0) {
+    if (!RandomBytes(&sessionId, sizeof(sessionId)) || sessionId == 0) {
         output.Sanitizer("cannot generate session identity", true);
         return 125;
     }
@@ -409,9 +438,8 @@ int RunApplication(const Options& inputOptions, const std::string& libraryPath)
         const std::string parentText = std::to_string(getppid());
         const std::string timeoutText = std::to_string(options.handshakeTimeoutMs);
         (void)setenv("ACL_API_INJECTION", libraryPath.c_str(), 1);
-        (void)setenv(ipc::kSocketPathEnv, socketPath.c_str(), 1);
+        (void)setenv(ipc::kUdsNameEnv, udsName.c_str(), 1);
         (void)setenv(ipc::kSessionIdEnv, sessionText.c_str(), 1);
-        (void)setenv(ipc::kSessionNonceEnv, nonce.c_str(), 1);
         (void)setenv(ipc::kCliPidEnv, parentText.c_str(), 1);
         (void)setenv(ipc::kHandshakeTimeoutEnv, timeoutText.c_str(), 1);
         std::string environmentError;
@@ -491,8 +519,7 @@ int RunApplication(const Options& inputOptions, const std::string& libraryPath)
     UdsClient client;
     std::string ready;
     const bool handshake = client.ConnectAndConfigure(
-        socketPath, sessionId, nonce, static_cast<uint32_t>(child), options.handshakeTimeoutMs, options.toolConfig,
-        ready, error);
+        udsName, sessionId, static_cast<uint32_t>(child), options.handshakeTimeoutMs, toolConfig, ready, error);
     std::atomic<bool> sessionEnd{false};
     std::atomic<bool> protocolComplete{handshake};
     std::atomic<uint64_t> sanitizerErrors{0};
@@ -503,7 +530,9 @@ int RunApplication(const Options& inputOptions, const std::string& libraryPath)
             while (true) {
                 ipc::Frame frame{};
                 std::string receiveError;
-                const ipc::IoStatus status = client.Receive(frame, receiveError);
+                // 采集阶段不设超时：应用可能跑数小时，任何固定值都是错的。终止由
+                // 对端关闭连接（CLOSED）或子进程退出驱动，见下面的分支。
+                const ipc::IoStatus status = client.Receive(frame, ipc::kNoDeadline, receiveError);
                 if (status == ipc::IoStatus::CLOSED) {
                     break;
                 }
@@ -565,13 +594,14 @@ int RunApplication(const Options& inputOptions, const std::string& libraryPath)
     } else if (!handshake || !protocolComplete || !sessionEnd) {
         result = 125;
     } else if (sanitizerErrors != 0) {
-        result = 2;
+        // 目标行为是"默认透传应用退出码"，由内部选项 --error-exitcode 覆盖。这里先接上
+        // --error-exitcode；把未指定时的默认值从 2 翻转为透传会改变现有 demo 的退出码，
+        // 留待报告语义改造时一并调整。
+        result = options.errorExitCode != 0 ? options.errorExitCode : 2;
     }
 
-    if (!options.toolConfig.keepTemp) {
-        std::error_code cleanupError;
-        std::filesystem::remove_all(sessionDirectory, cleanupError);
-    }
+    std::error_code cleanupError;
+    std::filesystem::remove_all(sessionDirectory, cleanupError);
     return result;
 }
 

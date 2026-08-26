@@ -135,6 +135,28 @@ bool Fail(std::string& error, const char* message)
     return false;
 }
 
+// 本实现认识的 must-understand 类型（最高位为 0 的那些）。收到不在此列的
+// must-understand 类型必须判为协议错误，而不是跳过。
+bool IsKnownMustUnderstandType(uint16_t type)
+{
+    switch (static_cast<MessageType>(type)) {
+        case MessageType::CLIENT_HELLO:
+        case MessageType::SERVER_HELLO:
+        case MessageType::CONFIGURE:
+        case MessageType::READY:
+        case MessageType::DIAGNOSTIC:
+        case MessageType::LOG:
+        case MessageType::SUMMARY:
+        case MessageType::SESSION_END:
+        case MessageType::ERROR:
+            return true;
+        case MessageType::DIAGNOSTIC_STREAM:
+            // 归 must-ignore 区间管，走不到这里。
+            return false;
+    }
+    return false;
+}
+
 } // namespace
 
 std::vector<uint8_t> EncodeFrame(const Frame& frame)
@@ -142,12 +164,23 @@ std::vector<uint8_t> EncodeFrame(const Frame& frame)
     if (frame.payload.size() > kMaxPayloadSize) {
         return {};
     }
+    // 帧头布局（偏移 / 字段 / 宽度）：
+    //   0  magic        u32     4  major  u16     6  minor u16
+    //   8  type         u16    10  flags  u16
+    //  12  length       u32   —— 整帧字节数 = kWireHeaderSize + payload_size
+    //  16  payload_size u32
+    //  20  session_id   u64    28  sequence u64    36  payload
+    //
+    // 注意 session_id 落在偏移 20、sequence 落在 28，都不在 8 字节边界上。这对线路格式
+    // 没有影响（各字段连续写入、不含 padding），但实现必须逐字段读写，不得把帧头映射成
+    // C 结构体再 memcpy。
     Encoder encoder;
     encoder.PutU32(kProtocolMagic);
     encoder.PutU16(kProtocolMajor);
     encoder.PutU16(kProtocolMinor);
     encoder.PutU16(static_cast<uint16_t>(frame.type));
     encoder.PutU16(frame.flags);
+    encoder.PutU32(static_cast<uint32_t>(kWireHeaderSize + frame.payload.size()));
     encoder.PutU32(static_cast<uint32_t>(frame.payload.size()));
     encoder.PutU64(frame.sessionId);
     encoder.PutU64(frame.sequence);
@@ -167,12 +200,13 @@ bool DecodeFrame(const uint8_t* data, size_t size, Frame& frame, std::string& er
     uint16_t minor = 0;
     uint16_t type = 0;
     uint16_t flags = 0;
+    uint32_t length = 0;
     uint32_t payloadSize = 0;
     uint64_t sessionId = 0;
     uint64_t sequence = 0;
     if (!decoder.GetU32(magic) || !decoder.GetU16(major) || !decoder.GetU16(minor) || !decoder.GetU16(type) ||
-        !decoder.GetU16(flags) || !decoder.GetU32(payloadSize) || !decoder.GetU64(sessionId) ||
-        !decoder.GetU64(sequence)) {
+        !decoder.GetU16(flags) || !decoder.GetU32(length) || !decoder.GetU32(payloadSize) ||
+        !decoder.GetU64(sessionId) || !decoder.GetU64(sequence)) {
         return Fail(error, "malformed frame header");
     }
     if (magic != kProtocolMagic) {
@@ -184,10 +218,27 @@ bool DecodeFrame(const uint8_t* data, size_t size, Frame& frame, std::string& er
     if (minor > kProtocolMinor) {
         return Fail(error, "unsupported protocol minor version");
     }
-    if (payloadSize > kMaxPayloadSize || size != kWireHeaderSize + payloadSize) {
+    // length 与 payload_size 表达的是同一信息（相差常数 kWireHeaderSize），任何一侧编码
+    // 出错都会让它们矛盾，因此必须强制交叉校验。三条都在分配 payload 缓冲区之前执行。
+    if (payloadSize > kMaxPayloadSize) {
         return Fail(error, "invalid frame payload size");
     }
-    if (type < static_cast<uint16_t>(MessageType::CLIENT_HELLO) || type > static_cast<uint16_t>(MessageType::ERROR)) {
+    if (length != kWireHeaderSize + payloadSize) {
+        return Fail(error, "frame length does not match payload size");
+    }
+    // SOCK_SEQPACKET 保留消息边界，length 必然等于收到的数据报长度；不等说明对端实现
+    // 有 bug，或者这根本不是一个完整的帧。
+    if (size != length) {
+        return Fail(error, "frame length does not match the received datagram");
+    }
+    // bit 3-7 是 must-understand 的保留位，非零即协议错误。bit 8-15 是 must-ignore 的
+    // 保留位，这里不做任何校验，原样交给上层忽略。
+    if ((flags & kFlagsReservedMustUnderstand) != 0) {
+        return Fail(error, "reserved must-understand flag bits are set");
+    }
+    // 未知类型的处理取决于最高位：must-understand 直接拒绝，must-ignore 照常解出来，
+    // 由上层跳过。这样 minor 版本才可能在不破坏旧实现的前提下新增消息。
+    if (!IsMustIgnoreType(type) && !IsKnownMustUnderstandType(type)) {
         return Fail(error, "unknown message type");
     }
     frame.type = static_cast<MessageType>(type);
@@ -200,20 +251,18 @@ bool DecodeFrame(const uint8_t* data, size_t size, Frame& frame, std::string& er
 
 std::vector<uint8_t> EncodeHello(const HelloPayload& hello)
 {
+    // 固定 8 字节：pid u32 + uid u32。
     Encoder encoder;
     encoder.PutU32(hello.pid);
     encoder.PutU32(hello.uid);
-    if (!encoder.PutString(hello.nonce)) {
-        return {};
-    }
     return encoder.Take();
 }
 
 bool DecodeHello(const std::vector<uint8_t>& payload, HelloPayload& hello, std::string& error)
 {
     Decoder decoder(payload.data(), payload.size());
-    if (!decoder.GetU32(hello.pid) || !decoder.GetU32(hello.uid) || !decoder.GetString(hello.nonce, 128) ||
-        !decoder.Done()) {
+    // Done() 保证解码结束位置恰好等于 payload_size，不允许尾随字节。
+    if (!decoder.GetU32(hello.pid) || !decoder.GetU32(hello.uid) || !decoder.Done()) {
         return Fail(error, "malformed hello payload");
     }
     return true;
@@ -312,8 +361,60 @@ const char* MessageTypeName(MessageType type)
             return "SESSION_END";
         case MessageType::ERROR:
             return "ERROR";
+        case MessageType::DIAGNOSTIC_STREAM:
+            return "DIAGNOSTIC";
     }
     return "UNKNOWN";
+}
+
+// ---------------------------------------------------------------------------
+// 选项注册表
+// ---------------------------------------------------------------------------
+
+const char* ToolName(ToolId id)
+{
+    switch (id) {
+        case ToolId::kMemcheck:
+            return "memcheck";
+        case ToolId::kSynccheck:
+            return "synccheck";
+    }
+    return "unknown";
+}
+
+bool LookupTool(const std::string& name, ToolId& id)
+{
+    if (name == "memcheck") {
+        id = ToolId::kMemcheck;
+        return true;
+    }
+    if (name == "synccheck") {
+        id = ToolId::kSynccheck;
+        return true;
+    }
+    return false;
+}
+
+const std::vector<OptionRegistryEntry>& OptionRegistry()
+{
+    // 当前全部是"出现即为真"的布尔开关：value_size=1 且只接受 0x01；
+    // 缺省时不发送 OptionValue，由 Server 取注册表默认值。
+    static const std::vector<OptionRegistryEntry> registry = {
+        {"check-cache-control", OptionId::kMemcheckCheckCacheControl, ToolId::kMemcheck, 0, 1, 0x01},
+        {"missing-barrier-init-is-fatal", OptionId::kSynccheckMissingBarrierInitIsFatal, ToolId::kSynccheck, 0, 1,
+         0x01},
+    };
+    return registry;
+}
+
+const OptionRegistryEntry* LookupOption(const std::string& name)
+{
+    for (const auto& entry : OptionRegistry()) {
+        if (name == entry.name) {
+            return &entry;
+        }
+    }
+    return nullptr;
 }
 
 } // namespace npu::sanitizer::ipc

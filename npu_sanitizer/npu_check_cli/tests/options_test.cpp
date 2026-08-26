@@ -74,87 +74,194 @@ TEST(OptionsTest, AcceptsHelpWithoutApplication)
     EXPECT_TRUE(result.options.application.empty());
 }
 
-TEST(OptionsTest, ParsesMemcheckInvocation)
+// 把 Options::tools 压成 (toolId, [optionId...]) 便于断言顺序与去重。
+std::vector<std::pair<uint16_t, std::vector<uint16_t>>> ToolShape(const Options& options)
 {
-    const auto result = Parse({
-        "npu_check",   "--tool",
-        "memcheck",    "--strict",
-        "--keep-temp", "--log-file",
-        "report.log",  "--work-dir",
-        "work",        "--probe-cache-dir",
-        "cache",       "--compile-option",
-        "-g",          "--compile-option",
-        "-O2",         "--handshake-timeout-ms",
-        "250",         "--",
-        "./sample",    "--size",
-        "64",
-    });
-
-    ASSERT_TRUE(result.ok) << result.error;
-    EXPECT_EQ(result.options.toolConfig.toolName, "memcheck");
-    EXPECT_TRUE(result.options.toolConfig.strict);
-    EXPECT_TRUE(result.options.toolConfig.keepTemp);
-    EXPECT_EQ(result.options.handshakeTimeoutMs, 250);
-    EXPECT_TRUE(std::filesystem::path(result.options.toolConfig.logFile).is_absolute());
-    EXPECT_TRUE(std::filesystem::path(result.options.toolConfig.workDir).is_absolute());
-    EXPECT_TRUE(std::filesystem::path(result.options.toolConfig.probeCacheDir).is_absolute());
-    EXPECT_EQ(result.options.toolConfig.compileOptions, (std::vector<std::string>{"-g", "-O2"}));
-    EXPECT_EQ(result.options.application, (std::vector<std::string>{"./sample", "--size", "64"}));
+    std::vector<std::pair<uint16_t, std::vector<uint16_t>>> shape;
+    for (const auto& tool : options.tools) {
+        std::vector<uint16_t> optionIds;
+        for (const auto& option : tool.options) {
+            optionIds.push_back(static_cast<uint16_t>(option.optionId));
+        }
+        shape.emplace_back(static_cast<uint16_t>(tool.toolId), std::move(optionIds));
+    }
+    return shape;
 }
 
-TEST(OptionsTest, AppliesLastBooleanOption)
+constexpr uint16_t kMemcheck = static_cast<uint16_t>(ipc::ToolId::kMemcheck);
+constexpr uint16_t kSynccheck = static_cast<uint16_t>(ipc::ToolId::kSynccheck);
+constexpr uint16_t kCheckCacheControl = static_cast<uint16_t>(ipc::OptionId::kMemcheckCheckCacheControl);
+constexpr uint16_t kMissingBarrierInitIsFatal =
+    static_cast<uint16_t>(ipc::OptionId::kSynccheckMissingBarrierInitIsFatal);
+
+// 完全没有 --tool 时工具集合取默认值 {memcheck}。
+TEST(OptionsTest, DefaultsToMemcheckWhenNoToolGiven)
 {
-    const auto result = Parse({
-        "npu_check",
-        "--tool",
-        "memcheck",
-        "--strict",
-        "--no-strict",
-        "--keep-temp",
-        "--no-keep-temp",
-        "--",
-        "./sample",
-    });
+    const auto result = Parse({"npu_check", "./sample"});
 
     ASSERT_TRUE(result.ok) << result.error;
-    EXPECT_FALSE(result.options.toolConfig.strict);
-    EXPECT_FALSE(result.options.toolConfig.keepTemp);
+    EXPECT_EQ(ToolShape(result.options), (decltype(ToolShape(result.options)){{kMemcheck, {}}}));
+    EXPECT_EQ(result.options.application, (std::vector<std::string>{"./sample"}));
+}
+
+// "--" 是可选的：带与不带解析为同一 Options。
+TEST(OptionsTest, SeparatorIsOptional)
+{
+    const auto withSeparator = Parse({"npu_check", "--tool", "memcheck", "--", "./sample", "--size", "64"});
+    const auto withoutSeparator = Parse({"npu_check", "--tool", "memcheck", "./sample", "--size", "64"});
+
+    ASSERT_TRUE(withSeparator.ok) << withSeparator.error;
+    ASSERT_TRUE(withoutSeparator.ok) << withoutSeparator.error;
+    EXPECT_EQ(withSeparator.options.application, withoutSeparator.options.application);
+    EXPECT_EQ(ToolShape(withSeparator.options), ToolShape(withoutSeparator.options));
+    // app_name 之后的参数不再由 CLI 解析。
+    EXPECT_EQ(withoutSeparator.options.application, (std::vector<std::string>{"./sample", "--size", "64"}));
+}
+
+// 只要出现过任意一个 --tool，默认值即不生效，不与显式指定的工具做并集。
+TEST(OptionsTest, ExplicitToolSuppressesDefault)
+{
+    const auto result = Parse({"npu_check", "--tool", "synccheck", "./sample"});
+
+    ASSERT_TRUE(result.ok) << result.error;
+    EXPECT_EQ(ToolShape(result.options), (decltype(ToolShape(result.options)){{kSynccheck, {}}}));
+}
+
+TEST(OptionsTest, RepeatedToolIsIdempotent)
+{
+    const auto result = Parse({"npu_check", "--tool", "memcheck", "--tool", "memcheck", "./sample"});
+
+    ASSERT_TRUE(result.ok) << result.error;
+    EXPECT_EQ(ToolShape(result.options), (decltype(ToolShape(result.options)){{kMemcheck, {}}}));
+}
+
+// 规范化编码唯一：tools 按 toolId 升序，与命令行出现顺序无关。
+TEST(OptionsTest, ToolsAreSortedByToolId)
+{
+    const auto reversed = Parse({"npu_check", "--tool", "synccheck", "--tool", "memcheck", "./sample"});
+    const auto ordered = Parse({"npu_check", "--tool", "memcheck", "--tool", "synccheck", "./sample"});
+
+    ASSERT_TRUE(reversed.ok) << reversed.error;
+    ASSERT_TRUE(ordered.ok) << ordered.error;
+    EXPECT_EQ(ToolShape(reversed.options), (decltype(ToolShape(reversed.options)){{kMemcheck, {}}, {kSynccheck, {}}}));
+    EXPECT_EQ(ToolShape(reversed.options), ToolShape(ordered.options));
+}
+
+// 子选项归属由注册表决定，可出现在所属 --tool 之前或之后。
+TEST(OptionsTest, SuboptionOwnershipIsIndependentOfPosition)
+{
+    const auto before = Parse({"npu_check", "--check-cache-control", "--tool", "memcheck", "./sample"});
+    const auto after = Parse({"npu_check", "--tool", "memcheck", "--check-cache-control", "./sample"});
+
+    ASSERT_TRUE(before.ok) << before.error;
+    ASSERT_TRUE(after.ok) << after.error;
+    EXPECT_EQ(ToolShape(before.options), (decltype(ToolShape(before.options)){{kMemcheck, {kCheckCacheControl}}}));
+    EXPECT_EQ(ToolShape(before.options), ToolShape(after.options));
+    ASSERT_EQ(before.options.tools.size(), 1U);
+    ASSERT_EQ(before.options.tools.front().options.size(), 1U);
+    // 布尔类子选项"出现即为真"，value_size=1 且只取 0x01。
+    EXPECT_EQ(before.options.tools.front().options.front().value, (std::vector<uint8_t>{0x01}));
+}
+
+// 依赖校验在默认值生效之后进行：默认集合含 memcheck，故该子选项合法。
+TEST(OptionsTest, SuboptionOfDefaultToolIsAccepted)
+{
+    const auto result = Parse({"npu_check", "--check-cache-control", "./sample"});
+
+    ASSERT_TRUE(result.ok) << result.error;
+    EXPECT_EQ(ToolShape(result.options), (decltype(ToolShape(result.options)){{kMemcheck, {kCheckCacheControl}}}));
+}
+
+TEST(OptionsTest, RejectsSuboptionWhoseToolIsNotEnabled)
+{
+    // 默认集合不含 synccheck。
+    const auto defaultSet = Parse({"npu_check", "--missing-barrier-init-is-fatal", "./sample"});
+    EXPECT_FALSE(defaultSet.ok);
+    EXPECT_EQ(defaultSet.error, "--missing-barrier-init-is-fatal belongs to tool 'synccheck', which is not enabled");
+
+    // 显式指定 synccheck 后默认值不生效，memcheck 未启用。
+    const auto explicitSet = Parse({"npu_check", "--tool", "synccheck", "--check-cache-control", "./sample"});
+    EXPECT_FALSE(explicitSet.ok);
+    EXPECT_EQ(explicitSet.error, "--check-cache-control belongs to tool 'memcheck', which is not enabled");
+
+    // 同时启用两个工具时两个子选项都合法，且各自归属正确。
+    const auto both = Parse(
+        {"npu_check", "--tool", "memcheck", "--tool", "synccheck", "--check-cache-control",
+         "--missing-barrier-init-is-fatal", "./sample"});
+    ASSERT_TRUE(both.ok) << both.error;
+    EXPECT_EQ(
+        ToolShape(both.options), (decltype(ToolShape(both.options)){
+                                     {kMemcheck, {kCheckCacheControl}}, {kSynccheck, {kMissingBarrierInitIsFatal}}}));
 }
 
 TEST(OptionsTest, RejectsInvalidInvocation)
 {
     const auto missingApplication = Parse({"npu_check", "--tool", "memcheck"});
     EXPECT_FALSE(missingApplication.ok);
-    EXPECT_EQ(missingApplication.error, "expected -- followed by an application command");
+    EXPECT_EQ(missingApplication.error, "expected an application command");
 
-    const auto unsupportedTool = Parse({"npu_check", "--tool", "trace", "--", "./sample"});
-    EXPECT_FALSE(unsupportedTool.ok);
-    EXPECT_EQ(unsupportedTool.error, "unsupported tool 'trace'; current implementation supports memcheck");
+    const auto danglingSeparator = Parse({"npu_check", "--tool", "memcheck", "--"});
+    EXPECT_FALSE(danglingSeparator.ok);
+    EXPECT_EQ(danglingSeparator.error, "expected an application command");
 
-    const auto invalidTimeout =
-        Parse({"npu_check", "--tool", "memcheck", "--handshake-timeout-ms", "99", "--", "./sample"});
-    EXPECT_FALSE(invalidTimeout.ok);
-    EXPECT_EQ(invalidTimeout.error, "--handshake-timeout-ms must be in [100, 120000]");
+    const auto unknownTool = Parse({"npu_check", "--tool", "trace", "--", "./sample"});
+    EXPECT_FALSE(unknownTool.ok);
+    EXPECT_EQ(unknownTool.error, "unknown tool 'trace'; supported tools are memcheck and synccheck");
 
-    const auto unknownOption = Parse({"npu_check", "--tool", "memcheck", "--unknown", "--", "./sample"});
+    const auto missingValue = Parse({"npu_check", "--tool"});
+    EXPECT_FALSE(missingValue.ok);
+    EXPECT_EQ(missingValue.error, "missing value for --tool");
+
+    const auto unknownOption = Parse({"npu_check", "--unknown", "--", "./sample"});
     EXPECT_FALSE(unknownOption.ok);
     EXPECT_EQ(unknownOption.error, "unknown option: --unknown");
+
+    const auto shortUnknown = Parse({"npu_check", "-x", "--", "./sample"});
+    EXPECT_FALSE(shortUnknown.ok);
+    EXPECT_EQ(shortUnknown.error, "unknown option: -x");
+
+    const auto bareDash = Parse({"npu_check", "-", "--", "./sample"});
+    EXPECT_FALSE(bareDash.ok);
+    EXPECT_EQ(bareDash.error, "unknown option: -");
 }
 
-TEST(OptionsTest, RejectsTooManyCompileOptions)
+// 内部验证选项与对外选项走同一套解析和校验流程，值域校验在解析阶段完成。
+TEST(OptionsTest, ValidatesInternalOptionRanges)
 {
-    std::vector<std::string> arguments{"npu_check", "--tool", "memcheck"};
-    for (size_t index = 0; index <= ipc::kMaxCompileOptions; ++index) {
-        arguments.push_back("--compile-option");
-        arguments.push_back("-DTEST=" + std::to_string(index));
-    }
-    arguments.push_back("--");
-    arguments.push_back("./sample");
+    EXPECT_FALSE(Parse({"npu_check", "--handshake-timeout-ms", "99", "./sample"}).ok);
+    EXPECT_FALSE(Parse({"npu_check", "--handshake-timeout-ms", "120001", "./sample"}).ok);
+    EXPECT_FALSE(Parse({"npu_check", "--handshake-timeout-ms", "abc", "./sample"}).ok);
 
-    const auto result = Parse(std::move(arguments));
+    const auto low = Parse({"npu_check", "--handshake-timeout-ms", "100", "./sample"});
+    ASSERT_TRUE(low.ok) << low.error;
+    EXPECT_EQ(low.options.handshakeTimeoutMs, 100);
 
-    EXPECT_FALSE(result.ok);
-    EXPECT_EQ(result.error, "too many --compile-option values");
+    const auto high = Parse({"npu_check", "--handshake-timeout-ms", "120000", "./sample"});
+    ASSERT_TRUE(high.ok) << high.error;
+    EXPECT_EQ(high.options.handshakeTimeoutMs, 120000);
+
+    EXPECT_FALSE(Parse({"npu_check", "--error-exitcode", "0", "./sample"}).ok);
+    EXPECT_FALSE(Parse({"npu_check", "--error-exitcode", "256", "./sample"}).ok);
+
+    const auto exitLow = Parse({"npu_check", "--error-exitcode", "1", "./sample"});
+    ASSERT_TRUE(exitLow.ok) << exitLow.error;
+    EXPECT_EQ(exitLow.options.errorExitCode, 1);
+
+    const auto exitHigh = Parse({"npu_check", "--error-exitcode", "255", "./sample"});
+    ASSERT_TRUE(exitHigh.ok) << exitHigh.error;
+    EXPECT_EQ(exitHigh.options.errorExitCode, 255);
+
+    // 未指定时为 0，表示不覆盖应用退出码。
+    EXPECT_EQ(Parse({"npu_check", "./sample"}).options.errorExitCode, 0);
+}
+
+TEST(OptionsTest, NormalizesLogFileToAbsolutePath)
+{
+    const auto result = Parse({"npu_check", "--log-file", "report.log", "./sample"});
+
+    ASSERT_TRUE(result.ok) << result.error;
+    EXPECT_TRUE(std::filesystem::path(result.options.logFile).is_absolute());
+    EXPECT_TRUE(Parse({"npu_check", "./sample"}).options.logFile.empty());
 }
 
 TEST(OptionsTest, ResolvesExplicitRegularFile)
@@ -175,15 +282,24 @@ TEST(OptionsTest, RejectsMissingLibrary)
     std::string error;
 
     EXPECT_FALSE(ResolveLibraryPath("/tmp/npu_check_missing_library.so", resolved, error));
-    EXPECT_EQ(error, "cannot locate libnpu_check.so; use --library or NPU_CHECK_LIBRARY_PATH");
+    EXPECT_EQ(error, "cannot locate libnpu_check.so; set NPU_CHECK_LIBRARY_PATH");
 }
 
-TEST(OptionsTest, DocumentsRequiredArguments)
+// --help 输出只含对外选项，内部验证选项不得外泄。
+TEST(OptionsTest, UsageListsOnlyPublicOptions)
 {
     const std::string usage = Usage();
 
-    EXPECT_NE(usage.find("Usage: npu_check --tool memcheck"), std::string::npos);
-    EXPECT_NE(usage.find("--handshake-timeout-ms N"), std::string::npos);
+    EXPECT_NE(usage.find("--tool"), std::string::npos);
+    EXPECT_NE(usage.find("--log-file"), std::string::npos);
+    EXPECT_NE(usage.find("--help"), std::string::npos);
+    EXPECT_NE(usage.find("-h"), std::string::npos);
+
+    EXPECT_EQ(usage.find("--handshake-timeout-ms"), std::string::npos);
+    EXPECT_EQ(usage.find("--error-exitcode"), std::string::npos);
+    // 工具子选项尚未对外支持，同样不出现在帮助里。
+    EXPECT_EQ(usage.find("--check-cache-control"), std::string::npos);
+    EXPECT_EQ(usage.find("--missing-barrier-init-is-fatal"), std::string::npos);
 }
 
 } // namespace

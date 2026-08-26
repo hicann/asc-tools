@@ -10,12 +10,15 @@
 
 #include "options.h"
 
+#include <algorithm>
 #include <array>
 #include <cerrno>
 #include <climits>
 #include <cstdlib>
 #include <filesystem>
+#include <map>
 #include <optional>
+#include <set>
 #include <unistd.h>
 
 namespace npu::sanitizer::cli {
@@ -31,12 +34,14 @@ bool NeedValue(int argc, char** argv, int& index, std::string& value, std::strin
     return true;
 }
 
-std::optional<int> ParseTimeout(const std::string& text)
+// 解析十进制整数并做闭区间值域校验。内部验证选项与对外选项走同一套流程，
+// 值域校验同样在解析阶段完成，越界即报用法错误，不留到运行期。
+std::optional<int> ParseBoundedInt(const std::string& text, long low, long high)
 {
     char* end = nullptr;
     errno = 0;
     const long value = std::strtol(text.c_str(), &end, 10);
-    if (errno != 0 || end == text.c_str() || *end != '\0' || value < 100 || value > 120000) {
+    if (errno != 0 || end == text.c_str() || *end != '\0' || value < low || value > high) {
         return std::nullopt;
     }
     return static_cast<int>(value);
@@ -64,90 +69,127 @@ bool ParseOptions(int argc, char** argv, Options& options, std::string& error)
 {
     options = {};
 
-    int separator = -1;
+    // --tool 显式指定的集合。std::set 天然去重（重复指定同一工具即幂等）且按 toolId
+    // 升序，正好是下发前要求的规范化顺序，不必再单独排序去重。
+    std::set<ipc::ToolId> explicitTools;
+    // 已出现的工具子选项。std::map 按 optionId 升序，同样直接满足规范化要求；
+    // 同一子选项重复出现按幂等处理。
+    std::map<ipc::OptionId, const ipc::OptionRegistryEntry*> seenOptions;
+    int applicationStart = -1;
+
     for (int i = 1; i < argc; ++i) {
         const std::string argument = argv[i];
         if (argument == "--") {
-            separator = i;
+            applicationStart = i + 1;
             break;
         }
         if (argument == "--help" || argument == "-h") {
             options.showHelp = true;
             return true;
         }
+        if (argument.rfind('-', 0) != 0) {
+            // 第一个不以 '-' 开头的参数即应用区域起点，其后参数一律原样交给被测程序，
+            // 不再由 CLI 解析。因此 "--" 是可选的：写与不写解析出的 Options 完全相同。
+            applicationStart = i;
+            break;
+        }
+
         std::string value;
         if (argument == "--tool") {
             if (!NeedValue(argc, argv, i, value, error)) {
                 return false;
             }
-            options.toolConfig.toolName = value;
-        } else if (argument == "--library") {
+            ipc::ToolId toolId{};
+            if (!ipc::LookupTool(value, toolId)) {
+                error = "unknown tool '" + value + "'; supported tools are memcheck and synccheck";
+                return false;
+            }
+            explicitTools.insert(toolId);
+            continue;
+        }
+        if (argument == "--log-file") {
             if (!NeedValue(argc, argv, i, value, error)) {
                 return false;
             }
-            options.libraryPath = value;
-        } else if (argument == "--log-file") {
+            options.logFile = AbsolutePath(value);
+            continue;
+        }
+        if (argument == "--handshake-timeout-ms") {
             if (!NeedValue(argc, argv, i, value, error)) {
                 return false;
             }
-            options.toolConfig.logFile = AbsolutePath(value);
-        } else if (argument == "--work-dir") {
-            if (!NeedValue(argc, argv, i, value, error)) {
-                return false;
-            }
-            options.toolConfig.workDir = AbsolutePath(value);
-        } else if (argument == "--probe-cache-dir") {
-            if (!NeedValue(argc, argv, i, value, error)) {
-                return false;
-            }
-            options.toolConfig.probeCacheDir = AbsolutePath(value);
-        } else if (argument == "--compile-option") {
-            if (!NeedValue(argc, argv, i, value, error)) {
-                return false;
-            }
-            options.toolConfig.compileOptions.push_back(value);
-        } else if (argument == "--handshake-timeout-ms") {
-            if (!NeedValue(argc, argv, i, value, error)) {
-                return false;
-            }
-            const auto timeout = ParseTimeout(value);
-            if (!timeout) {
+            const auto parsed = ParseBoundedInt(value, 100, 120000);
+            if (!parsed) {
                 error = "--handshake-timeout-ms must be in [100, 120000]";
                 return false;
             }
-            options.handshakeTimeoutMs = *timeout;
-        } else if (argument == "--strict") {
-            options.toolConfig.strict = true;
-        } else if (argument == "--no-strict") {
-            options.toolConfig.strict = false;
-        } else if (argument == "--keep-temp") {
-            options.toolConfig.keepTemp = true;
-        } else if (argument == "--no-keep-temp") {
-            options.toolConfig.keepTemp = false;
-        } else {
-            error = "unknown option: " + argument;
+            options.handshakeTimeoutMs = *parsed;
+            continue;
+        }
+        if (argument == "--error-exitcode") {
+            if (!NeedValue(argc, argv, i, value, error)) {
+                return false;
+            }
+            const auto parsed = ParseBoundedInt(value, 1, 255);
+            if (!parsed) {
+                error = "--error-exitcode must be in [1, 255]";
+                return false;
+            }
+            options.errorExitCode = *parsed;
+            continue;
+        }
+        // 工具子选项：名称在 CLI 中全局唯一，归属由共享注册表决定，因此可以出现在
+        // 所属 --tool 之前或之后，这里不依赖"当前工具"状态，也不按参数相邻关系推断。
+        if (argument.rfind("--", 0) == 0 && argument.size() > 2) {
+            if (const auto* entry = ipc::LookupOption(argument.substr(2)); entry != nullptr) {
+                seenOptions[entry->optionId] = entry;
+                continue;
+            }
+        }
+        error = "unknown option: " + argument;
+        return false;
+    }
+
+    // 完全没有出现 --tool 时工具集合取默认值 {memcheck}；只要出现过任意一个 --tool，
+    // 默认值即不生效，不与显式指定的工具做并集 —— 否则用户没法把默认工具关掉。
+    std::set<ipc::ToolId> enabledTools = explicitTools;
+    if (enabledTools.empty()) {
+        enabledTools.insert(ipc::ToolId::kMemcheck);
+    }
+
+    // 子选项的依赖校验必须在默认值生效之后进行：否则只写 --check-cache-control 而不写
+    // --tool memcheck 时，会因为此刻工具集合还是空的而被误判为"所属工具未启用"。
+    for (const auto& [optionId, entry] : seenOptions) {
+        (void)optionId;
+        if (enabledTools.count(entry->toolId) == 0) {
+            error = std::string("--") + entry->name + " belongs to tool '" + ipc::ToolName(entry->toolId) +
+                    "', which is not enabled";
             return false;
         }
     }
 
-    if (separator < 0 || separator + 1 >= argc) {
-        error = "expected -- followed by an application command";
+    // 规范化编码唯一：tools 按 toolId 升序，每个工具内 options 按 optionId 升序，均不重复。
+    for (const ipc::ToolId toolId : enabledTools) {
+        ipc::ToolRequest request;
+        request.toolId = toolId;
+        for (const auto& [optionId, entry] : seenOptions) {
+            if (entry->toolId != toolId) {
+                continue;
+            }
+            ipc::OptionValue optionValue;
+            optionValue.optionId = optionId;
+            // 布尔类子选项是"出现即为真"的开关，缺省时不发送 OptionValue。
+            optionValue.value.assign(entry->valueSize, entry->presentValue);
+            request.options.push_back(std::move(optionValue));
+        }
+        options.tools.push_back(std::move(request));
+    }
+
+    if (applicationStart < 0 || applicationStart >= argc) {
+        error = "expected an application command";
         return false;
     }
-    if (options.toolConfig.toolName.empty()) {
-        error = "--tool is required";
-        return false;
-    }
-    if (options.toolConfig.toolName != "memcheck" && options.toolConfig.toolName != "synccheck") {
-        error = "unsupported tool '" + options.toolConfig.toolName +
-                "'; current implementation supports memcheck and synccheck";
-        return false;
-    }
-    if (options.toolConfig.compileOptions.size() > ipc::kMaxCompileOptions) {
-        error = "too many --compile-option values";
-        return false;
-    }
-    for (int i = separator + 1; i < argc; ++i) {
+    for (int i = applicationStart; i < argc; ++i) {
         options.application.emplace_back(argv[i]);
     }
     return true;
@@ -181,22 +223,25 @@ bool ResolveLibraryPath(const std::string& requested, std::string& resolved, std
             return true;
         }
     }
-    error = "cannot locate libnpu_check.so; use --library or NPU_CHECK_LIBRARY_PATH";
+    error = "cannot locate libnpu_check.so; set NPU_CHECK_LIBRARY_PATH";
     return false;
 }
 
 std::string Usage()
 {
-    return "Usage: npu_check --tool {memcheck|synccheck} [options] -- <application> [args...]\n"
+    // 只列对外命令行契约：--tool、--log-file、--help/-h 以及 -- 边界规则。
+    // 内部验证选项（--handshake-timeout-ms、--error-exitcode）不对外承诺兼容性，
+    // 不得出现在这里。
+    return "Usage: npu_check [--tool <name>]... [--log-file <path>] [--] <application> [args...]\n"
            "Options:\n"
-           "  --library PATH              libnpu_check.so path\n"
-           "  --log-file PATH             combined npu_check and application log\n"
-           "  --work-dir PATH             sanitizer_api work directory\n"
-           "  --probe-cache-dir PATH      patched probe cache directory\n"
-           "  --compile-option OPTION     repeatable user compilation metadata\n"
-           "  --strict | --no-strict      treat unknown GM addresses as errors or warnings\n"
-           "  --keep-temp | --no-keep-temp preserve or remove the private session directory\n"
-           "  --handshake-timeout-ms N    injection handshake timeout, 100..120000\n";
+           "  --tool <memcheck|synccheck>  enable a checker; repeatable and idempotent.\n"
+           "                               Defaults to memcheck when no --tool is given.\n"
+           "  --log-file <path>            directory or file receiving the report and\n"
+           "                               the application output\n"
+           "  -h, --help                   show this help and exit\n"
+           "\n"
+           "Pass -- before <application> when the application path or its arguments start\n"
+           "with '-'.\n";
 }
 
 } // namespace npu::sanitizer::cli
