@@ -202,4 +202,26 @@ bool CollectDevice0Info(
     return true;
 }
 
+bool CollectAiCoreCounts(
+    HardwareDeviceApi& api, std::uint32_t* aiCubeCount, std::uint32_t* aiVectorCount, DiagnosticSink* diagnostics)
+{
+    if (aiCubeCount == nullptr || aiVectorCount == nullptr) {
+        Diagnose(diagnostics, "AI Core count output is null");
+        return false;
+    }
+
+    std::uint32_t cubeCount = 0;
+    std::uint32_t vectorCount = 0;
+    const bool readCube =
+        ReadCountAttribute(api, kDeviceAttributeCubeCoreCount, "Cube Core count", &cubeCount, diagnostics);
+    const bool readVector =
+        ReadCountAttribute(api, kDeviceAttributeVectorCoreCount, "Vector Core count", &vectorCount, diagnostics);
+    if (!readCube || !readVector) {
+        return false;
+    }
+    *aiCubeCount = cubeCount;
+    *aiVectorCount = vectorCount;
+    return true;
+}
+
 } // namespace npu_compute

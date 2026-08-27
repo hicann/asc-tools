@@ -224,6 +224,31 @@ bool TestCompleteMapping()
     return true;
 }
 
+bool TestCollectAiCoreCountsOnlyReadsCountAttributes()
+{
+    FakeHardwareDeviceApi api;
+    std::uint32_t cubeCount = 0;
+    std::uint32_t vectorCount = 0;
+    std::vector<std::string> diagnostics;
+    npu_compute::DiagnosticSink sink = [&diagnostics](std::string_view value) { diagnostics.emplace_back(value); };
+
+    CHECK(npu_compute::CollectAiCoreCounts(api, &cubeCount, &vectorCount, &sink));
+    CHECK(cubeCount == 36);
+    CHECK(vectorCount == 72);
+    const std::vector<std::int32_t> expectedAttributes = {
+        npu_compute::kDeviceAttributeCubeCoreCount,
+        npu_compute::kDeviceAttributeVectorCoreCount,
+    };
+    CHECK(api.deviceAttributes == expectedAttributes);
+    const std::vector<std::int32_t> expectedDeviceIds = {0, 0};
+    CHECK(api.deviceIds == expectedDeviceIds);
+    CHECK(api.deviceCountCalls == 0);
+    CHECK(api.socNameCalls == 0);
+    CHECK(api.platformTypes.empty());
+    CHECK(diagnostics.empty());
+    return true;
+}
+
 bool TestPartialFailuresAndInvalidValues()
 {
     FakeHardwareDeviceApi api;
@@ -314,7 +339,8 @@ bool TestInvalidDeviceCountAndOutputPointers()
 
 int main()
 {
-    if (!TestCompleteMapping() || !TestPartialFailuresAndInvalidValues() || !TestNoVisibleDeviceSkipsDeviceQueries() ||
+    if (!TestCompleteMapping() || !TestCollectAiCoreCountsOnlyReadsCountAttributes() ||
+        !TestPartialFailuresAndInvalidValues() || !TestNoVisibleDeviceSkipsDeviceQueries() ||
         !TestInvalidDeviceCountAndOutputPointers()) {
         return 1;
     }

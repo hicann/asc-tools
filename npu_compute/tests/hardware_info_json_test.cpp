@@ -69,6 +69,20 @@ int main()
     CHECK(error.empty());
     CHECK(jsonl == expected);
 
+    npu_compute::HardwareInfoFrequencies frequencies;
+    CHECK(npu_compute::ParseHardwareInfoFrequenciesJsonl(jsonl, &frequencies, &error));
+    CHECK(error.empty());
+    CHECK(frequencies.aiCubeCount == 36);
+    CHECK(frequencies.aiVectorCount == 72);
+    CHECK(frequencies.aiCubeFrequencyMhz == 1800);
+    CHECK(frequencies.aiVectorFrequencyMhz == 1800);
+
+    CHECK(!npu_compute::ParseHardwareInfoFrequenciesJsonl(
+        "{\"category\":\"AI Core Information\",\"ai cube frequency(MHZ)\":0,"
+        "\"ai vector frequency(MHZ)\":1800}\n",
+        &frequencies, &error));
+    CHECK(!error.empty());
+
     npu_compute::HardwareInfoSnapshot escaped;
     escaped.device.chipInfo = "Ascend \"X\"\\line\nnext\t";
     escaped.device.archInfo = std::string("35\x01", 3);

@@ -9,6 +9,7 @@
  */
 #include "hardware_info_json.h"
 
+#include <charconv>
 #include <cmath>
 #include <iomanip>
 #include <locale>
@@ -96,6 +97,36 @@ std::string EscapeJson(std::string_view value)
     return escaped;
 }
 
+bool ParsePositiveUintField(std::string_view line, std::string_view field, std::uint32_t* value)
+{
+    if (value == nullptr) {
+        return false;
+    }
+    const std::string key = "\"" + std::string(field) + "\":";
+    const std::size_t keyPosition = line.find(key);
+    if (keyPosition == std::string_view::npos) {
+        return false;
+    }
+    std::size_t begin = keyPosition + key.size();
+    while (begin < line.size() && line[begin] == ' ') {
+        ++begin;
+    }
+    std::size_t end = begin;
+    while (end < line.size() && line[end] >= '0' && line[end] <= '9') {
+        ++end;
+    }
+    if (end == begin) {
+        return false;
+    }
+    std::uint32_t parsed = 0;
+    const auto result = std::from_chars(line.data() + begin, line.data() + end, parsed);
+    if (result.ec != std::errc{} || result.ptr != line.data() + end || parsed == 0) {
+        return false;
+    }
+    *value = parsed;
+    return true;
+}
+
 } // namespace
 
 bool SerializeHardwareInfoJsonl(const HardwareInfoSnapshot& snapshot, std::string* jsonl, std::string* error)
@@ -139,6 +170,43 @@ bool SerializeHardwareInfoJsonl(const HardwareInfoSnapshot& snapshot, std::strin
 
     *jsonl = output.str();
     return true;
+}
+
+bool ParseHardwareInfoFrequenciesJsonl(std::string_view jsonl, HardwareInfoFrequencies* frequencies, std::string* error)
+{
+    if (error != nullptr) {
+        error->clear();
+    }
+    if (frequencies == nullptr) {
+        SetError("HardwareInfo frequencies output is null", error);
+        return false;
+    }
+    *frequencies = {};
+
+    std::size_t begin = 0;
+    while (begin <= jsonl.size()) {
+        const std::size_t end = jsonl.find('\n', begin);
+        const std::string_view line =
+            end == std::string_view::npos ? jsonl.substr(begin) : jsonl.substr(begin, end - begin);
+        if (line.find("\"category\":\"AI Core Information\"") != std::string_view::npos) {
+            if (!ParsePositiveUintField(line, "ai cube count", &frequencies->aiCubeCount) ||
+                !ParsePositiveUintField(line, "ai vector count", &frequencies->aiVectorCount) ||
+                !ParsePositiveUintField(line, "ai cube frequency(MHZ)", &frequencies->aiCubeFrequencyMhz) ||
+                !ParsePositiveUintField(line, "ai vector frequency(MHZ)", &frequencies->aiVectorFrequencyMhz)) {
+                *frequencies = {};
+                SetError("HardwareInfo AI Core counts or frequencies are missing or invalid", error);
+                return false;
+            }
+            return true;
+        }
+        if (end == std::string_view::npos) {
+            break;
+        }
+        begin = end + 1;
+    }
+
+    SetError("HardwareInfo AI Core Information row is missing", error);
+    return false;
 }
 
 } // namespace npu_compute

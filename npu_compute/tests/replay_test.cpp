@@ -283,9 +283,9 @@ int main()
     CHECK(*static_cast<uint8_t*>(allocation) == 6);
 
     CHECK(g_configs.size() == 3);
-    const auto expected_first = ExpectedPmus({0, 1, 10, 36, 52, 53, 514, 515, 810, 1281});
-    const auto expected_second = ExpectedPmus({1794, 1812, 1813, 11, 12, 13, 14, 15, 1344, 1366});
-    const auto expected_third = ExpectedPmus({1376, 1377, 1378, 1379});
+    const auto expected_first = ExpectedPmus({0, 1, 10, 36, 52, 53, 514, 515, 769, 810});
+    const auto expected_second = ExpectedPmus({1281, 1794, 1812, 1813, 11, 12, 13, 14, 15, 1344});
+    const auto expected_third = ExpectedPmus({1366, 1376, 1377, 1378, 1379});
     CHECK(g_configs[0].pmuEvents == expected_first);
     CHECK(g_configs[0].profSwitch == (PROF_AICORE_METRICS_MASK | PROF_TASK_TIME_MASK));
     CHECK(g_configs[0].devNums == 1);

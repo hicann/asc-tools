@@ -336,8 +336,7 @@ int TestReplayLifecycle()
     CHECK(module.PrepareReplay({40, "CallerDefined", eventHole}) == ACLPTI_ERROR_INVALID_PARAMETER);
 
     const auto eventIds = PmuEvents({0x701, 0x22});
-    const data::ReplayPrepareInfo replayInfo{42, "CallerDefined", eventIds};
-    CHECK(module.PrepareReplay(replayInfo) == ACLPTI_SUCCESS);
+    CHECK(module.PrepareReplay({42, "CallerDefined", eventIds}) == ACLPTI_SUCCESS);
     CHECK(module.PrepareReplay({43, "Other", PmuEvents({0x1})}) == ACLPTI_ERROR_REPLAY_ACTIVE);
 
     const MsprofRawDataCallback callback = module.GetRawDataCallback();

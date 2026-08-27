@@ -46,6 +46,9 @@ bool CollectDevice0Info(
     HardwareDeviceApi& api, DeviceInfo* device, CpuInfo* cpu, AiCoreInfo* aiCore, MemoryInfo* memory,
     DiagnosticSink* diagnostics);
 
+bool CollectAiCoreCounts(
+    HardwareDeviceApi& api, std::uint32_t* aiCubeCount, std::uint32_t* aiVectorCount, DiagnosticSink* diagnostics);
+
 } // namespace npu_compute
 
 #endif // NPU_COMPUTE_SRC_NPU_COMPUTE_HARDWARE_INFO_DEVICE_H_

@@ -37,6 +37,7 @@ private:
         void* userData, aclptiCallbackDomain domain, aclptiCallbackId cbid,
         const aclptiCallbackData* callbackData) noexcept;
 
+    void HandleRuntimeReady() noexcept;
     void DisableHardwareCallbacks() noexcept;
     aclptiResult ProcessPmuData(std::shared_ptr<const aclptiPmuDataResult> result);
 
@@ -45,6 +46,9 @@ private:
     aclptiSubscribeHandle subscriber_ = nullptr;
     std::size_t enabled_hardware_callback_count_ = 0;
     bool hardware_info_enabled_ = false;
+    bool runtime_ready_callback_enabled_ = false;
+    bool csv_frequency_override_ = false;
+    bool csv_hardware_metadata_loaded_ = false;
     SectionConfig section_config_;
     PmuCsvConfig csv_config_;
     HardwareInfoCollector hardware_info_collector_;

@@ -9,6 +9,10 @@
  */
 #include "npu_compute_runtime.h"
 
+#include "common/debug_log.h"
+#include "hardware_device_api.h"
+#include "hardware_info_json.h"
+
 #include <algorithm>
 #include <array>
 #include <cerrno>
@@ -16,8 +20,10 @@
 #include <cstdio>
 #include <cstdlib>
 #include <filesystem>
+#include <fstream>
 #include <memory>
 #include <string>
+#include <string_view>
 #include <utility>
 
 #include <unistd.h>
@@ -30,6 +36,7 @@ constexpr std::array<aclptiCallbackId, 3> kHardwareReadyCallbackIds = {
     ACLPTI_RUNTIME_CBID_aclrtMalloc,
     ACLPTI_RUNTIME_CBID_aclrtLaunchKernel,
 };
+constexpr double kMsopprofA5FallbackFrequencyMhz = 1650.0;
 
 bool IsHardwareReadyCallback(aclptiCallbackId cbid)
 {
@@ -78,6 +85,96 @@ bool LoadOutputDirectory(std::filesystem::path* outputDirectory, std::string* er
     return true;
 }
 
+std::string_view Trim(std::string_view value)
+{
+    constexpr std::string_view whitespace = " \t\r\n";
+    const std::size_t first = value.find_first_not_of(whitespace);
+    if (first == std::string_view::npos) {
+        return {};
+    }
+    const std::size_t last = value.find_last_not_of(whitespace);
+    return value.substr(first, last - first + 1);
+}
+
+bool ParsePositiveDouble(std::string_view text, double* result)
+{
+    const std::string_view trimmed = Trim(text);
+    if (trimmed.empty() || result == nullptr) {
+        return false;
+    }
+    std::string owned(trimmed);
+    char* end = nullptr;
+    errno = 0;
+    const double parsed = std::strtod(owned.c_str(), &end);
+    if (errno != 0 || end == owned.c_str() || *end != '\0' || parsed <= 0.0 || !std::isfinite(parsed)) {
+        return false;
+    }
+    *result = parsed;
+    return true;
+}
+
+void LoadCsvAiCoreCountsFromDevice(PmuCsvConfig* config)
+{
+    if (config == nullptr || (config->aicCoreCount != 0 && config->aivCoreCount != 0)) {
+        return;
+    }
+
+    DynamicHardwareDeviceApi api;
+    std::uint32_t aiCubeCount = 0;
+    std::uint32_t aiVectorCount = 0;
+    DiagnosticSink diagnostics = [](std::string_view message) {
+        npu_compute::detail::DebugLog(
+            "npu-compute", "CSV hardware count fallback diagnostic: %.*s", static_cast<int>(message.size()),
+            message.data());
+    };
+    if (!CollectAiCoreCounts(api, &aiCubeCount, &aiVectorCount, &diagnostics)) {
+        npu_compute::detail::DebugLog("npu-compute", "CSV hardware count fallback unavailable");
+        return;
+    }
+    config->aicCoreCount = aiCubeCount;
+    config->aivCoreCount = aiVectorCount;
+    npu_compute::detail::DebugLog(
+        "npu-compute", "CSV hardware config: source=DeviceAttributes aicCoreCount=%u aivCoreCount=%u",
+        config->aicCoreCount, config->aivCoreCount);
+}
+
+void LoadCsvHardwareInfoMetadata(PmuCsvConfig* config, bool loadFrequencies)
+{
+    if (config == nullptr) {
+        return;
+    }
+    const std::filesystem::path path = std::filesystem::path(config->outputDirectory) / "HardwareInfo.jsonl";
+    std::ifstream input(path);
+    if (!input.is_open()) {
+        npu_compute::detail::DebugLog(
+            "npu-compute", "CSV hardware metadata fallback: HardwareInfo unavailable path=%s", path.c_str());
+        LoadCsvAiCoreCountsFromDevice(config);
+        return;
+    }
+    const std::string jsonl((std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>());
+    HardwareInfoFrequencies frequencies;
+    std::string error;
+    if (!ParseHardwareInfoFrequenciesJsonl(jsonl, &frequencies, &error)) {
+        npu_compute::detail::DebugLog(
+            "npu-compute", "CSV hardware metadata fallback: parse HardwareInfo failed path=%s reason=%s", path.c_str(),
+            error.c_str());
+        LoadCsvAiCoreCountsFromDevice(config);
+        return;
+    }
+    if (loadFrequencies) {
+        config->aicFrequencyMhz = static_cast<double>(frequencies.aiCubeFrequencyMhz);
+        config->aivFrequencyMhz = static_cast<double>(frequencies.aiVectorFrequencyMhz);
+    }
+    config->aicCoreCount = frequencies.aiCubeCount;
+    config->aivCoreCount = frequencies.aiVectorCount;
+    npu_compute::detail::DebugLog(
+        "npu-compute",
+        "CSV hardware config: source=HardwareInfo fallbackFrequency=%f aicFrequency=%f "
+        "aivFrequency=%f aicCoreCount=%u aivCoreCount=%u",
+        config->frequencyMhz, config->aicFrequencyMhz, config->aivFrequencyMhz, config->aicCoreCount,
+        config->aivCoreCount);
+}
+
 } // namespace
 
 namespace {
@@ -112,20 +209,30 @@ int NpuComputeRuntime::Initialize()
         std::fprintf(stderr, "[libnpu-compute] invalid NPU_COMPUTE_SECTIONS: %s\n", error.c_str());
         return kInitializeFailed;
     }
-    if (const char* outputDirectory = std::getenv("NPU_COMPUTE_CSV_OUTPUT_DIR");
-        outputDirectory != nullptr && outputDirectory[0] != '\0') {
-        csv_config_.outputDirectory = outputDirectory;
+    csv_config_.outputDirectory = outputDirectory.string();
+    csv_config_.mirrorOutputDirectory.clear();
+    if (const char* mirrorOutputDirectory = std::getenv("NPU_COMPUTE_CSV_OUTPUT_DIR");
+        mirrorOutputDirectory != nullptr && mirrorOutputDirectory[0] != '\0') {
+        csv_config_.mirrorOutputDirectory = mirrorOutputDirectory;
     }
+    csv_frequency_override_ = false;
+    csv_hardware_metadata_loaded_ = false;
+    csv_config_.frequencyMhz = kMsopprofA5FallbackFrequencyMhz;
+    csv_config_.aicFrequencyMhz = 0.0;
+    csv_config_.aivFrequencyMhz = 0.0;
+    csv_config_.aicCoreCount = 0;
+    csv_config_.aivCoreCount = 0;
     if (const char* frequency = std::getenv("NPU_COMPUTE_FREQUENCY_MHZ");
         frequency != nullptr && frequency[0] != '\0') {
-        char* end = nullptr;
-        errno = 0;
-        const double parsed = std::strtod(frequency, &end);
-        if (errno != 0 || end == frequency || *end != '\0' || parsed <= 0.0 || !std::isfinite(parsed)) {
+        double parsed = 0.0;
+        if (!ParsePositiveDouble(frequency, &parsed)) {
             std::fprintf(stderr, "[libnpu-compute] invalid NPU_COMPUTE_FREQUENCY_MHZ: %s\n", frequency);
             return kInitializeFailed;
         }
         csv_config_.frequencyMhz = parsed;
+        csv_config_.aicFrequencyMhz = parsed;
+        csv_config_.aivFrequencyMhz = parsed;
+        csv_frequency_override_ = true;
     }
     if (const char* socName = std::getenv("NPU_COMPUTE_SOC"); socName != nullptr && socName[0] != '\0') {
         csv_config_.socName = socName;
@@ -154,6 +261,7 @@ int NpuComputeRuntime::Initialize()
     pmu_consumer_ = std::move(consumer);
 
     hardware_info_enabled_ = !EnvironmentFlagEnabled("NPU_COMPUTE_DISABLE_HARDWARE_INFO");
+    runtime_ready_callback_enabled_ = hardware_info_enabled_;
     if (hardware_info_enabled_) {
         if (!hardware_info_collector_.Initialize(outputDirectory, &error)) {
             std::fprintf(stderr, "[libnpu-compute] initialize HardwareInfo collector failed: %s\n", error.c_str());
@@ -165,8 +273,8 @@ int NpuComputeRuntime::Initialize()
     }
 
     aclptiResult result = aclptiSubscribe(
-        &subscriber_, hardware_info_enabled_ ? &NpuComputeRuntime::RuntimeReadyCallback : nullptr,
-        hardware_info_enabled_ ? static_cast<void*>(&hardware_info_collector_) : nullptr, nullptr);
+        &subscriber_, runtime_ready_callback_enabled_ ? &NpuComputeRuntime::RuntimeReadyCallback : nullptr,
+        runtime_ready_callback_enabled_ ? static_cast<void*>(this) : nullptr, nullptr);
     if (result != ACLPTI_SUCCESS) {
         std::fprintf(stderr, "[libnpu-compute] aclptiSubscribe failed: %d\n", result);
         pmu_consumer_->ShutdownAndDrain();
@@ -190,7 +298,7 @@ int NpuComputeRuntime::Initialize()
     std::fprintf(stderr, "[libnpu-compute] subscriber initialized\n");
 
     enabled_hardware_callback_count_ = 0;
-    if (hardware_info_enabled_) {
+    if (runtime_ready_callback_enabled_) {
         for (aclptiCallbackId cbid : kHardwareReadyCallbackIds) {
             result = aclptiEnableCallback(true, subscriber_, ACLPTI_CB_DOMAIN_RUNTIME_API, cbid);
             if (result != ACLPTI_SUCCESS) {
@@ -233,6 +341,7 @@ void NpuComputeRuntime::Stop() noexcept
         hardware_info_collector_.Stop();
         hardware_info_enabled_ = false;
     }
+    runtime_ready_callback_enabled_ = false;
 }
 
 void NpuComputeRuntime::DisableHardwareCallbacks() noexcept
@@ -246,6 +355,18 @@ void NpuComputeRuntime::DisableHardwareCallbacks() noexcept
             std::fprintf(stderr, "[libnpu-compute] disabled ACL PTI callback cbid=%u\n", cbid);
         }
         --enabled_hardware_callback_count_;
+    }
+}
+
+void NpuComputeRuntime::HandleRuntimeReady() noexcept
+{
+    try {
+        std::lock_guard<std::mutex> lock(mutex_);
+        if (hardware_info_enabled_) {
+            hardware_info_collector_.NotifyRuntimeReady();
+        }
+    } catch (...) {
+        std::fprintf(stderr, "[libnpu-compute] Runtime Ready handling failed\n");
     }
 }
 
@@ -273,7 +394,28 @@ aclptiResult NpuComputeRuntime::ProcessPmuData(std::shared_ptr<const aclptiPmuDa
             return ACLPTI_ERROR_ASSEMBLE;
         }
     }
-    const aclptiResult csvStatus = PmuCsvWriter::Write(*result, section_config_.Sections(), csv_config_);
+    PmuCsvConfig csvConfig;
+    bool stopHardwareInfo = false;
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        if (hardware_info_enabled_) {
+            stopHardwareInfo = true;
+            hardware_info_enabled_ = false;
+            runtime_ready_callback_enabled_ = false;
+        }
+    }
+    if (stopHardwareInfo) {
+        hardware_info_collector_.Stop();
+    }
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        if (!csv_hardware_metadata_loaded_) {
+            LoadCsvHardwareInfoMetadata(&csv_config_, !csv_frequency_override_);
+            csv_hardware_metadata_loaded_ = true;
+        }
+        csvConfig = csv_config_;
+    }
+    const aclptiResult csvStatus = PmuCsvWriter::Write(*result, section_config_.Sections(), csvConfig);
     if (csvStatus != ACLPTI_SUCCESS) {
         return csvStatus;
     }
@@ -305,10 +447,10 @@ void NpuComputeRuntime::RuntimeReadyCallback(
         return;
     }
     try {
-        auto* collector = static_cast<HardwareInfoCollector*>(userData);
-        collector->NotifyRuntimeReady();
+        auto* runtime = static_cast<NpuComputeRuntime*>(userData);
+        runtime->HandleRuntimeReady();
     } catch (...) {
-        std::fprintf(stderr, "[libnpu-compute] HardwareInfo Runtime Ready callback failed\n");
+        std::fprintf(stderr, "[libnpu-compute] Runtime Ready callback failed\n");
     }
 }
 

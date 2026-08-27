@@ -21,11 +21,12 @@
 
 #include <unistd.h>
 
-#define CHECK(condition)    \
-    do {                    \
-        if (!(condition)) { \
-            return 1;       \
-        }                   \
+#define CHECK(condition)                                                                      \
+    do {                                                                                      \
+        if (!(condition)) {                                                                   \
+            std::fprintf(stderr, "CHECK failed %s:%d: %s\n", __FILE__, __LINE__, #condition); \
+            return 1;                                                                         \
+        }                                                                                     \
     } while (false)
 
 namespace {
@@ -176,6 +177,21 @@ int main()
     CHECK(HasMatchingColumnCounts(directory / "MemoryUB.csv"));
     CHECK(HasMatchingColumnCounts(directory / "PipeUtilization.csv"));
 
+    const auto splitFrequencyDirectory = std::filesystem::temp_directory_path() /
+                                         ("npu_compute_csv_split_frequency_test_" +
+                                          std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+    config.outputDirectory = splitFrequencyDirectory.string();
+    config.aicFrequencyMhz = 500.0;
+    config.aivFrequencyMhz = 2000.0;
+    CHECK(npu_compute::PmuCsvWriter::Write(result, {"L2Cache"}, config) == ACLPTI_SUCCESS);
+    const std::string splitFrequencyL2 = ReadFile(splitFrequencyDirectory / "L2Cache.csv");
+    CHECK(splitFrequencyL2.find("2,cube3,2,1000,NA,NA") != std::string::npos);
+    CHECK(splitFrequencyL2.find("2,vector3,NA,NA,1,2000") != std::string::npos);
+    std::filesystem::remove_all(splitFrequencyDirectory);
+    config.outputDirectory = directory.string();
+    config.aicFrequencyMhz = 0.0;
+    config.aivFrequencyMhz = 0.0;
+
     aclptiPmuDataResult secondResult = result;
     secondResult.pmuLogs.clear();
     aclptiPmuDataRow secondRow = aicRow;
@@ -216,19 +232,95 @@ int main()
     CHECK(CaptureStderr(
         [&] { sparseWriteStatus = npu_compute::PmuCsvWriter::Write(sparseResult, {"L2Cache"}, config); }, &sparseLog));
     CHECK(sparseWriteStatus == ACLPTI_SUCCESS);
-    if (hadPreviousDebug) {
-        CHECK(setenv("NPU_COMPUTE_DEBUG", previousDebugValue.c_str(), 1) == 0);
-    } else {
-        CHECK(unsetenv("NPU_COMPUTE_DEBUG") == 0);
-    }
     CHECK(sparseLog.find("CSV section data availability: section=L2Cache rows=1") != std::string::npos);
     CHECK(sparseLog.find("missingFields=") != std::string::npos);
+    CHECK(sparseLog.find("missingReasons=") != std::string::npos);
+    CHECK(sparseLog.find("missingColumnReasons=") != std::string::npos);
+    CHECK(sparseLog.find("CoreTypeNotApplicable") != std::string::npos);
+    CHECK(sparseLog.find("EventMissing") != std::string::npos);
+    CHECK(sparseLog.find("aiv_time(us)@CoreTypeNotApplicable:1") != std::string::npos);
+    CHECK(sparseLog.find("aic_read_close_victim@EventMissing:1") != std::string::npos);
     CHECK(sparseLog.find("aic_read_close_victim:1") != std::string::npos);
     CHECK(sparseLog.find("aiv_time(us):1") != std::string::npos);
     const std::string sparseL2 = ReadFile(sparseDirectory / "L2Cache.csv");
     CHECK(sparseL2.find("4,cube5,1,1000,NA,NA") != std::string::npos);
     CHECK(sparseL2.find("10,0,NA,NA,NA,NA") != std::string::npos);
     std::filesystem::remove_all(sparseDirectory);
+
+    const auto mirrorPrimaryDirectory = std::filesystem::temp_directory_path() /
+                                        ("npu_compute_csv_mirror_primary_test_" +
+                                         std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+    const auto mirrorDirectory =
+        std::filesystem::temp_directory_path() /
+        ("npu_compute_csv_mirror_test_" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+    config.outputDirectory = mirrorPrimaryDirectory.string();
+    config.mirrorOutputDirectory = mirrorDirectory.string();
+    CHECK(npu_compute::PmuCsvWriter::Write(sparseResult, {"L2Cache"}, config) == ACLPTI_SUCCESS);
+    CHECK(std::filesystem::exists(mirrorPrimaryDirectory / "L2Cache.csv"));
+    CHECK(std::filesystem::exists(mirrorDirectory / "L2Cache.csv"));
+    CHECK(ReadFile(mirrorDirectory / "L2Cache.csv") == ReadFile(mirrorPrimaryDirectory / "L2Cache.csv"));
+    std::filesystem::remove_all(mirrorPrimaryDirectory);
+    std::filesystem::remove_all(mirrorDirectory);
+    config.mirrorOutputDirectory.clear();
+
+    const auto mirrorFailurePrimaryDirectory =
+        std::filesystem::temp_directory_path() /
+        ("npu_compute_csv_mirror_failure_primary_test_" +
+         std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+    const auto blockedMirrorDirectory = std::filesystem::temp_directory_path() /
+                                        ("npu_compute_csv_blocked_mirror_test_" +
+                                         std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+    {
+        std::ofstream blockedOutput(blockedMirrorDirectory);
+        blockedOutput << "not a directory\n";
+    }
+    config.outputDirectory = mirrorFailurePrimaryDirectory.string();
+    config.mirrorOutputDirectory = blockedMirrorDirectory.string();
+    CHECK(setenv("NPU_COMPUTE_DEBUG", "1", 1) == 0);
+    std::string mirrorFailureLog;
+    aclptiResult mirrorFailureStatus = ACLPTI_ERROR_INTERNAL;
+    CHECK(CaptureStderr(
+        [&] { mirrorFailureStatus = npu_compute::PmuCsvWriter::Write(sparseResult, {"L2Cache"}, config); },
+        &mirrorFailureLog));
+    CHECK(mirrorFailureStatus == ACLPTI_SUCCESS);
+    CHECK(std::filesystem::exists(mirrorFailurePrimaryDirectory / "L2Cache.csv"));
+    CHECK(mirrorFailureLog.find("CSV mirror") != std::string::npos);
+    std::filesystem::remove_all(mirrorFailurePrimaryDirectory);
+    std::filesystem::remove(blockedMirrorDirectory);
+    config.mirrorOutputDirectory.clear();
+
+    const auto blockedDirectory =
+        std::filesystem::temp_directory_path() /
+        ("npu_compute_csv_blocked_test_" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+    {
+        std::ofstream blockedOutput(blockedDirectory);
+        blockedOutput << "not a directory\n";
+    }
+    config.outputDirectory = blockedDirectory.string();
+    std::string filesystemLog;
+    aclptiResult filesystemStatus = ACLPTI_SUCCESS;
+    CHECK(CaptureStderr(
+        [&] { filesystemStatus = npu_compute::PmuCsvWriter::Write(sparseResult, {"L2Cache"}, config); },
+        &filesystemLog));
+    CHECK(filesystemStatus == ACLPTI_ERROR_CSV_WRITE);
+    CHECK(filesystemLog.find("CSV write rejected: output path is not a directory") != std::string::npos);
+    CHECK(filesystemLog.find("path=" + blockedDirectory.string()) != std::string::npos);
+    CHECK(filesystemLog.find("reason=") != std::string::npos);
+    std::filesystem::remove(blockedDirectory);
+
+    config.outputDirectory = "relative_csv_output";
+    std::string relativeLog;
+    aclptiResult relativeStatus = ACLPTI_SUCCESS;
+    CHECK(CaptureStderr(
+        [&] { relativeStatus = npu_compute::PmuCsvWriter::Write(sparseResult, {"L2Cache"}, config); }, &relativeLog));
+    CHECK(relativeStatus == ACLPTI_ERROR_INVALID_PARAMETER);
+    CHECK(relativeLog.find("CSV write rejected: output path must be absolute") != std::string::npos);
+    CHECK(relativeLog.find("path=relative_csv_output") != std::string::npos);
+    if (hadPreviousDebug) {
+        CHECK(setenv("NPU_COMPUTE_DEBUG", previousDebugValue.c_str(), 1) == 0);
+    } else {
+        CHECK(unsetenv("NPU_COMPUTE_DEBUG") == 0);
+    }
 
     const auto emptyDirectory =
         std::filesystem::temp_directory_path() /
@@ -252,21 +344,20 @@ int main()
 
     std::filesystem::remove_all(emptyDirectory);
 
-    const auto environmentDirectory = std::filesystem::temp_directory_path() /
-                                      ("npu_compute_csv_environment_test_" +
-                                       std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
-    const char* previousOutputDirectory = std::getenv("NPU_COMPUTE_CSV_OUTPUT_DIR");
-    const std::string previousOutputDirectoryValue = previousOutputDirectory == nullptr ? "" : previousOutputDirectory;
-    const bool hadPreviousOutputDirectory = previousOutputDirectory != nullptr;
-    CHECK(setenv("NPU_COMPUTE_CSV_OUTPUT_DIR", environmentDirectory.c_str(), 1) == 0);
+    CHECK(npu_compute::PmuCsvConfig{}.outputDirectory.empty());
     config.outputDirectory.clear();
-    CHECK(npu_compute::PmuCsvWriter::Write(sparseResult, {"L2Cache"}, config) == ACLPTI_SUCCESS);
-    CHECK(std::filesystem::exists(environmentDirectory / "L2Cache.csv"));
-    if (hadPreviousOutputDirectory) {
-        CHECK(setenv("NPU_COMPUTE_CSV_OUTPUT_DIR", previousOutputDirectoryValue.c_str(), 1) == 0);
+    CHECK(setenv("NPU_COMPUTE_DEBUG", "1", 1) == 0);
+    std::string emptyOutputLog;
+    aclptiResult emptyOutputStatus = ACLPTI_SUCCESS;
+    CHECK(CaptureStderr(
+        [&] { emptyOutputStatus = npu_compute::PmuCsvWriter::Write(sparseResult, {"L2Cache"}, config); },
+        &emptyOutputLog));
+    CHECK(emptyOutputStatus == ACLPTI_ERROR_INVALID_PARAMETER);
+    CHECK(emptyOutputLog.find("CSV write rejected: output path is empty") != std::string::npos);
+    if (hadPreviousDebug) {
+        CHECK(setenv("NPU_COMPUTE_DEBUG", previousDebugValue.c_str(), 1) == 0);
     } else {
-        CHECK(unsetenv("NPU_COMPUTE_CSV_OUTPUT_DIR") == 0);
+        CHECK(unsetenv("NPU_COMPUTE_DEBUG") == 0);
     }
-    std::filesystem::remove_all(environmentDirectory);
     return 0;
 }

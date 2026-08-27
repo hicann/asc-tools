@@ -12,11 +12,22 @@
 
 #include "hardware_info_types.h"
 
+#include <cstdint>
 #include <string>
+#include <string_view>
 
 namespace npu_compute {
 
+struct HardwareInfoFrequencies {
+    std::uint32_t aiCubeCount = 0;
+    std::uint32_t aiVectorCount = 0;
+    std::uint32_t aiCubeFrequencyMhz = 0;
+    std::uint32_t aiVectorFrequencyMhz = 0;
+};
+
 bool SerializeHardwareInfoJsonl(const HardwareInfoSnapshot& snapshot, std::string* jsonl, std::string* error);
+bool ParseHardwareInfoFrequenciesJsonl(
+    std::string_view jsonl, HardwareInfoFrequencies* frequencies, std::string* error);
 
 } // namespace npu_compute
 
