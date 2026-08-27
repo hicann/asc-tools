@@ -171,21 +171,21 @@ class OpDesc:
 
     @staticmethod
     def _parse_digit(conf: str) -> int:
-        return int(conf.split("=")[1])
+        return int(conf.split("=", 1)[1])
 
     @staticmethod
     def _parse_flag(conf: str) -> bool:
-        if "true" == conf.split("=")[1]:
+        if "true" == conf.split("=", 1)[1]:
             return True
         return False
 
     @staticmethod
     def _parse_str(conf: str) -> str:
-        return conf.split("=")[1]
+        return conf.split("=", 1)[1]
 
     @staticmethod
     def _parse_list(conf: str) -> list:
-        return conf.split("=")[1].split(",")
+        return conf.split("=", 1)[1].split(",")
 
     def parse_input(self: any, conf: str):
         if conf.startswith("input{}.name".format(int(self.input_idx) + 1)):
