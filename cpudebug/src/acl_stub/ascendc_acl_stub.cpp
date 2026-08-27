@@ -103,9 +103,14 @@ size_t aclDataTypeSize(aclDataType dataType)
     }
 }
 
-float aclFloat16ToFloat(aclFloat16 value) { return static_cast<float>(half(value)); }
+float aclFloat16ToFloat(aclFloat16 value)
+{
+    half fp16;
+    fp16.val = value;
+    return fp16.ToFloat();
+}
 
-aclFloat16 aclFloatToFloat16(float value) { return static_cast<aclFloat16>(half(value)); }
+aclFloat16 aclFloatToFloat16(float value) { return half(value).val; }
 
 aclError aclrtSetDevice(int32_t deviceId)
 {
