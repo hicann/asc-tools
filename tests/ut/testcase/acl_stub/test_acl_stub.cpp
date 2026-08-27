@@ -65,13 +65,19 @@ TEST_F(TEST_ACL_STUB, AclDataTypeSizeCorrect)
 
 TEST_F(TEST_ACL_STUB, AclFloat16AndFloatConvert)
 {
-    float f_val = 123.0f;
-    aclFloat16 f16_val = aclFloatToFloat16(f_val);
-    float f_convert = aclFloat16ToFloat(f16_val);
-    EXPECT_NEAR(f_convert, f_val, 0.1f);
+    EXPECT_EQ(aclFloatToFloat16(0.0f), 0x0000);
+    EXPECT_EQ(aclFloatToFloat16(0.5f), 0x3800);
+    EXPECT_EQ(aclFloatToFloat16(1.5f), 0x3E00);
+    EXPECT_EQ(aclFloatToFloat16(3.3f), 0x429A);
+    EXPECT_EQ(aclFloatToFloat16(100.0f), 0x5640);
+    EXPECT_EQ(aclFloatToFloat16(-2.0f), 0xC000);
 
-    EXPECT_EQ(aclFloat16ToFloat(aclFloatToFloat16(0.0f)), 0.0f);
-    EXPECT_NEAR(aclFloat16ToFloat(aclFloatToFloat16(100.0f)), 100.0f, 0.1f);
+    EXPECT_FLOAT_EQ(aclFloat16ToFloat(0x0000), 0.0f);
+    EXPECT_FLOAT_EQ(aclFloat16ToFloat(0x3800), 0.5f);
+    EXPECT_FLOAT_EQ(aclFloat16ToFloat(0x3E00), 1.5f);
+    EXPECT_FLOAT_EQ(aclFloat16ToFloat(0x429A), 3.30078125f);
+    EXPECT_FLOAT_EQ(aclFloat16ToFloat(0x5640), 100.0f);
+    EXPECT_FLOAT_EQ(aclFloat16ToFloat(0xC000), -2.0f);
 }
 
 TEST_F(TEST_ACL_STUB, AclrtDeviceStreamContextSuccess)
