@@ -15,11 +15,13 @@
 
 #include <array>
 #include <cstddef>
+#include <vector>
 
 namespace aclsan {
 
 constexpr std::size_t kDataCopyAccessCount = 2;
 using DeviceMemoryAccessDataArray = std::array<AclsanDeviceMemoryAccessData, kDataCopyAccessCount>;
+using DeviceMemoryAccessDataBatch = std::vector<AclsanDeviceMemoryAccessData>;
 
 class AclsanCallbackDispatcher final {
 public:
@@ -27,6 +29,7 @@ public:
     static void DispatchSynchronizeEnd(const AclsanSynchronizeData& callbackData) noexcept;
     static void DispatchDeviceMemoryAccess(const AclsanDeviceMemoryAccessData& callbackData) noexcept;
     static void DispatchDeviceMemoryAccess(const DeviceMemoryAccessDataArray& callbackData) noexcept;
+    static void DispatchDeviceMemoryAccess(const DeviceMemoryAccessDataBatch& callbackData) noexcept;
     static void DispatchDeviceSync(const AclsanDeviceSyncData& callbackData) noexcept;
 
 private:

@@ -10,7 +10,9 @@
 
 #include <gtest/gtest.h>
 
+#include <array>
 #include <cstdint>
+#include <limits>
 #include <string>
 
 namespace npu::sanitizer {
@@ -158,6 +160,293 @@ TEST(MemcheckTest, ExpandsBlockRepeatAndAffineLayouts)
     reports = checker.OnSynchronization();
     ASSERT_EQ(reports.size(), 1U);
     EXPECT_EQ(reports.front().common.pattern, static_cast<uint32_t>(NpusanMemcheckPattern::kInvalidAccess));
+}
+
+TEST(MemcheckTest, UsesByteStrideForSparseGmAccesses)
+{
+    Memcheck checker(true);
+    checker.OnAllocation(AllocationEvent(0x1000, 32, 1));
+    checker.OnAllocation(AllocationEvent(0x1080, 32, 2));
+    checker.OnAllocation(AllocationEvent(0x1100, 32, 3));
+
+    auto blockRepeat = Access(DeviceSourceKind::MTE2, 0x1000, 1);
+    blockRepeat.layoutKind = ACLSAN_MEM_LAYOUT_BLOCK_REPEAT;
+    blockRepeat.layout.blockRepeat.blockNum = 3;
+    blockRepeat.layout.blockRepeat.blockSize = 32;
+    blockRepeat.layout.blockRepeat.blockStride = 128;
+    blockRepeat.layout.blockRepeat.repeatTimes = 1;
+    checker.QueueDeviceMemoryAccess(blockRepeat);
+    EXPECT_TRUE(checker.OnSynchronization().empty());
+
+    blockRepeat.layout.blockRepeat.blockNum = 4;
+    checker.QueueDeviceMemoryAccess(blockRepeat);
+    const auto reports = checker.OnSynchronization();
+
+    ASSERT_EQ(reports.size(), 1U);
+    EXPECT_EQ(reports.front().access.address, 0x1180U);
+    EXPECT_EQ(reports.front().access.accessBytes, 32U);
+    EXPECT_EQ(reports.front().access.rangeBegin, 0x1180U);
+    EXPECT_EQ(reports.front().access.rangeEnd, 0x11a0U);
+}
+
+TEST(MemcheckTest, ProcessesMoreThanFourRangesFromOneInstruction)
+{
+    constexpr uint64_t kBase = 0x8000;
+    constexpr uint64_t kStride = 0x100;
+    constexpr uint64_t kAccessBytes = 16;
+    constexpr uint32_t kAccessCount = 9;
+    constexpr uint64_t kInstrExecId = 41;
+    constexpr uint64_t kSerialNo = 73;
+
+    Memcheck checker(true);
+    for (uint32_t index = 0; index + 1 < kAccessCount; ++index) {
+        checker.OnAllocation(AllocationEvent(kBase + index * kStride, kAccessBytes, index + 1));
+    }
+
+    for (uint32_t index = 0; index < kAccessCount; ++index) {
+        auto access = Access(DeviceSourceKind::MTE2, kBase + index * kStride, kAccessBytes);
+        access.header.instrExecId = kInstrExecId;
+        access.header.serialNo = kSerialNo;
+        access.accessIndex = index;
+        access.accessCount = kAccessCount;
+        checker.QueueDeviceMemoryAccess(access);
+    }
+
+    EXPECT_EQ(checker.Stats().pendingDeviceOperations, kAccessCount);
+    const auto reports = checker.OnSynchronization();
+
+    ASSERT_EQ(reports.size(), 1U);
+    EXPECT_EQ(reports.front().common.pattern, static_cast<uint32_t>(NpusanMemcheckPattern::kInvalidAccess));
+    EXPECT_EQ(reports.front().access.address, kBase + (kAccessCount - 1) * kStride);
+    EXPECT_EQ(reports.front().access.accessBytes, kAccessBytes);
+    EXPECT_EQ(reports.front().common.exec.instrExecId, kInstrExecId);
+    EXPECT_EQ(reports.front().common.exec.serialNo, kSerialNo);
+    EXPECT_EQ(checker.Stats().pendingDeviceOperations, 0U);
+    EXPECT_EQ(checker.Stats().errors, 1U);
+    EXPECT_EQ(checker.Stats().droppedDeviceOperations, 0U);
+}
+
+TEST(MemcheckTest, ProcessesDisjointValidRangesWithoutCheckingTheirEnvelope)
+{
+    constexpr uint64_t kBase = 0xa000;
+    constexpr uint64_t kStride = 0x100;
+    constexpr uint64_t kAccessBytes = 16;
+    constexpr uint32_t kAccessCount = 9;
+    constexpr uint64_t kInstrExecId = 42;
+    constexpr uint64_t kSerialNo = 74;
+
+    Memcheck checker(true);
+    for (uint32_t index = 0; index < kAccessCount; ++index) {
+        const uint64_t address = kBase + index * kStride;
+        checker.OnAllocation(AllocationEvent(address, kAccessBytes, index + 1));
+
+        auto access = Access(DeviceSourceKind::MTE2, address, kAccessBytes);
+        access.header.instrExecId = kInstrExecId;
+        access.header.serialNo = kSerialNo;
+        access.accessIndex = index;
+        access.accessCount = kAccessCount;
+        checker.QueueDeviceMemoryAccess(access);
+    }
+
+    EXPECT_EQ(checker.Stats().pendingDeviceOperations, kAccessCount);
+    EXPECT_TRUE(checker.OnSynchronization().empty());
+    EXPECT_EQ(checker.Stats().pendingDeviceOperations, 0U);
+    EXPECT_EQ(checker.Stats().errors, 0U);
+    EXPECT_EQ(checker.Stats().droppedDeviceOperations, 0U);
+}
+
+TEST(MemcheckTest, ChecksScalarAccessAtAllocationBoundary)
+{
+    Memcheck checker(true);
+    checker.OnAllocation(AllocationEvent(0x3000, 16, 1));
+
+    auto scalar = Access(DeviceSourceKind::MTE2, 0x300f, 1);
+    scalar.layoutKind = ACLSAN_MEM_LAYOUT_SCALAR;
+    scalar.layout.scalar.bytes = 1;
+    checker.QueueDeviceMemoryAccess(scalar);
+    EXPECT_TRUE(checker.OnSynchronization().empty());
+
+    scalar.layout.scalar.bytes = 2;
+    checker.QueueDeviceMemoryAccess(scalar);
+    const auto reports = checker.OnSynchronization();
+    ASSERT_EQ(reports.size(), 1U);
+    EXPECT_EQ(reports.front().access.address, 0x300fU);
+    EXPECT_EQ(reports.front().access.accessBytes, 2U);
+}
+
+TEST(MemcheckTest, RepresentsTruncatedRowsWithoutTouchingPadding)
+{
+    Memcheck checker(true);
+    checker.OnAllocation(AllocationEvent(0x4000, 20, 1));
+
+    auto truncated = Access(DeviceSourceKind::MTE2, 0x4000, 1);
+    truncated.layoutKind = ACLSAN_MEM_LAYOUT_BLOCK_REPEAT;
+    truncated.layout.blockRepeat.blockNum = 3;
+    truncated.layout.blockRepeat.blockSize = 4;
+    truncated.layout.blockRepeat.blockStride = 8;
+    truncated.layout.blockRepeat.repeatTimes = 1;
+    checker.QueueDeviceMemoryAccess(truncated);
+
+    EXPECT_TRUE(checker.OnSynchronization().empty());
+}
+
+TEST(MemcheckTest, CoalescesLargeDenseAffineLayout)
+{
+    Memcheck checker(true);
+    constexpr uint64_t kBase = 0x100000;
+    constexpr uint64_t kBytes = 2ULL * 1024 * 1024;
+    checker.OnAllocation(AllocationEvent(kBase, kBytes, 1));
+
+    auto dense = Access(DeviceSourceKind::MTE2, kBase, 1);
+    dense.layoutKind = ACLSAN_MEM_LAYOUT_ND_AFFINE;
+    dense.layout.ndAffine.rank = 5;
+    dense.layout.ndAffine.elementBytes = 1;
+    dense.layout.ndAffine.dims[0] = 2;
+    dense.layout.ndAffine.dims[1] = 16;
+    dense.layout.ndAffine.dims[2] = 16;
+    dense.layout.ndAffine.dims[3] = 64;
+    dense.layout.ndAffine.dims[4] = 64;
+    dense.layout.ndAffine.strides[0] = 1024 * 1024;
+    dense.layout.ndAffine.strides[1] = 64 * 1024;
+    dense.layout.ndAffine.strides[2] = 4 * 1024;
+    dense.layout.ndAffine.strides[3] = 64;
+    dense.layout.ndAffine.strides[4] = 1;
+    checker.QueueDeviceMemoryAccess(dense);
+
+    EXPECT_TRUE(checker.OnSynchronization().empty());
+    EXPECT_EQ(checker.Stats().droppedDeviceOperations, 0U);
+}
+
+TEST(MemcheckTest, RepresentsBatchedNzZnZzAndNnLayouts)
+{
+    constexpr uint32_t kNdRank = 5;
+    constexpr uint64_t kBase = 0x7000;
+    constexpr uint64_t kMatrixBytes = 36;
+    constexpr std::array<uint64_t, kNdRank> kDimensions{2, 2, 3, 2, 3};
+    const std::array<std::array<int64_t, kNdRank>, 4> formatStrides{{
+        {kMatrixBytes, 6, 12, 3, 1}, // NZ
+        {kMatrixBytes, 18, 6, 1, 2}, // ZN
+        {kMatrixBytes, 18, 6, 3, 1}, // ZZ
+        {kMatrixBytes, 6, 12, 1, 2}, // NN
+    }};
+
+    for (const auto& strides : formatStrides) {
+        Memcheck checker(true);
+        checker.OnAllocation(AllocationEvent(kBase, 2 * kMatrixBytes - 1, 1));
+        auto access = Access(DeviceSourceKind::MTE2, kBase, 1);
+        access.layoutKind = ACLSAN_MEM_LAYOUT_ND_AFFINE;
+        access.layout.ndAffine.rank = kNdRank;
+        access.layout.ndAffine.elementBytes = 1;
+        for (uint32_t dimension = 0; dimension < kNdRank; ++dimension) {
+            access.layout.ndAffine.dims[dimension] = kDimensions[dimension];
+            access.layout.ndAffine.strides[dimension] = strides[dimension];
+        }
+        checker.QueueDeviceMemoryAccess(access);
+
+        const auto reports = checker.OnSynchronization();
+        ASSERT_EQ(reports.size(), 1U);
+        EXPECT_EQ(reports.front().access.address, kBase);
+        EXPECT_EQ(reports.front().access.rangeEnd, kBase + 2 * kMatrixBytes);
+        EXPECT_EQ(checker.Stats().droppedDeviceOperations, 0U);
+    }
+}
+
+TEST(MemcheckTest, DropsOversizedSparseAffineLayoutWithoutEnvelopeFalsePositive)
+{
+    Memcheck checker(true);
+    checker.OnAllocation(AllocationEvent(0x5000, 8, 1));
+    checker.OnAllocation(AllocationEvent(0x100005000, 8, 2));
+
+    auto sparse = Access(DeviceSourceKind::MTE2, 0x5000, 1);
+    sparse.layoutKind = ACLSAN_MEM_LAYOUT_ND_AFFINE;
+    sparse.layout.ndAffine.rank = 2;
+    sparse.layout.ndAffine.elementBytes = 8;
+    sparse.layout.ndAffine.dims[0] = 1025;
+    sparse.layout.ndAffine.dims[1] = 1025;
+    sparse.layout.ndAffine.strides[0] = 1LL << 32U;
+    sparse.layout.ndAffine.strides[1] = 1LL << 32U;
+    checker.QueueDeviceMemoryAccess(sparse);
+
+    EXPECT_TRUE(checker.OnSynchronization().empty());
+    EXPECT_EQ(checker.Stats().droppedDeviceOperations, 1U);
+}
+
+TEST(MemcheckTest, DropsExtremeAndMalformedLayouts)
+{
+    Memcheck checker(true);
+    checker.OnAllocation(AllocationEvent(0x1000, 64, 1));
+
+    auto extreme = Access(DeviceSourceKind::MTE2, 0x1000, 1);
+    extreme.layoutKind = ACLSAN_MEM_LAYOUT_BLOCK_REPEAT;
+    extreme.layout.blockRepeat.blockNum = std::numeric_limits<uint32_t>::max();
+    extreme.layout.blockRepeat.blockSize = std::numeric_limits<uint32_t>::max();
+    extreme.layout.blockRepeat.blockStride = std::numeric_limits<int64_t>::max();
+    extreme.layout.blockRepeat.repeatTimes = std::numeric_limits<uint32_t>::max();
+    extreme.layout.blockRepeat.repeatStride = std::numeric_limits<int64_t>::max();
+    checker.QueueDeviceMemoryAccess(extreme);
+
+    auto zeroCount = Access(DeviceSourceKind::MTE2, 0x1000, 2);
+    zeroCount.layoutKind = ACLSAN_MEM_LAYOUT_BLOCK_REPEAT;
+    zeroCount.layout.blockRepeat.blockNum = 0;
+    zeroCount.layout.blockRepeat.blockSize = 1;
+    zeroCount.layout.blockRepeat.repeatTimes = 1;
+    checker.QueueDeviceMemoryAccess(zeroCount);
+
+    auto invalidRank = Access(DeviceSourceKind::MTE2, 0x1000, 3);
+    invalidRank.layoutKind = ACLSAN_MEM_LAYOUT_ND_AFFINE;
+    invalidRank.layout.ndAffine.rank = 6;
+    invalidRank.layout.ndAffine.elementBytes = 1;
+    checker.QueueDeviceMemoryAccess(invalidRank);
+
+    EXPECT_TRUE(checker.OnSynchronization().empty());
+    EXPECT_EQ(checker.Stats().droppedDeviceOperations, 3U);
+}
+
+TEST(MemcheckTest, SupportsNegativeBlockAndAffineStrides)
+{
+    constexpr uint64_t kElementBytes = 16;
+    Memcheck checker(true);
+    checker.OnAllocation(AllocationEvent(0x1000, kElementBytes, 1));
+    checker.OnAllocation(AllocationEvent(0x1040, kElementBytes, 2));
+    checker.OnAllocation(AllocationEvent(0x1080, kElementBytes, 3));
+
+    auto blockRepeat = Access(DeviceSourceKind::MTE2, 0x1080, 1);
+    blockRepeat.layoutKind = ACLSAN_MEM_LAYOUT_BLOCK_REPEAT;
+    blockRepeat.layout.blockRepeat.blockNum = 3;
+    blockRepeat.layout.blockRepeat.blockSize = kElementBytes;
+    blockRepeat.layout.blockRepeat.blockStride = -0x40;
+    blockRepeat.layout.blockRepeat.repeatTimes = 1;
+    checker.QueueDeviceMemoryAccess(blockRepeat);
+    EXPECT_TRUE(checker.OnSynchronization().empty());
+
+    auto affine = Access(DeviceSourceKind::MTE2, 0x1080, 1);
+    affine.layoutKind = ACLSAN_MEM_LAYOUT_ND_AFFINE;
+    affine.layout.ndAffine.rank = 1;
+    affine.layout.ndAffine.elementBytes = kElementBytes;
+    affine.layout.ndAffine.dims[0] = 4;
+    affine.layout.ndAffine.strides[0] = -0x40;
+    checker.QueueDeviceMemoryAccess(affine);
+    const auto reports = checker.OnSynchronization();
+
+    ASSERT_EQ(reports.size(), 1U);
+    EXPECT_EQ(reports.front().access.address, 0xfc0U);
+    EXPECT_EQ(reports.front().access.accessBytes, kElementBytes);
+    EXPECT_EQ(checker.Stats().droppedDeviceOperations, 0U);
+}
+
+TEST(MemcheckTest, DropsLayoutWhoseSegmentAddressOverflows)
+{
+    Memcheck checker(true);
+    auto overflow = Access(DeviceSourceKind::MTE2, std::numeric_limits<uint64_t>::max() - 7, 1);
+    overflow.layoutKind = ACLSAN_MEM_LAYOUT_BLOCK_REPEAT;
+    overflow.layout.blockRepeat.blockNum = 2;
+    overflow.layout.blockRepeat.blockSize = 8;
+    overflow.layout.blockRepeat.blockStride = 16;
+    overflow.layout.blockRepeat.repeatTimes = 1;
+    checker.QueueDeviceMemoryAccess(overflow);
+
+    EXPECT_TRUE(checker.OnSynchronization().empty());
+    EXPECT_EQ(checker.Stats().droppedDeviceOperations, 1U);
 }
 
 TEST(MemcheckTest, SeparatesReadWriteAndHonorsPredicate)

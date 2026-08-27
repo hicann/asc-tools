@@ -44,6 +44,10 @@ struct CapturedMemoryAccess {
     uint64_t bytes;
     uint32_t memorySpace;
     uint32_t accessMode;
+    uint32_t layoutKind;
+    uint32_t rank;
+    uint64_t firstCount;
+    uint64_t secondCount;
 };
 
 std::vector<CapturedRecord> g_records;
@@ -55,6 +59,7 @@ bool g_failLaunch = false;
 bool g_failSync = false;
 bool g_writeRecord = true;
 bool g_writeMemoryRecord = false;
+bool g_writeMultiMemoryRecords = false;
 uint32_t g_expectedHiddenOffset = 16;
 uint32_t g_expectedPlaceholderDataOffset = 0;
 
@@ -118,6 +123,22 @@ aclError OriginalLaunch(
     auto* slice = reinterpret_cast<aclsan::AscsanTraceSliceHeader*>(bytes + sizeof(*header) + sliceBytes);
     auto* record = reinterpret_cast<aclsan::AscsanRawTraceRecord*>(reinterpret_cast<uint8_t*>(slice) + sizeof(*slice));
     record->pc = 0x1234;
+    if (g_writeMultiMemoryRecords) {
+        record->args[0] = 2;
+        record->instrId = 399;
+        record->pipeline = ACLSAN_DEVICE_PIPE_MTE2;
+
+        auto* multi = record + 1;
+        multi->pc = 0x1238;
+        multi->args[1] = 0x130000000000ULL;
+        multi->args[2] = (64ULL << 4U) | (4ULL << 48U);
+        multi->args[3] = 8ULL | (512ULL << 21U);
+        multi->instrId = 78;
+        multi->siteId = 39;
+        multi->pipeline = ACLSAN_DEVICE_PIPE_MTE2;
+        slice->recordCount = 2;
+        return ACL_SUCCESS;
+    }
     if (g_writeMemoryRecord) {
         record->args[0] = 0;
         record->args[1] = 0x120000025000ULL;
@@ -150,8 +171,23 @@ void Callback(void*, AclsanCallbackDomain domain, AclsanCallbackId id, const voi
     }
     if (id == ACLSAN_CBID_DEVICE_MEMORY_ACCESS) {
         const auto* access = static_cast<const AclsanDeviceMemoryAccessData*>(data);
+        uint32_t rank = 0;
+        uint64_t firstCount = 0;
+        uint64_t secondCount = 0;
+        uint64_t bytes = 0;
+        if (access->layoutKind == ACLSAN_MEM_LAYOUT_ND_AFFINE) {
+            rank = access->layout.ndAffine.rank;
+            firstCount = access->layout.ndAffine.dims[0];
+            secondCount = access->layout.ndAffine.dims[1];
+            bytes = access->layout.ndAffine.elementBytes;
+        } else if (access->layoutKind == ACLSAN_MEM_LAYOUT_BLOCK_REPEAT) {
+            bytes = access->layout.blockRepeat.blockSize;
+        } else if (access->layoutKind == ACLSAN_MEM_LAYOUT_RANGE) {
+            bytes = access->layout.range.bytes;
+        }
         g_memoryAccesses.push_back(
-            {access->address, access->layout.range.bytes, access->memorySpace, access->accessMode});
+            {access->address, bytes, access->memorySpace, access->accessMode, access->layoutKind, rank, firstCount,
+             secondCount});
         return;
     }
     if (id == ACLSAN_CBID_DEVICE_SYNC) {
@@ -217,12 +253,27 @@ int main()
         aclrtLaunchKernelWithHostArgs(function, 2, stream1, nullptr, arguments, sizeof(arguments), nullptr, 0) ==
         ACL_SUCCESS);
     CHECK(aclrtSynchronizeStream(stream1) == ACL_SUCCESS);
-    CHECK(g_memoryAccesses.size() == 2);
+    CHECK(g_memoryAccesses.size() == 1);
     CHECK(g_memoryAccesses[0].address == 0x120000025000ULL);
     CHECK(g_memoryAccesses[0].bytes == 8256);
     CHECK(g_memoryAccesses[0].memorySpace == ACLSAN_DEVICE_MEMORY_SPACE_GM);
     CHECK(g_memoryAccesses[0].accessMode == ACLSAN_DEVICE_MEMORY_ACCESS_READ);
     g_writeMemoryRecord = false;
+
+    g_writeMultiMemoryRecords = true;
+    CHECK(
+        aclrtLaunchKernelWithHostArgs(function, 2, stream1, nullptr, arguments, sizeof(arguments), nullptr, 0) ==
+        ACL_SUCCESS);
+    CHECK(aclrtSynchronizeStream(stream1) == ACL_SUCCESS);
+    CHECK(g_memoryAccesses.size() == 2);
+    CHECK(g_memoryAccesses[1].address == 0x130000000000ULL);
+    CHECK(g_memoryAccesses[1].memorySpace == ACLSAN_DEVICE_MEMORY_SPACE_GM);
+    CHECK(g_memoryAccesses[1].accessMode == ACLSAN_DEVICE_MEMORY_ACCESS_READ);
+    CHECK(g_memoryAccesses[1].layoutKind == ACLSAN_MEM_LAYOUT_ND_AFFINE);
+    CHECK(g_memoryAccesses[1].rank == 2);
+    CHECK(g_memoryAccesses[1].firstCount == 4);
+    CHECK(g_memoryAccesses[1].secondCount == 2);
+    g_writeMultiMemoryRecords = false;
 
     g_failSync = true;
     CHECK(

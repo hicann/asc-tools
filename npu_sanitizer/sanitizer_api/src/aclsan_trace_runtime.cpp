@@ -24,6 +24,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <limits>
+#include <unordered_map>
 #include <mutex>
 #include <new>
 #include <utility>
@@ -179,16 +180,45 @@ void ReleaseDeviceBuffer(void* buffer) noexcept
 
 void DispatchTraceRecords(const std::vector<sanitizer::AscsanRawTraceRecord>& records) noexcept
 {
+    constexpr uint64_t kSetMte2NzParaInstructionId = 399;
+    const auto isMultiInstruction = [](uint64_t instructionId) noexcept {
+        return instructionId >= static_cast<uint64_t>(sanitizer::CceInstructionId::CopyGmToCbufMultiNd2NzB8) &&
+               instructionId <= static_cast<uint64_t>(sanitizer::CceInstructionId::CopyGmToCbufMultiDn2NzB32);
+    };
+
+    std::unordered_map<uint32_t, uint16_t> matrixNumByBlock;
     uint64_t serialNo = 0;
     for (const sanitizer::AscsanRawTraceRecord& record : records) {
-        const TraceCallbackContext context{DecodeRawTraceTransferBytes(record), serialNo + 1, serialNo, record.blockId};
-        const auto callbackData = TranslateRawTraceToCallbackData(record, context);
+        if (record.instrId == kSetMte2NzParaInstructionId) {
+            matrixNumByBlock[record.blockId] = static_cast<uint16_t>(record.args[0]);
+            ++serialNo;
+            continue;
+        }
+
+        sanitizer::AscsanRawTraceRecord enrichedRecord = record;
+        if (isMultiInstruction(record.instrId)) {
+            const auto matrixNum = matrixNumByBlock.find(record.blockId);
+            if (matrixNum == matrixNumByBlock.end()) {
+                ASC_SAN_ERROR(
+                    "acl_san trace: multi memory instruction has no preceding SET_MTE2_NZ_PARA: instrId=%llu "
+                    "pc=0x%llx block=%u",
+                    static_cast<unsigned long long>(record.instrId), static_cast<unsigned long long>(record.pc),
+                    record.blockId);
+                ++serialNo;
+                continue;
+            }
+            enrichedRecord.args[4] = matrixNum->second;
+        }
+
+        const TraceCallbackContext context{
+            DecodeRawTraceTransferBytes(enrichedRecord), serialNo + 1, serialNo, record.blockId};
+        const auto callbackData = TranslateRawTraceToCallbackData(enrichedRecord, context);
         if (!callbackData.has_value()) {
             ASC_SAN_ERROR(
                 "acl_san trace: unsupported raw trace instrId=%llu pc=0x%llx block=%u",
                 static_cast<unsigned long long>(record.instrId), static_cast<unsigned long long>(record.pc),
                 record.blockId);
-        } else if (const auto* memory = std::get_if<DeviceMemoryAccessDataArray>(&*callbackData)) {
+        } else if (const auto* memory = std::get_if<MemoryCbdata>(&*callbackData)) {
             AclsanCallbackDispatcher::DispatchDeviceMemoryAccess(*memory);
         } else if (const auto* sync = std::get_if<AclsanDeviceSyncData>(&*callbackData)) {
             AclsanCallbackDispatcher::DispatchDeviceSync(*sync);

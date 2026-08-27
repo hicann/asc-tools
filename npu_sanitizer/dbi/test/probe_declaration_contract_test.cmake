@@ -28,14 +28,14 @@ string(REGEX MATCHALL
   "__sanitizer_report_[A-Za-z0-9_]+[ \t\r\n]*\\("
   probe_definitions "${probe_content}")
 list(LENGTH probe_definitions probe_count)
-if(NOT probe_count EQUAL 75)
-  message(FATAL_ERROR "expected 75 probe definitions, found ${probe_count}")
+if(NOT probe_count EQUAL 76)
+  message(FATAL_ERROR "expected 76 probe definitions, found ${probe_count}")
 endif()
 
 set(explicit_declaration
   "extern[ \t\r\n]+__attribute__\\(\\(noinline\\)\\)[ \t\r\n]+__attribute__\\(\\(weak\\)\\)[ \t\r\n]+__aicore__[ \t\r\n]+void[ \t\r\n]+__sanitizer_report_[A-Za-z0-9_]+[ \t\r\n]*\\(")
 string(REGEX MATCHALL "${explicit_declaration}" explicit_probes "${probe_content}")
 list(LENGTH explicit_probes explicit_probe_count)
-if(NOT explicit_probe_count EQUAL 75)
-  message(FATAL_ERROR "expected 75 explicit probe declarations, found ${explicit_probe_count}")
+if(NOT explicit_probe_count EQUAL 76)
+  message(FATAL_ERROR "expected 76 explicit probe declarations, found ${explicit_probe_count}")
 endif()

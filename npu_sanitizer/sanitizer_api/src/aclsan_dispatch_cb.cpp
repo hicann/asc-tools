@@ -72,6 +72,13 @@ void AclsanCallbackDispatcher::DispatchDeviceMemoryAccess(const DeviceMemoryAcce
     }
 }
 
+void AclsanCallbackDispatcher::DispatchDeviceMemoryAccess(const DeviceMemoryAccessDataBatch& callbackData) noexcept
+{
+    for (const AclsanDeviceMemoryAccessData& data : callbackData) {
+        DispatchDeviceMemoryAccess(data);
+    }
+}
+
 void AclsanCallbackDispatcher::DispatchDeviceSync(const AclsanDeviceSyncData& callbackData) noexcept
 {
     Dispatch(ACLSAN_CB_DOMAIN_DEVICE_INSTRUCTION, ACLSAN_CBID_DEVICE_SYNC, &callbackData, "DEVICE_SYNC");

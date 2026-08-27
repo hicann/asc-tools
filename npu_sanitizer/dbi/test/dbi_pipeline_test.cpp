@@ -117,7 +117,7 @@ std::string ReadGeneratedFile(const std::filesystem::path& path)
 TEST(CtrlbinGeneratorTest, FiltersBindingsToSelectedProbeGroups)
 {
     const auto symbols = BindingSymbols({ProbeGroup::Mte2});
-    EXPECT_EQ(symbols.size(), 19U);
+    EXPECT_EQ(symbols.size(), 20U);
     for (const auto& symbol : symbols) {
         EXPECT_NE(symbol.find("sanitizer_report_"), std::string::npos);
     }
@@ -130,7 +130,7 @@ TEST(CtrlbinGeneratorTest, FiltersBindingsToSelectedProbeGroups)
     std::filesystem::remove(path);
 }
 
-TEST(CtrlbinGeneratorTest, AllGroupsPreserveBindingCount) { EXPECT_EQ(BindingSymbols(AllProbeGroups()).size(), 75U); }
+TEST(CtrlbinGeneratorTest, AllGroupsPreserveBindingCount) { EXPECT_EQ(BindingSymbols(AllProbeGroups()).size(), 76U); }
 
 TEST(CtrlbinGeneratorTest, ConcurrentRequestsRemainIsolated)
 {

@@ -201,3 +201,10 @@ extern __attribute__((noinline)) __attribute__((weak)) __aicore__ void __sanitiz
     aclsan::WriteTraceRecord(
         memInfo, pc, bid, aclsan::PIPELINE_MTE2, 150, reinterpret_cast<uint64_t>(dst), config, 0UL, 0UL, 0UL);
 }
+
+// SET_MTE2_NZ_PARA, API ID 399.
+extern __attribute__((noinline)) __attribute__((weak)) __aicore__ void __sanitizer_report_set_mte2_nz_para(
+    __gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, uint64_t config)
+{
+    aclsan::WriteTraceRecord(memInfo, pc, bid, aclsan::PIPELINE_MTE2, 399, config & 0xFFFFUL, 0UL, 0UL, 0UL, 0UL);
+}

@@ -8,6 +8,8 @@
 
 #include "checker/memcheck.h"
 
+#include <algorithm>
+#include <array>
 #include <chrono>
 #include <iterator>
 #include <limits>
@@ -29,6 +31,22 @@ using aclsan::cann::ReportTool;
 
 constexpr uint32_t kAllocationStateLive = 1;
 constexpr uint32_t kAllocationStateFreed = 2;
+constexpr uint32_t kMaxAffineRank = 5;
+constexpr uint64_t kMaxLayoutSegments = 1u << 20u;
+
+struct AffineLayout {
+    uint64_t base = 0;
+    uint32_t rank = 0;
+    uint64_t elementBytes = 0;
+    std::array<uint64_t, kMaxAffineRank> dimensions{};
+    std::array<int64_t, kMaxAffineRank> strides{};
+};
+
+struct AffineAxis {
+    uint64_t count = 0;
+    int64_t stride = 0;
+    uint64_t absoluteStride = 0;
+};
 
 uint64_t TimestampNs()
 {
@@ -42,6 +60,132 @@ std::optional<uint64_t> RangeEnd(uint64_t base, uint64_t bytes)
         return std::nullopt;
     }
     return base + bytes;
+}
+
+uint64_t AbsoluteStride(int64_t stride)
+{
+    return stride < 0 ? static_cast<uint64_t>(-(stride + 1)) + 1 : static_cast<uint64_t>(stride);
+}
+
+bool AddOffset(__int128 left, __int128 right, __int128& result)
+{
+    return !__builtin_add_overflow(left, right, &result);
+}
+
+bool AxisExtent(const AffineAxis& axis, __int128& extent)
+{
+    return !__builtin_mul_overflow(static_cast<__int128>(axis.count - 1), static_cast<__int128>(axis.stride), &extent);
+}
+
+std::optional<uint64_t> AddressWithOffset(uint64_t base, __int128 offset)
+{
+    if (offset < -static_cast<__int128>(base) ||
+        offset > static_cast<__int128>(std::numeric_limits<uint64_t>::max() - base)) {
+        return std::nullopt;
+    }
+    return static_cast<uint64_t>(static_cast<__int128>(base) + offset);
+}
+
+template <typename Visitor>
+bool VisitAffineSegments(const AffineLayout& layout, Visitor&& visitor)
+{
+    if (layout.rank == 0 || layout.rank > kMaxAffineRank || layout.elementBytes == 0) {
+        return false;
+    }
+
+    std::array<AffineAxis, kMaxAffineRank> axes{};
+    uint32_t axisCount = 0;
+    for (uint32_t dimension = 0; dimension < layout.rank; ++dimension) {
+        const uint64_t count = layout.dimensions[dimension];
+        if (count == 0) {
+            return false;
+        }
+        if (count > 1) {
+            const int64_t stride = layout.strides[dimension];
+            axes[axisCount++] = {count, stride, AbsoluteStride(stride)};
+        }
+    }
+    for (uint32_t index = 1; index < axisCount; ++index) {
+        const AffineAxis axis = axes[index];
+        uint32_t insertion = index;
+        while (insertion > 0 && axes[insertion - 1].absoluteStride > axis.absoluteStride) {
+            axes[insertion] = axes[insertion - 1];
+            --insertion;
+        }
+        axes[insertion] = axis;
+    }
+
+    __int128 contiguousBegin = 0;
+    uint64_t contiguousBytes = layout.elementBytes;
+    uint32_t sparseBegin = 0;
+    for (; sparseBegin < axisCount; ++sparseBegin) {
+        const AffineAxis& axis = axes[sparseBegin];
+        if (axis.absoluteStride > contiguousBytes) {
+            break;
+        }
+
+        __int128 extent = 0;
+        if (!AxisExtent(axis, extent)) {
+            return false;
+        }
+        const unsigned __int128 absoluteExtent =
+            extent < 0 ? static_cast<unsigned __int128>(-(extent + 1)) + 1 : static_cast<unsigned __int128>(extent);
+        const unsigned __int128 mergedBytes = static_cast<unsigned __int128>(contiguousBytes) + absoluteExtent;
+        if (mergedBytes > std::numeric_limits<uint64_t>::max()) {
+            return false;
+        }
+        contiguousBytes = static_cast<uint64_t>(mergedBytes);
+        if (extent < 0 && !AddOffset(contiguousBegin, extent, contiguousBegin)) {
+            return false;
+        }
+    }
+
+    uint64_t segmentCount = 1;
+    __int128 minimumOffset = contiguousBegin;
+    __int128 maximumOffset = contiguousBegin;
+    for (uint32_t axisIndex = sparseBegin; axisIndex < axisCount; ++axisIndex) {
+        const AffineAxis& axis = axes[axisIndex];
+        if (axis.count > kMaxLayoutSegments / segmentCount) {
+            return false;
+        }
+        segmentCount *= axis.count;
+
+        __int128 extent = 0;
+        if (!AxisExtent(axis, extent)) {
+            return false;
+        }
+        if (extent < 0) {
+            if (!AddOffset(minimumOffset, extent, minimumOffset)) {
+                return false;
+            }
+        } else if (!AddOffset(maximumOffset, extent, maximumOffset)) {
+            return false;
+        }
+    }
+    if (!AddressWithOffset(layout.base, minimumOffset) || !AddressWithOffset(layout.base, maximumOffset)) {
+        return false;
+    }
+
+    for (uint64_t linear = 0; linear < segmentCount; ++linear) {
+        uint64_t index = linear;
+        __int128 offset = contiguousBegin;
+        for (uint32_t axisIndex = sparseBegin; axisIndex < axisCount; ++axisIndex) {
+            const AffineAxis& axis = axes[axisIndex];
+            const uint64_t coordinate = index % axis.count;
+            index /= axis.count;
+            __int128 term = 0;
+            if (__builtin_mul_overflow(static_cast<__int128>(coordinate), static_cast<__int128>(axis.stride), &term) ||
+                !AddOffset(offset, term, offset)) {
+                return false;
+            }
+        }
+        const auto address = AddressWithOffset(layout.base, offset);
+        if (!address) {
+            return false;
+        }
+        visitor(*address, contiguousBytes);
+    }
+    return true;
 }
 
 const char* SourceKindName(uint32_t sourceKind)
@@ -215,9 +359,13 @@ void Memcheck::QueueDeviceMemoryAccess(const AclsanDeviceMemoryAccessData& data)
 
 std::vector<NpusanMemcheckReport> Memcheck::CheckDeviceMemoryAccess(const AclsanDeviceMemoryAccessData& data)
 {
+    const auto markIncomplete = [this]() {
+        ++stats_.droppedDeviceOperations;
+        return std::vector<NpusanMemcheckReport>{};
+    };
     if (data.header.version != ACLSAN_API_VERSION || data.header.size < sizeof(AclsanDeviceMemoryAccessData) ||
         data.accessCount == 0 || data.accessIndex >= data.accessCount) {
-        return {};
+        return markIncomplete();
     }
 
     std::vector<NpusanReportAccessMode> accessModes;
@@ -233,7 +381,7 @@ std::vector<NpusanMemcheckReport> Memcheck::CheckDeviceMemoryAccess(const Aclsan
             accessModes.push_back(NpusanReportAccessMode::kWrite);
             break;
         default:
-            return {};
+            return markIncomplete();
     }
 
     if (data.memorySpace != ACLSAN_DEVICE_MEMORY_SPACE_GM || ((data.header.flags & kDeviceEventFlagPredicated) != 0 &&
@@ -249,137 +397,51 @@ std::vector<NpusanMemcheckReport> Memcheck::CheckDeviceMemoryAccess(const Aclsan
         }
     };
 
-    constexpr uint64_t kMaxLayoutSegments = 1u << 20u;
-    const auto addressWithOffset = [](uint64_t base, __int128 offset) -> std::optional<uint64_t> {
-        if (offset < -static_cast<__int128>(base) ||
-            offset > static_cast<__int128>(std::numeric_limits<uint64_t>::max() - base)) {
-            return std::nullopt;
-        }
-        return static_cast<uint64_t>(static_cast<__int128>(base) + offset);
-    };
-
     switch (data.layoutKind) {
         case ACLSAN_MEM_LAYOUT_SCALAR:
             if (data.layout.scalar.bytes == 0) {
-                return {};
+                return markIncomplete();
             }
             appendAccess(data.address, data.layout.scalar.bytes);
             break;
         case ACLSAN_MEM_LAYOUT_RANGE:
             if (data.layout.range.bytes == 0) {
-                return {};
+                return markIncomplete();
             }
             appendAccess(data.address, data.layout.range.bytes);
             break;
         case ACLSAN_MEM_LAYOUT_BLOCK_REPEAT: {
             const auto& layout = data.layout.blockRepeat;
-            if (layout.blockNum == 0 || layout.blockSize == 0 || layout.repeatTimes == 0) {
-                return {};
-            }
-            const uint64_t segmentCount = static_cast<uint64_t>(layout.blockNum) * layout.repeatTimes;
-            if (segmentCount > kMaxLayoutSegments) {
-                return {};
-            }
-            for (uint32_t repeat = 0; repeat < layout.repeatTimes; ++repeat) {
-                for (uint32_t block = 0; block < layout.blockNum; ++block) {
-                    const __int128 offset = static_cast<__int128>(repeat) * layout.repeatStride +
-                                            static_cast<__int128>(block) * layout.blockStride;
-                    const auto address = addressWithOffset(data.address, offset);
-                    if (!address) {
-                        return {};
-                    }
-                    appendAccess(*address, layout.blockSize);
-                }
+            AffineLayout affine{};
+            affine.base = data.address;
+            affine.rank = 2;
+            affine.elementBytes = layout.blockSize;
+            affine.dimensions[0] = layout.blockNum;
+            affine.dimensions[1] = layout.repeatTimes;
+            affine.strides[0] = layout.blockStride;
+            affine.strides[1] = layout.repeatStride;
+            if (!VisitAffineSegments(affine, appendAccess)) {
+                return markIncomplete();
             }
             break;
         }
         case ACLSAN_MEM_LAYOUT_ND_AFFINE: {
             const auto& layout = data.layout.ndAffine;
-            if (layout.rank == 0 || layout.rank > 5 || layout.elementBytes == 0) {
-                return {};
+            AffineLayout affine{};
+            affine.base = data.address;
+            affine.rank = layout.rank;
+            affine.elementBytes = layout.elementBytes;
+            for (uint32_t dimension = 0; dimension < kMaxAffineRank; ++dimension) {
+                affine.dimensions[dimension] = layout.dims[dimension];
+                affine.strides[dimension] = layout.strides[dimension];
             }
-            uint64_t elementCount = 1;
-            bool countOverflow = false;
-            for (uint32_t dimension = 0; dimension < layout.rank; ++dimension) {
-                if (layout.dims[dimension] == 0 ||
-                    elementCount > std::numeric_limits<uint64_t>::max() / layout.dims[dimension]) {
-                    countOverflow = true;
-                    break;
-                }
-                elementCount *= layout.dims[dimension];
-            }
-            if (countOverflow) {
-                return {};
-            }
-
-            const __int128 kAddressOffsetMin = -static_cast<__int128>(std::numeric_limits<uint64_t>::max());
-            const __int128 kAddressOffsetMax = static_cast<__int128>(std::numeric_limits<uint64_t>::max());
-            __int128 minOffset = 0;
-            __int128 maxOffset = 0;
-            bool offsetOverflow = false;
-            for (uint32_t dimension = 0; dimension < layout.rank; ++dimension) {
-                const __int128 extent = static_cast<__int128>(layout.dims[dimension] - 1) *
-                                        static_cast<__int128>(layout.strides[dimension]);
-                if (extent < 0) {
-                    if (extent < kAddressOffsetMin - minOffset) {
-                        offsetOverflow = true;
-                        break;
-                    }
-                    minOffset += extent;
-                } else {
-                    if (extent > kAddressOffsetMax - maxOffset) {
-                        offsetOverflow = true;
-                        break;
-                    }
-                    maxOffset += extent;
-                }
-            }
-            if (offsetOverflow) {
-                return {};
-            }
-
-            if (elementCount <= kMaxLayoutSegments) {
-                for (uint64_t linear = 0; linear < elementCount; ++linear) {
-                    uint64_t index = linear;
-                    __int128 offset = 0;
-                    for (uint32_t dimension = layout.rank; dimension > 0; --dimension) {
-                        const uint32_t current = dimension - 1;
-                        const uint64_t coordinate = index % layout.dims[current];
-                        index /= layout.dims[current];
-                        const __int128 term = static_cast<__int128>(coordinate) * layout.strides[current];
-                        if (term < 0) {
-                            if (term < kAddressOffsetMin - offset) {
-                                offsetOverflow = true;
-                                break;
-                            }
-                        } else if (term > kAddressOffsetMax - offset) {
-                            offsetOverflow = true;
-                            break;
-                        }
-                        offset += term;
-                    }
-                    if (offsetOverflow) {
-                        return {};
-                    }
-                    const auto address = addressWithOffset(data.address, offset);
-                    if (!address) {
-                        return {};
-                    }
-                    appendAccess(*address, layout.elementBytes);
-                }
-            } else {
-                const auto first = addressWithOffset(data.address, minOffset);
-                const auto last = addressWithOffset(data.address, maxOffset);
-                if (!first || !last || *last < *first ||
-                    *last - *first > std::numeric_limits<uint64_t>::max() - layout.elementBytes) {
-                    return {};
-                }
-                appendAccess(*first, *last - *first + layout.elementBytes);
+            if (!VisitAffineSegments(affine, appendAccess)) {
+                return markIncomplete();
             }
             break;
         }
         default:
-            return {};
+            return markIncomplete();
     }
 
     return reports;

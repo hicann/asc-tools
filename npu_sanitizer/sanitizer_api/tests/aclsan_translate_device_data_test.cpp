@@ -24,6 +24,8 @@ constexpr uint64_t kCopyGmToCbufAlignV2B16Id = 75;
 constexpr uint64_t kCopyGmToCbufV2Id = 73;
 constexpr uint64_t kCopyGmToUbufAlignV2B32Id = 86;
 constexpr uint64_t kCopyUbufToGmAlignV2Id = 83;
+constexpr uint64_t kCopyGmToCbufMultiNd2NzB16Id = 78;
+constexpr uint64_t kFixL0cToOutF32Id = 91;
 constexpr uint64_t kSetFlagId = 440;
 constexpr uint64_t kSetFlagIId = 441;
 constexpr uint64_t kWaitFlagId = 442;
@@ -175,12 +177,14 @@ void TestTranslateRawTraceToCallbackData()
     record.siteId = 2;
     record.args[0] = 0x200040;
     record.args[1] = 0x100040;
+    record.args[2] = (1ULL << 4U) | (128ULL << 25U);
     const aclsan::TraceCallbackContext callbackContext{128, 1002, 2, 0};
 
     const auto memoryCallback = aclsan::TranslateRawTraceToCallbackData(record, callbackContext);
     assert(memoryCallback.has_value());
-    const auto* accesses = std::get_if<aclsan::DeviceMemoryAccessDataArray>(&*memoryCallback);
+    const auto* accesses = std::get_if<aclsan::MemoryCbdata>(&*memoryCallback);
     assert(accesses != nullptr);
+    assert(accesses->size() == 1);
     const AclsanDeviceMemoryAccessData& source = (*accesses)[0];
     assert(source.header.pc == record.pc);
     assert(source.header.siteId == record.siteId);
@@ -193,16 +197,8 @@ void TestTranslateRawTraceToCallbackData()
     assert(source.memorySpace == ACLSAN_DEVICE_MEMORY_SPACE_GM);
     assert(source.accessMode == ACLSAN_DEVICE_MEMORY_ACCESS_READ);
     assert(source.accessIndex == 0);
-    assert(source.accessCount == 2);
+    assert(source.accessCount == 1);
     assert(source.layout.range.bytes == callbackContext.transferBytes);
-
-    const AclsanDeviceMemoryAccessData& destination = (*accesses)[1];
-    assert(destination.address == record.args[0]);
-    assert(destination.memorySpace == ACLSAN_DEVICE_MEMORY_SPACE_L1);
-    assert(destination.accessMode == ACLSAN_DEVICE_MEMORY_ACCESS_WRITE);
-    assert(destination.accessIndex == 1);
-    assert(destination.accessCount == 2);
-    assert(destination.layout.range.bytes == callbackContext.transferBytes);
 
     record.instrId = kCopyUbufToGmAlignV2Id;
     record.pipeline = ACLSAN_DEVICE_PIPE_MTE3;
@@ -210,21 +206,14 @@ void TestTranslateRawTraceToCallbackData()
     record.args[1] = 0x400040;
     const auto ubToGmCallback = aclsan::TranslateRawTraceToCallbackData(record, callbackContext);
     assert(ubToGmCallback.has_value());
-    const auto* ubToGmAccesses = std::get_if<aclsan::DeviceMemoryAccessDataArray>(&*ubToGmCallback);
+    const auto* ubToGmAccesses = std::get_if<aclsan::MemoryCbdata>(&*ubToGmCallback);
     assert(ubToGmAccesses != nullptr);
-    const AclsanDeviceMemoryAccessData& ubSource = (*ubToGmAccesses)[0];
-    assert(ubSource.address == record.args[1]);
-    assert(ubSource.memorySpace == ACLSAN_DEVICE_MEMORY_SPACE_UB);
-    assert(ubSource.accessMode == ACLSAN_DEVICE_MEMORY_ACCESS_READ);
-    assert(ubSource.accessIndex == 0);
-    assert(ubSource.header.pipeline == ACLSAN_DEVICE_PIPE_MTE3);
-    assert(ubSource.layout.range.bytes == callbackContext.transferBytes);
-
-    const AclsanDeviceMemoryAccessData& gmDestination = (*ubToGmAccesses)[1];
+    assert(ubToGmAccesses->size() == 1);
+    const AclsanDeviceMemoryAccessData& gmDestination = (*ubToGmAccesses)[0];
     assert(gmDestination.address == record.args[0]);
     assert(gmDestination.memorySpace == ACLSAN_DEVICE_MEMORY_SPACE_GM);
     assert(gmDestination.accessMode == ACLSAN_DEVICE_MEMORY_ACCESS_WRITE);
-    assert(gmDestination.accessIndex == 1);
+    assert(gmDestination.accessIndex == 0);
     assert(gmDestination.header.pc == record.pc);
     assert(gmDestination.header.instrExecId == callbackContext.instrExecId);
 
@@ -255,6 +244,52 @@ void TestTranslateRawTraceToCallbackData()
     assert(waitSync != nullptr);
     assert(waitSync->action == ACLSAN_DEVICE_SYNC_ACTION_WAIT);
     assert(waitSync->header.sourceKind == ACLSAN_DEVICE_SOURCE_SET_WAIT_FLAG);
+}
+
+void TestTranslateMultiAndFixpipeToGmCbdata()
+{
+    sanitizer::AscsanRawTraceRecord multi{};
+    multi.instrId = kCopyGmToCbufMultiNd2NzB16Id;
+    multi.pipeline = ACLSAN_DEVICE_PIPE_MTE2;
+    multi.args[1] = 0x5000;
+    multi.args[2] = (64ULL << 4U) | (4ULL << 48U);
+    multi.args[3] = 8ULL | (512ULL << 21U);
+    multi.args[4] = 2;
+    const aclsan::TraceCallbackContext context{128, 20, 19, 3};
+
+    const auto multiCallback = aclsan::TranslateRawTraceToCallbackData(multi, context);
+    assert(multiCallback.has_value());
+    const auto* multiAccesses = std::get_if<aclsan::MemoryCbdata>(&*multiCallback);
+    assert(multiAccesses != nullptr);
+    assert(multiAccesses->size() == 1);
+    const auto& multiAccess = multiAccesses->front();
+    assert(multiAccess.address == multi.args[1]);
+    assert(multiAccess.accessMode == ACLSAN_DEVICE_MEMORY_ACCESS_READ);
+    assert(multiAccess.layoutKind == ACLSAN_MEM_LAYOUT_ND_AFFINE);
+    assert(multiAccess.layout.ndAffine.rank == 2);
+    assert(multiAccess.layout.ndAffine.elementBytes == 16);
+    assert(multiAccess.layout.ndAffine.dims[0] == 4);
+    assert(multiAccess.layout.ndAffine.dims[1] == 2);
+    assert(multiAccess.layout.ndAffine.strides[0] == 64);
+    assert(multiAccess.layout.ndAffine.strides[1] == 512);
+    assert(aclsan::DecodeRawTraceTransferBytes(multi) == 128);
+
+    sanitizer::AscsanRawTraceRecord fixpipe{};
+    fixpipe.instrId = kFixL0cToOutF32Id;
+    fixpipe.pipeline = ACLSAN_DEVICE_PIPE_FIXPIPE;
+    fixpipe.args[0] = 0x8000;
+    fixpipe.args[2] = (18ULL << 4U) | (4ULL << 16U) | (64ULL << 32U);
+
+    const auto fixpipeCallback = aclsan::TranslateRawTraceToCallbackData(fixpipe, context);
+    assert(fixpipeCallback.has_value());
+    const auto* fixpipeAccesses = std::get_if<aclsan::MemoryCbdata>(&*fixpipeCallback);
+    assert(fixpipeAccesses != nullptr);
+    assert(fixpipeAccesses->size() == 2);
+    assert((*fixpipeAccesses)[0].address == 0x8000);
+    assert((*fixpipeAccesses)[0].layout.range.bytes == 256);
+    assert((*fixpipeAccesses)[1].address == 0x8100);
+    assert((*fixpipeAccesses)[1].layout.range.bytes == 32);
+    assert(aclsan::DecodeRawTraceTransferBytes(fixpipe) == 288);
 }
 
 std::string CaptureTranslateDebugLogs(
@@ -340,10 +375,7 @@ void TestTranslateDebugLogsShowUbufToGmConversion()
     assert(logs.find("[param] type=CopyUbufToGmAlignV2ParamField") != std::string::npos);
     assert(logs.find("burstNum=2 burstLen=64") != std::string::npos);
     assert(
-        logs.find("[cbdata] type=AclsanDeviceMemoryAccessData index=0 address=0x4000 memorySpace=2 accessMode=1") !=
-        std::string::npos);
-    assert(
-        logs.find("[cbdata] type=AclsanDeviceMemoryAccessData index=1 address=0x3000 memorySpace=1 accessMode=2") !=
+        logs.find("[cbdata] type=AclsanDeviceMemoryAccessData index=0 address=0x3000 memorySpace=1 accessMode=2") !=
         std::string::npos);
 }
 
@@ -367,6 +399,7 @@ int main()
     TestTranslateAllFlagVariantsToCorrectActions();
     TestTranslateCopyUbufToGmAlignV2();
     TestTranslateRawTraceToCallbackData();
+    TestTranslateMultiAndFixpipeToGmCbdata();
     TestTranslateDebugLogsShowSyncConversion();
     TestTranslateDebugLogsShowUbufToGmConversion();
     TestRejectUnsupportedInstruction();

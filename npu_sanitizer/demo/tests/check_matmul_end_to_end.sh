@@ -32,8 +32,8 @@ RunAndCheck()
     fi
 }
 
-RunAndCheck matmul_basic_api 12
-RunAndCheck matmul_leakyrelu_basic_api 36
+RunAndCheck matmul_basic_api 14
+RunAndCheck matmul_leakyrelu_basic_api 38
 grep -F '[AIV Block 3/4]' "${output}"
 grep -F 'instrId=456' "${output}"
 grep -F 'instrId=458' "${output}"

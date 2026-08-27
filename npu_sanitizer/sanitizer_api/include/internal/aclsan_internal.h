@@ -16,6 +16,7 @@
 #include "cce_instr/cce_instr_struct_sync.h"
 #include "internal/aclsan_device_record.h"
 #include "internal/aclsan_dispatch_cb.h"
+#include "internal/aclsan_memory_cbdata.h"
 #include "npu_compute/injection_hook.h"
 
 #include <optional>
@@ -29,10 +30,11 @@ struct CallStackResult;
 
 using CceInstructionParamField = std::variant<
     sanitizer::CopyGmToUbufAlignV2ParamField, sanitizer::CopyGmToCbufAlignV2ParamField,
-    sanitizer::CopyUbufToGmAlignV2ParamField, sanitizer::CopyGmToCbufV2ParamField, sanitizer::FlagParamField,
-    sanitizer::BufferParamField>;
+    sanitizer::CopyGmToCbufMultiNd2NzParamField, sanitizer::CopyGmToCbufMultiDn2NzParamField,
+    sanitizer::CopyUbufToGmAlignV2ParamField, sanitizer::CopyGmToCbufV2ParamField, sanitizer::FixL0cToOutParamField,
+    sanitizer::FlagParamField, sanitizer::BufferParamField>;
 
-using CceTraceCallbackData = std::variant<DeviceMemoryAccessDataArray, AclsanDeviceSyncData>;
+using CceTraceCallbackData = std::variant<MemoryCbdata, AclsanDeviceSyncData>;
 
 struct TraceCallbackContext {
     uint64_t transferBytes;

@@ -14,6 +14,7 @@
 
 #include <array>
 #include <cstdint>
+#include <limits>
 #include <variant>
 
 namespace aclsan {
@@ -27,6 +28,71 @@ constexpr uint32_t kPipeMte2 = 2;
 
 using DecodedOperand =
     std::variant<sanitizer::CopyOperand, sanitizer::NdDmaOperand, sanitizer::FlagOperand, sanitizer::BufferParamField>;
+
+uint64_t ExtractBitRange(uint64_t value, uint32_t begin, uint32_t end) noexcept
+{
+    return (value >> begin) & ((1ULL << (end - begin)) - 1ULL);
+}
+
+uint8_t FixpipeDestinationElementBytes(uint64_t quantPre) noexcept
+{
+    switch (quantPre) {
+        case 0:
+        case 14:
+        case 15:
+            return 4;
+        case 1:
+        case 10:
+        case 11:
+        case 16:
+        case 31:
+        case 32:
+        case 33:
+        case 34:
+        case 35:
+        case 36:
+            return 2;
+        case 2:
+        case 3:
+        case 4:
+        case 5:
+        case 8:
+        case 9:
+        case 12:
+        case 13:
+        case 23:
+        case 24:
+            return 1;
+        default:
+            return 0;
+    }
+}
+
+bool MultiplyWithoutOverflow(uint64_t left, uint64_t right, uint64_t& product) noexcept
+{
+    if (left != 0 && right > std::numeric_limits<uint64_t>::max() / left) {
+        return false;
+    }
+    product = left * right;
+    return true;
+}
+
+uint64_t MultiInstructionElementBytes(uint64_t instructionId) noexcept
+{
+    switch (static_cast<sanitizer::CceInstructionId>(instructionId)) {
+        case sanitizer::CceInstructionId::CopyGmToCbufMultiNd2NzB8:
+        case sanitizer::CceInstructionId::CopyGmToCbufMultiDn2NzB8:
+            return 1;
+        case sanitizer::CceInstructionId::CopyGmToCbufMultiNd2NzB16:
+        case sanitizer::CceInstructionId::CopyGmToCbufMultiDn2NzB16:
+            return 2;
+        case sanitizer::CceInstructionId::CopyGmToCbufMultiNd2NzB32:
+        case sanitizer::CceInstructionId::CopyGmToCbufMultiDn2NzB32:
+            return 4;
+        default:
+            return 0;
+    }
+}
 
 uint32_t ToSyncAction(uint32_t instrId) noexcept
 {
@@ -127,14 +193,30 @@ void LogParamField(const CceInstructionParamField& params) noexcept
     }
 }
 
+uint64_t MemoryAccessUnitBytes(const AclsanDeviceMemoryAccessData& value) noexcept
+{
+    switch (value.layoutKind) {
+        case ACLSAN_MEM_LAYOUT_SCALAR:
+            return value.layout.scalar.bytes;
+        case ACLSAN_MEM_LAYOUT_RANGE:
+            return value.layout.range.bytes;
+        case ACLSAN_MEM_LAYOUT_BLOCK_REPEAT:
+            return value.layout.blockRepeat.blockSize;
+        case ACLSAN_MEM_LAYOUT_ND_AFFINE:
+            return value.layout.ndAffine.elementBytes;
+        default:
+            return 0;
+    }
+}
+
 void LogMemoryAccessData(const AclsanDeviceMemoryAccessData& value, uint32_t index) noexcept
 {
     ASC_SAN_DEBUG(
         "[cbdata] type=AclsanDeviceMemoryAccessData index=%u address=0x%llx memorySpace=%u accessMode=%u "
-        "accessIndex=%u accessCount=%u bytes=%llu pc=0x%llx siteId=%u instrExecId=%llu serialNo=%llu "
+        "accessIndex=%u accessCount=%u layoutKind=%u bytes=%llu pc=0x%llx siteId=%u instrExecId=%llu serialNo=%llu "
         "coreId=%u blockId=%u pipeline=%u",
         index, static_cast<unsigned long long>(value.address), value.memorySpace, value.accessMode, value.accessIndex,
-        value.accessCount, static_cast<unsigned long long>(value.layout.range.bytes),
+        value.accessCount, value.layoutKind, static_cast<unsigned long long>(MemoryAccessUnitBytes(value)),
         static_cast<unsigned long long>(value.header.pc), value.header.siteId,
         static_cast<unsigned long long>(value.header.instrExecId),
         static_cast<unsigned long long>(value.header.serialNo), value.header.coreId, value.header.blockId,
@@ -143,9 +225,10 @@ void LogMemoryAccessData(const AclsanDeviceMemoryAccessData& value, uint32_t ind
 
 void LogCallbackData(const CceTraceCallbackData& callbackData) noexcept
 {
-    if (const auto* memory = std::get_if<DeviceMemoryAccessDataArray>(&callbackData)) {
-        LogMemoryAccessData((*memory)[0], 0);
-        LogMemoryAccessData((*memory)[1], 1);
+    if (const auto* memory = std::get_if<MemoryCbdata>(&callbackData)) {
+        for (uint32_t index = 0; index < memory->size(); ++index) {
+            LogMemoryAccessData((*memory)[index], index);
+        }
         return;
     }
     if (const auto* sync = std::get_if<AclsanDeviceSyncData>(&callbackData)) {
@@ -180,13 +263,26 @@ public:
         const CceInstructionParamField& params) noexcept
     {
         if (const auto* copy = std::get_if<sanitizer::CopyGmToUbufAlignV2ParamField>(&params)) {
-            return MakeDeviceMemoryAccessData(record, context, *copy);
+            return ConvertMemoryField(record, context, MemoryInstructionField{*copy});
         }
         if (const auto* copy = std::get_if<sanitizer::CopyGmToCbufAlignV2ParamField>(&params)) {
-            return MakeDeviceMemoryAccessData(record, context, *copy);
+            return ConvertMemoryField(record, context, MemoryInstructionField{*copy});
+        }
+        if (const auto* copy = std::get_if<sanitizer::CopyGmToCbufMultiNd2NzParamField>(&params)) {
+            return ConvertMemoryField(
+                record, context,
+                MemoryInstructionField{MultiNd2NzMemoryField{*copy, static_cast<uint16_t>(record.args[4])}});
+        }
+        if (const auto* copy = std::get_if<sanitizer::CopyGmToCbufMultiDn2NzParamField>(&params)) {
+            return ConvertMemoryField(
+                record, context,
+                MemoryInstructionField{MultiDn2NzMemoryField{*copy, static_cast<uint16_t>(record.args[4])}});
         }
         if (const auto* copy = std::get_if<sanitizer::CopyUbufToGmAlignV2ParamField>(&params)) {
-            return MakeDeviceMemoryAccessData(record, context, *copy);
+            return ConvertMemoryField(record, context, MemoryInstructionField{*copy});
+        }
+        if (const auto* fixpipe = std::get_if<sanitizer::FixL0cToOutParamField>(&params)) {
+            return ConvertMemoryField(record, context, MemoryInstructionField{DecodeFixpipeField(*fixpipe, record)});
         }
         if (const auto* flag = std::get_if<sanitizer::FlagParamField>(&params)) {
             return MakeDeviceSyncData(record, context, *flag);
@@ -210,14 +306,22 @@ private:
     static const TranslationRoute* FindRoute(uint64_t instrId) noexcept
     {
         const auto instructionId = static_cast<sanitizer::CceInstructionId>(instrId);
-        static constexpr std::array<TranslationRoute, 23> kRoutes = {{
+        static constexpr std::array<TranslationRoute, 31> kRoutes = {{
             {sanitizer::CceInstructionId::CopyGmToUbufAlignV2B8, ParseCopyOperand, ConvertCopyGmToUbufAlignV2},
             {sanitizer::CceInstructionId::CopyGmToUbufAlignV2B16, ParseCopyOperand, ConvertCopyGmToUbufAlignV2},
             {sanitizer::CceInstructionId::CopyGmToUbufAlignV2B32, ParseCopyOperand, ConvertCopyGmToUbufAlignV2},
             {sanitizer::CceInstructionId::CopyGmToCbufAlignV2B8, ParseCopyOperand, ConvertCopyGmToCbufAlignV2},
             {sanitizer::CceInstructionId::CopyGmToCbufAlignV2B16, ParseCopyOperand, ConvertCopyGmToCbufAlignV2},
             {sanitizer::CceInstructionId::CopyGmToCbufAlignV2B32, ParseCopyOperand, ConvertCopyGmToCbufAlignV2},
+            {sanitizer::CceInstructionId::CopyGmToCbufMultiNd2NzB8, ParseCopyOperand, ConvertCopyGmToCbufMultiNd2Nz},
+            {sanitizer::CceInstructionId::CopyGmToCbufMultiNd2NzB16, ParseCopyOperand, ConvertCopyGmToCbufMultiNd2Nz},
+            {sanitizer::CceInstructionId::CopyGmToCbufMultiNd2NzB32, ParseCopyOperand, ConvertCopyGmToCbufMultiNd2Nz},
+            {sanitizer::CceInstructionId::CopyGmToCbufMultiDn2NzB8, ParseCopyOperand, ConvertCopyGmToCbufMultiDn2Nz},
+            {sanitizer::CceInstructionId::CopyGmToCbufMultiDn2NzB16, ParseCopyOperand, ConvertCopyGmToCbufMultiDn2Nz},
+            {sanitizer::CceInstructionId::CopyGmToCbufMultiDn2NzB32, ParseCopyOperand, ConvertCopyGmToCbufMultiDn2Nz},
             {sanitizer::CceInstructionId::CopyUbufToGmAlignV2, ParseCopyOperand, ConvertCopyUbufToGmAlignV2},
+            {sanitizer::CceInstructionId::FixL0cToOutF32, ParseCopyOperand, ConvertFixL0cToOut},
+            {sanitizer::CceInstructionId::FixL0cToOutS32, ParseCopyOperand, ConvertFixL0cToOut},
             {sanitizer::CceInstructionId::SetFlag, ParseFlagOperand, ConvertFlag},
             {sanitizer::CceInstructionId::SetFlagI, ParseFlagOperand, ConvertFlag},
             {sanitizer::CceInstructionId::WaitFlag, ParseFlagOperand, ConvertFlag},
@@ -281,6 +385,34 @@ private:
         return CceInstructionParamField{sanitizer::ConvertCopyGmToCbufAlignV2Operand(*copyOperand)};
     }
 
+    static std::optional<CceInstructionParamField> ConvertCopyGmToCbufMultiNd2Nz(const DecodedOperand& operand) noexcept
+    {
+        const auto* copyOperand = std::get_if<sanitizer::CopyOperand>(&operand);
+        if (copyOperand == nullptr) {
+            return std::nullopt;
+        }
+        return CceInstructionParamField{sanitizer::ConvertCopyGmToCbufMultiNd2NzOperand(*copyOperand)};
+    }
+
+    static std::optional<CceInstructionParamField> ConvertCopyGmToCbufMultiDn2Nz(const DecodedOperand& operand) noexcept
+    {
+        const auto* copyOperand = std::get_if<sanitizer::CopyOperand>(&operand);
+        if (copyOperand == nullptr) {
+            return std::nullopt;
+        }
+        return CceInstructionParamField{sanitizer::ConvertCopyGmToCbufMultiDn2NzOperand(*copyOperand)};
+    }
+
+    static std::optional<CceInstructionParamField> ConvertFixL0cToOut(const DecodedOperand& operand) noexcept
+    {
+        const auto* copyOperand = std::get_if<sanitizer::CopyOperand>(&operand);
+        if (copyOperand == nullptr) {
+            return std::nullopt;
+        }
+        return CceInstructionParamField{
+            sanitizer::FixL0cToOutParamField{copyOperand->instr_id, copyOperand->dstAddr, copyOperand->srcAddr}};
+    }
+
     static std::optional<CceInstructionParamField> ConvertCopyUbufToGmAlignV2(const DecodedOperand& operand) noexcept
     {
         const auto* copyOperand = std::get_if<sanitizer::CopyOperand>(&operand);
@@ -309,6 +441,45 @@ private:
         return CceInstructionParamField{*bufferOperand};
     }
 
+    static FixpipeMemoryField DecodeFixpipeField(
+        const sanitizer::FixL0cToOutParamField& field, const sanitizer::AscsanRawTraceRecord& record) noexcept
+    {
+        const uint64_t config0 = record.args[2];
+        const uint64_t config1 = record.args[3];
+        const uint8_t quantPre =
+            static_cast<uint8_t>(ExtractBitRange(config1, 34, 39) | (ExtractBitRange(config1, 29, 30) << 5U));
+        return {
+            field,
+            static_cast<uint16_t>(ExtractBitRange(config0, 4, 16)),
+            static_cast<uint16_t>(ExtractBitRange(config0, 16, 32)),
+            static_cast<uint32_t>(ExtractBitRange(config0, 32, 64)),
+            quantPre,
+            ExtractBitRange(config1, 42, 43) != 0,
+            ExtractBitRange(config1, 43, 44) != 0,
+            ExtractBitRange(config1, 62, 63) != 0,
+            FixpipeDestinationElementBytes(quantPre),
+        };
+    }
+
+    static std::optional<CceTraceCallbackData> ConvertMemoryField(
+        const sanitizer::AscsanRawTraceRecord& record, const TraceCallbackContext& context,
+        MemoryInstructionField field) noexcept
+    {
+        const MemoryCbdataContext memoryContext{record.pc,      context.instrExecId, context.serialNo, record.siteId,
+                                                context.coreId, record.blockId,      record.pipeline};
+        MemoryCbdataResult result = MemoryFieldToCbdataConverter{memoryContext}.Convert(field);
+        switch (result.status) {
+            case MemoryCbdataStatus::SUCCESS:
+            case MemoryCbdataStatus::NO_ACCESS:
+                return CceTraceCallbackData{std::move(result.data)};
+            case MemoryCbdataStatus::INVALID_FIELD:
+            case MemoryCbdataStatus::ARITHMETIC_OVERFLOW:
+            case MemoryCbdataStatus::RESOURCE_EXHAUSTED:
+                return std::nullopt;
+        }
+        return std::nullopt;
+    }
+
     static AclsanDeviceEventHeader MakeDeviceEventHeader(
         const sanitizer::AscsanRawTraceRecord& record, const TraceCallbackContext& context, uint32_t callbackDataSize,
         uint32_t sourceKind) noexcept
@@ -320,54 +491,6 @@ private:
                 kDefaultDeviceId,    context.coreId,
                 record.blockId,      kBlockTypeAiv,
                 record.pipeline,     0};
-    }
-
-    static AclsanDeviceMemoryAccessData MakeDeviceMemoryAccessData(
-        const AclsanDeviceEventHeader& header, uint64_t address, AclsanDeviceMemorySpace memorySpace,
-        uint32_t accessMode, uint32_t accessIndex, uint64_t transferBytes) noexcept
-    {
-        AclsanDeviceMemoryAccessData callbackData{};
-        callbackData.header = header;
-        callbackData.address = address;
-        callbackData.memorySpace = static_cast<uint32_t>(memorySpace);
-        callbackData.accessMode = accessMode;
-        callbackData.accessIndex = accessIndex;
-        callbackData.accessCount = kDataCopyAccessCount;
-        callbackData.layoutKind = ACLSAN_MEM_LAYOUT_RANGE;
-        callbackData.layout.range.bytes = transferBytes;
-        return callbackData;
-    }
-
-    template <typename ParamField>
-    static CceTraceCallbackData MakeDeviceMemoryAccessData(
-        const sanitizer::AscsanRawTraceRecord& record, const TraceCallbackContext& context,
-        const ParamField& params) noexcept
-    {
-        const AclsanDeviceEventHeader header =
-            MakeDeviceEventHeader(record, context, static_cast<uint32_t>(sizeof(AclsanDeviceMemoryAccessData)), 0);
-        return DeviceMemoryAccessDataArray{
-            MakeDeviceMemoryAccessData(
-                header, params.srcAddr, ParamField::srcPos, ACLSAN_DEVICE_MEMORY_ACCESS_READ, 0, context.transferBytes),
-            MakeDeviceMemoryAccessData(
-                header, params.dstAddr, ParamField::dstPos, ACLSAN_DEVICE_MEMORY_ACCESS_WRITE, 1,
-                context.transferBytes),
-        };
-    }
-
-    static CceTraceCallbackData MakeDeviceMemoryAccessData(
-        const sanitizer::AscsanRawTraceRecord& record, const TraceCallbackContext& context,
-        const sanitizer::CopyUbufToGmAlignV2ParamField& params) noexcept
-    {
-        const AclsanDeviceEventHeader header =
-            MakeDeviceEventHeader(record, context, static_cast<uint32_t>(sizeof(AclsanDeviceMemoryAccessData)), 0);
-        return DeviceMemoryAccessDataArray{
-            MakeDeviceMemoryAccessData(
-                header, params.srcAddr, ACLSAN_DEVICE_MEMORY_SPACE_UB, ACLSAN_DEVICE_MEMORY_ACCESS_READ, 0,
-                context.transferBytes),
-            MakeDeviceMemoryAccessData(
-                header, params.dstAddr, ACLSAN_DEVICE_MEMORY_SPACE_GM, ACLSAN_DEVICE_MEMORY_ACCESS_WRITE, 1,
-                context.transferBytes),
-        };
     }
 
     static CceTraceCallbackData MakeDeviceSyncData(
@@ -456,6 +579,36 @@ uint64_t DecodeRawTraceTransferBytes(const sanitizer::AscsanRawTraceRecord& reco
     }
     if (const auto* copy = std::get_if<sanitizer::CopyUbufToGmAlignV2ParamField>(&*params)) {
         return static_cast<uint64_t>(copy->burstNum) * copy->burstLen;
+    }
+    uint64_t transferBytes = 0;
+    if (const auto* copy = std::get_if<sanitizer::CopyGmToCbufMultiNd2NzParamField>(&*params)) {
+        uint64_t matrixElements = 0;
+        return MultiplyWithoutOverflow(record.args[4], copy->nValue, matrixElements) &&
+                       MultiplyWithoutOverflow(matrixElements, copy->dValue, matrixElements) &&
+                       MultiplyWithoutOverflow(
+                           matrixElements, MultiInstructionElementBytes(record.instrId), transferBytes) ?
+                   transferBytes :
+                   0;
+    }
+    if (const auto* copy = std::get_if<sanitizer::CopyGmToCbufMultiDn2NzParamField>(&*params)) {
+        uint64_t matrixElements = 0;
+        return MultiplyWithoutOverflow(record.args[4], copy->nValue, matrixElements) &&
+                       MultiplyWithoutOverflow(matrixElements, copy->dValue, matrixElements) &&
+                       MultiplyWithoutOverflow(
+                           matrixElements, MultiInstructionElementBytes(record.instrId), transferBytes) ?
+                   transferBytes :
+                   0;
+    }
+    if (std::get_if<sanitizer::FixL0cToOutParamField>(&*params) != nullptr) {
+        const uint64_t nSize = ExtractBitRange(record.args[2], 4, 16);
+        const uint64_t mSize = ExtractBitRange(record.args[2], 16, 32);
+        const uint64_t quantPre =
+            ExtractBitRange(record.args[3], 34, 39) | (ExtractBitRange(record.args[3], 29, 30) << 5U);
+        const uint64_t elementBytes = FixpipeDestinationElementBytes(quantPre);
+        return MultiplyWithoutOverflow(nSize, mSize, transferBytes) &&
+                       MultiplyWithoutOverflow(transferBytes, elementBytes, transferBytes) ?
+                   transferBytes :
+                   0;
     }
     return 0;
 }

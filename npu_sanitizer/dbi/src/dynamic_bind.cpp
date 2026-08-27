@@ -36,7 +36,7 @@ aclsan::ProbeGroup BindingGroup(const BindingSpec& binding)
 {
     using aclsan::ProbeGroup;
     const uint16_t id = binding.apiId;
-    if ((id >= 72 && id <= 82) || (id >= 84 && id <= 89) || id == 149 || id == 150) {
+    if ((id >= 72 && id <= 82) || (id >= 84 && id <= 89) || id == 149 || id == 150 || id == 399) {
         return ProbeGroup::Mte2;
     }
     if (id == 83 || id == 173) {
@@ -107,6 +107,8 @@ const std::vector<BindingSpec>& AllBindings()
         // SET_L1_2D.b16/b32.
         {InstrType::SET_L1_2D_B16, 149, "__sanitizer_report_set_l1_2d_b16", {0, 1}},
         {InstrType::SET_L1_2D_B32, 150, "__sanitizer_report_set_l1_2d_b32", {0, 1}},
+        // SET_MTE2_NZ_PARA. The low 16 bits provide matrixNum for subsequent MULTI copies in the same block.
+        {InstrType::SET_MTE2_NZ_PARA, 399, "__sanitizer_report_set_mte2_nz_para", {0}},
 
         // MTE3: MOV_UB_TO_OUT_ALIGN_V2.
         {InstrType::COPY_UBUF_TO_GM_ALIGN_V2, 83, "__sanitizer_report_copy_ubuf_to_gm_align_v2", {0, 1, 2, 3}},

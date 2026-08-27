@@ -32,6 +32,7 @@ add_library(acl_san SHARED
   src/aclsan_api.cpp
   src/aclsan_dispatch_cb.cpp
   src/aclsan_hook_aclrt.cpp
+  src/aclsan_memory_cbdata.cpp
   src/aclsan_trace_buffer.cpp
   src/aclsan_trace_runtime.cpp
   src/aclsan_translate_device_data.cpp
@@ -110,6 +111,7 @@ if(ENABLE_TEST)
     src/aclsan_trace_buffer.cpp
     src/aclsan_trace_runtime.cpp
     src/aclsan_translate_device_data.cpp
+    src/aclsan_memory_cbdata.cpp
     src/cce_instr_struct_dma.cpp
     src/cce_instr_types.cpp
   )
@@ -147,6 +149,7 @@ if(ENABLE_TEST)
   add_executable(aclsan_translate_device_data_test
     tests/aclsan_translate_device_data_test.cpp
     src/aclsan_translate_device_data.cpp
+    src/aclsan_memory_cbdata.cpp
     src/cce_instr_struct_dma.cpp
     src/cce_instr_types.cpp
   )
@@ -154,6 +157,17 @@ if(ENABLE_TEST)
   target_compile_options(aclsan_translate_device_data_test PRIVATE -Wall -Wextra -Werror)
   target_include_directories(aclsan_translate_device_data_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
   target_link_libraries(aclsan_translate_device_data_test PRIVATE npu_compute_integration_headers)
+  add_test(NAME aclsan_translate_device_data_test COMMAND aclsan_translate_device_data_test)
+
+  add_executable(aclsan_memory_cbdata_test
+    tests/aclsan_memory_cbdata_test.cpp
+    src/aclsan_memory_cbdata.cpp
+  )
+  target_compile_features(aclsan_memory_cbdata_test PRIVATE cxx_std_17)
+  target_compile_options(aclsan_memory_cbdata_test PRIVATE -Wall -Wextra -Werror)
+  target_include_directories(aclsan_memory_cbdata_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
+  target_link_libraries(aclsan_memory_cbdata_test PRIVATE npu_compute_integration_headers)
+  add_test(NAME aclsan_memory_cbdata_test COMMAND aclsan_memory_cbdata_test)
 
   add_executable(cce_instr_header_contract_test tests/cce_instr_header_contract_test.cpp)
   target_compile_features(cce_instr_header_contract_test PRIVATE cxx_std_17)
