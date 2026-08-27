@@ -99,6 +99,7 @@ int main()
     ScopedEnvironmentVariable dbiArch("NPU_CHECK_DBI_ARCH");
     ScopedEnvironmentVariable dbiArgSize("NPU_CHECK_DBI_ARG_SIZE");
     ScopedEnvironmentVariable dbiStrict("NPU_CHECK_DBI_STRICT");
+    ScopedEnvironmentVariable dbiSourceRoot("NPU_CHECK_DBI_SOURCE_ROOT");
     ScopedEnvironmentVariable probeObject("ACLSAN_PROBE_OBJECT");
     ScopedEnvironmentVariable probeCtrlBinary("ACLSAN_PROBE_CTRL_BINARY");
     ScopedEnvironmentVariable probeSymbolOrdering("ACLSAN_PROBE_SYMBOL_ORDERING");
@@ -108,6 +109,7 @@ int main()
     CHECK(dbiArch.Unset() == 0);
     CHECK(dbiArgSize.Unset() == 0);
     CHECK(dbiStrict.Unset() == 0);
+    CHECK(dbiSourceRoot.Set("/missing/dbi-source") == 0);
     CHECK(probeObject.Set("/missing/probe.o") == 0);
     CHECK(probeCtrlBinary.Set("/missing/ctrl.bin") == 0);
     CHECK(probeSymbolOrdering.Set("/missing/symbol_ordering.txt") == 0);
@@ -152,6 +154,12 @@ int main()
     g_recurseDataLoad = true;
     CHECK(aclrtBinaryLoadFromData(binary, sizeof(binary), &dataOptions, &dataHandle) == 81);
     CHECK(g_originalDataCalls == dataCallsBeforeRecursion + 2);
+
+    CHECK(dbiStrict.Set("1") == 0);
+    const int dataCallsBeforeStrictFailure = g_originalDataCalls;
+    CHECK(aclrtBinaryLoadFromData(binary, sizeof(binary), &dataOptions, &dataHandle) == ACL_ERROR_FAILURE);
+    CHECK(g_originalDataCalls == dataCallsBeforeStrictFailure);
+    CHECK(dbiStrict.Unset() == 0);
 
     CHECK(aclsanUnsubscribe(subscriber) == ACLSAN_STATUS_SUCCESS);
     CHECK(aclrtBinaryLoadFromData(binary, sizeof(binary), &dataOptions, &dataHandle) == 81);

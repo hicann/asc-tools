@@ -14,25 +14,6 @@ endif()
 
 find_package(Threads REQUIRED)
 
-find_path(NPU_CHECK_ACL_INCLUDE_DIR
-  NAMES acl/acl_rt.h
-  HINTS
-    "${NPUCOMPUTE_ACL_INCLUDE_DIR}"
-    "${ASCEND_CANN_PACKAGE_PATH}"
-    "$ENV{ASCEND_HOME_PATH}"
-    "/usr/local/Ascend/cann"
-    "/usr/local/Ascend/cann-9.2.0"
-  PATH_SUFFIXES "${CMAKE_SYSTEM_PROCESSOR}-linux/include" include
-)
-if(NPU_CHECK_ACL_INCLUDE_DIR)
-  set(NPU_CHECK_HAS_ACL_DBI_HOOK ON)
-else()
-  set(NPU_CHECK_HAS_ACL_DBI_HOOK OFF)
-  message(STATUS "CANN acl/acl_rt.h was not found; ACL DBI binary-load hooks are disabled")
-endif()
-set(NPU_CHECK_ACL_INCLUDE_DIR "${NPU_CHECK_ACL_INCLUDE_DIR}" PARENT_SCOPE)
-set(NPU_CHECK_HAS_ACL_DBI_HOOK "${NPU_CHECK_HAS_ACL_DBI_HOOK}" PARENT_SCOPE)
-
 add_library(npu_check_dbi_ctrlbin STATIC
   src/dynamic_bind.cpp
   src/msbit/MSBit.cpp
@@ -52,20 +33,12 @@ set_target_properties(npu_check_dbi_ctrlbin PROPERTIES
 )
 
 add_library(npu_check_dbi_engine STATIC
+  src/binary_instrumenter.cpp
   src/dbi_pipeline.cpp
   src/tool_runner.cpp
 )
-if(NPU_CHECK_HAS_ACL_DBI_HOOK)
-  target_sources(npu_check_dbi_engine PRIVATE src/acl_hook.cpp)
-endif()
 target_compile_features(npu_check_dbi_engine PUBLIC cxx_std_17)
 target_include_directories(npu_check_dbi_engine PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
-if(NPU_CHECK_HAS_ACL_DBI_HOOK)
-  target_include_directories(npu_check_dbi_engine PUBLIC ${NPU_CHECK_ACL_INCLUDE_DIR})
-endif()
-if(TARGET npu_compute_integration_headers)
-  target_link_libraries(npu_check_dbi_engine PUBLIC npu_compute_integration_headers)
-endif()
 target_compile_options(npu_check_dbi_engine PRIVATE -Wall -Wextra -Werror)
 target_link_libraries(npu_check_dbi_engine
   PUBLIC npu_check_dbi_ctrlbin

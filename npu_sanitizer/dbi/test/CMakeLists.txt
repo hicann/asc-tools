@@ -13,6 +13,11 @@ add_test(NAME aclsan.probe_declaration_contract
     -DDBI_ROOT=${CMAKE_CURRENT_SOURCE_DIR}/..
     -P ${CMAKE_CURRENT_SOURCE_DIR}/probe_declaration_contract_test.cmake)
 
+add_test(NAME aclsan.no_legacy_acl_hook_registration
+  COMMAND ${CMAKE_COMMAND}
+    -DDBI_ROOT=${CMAKE_CURRENT_SOURCE_DIR}/..
+    -P ${CMAKE_CURRENT_SOURCE_DIR}/no_legacy_acl_hook_registration_test.cmake)
+
 if(NPU_CHECK_RUN_REAL_DBI_HARDWARE AND NOT NPU_CHECK_ENABLE_REAL_DBI_FLOW)
   message(FATAL_ERROR "NPU_CHECK_RUN_REAL_DBI_HARDWARE requires NPU_CHECK_ENABLE_REAL_DBI_FLOW=ON")
 endif()

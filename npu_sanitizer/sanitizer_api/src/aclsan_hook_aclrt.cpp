@@ -9,7 +9,7 @@
  */
 
 #include "aclsan/aclsan_api.h"
-#include "acl_hook.h"
+#include "binary_instrumenter.h"
 #include "internal/aclsan_active_probe_plan.h"
 #include "internal/aclsan_dispatch_cb.h"
 #include "internal/aclsan_internal.h"
@@ -39,6 +39,16 @@ bool IsHookRequired(const std::set<aclrtApiId>& requiredHooks, aclrtApiId apiId)
 namespace {
 
 bool g_hookStateValid = true;
+thread_local bool g_binaryLoadInProgress = false;
+
+class BinaryLoadGuard {
+public:
+    BinaryLoadGuard() { g_binaryLoadInProgress = true; }
+    ~BinaryLoadGuard() { g_binaryLoadInProgress = false; }
+
+    BinaryLoadGuard(const BinaryLoadGuard&) = delete;
+    BinaryLoadGuard& operator=(const BinaryLoadGuard&) = delete;
+};
 
 template <aclrtApiId ApiId>
 struct RuntimeFunctionTraits;
@@ -130,6 +140,18 @@ AclsanSynchronizeData MakeSynchronizeData(const char* apiName, aclrtStream strea
     return {MakeCallbackCommonData(apiName, result, static_cast<uint32_t>(sizeof(AclsanSynchronizeData))), stream};
 }
 
+struct InstrumentedBinaryLoadContext {
+    aclrtBinaryLoadFromDataFunc original = nullptr;
+    const aclrtBinaryLoadOptions* options = nullptr;
+    aclrtBinHandle* binHandle = nullptr;
+};
+
+int32_t LoadInstrumentedBinary(const void* data, size_t length, void* userdata)
+{
+    auto& context = *static_cast<InstrumentedBinaryLoadContext*>(userdata);
+    return context.original(data, length, context.options, context.binHandle);
+}
+
 aclError aclrtMallocHook(void** deviceAddress, std::size_t size, aclrtMemMallocPolicy policy) noexcept
 {
     const auto original = GetOriginalRuntimeFunction<ACL_RT_API_aclrtMalloc>();
@@ -167,13 +189,29 @@ aclError aclrtBinaryLoadFromDataHook(
         return ACL_ERROR_UNINITIALIZE;
     }
 
-    std::shared_lock<std::shared_mutex> planLock;
-    if (!aclsan::IsBinaryLoadHookReentrant()) {
-        planLock = std::shared_lock<std::shared_mutex>(aclsan::ActiveProbePlanMutex());
+    if (g_binaryLoadInProgress) {
+        const aclError result = original(data, length, options, binHandle);
+        if (result == ACL_SUCCESS && binHandle != nullptr) {
+            aclsan::RecordTraceBinaryLoadFromData(*binHandle, false, data, length);
+        }
+        return result;
     }
+
+    const std::shared_lock<std::shared_mutex> planLock(aclsan::ActiveProbePlanMutex());
+    const BinaryLoadGuard guard;
     bool loadedPatched = false;
-    const aclError result = aclsan::HandleBinaryLoadFromDataWithDefaultConfig(
-        data, length, options, binHandle, original, aclsan::SnapshotActiveProbePlan(), &loadedPatched);
+    InstrumentedBinaryLoadContext loadContext{original, options, binHandle};
+    const aclsan::RuntimeBinaryInstrumentationResult instrumentation = aclsan::InstrumentRuntimeBinary(
+        data, length, aclsan::SnapshotActiveProbePlan(), &LoadInstrumentedBinary, &loadContext);
+    aclError result = ACL_ERROR_FAILURE;
+    if (instrumentation.status == aclsan::BinaryInstrumentationStatus::Instrumented) {
+        result = instrumentation.consumerStatus;
+        loadedPatched = result == ACL_SUCCESS;
+    } else if (instrumentation.status == aclsan::BinaryInstrumentationStatus::Failed) {
+        result = instrumentation.strict != 0 ? ACL_ERROR_FAILURE : original(data, length, options, binHandle);
+    } else {
+        result = original(data, length, options, binHandle);
+    }
     if (result == ACL_SUCCESS && binHandle != nullptr) {
         aclsan::RecordTraceBinaryLoadFromData(*binHandle, loadedPatched, data, length);
     }

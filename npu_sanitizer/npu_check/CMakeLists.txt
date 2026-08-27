@@ -210,20 +210,14 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR OR ENABLE_TEST)
   target_link_libraries(npu_check_dbi_integration_tests PRIVATE npu_check_dbi_ctrlbin GTest::gtest)
   add_test(NAME npu_check_dbi_integration COMMAND npu_check_dbi_integration_tests)
 
-  if(NPU_CHECK_HAS_ACL_DBI_HOOK)
-    add_executable(npu_check_dbi_acl_hook_tests
-      tests/gtest_main.cpp
-      ${NPU_CHECK_DBI_TEST_DIR}/acl_hook_test.cpp
-    )
-    target_compile_features(npu_check_dbi_acl_hook_tests PRIVATE cxx_std_17)
-    target_compile_definitions(npu_check_dbi_acl_hook_tests PRIVATE _GLIBCXX_USE_CXX11_ABI=0)
-    target_include_directories(npu_check_dbi_acl_hook_tests PRIVATE
-      ${NPU_CHECK_DBI_INCLUDE_DIR}
-      ${NPU_CHECK_ACL_INCLUDE_DIR}
-    )
-    target_link_libraries(npu_check_dbi_acl_hook_tests PRIVATE npu_check_dbi_engine GTest::gtest)
-    set_target_properties(npu_check_dbi_acl_hook_tests PROPERTIES ENABLE_EXPORTS ON)
-    add_test(NAME npu_check_dbi_acl_hook COMMAND npu_check_dbi_acl_hook_tests)
-  endif()
+  add_executable(npu_check_dbi_binary_instrumenter_tests
+    tests/gtest_main.cpp
+    ${NPU_CHECK_DBI_TEST_DIR}/binary_instrumenter_test.cpp
+  )
+  target_compile_features(npu_check_dbi_binary_instrumenter_tests PRIVATE cxx_std_17)
+  target_compile_definitions(npu_check_dbi_binary_instrumenter_tests PRIVATE _GLIBCXX_USE_CXX11_ABI=0)
+  target_include_directories(npu_check_dbi_binary_instrumenter_tests PRIVATE ${NPU_CHECK_DBI_INCLUDE_DIR})
+  target_link_libraries(npu_check_dbi_binary_instrumenter_tests PRIVATE npu_check_dbi_engine GTest::gtest)
+  add_test(NAME npu_check_dbi_binary_instrumenter COMMAND npu_check_dbi_binary_instrumenter_tests)
 
 endif()
