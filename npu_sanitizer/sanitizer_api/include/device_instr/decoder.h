@@ -1,0 +1,71 @@
+/**
+ * Copyright (c) 2026 Huawei Technologies Co., Ltd.
+ * This program is free software, you can redistribute it and/or modify it under the terms and conditions of
+ * CANN Open Software License Agreement Version 2.0 (the "License").
+ * Please refer to the License for details. You may not use this file except in compliance with the License.
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
+ * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
+ * See LICENSE in the root of the software repository for the full text of the License.
+ */
+
+#ifndef NPU_SANITIZER_SANITIZER_API_DEVICE_INSTR_DECODER_H_
+#define NPU_SANITIZER_SANITIZER_API_DEVICE_INSTR_DECODER_H_
+
+#include "device_instr/common/device_instr_struct_dma.h"
+#include "device_instr/common/device_instr_struct_register.h"
+#include "device_instr/common/device_instr_struct_sync.h"
+#include "trace_buffer_abi.h"
+
+#include <optional>
+#include <variant>
+
+namespace aclsan {
+
+// 将不同的指令合并，例如CopyGmToUbufAlignB16/B32/B8合并为一个
+enum class DeviceInstructionKind : uint32_t {
+    InvalidInstruction, // 默认值，错误场景
+
+    CopyGmToUbufAlignV2, // InstructionId::CopyGmToUbufAlignV2B8/B16/B32 -> CopyGmToUbufAlignV2ParamField
+    CopyGmToCbufAlignV2, // InstructionId::CopyGmToCbufAlignV2B8/B16/B32 -> CopyGmToCbufAlignV2ParamField
+    CopyUbufToGmAlignV2, // InstructionId::CopyUbufToGmAlignV2           -> CopyUbufToGmAlignV2ParamField
+    CopyGmToCbufMulti,   // InstructionId::CopyGmToCbufMulti*            -> CopyGmToCbufMultiParamField<DN2NZ/ND2NZ>
+    CopyGmToCbufV2,      // InstructionId::CopyGmToCbufV2                -> CopyGmToCbufV2ParamField
+    LoadGmToCbuf2DV2,    // InstructionId::LoadGmToCbuf2DV2              -> LoadGmToCbuf2DV2ParamField
+    NdDmaOutToUbuf,      // InstructionId::NdDmaOutToUbufB8/B16/B32      -> NdDmaOutToUbufParamField
+    SetL12D,             // InstructionId::SetL12DB16/B32                -> SetL12DParamField
+    FixL0cToOut,         // InstructionId::FixL0cToOutF32/S32            -> FixL0cToOutParamField
+    SetPadding,          // InstructionId::SetPadding                    -> SetPaddingParamField
+
+    SetFlag,  // InstructionId::SetFlag/SetFlagI/SetFlagV/SetFlagIV     -> FlagParamField
+    WaitFlag, // InstructionId::WaitFlag/WaitFlagI/WaitFlagV/WaitFlagIV -> FlagParamField
+    GetBuf,   // InstructionId::GetBuf/GetBufI/GetBufV/GetBufIV         -> SyncBufParamField
+    RlsBuf,   // InstructionId::RlsBuf/RlsBufI/RlsBufV/RlsBufIV         -> SyncBufParamField
+};
+
+using DeviceInstructionParamField = std::variant<
+    std::monostate, // 默认构造为空
+    CopyGmToUbufAlignV2ParamField, CopyGmToCbufAlignV2ParamField, CopyUbufToGmAlignV2ParamField,
+    CopyGmToCbufMultiDn2NzParamField, CopyGmToCbufMultiNd2NzParamField, CopyGmToCbufV2ParamField,
+    LoadGmToCbuf2DV2ParamField, NdDmaOutToUbufParamField, SetL12DParamField, FixL0cToOutParamField,
+    SetPaddingParamField, FlagParamField, SyncBufParamField>;
+
+struct DecodedInstruction {
+    DeviceInstructionKind kind = DeviceInstructionKind::InvalidInstruction;
+    AclsanDevicePipeline pipeline = ACLSAN_DEVICE_PIPE_INVALID; // 该条指令对应的流水
+    DeviceInstructionParamField params{};                       // 该条自会零对应的paramField
+};
+
+// 输入：一条raw data 输出：解码成功时为DecodedInstruction，失败时为std::nullopt
+// DecodeDeviceInstructionFunc 为函数指针
+using DecodeDeviceInstructionFunc =
+    std::optional<DecodedInstruction> (*)(const aclsan::AclsanRawTraceRecord& record) noexcept;
+
+// 示例：DeviceInstructionDecoder decoder{"dav_3510", Decode}; Decode(const aclsan::AclsanRawTraceRecord& record)
+struct DeviceInstructionDecoder {
+    const char* architecture = nullptr;
+    DecodeDeviceInstructionFunc decode = nullptr;
+};
+
+} // namespace aclsan
+
+#endif // NPU_SANITIZER_SANITIZER_API_DEVICE_INSTR_DECODER_H_

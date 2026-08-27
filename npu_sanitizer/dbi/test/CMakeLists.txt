@@ -69,7 +69,7 @@ endif()
 
 set(NPU_CHECK_REAL_DBI_SOURCE_ROOT "${CMAKE_CURRENT_BINARY_DIR}/full-flow-real-sources")
 file(MAKE_DIRECTORY "${NPU_CHECK_REAL_DBI_SOURCE_ROOT}/probes")
-foreach(probe IN ITEMS fixpipe mte1 mte2 mte3 sync)
+foreach(probe IN ITEMS fixpipe mte1 mte2 mte3 register sync)
   configure_file(
     "${CMAKE_CURRENT_SOURCE_DIR}/../src/probes/${probe}.cpp"
     "${NPU_CHECK_REAL_DBI_SOURCE_ROOT}/probes/${probe}.cpp" COPYONLY)

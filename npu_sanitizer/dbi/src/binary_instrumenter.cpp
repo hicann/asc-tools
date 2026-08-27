@@ -141,6 +141,8 @@ BinaryInstrumentationConfig DefaultBinaryInstrumentationConfig()
                 config.probeGroups.push_back(ProbeGroup::Fixpipe);
             else if (group == "sync")
                 config.probeGroups.push_back(ProbeGroup::Sync);
+            else if (group == "register")
+                config.probeGroups.push_back(ProbeGroup::Register);
         }
     }
     const std::string compilerArgCount = Env("NPU_CHECK_DBI_COMPILER_ARG_COUNT");

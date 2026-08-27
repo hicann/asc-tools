@@ -36,6 +36,9 @@ aclsan::ProbeGroup BindingGroup(const BindingSpec& binding)
 {
     using aclsan::ProbeGroup;
     const uint16_t id = binding.apiId;
+    if (id == 392) {
+        return ProbeGroup::Register;
+    }
     if ((id >= 72 && id <= 82) || (id >= 84 && id <= 89) || id == 149 || id == 150 || id == 399) {
         return ProbeGroup::Mte2;
     }
@@ -115,6 +118,8 @@ const std::vector<BindingSpec>& AllBindings()
         // MOV_UB_TO_L1.
         {InstrType::COPY_UBUF_TO_CBUF, 173, "__sanitizer_report_copy_ubuf_to_cbuf", {0, 1, 2}},
 
+        // Register: SET_PADDING.
+        {InstrType::SET_PADDING, 392, "__sanitizer_report_set_padding", {0}},
         // MTE1: LOAD_L1_TO_L0B_2D_TRANSPOSE.b8/b16/b32/b4.
         {InstrType::LOAD_CBUF_TO_CB_TRANSPOSE_B8,
          137,
@@ -287,7 +292,8 @@ namespace aclsan {
 
 std::vector<ProbeGroup> AllProbeGroups()
 {
-    return {ProbeGroup::Mte1, ProbeGroup::Mte2, ProbeGroup::Mte3, ProbeGroup::Fixpipe, ProbeGroup::Sync};
+    return {ProbeGroup::Mte1,    ProbeGroup::Mte2, ProbeGroup::Mte3,
+            ProbeGroup::Fixpipe, ProbeGroup::Sync, ProbeGroup::Register};
 }
 
 std::vector<std::string> BindingSymbols(const std::vector<ProbeGroup>& groups)

@@ -15,8 +15,8 @@ extern __attribute__((noinline)) __attribute__((weak)) __aicore__ void __sanitiz
     __gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, __cbuf__ void* dst, __ubuf__ void* src, uint64_t config)
 {
     aclsan::WriteTraceRecord(
-        memInfo, pc, bid, aclsan::PIPELINE_MTE3, 173, reinterpret_cast<uint64_t>(dst), reinterpret_cast<uint64_t>(src),
-        config, 0UL, 0UL);
+        memInfo, pc, bid, aclsan::DeviceInstructionCategory::MemoryAccess, static_cast<uint16_t>(PIPE_MTE3), 173,
+        reinterpret_cast<uint64_t>(dst), reinterpret_cast<uint64_t>(src), config, 0UL, 0UL);
 }
 
 // MOV_UB_TO_OUT_ALIGN_V2, API ID 83.
@@ -25,6 +25,6 @@ extern __attribute__((noinline)) __attribute__((weak)) __aicore__ void __sanitiz
     uint64_t config1)
 {
     aclsan::WriteTraceRecord(
-        memInfo, pc, bid, aclsan::PIPELINE_MTE3, 83, reinterpret_cast<uint64_t>(dst), reinterpret_cast<uint64_t>(src),
-        config0, config1, 0UL);
+        memInfo, pc, bid, aclsan::DeviceInstructionCategory::MemoryAccess, static_cast<uint16_t>(PIPE_MTE3), 83,
+        reinterpret_cast<uint64_t>(dst), reinterpret_cast<uint64_t>(src), config0, config1, 0UL);
 }

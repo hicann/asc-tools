@@ -20,7 +20,7 @@ grep -Fq 'add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../npu_check_cli" npu_ch
     "${demo_dir}/CMakeLists.txt"
 grep -Fq 'add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../npu_check" npu_check)' \
     "${demo_dir}/CMakeLists.txt"
-grep -Fq 'foreach(probe_source mte1 mte2 mte3 fixpipe sync)' "${demo_dir}/CMakeLists.txt"
+grep -Fq 'foreach(probe_source mte1 mte2 mte3 fixpipe register sync)' "${demo_dir}/CMakeLists.txt"
 grep -Fq '"${ACLSAN_DBI_SOURCE_DIRECTORY}/src/probes/${probe_source}.cpp"' \
     "${demo_dir}/CMakeLists.txt"
 grep -Fq '"${ACLSAN_DBI_RUNTIME_SOURCE_DIRECTORY}/probes/${probe_source}.cpp"' \

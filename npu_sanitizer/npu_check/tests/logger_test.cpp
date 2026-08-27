@@ -107,7 +107,7 @@ TEST(LoggerTest, SynccheckLogsInvalidDeviceSyncData)
         data.header.launchId = 7;
         data.header.instrExecId = 11;
         data.header.pc = 0x1234;
-        data.header.coreId = 3;
+        data.header.phyCoreId = 3;
         data.header.blockId = 5;
         data.syncKind = 99;
         data.action = 88;
@@ -121,6 +121,20 @@ TEST(LoggerTest, SynccheckLogsInvalidDeviceSyncData)
     EXPECT_NE(content.find("sync_kind=99 action=88"), std::string::npos);
     EXPECT_NE(content.find("launch=7 instr_exec=11 pc=0x1234 core=3 block=5"), std::string::npos);
     std::filesystem::remove(path, ignored);
+}
+
+TEST(SynccheckTest, PreservesDeviceBlockTypeInReport)
+{
+    Synccheck synccheck;
+    AclsanDeviceSyncData data{};
+    data.header.blockType = ACLSAN_DEVICE_BLOCK_TYPE_AICORE_VECTOR;
+    data.syncKind = ACLSAN_DEVICE_SYNC_KIND_SET_WAIT_FLAG;
+    data.action = ACLSAN_DEVICE_SYNC_ACTION_WAIT;
+
+    const auto reports = synccheck.OnDeviceSync(data);
+
+    ASSERT_EQ(reports.size(), 1U);
+    EXPECT_EQ(reports.front().triggerPoint.exec.blockType, ACLSAN_DEVICE_BLOCK_TYPE_AICORE_VECTOR);
 }
 
 } // namespace

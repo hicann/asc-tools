@@ -45,7 +45,7 @@ NpusanMemcheckReport MakeInvalidAccessReport()
     report.common.exec.functionId = 3;
     report.common.exec.pc = 0x4012;
     report.common.exec.deviceId = 0;
-    report.common.exec.coreId = 2;
+    report.common.exec.phyCoreId = 2;
     report.common.exec.blockId = 17;
     report.common.exec.pipeId = 1;
     report.common.exec.pipeName = "MTE2";
@@ -100,7 +100,7 @@ NpusanInitcheckReport MakeInitcheckReport()
     report.common.pattern = static_cast<std::uint32_t>(NpusanInitcheckPattern::kPartialUninitializedRead);
     report.common.exec.pc = 0x5128;
     report.common.exec.deviceId = 0;
-    report.common.exec.coreId = 3;
+    report.common.exec.phyCoreId = 3;
     report.common.exec.blockId = 9;
     report.common.exec.pipeName = "MTE2";
     report.common.exec.kernelName = "ReduceKernel";
@@ -130,7 +130,7 @@ NpusanRacecheckReport MakeRacecheckReport()
     report.common.pattern = static_cast<std::uint32_t>(NpusanRacecheckPattern::kHazardRaw);
     report.hazardCount = 1;
 
-    report.first.exec.coreId = 2;
+    report.first.exec.phyCoreId = 2;
     report.first.exec.blockId = 17;
     report.first.exec.pipeName = "MTE3";
     report.first.exec.pc = 0x6040;
@@ -140,7 +140,7 @@ NpusanRacecheckReport MakeRacecheckReport()
     report.first.access.accessBytes = 4;
     report.first.access.address = 0x2000;
 
-    report.second.exec.coreId = 2;
+    report.second.exec.phyCoreId = 2;
     report.second.exec.blockId = 17;
     report.second.exec.pipeName = "V";
     report.second.exec.pc = 0x6088;
@@ -161,14 +161,14 @@ NpusanRacecheckReport MakeRacecheckReport()
 }
 
 NpusanReportExecContext MakeSyncExec(
-    std::uint32_t coreId, std::uint32_t blockId, std::uint32_t pipeId, const char* pipeName, std::uint64_t pc,
+    std::uint32_t phyCoreId, std::uint32_t blockId, std::uint32_t pipeId, const char* pipeName, std::uint64_t pc,
     const char* function, std::uint64_t offset, const char* file, std::uint32_t line)
 {
     NpusanReportExecContext exec{};
     exec.pc = pc;
     exec.offset = offset;
     exec.deviceId = 0;
-    exec.coreId = coreId;
+    exec.phyCoreId = phyCoreId;
     exec.blockId = blockId;
     exec.pipeId = pipeId;
     exec.line = line;
@@ -325,7 +325,7 @@ NpusanSoccheckReport MakeSoccheckReport()
     report.common.exec.line = 54;
     report.common.exec.pc = 0x8018;
     report.common.exec.deviceId = 0;
-    report.common.exec.coreId = 1;
+    report.common.exec.phyCoreId = 1;
     report.common.exec.blockId = 3;
     report.common.exec.pipeName = "S";
 

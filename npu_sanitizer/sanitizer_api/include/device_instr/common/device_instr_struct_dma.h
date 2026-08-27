@@ -8,44 +8,43 @@
  * See LICENSE in the root of the software repository for the full text of the License.
  */
 
-#ifndef NPU_SANITIZER_SANITIZER_API_CCE_INSTR_STRUCT_DMA_H_
-#define NPU_SANITIZER_SANITIZER_API_CCE_INSTR_STRUCT_DMA_H_
+#ifndef NPU_SANITIZER_SANITIZER_API_DEVICE_INSTR_COMMON_DEVICE_INSTR_STRUCT_DMA_H_
+#define NPU_SANITIZER_SANITIZER_API_DEVICE_INSTR_COMMON_DEVICE_INSTR_STRUCT_DMA_H_
 
-#include "cce_instr_types.h"
-#include "raw_data_struct.h"
+#include "device_instr/common/device_instr_types.h"
+#include "trace_buffer_abi.h"
 
 #include <cstdint>
 
-namespace sanitizer {
+namespace aclsan {
 
 // 位域注释规则：
 // 1. bit index 从 0 开始。
-// 2. [begin:end] 是左闭右开区间，读取 begin 到 end - 1；例如 [4:24] 读取 bit 4~23。
+// 2. [begin:end] 是闭区间，读取 begin 到 end；例如 [0:3] 读取 bit 0~3，取值范围为 0~15。
 // 3. [bit] 只读取指定的一个 bit；例如 [58] 只读取 bit 58。
 // 4. 未被任何区间覆盖的 bit 是空隙位，转换时忽略，不自动并入相邻字段。
-// 5. 新增字段时，区间必须满足 0 <= begin < end <= 64，并明确写出来源 config0 或 config1。
+// 5. 新增字段时，区间必须满足 0 <= begin <= end < 64，并明确写出来源 config0 或 config1。
 
-// 已更新 参数已确认
-// 对应 CCE 指令：
 // - MOV_OUT_TO_L1_ALIGN_V2.<b8/b16/b32>
 // - MOV_OUT_TO_UB_ALIGN_V2.<b8/b16/b32>
 template <AclsanDeviceMemorySpace SrcSpace, AclsanDeviceMemorySpace DstSpace>
 struct MovAlignV2ParamField {
-    static constexpr AclsanDeviceMemorySpace srcPos = SrcSpace;
-    static constexpr AclsanDeviceMemorySpace dstPos = DstSpace;
+    static constexpr AclsanDeviceMemorySpace SRC_POS = SrcSpace;
+    static constexpr AclsanDeviceMemorySpace DST_POS = DstSpace;
 
-    uint32_t instr_id = 0; // 对应CopyOperand的instr_id
+    uint32_t instrId = 0;
+    uint32_t dataBits = 0; // InstructionId 中的 dtype 位宽，单位为 bit；0 表示未知
     uint64_t dstAddr = 0;
     uint64_t srcAddr = 0;
     uint8_t sid = 0;               // config0 [0:3]
     uint32_t burstNum = 0;         // config0 [4:24]
-    uint32_t burstLen = 0;         // config0 [25:45]
+    uint32_t burstLen = 0;         // config0 [25:45]   单位为Byte
     uint8_t leftPaddingCount = 0;  // config0 [46:51]
     uint8_t rightPaddingCount = 0; // config0 [52:57]
     bool dataSelectBit = false;    // config0 [58]
     uint8_t l2CacheControl = 0;    // config0 [60:63]
-    uint64_t burstSrcStride = 0;   // config1 [0:39]
-    uint32_t burstDstStride = 0;   // config1 [40:60]
+    uint64_t burstSrcStride = 0;   // config1 [0:39]    单位为Byte
+    uint32_t burstDstStride = 0;   // config1 [40:60]   单位为Byte
 };
 
 using CopyGmToUbufAlignV2ParamField =
@@ -53,15 +52,14 @@ using CopyGmToUbufAlignV2ParamField =
 using CopyGmToCbufAlignV2ParamField =
     MovAlignV2ParamField<ACLSAN_DEVICE_MEMORY_SPACE_GM, ACLSAN_DEVICE_MEMORY_SPACE_L1>;
 
-// 已更新 参数已确认
-// 对应 CCE 指令：
 // - MOV_OUT_TO_L1_MULTI_DN2NZ.<b8/b16/b32>
 // - MOV_OUT_TO_L1_MULTI_ND2NZ.<b8/b16/b32>
 template <NdNzConversionMode ConversionMode>
 struct CopyGmToCbufMultiParamField {
-    static constexpr NdNzConversionMode conversionMode = ConversionMode;
+    static constexpr NdNzConversionMode CONVERSION_MODE = ConversionMode;
 
-    uint32_t instr_id = 0;
+    uint32_t instrId = 0;
+    uint32_t dataBits = 0; // InstructionId 中的 dtype 位宽，单位为 bit；0 表示未知
     uint64_t dstAddr = 0;
     uint64_t srcAddr = 0;
     uint8_t sid = 0;             // config0 [0:3]
@@ -76,25 +74,26 @@ struct CopyGmToCbufMultiParamField {
 using CopyGmToCbufMultiDn2NzParamField = CopyGmToCbufMultiParamField<NdNzConversionMode::DN2NZ>;
 using CopyGmToCbufMultiNd2NzParamField = CopyGmToCbufMultiParamField<NdNzConversionMode::ND2NZ>;
 
-// 已更新 参数已确认
-// 对应 CCE 指令：MOV_OUT_TO_L1_V2
+// MOV_OUT_TO_L1_V2
 struct CopyGmToCbufV2ParamField {
-    uint32_t instr_id = 0;
+    static constexpr AclsanDeviceMemorySpace SRC_POS = ACLSAN_DEVICE_MEMORY_SPACE_GM;
+    static constexpr AclsanDeviceMemorySpace DST_POS = ACLSAN_DEVICE_MEMORY_SPACE_L1;
+
+    uint32_t instrId = 0;
     uint64_t dstAddr = 0;
     uint64_t srcAddr = 0;
     uint8_t sid = 0;             // config0 [0:3]
     uint32_t burstNum = 0;       // config0 [4:20]
-    uint32_t burstLen = 0;       // config0 [25:41]
+    uint32_t burstLen = 0;       // config0 [25:41]    单位为C0_SIZE(32B)
     uint8_t padFunctionMode = 0; // config0 [56:59]
     uint8_t l2CacheControl = 0;  // config0 [60:63]
-    uint64_t srcStride = 0;      // config1 [0:5]
-    uint32_t dstStride = 0;      // config1 [40:56]
+    uint64_t srcStride = 0;      // config1 [0:35]     单位为C0_SIZE(32B)
+    uint32_t dstStride = 0;      // config1 [40:56]    单位为C0_SIZE(32B)
 };
 
-// 已更新 参数已确认
-// 对应 CCE 指令：LOAD_OUT_TO_L1_2DV2
+// LOAD_OUT_TO_L1_2DV2
 struct LoadGmToCbuf2DV2ParamField {
-    uint32_t instr_id = 0;
+    uint32_t instrId = 0;
     uint64_t dstAddr = 0;
     uint64_t srcAddr = 0;
     uint32_t mStartPosition = 0; // config0 [0:31]
@@ -107,50 +106,26 @@ struct LoadGmToCbuf2DV2ParamField {
     uint8_t l2CacheControl = 0;  // config1 [60:63]
 };
 
-// asc_copy_ub2gm_align_impl
-// 已更新 参数已确认
-// 对应 CCE 指令：MOV_UB_TO_OUT_ALIGN_V2
+// MOV_UB_TO_OUT_ALIGN_V2
 struct CopyUbufToGmAlignV2ParamField {
-    uint32_t instr_id = 0;
+    static constexpr AclsanDeviceMemorySpace SRC_POS = ACLSAN_DEVICE_MEMORY_SPACE_UB;
+    static constexpr AclsanDeviceMemorySpace DST_POS = ACLSAN_DEVICE_MEMORY_SPACE_GM;
+
+    uint32_t instrId = 0;
     uint64_t dstAddr = 0;
     uint64_t srcAddr = 0;
     uint8_t sid = 0;            // config0 [0:3]
     uint32_t burstNum = 0;      // config0 [4:24]
-    uint32_t burstLen = 0;      // config0 [25:45]
+    uint32_t burstLen = 0;      // config0 [25:45]   单位为Byte
     uint8_t l2CacheControl = 0; // config0 [60:63]
-    uint64_t dstStride = 0;     // config1 [0:39]
-    uint32_t srcStride = 0;     // config1 [40:60]
+    uint64_t dstStride = 0;     // config1 [0:39]    单位为Byte
+    uint32_t srcStride = 0;     // config1 [40:60]   单位为Byte
 };
 
-// DONE 指令的 Operand -> ParamField 映射：
-// MOV_OUT_TO_UB_ALIGN_V2: CopyGmToUbufAlignV2Operand -> CopyGmToUbufAlignV2ParamField
-CopyGmToUbufAlignV2ParamField ConvertCopyGmToUbufAlignV2Operand(const CopyGmToUbufAlignV2Operand& operand);
-
-// MOV_OUT_TO_L1_ALIGN_V2: CopyGmToCbufAlignV2Operand -> CopyGmToCbufAlignV2ParamField
-CopyGmToCbufAlignV2ParamField ConvertCopyGmToCbufAlignV2Operand(const CopyGmToCbufAlignV2Operand& operand);
-
-// MOV_OUT_TO_L1_MULTI_DN2NZ:
-// CopyGmToCbufMultiDn2NzOperand -> CopyGmToCbufMultiDn2NzParamField
-CopyGmToCbufMultiDn2NzParamField ConvertCopyGmToCbufMultiDn2NzOperand(const CopyGmToCbufMultiDn2NzOperand& operand);
-
-// MOV_OUT_TO_L1_MULTI_ND2NZ:
-// CopyGmToCbufMultiNd2NzOperand -> CopyGmToCbufMultiNd2NzParamField
-CopyGmToCbufMultiNd2NzParamField ConvertCopyGmToCbufMultiNd2NzOperand(const CopyGmToCbufMultiNd2NzOperand& operand);
-
-// MOV_OUT_TO_L1_V2: CopyGmToCbufV2Operand -> CopyGmToCbufV2ParamField
-CopyGmToCbufV2ParamField ConvertCopyGmToCbufV2Operand(const CopyGmToCbufV2Operand& operand);
-
-// LOAD_OUT_TO_L1_2DV2: LoadGmToCbuf2DV2Operand -> LoadGmToCbuf2DV2ParamField
-LoadGmToCbuf2DV2ParamField ConvertLoadGmToCbuf2DV2Operand(const LoadGmToCbuf2DV2Operand& operand);
-
-// MOV_UB_TO_OUT_ALIGN_V2: CopyUbufToGmAlignV2Operand -> CopyUbufToGmAlignV2ParamField
-CopyUbufToGmAlignV2ParamField ConvertCopyUbufToGmAlignV2Operand(const CopyUbufToGmAlignV2Operand& operand);
-
-// 已更新 参数已确认
-// 对应 CCE 指令：
 // - ND_DMA_OUT_TO_UB.<b8/b16/b32>
 struct NdDmaParamField {
-    uint32_t instr_id = 0;
+    uint32_t instrId = 0;
+    uint32_t dataBits = 0; // InstructionId 中的 dtype 位宽，单位为 bit；0 表示未知
     uint64_t dstAddr = 0;
     uint64_t srcAddr = 0;
     uint8_t sid = 0;                    // config0 [0:3]
@@ -167,25 +142,48 @@ struct NdDmaParamField {
 
 using NdDmaOutToUbufParamField = NdDmaParamField;
 
-// 已更新 参数已确认
-// 对应 CCE 指令：SET_L1_2D.<b16/b32>
+// SET_L1_2D.<b16/b32>
 // 1个dst + 1个64B config
 struct SetL12DParamField {
-    uint32_t instr_id = 0;
+    uint32_t instrId = 0;
+    uint32_t dataBits = 0; // InstructionId 中的 dtype 位宽，单位为 bit；0 表示未知
     uint64_t dstAddr = 0;
     uint16_t repeatTimes = 0; // config0 [0:14]
     uint16_t blockNum = 0;    // config0 [16:30]
     uint16_t repeatGap = 0;   // config0 [32:46]
 };
 
-// TODO: 还没补充完整
-// 对应 CCE 指令：FIX_L0C_TO_OUT.<f32/s32>
+// FIX_L0C_TO_OUT.<f32/s32>
 struct FixL0cToOutParamField {
-    uint32_t instr_id = 0;
+    uint32_t instrId = 0;
+    uint32_t dataBits = 0; // InstructionId 中的 dtype 位宽，单位为 bit；0 表示未知
     uint64_t dstAddr = 0;
     uint64_t srcAddr = 0;
+    uint8_t sid = 0;                     // config0 [0:3]
+    uint16_t nSize = 0;                  // config0 [4:15]
+    uint16_t mSize = 0;                  // config0 [16:31]
+    uint32_t loopDstStride = 0;          // config0 [32:63]
+    uint16_t loopSrtStride = 0;          // config1 [0:15]
+    uint8_t l2CacheControl = 0;          // config1 [16:19]
+    uint8_t clipReluPre = 0;             // config1 [30:31]
+    uint8_t unitFlag = 0;                // config1 [32:33]
+    uint8_t quantPre = 0;                // config1 [29] + [34:38]  29位是most significant  TODO: 待测试
+    uint8_t reluPre = 0;                 // config1 [39:41]
+    bool splitEnable = false;            // config1 [42]
+    bool nz2ndEnable = false;            // config1 [43]
+    uint8_t quantPost = 0;               // config1 [44:48]
+    uint8_t reluPost = 0;                // config1 [49:51]
+    bool clipReluPost = false;           // config1 [52]
+    bool loopEnhanceEnable = false;      // config1 [53]
+    uint8_t eltwiseOp = 0;               // config1 [54:56]
+    bool eltwiseAntqEnable = false;      // config1 [57]
+    bool loopEnhanceMergeEnable = false; // config1 [58]
+    bool c0PadEnable = false;            // config1 [59]
+    bool winoPostEnable = false;         // config1 [60]
+    bool brcbEnable = false;             // config1 [61]
+    bool nz2dnEnable = false;            // config1 [62]
 };
 
-} // namespace sanitizer
+} // namespace aclsan
 
-#endif // NPU_SANITIZER_SANITIZER_API_CCE_INSTR_STRUCT_DMA_H_
+#endif // NPU_SANITIZER_SANITIZER_API_DEVICE_INSTR_COMMON_DEVICE_INSTR_STRUCT_DMA_H_

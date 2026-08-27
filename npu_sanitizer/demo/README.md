@@ -9,6 +9,7 @@
 | 目录 | 源文件 | 生成的可执行文件 | 说明 |
 | --- | --- | --- | --- |
 | `examples/add` | `add.asc` | `aclsan_demo_add` | AscendC 向量加法示例，校验计算结果。 |
+| `examples/padding_register_state` | `padding_register_state.asc` | `aclsan_demo_padding_register_state` | 执行两次 `SET_PADDING`，验证 padding 值进入 register manager。 |
 | `examples/synccheck` | 每个场景一个独立目录 | `aclsan_demo_synccheck_<场景名>` | 同步指令配对的正常与异常样例。 |
 | `examples/matmul_basic_api` | `matmul_basic_api.asc` | `aclsan_demo_matmul_basic_api` | 基础矩阵乘样例。 |
 | `examples/matmul_leakyrelu_basic_api` | `matmul_leakyrelu_basic_api.asc` | `aclsan_demo_matmul_leakyrelu_basic_api` | Matmul 与 LeakyRelu 融合样例。 |
@@ -70,6 +71,7 @@ bash ./npu_sanitizer/demo/run.sh
 
 ```bash
 bash ./npu_sanitizer/demo/run.sh add
+bash ./npu_sanitizer/demo/run.sh padding_register_state
 bash ./npu_sanitizer/demo/run.sh synccheck/single_pair
 bash ./npu_sanitizer/demo/run.sh synccheck/single_unconsumed
 bash ./npu_sanitizer/demo/run.sh matmul_basic_api
@@ -90,6 +92,11 @@ NPUCOMPUTE_CANN_ROOT=/path/to/cann/x86_64-linux \
 再从对应的 `build/run` 目录调用可执行文件并执行 `verify_result.py`。成功时会输出
 `test pass!`，并以结果校验、应用退出状态、UDS handshake、sanitizer summary 和
 session end 共同决定执行结果。
+
+`padding_register_state` 使用单 cube block kernel 依次执行 `asc_set_l13d_padding(0x12)` 和
+`asc_set_l13d_padding(0x34)`。Device 日志证明值为 `0x1212` 和 `0x3434` 的两条 `SET_PADDING` raw
+record 被解码并交给同一个 register-state key；`register_state_manager_test` 通过 `Get()` 独立验证
+同一 key 只保存最新值。
 
 ## 运行链路
 

@@ -9,7 +9,7 @@
  */
 
 #include "aclsan/aclsan_api.h"
-#include "cce_instr/cce_instr_types.h"
+#include "device_instr/common/instruction_id.h"
 #include "internal/aclsan_memory_cbdata.h"
 
 #include <cassert>
@@ -17,12 +17,15 @@
 
 namespace {
 
-uint32_t InstructionId(sanitizer::CceInstructionId instruction) { return static_cast<uint32_t>(instruction); }
+using aclsan::CopyGmToUbufAlignV2ParamField;
+using aclsan::InstructionId;
+
+uint32_t RawInstructionId(InstructionId instruction) { return static_cast<uint32_t>(instruction); }
 
 void TestEmptyFieldProducesNoCbdata()
 {
-    sanitizer::CopyGmToUbufAlignV2ParamField field{};
-    field.instr_id = InstructionId(sanitizer::CceInstructionId::CopyGmToUbufAlignV2B16);
+    CopyGmToUbufAlignV2ParamField field{};
+    field.instrId = RawInstructionId(InstructionId::CopyGmToUbufAlignV2B16);
 
     const auto result = aclsan::MemoryFieldToCbdataConverter{{}}.Convert(aclsan::MemoryInstructionField{field});
     assert(result.status == aclsan::MemoryCbdataStatus::NO_ACCESS);
@@ -31,8 +34,8 @@ void TestEmptyFieldProducesNoCbdata()
 
 void TestFieldAndContextProduceCbdata()
 {
-    sanitizer::CopyGmToUbufAlignV2ParamField field{};
-    field.instr_id = InstructionId(sanitizer::CceInstructionId::CopyGmToUbufAlignV2B16);
+    CopyGmToUbufAlignV2ParamField field{};
+    field.instrId = RawInstructionId(InstructionId::CopyGmToUbufAlignV2B16);
     field.srcAddr = 0x1000;
     field.burstNum = 3;
     field.burstLen = 32;
@@ -47,7 +50,7 @@ void TestFieldAndContextProduceCbdata()
     assert(access.header.instrExecId == context.instrExecId);
     assert(access.header.serialNo == context.serialNo);
     assert(access.header.siteId == context.siteId);
-    assert(access.header.coreId == context.coreId);
+    assert(access.header.phyCoreId == context.coreId);
     assert(access.header.blockId == context.blockId);
     assert(access.header.pipeline == context.pipeline);
     assert(access.address == field.srcAddr);
@@ -66,7 +69,7 @@ void TestFieldAndContextProduceCbdata()
 void TestOneFieldCanProduceMultipleCbdataRecords()
 {
     aclsan::FixpipeMemoryField field{};
-    field.field.instr_id = InstructionId(sanitizer::CceInstructionId::FixL0cToOutF32);
+    field.field.instrId = RawInstructionId(InstructionId::FixL0cToOutF32);
     field.field.dstAddr = 0x8000;
     field.nSize = 18;
     field.mSize = 4;
@@ -90,7 +93,7 @@ void TestOneFieldCanProduceMultipleCbdataRecords()
 
 void TestInvalidFieldIsRejected()
 {
-    sanitizer::CopyGmToUbufAlignV2ParamField field{};
+    CopyGmToUbufAlignV2ParamField field{};
     field.srcAddr = 0x1000;
     field.burstNum = 1;
     field.burstLen = 32;
@@ -102,8 +105,8 @@ void TestInvalidFieldIsRejected()
 
 void TestMismatchedInstructionIdIsRejected()
 {
-    sanitizer::CopyGmToUbufAlignV2ParamField field{};
-    field.instr_id = InstructionId(sanitizer::CceInstructionId::CopyGmToCbufAlignV2B16);
+    CopyGmToUbufAlignV2ParamField field{};
+    field.instrId = RawInstructionId(InstructionId::CopyGmToCbufAlignV2B16);
     field.srcAddr = 0x1000;
     field.burstNum = 1;
     field.burstLen = 32;

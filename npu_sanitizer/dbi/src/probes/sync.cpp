@@ -17,8 +17,8 @@ extern __attribute__((noinline)) __attribute__((weak)) __aicore__ void __sanitiz
     __gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, pipe_t srcPipe, pipe_t dstPipe, uint64_t eventId)
 {
     aclsan::WriteTraceRecord(
-        memInfo, pc, bid, aclsan::PIPELINE_SET_WAIT_FLAG, 440, static_cast<uint64_t>(srcPipe),
-        static_cast<uint64_t>(dstPipe), eventId, 0UL, 0UL);
+        memInfo, pc, bid, aclsan::DeviceInstructionCategory::Synchronization, static_cast<uint16_t>(PIPE_S), 440,
+        static_cast<uint64_t>(srcPipe), static_cast<uint64_t>(dstPipe), eventId, 0UL, 0UL);
 }
 
 // SET_FLAGI, API ID 441.
@@ -26,8 +26,8 @@ extern __attribute__((noinline)) __attribute__((weak)) __aicore__ void __sanitiz
     __gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, pipe_t srcPipe, pipe_t dstPipe, uint64_t eventId)
 {
     aclsan::WriteTraceRecord(
-        memInfo, pc, bid, aclsan::PIPELINE_SET_WAIT_FLAG, 441, static_cast<uint64_t>(srcPipe),
-        static_cast<uint64_t>(dstPipe), eventId, 0UL, 0UL);
+        memInfo, pc, bid, aclsan::DeviceInstructionCategory::Synchronization, static_cast<uint16_t>(PIPE_S), 441,
+        static_cast<uint64_t>(srcPipe), static_cast<uint64_t>(dstPipe), eventId, 0UL, 0UL);
 }
 
 // WAIT_FLAG, API ID 442.
@@ -35,8 +35,8 @@ extern __attribute__((noinline)) __attribute__((weak)) __aicore__ void __sanitiz
     __gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, pipe_t srcPipe, pipe_t dstPipe, uint64_t eventId)
 {
     aclsan::WriteTraceRecord(
-        memInfo, pc, bid, aclsan::PIPELINE_SET_WAIT_FLAG, 442, static_cast<uint64_t>(srcPipe),
-        static_cast<uint64_t>(dstPipe), eventId, 0UL, 0UL);
+        memInfo, pc, bid, aclsan::DeviceInstructionCategory::Synchronization, static_cast<uint16_t>(PIPE_S), 442,
+        static_cast<uint64_t>(srcPipe), static_cast<uint64_t>(dstPipe), eventId, 0UL, 0UL);
 }
 
 // WAIT_FLAGI, API ID 443.
@@ -44,8 +44,8 @@ extern __attribute__((noinline)) __attribute__((weak)) __aicore__ void __sanitiz
     __gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, pipe_t srcPipe, pipe_t dstPipe, uint64_t eventId)
 {
     aclsan::WriteTraceRecord(
-        memInfo, pc, bid, aclsan::PIPELINE_SET_WAIT_FLAG, 443, static_cast<uint64_t>(srcPipe),
-        static_cast<uint64_t>(dstPipe), eventId, 0UL, 0UL);
+        memInfo, pc, bid, aclsan::DeviceInstructionCategory::Synchronization, static_cast<uint16_t>(PIPE_S), 443,
+        static_cast<uint64_t>(srcPipe), static_cast<uint64_t>(dstPipe), eventId, 0UL, 0UL);
 }
 
 // WAIT_FLAG_DEV, API ID 445.
@@ -53,8 +53,8 @@ extern __attribute__((noinline)) __attribute__((weak)) __aicore__ void __sanitiz
     __gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, pipe_t pipe, int64_t flagId)
 {
     aclsan::WriteTraceRecord(
-        memInfo, pc, bid, aclsan::PIPELINE_SET_WAIT_FLAG, 445, static_cast<uint64_t>(pipe),
-        static_cast<uint64_t>(flagId), 0UL, 0UL, 0UL);
+        memInfo, pc, bid, aclsan::DeviceInstructionCategory::Synchronization, static_cast<uint16_t>(PIPE_S), 445,
+        static_cast<uint64_t>(pipe), static_cast<uint64_t>(flagId), 0UL, 0UL, 0UL);
 }
 
 // WAIT_FLAG_DEVI, API ID 446.
@@ -62,8 +62,8 @@ extern __attribute__((noinline)) __attribute__((weak)) __aicore__ void __sanitiz
     __gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, pipe_t pipe, uint8_t flagId)
 {
     aclsan::WriteTraceRecord(
-        memInfo, pc, bid, aclsan::PIPELINE_SET_WAIT_FLAG, 446, static_cast<uint64_t>(pipe),
-        static_cast<uint64_t>(flagId), 0UL, 0UL, 0UL);
+        memInfo, pc, bid, aclsan::DeviceInstructionCategory::Synchronization, static_cast<uint16_t>(PIPE_S), 446,
+        static_cast<uint64_t>(pipe), static_cast<uint64_t>(flagId), 0UL, 0UL, 0UL);
 }
 
 // SET_FLAG_V, API ID 456.
@@ -71,7 +71,8 @@ extern __attribute__((noinline)) __attribute__((weak)) __aicore__ void __sanitiz
     __gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, pipe_t dstPipe, uint64_t eventId)
 {
     aclsan::WriteTraceRecord(
-        memInfo, pc, bid, aclsan::PIPELINE_SET_WAIT_FLAG, 456, static_cast<uint64_t>(dstPipe), eventId, 0UL, 0UL, 0UL);
+        memInfo, pc, bid, aclsan::DeviceInstructionCategory::Synchronization, static_cast<uint16_t>(PIPE_S), 456,
+        static_cast<uint64_t>(dstPipe), eventId, 0UL, 0UL, 0UL);
 }
 
 // SET_FLAGI_V, API ID 457.
@@ -79,7 +80,8 @@ extern __attribute__((noinline)) __attribute__((weak)) __aicore__ void __sanitiz
     __gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, pipe_t dstPipe, uint64_t eventId)
 {
     aclsan::WriteTraceRecord(
-        memInfo, pc, bid, aclsan::PIPELINE_SET_WAIT_FLAG, 457, static_cast<uint64_t>(dstPipe), eventId, 0UL, 0UL, 0UL);
+        memInfo, pc, bid, aclsan::DeviceInstructionCategory::Synchronization, static_cast<uint16_t>(PIPE_S), 457,
+        static_cast<uint64_t>(dstPipe), eventId, 0UL, 0UL, 0UL);
 }
 
 // WAIT_FLAG_V, API ID 458.
@@ -87,7 +89,8 @@ extern __attribute__((noinline)) __attribute__((weak)) __aicore__ void __sanitiz
     __gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, pipe_t srcPipe, uint64_t eventId)
 {
     aclsan::WriteTraceRecord(
-        memInfo, pc, bid, aclsan::PIPELINE_SET_WAIT_FLAG, 458, static_cast<uint64_t>(srcPipe), eventId, 0UL, 0UL, 0UL);
+        memInfo, pc, bid, aclsan::DeviceInstructionCategory::Synchronization, static_cast<uint16_t>(PIPE_S), 458,
+        static_cast<uint64_t>(srcPipe), eventId, 0UL, 0UL, 0UL);
 }
 
 // WAIT_FLAGI_V, API ID 459.
@@ -95,7 +98,8 @@ extern __attribute__((noinline)) __attribute__((weak)) __aicore__ void __sanitiz
     __gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, pipe_t srcPipe, uint64_t eventId)
 {
     aclsan::WriteTraceRecord(
-        memInfo, pc, bid, aclsan::PIPELINE_SET_WAIT_FLAG, 459, static_cast<uint64_t>(srcPipe), eventId, 0UL, 0UL, 0UL);
+        memInfo, pc, bid, aclsan::DeviceInstructionCategory::Synchronization, static_cast<uint16_t>(PIPE_S), 459,
+        static_cast<uint64_t>(srcPipe), eventId, 0UL, 0UL, 0UL);
 }
 
 // WAIT_FLAG_DEV_V, API ID 469.
@@ -103,7 +107,8 @@ extern __attribute__((noinline)) __attribute__((weak)) __aicore__ void __sanitiz
     __gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, int64_t flagId)
 {
     aclsan::WriteTraceRecord(
-        memInfo, pc, bid, aclsan::PIPELINE_SET_WAIT_FLAG, 469, static_cast<uint64_t>(flagId), 0UL, 0UL, 0UL, 0UL);
+        memInfo, pc, bid, aclsan::DeviceInstructionCategory::Synchronization, static_cast<uint16_t>(PIPE_S), 469,
+        static_cast<uint64_t>(flagId), 0UL, 0UL, 0UL, 0UL);
 }
 
 // WAIT_FLAG_DEVI_V, API ID 470.
@@ -111,7 +116,8 @@ extern __attribute__((noinline)) __attribute__((weak)) __aicore__ void __sanitiz
     __gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, uint8_t flagId)
 {
     aclsan::WriteTraceRecord(
-        memInfo, pc, bid, aclsan::PIPELINE_SET_WAIT_FLAG, 470, static_cast<uint64_t>(flagId), 0UL, 0UL, 0UL, 0UL);
+        memInfo, pc, bid, aclsan::DeviceInstructionCategory::Synchronization, static_cast<uint16_t>(PIPE_S), 470,
+        static_cast<uint64_t>(flagId), 0UL, 0UL, 0UL, 0UL);
 }
 
 // HSET_FLAG, API ID 471.
@@ -120,8 +126,9 @@ extern __attribute__((noinline)) __attribute__((weak)) __aicore__ void __sanitiz
     bool isVirtual)
 {
     aclsan::WriteTraceRecord(
-        memInfo, pc, bid, aclsan::PIPELINE_SET_WAIT_FLAG, 471, static_cast<uint64_t>(srcPipe),
-        static_cast<uint64_t>(dstPipe), eventId, static_cast<uint64_t>(memory), static_cast<uint64_t>(isVirtual));
+        memInfo, pc, bid, aclsan::DeviceInstructionCategory::Synchronization, static_cast<uint16_t>(PIPE_S), 471,
+        static_cast<uint64_t>(srcPipe), static_cast<uint64_t>(dstPipe), eventId, static_cast<uint64_t>(memory),
+        static_cast<uint64_t>(isVirtual));
 }
 
 // HSET_FLAGI, API ID 472.
@@ -130,8 +137,9 @@ extern __attribute__((noinline)) __attribute__((weak)) __aicore__ void __sanitiz
     bool isVirtual)
 {
     aclsan::WriteTraceRecord(
-        memInfo, pc, bid, aclsan::PIPELINE_SET_WAIT_FLAG, 472, static_cast<uint64_t>(srcPipe),
-        static_cast<uint64_t>(dstPipe), eventId, static_cast<uint64_t>(memory), static_cast<uint64_t>(isVirtual));
+        memInfo, pc, bid, aclsan::DeviceInstructionCategory::Synchronization, static_cast<uint16_t>(PIPE_S), 472,
+        static_cast<uint64_t>(srcPipe), static_cast<uint64_t>(dstPipe), eventId, static_cast<uint64_t>(memory),
+        static_cast<uint64_t>(isVirtual));
 }
 
 // HWAIT_FLAG, API ID 473.
@@ -140,8 +148,9 @@ extern __attribute__((noinline)) __attribute__((weak)) __aicore__ void __sanitiz
     bool isVirtual)
 {
     aclsan::WriteTraceRecord(
-        memInfo, pc, bid, aclsan::PIPELINE_SET_WAIT_FLAG, 473, static_cast<uint64_t>(srcPipe),
-        static_cast<uint64_t>(dstPipe), eventId, static_cast<uint64_t>(memory), static_cast<uint64_t>(isVirtual));
+        memInfo, pc, bid, aclsan::DeviceInstructionCategory::Synchronization, static_cast<uint16_t>(PIPE_S), 473,
+        static_cast<uint64_t>(srcPipe), static_cast<uint64_t>(dstPipe), eventId, static_cast<uint64_t>(memory),
+        static_cast<uint64_t>(isVirtual));
 }
 
 // HWAIT_FLAGI, API ID 474.
@@ -150,8 +159,9 @@ extern __attribute__((noinline)) __attribute__((weak)) __aicore__ void __sanitiz
     bool isVirtual)
 {
     aclsan::WriteTraceRecord(
-        memInfo, pc, bid, aclsan::PIPELINE_SET_WAIT_FLAG, 474, static_cast<uint64_t>(srcPipe),
-        static_cast<uint64_t>(dstPipe), eventId, static_cast<uint64_t>(memory), static_cast<uint64_t>(isVirtual));
+        memInfo, pc, bid, aclsan::DeviceInstructionCategory::Synchronization, static_cast<uint16_t>(PIPE_S), 474,
+        static_cast<uint64_t>(srcPipe), static_cast<uint64_t>(dstPipe), eventId, static_cast<uint64_t>(memory),
+        static_cast<uint64_t>(isVirtual));
 }
 
 // GET/RLS BUF instructions.
@@ -161,8 +171,8 @@ extern __attribute__((noinline)) __attribute__((weak)) __aicore__ void __sanitiz
     __gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, pipe_t pipe, uint8_t bufId, bool mode)
 {
     aclsan::WriteTraceRecord(
-        memInfo, pc, bid, aclsan::PIPELINE_GET_RLS_BUF, 448, static_cast<uint64_t>(pipe), static_cast<uint64_t>(bufId),
-        static_cast<uint64_t>(mode), 0UL, 0UL);
+        memInfo, pc, bid, aclsan::DeviceInstructionCategory::Synchronization, static_cast<uint16_t>(PIPE_S), 448,
+        static_cast<uint64_t>(pipe), static_cast<uint64_t>(bufId), static_cast<uint64_t>(mode), 0UL, 0UL);
 }
 
 // GET_BUFI, API ID 449.
@@ -170,8 +180,8 @@ extern __attribute__((noinline)) __attribute__((weak)) __aicore__ void __sanitiz
     __gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, pipe_t pipe, uint64_t bufId, bool mode)
 {
     aclsan::WriteTraceRecord(
-        memInfo, pc, bid, aclsan::PIPELINE_GET_RLS_BUF, 449, static_cast<uint64_t>(pipe), bufId,
-        static_cast<uint64_t>(mode), 0UL, 0UL);
+        memInfo, pc, bid, aclsan::DeviceInstructionCategory::Synchronization, static_cast<uint16_t>(PIPE_S), 449,
+        static_cast<uint64_t>(pipe), bufId, static_cast<uint64_t>(mode), 0UL, 0UL);
 }
 
 // RLS_BUF, API ID 450.
@@ -179,8 +189,8 @@ extern __attribute__((noinline)) __attribute__((weak)) __aicore__ void __sanitiz
     __gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, pipe_t pipe, uint8_t bufId, bool mode)
 {
     aclsan::WriteTraceRecord(
-        memInfo, pc, bid, aclsan::PIPELINE_GET_RLS_BUF, 450, static_cast<uint64_t>(pipe), static_cast<uint64_t>(bufId),
-        static_cast<uint64_t>(mode), 0UL, 0UL);
+        memInfo, pc, bid, aclsan::DeviceInstructionCategory::Synchronization, static_cast<uint16_t>(PIPE_S), 450,
+        static_cast<uint64_t>(pipe), static_cast<uint64_t>(bufId), static_cast<uint64_t>(mode), 0UL, 0UL);
 }
 
 // RLS_BUFI, API ID 451.
@@ -188,8 +198,8 @@ extern __attribute__((noinline)) __attribute__((weak)) __aicore__ void __sanitiz
     __gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, pipe_t pipe, uint64_t bufId, bool mode)
 {
     aclsan::WriteTraceRecord(
-        memInfo, pc, bid, aclsan::PIPELINE_GET_RLS_BUF, 451, static_cast<uint64_t>(pipe), bufId,
-        static_cast<uint64_t>(mode), 0UL, 0UL);
+        memInfo, pc, bid, aclsan::DeviceInstructionCategory::Synchronization, static_cast<uint16_t>(PIPE_S), 451,
+        static_cast<uint64_t>(pipe), bufId, static_cast<uint64_t>(mode), 0UL, 0UL);
 }
 
 // GET_BUF_V, API ID 460.
@@ -197,8 +207,8 @@ extern __attribute__((noinline)) __attribute__((weak)) __aicore__ void __sanitiz
     __gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, uint8_t bufId, bool mode)
 {
     aclsan::WriteTraceRecord(
-        memInfo, pc, bid, aclsan::PIPELINE_GET_RLS_BUF, 460, static_cast<uint64_t>(bufId), static_cast<uint64_t>(mode),
-        0UL, 0UL, 0UL);
+        memInfo, pc, bid, aclsan::DeviceInstructionCategory::Synchronization, static_cast<uint16_t>(PIPE_S), 460,
+        static_cast<uint64_t>(bufId), static_cast<uint64_t>(mode), 0UL, 0UL, 0UL);
 }
 
 // GET_BUFI_V, API ID 461.
@@ -206,7 +216,8 @@ extern __attribute__((noinline)) __attribute__((weak)) __aicore__ void __sanitiz
     __gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, uint64_t bufId, bool mode)
 {
     aclsan::WriteTraceRecord(
-        memInfo, pc, bid, aclsan::PIPELINE_GET_RLS_BUF, 461, bufId, static_cast<uint64_t>(mode), 0UL, 0UL, 0UL);
+        memInfo, pc, bid, aclsan::DeviceInstructionCategory::Synchronization, static_cast<uint16_t>(PIPE_S), 461, bufId,
+        static_cast<uint64_t>(mode), 0UL, 0UL, 0UL);
 }
 
 // RLS_BUF_V, API ID 462.
@@ -214,8 +225,8 @@ extern __attribute__((noinline)) __attribute__((weak)) __aicore__ void __sanitiz
     __gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, uint8_t bufId, bool mode)
 {
     aclsan::WriteTraceRecord(
-        memInfo, pc, bid, aclsan::PIPELINE_GET_RLS_BUF, 462, static_cast<uint64_t>(bufId), static_cast<uint64_t>(mode),
-        0UL, 0UL, 0UL);
+        memInfo, pc, bid, aclsan::DeviceInstructionCategory::Synchronization, static_cast<uint16_t>(PIPE_S), 462,
+        static_cast<uint64_t>(bufId), static_cast<uint64_t>(mode), 0UL, 0UL, 0UL);
 }
 
 // RLS_BUFI_V, API ID 463.
@@ -223,5 +234,6 @@ extern __attribute__((noinline)) __attribute__((weak)) __aicore__ void __sanitiz
     __gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, uint64_t bufId, bool mode)
 {
     aclsan::WriteTraceRecord(
-        memInfo, pc, bid, aclsan::PIPELINE_GET_RLS_BUF, 463, bufId, static_cast<uint64_t>(mode), 0UL, 0UL, 0UL);
+        memInfo, pc, bid, aclsan::DeviceInstructionCategory::Synchronization, static_cast<uint16_t>(PIPE_S), 463, bufId,
+        static_cast<uint64_t>(mode), 0UL, 0UL, 0UL);
 }

@@ -469,7 +469,7 @@ void ToolManager::OnCallback(AclsanCallbackDomain domain, AclsanCallbackId cbid,
                         std::ostringstream message;
                         message << "device memory access launch=" << data->header.launchId << " pc=0x" << std::hex
                                 << data->header.pc << std::dec << " device=" << data->header.deviceId
-                                << " core=" << data->header.coreId << " address=0x" << std::hex << data->address
+                                << " core=" << data->header.phyCoreId << " address=0x" << std::hex << data->address
                                 << std::dec << " access_mode=" << data->accessMode << " layout=" << data->layoutKind;
                         logger_.Debug(message.str());
                     } else {

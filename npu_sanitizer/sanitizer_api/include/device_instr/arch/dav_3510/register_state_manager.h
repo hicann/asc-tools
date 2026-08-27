@@ -1,0 +1,59 @@
+/**
+ * Copyright (c) 2026 Huawei Technologies Co., Ltd.
+ * This program is free software, you can redistribute it and/or modify it under the terms and conditions of
+ * CANN Open Software License Agreement Version 2.0 (the "License").
+ * Please refer to the License for details. You may not use this file except in compliance with the License.
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
+ * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
+ * See LICENSE in the root of the software repository for the full text of the License.
+ */
+
+#ifndef NPU_SANITIZER_SANITIZER_API_DEVICE_INSTR_ARCH_DAV_3510_REGISTER_STATE_MANAGER_H_
+#define NPU_SANITIZER_SANITIZER_API_DEVICE_INSTR_ARCH_DAV_3510_REGISTER_STATE_MANAGER_H_
+
+#include "device_instr/common/device_instr_struct_dma.h"
+#include "device_instr/common/device_instr_struct_register.h"
+
+#include <cstddef>
+#include <cstdint>
+#include <optional>
+#include <unordered_map>
+
+namespace aclsan::dav3510 {
+
+struct Dav3510CoreKey {
+    uint32_t blockType = ACLSAN_DEVICE_BLOCK_TYPE_AICORE;
+    uint32_t blockId = 0;
+
+    bool operator==(const Dav3510CoreKey& other) const noexcept;
+};
+
+struct Dav3510CoreRegisterState {
+    std::optional<VectorMaskParamField> vectorMask;
+    std::optional<SetL12DParamField> setL12D;
+    std::optional<SetPaddingParamField> setPadding;
+};
+
+class Dav3510RegisterStateManager final {
+public:
+    explicit Dav3510RegisterStateManager(uint64_t launchId) noexcept;
+
+    void Update(const Dav3510CoreKey& key, const VectorMaskParamField& params) noexcept;
+    void Update(const Dav3510CoreKey& key, const SetL12DParamField& params) noexcept;
+    void Update(const Dav3510CoreKey& key, const SetPaddingParamField& params) noexcept;
+    std::optional<Dav3510CoreRegisterState> Get(const Dav3510CoreKey& key) const noexcept;
+    uint64_t GetLaunchId() const noexcept;
+    void Reset() noexcept;
+
+private:
+    struct CoreKeyHash {
+        std::size_t operator()(const Dav3510CoreKey& key) const noexcept;
+    };
+
+    uint64_t launchId_ = 0;
+    std::unordered_map<Dav3510CoreKey, Dav3510CoreRegisterState, CoreKeyHash> states_;
+};
+
+} // namespace aclsan::dav3510
+
+#endif // NPU_SANITIZER_SANITIZER_API_DEVICE_INSTR_ARCH_DAV_3510_REGISTER_STATE_MANAGER_H_

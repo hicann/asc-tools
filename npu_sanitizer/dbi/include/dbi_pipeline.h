@@ -15,7 +15,7 @@
 
 namespace aclsan {
 
-enum class ProbeGroup : uint8_t { Mte1, Mte2, Mte3, Fixpipe, Sync };
+enum class ProbeGroup : uint8_t { Mte1, Mte2, Mte3, Fixpipe, Sync, Register };
 
 enum ProbeGroupMask : uint32_t {
     PROBE_GROUP_MTE1 = 1U << 0U,
@@ -23,7 +23,9 @@ enum ProbeGroupMask : uint32_t {
     PROBE_GROUP_MTE3 = 1U << 2U,
     PROBE_GROUP_FIXPIPE = 1U << 3U,
     PROBE_GROUP_SYNC = 1U << 4U,
-    PROBE_GROUP_ALL = PROBE_GROUP_MTE1 | PROBE_GROUP_MTE2 | PROBE_GROUP_MTE3 | PROBE_GROUP_FIXPIPE | PROBE_GROUP_SYNC,
+    PROBE_GROUP_REGISTER = 1U << 5U,
+    PROBE_GROUP_ALL = PROBE_GROUP_MTE1 | PROBE_GROUP_MTE2 | PROBE_GROUP_MTE3 | PROBE_GROUP_FIXPIPE | PROBE_GROUP_SYNC |
+                      PROBE_GROUP_REGISTER,
 };
 
 struct ToolchainPaths {

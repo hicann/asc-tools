@@ -195,7 +195,7 @@ struct NpusanReportExecContext {
     std::uint64_t offset = 0;
 
     std::uint32_t deviceId = 0;
-    std::uint32_t coreId = std::numeric_limits<std::uint32_t>::max();
+    std::uint32_t phyCoreId = std::numeric_limits<std::uint32_t>::max();
     std::uint32_t blockId = 0;
     std::uint32_t blockType = 0;
     std::uint32_t pipeId = 0;

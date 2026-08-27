@@ -443,7 +443,7 @@ int RunApplication(const Options& options, const std::string& libraryPath)
         (void)setenv(ipc::kCliPidEnv, parentText.c_str(), 1);
         (void)setenv(ipc::kHandshakeTimeoutEnv, timeoutText.c_str(), 1);
         std::string environmentError;
-        if (!ApplyEnvironment(BuildDbiEnvironment(options.toolConfig), environmentError)) {
+        if (!ApplyEnvironment(BuildDbiEnvironment(toolConfig), environmentError)) {
             dprintf(STDERR_FILENO, "npu_check: %s\n", environmentError.c_str());
             _exit(126);
         }

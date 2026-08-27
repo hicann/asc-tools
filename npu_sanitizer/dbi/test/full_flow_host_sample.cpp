@@ -41,6 +41,8 @@ const auto kStream = reinterpret_cast<aclrtStream>(0x51);
 
 struct CapturedRecord {
     uint32_t blockId;
+    uint32_t blockType;
+    uint32_t phyCoreId;
     uint32_t pipeline;
     uint32_t siteId;
     uint64_t pc;
@@ -149,27 +151,34 @@ aclError OriginalLaunch(
     std::puts("[hook] launch trace_buffer_injected=yes");
 
     auto* bytes = static_cast<uint8_t*>(traceBuffer);
-    auto* header = reinterpret_cast<aclsan::AscsanTraceBufferHeader*>(bytes);
+    auto* header = reinterpret_cast<aclsan::AclsanTraceBufferHeader*>(bytes);
     size_t sliceBytes = 0;
-    if (header->magic != aclsan::ASCSAN_TRACE_BUFFER_MAGIC_V1 || header->blockCount != blocks ||
-        header->recordsPerBlock != 2 || !aclsan::TraceSliceBytes(header->recordsPerBlock, &sliceBytes)) {
+    if (header->magic != aclsan::ASCSAN_TRACE_BUFFER_MAGIC || header->blockCount != blocks ||
+        header->recordsPerCore != 2 || header->physicalCoreCount != 108U ||
+        !aclsan::TraceSliceBytes(header->recordsPerCore, &sliceBytes)) {
         return ACL_ERROR_INVALID_PARAM;
     }
 
-    for (uint32_t block = 0; block < blocks; ++block) {
-        auto* slice = reinterpret_cast<aclsan::AscsanTraceSliceHeader*>(
-            bytes + sizeof(*header) + static_cast<size_t>(block) * sliceBytes);
+    constexpr uint32_t blockIds[] = {0U, 1U};
+    constexpr uint32_t phyCoreIds[] = {5U, 18U};
+    for (uint32_t recordIndex = 0; recordIndex < 2; ++recordIndex) {
+        auto* slice = reinterpret_cast<aclsan::AclsanTraceSliceHeader*>(
+            bytes + sizeof(*header) + static_cast<size_t>(phyCoreIds[recordIndex]) * sliceBytes);
         auto* record =
-            reinterpret_cast<aclsan::AscsanRawTraceRecord*>(reinterpret_cast<uint8_t*>(slice) + sizeof(*slice));
-        record->pc = kRecords[block].pc;
-        record->args[0] = kRecords[block].srcPipe;
-        record->args[1] = kRecords[block].dstPipe;
-        record->args[2] = kRecords[block].eventId;
+            reinterpret_cast<aclsan::AclsanRawTraceRecord*>(reinterpret_cast<uint8_t*>(slice) + sizeof(*slice));
+        record->pc = kRecords[recordIndex].pc;
+        record->args[0] = kRecords[recordIndex].srcPipe;
+        record->args[1] = kRecords[recordIndex].dstPipe;
+        record->args[2] = kRecords[recordIndex].eventId;
         record->args[3] = 0;
         record->args[4] = 0;
-        record->instrId = kRecords[block].instrId;
-        record->siteId = kRecords[block].siteId;
-        record->pipeline = kRecords[block].pipeline;
+        record->instrId = kRecords[recordIndex].instrId;
+        record->siteId = kRecords[recordIndex].siteId;
+        record->category = aclsan::DeviceInstructionCategory::Synchronization;
+        record->pipeline = static_cast<uint16_t>(kRecords[recordIndex].pipeline);
+        record->blockId = blockIds[recordIndex];
+        record->reserved = 0;
+        slice->phyCoreId = phyCoreIds[recordIndex];
         slice->recordCount = 1;
     }
     std::puts("[device] records=2");
@@ -188,10 +197,13 @@ void Callback(void*, AclsanCallbackDomain domain, AclsanCallbackId id, const voi
     if (id == ACLSAN_CBID_DEVICE_MEMORY_ACCESS) {
         const auto* memory = static_cast<const AclsanDeviceMemoryAccessData*>(data);
         g_state.callbacks.push_back(
-            {memory->header.blockId, memory->header.pipeline, memory->header.siteId, memory->header.pc});
+            {memory->header.blockId, memory->header.blockType, memory->header.phyCoreId, memory->header.pipeline,
+             memory->header.siteId, memory->header.pc});
     } else if (id == ACLSAN_CBID_DEVICE_SYNC) {
         const auto* sync = static_cast<const AclsanDeviceSyncData*>(data);
-        g_state.callbacks.push_back({sync->header.blockId, ACLSAN_DEVICE_PIPE_SCALAR, 0, sync->header.pc});
+        g_state.callbacks.push_back(
+            {sync->header.blockId, sync->header.blockType, sync->header.phyCoreId, ACLSAN_DEVICE_PIPE_SCALAR, 0,
+             sync->header.pc});
     }
 }
 
@@ -269,10 +281,14 @@ int main(int argc, char** argv)
     CHECK(g_state.d2hCalls == 1);
     CHECK(g_state.callbacks.size() == 2);
     CHECK(g_state.callbacks[0].blockId == 0);
+    CHECK(g_state.callbacks[0].blockType == ACLSAN_DEVICE_BLOCK_TYPE_AICORE_CUBE);
+    CHECK(g_state.callbacks[0].phyCoreId == 5);
     CHECK(g_state.callbacks[0].pipeline == ACLSAN_DEVICE_PIPE_SCALAR);
     CHECK(g_state.callbacks[0].siteId == 0);
     CHECK(g_state.callbacks[0].pc == 0x1000);
     CHECK(g_state.callbacks[1].blockId == 1);
+    CHECK(g_state.callbacks[1].blockType == ACLSAN_DEVICE_BLOCK_TYPE_AICORE_VECTOR);
+    CHECK(g_state.callbacks[1].phyCoreId == 18);
     CHECK(g_state.callbacks[1].pipeline == ACLSAN_DEVICE_PIPE_SCALAR);
     CHECK(g_state.callbacks[1].siteId == 0);
     CHECK(g_state.callbacks[1].pc == 0x2000);

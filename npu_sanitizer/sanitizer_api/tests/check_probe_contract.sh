@@ -12,62 +12,142 @@
 set -euo pipefail
 
 api_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
-pipeline_header="${api_dir}/include/aclsan/aclsan_cbdata_device.h"
+dbi_dir=$(cd "${api_dir}/../dbi" && pwd)
 
-grep -Fq 'typedef enum AclsanDevicePipeline {' "${pipeline_header}"
-grep -Fq 'ACLSAN_DEVICE_PIPE_SCALAR = 1' "${pipeline_header}"
-if [[ -e "${api_dir}/include/internal/aclsan_cbdata_device.h" ]]; then
-    printf 'internal/aclsan_cbdata_device.h is still present\n' >&2
+Fail()
+{
+    printf 'probe contract check failed: %s\n' "$1" >&2
     exit 1
-fi
-grep -Fq '#include "aclsan/aclsan_cbdata_device.h"' \
-    "${api_dir}/include/aclsan/aclsan_callback.h"
-grep -Fq '#include "aclsan/aclsan_callback.h"' \
-    "${api_dir}/../npu_check/src/checker/memcheck.h"
+}
 
-legacy_probe_resources=(
-    probe
+[[ ! -e "${api_dir}/src/probe" ]] || Fail 'sanitizer_api/src/probe must not exist'
+
+required_files=(
+    "${api_dir}/src/device_runtime/device_symbolizer.h"
+    "${api_dir}/src/device_runtime/device_symbolizer.cpp"
+    "${api_dir}/src/aclsan_trace_buffer.cpp"
+    "${api_dir}/src/aclsan_trace_runtime.cpp"
+    "${api_dir}/include/internal/aclsan_active_probe_plan.h"
+    "${api_dir}/include/internal/aclsan_trace_buffer.h"
+    "${api_dir}/include/internal/aclsan_trace_runtime.h"
+    "${dbi_dir}/include/trace_buffer_abi.h"
+    "${dbi_dir}/include/dbi_pipeline.h"
+    "${dbi_dir}/src/dbi_pipeline.cpp"
+    "${dbi_dir}/src/acl_hook.cpp"
+    "${dbi_dir}/src/probes/mte2.cpp"
+    "${dbi_dir}/src/probes/sync.cpp"
 )
-for resource in "${legacy_probe_resources[@]}"; do
-    if [[ -e "${api_dir}/${resource}" ]]; then
-        printf 'legacy Probe resource is still present: %s\n' "${resource}" >&2
-        exit 1
-    fi
+for required_file in "${required_files[@]}"; do
+    [[ -f "${required_file}" ]] || Fail "required file is missing: ${required_file}"
 done
 
-dbi_probe_resources=(
-    src/probes/mte1.cpp
-    src/probes/mte2.cpp
-    src/probes/mte3.cpp
-    src/probes/fixpipe.cpp
-    src/probes/sync.cpp
-    include/trace_record.h
-)
-for resource in "${dbi_probe_resources[@]}"; do
-    if [[ ! -f "${api_dir}/../dbi/${resource}" ]]; then
-        printf 'required DBI probe resource is missing: %s\n' "${resource}" >&2
-        exit 1
-    fi
+[[ ! -e "${api_dir}/include/device_instr/common/raw_data_struct.h" ]] || \
+    Fail 'duplicate raw_data_struct.h must not exist'
+if rg -n 'raw_data_struct\.h' \
+    "${api_dir}/include" "${api_dir}/src" "${api_dir}/tests" --glob '!check_probe_contract.sh'; then
+    Fail 'sanitizer_api still references the removed raw trace header or type'
+fi
+
+legacy_namespace='sani''tizer'
+legacy_trace_prefix='Asc''san'
+if rg -n "\\bnamespace ${legacy_namespace}\\b|\\b${legacy_namespace}::" \
+    "${api_dir}/include" "${api_dir}/src" "${api_dir}/tests" --glob '!check_probe_contract.sh'; then
+    Fail 'sanitizer_api must use the aclsan namespace'
+fi
+if rg -n "\\b${legacy_trace_prefix}[A-Za-z0-9_]*\\b" \
+    "${api_dir}" "${dbi_dir}"; then
+    Fail 'sanitizer_api and dbi must use Aclsan trace ABI type names'
+fi
+
+cmake_file="${api_dir}/CMakeLists.txt"
+grep -Fq 'npu_check_dbi_engine' "${cmake_file}" || Fail 'acl_san does not link the DBI engine'
+grep -Fq 'src/aclsan_trace_buffer.cpp' "${cmake_file}" || Fail 'trace buffer adapter is not built'
+grep -Fq 'src/aclsan_trace_runtime.cpp' "${cmake_file}" || Fail 'trace runtime is not built'
+grep -Fq 'src/device_runtime/device_symbolizer.cpp' "${cmake_file}" || Fail 'device symbolizer is not built'
+
+trace_buffer="${api_dir}/src/aclsan_trace_buffer.cpp"
+trace_buffer_abi="${api_dir}/../dbi/include/trace_buffer_abi.h"
+for trace_type in AclsanTraceBufferHeader AclsanTraceSliceHeader AclsanRawTraceRecord; do
+    grep -Fq "struct ${trace_type}" "${trace_buffer_abi}" || Fail "trace buffer ABI does not define ${trace_type}"
 done
-
-grep -Fq 'ACLSAN_DEVICE_PIPE_MTE2' "${api_dir}/src/cce_instr_types.cpp"
-grep -Fq 'ACLSAN_DEVICE_PIPE_MTE3' "${api_dir}/src/cce_instr_types.cpp"
-grep -Fq 'ACLSAN_DEVICE_PIPE_SCALAR' "${api_dir}/src/cce_instr_types.cpp"
-if grep -Rq 'MakeMockRawTraceRecords' "${api_dir}/src" "${api_dir}/include"; then
-    printf 'mock raw trace producer is still present\n' >&2
-    exit 1
+grep -Fq 'ASCSAN_TRACE_BUFFER_MAGIC' "${trace_buffer_abi}" || \
+    Fail 'trace buffer ABI does not define its magic'
+if grep -Eq 'ASCSAN_TRACE_BUFFER_MAGIC_V[0-9]+' "${trace_buffer_abi}"; then
+    Fail 'trace buffer ABI must expose only one unversioned magic'
 fi
-if rg -q 'ACLSAN_PROBE_OBJECT|ACLSAN_BUILD_DEVICE_PROBE_RESOURCES|aclsan_probe_resources' \
-    "${api_dir}/CMakeLists.txt" "${api_dir}/src"; then
-    printf 'legacy Probe build reference is still present in sanitizer_api\n' >&2
-    exit 1
+grep -Fq 'parsed.record.pc = wire.pc;' "${trace_buffer}" || Fail 'wire pc is not converted explicitly'
+grep -Fq 'parsed.record.instrId = wire.instrId;' "${trace_buffer}" || Fail 'wire instrId is not converted explicitly'
+grep -Fq 'std::memcpy(parsed.record.args, wire.args, sizeof(wire.args));' "${trace_buffer}" || \
+    Fail 'wire arguments are not converted explicitly'
+grep -Fq 'const TraceBlockKey blockKey{blockType, wire.blockId};' "${trace_buffer}" || \
+    Fail 'instruction execution identity is not keyed by block type and logical block ID'
+grep -Fq 'parsed.instrExecId = ++instructionCounts[blockKey];' "${trace_buffer}" || \
+    Fail 'instruction execution ID is not counted per logical block'
+grep -Fq 'parsed.blockId = wire.blockId;' "${trace_buffer}" || Fail 'block ID is not read from the raw record'
+grep -Fq 'parsed.blockType = blockType;' "${trace_buffer}" || Fail 'block type is not derived from the DBI slice'
+grep -Fq 'parsed.phyCoreId = expectedPhyCoreId;' "${trace_buffer}" || \
+    Fail 'physical core ID is not derived from the physical slice'
+grep -Fq 'parsed.launchId = header.launchId;' "${trace_buffer}" || \
+    Fail 'launch ID is not propagated from the validated trace buffer header'
+grep -Fq 'parsed.deviceId = deviceId;' "${trace_buffer}" || \
+    Fail 'launch-owned device ID is not propagated to parsed records'
+if rg -n 'ASCSAN_TRACE_SLICES_PER_BLOCK|TraceSliceCount' "${trace_buffer_abi}" "${trace_buffer}"; then
+    Fail 'trace buffer layout must not size physical slices from the logical block count'
 fi
 
-if rg -q '\bAclsanPatchPipeline\b|\bACLSAN_PATCH_PIPELINE_' \
-    "${api_dir}/include" "${api_dir}/src" "${api_dir}/tests" "${api_dir}/../npu_check" \
-    -g '*.{h,cpp,asc}' -g '!check_probe_contract.sh'; then
-    printf 'legacy patch pipeline name is still present\n' >&2
-    exit 1
+trace_runtime="${api_dir}/src/aclsan_trace_runtime.cpp"
+grep -Fq 'aclsan::FindDeviceInstructionDecoder(getSocName())' "${trace_runtime}" || \
+    Fail 'trace runtime does not select the local instruction decoder'
+grep -Fq 'TranslateDecodedTraceToCallbackData(parsed, *decoded)' "${trace_runtime}" || \
+    Fail 'decoded DBI records are not translated to public callback data'
+trace_translator="${api_dir}/src/aclsan/aclsan_translate_device_data.cpp"
+device_data_header="${api_dir}/include/internal/aclsan_device_data.h"
+grep -Fq 'using DeviceMemoryAccessDataList = std::vector<AclsanDeviceMemoryAccessData>;' "${device_data_header}" || \
+    Fail 'device memory access translator result is not a variable-length vector'
+grep -Fq 'std::variant<DeviceMemoryAccessDataList, AclsanDeviceSyncData>' "${device_data_header}" || \
+    Fail 'device callback data does not contain the variable-length memory access list'
+grep -Fq 'std::get_if<DeviceMemoryAccessDataList>' "${trace_runtime}" || \
+    Fail 'trace runtime does not consume the variable-length memory access list'
+if rg -n '\bDeviceMemoryAccessDataArray\b' \
+    "${api_dir}/include" "${api_dir}/src" "${api_dir}/tests" --glob '!check_probe_contract.sh'; then
+    Fail 'fixed-length DeviceMemoryAccessDataArray must not remain'
+fi
+for identity_field in launchId instrExecId deviceId phyCoreId blockId blockType; do
+    grep -Fq "parsed.${identity_field}" "${trace_translator}" || \
+        Fail "callback translation does not use ParsedTraceRecord::${identity_field}"
+done
+if rg -n '\bTraceCallbackContext\b' \
+    "${api_dir}/include" "${api_dir}/src" "${api_dir}/tests" --glob '!check_probe_contract.sh'; then
+    Fail 'TraceCallbackContext must be merged into ParsedTraceRecord'
+fi
+grep -Fq 'std::get_if<SetPaddingParamField>' "${trace_runtime}" || \
+    Fail 'trace runtime does not recognize decoded SET_PADDING state'
+grep -Fq 'registerState.Update({parsed.blockType, parsed.blockId}, *setPadding);' "${trace_runtime}" || \
+    Fail 'trace runtime does not update SET_PADDING state by block type and block ID'
+
+binding_source="${dbi_dir}/src/dynamic_bind.cpp"
+register_probe="${dbi_dir}/src/probes/register.cpp"
+grep -Fq '{InstrType::SET_PADDING, 392, "__sanitizer_report_set_padding", {0}}' "${binding_source}" || \
+    Fail 'DBI does not bind SET_PADDING argument 0 to instruction ID 392'
+grep -Fq 'return ProbeGroup::Register;' "${binding_source}" || \
+    Fail 'SET_PADDING is not assigned to the Register probe group'
+grep -Fq '__sanitizer_report_set_padding(' "${register_probe}" || Fail 'Register SET_PADDING probe is missing'
+grep -Fq 'static_cast<uint16_t>(PIPE_S), 392, value' "${register_probe}" || \
+    Fail 'SET_PADDING probe does not record PIPE_S and preserve value in raw argument 0'
+
+hook_source="${api_dir}/src/aclsan/aclsan_hook_aclrt.cpp"
+grep -Fq 'HandleBinaryLoadFromDataWithDefaultConfig' "${hook_source}" || \
+    Fail 'binary-load hook does not use the DBI engine'
+grep -Fq 'SnapshotActiveProbePlan()' "${hook_source}" || Fail 'binary-load hook does not snapshot the active DBI plan'
+grep -Fq 'PrepareTraceLaunch(' "${hook_source}" || Fail 'launch hook does not prepare a DBI trace buffer'
+grep -Fq 'CompleteTraceLaunch(' "${hook_source}" || Fail 'launch hook does not retain DBI trace ownership'
+grep -Fq 'CollectTraceStream(' "${hook_source}" || Fail 'synchronize hook does not collect DBI records'
+
+if rg -n \
+    'ACLSAN_PROBE_|ACLSAN_BUILD_DEVICE_PROBE_RESOURCES|sanitizer_api/src/probe|src/probe/|ProbeRuntime|ProbeParseResult|DispatchProbeRecords' \
+    "${api_dir}/CMakeLists.txt" "${api_dir}/include" "${api_dir}/src" "${api_dir}/tests" \
+    --glob '!check_probe_contract.sh'; then
+    Fail 'legacy sanitizer_api probe implementation is still referenced'
 fi
 
-printf 'probe contract=PASS\n'
+printf 'probe contract check passed: sanitizer_api uses npu_check/dbi and has no src/probe\n'

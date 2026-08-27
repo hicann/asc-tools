@@ -10,12 +10,16 @@
 
 #include "internal/aclsan_trace_runtime.h"
 
-#include "internal/aclsan_dispatch_cb.h"
-#include "internal/aclsan_internal.h"
+#include "device_instr/decoder_registry.h"
+#include "device_instr/arch/dav_3510/register_state_manager.h"
+#include "device_instr/common/instruction_id.h"
+#include "device_runtime/device_binary_registry.h"
+#include "internal/aclsan_device_data.h"
+#include "internal/aclsan_device_data_log.h"
+#include "internal/aclsan_dispatch.h"
 #include "internal/aclsan_log.h"
 #include "internal/aclsan_trace_buffer.h"
 #include "npu_compute/injection_hook.h"
-#include "device_runtime/device_binary_registry.h"
 #include "trace_buffer_abi.h"
 
 #include <algorithm>
@@ -39,7 +43,10 @@ struct PendingTrace {
     aclrtStream stream = nullptr;
     void* deviceBuffer = nullptr;
     uint32_t blockCount = 0;
-    uint32_t recordsPerBlock = 0;
+    uint32_t recordsPerCore = 0;
+    uint32_t physicalCoreCount = 0;
+    uint32_t deviceId = 0;
+    const aclsan::DeviceInstructionDecoder* decoder = nullptr;
     std::vector<uint8_t> hostBuffer;
 };
 
@@ -87,6 +94,21 @@ bool StrictModeEnabled()
 {
     const char* strict = std::getenv("NPU_CHECK_DBI_STRICT");
     return strict != nullptr && std::strcmp(strict, "1") == 0;
+}
+
+bool QueryPhysicalCoreCount(uint32_t deviceId, uint32_t& physicalCoreCount)
+{
+    const auto getDeviceInfo = Original<aclrtGetDeviceInfoFunc>(ACL_RT_API_aclrtGetDeviceInfo);
+    int64_t cubeCoreCount = 0;
+    int64_t vectorCoreCount = 0;
+    if (getDeviceInfo == nullptr ||
+        getDeviceInfo(deviceId, ACL_DEV_ATTR_CUBE_CORE_NUM, &cubeCoreCount) != ACL_SUCCESS ||
+        getDeviceInfo(deviceId, ACL_DEV_ATTR_VECTOR_CORE_NUM, &vectorCoreCount) != ACL_SUCCESS || cubeCoreCount <= 0 ||
+        vectorCoreCount != 2 * cubeCoreCount) {
+        return false;
+    }
+    physicalCoreCount = static_cast<uint32_t>(cubeCoreCount + vectorCoreCount);
+    return aclsan::IsTracePhysicalCoreTopologyValid(physicalCoreCount);
 }
 
 bool IsInstrumented(aclrtFuncHandle function)
@@ -178,56 +200,99 @@ void ReleaseDeviceBuffer(void* buffer) noexcept
     }
 }
 
-void DispatchTraceRecords(const std::vector<sanitizer::AscsanRawTraceRecord>& records) noexcept
+aclError ResolveLaunchContext(PreparedTraceLaunch& prepared) noexcept
 {
-    constexpr uint64_t kSetMte2NzParaInstructionId = 399;
+    const auto getSocName = Original<aclrtGetSocNameFunc>(ACL_RT_API_aclrtGetSocName);
+    prepared.decoder = getSocName == nullptr ? nullptr : aclsan::FindDeviceInstructionDecoder(getSocName());
+    if (prepared.decoder == nullptr || prepared.decoder->decode == nullptr) {
+        ASC_SAN_ERROR("acl_san trace: cannot select Device instruction decoder");
+        return ACL_ERROR_RT_INTERNAL_ERROR;
+    }
+
+    const auto getDevice = Original<aclrtGetDeviceFunc>(ACL_RT_API_aclrtGetDevice);
+    int32_t deviceId = -1;
+    if (getDevice == nullptr || getDevice(&deviceId) != ACL_SUCCESS || deviceId < 0) {
+        ASC_SAN_ERROR("acl_san trace: cannot query current Device ID");
+        return ACL_ERROR_RT_INTERNAL_ERROR;
+    }
+    prepared.deviceId = static_cast<uint32_t>(deviceId);
+    if (!QueryPhysicalCoreCount(prepared.deviceId, prepared.physicalCoreCount)) {
+        ASC_SAN_ERROR(
+            "acl_san trace: cannot query a supported physical core topology for Device %u", prepared.deviceId);
+        return ACL_ERROR_RT_INTERNAL_ERROR;
+    }
+    return ACL_SUCCESS;
+}
+
+} // namespace
+
+void DispatchTraceRecords(
+    const std::vector<ParsedTraceRecord>& records, const aclsan::DeviceInstructionDecoder& decoder) noexcept
+{
+    constexpr uint64_t SET_MTE2_NZ_PARA_INSTRUCTION_ID = 399;
     const auto isMultiInstruction = [](uint64_t instructionId) noexcept {
-        return instructionId >= static_cast<uint64_t>(sanitizer::CceInstructionId::CopyGmToCbufMultiNd2NzB8) &&
-               instructionId <= static_cast<uint64_t>(sanitizer::CceInstructionId::CopyGmToCbufMultiDn2NzB32);
+        return instructionId >= static_cast<uint64_t>(InstructionId::CopyGmToCbufMultiNd2NzB8) &&
+               instructionId <= static_cast<uint64_t>(InstructionId::CopyGmToCbufMultiDn2NzB32);
+    };
+    const auto blockKey = [](const ParsedTraceRecord& parsed) noexcept {
+        return (static_cast<uint64_t>(parsed.blockType) << 32U) | parsed.blockId;
     };
 
-    std::unordered_map<uint32_t, uint16_t> matrixNumByBlock;
-    uint64_t serialNo = 0;
-    for (const sanitizer::AscsanRawTraceRecord& record : records) {
-        if (record.instrId == kSetMte2NzParaInstructionId) {
-            matrixNumByBlock[record.blockId] = static_cast<uint16_t>(record.args[0]);
-            ++serialNo;
+    if (records.empty()) {
+        return;
+    }
+    dav3510::Dav3510RegisterStateManager registerState(records.front().launchId);
+    std::unordered_map<uint64_t, uint16_t> matrixNumByBlock;
+    for (const ParsedTraceRecord& parsed : records) {
+        if (parsed.record.instrId == SET_MTE2_NZ_PARA_INSTRUCTION_ID) {
+            LogRawRecord(parsed);
+            matrixNumByBlock[blockKey(parsed)] = static_cast<uint16_t>(parsed.record.args[0]);
             continue;
         }
 
-        sanitizer::AscsanRawTraceRecord enrichedRecord = record;
-        if (isMultiInstruction(record.instrId)) {
-            const auto matrixNum = matrixNumByBlock.find(record.blockId);
+        ParsedTraceRecord enriched = parsed;
+        if (isMultiInstruction(parsed.record.instrId)) {
+            const auto matrixNum = matrixNumByBlock.find(blockKey(parsed));
             if (matrixNum == matrixNumByBlock.end()) {
                 ASC_SAN_ERROR(
                     "acl_san trace: multi memory instruction has no preceding SET_MTE2_NZ_PARA: instrId=%llu "
                     "pc=0x%llx block=%u",
-                    static_cast<unsigned long long>(record.instrId), static_cast<unsigned long long>(record.pc),
-                    record.blockId);
-                ++serialNo;
+                    static_cast<unsigned long long>(parsed.record.instrId),
+                    static_cast<unsigned long long>(parsed.record.pc), parsed.blockId);
                 continue;
             }
-            enrichedRecord.args[4] = matrixNum->second;
+            enriched.record.args[4] = matrixNum->second;
         }
 
-        const TraceCallbackContext context{
-            DecodeRawTraceTransferBytes(enrichedRecord), serialNo + 1, serialNo, record.blockId};
-        const auto callbackData = TranslateRawTraceToCallbackData(enrichedRecord, context);
+        const std::optional<aclsan::DecodedInstruction> decoded = decoder.decode(enriched.record);
+        if (!decoded.has_value()) {
+            ASC_SAN_ERROR(
+                "acl_san trace: unsupported raw trace instrId=%llu pc=0x%llx block=%u",
+                static_cast<unsigned long long>(parsed.record.instrId),
+                static_cast<unsigned long long>(parsed.record.pc), parsed.blockId);
+            continue;
+        }
+        if (const auto* setPadding = std::get_if<SetPaddingParamField>(&decoded->params)) {
+            LogRawRecord(parsed);
+            LogParamField(decoded->params);
+            registerState.Update({parsed.blockType, parsed.blockId}, *setPadding);
+            continue;
+        }
+        const auto callbackData = TranslateDecodedTraceToCallbackData(enriched, *decoded);
         if (!callbackData.has_value()) {
             ASC_SAN_ERROR(
                 "acl_san trace: unsupported raw trace instrId=%llu pc=0x%llx block=%u",
-                static_cast<unsigned long long>(record.instrId), static_cast<unsigned long long>(record.pc),
-                record.blockId);
-        } else if (const auto* memory = std::get_if<MemoryCbdata>(&*callbackData)) {
-            AclsanCallbackDispatcher::DispatchDeviceMemoryAccess(*memory);
+                static_cast<unsigned long long>(parsed.record.instrId),
+                static_cast<unsigned long long>(parsed.record.pc), parsed.blockId);
+        } else if (const auto* memory = std::get_if<DeviceMemoryAccessDataList>(&*callbackData)) {
+            for (const AclsanDeviceMemoryAccessData& access : *memory) {
+                AclsanCallbackDispatcher::DispatchDeviceMemoryAccess(access);
+            }
         } else if (const auto* sync = std::get_if<AclsanDeviceSyncData>(&*callbackData)) {
             AclsanCallbackDispatcher::DispatchDeviceSync(*sync);
         }
-        ++serialNo;
     }
 }
-
-} // namespace
 
 void RecordTraceBinaryLoadFromData(
     aclrtBinHandle binary, bool instrumented, const void* image, size_t imageBytes) noexcept
@@ -299,6 +364,10 @@ aclError PrepareTraceLaunch(
         prepared.instrumented = true;
         prepared.launchId = AllocateLaunchId();
         prepared.blockCount = blockCount;
+        const aclError contextStatus = ResolveLaunchContext(prepared);
+        if (contextStatus != ACL_SUCCESS) {
+            return contextStatus;
+        }
 
         size_t insertionOffset = 0;
         const aclError expandStatus =
@@ -307,20 +376,21 @@ aclError PrepareTraceLaunch(
             return expandStatus;
         }
 
-        uint32_t capacity = aclsan::ASCSAN_TRACE_RECORDS_PER_BLOCK_DEFAULT;
+        uint32_t capacity = aclsan::ASCSAN_TRACE_RECORDS_PER_CORE_DEFAULT;
         const char* capacityText = std::getenv("NPU_CHECK_TRACE_RECORDS_PER_BLOCK");
         const bool capacityValid = capacityText == nullptr || capacityText[0] == '\0' ||
                                    ParsePositiveUint32("NPU_CHECK_TRACE_RECORDS_PER_BLOCK", capacity);
         std::string error;
         if (!capacityValid ||
-            !InitializeTraceBuffer(prepared.hostBuffer, blockCount, capacity, prepared.launchId, error)) {
+            !InitializeTraceBuffer(
+                prepared.hostBuffer, prepared.physicalCoreCount, blockCount, capacity, prepared.launchId, error)) {
             ASC_SAN_ERROR(
                 "acl_san trace: cannot initialize launch buffer: %s",
                 capacityValid ? error.c_str() : "invalid NPU_CHECK_TRACE_RECORDS_PER_BLOCK");
             StoreHiddenPointer(prepared, insertionOffset);
             return StrictModeEnabled() ? ACL_ERROR_FAILURE : ACL_SUCCESS;
         }
-        prepared.recordsPerBlock = capacity;
+        prepared.recordsPerCore = capacity;
 
         const auto mallocFunction = Original<aclrtMallocFunc>(ACL_RT_API_aclrtMalloc);
         const auto memcpyFunction = Original<aclrtMemcpyFunc>(ACL_RT_API_aclrtMemcpy);
@@ -376,7 +446,10 @@ void CompleteTraceLaunch(
             stream,
             prepared.deviceBuffer,
             prepared.blockCount,
-            prepared.recordsPerBlock,
+            prepared.recordsPerCore,
+            prepared.physicalCoreCount,
+            prepared.deviceId,
+            prepared.decoder,
             std::move(prepared.hostBuffer)};
         TraceRuntimeState& state = State();
         std::lock_guard<std::mutex> lock(state.mutex);
@@ -423,15 +496,15 @@ void CollectTraceStream(aclrtStream stream) noexcept
             }
 
             TraceBufferParseResult parsed = ParseTraceBuffer(
-                pending.hostBuffer.data(), pending.hostBuffer.size(), pending.blockCount, pending.recordsPerBlock,
-                pending.launchId);
+                pending.hostBuffer.data(), pending.hostBuffer.size(), pending.physicalCoreCount, pending.blockCount,
+                pending.recordsPerCore, pending.launchId, pending.deviceId);
             if (!parsed.ok) {
                 ASC_SAN_ERROR(
                     "acl_san trace: malformed buffer for launch=%llu: %s",
                     static_cast<unsigned long long>(pending.launchId), parsed.error.c_str());
             } else {
-                if (!parsed.records.empty()) {
-                    DispatchTraceRecords(parsed.records);
+                if (!parsed.records.empty() && pending.decoder != nullptr) {
+                    DispatchTraceRecords(parsed.records, *pending.decoder);
                 }
                 if (parsed.overflowCount != 0) {
                     ASC_SAN_ERROR(

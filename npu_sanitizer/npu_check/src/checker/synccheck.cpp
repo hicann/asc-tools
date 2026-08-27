@@ -58,8 +58,9 @@ NpusanReportExecContext ExecContext(const AclsanDeviceSyncData& data)
     exec.launchId = data.header.launchId;
     exec.instrExecId = data.header.instrExecId;
     exec.pc = data.header.pc;
-    exec.coreId = data.header.coreId;
+    exec.phyCoreId = data.header.phyCoreId;
     exec.blockId = data.header.blockId;
+    exec.blockType = data.header.blockType;
     // Sync instructions execute on PIPE_S independently of their srcPipe/dstPipe pairing arguments.
     exec.pipeId = 0;
     exec.pipeName = "PIPE_S";
@@ -73,7 +74,7 @@ size_t Synccheck::SyncPairKeyHash::operator()(const SyncPairKey& key) const noex
     size_t seed = 0;
     HashCombine(seed, key.launchId);
     HashCombine(seed, key.objectId);
-    HashCombine(seed, key.coreId);
+    HashCombine(seed, key.phyCoreId);
     HashCombine(seed, key.blockId);
     HashCombine(seed, key.syncKind);
     HashCombine(seed, key.scope);
@@ -85,14 +86,14 @@ size_t Synccheck::SyncPairKeyHash::operator()(const SyncPairKey& key) const noex
 
 bool Synccheck::BufferOccupancyKey::operator==(const BufferOccupancyKey& other) const noexcept
 {
-    return objectId == other.objectId && coreId == other.coreId;
+    return objectId == other.objectId && phyCoreId == other.phyCoreId;
 }
 
 size_t Synccheck::BufferOccupancyKeyHash::operator()(const BufferOccupancyKey& key) const noexcept
 {
     size_t seed = 0;
     HashCombine(seed, key.objectId);
-    HashCombine(seed, key.coreId);
+    HashCombine(seed, key.phyCoreId);
     return seed;
 }
 
@@ -101,7 +102,7 @@ Synccheck::SyncPairKey Synccheck::BuildExactKey(const AclsanDeviceSyncData& data
     SyncPairKey key{};
     key.launchId = data.header.launchId;
     key.objectId = data.objectId;
-    key.coreId = data.header.coreId;
+    key.phyCoreId = data.header.phyCoreId;
     key.blockId = data.header.blockId;
     key.syncKind = data.syncKind;
     key.scope = data.scope;
@@ -116,7 +117,7 @@ Synccheck::SyncPairKey Synccheck::BuildExactKey(const AclsanDeviceSyncData& data
 
 Synccheck::BufferOccupancyKey Synccheck::BuildBufferOccupancyKey(const AclsanDeviceSyncData& data)
 {
-    return {data.objectId, data.header.coreId};
+    return {data.objectId, data.header.phyCoreId};
 }
 
 bool Synccheck::IsClose(uint32_t action)
@@ -146,7 +147,7 @@ std::vector<Synccheck::Report> Synccheck::OnDeviceSync(const AclsanDeviceSyncDat
             message << "invalid device sync data"
                     << " sync_kind=" << data.syncKind << " action=" << data.action << " launch=" << data.header.launchId
                     << " instr_exec=" << data.header.instrExecId << " pc=0x" << std::hex << data.header.pc << std::dec
-                    << " core=" << data.header.coreId << " block=" << data.header.blockId;
+                    << " core=" << data.header.phyCoreId << " block=" << data.header.blockId;
             logger_->Error(message.str());
         }
         return {};

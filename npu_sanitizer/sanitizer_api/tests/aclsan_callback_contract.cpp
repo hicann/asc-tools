@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2025 Huawei Technologies Co., Ltd.
+ * Copyright (c) 2026 Huawei Technologies Co., Ltd.
  * This program is free software, you can redistribute it and/or modify it under the terms and conditions of
  * CANN Open Software License Agreement Version 2.0 (the "License").
  * Please refer to the License for details. You may not use this file except in compliance with the License.
@@ -12,7 +12,7 @@
 #include "aclsan/aclsan_cbdata_device.h"
 #include "aclsan/aclsan_cbdata_resource.h"
 #include "aclsan/aclsan_cbdata_synchronize.h"
-#include "aclsan/aclsan_callback.h"
+#include "aclsan/aclsan_cbdata.h"
 #include "aclsan/aclsan_api.h"
 
 #include <cstddef>
@@ -26,6 +26,22 @@ template <typename T>
 struct HasInstrType<T, std::void_t<decltype(&T::instrType)>> : std::true_type {};
 
 static_assert(std::is_same_v<AclsanStatus, std::uint32_t>);
+static_assert(std::is_same_v<AclsanCallbackId, std::uint32_t>);
+static_assert(std::is_enum_v<AclsanCallbackIdResource>);
+static_assert(std::is_enum_v<AclsanCallbackIdSynchronize>);
+static_assert(std::is_enum_v<AclsanCallbackIdDeviceInstruction>);
+static_assert(std::is_same_v<decltype(ACLSAN_CBID_RESOURCE_MEMORY_ALLOC), AclsanCallbackIdResource>);
+static_assert(std::is_same_v<decltype(ACLSAN_CBID_SYNCHRONIZE_STREAM_SYNC_END), AclsanCallbackIdSynchronize>);
+static_assert(std::is_same_v<decltype(ACLSAN_CBID_DEVICE_MEMORY_ACCESS), AclsanCallbackIdDeviceInstruction>);
+static_assert(static_cast<std::uint32_t>(ACLSAN_CBID_RESOURCE_MEMORY_ALLOC) == 1);
+static_assert(static_cast<std::uint32_t>(ACLSAN_CBID_RESOURCE_MEMORY_FREE) == 2);
+static_assert(static_cast<std::uint32_t>(ACLSAN_CBID_RESOURCE_INVALID) == 0x7fffffffU);
+static_assert(static_cast<std::uint32_t>(ACLSAN_CBID_SYNCHRONIZE_STREAM_SYNC_END) == 1);
+static_assert(static_cast<std::uint32_t>(ACLSAN_CBID_SYNCHRONIZE_DEVICE_SYNC_END) == 2);
+static_assert(static_cast<std::uint32_t>(ACLSAN_CBID_SYNCHRONIZE_INVALID) == 0x7fffffffU);
+static_assert(static_cast<std::uint32_t>(ACLSAN_CBID_DEVICE_MEMORY_ACCESS) == 1);
+static_assert(static_cast<std::uint32_t>(ACLSAN_CBID_DEVICE_SYNC) == 2);
+static_assert(static_cast<std::uint32_t>(ACLSAN_CBID_DEVICE_INSTRUCTION_INVALID) == 0x7fffffffU);
 static_assert(std::is_standard_layout_v<AclsanCallbackCommonData>);
 static_assert(std::is_standard_layout_v<AclsanResourceData>);
 static_assert(std::is_standard_layout_v<AclsanSynchronizeData>);
@@ -34,9 +50,12 @@ static_assert(std::is_standard_layout_v<AclsanDeviceSyncData>);
 static_assert(ACLSAN_DEVICE_PIPE_INVALID == 100);
 static_assert(ACLSAN_DEVICE_PIPE_SCALAR == 0);
 static_assert(ACLSAN_DEVICE_PIPE_VECTOR == 1);
-static_assert(ACLSAN_DEVICE_PIPE_MTE2 == 3);
+static_assert(ACLSAN_DEVICE_PIPE_MTE2 == 4);
 static_assert(ACLSAN_DEVICE_PIPE_MTE3 == 5);
 static_assert(ACLSAN_DEVICE_PIPE_FIXPIPE == 10);
+static_assert(ACLSAN_DEVICE_BLOCK_TYPE_AICORE == 0);
+static_assert(ACLSAN_DEVICE_BLOCK_TYPE_AICORE_VECTOR == 1);
+static_assert(ACLSAN_DEVICE_BLOCK_TYPE_AICORE_CUBE == 2);
 static_assert(!HasInstrType<AclsanDeviceSyncData>::value);
 static_assert(std::is_same_v<decltype(AclsanDeviceSyncData::header), AclsanDeviceEventHeader>);
 static_assert(offsetof(AclsanDeviceSyncData, header) == 0);

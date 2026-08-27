@@ -17,6 +17,11 @@
 #include <vector>
 
 namespace aclsan {
+struct DeviceInstructionDecoder;
+struct ParsedTraceRecord;
+} // namespace aclsan
+
+namespace aclsan {
 
 namespace device_runtime {
 struct CallStackResult;
@@ -26,12 +31,18 @@ struct PreparedTraceLaunch {
     bool instrumented = false;
     uint64_t launchId = 0;
     uint32_t blockCount = 0;
-    uint32_t recordsPerBlock = 0;
+    uint32_t recordsPerCore = 0;
+    uint32_t physicalCoreCount = 0;
+    uint32_t deviceId = 0;
     void* deviceBuffer = nullptr;
+    const aclsan::DeviceInstructionDecoder* decoder = nullptr;
     std::vector<uint8_t> hostBuffer;
     std::vector<uint8_t> arguments;
     std::vector<aclrtPlaceHolderInfo> placeholders;
 };
+
+void DispatchTraceRecords(
+    const std::vector<ParsedTraceRecord>& records, const DeviceInstructionDecoder& decoder) noexcept;
 
 void RecordTraceBinaryLoadFromData(
     aclrtBinHandle binary, bool instrumented, const void* image, size_t imageBytes) noexcept;

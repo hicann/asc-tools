@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2025 Huawei Technologies Co., Ltd.
+ * Copyright (c) 2026 Huawei Technologies Co., Ltd.
  * This program is free software, you can redistribute it and/or modify it under the terms and conditions of
  * CANN Open Software License Agreement Version 2.0 (the "License").
  * Please refer to the License for details. You may not use this file except in compliance with the License.
@@ -10,19 +10,22 @@
 
 #include "aclsan/aclsan_api.h"
 #include "binary_instrumenter.h"
+#include "device_runtime/device_symbolizer.h"
 #include "internal/aclsan_active_probe_plan.h"
-#include "internal/aclsan_dispatch_cb.h"
-#include "internal/aclsan_internal.h"
+#include "internal/aclsan_dispatch.h"
+#include "internal/aclsan_device_data.h"
 #include "internal/aclsan_log.h"
+#include "internal/aclsan_runtime_hook.h"
 #include "internal/aclsan_trace_runtime.h"
 #include "npu_compute/injection_hook.h"
-#include "device_runtime/device_symbolizer.h"
 
 #include <array>
 #include <cstdint>
-#include <shared_mutex>
+#include <cstdlib>
 #include <set>
+#include <shared_mutex>
 #include <utility>
+#include <variant>
 
 namespace aclsan {
 namespace {
@@ -38,7 +41,6 @@ bool IsHookRequired(const std::set<aclrtApiId>& requiredHooks, aclrtApiId apiId)
 
 namespace {
 
-bool g_hookStateValid = true;
 thread_local bool g_binaryLoadInProgress = false;
 
 class BinaryLoadGuard {
@@ -56,6 +58,11 @@ struct RuntimeFunctionTraits;
 template <>
 struct RuntimeFunctionTraits<ACL_RT_API_aclrtLaunchKernelWithHostArgs> {
     using Type = aclrtLaunchKernelWithHostArgsFunc;
+};
+
+template <>
+struct RuntimeFunctionTraits<ACL_RT_API_aclrtMemcpy> {
+    using Type = aclrtMemcpyFunc;
 };
 
 template <>
@@ -108,30 +115,76 @@ struct RuntimeFunctionTraits<ACL_RT_API_aclrtBinaryUnLoad> {
     using Type = aclrtBinaryUnLoadFunc;
 };
 
+template <>
+struct RuntimeFunctionTraits<ACL_RT_API_aclrtGetDevice> {
+    using Type = aclrtGetDeviceFunc;
+};
+
+template <>
+struct RuntimeFunctionTraits<ACL_RT_API_aclrtBinaryGetGlobal> {
+    using Type = aclrtBinaryGetGlobalFunc;
+};
+
+template <>
+struct RuntimeFunctionTraits<ACL_RT_API_aclrtGetFunctionAttribute> {
+    using Type = aclrtGetFunctionAttributeFunc;
+};
+
+template <>
+struct RuntimeFunctionTraits<ACL_RT_API_aclrtGetSocName> {
+    using Type = aclrtGetSocNameFunc;
+};
+
+[[noreturn]] void AbortHookFailure(const char* hookName, const char* stage, const char* reason) noexcept
+{
+    ASC_SAN_ERROR("[FATAL] npucheck internal failure: hook=%s stage=%s reason=%s", hookName, stage, reason);
+    std::abort();
+}
+
 template <aclrtApiId ApiId>
-typename RuntimeFunctionTraits<ApiId>::Type GetOriginalRuntimeFunction() noexcept
+typename RuntimeFunctionTraits<ApiId>::Type GetOriginalRuntimeFunction(const char* hookName) noexcept
 {
     using Function = typename RuntimeFunctionTraits<ApiId>::Type;
     const auto function = reinterpret_cast<Function>(acltoolGetOriginalRuntimeApi(ApiId));
+    // 如果获取不到原始aclrt函数指针，直接异常中止
     if (function == nullptr) {
-        ASC_SAN_ERROR("acltoolGetOriginalRuntimeApi apiId=%u returns nullptr", static_cast<uint32_t>(ApiId));
+        AbortHookFailure(hookName, "call_original_aclrt", "acltoolGetOriginalRuntimeApi returned nullptr");
     }
     return function;
 }
 
-AclsanCallbackCommonData MakeCallbackCommonData(const char* apiName, int result, uint32_t size) noexcept
+// 获取当前运行的deviceId用于记录
+bool GetCurrentDeviceId(uint32_t& deviceId) noexcept
 {
-    return {ACLSAN_API_VERSION, size, apiName, result, 0, 0};
+    const auto function = GetOriginalRuntimeFunction<ACL_RT_API_aclrtGetDevice>("aclrtGetDevice");
+    int32_t currentDeviceId = -1;
+    const aclError result = function(&currentDeviceId);
+    if (result != ACL_SUCCESS || currentDeviceId < 0) {
+        ASC_SAN_ERROR("acl_san: aclrtGetDevice failed: result=%d deviceId=%d", result, currentDeviceId);
+        return false;
+    }
+    deviceId = static_cast<uint32_t>(currentDeviceId);
+    return true;
 }
 
-AclsanResourceData MakeDeviceResourceData(const char* apiName, int result, void* deviceAddress, uint64_t bytes) noexcept
+// ==============================================
+// =============     创建cbdata     =============
+// ==============================================
+AclsanCallbackCommonData MakeCallbackCommonData(const char* apiName, int result, uint32_t size) noexcept
+{
+    return {ACLSAN_API_VERSION, size, apiName, result, 0};
+}
+
+// TODO: resourceId目前感觉用不到，可能得改成0
+AclsanResourceData MakeDeviceResourceData(
+    const char* apiName, int result, void* deviceAddress, uint64_t bytes, uint32_t deviceId) noexcept
 {
     return {
         MakeCallbackCommonData(apiName, result, static_cast<uint32_t>(sizeof(AclsanResourceData))),
         deviceAddress,
         bytes,
         ACLSAN_MEMORY_SPACE_DEVICE,
-        0,
+        deviceId,
         static_cast<uint64_t>(reinterpret_cast<uintptr_t>(deviceAddress))};
 }
 
@@ -139,6 +192,12 @@ AclsanSynchronizeData MakeSynchronizeData(const char* apiName, aclrtStream strea
 {
     return {MakeCallbackCommonData(apiName, result, static_cast<uint32_t>(sizeof(AclsanSynchronizeData))), stream};
 }
+
+// ==============================================
+// =========    aclrt接口的hook逻辑    ===========
+// ==============================================
+
+// 基本逻辑: 如果获取原始aclrt函数指针失败，那么直接abort。否则把cbdata传回去
 
 struct InstrumentedBinaryLoadContext {
     aclrtBinaryLoadFromDataFunc original = nullptr;
@@ -152,42 +211,45 @@ int32_t LoadInstrumentedBinary(const void* data, size_t length, void* userdata)
     return context.original(data, length, context.options, context.binHandle);
 }
 
+// DONE
 aclError aclrtMallocHook(void** deviceAddress, std::size_t size, aclrtMemMallocPolicy policy) noexcept
 {
-    const auto original = GetOriginalRuntimeFunction<ACL_RT_API_aclrtMalloc>();
-    if (original == nullptr) {
-        return ACL_ERROR_RT_INTERNAL_ERROR;
-    }
+    uint32_t deviceId;
+    const bool hasDeviceId = GetCurrentDeviceId(deviceId);
+    const auto original = GetOriginalRuntimeFunction<ACL_RT_API_aclrtMalloc>("aclrtMalloc");
     const aclError result = original(deviceAddress, size, policy);
-    if (result == ACL_SUCCESS && deviceAddress != nullptr) {
-        const AclsanResourceData callbackData =
-            MakeDeviceResourceData("aclrtMalloc", result, *deviceAddress, static_cast<uint64_t>(size));
-        aclsan::AclsanCallbackDispatcher::DispatchResource(ACLSAN_CBID_RESOURCE_MEMORY_ALLOC, callbackData);
+    if (!hasDeviceId) {
+        return result;
     }
+    void* allocatedAddress = nullptr;
+    if (result == ACL_SUCCESS && deviceAddress != nullptr) {
+        allocatedAddress = *deviceAddress;
+    }
+    const AclsanResourceData callbackData =
+        MakeDeviceResourceData("aclrtMalloc", result, allocatedAddress, static_cast<uint64_t>(size), deviceId);
+    aclsan::AclsanCallbackDispatcher::DispatchResource(ACLSAN_CBID_RESOURCE_MEMORY_ALLOC, callbackData);
     return result;
 }
 
+// DONE
 aclError aclrtFreeHook(void* deviceAddress) noexcept
 {
-    const auto original = GetOriginalRuntimeFunction<ACL_RT_API_aclrtFree>();
-    if (original == nullptr) {
-        return ACL_ERROR_RT_INTERNAL_ERROR;
-    }
+    uint32_t deviceId;
+    const bool hasDeviceId = GetCurrentDeviceId(deviceId);
+    const auto original = GetOriginalRuntimeFunction<ACL_RT_API_aclrtFree>("aclrtFree");
     const aclError result = original(deviceAddress);
-    if (result == ACL_SUCCESS && deviceAddress != nullptr) {
-        const AclsanResourceData callbackData = MakeDeviceResourceData("aclrtFree", result, deviceAddress, 0);
-        aclsan::AclsanCallbackDispatcher::DispatchResource(ACLSAN_CBID_RESOURCE_MEMORY_FREE, callbackData);
+    if (!hasDeviceId) {
+        return result;
     }
+    const AclsanResourceData callbackData = MakeDeviceResourceData("aclrtFree", result, deviceAddress, 0, deviceId);
+    aclsan::AclsanCallbackDispatcher::DispatchResource(ACLSAN_CBID_RESOURCE_MEMORY_FREE, callbackData);
     return result;
 }
 
 aclError aclrtBinaryLoadFromDataHook(
     const void* data, size_t length, const aclrtBinaryLoadOptions* options, aclrtBinHandle* binHandle) noexcept
 {
-    const auto original = GetOriginalRuntimeFunction<ACL_RT_API_aclrtBinaryLoadFromData>();
-    if (original == nullptr) {
-        return ACL_ERROR_UNINITIALIZE;
-    }
+    const auto original = GetOriginalRuntimeFunction<ACL_RT_API_aclrtBinaryLoadFromData>("aclrtBinaryLoadFromData");
 
     if (g_binaryLoadInProgress) {
         const aclError result = original(data, length, options, binHandle);
@@ -219,40 +281,31 @@ aclError aclrtBinaryLoadFromDataHook(
 }
 
 aclError aclrtBinaryGetFunctionHook(
-    const aclrtBinHandle binary, const char* kernelName, aclrtFuncHandle* function) noexcept
+    const aclrtBinHandle binHandle, const char* kernelName, aclrtFuncHandle* funcHandle) noexcept
 {
-    const auto original = GetOriginalRuntimeFunction<ACL_RT_API_aclrtBinaryGetFunction>();
-    if (original == nullptr) {
-        return ACL_ERROR_UNINITIALIZE;
-    }
-    const aclError result = original(binary, kernelName, function);
-    if (result == ACL_SUCCESS && function != nullptr) {
-        aclsan::RecordTraceBinaryFunctionLookup(binary, *function);
+    const auto original = GetOriginalRuntimeFunction<ACL_RT_API_aclrtBinaryGetFunction>("aclrtBinaryGetFunction");
+    const aclError result = original(binHandle, kernelName, funcHandle);
+    if (result == ACL_SUCCESS && funcHandle != nullptr) {
+        aclsan::RecordTraceBinaryFunctionLookup(binHandle, *funcHandle);
     }
     return result;
 }
 
 aclError aclrtBinaryGetFunctionByEntryHook(
-    aclrtBinHandle binary, uint64_t functionEntry, aclrtFuncHandle* function) noexcept
+    aclrtBinHandle binHandle, uint64_t functionEntry, aclrtFuncHandle* funcHandle) noexcept
 {
-    const auto original = GetOriginalRuntimeFunction<ACL_RT_API_aclrtBinaryGetFunctionByEntry>();
-    if (original == nullptr) {
-        return ACL_ERROR_UNINITIALIZE;
-    }
-    const aclError result = original(binary, functionEntry, function);
-    if (result == ACL_SUCCESS && function != nullptr) {
-        aclsan::RecordTraceBinaryFunctionLookup(binary, *function);
+    const auto original =
+        GetOriginalRuntimeFunction<ACL_RT_API_aclrtBinaryGetFunctionByEntry>("aclrtBinaryGetFunctionByEntry");
+    const aclError result = original(binHandle, functionEntry, funcHandle);
+    if (result == ACL_SUCCESS && funcHandle != nullptr) {
+        aclsan::RecordTraceBinaryFunctionLookup(binHandle, *funcHandle);
     }
     return result;
 }
 
 aclError aclrtGetFuncBySymbolHook(const void* symbol, aclrtFuncHandle* funcHandle) noexcept
 {
-    const auto original = GetOriginalRuntimeFunction<ACL_RT_API_aclrtGetFuncBySymbol>();
-    if (original == nullptr) {
-        return ACL_ERROR_RT_INTERNAL_ERROR;
-    }
-    ASC_SAN_DEBUG("[HOOK aclrtGetFuncBySymbol] symbol=%p", symbol);
+    const auto original = GetOriginalRuntimeFunction<ACL_RT_API_aclrtGetFuncBySymbol>("aclrtGetFuncBySymbol");
     const aclError result = original(symbol, funcHandle);
     if (result == ACL_SUCCESS && funcHandle != nullptr) {
         aclsan::RecordTraceFunctionLookup(*funcHandle);
@@ -264,38 +317,31 @@ aclError aclrtLaunchKernelWithHostArgsHook(
     aclrtFuncHandle funcHandle, uint32_t numBlocks, aclrtStream stream, aclrtLaunchKernelCfg* config, void* hostArgs,
     size_t argsSize, aclrtPlaceHolderInfo* placeHolderArray, size_t placeHolderNum) noexcept
 {
-    const auto original = GetOriginalRuntimeFunction<ACL_RT_API_aclrtLaunchKernelWithHostArgs>();
-    if (original == nullptr) {
-        return ACL_ERROR_RT_INTERNAL_ERROR;
-    }
+    const auto original =
+        GetOriginalRuntimeFunction<ACL_RT_API_aclrtLaunchKernelWithHostArgs>("aclrtLaunchKernelWithHostArgs");
     aclsan::PreparedTraceLaunch prepared;
-    const aclError prepareStatus = aclsan::PrepareTraceLaunch(
+    const aclError prepareResult = aclsan::PrepareTraceLaunch(
         funcHandle, numBlocks, hostArgs, argsSize, placeHolderArray, placeHolderNum, prepared);
-    if (prepareStatus != ACL_SUCCESS) {
-        return prepareStatus;
+    if (prepareResult != ACL_SUCCESS) {
+        return prepareResult;
     }
-    void* launchArgs = prepared.instrumented ? prepared.arguments.data() : hostArgs;
-    const size_t launchArgsSize = prepared.instrumented ? prepared.arguments.size() : argsSize;
+
+    void* launchArguments = prepared.instrumented ? prepared.arguments.data() : hostArgs;
+    const size_t launchArgumentBytes = prepared.instrumented ? prepared.arguments.size() : argsSize;
     aclrtPlaceHolderInfo* launchPlaceholders =
         prepared.instrumented && !prepared.placeholders.empty() ? prepared.placeholders.data() : placeHolderArray;
     const size_t launchPlaceholderCount = prepared.instrumented ? prepared.placeholders.size() : placeHolderNum;
-
     const aclError result = original(
-        funcHandle, numBlocks, stream, config, launchArgs, launchArgsSize, launchPlaceholders, launchPlaceholderCount);
+        funcHandle, numBlocks, stream, config, launchArguments, launchArgumentBytes, launchPlaceholders,
+        launchPlaceholderCount);
     aclsan::CompleteTraceLaunch(std::move(prepared), funcHandle, stream, result);
     return result;
 }
 
+// DONE
 aclError aclrtSynchronizeStreamHook(aclrtStream stream) noexcept
 {
-    const auto original = GetOriginalRuntimeFunction<ACL_RT_API_aclrtSynchronizeStream>();
-    if (original == nullptr) {
-        const AclsanSynchronizeData callbackData =
-            MakeSynchronizeData("aclrtSynchronizeStream", stream, ACL_ERROR_RT_INTERNAL_ERROR);
-        aclsan::AclsanCallbackDispatcher::DispatchSynchronizeEnd(callbackData);
-        return ACL_ERROR_RT_INTERNAL_ERROR;
-    }
-
+    const auto original = GetOriginalRuntimeFunction<ACL_RT_API_aclrtSynchronizeStream>("aclrtSynchronizeStream");
     const aclError result = original(stream);
     if (result == ACL_SUCCESS) {
         aclsan::CollectTraceStream(stream);
@@ -305,16 +351,11 @@ aclError aclrtSynchronizeStreamHook(aclrtStream stream) noexcept
     return result;
 }
 
+// DONE
 aclError aclrtSynchronizeStreamWithTimeoutHook(aclrtStream stream, int32_t timeout) noexcept
 {
-    const auto original = GetOriginalRuntimeFunction<ACL_RT_API_aclrtSynchronizeStreamWithTimeout>();
-    if (original == nullptr) {
-        const AclsanSynchronizeData callbackData =
-            MakeSynchronizeData("aclrtSynchronizeStreamWithTimeout", stream, ACL_ERROR_RT_INTERNAL_ERROR);
-        aclsan::AclsanCallbackDispatcher::DispatchSynchronizeEnd(callbackData);
-        return ACL_ERROR_RT_INTERNAL_ERROR;
-    }
-
+    const auto original =
+        GetOriginalRuntimeFunction<ACL_RT_API_aclrtSynchronizeStreamWithTimeout>("aclrtSynchronizeStreamWithTimeout");
     const aclError result = original(stream, timeout);
     if (result == ACL_SUCCESS) {
         aclsan::CollectTraceStream(stream);
@@ -326,11 +367,7 @@ aclError aclrtSynchronizeStreamWithTimeoutHook(aclrtStream stream, int32_t timeo
 
 aclError aclrtBinaryUnLoadHook(aclrtBinHandle binHandle) noexcept
 {
-    const auto original = GetOriginalRuntimeFunction<ACL_RT_API_aclrtBinaryUnLoad>();
-    if (original == nullptr) {
-        return ACL_ERROR_RT_INTERNAL_ERROR;
-    }
-    ASC_SAN_DEBUG("[HOOK aclrtBinaryUnLoad] handle=%p", binHandle);
+    const auto original = GetOriginalRuntimeFunction<ACL_RT_API_aclrtBinaryUnLoad>("aclrtBinaryUnLoad");
     const aclError result = original(binHandle);
     if (result == ACL_SUCCESS) {
         aclsan::RecordTraceBinaryUnload(binHandle);
@@ -340,11 +377,7 @@ aclError aclrtBinaryUnLoadHook(aclrtBinHandle binHandle) noexcept
 
 aclError aclrtResetDeviceHook(int32_t deviceId) noexcept
 {
-    const auto original = GetOriginalRuntimeFunction<ACL_RT_API_aclrtResetDevice>();
-    if (original == nullptr) {
-        return ACL_ERROR_RT_INTERNAL_ERROR;
-    }
-    ASC_SAN_DEBUG("[HOOK aclrtResetDevice] device=%d", deviceId);
+    const auto original = GetOriginalRuntimeFunction<ACL_RT_API_aclrtResetDevice>("aclrtResetDevice");
     const aclError result = original(deviceId);
     if (result == ACL_SUCCESS) {
         aclsan::ResetTraceRuntimeState();
@@ -356,9 +389,11 @@ using ConfigureHook = int32_t (*)(bool enable) noexcept;
 
 struct RuntimeHookBinding {
     aclrtApiId apiId;
+    const char* hookName;
     ConfigureHook configure;
 };
 
+// 如果enable，那么注册hook; 反之清除hook
 template <aclrtApiId ApiId, auto Register, auto Hook>
 int32_t ConfigureRuntimeHook(bool enable) noexcept
 {
@@ -366,51 +401,42 @@ int32_t ConfigureRuntimeHook(bool enable) noexcept
 }
 
 template <aclrtApiId ApiId, auto Register, auto Hook>
-constexpr RuntimeHookBinding MakeRuntimeHookBinding() noexcept
+constexpr RuntimeHookBinding MakeRuntimeHookBinding(const char* hookName) noexcept
 {
-    return {ApiId, ConfigureRuntimeHook<ApiId, Register, Hook>};
+    return {ApiId, hookName, ConfigureRuntimeHook<ApiId, Register, Hook>};
 }
 
-const std::array<RuntimeHookBinding, 11> kRuntimeHookBindings = {{
+// aclrtApiId + acl_tool_inject提供的注册aclrt的函数 + 我们实现的hook函数
+const std::array<RuntimeHookBinding, 11> g_runtimeHookBindings = {{
     MakeRuntimeHookBinding<
         ACL_RT_API_aclrtLaunchKernelWithHostArgs, acltoolRegisterAclrtLaunchKernelWithHostArgsCallbacks,
-        aclrtLaunchKernelWithHostArgsHook>(),
+        aclrtLaunchKernelWithHostArgsHook>("aclrtLaunchKernelWithHostArgs"),
     MakeRuntimeHookBinding<
         ACL_RT_API_aclrtBinaryLoadFromData, acltoolRegisterAclrtBinaryLoadFromDataCallbacks,
-        aclrtBinaryLoadFromDataHook>(),
+        aclrtBinaryLoadFromDataHook>("aclrtBinaryLoadFromData"),
     MakeRuntimeHookBinding<
-        ACL_RT_API_aclrtBinaryGetFunction, acltoolRegisterAclrtBinaryGetFunctionCallbacks,
-        aclrtBinaryGetFunctionHook>(),
+        ACL_RT_API_aclrtBinaryGetFunction, acltoolRegisterAclrtBinaryGetFunctionCallbacks, aclrtBinaryGetFunctionHook>(
+        "aclrtBinaryGetFunction"),
     MakeRuntimeHookBinding<
         ACL_RT_API_aclrtBinaryGetFunctionByEntry, acltoolRegisterAclrtBinaryGetFunctionByEntryCallbacks,
-        aclrtBinaryGetFunctionByEntryHook>(),
-    MakeRuntimeHookBinding<ACL_RT_API_aclrtMalloc, acltoolRegisterAclrtMallocCallbacks, aclrtMallocHook>(),
-    MakeRuntimeHookBinding<ACL_RT_API_aclrtFree, acltoolRegisterAclrtFreeCallbacks, aclrtFreeHook>(),
+        aclrtBinaryGetFunctionByEntryHook>("aclrtBinaryGetFunctionByEntry"),
+    MakeRuntimeHookBinding<ACL_RT_API_aclrtMalloc, acltoolRegisterAclrtMallocCallbacks, aclrtMallocHook>("aclrtMalloc"),
+    MakeRuntimeHookBinding<ACL_RT_API_aclrtFree, acltoolRegisterAclrtFreeCallbacks, aclrtFreeHook>("aclrtFree"),
     MakeRuntimeHookBinding<
-        ACL_RT_API_aclrtSynchronizeStream, acltoolRegisterAclrtSynchronizeStreamCallbacks,
-        aclrtSynchronizeStreamHook>(),
+        ACL_RT_API_aclrtSynchronizeStream, acltoolRegisterAclrtSynchronizeStreamCallbacks, aclrtSynchronizeStreamHook>(
+        "aclrtSynchronizeStream"),
     MakeRuntimeHookBinding<
         ACL_RT_API_aclrtSynchronizeStreamWithTimeout, acltoolRegisterAclrtSynchronizeStreamWithTimeoutCallbacks,
-        aclrtSynchronizeStreamWithTimeoutHook>(),
+        aclrtSynchronizeStreamWithTimeoutHook>("aclrtSynchronizeStreamWithTimeout"),
     MakeRuntimeHookBinding<
-        ACL_RT_API_aclrtGetFuncBySymbol, acltoolRegisterAclrtGetFuncBySymbolCallbacks, aclrtGetFuncBySymbolHook>(),
+        ACL_RT_API_aclrtGetFuncBySymbol, acltoolRegisterAclrtGetFuncBySymbolCallbacks, aclrtGetFuncBySymbolHook>(
+        "aclrtGetFuncBySymbol"),
     MakeRuntimeHookBinding<
-        ACL_RT_API_aclrtBinaryUnLoad, acltoolRegisterAclrtBinaryUnLoadCallbacks, aclrtBinaryUnLoadHook>(),
-    MakeRuntimeHookBinding<
-        ACL_RT_API_aclrtResetDevice, acltoolRegisterAclrtResetDeviceCallbacks, aclrtResetDeviceHook>(),
+        ACL_RT_API_aclrtBinaryUnLoad, acltoolRegisterAclrtBinaryUnLoadCallbacks, aclrtBinaryUnLoadHook>(
+        "aclrtBinaryUnLoad"),
+    MakeRuntimeHookBinding<ACL_RT_API_aclrtResetDevice, acltoolRegisterAclrtResetDeviceCallbacks, aclrtResetDeviceHook>(
+        "aclrtResetDevice"),
 }};
-
-bool ApplyRuntimeHookConfiguration(const std::set<aclrtApiId>& requiredHooks) noexcept
-{
-    bool success = true;
-    for (const RuntimeHookBinding& binding : kRuntimeHookBindings) {
-        const bool enable = aclsan::IsHookRequired(requiredHooks, binding.apiId);
-        if (binding.configure(enable) != 0) {
-            success = false;
-        }
-    }
-    return success;
-}
 
 } // namespace
 
@@ -418,32 +444,22 @@ namespace aclsan {
 
 AclsanStatus ResolveActiveDeviceCallStack(uint64_t pc, device_runtime::CallStackResult* result) noexcept
 {
-    if (result == nullptr) {
-        return ACLSAN_STATUS_ERROR_INVALID_PARAMETER;
-    }
+    ACLSAN_CHECK_NULLPTR("ResolveActiveDeviceCallStack", result);
     *result = ResolveTraceDeviceCallStack(pc);
     return ACLSAN_STATUS_SUCCESS;
 }
 
-AclsanStatus ApplyRuntimeHooks(const std::set<aclrtApiId>& requiredHooks) noexcept
+// 针对所有hook相关的aclrt函数，不在requiredHooks中的统一清除hook，反之注册hook
+void ApplyRuntimeHooks(const std::set<aclrtApiId>& requiredHooks) noexcept
 {
-    if (!g_hookStateValid) {
-        ASC_SAN_ERROR("acl_san: custom hook state is poisoned; restart the process before retrying");
-        return ACLSAN_STATUS_ERROR_INJECTION_FAILED;
-    }
-
-    if (!ApplyRuntimeHookConfiguration(requiredHooks)) {
-        if (!ApplyRuntimeHookConfiguration({})) {
-            g_hookStateValid = false;
-            ASC_SAN_ERROR("acl_san: custom configuration failed and clearing all custom slots failed");
-        } else {
-            ASC_SAN_ERROR("acl_san: custom configuration failed; all custom slots cleared");
+    for (const RuntimeHookBinding& binding : g_runtimeHookBindings) {
+        const bool enable = aclsan::IsHookRequired(requiredHooks, binding.apiId);
+        if (binding.configure(enable) != 0) {
+            AbortHookFailure(
+                binding.hookName, enable ? "register_runtime_hook" : "clear_runtime_hook",
+                "Runtime hook configuration returned nonzero");
         }
-        return ACLSAN_STATUS_ERROR_INJECTION_FAILED;
     }
-    return ACLSAN_STATUS_SUCCESS;
 }
-
-bool IsRuntimeHookStatePoisoned() noexcept { return !g_hookStateValid; }
 
 } // namespace aclsan

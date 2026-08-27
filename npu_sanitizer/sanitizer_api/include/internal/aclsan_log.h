@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2025 Huawei Technologies Co., Ltd.
+ * Copyright (c) 2026 Huawei Technologies Co., Ltd.
  * This program is free software, you can redistribute it and/or modify it under the terms and conditions of
  * CANN Open Software License Agreement Version 2.0 (the "License").
  * Please refer to the License for details. You may not use this file except in compliance with the License.
@@ -35,11 +35,11 @@ inline bool AclsanIsStdoutLogEnabled() noexcept
 
 inline const char* AclsanGetLogLevelName(AclsanLogLevel level) noexcept
 {
-    static const char* const levelNames[] = {"DEBUG", "INFO", "WARNING", "ERROR"};
+    static const char* const LEVEL_NAMES[] = {"DEBUG", "INFO", "WARNING", "ERROR"};
     if (level < ACLSAN_LOG_DEBUG || level > ACLSAN_LOG_ERROR) {
         return "ERROR";
     }
-    return levelNames[level];
+    return LEVEL_NAMES[level];
 }
 
 inline void AclsanLogWrite(AclsanLogLevel level, const char* format, ...) noexcept
@@ -65,5 +65,13 @@ inline void AclsanLogWrite(AclsanLogLevel level, const char* format, ...) noexce
 #define ASC_SAN_INFO(...) AclsanLogWrite(ACLSAN_LOG_INFO, __VA_ARGS__)
 #define ASC_SAN_WARNING(...) AclsanLogWrite(ACLSAN_LOG_WARNING, __VA_ARGS__)
 #define ASC_SAN_ERROR(...) AclsanLogWrite(ACLSAN_LOG_ERROR, __VA_ARGS__)
+
+#define ACLSAN_CHECK_NULLPTR(apiName, argument)                       \
+    do {                                                              \
+        if ((argument) == nullptr) {                                  \
+            ASC_SAN_ERROR("%s: %s is nullptr", (apiName), #argument); \
+            return ACLSAN_STATUS_ERROR_INVALID_PARAMETER;             \
+        }                                                             \
+    } while (false)
 
 #endif

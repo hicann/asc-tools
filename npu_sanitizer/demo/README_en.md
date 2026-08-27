@@ -10,6 +10,7 @@ enables the memcheck callbacks provided by `libacl_san.so`.
 | Directory | Source File | Executable | Description |
 | --- | --- | --- | --- |
 | `examples/add` | `add.asc` | `aclsan_demo_add` | AscendC vector addition example with result verification. |
+| `examples/padding_register_state` | `padding_register_state.asc` | `aclsan_demo_padding_register_state` | Executes two `SET_PADDING` instructions and verifies that their values reach the register manager. |
 | `examples/synccheck` | One standalone directory per scenario | `aclsan_demo_synccheck_<scenario>` | Normal and abnormal synchronization pairing examples. |
 | `examples/matmul_basic_api` | `matmul_basic_api.asc` | `aclsan_demo_matmul_basic_api` | Basic matrix multiplication example. |
 | `examples/matmul_leakyrelu_basic_api` | `matmul_leakyrelu_basic_api.asc` | `aclsan_demo_matmul_leakyrelu_basic_api` | Fused Matmul and LeakyReLU example. |
@@ -78,6 +79,7 @@ with one of the following commands:
 
 ```bash
 bash ./npu_sanitizer/demo/run.sh add
+bash ./npu_sanitizer/demo/run.sh padding_register_state
 bash ./npu_sanitizer/demo/run.sh synccheck/single_pair
 bash ./npu_sanitizer/demo/run.sh synccheck/single_unconsumed
 bash ./npu_sanitizer/demo/run.sh matmul_basic_api
@@ -102,6 +104,12 @@ then launches the executable from the corresponding `build/run` directory and
 runs `verify_result.py`. On success, the verifier prints `test pass!`. The final
 result is determined by result verification, application exit status, UDS
 handshake, sanitizer summary, and session end state.
+
+`padding_register_state` uses a single cube block to execute
+`asc_set_l13d_padding(0x12)` followed by `asc_set_l13d_padding(0x34)`. Device logs prove
+that the `0x1212` and `0x3434` `SET_PADDING` raw values are decoded and delivered to the
+same register-state key. `register_state_manager_test` independently calls `Get()` to
+verify that the same key retains only the latest value.
 
 ## Runtime Flow
 

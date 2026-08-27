@@ -23,7 +23,7 @@
 
 namespace {
 
-constexpr std::size_t kRuntimeApiCount = 17;
+constexpr std::size_t kRuntimeApiCount = 22;
 
 struct KernelArgs {
     uint8_t* value;
@@ -100,6 +100,31 @@ aclError RealAclrtDestroyStream(aclrtStream) { return ACL_SUCCESS; }
 
 aclError RealAclrtSetDevice(std::int32_t) { return ACL_SUCCESS; }
 
+aclError RealAclrtGetDevice(std::int32_t* deviceId)
+{
+    if (deviceId == nullptr) {
+        return ACL_ERROR_INVALID_PARAM;
+    }
+    *deviceId = 0;
+    return ACL_SUCCESS;
+}
+
+aclError RealAclrtGetDeviceInfo(uint32_t, aclrtDevAttr attr, int64_t* value)
+{
+    if (value == nullptr) {
+        return ACL_ERROR_INVALID_PARAM;
+    }
+    if (attr == ACL_DEV_ATTR_CUBE_CORE_NUM) {
+        *value = 36;
+        return ACL_SUCCESS;
+    }
+    if (attr == ACL_DEV_ATTR_VECTOR_CORE_NUM) {
+        *value = 72;
+        return ACL_SUCCESS;
+    }
+    return ACL_ERROR_INVALID_PARAM;
+}
+
 aclError RealAclrtResetDevice(std::int32_t) { return ACL_SUCCESS; }
 
 aclError RealAclrtSynchronizeStream(aclrtStream) { return ACL_SUCCESS; }
@@ -142,6 +167,28 @@ aclError RealAclrtBinaryUnLoad(aclrtBinHandle binHandle)
     return binHandle == nullptr ? ACL_ERROR_INVALID_PARAM : ACL_SUCCESS;
 }
 
+aclError RealAclrtBinaryGetGlobal(aclrtBinHandle, const char*, void** address, std::size_t* bytes)
+{
+    static std::uint64_t global = 0;
+    if (address == nullptr || bytes == nullptr) {
+        return ACL_ERROR_INVALID_PARAM;
+    }
+    *address = &global;
+    *bytes = sizeof(global);
+    return ACL_SUCCESS;
+}
+
+aclError RealAclrtGetFunctionAttribute(aclrtFuncHandle, aclrtFuncAttribute, std::int64_t* attrValue)
+{
+    if (attrValue == nullptr) {
+        return ACL_ERROR_INVALID_PARAM;
+    }
+    *attrValue = 0;
+    return ACL_SUCCESS;
+}
+
+const char* RealAclrtGetSocName() { return "Ascend950PR_9599"; }
+
 template <typename Function>
 aclrtApiFunc ToGenericFunction(Function function)
 {
@@ -179,6 +226,13 @@ std::array<RuntimeEntry, kRuntimeApiCount> g_runtimeEntries = {{
     {"aclrtBinaryUnLoad", ToGenericFunction(&RealAclrtBinaryUnLoad), ToGenericFunction(&RealAclrtBinaryUnLoad)},
     {"aclrtSynchronizeStreamWithTimeout", ToGenericFunction(&RealAclrtSynchronizeStreamWithTimeout),
      ToGenericFunction(&RealAclrtSynchronizeStreamWithTimeout)},
+    {"aclrtGetDevice", ToGenericFunction(&RealAclrtGetDevice), ToGenericFunction(&RealAclrtGetDevice)},
+    {"aclrtBinaryGetGlobal", ToGenericFunction(&RealAclrtBinaryGetGlobal),
+     ToGenericFunction(&RealAclrtBinaryGetGlobal)},
+    {"aclrtGetFunctionAttribute", ToGenericFunction(&RealAclrtGetFunctionAttribute),
+     ToGenericFunction(&RealAclrtGetFunctionAttribute)},
+    {"aclrtGetSocName", ToGenericFunction(&RealAclrtGetSocName), ToGenericFunction(&RealAclrtGetSocName)},
+    {"aclrtGetDeviceInfo", ToGenericFunction(&RealAclrtGetDeviceInfo), ToGenericFunction(&RealAclrtGetDeviceInfo)},
 }};
 
 std::mutex g_runtimeMutex;
@@ -281,6 +335,16 @@ extern "C" aclError aclrtSetDevice(std::int32_t deviceId)
     return CallCurrent<aclError (*)(std::int32_t)>("aclrtSetDevice", deviceId);
 }
 
+extern "C" aclError aclrtGetDevice(std::int32_t* deviceId)
+{
+    return CallCurrent<aclError (*)(std::int32_t*)>("aclrtGetDevice", deviceId);
+}
+
+extern "C" aclError aclrtGetDeviceInfo(uint32_t deviceId, aclrtDevAttr attr, int64_t* value)
+{
+    return CallCurrent<aclError (*)(uint32_t, aclrtDevAttr, int64_t*)>("aclrtGetDeviceInfo", deviceId, attr, value);
+}
+
 extern "C" aclError aclrtResetDevice(std::int32_t deviceId)
 {
     return CallCurrent<aclError (*)(std::int32_t)>("aclrtResetDevice", deviceId);
@@ -352,6 +416,33 @@ extern "C" aclError aclrtGetFuncBySymbol(const void* symbol, aclrtFuncHandle* fu
 extern "C" aclError aclrtBinaryUnLoad(aclrtBinHandle binHandle)
 {
     return CallCurrent<aclError (*)(aclrtBinHandle)>("aclrtBinaryUnLoad", binHandle);
+}
+
+extern "C" aclError aclrtBinaryGetGlobal(aclrtBinHandle binHandle, const char* name, void** address, std::size_t* bytes)
+{
+    return CallCurrent<aclError (*)(aclrtBinHandle, const char*, void**, std::size_t*)>(
+        "aclrtBinaryGetGlobal", binHandle, name, address, bytes);
+}
+
+extern "C" aclError aclrtGetFunctionAttribute(
+    aclrtFuncHandle funcHandle, aclrtFuncAttribute attrType, std::int64_t* attrValue)
+{
+    return CallCurrent<aclError (*)(aclrtFuncHandle, aclrtFuncAttribute, std::int64_t*)>(
+        "aclrtGetFunctionAttribute", funcHandle, attrType, attrValue);
+}
+
+extern "C" const char* aclrtGetSocName()
+{
+    using Function = const char* (*)();
+    Function current = nullptr;
+    {
+        std::lock_guard<std::mutex> lock(g_runtimeMutex);
+        RuntimeEntry* entry = FindEntry("aclrtGetSocName");
+        if (entry != nullptr) {
+            current = reinterpret_cast<Function>(entry->current);
+        }
+    }
+    return current == nullptr ? nullptr : current();
 }
 
 extern "C" aclError aclrtLaunchKernelWithHostArgs(

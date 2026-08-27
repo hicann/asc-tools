@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+# ----------------------------------------------------------------------------------------------------------
+# Copyright (c) 2026 Huawei Technologies Co., Ltd.
+# This program is free software, you can redistribute it and/or modify it under the terms and conditions of
+# CANN Open Software License Agreement Version 2.0 (the "License").
+# Please refer to the License for details. You may not use this file except in compliance with the License.
+# THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
+# INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
+# See LICENSE in the root of the software repository for the full text of the License.
+# ----------------------------------------------------------------------------------------------------------
+
+set -euo pipefail
+
+api_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+translator="${api_dir}/src/aclsan/aclsan_translate_device_data.cpp"
+
+Fail()
+{
+    printf 'device memory access producer contract failed: %s\n' "$1" >&2
+    exit 1
+}
+
+if rg -n '\bMemoryAccessEndpoint\b|\bDATA_COPY_ACCESS_COUNT\b' "${translator}"; then
+    Fail 'producer must build and size the complete access list'
+fi
+
+grep -Fq 'static std::optional<DeviceMemoryAccessDataList> MakeDeviceMemoryAccessData(' "${translator}" || \
+    Fail 'MakeDeviceMemoryAccessData must return the complete access list'
+overload_count=$(grep -Fc 'static std::optional<DeviceMemoryAccessDataList> MakeDeviceMemoryAccessData(' "${translator}")
+if [[ "${overload_count}" -ne 3 ]]; then
+    Fail "expected 3 legacy MakeDeviceMemoryAccessData overloads, found ${overload_count}"
+fi
+if grep -Fq 'MakeMovAlignV2MemoryAccessData' "${translator}"; then
+    Fail 'converter-covered MOV_ALIGN_V2 helper must be removed'
+fi
+grep -Fq 'access.header.serialNo = index;' "${translator}" || Fail 'serialNo is not derived from the list index'
+grep -Fq 'access.accessIndex = static_cast<uint32_t>(index);' "${translator}" || \
+    Fail 'accessIndex is not derived from the list index'
+grep -Fq 'access.accessCount = static_cast<uint32_t>(accesses.size());' "${translator}" || \
+    Fail 'accessCount is not derived from the final list size'
+
+printf 'device memory access producer contract passed\n'

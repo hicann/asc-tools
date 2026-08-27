@@ -10,6 +10,7 @@
 #include "ctrlbin_generator.h"
 #include "tool_runner.h"
 
+#include <algorithm>
 #include <atomic>
 #include <cstdlib>
 #include <filesystem>
@@ -39,6 +40,7 @@ TEST(DbiPipelineTest, MapsProbeGroupsToTranslationUnits)
     EXPECT_EQ(ProbeSourceName(ProbeGroup::Mte3), "mte3.cpp");
     EXPECT_EQ(ProbeSourceName(ProbeGroup::Fixpipe), "fixpipe.cpp");
     EXPECT_EQ(ProbeSourceName(ProbeGroup::Sync), "sync.cpp");
+    EXPECT_EQ(ProbeSourceName(ProbeGroup::Register), "register.cpp");
 }
 
 TEST(DbiPipelineTest, ValidatesRequestFields)
@@ -128,9 +130,16 @@ TEST(CtrlbinGeneratorTest, FiltersBindingsToSelectedProbeGroups)
     EXPECT_TRUE(GenerateCtrlBin(path.string(), {ProbeGroup::Mte2}, diagnostic)) << diagnostic;
     EXPECT_GT(std::filesystem::file_size(path), 0U);
     std::filesystem::remove(path);
+
+    const auto mte1Symbols = BindingSymbols({ProbeGroup::Mte1});
+    EXPECT_EQ(std::find(mte1Symbols.begin(), mte1Symbols.end(), "__sanitizer_report_set_padding"), mte1Symbols.end());
+
+    const auto registerSymbols = BindingSymbols({ProbeGroup::Register});
+    ASSERT_EQ(registerSymbols.size(), 1U);
+    EXPECT_EQ(registerSymbols[0], "__sanitizer_report_set_padding");
 }
 
-TEST(CtrlbinGeneratorTest, AllGroupsPreserveBindingCount) { EXPECT_EQ(BindingSymbols(AllProbeGroups()).size(), 76U); }
+TEST(CtrlbinGeneratorTest, AllGroupsPreserveBindingCount) { EXPECT_EQ(BindingSymbols(AllProbeGroups()).size(), 77U); }
 
 TEST(CtrlbinGeneratorTest, ConcurrentRequestsRemainIsolated)
 {

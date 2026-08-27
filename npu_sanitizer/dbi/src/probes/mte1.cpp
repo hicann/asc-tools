@@ -15,7 +15,8 @@ extern __attribute__((noinline)) __attribute__((weak)) __aicore__ void __sanitiz
     __gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, uint64_t dst, __cbuf__ void* src, uint64_t config)
 {
     aclsan::WriteTraceRecord(
-        memInfo, pc, bid, aclsan::PIPELINE_MTE1, 426, dst, reinterpret_cast<uint64_t>(src), config, 0UL, 0UL);
+        memInfo, pc, bid, aclsan::DeviceInstructionCategory::MemoryAccess, static_cast<uint16_t>(PIPE_MTE1), 426, dst,
+        reinterpret_cast<uint64_t>(src), config, 0UL, 0UL);
 }
 
 // MOV_L1_TO_BT.f16, API ID 425.
@@ -23,7 +24,8 @@ extern __attribute__((noinline)) __attribute__((weak)) __aicore__ void __sanitiz
     __gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, uint64_t dst, __cbuf__ void* src, uint64_t config)
 {
     aclsan::WriteTraceRecord(
-        memInfo, pc, bid, aclsan::PIPELINE_MTE1, 425, dst, reinterpret_cast<uint64_t>(src), config, 0UL, 0UL);
+        memInfo, pc, bid, aclsan::DeviceInstructionCategory::MemoryAccess, static_cast<uint16_t>(PIPE_MTE1), 425, dst,
+        reinterpret_cast<uint64_t>(src), config, 0UL, 0UL);
 }
 
 // MOV_L1_TO_BT.s32, API ID 424.
@@ -31,7 +33,8 @@ extern __attribute__((noinline)) __attribute__((weak)) __aicore__ void __sanitiz
     __gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, uint64_t dst, __cbuf__ void* src, uint64_t config)
 {
     aclsan::WriteTraceRecord(
-        memInfo, pc, bid, aclsan::PIPELINE_MTE1, 424, dst, reinterpret_cast<uint64_t>(src), config, 0UL, 0UL);
+        memInfo, pc, bid, aclsan::DeviceInstructionCategory::MemoryAccess, static_cast<uint16_t>(PIPE_MTE1), 424, dst,
+        reinterpret_cast<uint64_t>(src), config, 0UL, 0UL);
 }
 
 // MOV_L1_TO_BT.f32, API ID 423.
@@ -39,7 +42,8 @@ extern __attribute__((noinline)) __attribute__((weak)) __aicore__ void __sanitiz
     __gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, uint64_t dst, __cbuf__ void* src, uint64_t config)
 {
     aclsan::WriteTraceRecord(
-        memInfo, pc, bid, aclsan::PIPELINE_MTE1, 423, dst, reinterpret_cast<uint64_t>(src), config, 0UL, 0UL);
+        memInfo, pc, bid, aclsan::DeviceInstructionCategory::MemoryAccess, static_cast<uint16_t>(PIPE_MTE1), 423, dst,
+        reinterpret_cast<uint64_t>(src), config, 0UL, 0UL);
 }
 
 // MOV_L1_TO_UB, API ID 158.
@@ -47,8 +51,8 @@ extern __attribute__((noinline)) __attribute__((weak)) __aicore__ void __sanitiz
     __gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, __ubuf__ void* dst, __cbuf__ void* src, uint64_t config)
 {
     aclsan::WriteTraceRecord(
-        memInfo, pc, bid, aclsan::PIPELINE_MTE1, 158, reinterpret_cast<uint64_t>(dst), reinterpret_cast<uint64_t>(src),
-        config, 0UL, 0UL);
+        memInfo, pc, bid, aclsan::DeviceInstructionCategory::MemoryAccess, static_cast<uint16_t>(PIPE_MTE1), 158,
+        reinterpret_cast<uint64_t>(dst), reinterpret_cast<uint64_t>(src), config, 0UL, 0UL);
 }
 
 // LOAD_L1_TO_L0A_3DV2.b8, API ID 154.
@@ -57,8 +61,8 @@ extern __attribute__((noinline)) __attribute__((weak)) __aicore__ void __sanitiz
     uint64_t config1)
 {
     aclsan::WriteTraceRecord(
-        memInfo, pc, bid, aclsan::PIPELINE_MTE1, 154, reinterpret_cast<uint64_t>(dst), reinterpret_cast<uint64_t>(src),
-        config0, config1, 0UL);
+        memInfo, pc, bid, aclsan::DeviceInstructionCategory::MemoryAccess, static_cast<uint16_t>(PIPE_MTE1), 154,
+        reinterpret_cast<uint64_t>(dst), reinterpret_cast<uint64_t>(src), config0, config1, 0UL);
 }
 
 // LOAD_L1_TO_L0A_3DV2.b16, API ID 153.
@@ -67,8 +71,8 @@ extern __attribute__((noinline)) __attribute__((weak)) __aicore__ void __sanitiz
     uint64_t config1)
 {
     aclsan::WriteTraceRecord(
-        memInfo, pc, bid, aclsan::PIPELINE_MTE1, 153, reinterpret_cast<uint64_t>(dst), reinterpret_cast<uint64_t>(src),
-        config0, config1, 0UL);
+        memInfo, pc, bid, aclsan::DeviceInstructionCategory::MemoryAccess, static_cast<uint16_t>(PIPE_MTE1), 153,
+        reinterpret_cast<uint64_t>(dst), reinterpret_cast<uint64_t>(src), config0, config1, 0UL);
 }
 
 // LOAD_L1_TO_L0A_3DV2.b32, API ID 422.
@@ -77,8 +81,8 @@ extern __attribute__((noinline)) __attribute__((weak)) __aicore__ void __sanitiz
     uint64_t config1)
 {
     aclsan::WriteTraceRecord(
-        memInfo, pc, bid, aclsan::PIPELINE_MTE1, 422, reinterpret_cast<uint64_t>(dst), reinterpret_cast<uint64_t>(src),
-        config0, config1, 0UL);
+        memInfo, pc, bid, aclsan::DeviceInstructionCategory::MemoryAccess, static_cast<uint16_t>(PIPE_MTE1), 422,
+        reinterpret_cast<uint64_t>(dst), reinterpret_cast<uint64_t>(src), config0, config1, 0UL);
 }
 
 // LOAD_L1_TO_L0B_3DV2.b8, API ID 156.
@@ -87,8 +91,8 @@ extern __attribute__((noinline)) __attribute__((weak)) __aicore__ void __sanitiz
     uint64_t config1)
 {
     aclsan::WriteTraceRecord(
-        memInfo, pc, bid, aclsan::PIPELINE_MTE1, 156, reinterpret_cast<uint64_t>(dst), reinterpret_cast<uint64_t>(src),
-        config0, config1, 0UL);
+        memInfo, pc, bid, aclsan::DeviceInstructionCategory::MemoryAccess, static_cast<uint16_t>(PIPE_MTE1), 156,
+        reinterpret_cast<uint64_t>(dst), reinterpret_cast<uint64_t>(src), config0, config1, 0UL);
 }
 
 // LOAD_L1_TO_L0B_3DV2.b16, API ID 155.
@@ -97,8 +101,8 @@ extern __attribute__((noinline)) __attribute__((weak)) __aicore__ void __sanitiz
     uint64_t config1)
 {
     aclsan::WriteTraceRecord(
-        memInfo, pc, bid, aclsan::PIPELINE_MTE1, 155, reinterpret_cast<uint64_t>(dst), reinterpret_cast<uint64_t>(src),
-        config0, config1, 0UL);
+        memInfo, pc, bid, aclsan::DeviceInstructionCategory::MemoryAccess, static_cast<uint16_t>(PIPE_MTE1), 155,
+        reinterpret_cast<uint64_t>(dst), reinterpret_cast<uint64_t>(src), config0, config1, 0UL);
 }
 
 // LOAD_L1_TO_L0B_3DV2.b32, API ID 157.
@@ -107,8 +111,8 @@ extern __attribute__((noinline)) __attribute__((weak)) __aicore__ void __sanitiz
     uint64_t config1)
 {
     aclsan::WriteTraceRecord(
-        memInfo, pc, bid, aclsan::PIPELINE_MTE1, 157, reinterpret_cast<uint64_t>(dst), reinterpret_cast<uint64_t>(src),
-        config0, config1, 0UL);
+        memInfo, pc, bid, aclsan::DeviceInstructionCategory::MemoryAccess, static_cast<uint16_t>(PIPE_MTE1), 157,
+        reinterpret_cast<uint64_t>(dst), reinterpret_cast<uint64_t>(src), config0, config1, 0UL);
 }
 
 // LOAD_L1_TO_L0A_2DV2.b8, API ID 143.
@@ -117,8 +121,8 @@ extern __attribute__((noinline)) __attribute__((weak)) __aicore__ void __sanitiz
     uint64_t config1, uint64_t transpose)
 {
     aclsan::WriteTraceRecord(
-        memInfo, pc, bid, aclsan::PIPELINE_MTE1, 143, reinterpret_cast<uint64_t>(dst), reinterpret_cast<uint64_t>(src),
-        config0, config1, transpose);
+        memInfo, pc, bid, aclsan::DeviceInstructionCategory::MemoryAccess, static_cast<uint16_t>(PIPE_MTE1), 143,
+        reinterpret_cast<uint64_t>(dst), reinterpret_cast<uint64_t>(src), config0, config1, transpose);
 }
 
 // LOAD_L1_TO_L0A_2DV2.b16, API ID 142.
@@ -127,8 +131,8 @@ extern __attribute__((noinline)) __attribute__((weak)) __aicore__ void __sanitiz
     uint64_t config1, uint64_t transpose)
 {
     aclsan::WriteTraceRecord(
-        memInfo, pc, bid, aclsan::PIPELINE_MTE1, 142, reinterpret_cast<uint64_t>(dst), reinterpret_cast<uint64_t>(src),
-        config0, config1, transpose);
+        memInfo, pc, bid, aclsan::DeviceInstructionCategory::MemoryAccess, static_cast<uint16_t>(PIPE_MTE1), 142,
+        reinterpret_cast<uint64_t>(dst), reinterpret_cast<uint64_t>(src), config0, config1, transpose);
 }
 
 // LOAD_L1_TO_L0A_2DV2.b32, API ID 144.
@@ -137,8 +141,8 @@ extern __attribute__((noinline)) __attribute__((weak)) __aicore__ void __sanitiz
     uint64_t config1, uint64_t transpose)
 {
     aclsan::WriteTraceRecord(
-        memInfo, pc, bid, aclsan::PIPELINE_MTE1, 144, reinterpret_cast<uint64_t>(dst), reinterpret_cast<uint64_t>(src),
-        config0, config1, transpose);
+        memInfo, pc, bid, aclsan::DeviceInstructionCategory::MemoryAccess, static_cast<uint16_t>(PIPE_MTE1), 144,
+        reinterpret_cast<uint64_t>(dst), reinterpret_cast<uint64_t>(src), config0, config1, transpose);
 }
 
 // LOAD_L1_TO_L0A_2DV2.b4, API ID 141.
@@ -147,8 +151,8 @@ extern __attribute__((noinline)) __attribute__((weak)) __aicore__ void __sanitiz
     uint64_t config1, uint64_t transpose)
 {
     aclsan::WriteTraceRecord(
-        memInfo, pc, bid, aclsan::PIPELINE_MTE1, 141, reinterpret_cast<uint64_t>(dst), reinterpret_cast<uint64_t>(src),
-        config0, config1, transpose);
+        memInfo, pc, bid, aclsan::DeviceInstructionCategory::MemoryAccess, static_cast<uint16_t>(PIPE_MTE1), 141,
+        reinterpret_cast<uint64_t>(dst), reinterpret_cast<uint64_t>(src), config0, config1, transpose);
 }
 
 // LOAD_L1_TO_L0B_2DV2.b4, API ID 146.
@@ -157,8 +161,8 @@ extern __attribute__((noinline)) __attribute__((weak)) __aicore__ void __sanitiz
     uint64_t config1, uint64_t transpose)
 {
     aclsan::WriteTraceRecord(
-        memInfo, pc, bid, aclsan::PIPELINE_MTE1, 146, reinterpret_cast<uint64_t>(dst), reinterpret_cast<uint64_t>(src),
-        config0, config1, transpose);
+        memInfo, pc, bid, aclsan::DeviceInstructionCategory::MemoryAccess, static_cast<uint16_t>(PIPE_MTE1), 146,
+        reinterpret_cast<uint64_t>(dst), reinterpret_cast<uint64_t>(src), config0, config1, transpose);
 }
 
 // LOAD_L1_TO_L0B_2DV2.b8, API ID 147.
@@ -167,8 +171,8 @@ extern __attribute__((noinline)) __attribute__((weak)) __aicore__ void __sanitiz
     uint64_t config1, uint64_t transpose)
 {
     aclsan::WriteTraceRecord(
-        memInfo, pc, bid, aclsan::PIPELINE_MTE1, 147, reinterpret_cast<uint64_t>(dst), reinterpret_cast<uint64_t>(src),
-        config0, config1, transpose);
+        memInfo, pc, bid, aclsan::DeviceInstructionCategory::MemoryAccess, static_cast<uint16_t>(PIPE_MTE1), 147,
+        reinterpret_cast<uint64_t>(dst), reinterpret_cast<uint64_t>(src), config0, config1, transpose);
 }
 
 // LOAD_L1_TO_L0B_2DV2.b16, API ID 145.
@@ -177,8 +181,8 @@ extern __attribute__((noinline)) __attribute__((weak)) __aicore__ void __sanitiz
     uint64_t config1, uint64_t transpose)
 {
     aclsan::WriteTraceRecord(
-        memInfo, pc, bid, aclsan::PIPELINE_MTE1, 145, reinterpret_cast<uint64_t>(dst), reinterpret_cast<uint64_t>(src),
-        config0, config1, transpose);
+        memInfo, pc, bid, aclsan::DeviceInstructionCategory::MemoryAccess, static_cast<uint16_t>(PIPE_MTE1), 145,
+        reinterpret_cast<uint64_t>(dst), reinterpret_cast<uint64_t>(src), config0, config1, transpose);
 }
 
 // LOAD_L1_TO_L0B_2DV2.b32, API ID 148.
@@ -187,8 +191,8 @@ extern __attribute__((noinline)) __attribute__((weak)) __aicore__ void __sanitiz
     uint64_t config1, uint64_t transpose)
 {
     aclsan::WriteTraceRecord(
-        memInfo, pc, bid, aclsan::PIPELINE_MTE1, 148, reinterpret_cast<uint64_t>(dst), reinterpret_cast<uint64_t>(src),
-        config0, config1, transpose);
+        memInfo, pc, bid, aclsan::DeviceInstructionCategory::MemoryAccess, static_cast<uint16_t>(PIPE_MTE1), 148,
+        reinterpret_cast<uint64_t>(dst), reinterpret_cast<uint64_t>(src), config0, config1, transpose);
 }
 
 // LOAD_L1_TO_L0B_2D_TRANSPOSE.b4, API ID 140.
@@ -198,8 +202,8 @@ __sanitizer_report_load_cbuf_to_cb_2d_transpose_b4(
     uint64_t fracStride)
 {
     aclsan::WriteTraceRecord(
-        memInfo, pc, bid, aclsan::PIPELINE_MTE1, 140, reinterpret_cast<uint64_t>(dst), reinterpret_cast<uint64_t>(src),
-        config, fracStride, 0UL);
+        memInfo, pc, bid, aclsan::DeviceInstructionCategory::MemoryAccess, static_cast<uint16_t>(PIPE_MTE1), 140,
+        reinterpret_cast<uint64_t>(dst), reinterpret_cast<uint64_t>(src), config, fracStride, 0UL);
 }
 
 // LOAD_L1_TO_L0B_2D_TRANSPOSE.b8, API ID 137.
@@ -209,8 +213,8 @@ __sanitizer_report_load_cbuf_to_cb_2d_transpose_b8(
     uint64_t fracStride)
 {
     aclsan::WriteTraceRecord(
-        memInfo, pc, bid, aclsan::PIPELINE_MTE1, 137, reinterpret_cast<uint64_t>(dst), reinterpret_cast<uint64_t>(src),
-        config, fracStride, 0UL);
+        memInfo, pc, bid, aclsan::DeviceInstructionCategory::MemoryAccess, static_cast<uint16_t>(PIPE_MTE1), 137,
+        reinterpret_cast<uint64_t>(dst), reinterpret_cast<uint64_t>(src), config, fracStride, 0UL);
 }
 
 // LOAD_L1_TO_L0B_2D_TRANSPOSE.b16, API ID 138.
@@ -220,8 +224,8 @@ __sanitizer_report_load_cbuf_to_cb_2d_transpose_b16(
     uint64_t fracStride)
 {
     aclsan::WriteTraceRecord(
-        memInfo, pc, bid, aclsan::PIPELINE_MTE1, 138, reinterpret_cast<uint64_t>(dst), reinterpret_cast<uint64_t>(src),
-        config, fracStride, 0UL);
+        memInfo, pc, bid, aclsan::DeviceInstructionCategory::MemoryAccess, static_cast<uint16_t>(PIPE_MTE1), 138,
+        reinterpret_cast<uint64_t>(dst), reinterpret_cast<uint64_t>(src), config, fracStride, 0UL);
 }
 
 // LOAD_L1_TO_L0B_2D_TRANSPOSE.b32, API ID 139.
@@ -231,6 +235,6 @@ __sanitizer_report_load_cbuf_to_cb_2d_transpose_b32(
     uint64_t fracStride)
 {
     aclsan::WriteTraceRecord(
-        memInfo, pc, bid, aclsan::PIPELINE_MTE1, 139, reinterpret_cast<uint64_t>(dst), reinterpret_cast<uint64_t>(src),
-        config, fracStride, 0UL);
+        memInfo, pc, bid, aclsan::DeviceInstructionCategory::MemoryAccess, static_cast<uint16_t>(PIPE_MTE1), 139,
+        reinterpret_cast<uint64_t>(dst), reinterpret_cast<uint64_t>(src), config, fracStride, 0UL);
 }

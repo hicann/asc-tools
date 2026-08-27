@@ -45,6 +45,11 @@ constexpr const char* kRuntimeApiNames[ACL_RT_API_MAX] = {
     "aclrtGetFuncBySymbol",
     "aclrtBinaryUnLoad",
     "aclrtSynchronizeStreamWithTimeout",
+    "aclrtGetDevice",
+    "aclrtBinaryGetGlobal",
+    "aclrtGetFunctionAttribute",
+    "aclrtGetSocName",
+    "aclrtGetDeviceInfo",
 };
 
 std::mutex g_initMutex;
@@ -149,6 +154,12 @@ void LogHookResult(const char* name, aclrtApiId id, aclError result)
         static_cast<int>(id), static_cast<int>(result));
 }
 
+void LogHookPointerResult(const char* name, aclrtApiId id, const void* result)
+{
+    npu_compute::detail::DebugLog(
+        "tool_injection", "hook return: name=%s id=%d result=%p", name, static_cast<int>(id), result);
+}
+
 } // namespace
 
 extern "C" aclError aclrtSetDeviceHook(int32_t deviceId)
@@ -161,6 +172,19 @@ extern "C" aclError aclrtSetDeviceHook(int32_t deviceId)
     }
     const aclError result = callback(deviceId);
     LogHookResult("aclrtSetDevice", id, result);
+    return result;
+}
+
+extern "C" aclError aclrtGetDeviceHook(int32_t* deviceId)
+{
+    constexpr aclrtApiId id = ACL_RT_API_aclrtGetDevice;
+    const auto callback = GetDispatchTarget<aclrtGetDeviceFunc>(id);
+    if (callback == nullptr) {
+        LogMissingCallback("aclrtGetDevice", id);
+        return ACL_ERROR_UNINITIALIZE;
+    }
+    const aclError result = callback(deviceId);
+    LogHookResult("aclrtGetDevice", id, result);
     return result;
 }
 
@@ -379,6 +403,59 @@ extern "C" aclError aclrtBinaryUnLoadHook(aclrtBinHandle binHandle)
     return result;
 }
 
+extern "C" aclError aclrtBinaryGetGlobalHook(aclrtBinHandle binHandle, const char* name, void** address, size_t* bytes)
+{
+    constexpr aclrtApiId id = ACL_RT_API_aclrtBinaryGetGlobal;
+    const auto callback = GetDispatchTarget<aclrtBinaryGetGlobalFunc>(id);
+    if (callback == nullptr) {
+        LogMissingCallback("aclrtBinaryGetGlobal", id);
+        return ACL_ERROR_UNINITIALIZE;
+    }
+    const aclError result = callback(binHandle, name, address, bytes);
+    LogHookResult("aclrtBinaryGetGlobal", id, result);
+    return result;
+}
+
+extern "C" aclError aclrtGetFunctionAttributeHook(
+    aclrtFuncHandle funcHandle, aclrtFuncAttribute attrType, int64_t* attrValue)
+{
+    constexpr aclrtApiId id = ACL_RT_API_aclrtGetFunctionAttribute;
+    const auto callback = GetDispatchTarget<aclrtGetFunctionAttributeFunc>(id);
+    if (callback == nullptr) {
+        LogMissingCallback("aclrtGetFunctionAttribute", id);
+        return ACL_ERROR_UNINITIALIZE;
+    }
+    const aclError result = callback(funcHandle, attrType, attrValue);
+    LogHookResult("aclrtGetFunctionAttribute", id, result);
+    return result;
+}
+
+extern "C" const char* aclrtGetSocNameHook()
+{
+    constexpr aclrtApiId id = ACL_RT_API_aclrtGetSocName;
+    const auto callback = GetDispatchTarget<aclrtGetSocNameFunc>(id);
+    if (callback == nullptr) {
+        LogMissingCallback("aclrtGetSocName", id);
+        return nullptr;
+    }
+    const char* result = callback();
+    LogHookPointerResult("aclrtGetSocName", id, result);
+    return result;
+}
+
+extern "C" aclError aclrtGetDeviceInfoHook(uint32_t deviceId, aclrtDevAttr attr, int64_t* value)
+{
+    constexpr aclrtApiId id = ACL_RT_API_aclrtGetDeviceInfo;
+    const auto callback = GetDispatchTarget<aclrtGetDeviceInfoFunc>(id);
+    if (callback == nullptr) {
+        LogMissingCallback("aclrtGetDeviceInfo", id);
+        return ACL_ERROR_UNINITIALIZE;
+    }
+    const aclError result = callback(deviceId, attr, value);
+    LogHookResult("aclrtGetDeviceInfo", id, result);
+    return result;
+}
+
 namespace {
 
 aclApiTable g_aclApiTable = {
@@ -400,6 +477,11 @@ aclApiTable g_aclApiTable = {
         FunctionToAddress(&aclrtGetFuncBySymbolHook),
         FunctionToAddress(&aclrtBinaryUnLoadHook),
         FunctionToAddress(&aclrtSynchronizeStreamWithTimeoutHook),
+        FunctionToAddress(&aclrtGetDeviceHook),
+        FunctionToAddress(&aclrtBinaryGetGlobalHook),
+        FunctionToAddress(&aclrtGetFunctionAttributeHook),
+        FunctionToAddress(&aclrtGetSocNameHook),
+        FunctionToAddress(&aclrtGetDeviceInfoHook),
     },
     {},
     {},
@@ -514,6 +596,11 @@ extern "C" NPU_COMPUTE_EXPORT int32_t acltoolRegisterAclrtSetDeviceCallbacks(acl
     return RegisterCallback(ACL_RT_API_aclrtSetDevice, FunctionToAddress(callback));
 }
 
+extern "C" NPU_COMPUTE_EXPORT int32_t acltoolRegisterAclrtGetDeviceCallbacks(aclrtGetDeviceFunc callback)
+{
+    return RegisterCallback(ACL_RT_API_aclrtGetDevice, FunctionToAddress(callback));
+}
+
 extern "C" NPU_COMPUTE_EXPORT int32_t acltoolRegisterAclrtResetDeviceCallbacks(aclrtResetDeviceFunc callback)
 {
     return RegisterCallback(ACL_RT_API_aclrtResetDevice, FunctionToAddress(callback));
@@ -598,4 +685,25 @@ extern "C" NPU_COMPUTE_EXPORT int32_t acltoolRegisterAclrtGetFuncBySymbolCallbac
 extern "C" NPU_COMPUTE_EXPORT int32_t acltoolRegisterAclrtBinaryUnLoadCallbacks(aclrtBinaryUnLoadFunc callback)
 {
     return RegisterCallback(ACL_RT_API_aclrtBinaryUnLoad, FunctionToAddress(callback));
+}
+
+extern "C" NPU_COMPUTE_EXPORT int32_t acltoolRegisterAclrtBinaryGetGlobalCallbacks(aclrtBinaryGetGlobalFunc callback)
+{
+    return RegisterCallback(ACL_RT_API_aclrtBinaryGetGlobal, FunctionToAddress(callback));
+}
+
+extern "C" NPU_COMPUTE_EXPORT int32_t
+acltoolRegisterAclrtGetFunctionAttributeCallbacks(aclrtGetFunctionAttributeFunc callback)
+{
+    return RegisterCallback(ACL_RT_API_aclrtGetFunctionAttribute, FunctionToAddress(callback));
+}
+
+extern "C" NPU_COMPUTE_EXPORT int32_t acltoolRegisterAclrtGetSocNameCallbacks(aclrtGetSocNameFunc callback)
+{
+    return RegisterCallback(ACL_RT_API_aclrtGetSocName, FunctionToAddress(callback));
+}
+
+extern "C" NPU_COMPUTE_EXPORT int32_t acltoolRegisterAclrtGetDeviceInfoCallbacks(aclrtGetDeviceInfoFunc callback)
+{
+    return RegisterCallback(ACL_RT_API_aclrtGetDeviceInfo, FunctionToAddress(callback));
 }

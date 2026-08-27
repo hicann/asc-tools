@@ -8,28 +8,20 @@
  * See LICENSE in the root of the software repository for the full text of the License.
  */
 
-#ifndef ACLSAN_DISPATCH_CB_H
-#define ACLSAN_DISPATCH_CB_H
+#ifndef ACLSAN_DISPATCH_H
+#define ACLSAN_DISPATCH_H
 
 #include "aclsan/aclsan_api.h"
 
-#include <array>
-#include <cstddef>
-#include <vector>
-
 namespace aclsan {
 
-constexpr std::size_t kDataCopyAccessCount = 2;
-using DeviceMemoryAccessDataArray = std::array<AclsanDeviceMemoryAccessData, kDataCopyAccessCount>;
-using DeviceMemoryAccessDataBatch = std::vector<AclsanDeviceMemoryAccessData>;
+bool InvokeCallback(AclsanCallbackDomain domain, AclsanCallbackId callbackId, const void* callbackData) noexcept;
 
 class AclsanCallbackDispatcher final {
 public:
     static void DispatchResource(AclsanCallbackId callbackId, const AclsanResourceData& callbackData) noexcept;
     static void DispatchSynchronizeEnd(const AclsanSynchronizeData& callbackData) noexcept;
     static void DispatchDeviceMemoryAccess(const AclsanDeviceMemoryAccessData& callbackData) noexcept;
-    static void DispatchDeviceMemoryAccess(const DeviceMemoryAccessDataArray& callbackData) noexcept;
-    static void DispatchDeviceMemoryAccess(const DeviceMemoryAccessDataBatch& callbackData) noexcept;
     static void DispatchDeviceSync(const AclsanDeviceSyncData& callbackData) noexcept;
 
 private:

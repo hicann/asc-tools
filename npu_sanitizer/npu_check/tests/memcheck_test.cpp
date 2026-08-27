@@ -51,7 +51,7 @@ AclsanDeviceMemoryAccessData Access(
     AclsanDeviceMemoryAccessData data{};
     data.header.version = ACLSAN_API_VERSION;
     data.header.size = sizeof(data);
-    data.header.pipeline = static_cast<uint32_t>(sourceKind);
+    data.header.pipeline = sourceKind == DeviceSourceKind::MTE2 ? ACLSAN_DEVICE_PIPE_MTE2 : ACLSAN_DEVICE_PIPE_MTE3;
     data.header.sourceKind = static_cast<uint32_t>(sourceKind);
     data.header.siteId = 7;
     data.header.blockId = 3;
@@ -72,7 +72,12 @@ TEST(MemcheckTest, ReportsOutOfBoundsReadAtSynchronization)
     Memcheck checker(true);
     checker.OnAllocation(AllocationEvent(0x100000, 4096, 1));
     const auto validRead = Access(DeviceSourceKind::MTE2, 0x100100, 64);
-    const auto invalidRead = Access(DeviceSourceKind::MTE2, 0x100ff0, 64);
+    auto invalidRead = Access(DeviceSourceKind::MTE2, 0x100ff0, 64);
+    invalidRead.header.sourceKind = ACLSAN_DEVICE_SOURCE_UNKNOWN;
+    invalidRead.header.pipeline = ACLSAN_DEVICE_PIPE_MTE2;
+    invalidRead.header.phyCoreId = 75;
+    invalidRead.header.blockId = 7;
+    invalidRead.header.blockType = ACLSAN_DEVICE_BLOCK_TYPE_AICORE_CUBE;
     checker.QueueDeviceMemoryAccess(validRead);
     checker.QueueDeviceMemoryAccess(invalidRead);
 
@@ -97,6 +102,7 @@ TEST(MemcheckTest, ReportsOutOfBoundsReadAtSynchronization)
         aclsan::cann::RenderNpusanReportRecord(aclsan::cann::NpusanReportRecord::From(report), {}, &rendered),
         ReportRenderStatus::kSuccess);
     EXPECT_NE(rendered.find("Invalid GM read of size 64 bytes"), std::string::npos);
+    EXPECT_NE(rendered.find("by aicore (75) type (AIC) block (7) pipe (MTE2)"), std::string::npos);
     EXPECT_NE(rendered.find("Address 0x100ff0 is out of bounds"), std::string::npos);
     EXPECT_NE(rendered.find("48 bytes after the nearest allocation"), std::string::npos);
     EXPECT_EQ(checker.Stats().pendingDeviceOperations, 0U);
@@ -501,6 +507,48 @@ TEST(MemcheckTest, UsesDeviceSpecificAllocationRanges)
     ASSERT_EQ(reports.size(), 1U);
     EXPECT_EQ(reports.front().common.pattern, static_cast<uint32_t>(NpusanMemcheckPattern::kInvalidAccess));
     EXPECT_EQ(reports.front().common.exec.deviceId, 0U);
+}
+
+TEST(MemcheckTest, GroupsDerivedDataByCompleteInstructionIdentity)
+{
+    Memcheck checker(true);
+    auto aicRead = Access(DeviceSourceKind::MTE2, 0x700000, 64, 1);
+    aicRead.header.launchId = 9;
+    aicRead.header.blockId = 0;
+    aicRead.header.blockType = ACLSAN_DEVICE_BLOCK_TYPE_AICORE_CUBE;
+    aicRead.header.phyCoreId = 3;
+    aicRead.header.instrExecId = 1;
+    aicRead.header.serialNo = 0;
+    aicRead.accessIndex = 0;
+    aicRead.accessCount = 2;
+
+    auto aicWrite = aicRead;
+    aicWrite.header.serialNo = 1;
+    aicWrite.address = 0x710000;
+    aicWrite.accessMode = ACLSAN_DEVICE_MEMORY_ACCESS_WRITE;
+    aicWrite.accessIndex = 1;
+
+    auto aivRead = aicRead;
+    aivRead.header.blockType = ACLSAN_DEVICE_BLOCK_TYPE_AICORE_VECTOR;
+    aivRead.header.phyCoreId = 4;
+    aivRead.address = 0x720000;
+
+    checker.QueueDeviceMemoryAccess(aicRead);
+    checker.QueueDeviceMemoryAccess(aicWrite);
+    checker.QueueDeviceMemoryAccess(aivRead);
+    const auto reports = checker.OnSynchronization();
+
+    ASSERT_EQ(reports.size(), 3U);
+    EXPECT_EQ(reports[0].common.groupId, reports[1].common.groupId);
+    EXPECT_NE(reports[0].common.groupId, reports[2].common.groupId);
+    EXPECT_EQ(reports[0].common.exec.phyCoreId, 3U);
+    EXPECT_EQ(reports[2].common.exec.phyCoreId, 4U);
+
+    std::string rendered;
+    EXPECT_EQ(
+        aclsan::cann::RenderNpusanReportRecord(aclsan::cann::NpusanReportRecord::From(reports[2]), {}, &rendered),
+        ReportRenderStatus::kSuccess);
+    EXPECT_NE(rendered.find("by aicore (4) type (AIV) block (0) pipe (MTE2)"), std::string::npos);
 }
 
 } // namespace

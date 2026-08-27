@@ -32,7 +32,7 @@ bool ExecContextsEqual(const NpusanReportExecContext& lhs, const NpusanReportExe
 {
     return lhs.launchId == rhs.launchId && lhs.binaryId == rhs.binaryId && lhs.functionId == rhs.functionId &&
            lhs.instrExecId == rhs.instrExecId && lhs.serialNo == rhs.serialNo && lhs.pc == rhs.pc &&
-           lhs.offset == rhs.offset && lhs.deviceId == rhs.deviceId && lhs.coreId == rhs.coreId &&
+           lhs.offset == rhs.offset && lhs.deviceId == rhs.deviceId && lhs.phyCoreId == rhs.phyCoreId &&
            lhs.blockId == rhs.blockId && lhs.blockType == rhs.blockType && lhs.pipeId == rhs.pipeId &&
            lhs.siteId == rhs.siteId && lhs.line == rhs.line && lhs.column == rhs.column &&
            lhs.function == rhs.function && lhs.file == rhs.file && lhs.pipeName == rhs.pipeName &&
@@ -292,8 +292,9 @@ std::string ActualRelatedPointLine(const NpusanSyncPoint& point, const ReportFie
 {
     std::ostringstream os;
     os << "=========     related point: " << OrUnknown(point.operation) << " by aicore ("
-       << FieldOr(fields, "relatedCoreId", "<unknown>") << ") block (" << FieldOr(fields, "relatedBlock", "0")
-       << ") pipe (" << FieldOr(fields, "relatedPipe", "<unknown>") << ") at "
+       << FieldOr(fields, "relatedCoreId", "<unknown>") << ") type (" << FieldOr(fields, "relatedType", "UNKNOWN")
+       << ") block (" << FieldOr(fields, "relatedBlock", "0") << ") pipe ("
+       << FieldOr(fields, "relatedPipe", "<unknown>") << ") at "
        << FieldOr(fields, "relatedLocation", "pc 0x0 in <unknown>") << '\n';
     return os.str();
 }

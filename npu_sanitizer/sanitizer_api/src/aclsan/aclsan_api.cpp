@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2025 Huawei Technologies Co., Ltd.
+ * Copyright (c) 2026 Huawei Technologies Co., Ltd.
  * This program is free software, you can redistribute it and/or modify it under the terms and conditions of
  * CANN Open Software License Agreement Version 2.0 (the "License").
  * Please refer to the License for details. You may not use this file except in compliance with the License.
@@ -9,23 +9,32 @@
  */
 
 #include "aclsan/aclsan_api.h"
-#include "internal/aclsan_active_probe_plan.h"
-#include "internal/aclsan_internal.h"
-#include "internal/aclsan_log.h"
-#include "npu_compute/injection_hook.h"
 #include "device_runtime/device_symbolizer.h"
+#include "internal/aclsan_active_probe_plan.h"
+#include "internal/aclsan_dispatch.h"
+#include "internal/aclsan_device_call_stack.h"
+#include "internal/aclsan_log.h"
+#include "internal/aclsan_runtime_hook.h"
+#include "npu_compute/injection_hook.h"
 
 #include <algorithm>
-#include <condition_variable>
+#include <cstdlib>
 #include <cstring>
 #include <map>
-#include <mutex>
 #include <new>
 #include <set>
 #include <shared_mutex>
 #include <string>
 #include <tuple>
 #include <vector>
+
+#define ACLSAN_CHECK_ACTIVE_SUBSCRIBER(apiName, subscriber)                \
+    do {                                                                   \
+        if (!IsActive((subscriber))) {                                     \
+            ASC_SAN_ERROR("%s: subscriber is not initialized", (apiName)); \
+            return ACLSAN_STATUS_ERROR_INVALID_PARAMETER;                  \
+        }                                                                  \
+    } while (false)
 
 namespace {
 
@@ -49,6 +58,12 @@ AclsanStatus UnavailableStatus(const std::string& error)
     return ACLSAN_STATUS_ERROR_RUNTIME;
 }
 
+[[noreturn]] void AbortConfigurationException(const char* operation, const char* reason) noexcept
+{
+    ASC_SAN_ERROR("[FATAL] npucheck internal failure: operation=%s reason=%s", operation, reason);
+    std::abort();
+}
+
 struct CallbackKey {
     AclsanCallbackDomain domain;
     AclsanCallbackId id;
@@ -60,7 +75,7 @@ struct CallbackKey {
 };
 
 // 记录每组 domain + callback id 需要开启 Hook 的 Runtime API。
-const std::map<CallbackKey, std::vector<aclrtApiId>> kCallbackRoutes = {
+const std::map<CallbackKey, std::vector<aclrtApiId>> g_callbackRoutes = {
     {{ACLSAN_CB_DOMAIN_RESOURCE, ACLSAN_CBID_RESOURCE_MEMORY_ALLOC}, {ACL_RT_API_aclrtMalloc}},
     {{ACLSAN_CB_DOMAIN_RESOURCE, ACLSAN_CBID_RESOURCE_MEMORY_FREE}, {ACL_RT_API_aclrtFree}},
     {{ACLSAN_CB_DOMAIN_DEVICE_INSTRUCTION, ACLSAN_CBID_DEVICE_MEMORY_ACCESS},
@@ -104,14 +119,11 @@ private:
 
     static bool IsValidCallbackId(AclsanCallbackDomain domain, AclsanCallbackId callbackId) noexcept;
     static bool IsValidCallbackDomain(AclsanCallbackDomain domain) noexcept;
-    static bool HasCallbackRoute(const CallbackKey& key) noexcept;
     static std::set<aclrtApiId> ComputeRequiredHooks(const std::set<CallbackKey>& enabledCallbacks);
     static uint32_t ComputeRequiredProbeGroups(const std::set<CallbackKey>& enabledCallbacks) noexcept;
 
     bool IsActive(AclsanSubscriberHandle subscriber) const noexcept;
     void LogConfigurationState(const char* operation, const char* stage) const noexcept;
-    void Reset(const char* operation) noexcept;
-    void ClearAfterException(AclsanStatus failure, const char* operation) noexcept;
     AclsanStatus ApplyCallbackConfiguration(std::set<CallbackKey>& candidateCallbacks, const char* operation);
     AclsanStatus UpdateCallbackConfiguration(const CallbackKey& key, bool shouldEnable);
 
@@ -120,11 +132,6 @@ private:
     void* userdata_ = nullptr;
     std::set<CallbackKey> enabledCallbacks_;
     std::set<aclrtApiId> requiredHooks_;
-    mutable std::recursive_mutex mutex_;
-    std::condition_variable_any callbacksDrained_;
-    size_t activeCallbackInvocations_ = 0;
-    bool acceptingCallbacks_ = false;
-    bool unsubscribeInProgress_ = false;
 };
 
 // 获取进程内唯一的AclsanSubscriber对象
@@ -154,19 +161,16 @@ bool AclsanSubscriber::IsValidCallbackDomain(AclsanCallbackDomain domain) noexce
            domain == ACLSAN_CB_DOMAIN_SYNCHRONIZE;
 }
 
-// 根据(callback domain, callback id)查询该 callback 是否已有 Runtime Hook route。
-bool AclsanSubscriber::HasCallbackRoute(const CallbackKey& key) noexcept
-{
-    return kCallbackRoutes.find(key) != kCallbackRoutes.end();
-}
-
 // 根据现在订阅的domain + id，确认哪些aclrt函数需要被hook
 std::set<aclrtApiId> AclsanSubscriber::ComputeRequiredHooks(const std::set<CallbackKey>& enabledCallbacks)
 {
     std::set<aclrtApiId> requiredHooks;
     for (const CallbackKey& key : enabledCallbacks) {
-        const auto route = kCallbackRoutes.find(key);
-        if (route == kCallbackRoutes.end()) {
+        const auto route = g_callbackRoutes.find(key);
+        if (route == g_callbackRoutes.end()) {
+            ASC_SAN_ERROR(
+                "ComputeRequiredHooks: callback route not found for domain=%u id=%u", static_cast<uint32_t>(key.domain),
+                static_cast<uint32_t>(key.id));
             continue;
         }
         for (aclrtApiId apiId : route->second) {
@@ -193,7 +197,7 @@ bool AclsanSubscriber::IsActive(AclsanSubscriberHandle subscriber) const noexcep
 void AclsanSubscriber::LogConfigurationState(const char* operation, const char* stage) const noexcept
 {
     ASC_SAN_DEBUG(
-        "%s: callback state stage=%s enabledCallbacks_=%zu requiredHooks_=%zu", operation, stage,
+        "%s: callback state stage=%s enabledCallbacks_ size=%zu requiredHooks_ size=%zu", operation, stage,
         enabledCallbacks_.size(), requiredHooks_.size());
     for (const CallbackKey& key : enabledCallbacks_) {
         ASC_SAN_DEBUG(
@@ -205,54 +209,12 @@ void AclsanSubscriber::LogConfigurationState(const char* operation, const char* 
     }
 }
 
-void AclsanSubscriber::Reset(const char* operation) noexcept
-{
-    LogConfigurationState(operation, "before-reset");
-    activeHandle_ = nullptr;
-    callback_ = nullptr;
-    userdata_ = nullptr;
-    enabledCallbacks_.clear();
-    requiredHooks_.clear();
-    acceptingCallbacks_ = false;
-    aclsan::CommitActiveProbePlan(0);
-    LogConfigurationState(operation, "after-reset");
-}
-
-// 异常情况，还原所有aclrt接口变为原始的aclrt功能
-void AclsanSubscriber::ClearAfterException(AclsanStatus failure, const char* operation) noexcept
-{
-    ASC_SAN_ERROR("%s: failed with result=%u", operation, static_cast<uint32_t>(failure));
-    const AclsanStatus restoreResult = aclsan::ApplyRuntimeHooks({});
-    if (restoreResult != ACLSAN_STATUS_SUCCESS) {
-        ASC_SAN_ERROR("Failed to clear EnableCallback info, result=%u", static_cast<uint32_t>(restoreResult));
-    } else {
-        ASC_SAN_ERROR("All EnableCallback info is cleared, all Runtime function remains original");
-    }
-    Reset(operation);
-}
-
 AclsanStatus AclsanSubscriber::ApplyCallbackConfiguration(
     std::set<CallbackKey>& candidateCallbacks, const char* operation)
 {
     std::set<aclrtApiId> candidateRequiredHooks = ComputeRequiredHooks(candidateCallbacks);
-    const uint32_t candidateProbeGroupMask = ComputeRequiredProbeGroups(candidateCallbacks);
-    const uint32_t previousProbeGroupMask = aclsan::SnapshotActiveProbePlan();
-    aclsan::CommitActiveProbePlan(candidateProbeGroupMask);
-    const AclsanStatus result = aclsan::ApplyRuntimeHooks(candidateRequiredHooks);
-    if (result != ACLSAN_STATUS_SUCCESS) {
-        aclsan::CommitActiveProbePlan(previousProbeGroupMask);
-        ASC_SAN_ERROR("%s: ApplyRuntimeHooks failed, result=%u", operation, static_cast<uint32_t>(result));
-        const AclsanStatus rollbackResult = aclsan::ApplyRuntimeHooks(requiredHooks_);
-        if (rollbackResult != ACLSAN_STATUS_SUCCESS) {
-            ASC_SAN_ERROR(
-                "%s: failed to restore previous Runtime Hooks, result=%u", operation,
-                static_cast<uint32_t>(rollbackResult));
-            Reset(operation);
-        } else {
-            LogConfigurationState(operation, "rollback-restored");
-        }
-        return result;
-    }
+    aclsan::CommitActiveProbePlan(ComputeRequiredProbeGroups(candidateCallbacks));
+    aclsan::ApplyRuntimeHooks(candidateRequiredHooks);
     enabledCallbacks_.swap(candidateCallbacks);
     requiredHooks_.swap(candidateRequiredHooks);
     LogConfigurationState(operation, "committed");
@@ -263,6 +225,7 @@ AclsanStatus AclsanSubscriber::ApplyCallbackConfiguration(
 AclsanStatus AclsanSubscriber::UpdateCallbackConfiguration(const CallbackKey& key, bool shouldEnable)
 {
     try {
+        std::unique_lock<std::shared_mutex> planLock(aclsan::ActiveProbePlanMutex());
         // 基于当前已启用的 domain + id 构建本次候选状态。
         std::set<CallbackKey> candidateCallbacks = enabledCallbacks_;
         if (shouldEnable) {
@@ -273,34 +236,23 @@ AclsanStatus AclsanSubscriber::UpdateCallbackConfiguration(const CallbackKey& ke
 
         return ApplyCallbackConfiguration(candidateCallbacks, "aclsanEnableCallback");
     } catch (const std::bad_alloc&) {
-        ClearAfterException(ACLSAN_STATUS_ERROR_OUT_OF_MEMORY, "aclsanEnableCallback");
-        return ACLSAN_STATUS_ERROR_OUT_OF_MEMORY;
+        AbortConfigurationException("aclsanEnableCallback", "out of memory");
     } catch (...) {
-        ClearAfterException(ACLSAN_STATUS_ERROR_INTERNAL, "aclsanEnableCallback");
-        return ACLSAN_STATUS_ERROR_INTERNAL;
+        AbortConfigurationException("aclsanEnableCallback", "unexpected C++ exception");
     }
 }
 
+// TODO: 看下英伟达要不要调用unsubscribe，如何销毁
 AclsanStatus AclsanSubscriber::Subscribe(
     AclsanSubscriberHandle* subscriber, AclsanCallbackFunc callback, void* userdata)
 {
-    std::unique_lock<std::shared_mutex> planLock(aclsan::ActiveProbePlanMutex());
-    std::lock_guard<std::recursive_mutex> stateLock(mutex_);
-    if (subscriber == nullptr || callback == nullptr) {
-        ASC_SAN_ERROR("aclsanSubscribe: subscriber / callback is nullptr");
-        return ACLSAN_STATUS_ERROR_INVALID_PARAMETER;
-    }
-    *subscriber = nullptr;
+    ACLSAN_CHECK_NULLPTR("aclsanSubscribe", subscriber);
+    ACLSAN_CHECK_NULLPTR("aclsanSubscribe", callback);
 
-    if (activeHandle_ != nullptr || unsubscribeInProgress_) {
+    if (activeHandle_ != nullptr) {
         ASC_SAN_ERROR("aclsanSubscribe: subscriber already exists");
         return ACLSAN_STATUS_ERROR_ALREADY_SUBSCRIBED;
     }
-    if (aclsan::IsRuntimeHookStatePoisoned()) {
-        ASC_SAN_ERROR("aclsanSubscribe: Runtime Hook state is poisoned");
-        return ACLSAN_STATUS_ERROR_INJECTION_FAILED;
-    }
-
     if (acltoolHookInit() != 0) {
         ASC_SAN_ERROR("aclsanSubscribe: acltoolHookInit failed");
         return ACLSAN_STATUS_ERROR_INJECTION_FAILED;
@@ -309,7 +261,6 @@ AclsanStatus AclsanSubscriber::Subscribe(
     activeHandle_ = this;
     callback_ = callback;
     userdata_ = userdata;
-    acceptingCallbacks_ = true;
     *subscriber = activeHandle_;
     ASC_SAN_DEBUG("aclsanSubscribe succeed");
     return ACLSAN_STATUS_SUCCESS;
@@ -318,15 +269,10 @@ AclsanStatus AclsanSubscriber::Subscribe(
 AclsanStatus AclsanSubscriber::EnableCallback(
     uint32_t enable, AclsanSubscriberHandle subscriber, AclsanCallbackDomain domain, AclsanCallbackId id)
 {
-    std::unique_lock<std::shared_mutex> planLock(aclsan::ActiveProbePlanMutex());
-    std::lock_guard<std::recursive_mutex> stateLock(mutex_);
+    ACLSAN_CHECK_ACTIVE_SUBSCRIBER("aclsanEnableCallback", subscriber);
     ASC_SAN_DEBUG(
         "aclsanEnableCallback start: enable=%u domain=%u id=%u", enable, static_cast<uint32_t>(domain),
         static_cast<uint32_t>(id));
-    if (!IsActive(subscriber)) {
-        ASC_SAN_ERROR("aclsanEnableCallback: subscriber is not initialized");
-        return ACLSAN_STATUS_ERROR_INVALID_PARAMETER;
-    }
     if (!IsValidCallbackId(domain, id)) {
         ASC_SAN_ERROR(
             "aclsanEnableCallback: invalid domain + id combination, enable=%u domain=%u id=%u", enable,
@@ -334,101 +280,61 @@ AclsanStatus AclsanSubscriber::EnableCallback(
         return ACLSAN_STATUS_ERROR_INVALID_PARAMETER;
     }
 
-    const CallbackKey key{domain, id};
-    // 已声明但尚无 producer 的 callback 不应被伪装成可用 route。
-    if (!HasCallbackRoute(key)) {
-        ASC_SAN_ERROR(
-            "aclsanEnableCallback: no supported callback route for domain=%u id=%u", static_cast<uint32_t>(domain),
-            static_cast<uint32_t>(id));
-        return ACLSAN_STATUS_ERROR_NOT_SUPPORTED;
-    }
-    return UpdateCallbackConfiguration(key, enable != 0);
+    return UpdateCallbackConfiguration(CallbackKey{domain, id}, enable != 0);
 }
 
 AclsanStatus AclsanSubscriber::Unsubscribe(AclsanSubscriberHandle subscriber) noexcept
 {
-    AclsanStatus result = ACLSAN_STATUS_SUCCESS;
-    {
-        std::unique_lock<std::shared_mutex> planLock(aclsan::ActiveProbePlanMutex());
-        std::lock_guard<std::recursive_mutex> stateLock(mutex_);
-        if (!IsActive(subscriber)) {
-            ASC_SAN_ERROR("aclsanUnsubscribe: subscriber is not initialized");
-            return ACLSAN_STATUS_ERROR_INVALID_PARAMETER;
-        }
+    ACLSAN_CHECK_ACTIVE_SUBSCRIBER("aclsanUnsubscribe", subscriber);
 
-        acceptingCallbacks_ = false;
-        unsubscribeInProgress_ = true;
-        result = aclsan::ApplyRuntimeHooks({});
-        Reset("aclsanUnsubscribe");
-    }
-
-    {
-        std::unique_lock<std::recursive_mutex> stateLock(mutex_);
-        callbacksDrained_.wait(stateLock, [this] { return activeCallbackInvocations_ == 0; });
-        unsubscribeInProgress_ = false;
-    }
-    if (result != ACLSAN_STATUS_SUCCESS) {
-        ASC_SAN_ERROR("aclsanUnsubscribe: ApplyRuntimeHooks failed, result=%u", static_cast<uint32_t>(result));
-    }
-    return result;
+    std::unique_lock<std::shared_mutex> planLock(aclsan::ActiveProbePlanMutex());
+    LogConfigurationState("aclsanUnsubscribe", "before-reset");
+    aclsan::ApplyRuntimeHooks({});
+    activeHandle_ = nullptr;
+    callback_ = nullptr;
+    userdata_ = nullptr;
+    enabledCallbacks_.clear();
+    requiredHooks_.clear();
+    aclsan::CommitActiveProbePlan(0);
+    LogConfigurationState("aclsanUnsubscribe", "after-reset");
+    return ACLSAN_STATUS_SUCCESS;
 }
 
 AclsanStatus AclsanSubscriber::EnableDomain(
     AclsanSubscriberHandle subscriber, AclsanCallbackDomain domain, uint32_t enable)
 {
-    std::unique_lock<std::shared_mutex> planLock(aclsan::ActiveProbePlanMutex());
-    std::lock_guard<std::recursive_mutex> stateLock(mutex_);
-    if (!IsActive(subscriber)) {
-        ASC_SAN_ERROR("aclsanEnableDomain: subscriber is not initialized");
-        return ACLSAN_STATUS_ERROR_INVALID_PARAMETER;
-    }
+    ACLSAN_CHECK_ACTIVE_SUBSCRIBER("aclsanEnableDomain", subscriber);
     if (!IsValidCallbackDomain(domain)) {
         ASC_SAN_ERROR("aclsanEnableDomain: invalid domain=%u", static_cast<uint32_t>(domain));
         return ACLSAN_STATUS_ERROR_INVALID_PARAMETER;
     }
 
     try {
+        std::unique_lock<std::shared_mutex> planLock(aclsan::ActiveProbePlanMutex());
         std::set<CallbackKey> candidateCallbacks = enabledCallbacks_;
-        bool hasRoute = false;
-        for (const auto& route : kCallbackRoutes) {
+        for (const auto& route : g_callbackRoutes) {
             if (route.first.domain != domain) {
                 continue;
             }
-            hasRoute = true;
             if (enable != 0) {
                 candidateCallbacks.insert(route.first);
             } else {
                 candidateCallbacks.erase(route.first);
             }
         }
-        if (!hasRoute) {
-            ASC_SAN_ERROR(
-                "aclsanEnableDomain: no supported callback route for domain=%u", static_cast<uint32_t>(domain));
-            return ACLSAN_STATUS_ERROR_NOT_SUPPORTED;
-        }
         return ApplyCallbackConfiguration(candidateCallbacks, "aclsanEnableDomain");
     } catch (const std::bad_alloc&) {
-        ASC_SAN_ERROR("aclsanEnableDomain: failed to allocate candidate callback state");
-        return ACLSAN_STATUS_ERROR_OUT_OF_MEMORY;
+        AbortConfigurationException("aclsanEnableDomain", "out of memory");
     } catch (...) {
-        ASC_SAN_ERROR("aclsanEnableDomain: failed to build candidate callback state");
-        return ACLSAN_STATUS_ERROR_INTERNAL;
+        AbortConfigurationException("aclsanEnableDomain", "unexpected C++ exception");
     }
 }
 
 AclsanStatus AclsanSubscriber::GetCallbackState(
     AclsanSubscriberHandle subscriber, AclsanCallbackDomain domain, uint32_t cbid, uint32_t* enabled) const noexcept
 {
-    std::lock_guard<std::recursive_mutex> stateLock(mutex_);
-    if (enabled == nullptr) {
-        ASC_SAN_ERROR("aclsanGetCallbackState: enabled is nullptr");
-        return ACLSAN_STATUS_ERROR_INVALID_PARAMETER;
-    }
-
-    if (!IsActive(subscriber)) {
-        ASC_SAN_ERROR("aclsanGetCallbackState: subscriber is not initialized");
-        return ACLSAN_STATUS_ERROR_INVALID_PARAMETER;
-    }
+    ACLSAN_CHECK_NULLPTR("aclsanGetCallbackState", enabled);
+    ACLSAN_CHECK_ACTIVE_SUBSCRIBER("aclsanGetCallbackState", subscriber);
 
     const AclsanCallbackId id = static_cast<AclsanCallbackId>(cbid);
     if (!IsValidCallbackId(domain, id)) {
@@ -437,65 +343,44 @@ AclsanStatus AclsanSubscriber::GetCallbackState(
             cbid);
         return ACLSAN_STATUS_ERROR_INVALID_PARAMETER;
     }
-    const CallbackKey key{domain, id};
-    if (!HasCallbackRoute(key)) {
-        ASC_SAN_ERROR(
-            "aclsanGetCallbackState: no supported callback route for domain=%u id=%u", static_cast<uint32_t>(domain),
-            cbid);
-        return ACLSAN_STATUS_ERROR_NOT_SUPPORTED;
-    }
     *enabled = IsCallbackEnabled(domain, id) ? 1 : 0;
     return ACLSAN_STATUS_SUCCESS;
 }
 
 bool AclsanSubscriber::IsCallbackEnabled(AclsanCallbackDomain domain, AclsanCallbackId id) const noexcept
 {
-    std::lock_guard<std::recursive_mutex> stateLock(mutex_);
     return activeHandle_ != nullptr && enabledCallbacks_.count(CallbackKey{domain, id}) != 0;
 }
 
 bool AclsanSubscriber::InvokeCallback(
     AclsanCallbackDomain domain, AclsanCallbackId id, const void* callbackData) noexcept
 {
-    AclsanCallbackFunc callback = nullptr;
-    void* userdata = nullptr;
-    {
-        std::lock_guard<std::recursive_mutex> stateLock(mutex_);
-        if (!acceptingCallbacks_ || callback_ == nullptr) {
-            ASC_SAN_ERROR("InvokeCallback: callback is nullptr or subscriber is stopping");
-            return false;
-        }
-
-        // 如果对应domain和id用户没有主动订阅，那么就不传回cbdata
-        if (enabledCallbacks_.count(CallbackKey{domain, id}) == 0) {
-            ASC_SAN_DEBUG(
-                "InvokeCallback: domain=%u id=%u is not enabled. No call for callback func",
-                static_cast<uint32_t>(domain), static_cast<uint32_t>(id));
-            return true;
-        }
-        callback = callback_;
-        userdata = userdata_;
-        ++activeCallbackInvocations_;
+    if (callbackData == nullptr) {
+        ASC_SAN_ERROR("InvokeCallback: callback data is nullptr");
+        return false;
     }
 
-    bool success = true;
+    if (callback_ == nullptr) {
+        ASC_SAN_ERROR("InvokeCallback: callback is nullptr");
+        return false;
+    }
+
+    // 如果对应domain和id用户没有主动订阅，那么就不传回cbdata
+    if (!IsCallbackEnabled(domain, id)) {
+        ASC_SAN_DEBUG(
+            "InvokeCallback: domain=%u id=%u is not enabled. No call for callback func", static_cast<uint32_t>(domain),
+            static_cast<uint32_t>(id));
+        return true;
+    }
+
     try {
-        callback(userdata, domain, id, callbackData);
+        callback_(userdata_, domain, id, callbackData);
     } catch (...) {
         ASC_SAN_ERROR(
             "InvokeCallback: domain=%u id=%u failed", static_cast<uint32_t>(domain), static_cast<uint32_t>(id));
-        success = false;
+        return false;
     }
-    {
-        std::lock_guard<std::recursive_mutex> stateLock(mutex_);
-        if (activeCallbackInvocations_ != 0) {
-            --activeCallbackInvocations_;
-        }
-        if (activeCallbackInvocations_ == 0) {
-            callbacksDrained_.notify_all();
-        }
-    }
-    return success;
+    return true;
 }
 
 // 创建唯一subscriber，更新callback函数。该步骤还会刷新aclrt的hook表
@@ -530,9 +415,7 @@ extern "C" AclsanStatus aclsanGetCallbackState(
 
 extern "C" AclsanStatus aclsanGetDeviceCallStack(uint64_t pc, AclsanDeviceCallStack* result)
 {
-    if (result == nullptr) {
-        return ACLSAN_STATUS_ERROR_INVALID_PARAMETER;
-    }
+    ACLSAN_CHECK_NULLPTR("aclsanGetDeviceCallStack", result);
     *result = {};
     result->pc = pc;
 
@@ -566,11 +449,6 @@ extern "C" AclsanStatus aclsanGetDeviceCallStack(uint64_t pc, AclsanDeviceCallSt
 }
 
 namespace aclsan {
-
-bool IsCallbackEnabled(AclsanCallbackDomain domain, AclsanCallbackId id) noexcept
-{
-    return AclsanSubscriber::Instance().IsCallbackEnabled(domain, id);
-}
 
 // 在 libsanitizer_api 内部通过 subscriber 保存的 callback 和 userdata 派发已启用键。
 bool InvokeCallback(AclsanCallbackDomain domain, AclsanCallbackId id, const void* callbackData) noexcept

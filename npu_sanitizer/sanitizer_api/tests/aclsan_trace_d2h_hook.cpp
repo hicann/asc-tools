@@ -32,7 +32,12 @@ namespace {
     } while (false)
 
 struct CapturedRecord {
+    uint64_t launchId;
+    uint64_t instrExecId;
+    uint32_t deviceId;
+    uint32_t phyCoreId;
     uint32_t blockId;
+    uint32_t blockType;
     uint64_t pc;
     uint32_t srcPipe;
     uint32_t dstPipe;
@@ -55,10 +60,15 @@ std::vector<CapturedMemoryAccess> g_memoryAccesses;
 size_t g_mallocCalls = 0;
 size_t g_freeCalls = 0;
 size_t g_d2hCalls = 0;
+size_t g_deviceInfoCalls = 0;
 bool g_failLaunch = false;
 bool g_failSync = false;
+bool g_failDeviceInfo = false;
+bool g_failVectorDeviceInfo = false;
 bool g_writeRecord = true;
 bool g_writeMemoryRecord = false;
+int64_t g_cubeCoreCount = 36;
+int64_t g_vectorCoreCount = 72;
 bool g_writeMultiMemoryRecords = false;
 uint32_t g_expectedHiddenOffset = 16;
 uint32_t g_expectedPlaceholderDataOffset = 0;
@@ -114,14 +124,20 @@ aclError OriginalLaunch(
     }
 
     auto* bytes = static_cast<uint8_t*>(deviceBuffer);
-    auto* header = reinterpret_cast<aclsan::AscsanTraceBufferHeader*>(bytes);
+    auto* header = reinterpret_cast<aclsan::AclsanTraceBufferHeader*>(bytes);
     size_t sliceBytes = 0;
-    if (header->magic != aclsan::ASCSAN_TRACE_BUFFER_MAGIC_V1 || header->blockCount != blocks ||
-        !aclsan::TraceSliceBytes(header->recordsPerBlock, &sliceBytes)) {
+    if (header->magic != aclsan::ASCSAN_TRACE_BUFFER_MAGIC || header->blockCount != blocks ||
+        !aclsan::TraceSliceBytes(header->recordsPerCore, &sliceBytes)) {
         return ACL_ERROR_INVALID_PARAM;
     }
-    auto* slice = reinterpret_cast<aclsan::AscsanTraceSliceHeader*>(bytes + sizeof(*header) + sliceBytes);
-    auto* record = reinterpret_cast<aclsan::AscsanRawTraceRecord*>(reinterpret_cast<uint8_t*>(slice) + sizeof(*slice));
+    if (header->physicalCoreCount != 108U) {
+        return ACL_ERROR_INVALID_PARAM;
+    }
+    constexpr uint32_t phyCoreId = 18U;
+    const uint32_t sliceIndex = phyCoreId;
+    auto* slice = reinterpret_cast<aclsan::AclsanTraceSliceHeader*>(
+        bytes + sizeof(*header) + static_cast<size_t>(sliceIndex) * sliceBytes);
+    auto* record = reinterpret_cast<aclsan::AclsanRawTraceRecord*>(reinterpret_cast<uint8_t*>(slice) + sizeof(*slice));
     record->pc = 0x1234;
     if (g_writeMultiMemoryRecords) {
         record->args[0] = 2;
@@ -147,6 +163,7 @@ aclError OriginalLaunch(
         record->args[4] = 0;
         record->instrId = 86;
         record->siteId = 38;
+        record->category = aclsan::DeviceInstructionCategory::MemoryAccess;
         record->pipeline = ACLSAN_DEVICE_PIPE_MTE2;
     } else {
         record->args[0] = 2;
@@ -156,13 +173,64 @@ aclError OriginalLaunch(
         record->args[4] = 0;
         record->instrId = 440;
         record->siteId = 37;
+        record->category = aclsan::DeviceInstructionCategory::Synchronization;
         record->pipeline = ACLSAN_DEVICE_PIPE_SCALAR;
     }
+    record->blockId = 1;
+    record->reserved = 0;
+    slice->phyCoreId = phyCoreId;
     slice->recordCount = 1;
+    if (!g_writeMemoryRecord) {
+        auto* second = record + 1;
+        second->pc = 0x2234;
+        second->args[0] = 2;
+        second->args[1] = 3;
+        second->args[2] = 8;
+        second->args[3] = 0;
+        second->args[4] = 0;
+        second->instrId = 440;
+        second->siteId = 38;
+        second->category = aclsan::DeviceInstructionCategory::Synchronization;
+        second->pipeline = ACLSAN_DEVICE_PIPE_SCALAR;
+        second->blockId = 0;
+        second->reserved = 0;
+        slice->recordCount = 2;
+    }
     return ACL_SUCCESS;
 }
 
 aclError OriginalSync(aclrtStream) { return g_failSync ? ACL_ERROR_FAILURE : ACL_SUCCESS; }
+
+const char* OriginalGetSocName() { return "Ascend950PR_9599"; }
+
+aclError OriginalGetDevice(int32_t* deviceId)
+{
+    if (deviceId == nullptr) {
+        return ACL_ERROR_INVALID_PARAM;
+    }
+    *deviceId = 3;
+    return ACL_SUCCESS;
+}
+
+aclError OriginalGetDeviceInfo(uint32_t deviceId, aclrtDevAttr attr, int64_t* value)
+{
+    if (g_failDeviceInfo || deviceId != 3U || value == nullptr) {
+        return ACL_ERROR_INVALID_PARAM;
+    }
+    ++g_deviceInfoCalls;
+    if (attr == ACL_DEV_ATTR_CUBE_CORE_NUM) {
+        *value = g_cubeCoreCount;
+        return ACL_SUCCESS;
+    }
+    if (attr == ACL_DEV_ATTR_VECTOR_CORE_NUM) {
+        if (g_failVectorDeviceInfo) {
+            return ACL_ERROR_INVALID_PARAM;
+        }
+        *value = g_vectorCoreCount;
+        return ACL_SUCCESS;
+    }
+    return ACL_ERROR_INVALID_PARAM;
+}
 
 void Callback(void*, AclsanCallbackDomain domain, AclsanCallbackId id, const void* data)
 {
@@ -192,7 +260,10 @@ void Callback(void*, AclsanCallbackDomain domain, AclsanCallbackId id, const voi
     }
     if (id == ACLSAN_CBID_DEVICE_SYNC) {
         const auto* sync = static_cast<const AclsanDeviceSyncData*>(data);
-        g_records.push_back({sync->header.blockId, sync->header.pc, sync->srcPipe, sync->dstPipe, sync->objectId});
+        g_records.push_back(
+            {sync->header.launchId, sync->header.instrExecId, sync->header.deviceId, sync->header.phyCoreId,
+             sync->header.blockId, sync->header.blockType, sync->header.pc, sync->srcPipe, sync->dstPipe,
+             sync->objectId});
     }
 }
 
@@ -207,6 +278,9 @@ int main()
     CHECK(RuntimeStubSetOriginFunction("aclrtMemcpy", &OriginalMemcpy) == ACL_SUCCESS);
     CHECK(RuntimeStubSetOriginFunction("aclrtLaunchKernelWithHostArgs", &OriginalLaunch) == ACL_SUCCESS);
     CHECK(RuntimeStubSetOriginFunction("aclrtSynchronizeStream", &OriginalSync) == ACL_SUCCESS);
+    CHECK(RuntimeStubSetOriginFunction("aclrtGetSocName", &OriginalGetSocName) == ACL_SUCCESS);
+    CHECK(RuntimeStubSetOriginFunction("aclrtGetDevice", &OriginalGetDevice) == ACL_SUCCESS);
+    CHECK(RuntimeStubSetOriginFunction("aclrtGetDeviceInfo", &OriginalGetDeviceInfo) == ACL_SUCCESS);
     CHECK(acltoolHookInit() == ACL_SUCCESS);
 
     AclsanSubscriberHandle subscriber = nullptr;
@@ -234,19 +308,33 @@ int main()
         ACL_SUCCESS);
     CHECK(g_records.empty());
     CHECK(g_d2hCalls == 0);
+    CHECK(g_deviceInfoCalls == 2);
 
     CHECK(
         aclrtLaunchKernelWithHostArgs(function, 2, stream2, nullptr, arguments, sizeof(arguments), nullptr, 0) ==
         ACL_SUCCESS);
     CHECK(aclrtSynchronizeStream(stream1) == ACL_SUCCESS);
-    CHECK(g_records.size() == 1);
+    CHECK(g_records.size() == 2);
+    CHECK(g_records[0].launchId == 1);
+    CHECK(g_records[0].instrExecId == 1);
+    CHECK(g_records[0].deviceId == 3);
+    CHECK(g_records[0].phyCoreId == 18);
     CHECK(g_records[0].blockId == 1);
+    CHECK(g_records[0].blockType == ACLSAN_DEVICE_BLOCK_TYPE_AICORE_VECTOR);
     CHECK(g_records[0].pc == 0x1234);
     CHECK(g_records[0].srcPipe == 2);
     CHECK(g_records[0].dstPipe == 3);
     CHECK(g_records[0].objectId == 7);
+    CHECK(g_records[1].launchId == 1);
+    CHECK(g_records[1].instrExecId == 1);
+    CHECK(g_records[1].deviceId == 3);
+    CHECK(g_records[1].phyCoreId == 18);
+    CHECK(g_records[1].blockId == 0);
+    CHECK(g_records[1].blockType == ACLSAN_DEVICE_BLOCK_TYPE_AICORE_VECTOR);
+    CHECK(g_records[1].pc == 0x2234);
+    CHECK(g_records[1].objectId == 8);
     CHECK(aclrtSynchronizeStream(stream2) == ACL_SUCCESS);
-    CHECK(g_records.size() == 2);
+    CHECK(g_records.size() == 4);
 
     g_writeMemoryRecord = true;
     CHECK(
@@ -280,10 +368,10 @@ int main()
         aclrtLaunchKernelWithHostArgs(function, 2, stream1, nullptr, arguments, sizeof(arguments), nullptr, 0) ==
         ACL_SUCCESS);
     CHECK(aclrtSynchronizeStream(stream1) == ACL_ERROR_FAILURE);
-    CHECK(g_records.size() == 2);
+    CHECK(g_records.size() == 4);
     g_failSync = false;
     CHECK(aclrtSynchronizeStream(stream1) == ACL_SUCCESS);
-    CHECK(g_records.size() == 3);
+    CHECK(g_records.size() == 6);
 
     const size_t freesBeforeFailedLaunch = g_freeCalls;
     g_failLaunch = true;
@@ -292,6 +380,39 @@ int main()
         ACL_ERROR_FAILURE);
     CHECK(g_freeCalls == freesBeforeFailedLaunch + 1);
     g_failLaunch = false;
+
+    const size_t mallocCallsBeforeInvalidTopology = g_mallocCalls;
+    g_failDeviceInfo = true;
+    CHECK(
+        aclrtLaunchKernelWithHostArgs(function, 2, stream1, nullptr, arguments, sizeof(arguments), nullptr, 0) ==
+        ACL_ERROR_RT_INTERNAL_ERROR);
+    g_failDeviceInfo = false;
+    g_failVectorDeviceInfo = true;
+    CHECK(
+        aclrtLaunchKernelWithHostArgs(function, 2, stream1, nullptr, arguments, sizeof(arguments), nullptr, 0) ==
+        ACL_ERROR_RT_INTERNAL_ERROR);
+    g_failVectorDeviceInfo = false;
+    g_cubeCoreCount = 0;
+    CHECK(
+        aclrtLaunchKernelWithHostArgs(function, 2, stream1, nullptr, arguments, sizeof(arguments), nullptr, 0) ==
+        ACL_ERROR_RT_INTERNAL_ERROR);
+    g_cubeCoreCount = 36;
+    g_vectorCoreCount = -1;
+    CHECK(
+        aclrtLaunchKernelWithHostArgs(function, 2, stream1, nullptr, arguments, sizeof(arguments), nullptr, 0) ==
+        ACL_ERROR_RT_INTERNAL_ERROR);
+    g_vectorCoreCount = 71;
+    CHECK(
+        aclrtLaunchKernelWithHostArgs(function, 2, stream1, nullptr, arguments, sizeof(arguments), nullptr, 0) ==
+        ACL_ERROR_RT_INTERNAL_ERROR);
+    g_cubeCoreCount = 1431655766;
+    g_vectorCoreCount = 2863311532;
+    CHECK(
+        aclrtLaunchKernelWithHostArgs(function, 2, stream1, nullptr, arguments, sizeof(arguments), nullptr, 0) ==
+        ACL_ERROR_RT_INTERNAL_ERROR);
+    g_cubeCoreCount = 36;
+    g_vectorCoreCount = 72;
+    CHECK(g_mallocCalls == mallocCallsBeforeInvalidTopology);
 
     setenv("NPU_CHECK_DBI_ARG_SIZE", "8", 1);
     g_expectedHiddenOffset = 8;

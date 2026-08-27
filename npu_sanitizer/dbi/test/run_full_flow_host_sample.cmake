@@ -29,7 +29,7 @@ file(WRITE "${TEST_ROOT}/toolchain/x86_64-linux/asc/include/kernel_operator.h" "
 file(WRITE
   "${TEST_ROOT}/toolchain/x86_64-linux/ascendc/include/highlevel_api/kernel_tiling/kernel_tiling.h"
   "// marker\n")
-foreach(probe IN ITEMS fixpipe mte1 mte2 mte3 sync)
+foreach(probe IN ITEMS fixpipe mte1 mte2 mte3 register sync)
   file(COPY "${SOURCE_ROOT}/src/probes/${probe}.cpp" DESTINATION "${staged_sources}/probes")
 endforeach()
 foreach(header IN ITEMS trace_record trace_buffer_abi)

@@ -25,6 +25,18 @@ case "${example_name}" in
         example_work_dir="${demo_dir}"
         asc_architecture="dav-3510"
         ;;
+    add_datacopy_stride_oob)
+        example_target="aclsan_demo_add_datacopy_stride_oob"
+        example_executable="${bin_dir}/${example_target}"
+        example_work_dir="${demo_dir}"
+        asc_architecture="dav-3510"
+        ;;
+    padding_register_state)
+        example_target="aclsan_demo_padding_register_state"
+        example_executable="${bin_dir}/${example_target}"
+        example_work_dir="${demo_dir}"
+        asc_architecture="dav-3510"
+        ;;
     matmul_basic_api)
         example_target="aclsan_demo_matmul_basic_api"
         example_executable="${demo_dir}/examples/matmul_basic_api/build/bin/${example_target}"
@@ -67,7 +79,8 @@ case "${asc_architecture}" in
 esac
 
 if [[ $# -gt 1 ]]; then
-    printf 'usage: %s [add|matmul_basic_api|matmul_leakyrelu_basic_api|synccheck/<sample>]\n' \
+    printf 'usage: %s [add|add_datacopy_stride_oob|padding_register_state|matmul_basic_api|' \
+        'matmul_leakyrelu_basic_api|synccheck/<sample>]\n' \
         "${BASH_SOURCE[0]}" >&2
     exit 2
 fi
@@ -100,7 +113,8 @@ source "${cann_install_dir}/set_env.sh"
 set -u
 cmake_args+=("-DNPUCOMPUTE_CANN_ROOT=${NPUCOMPUTE_CANN_ROOT}")
 cmake "${cmake_args[@]}"
-if [[ "${example_name}" == "add" || "${example_name}" == synccheck/* ]]; then
+if [[ "${example_name}" == "add" || "${example_name}" == "add_datacopy_stride_oob" ||
+    "${example_name}" == "padding_register_state" || "${example_name}" == synccheck/* ]]; then
     cmake --build "${build_dir}" --target npu_check_cli "${example_target}" --parallel
 else
     cmake --build "${build_dir}" --target npu_check_cli --parallel
@@ -147,9 +161,7 @@ export NPU_CHECK_DBI_TOOLCHAIN_ROOT="${cann_install_dir}"
 export NPU_CHECK_DBI_SOURCE_ROOT="${build_dir}/dbi_runtime_sources"
 export LD_LIBRARY_PATH="${bin_dir}:${cann_lib_dir}${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
 
-(cd "${example_work_dir}" && "${bin_dir}/npu_check" --tool "${example_tool}" --strict --keep-temp \
-    --work-dir "${build_dir}/probe_runtime" \
-    --probe-cache-dir "${build_dir}/probe_cache" -- "${example_executable}")
+(cd "${example_work_dir}" && "${bin_dir}/npu_check" --tool "${example_tool}" -- "${example_executable}")
 if [[ "${example_name}" == "matmul_basic_api" || "${example_name}" == "matmul_leakyrelu_basic_api" ]]; then
     python3 "${demo_dir}/examples/${example_name}/scripts/verify_result.py" \
         "${example_work_dir}/output/output.bin" \

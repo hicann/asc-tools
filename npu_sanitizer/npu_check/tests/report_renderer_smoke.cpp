@@ -8,6 +8,7 @@
 
 #include "diagnostic/report_renderer.h"
 #include "diagnostic/report/report_catalog.h"
+#include "diagnostic/report/report_fields.h"
 
 #include "aclsan/aclsan_cbdata_device.h"
 #include <gtest/gtest.h>
@@ -98,6 +99,17 @@ static_assert(std::is_same_v<aclsan::cann::detail::PatternCatalog::key_type, Rep
 static_assert(!HasDefaultSeverity<aclsan::cann::detail::PatternDescriptor>::value);
 static_assert(!HasSummaryTag<aclsan::cann::detail::PatternDescriptor>::value);
 
+TEST(ReportFieldsTest, FormatsBlockTypes)
+{
+    using aclsan::cann::detail::FormatBlockType;
+    static_assert(std::is_same_v<decltype(FormatBlockType(0)), std::string>);
+
+    EXPECT_EQ(FormatBlockType(ACLSAN_DEVICE_BLOCK_TYPE_AICORE), "AICORE");
+    EXPECT_EQ(FormatBlockType(ACLSAN_DEVICE_BLOCK_TYPE_AICORE_VECTOR), "AIV");
+    EXPECT_EQ(FormatBlockType(ACLSAN_DEVICE_BLOCK_TYPE_AICORE_CUBE), "AIC");
+    EXPECT_EQ(FormatBlockType(std::numeric_limits<std::uint32_t>::max()), "<unknown>");
+}
+
 std::string ReadFile(const std::string& path)
 {
     std::ifstream input(path, std::ios::binary);
@@ -129,6 +141,7 @@ ReportRecord MakeMemcheckInvalidAccessRecord()
             {"file", "kernel.cpp"},
             {"line", "42"},
             {"coreId", "3"},
+            {"blockType", "AIC"},
             {"blockId", "7"},
             {"pipeName", "MTE2"},
             {"address", "1000"},
@@ -155,6 +168,7 @@ ReportRecord MakeInitcheckRecord()
             {"file", "init.cpp"},
             {"line", "21"},
             {"coreId", "4"},
+            {"blockType", "AIV"},
             {"blockId", "2"},
             {"pipeName", "MTE2"},
             {"address", "3000"},
@@ -195,6 +209,7 @@ ReportRecord MakeSyncRecord()
             {"reasonText", "unmatched"},
             {"triggerOperation", "WAIT_FLAG"},
             {"triggerCoreId", "2"},
+            {"triggerType", "AIC"},
             {"triggerBlock", "5"},
             {"triggerPipe", "V"},
             {"triggerLocation", "sync_kernel+0x44 in sync.cpp:88"},
@@ -217,7 +232,7 @@ NpusanSynccheckReport MakePairingReport(NpusanSyncMismatchReason reason, NpusanS
     report.detailKind = NpusanSyncDetailKind::kPairing;
     report.hasRelatedPoint = true;
     report.triggerPoint.hasExecContext = true;
-    report.triggerPoint.exec.coreId = 1;
+    report.triggerPoint.exec.phyCoreId = 1;
     report.triggerPoint.exec.blockId = 4;
     report.triggerPoint.exec.pipeName = "MTE2";
     report.triggerPoint.exec.function = "SyncOperation";
@@ -264,7 +279,7 @@ NpusanSynccheckReport MakeSynccheckReport(NpusanSynccheckPattern pattern)
     report.common.flags = aclsan::cann::kNpusanReportCommonHasExecContext;
     report.triggerPoint.operation = "SYNC_OPERATION";
     report.triggerPoint.hasExecContext = true;
-    report.triggerPoint.exec.coreId = 0;
+    report.triggerPoint.exec.phyCoreId = 0;
     report.triggerPoint.exec.blockId = 1;
     report.triggerPoint.exec.pipeName = "S";
     report.triggerPoint.exec.pc = 0x100;
@@ -310,6 +325,7 @@ ReportRecord MakeSocRecord()
             {"file", "soc.cpp"},
             {"line", "9"},
             {"coreId", "6"},
+            {"blockType", "AIC"},
             {"blockId", "1"},
             {"pipeName", "S"},
             {"registerId", "17"},
@@ -374,7 +390,7 @@ TEST(ReportRendererTest, ListsAndRendersBuiltinTemplates)
         aclsan::cann::RenderReportRecord(MakeMemcheckInvalidAccessRecord(), {}, &rendered),
         ReportRenderStatus::kSuccess);
     EXPECT_NE(rendered.find("========= ERROR: Invalid GM read of size 16 bytes"), std::string::npos);
-    EXPECT_NE(rendered.find("by aicore (3) block (7) pipe (MTE2)"), std::string::npos);
+    EXPECT_NE(rendered.find("by aicore (3) type (AIC) block (7) pipe (MTE2)"), std::string::npos);
 
     EXPECT_EQ(aclsan::cann::RenderReportRecord(MakeInitcheckRecord(), {}, &rendered), ReportRenderStatus::kSuccess);
     EXPECT_NE(rendered.find("========= ERROR: Uninitialized GM memory read of size 32 bytes"), std::string::npos);
@@ -509,8 +525,8 @@ TEST(ReportRendererTest, RendersOnlyActiveCommonCallStackPrefix)
 
 TEST(ReportRendererTest, UsesExplicitUnknownPhysicalCoreSentinel)
 {
-    EXPECT_EQ(aclsan::cann::NpusanReportExecContext{}.coreId, std::numeric_limits<std::uint32_t>::max());
-    EXPECT_EQ(aclsan::cann::NpusanSyncPoint{}.exec.coreId, std::numeric_limits<std::uint32_t>::max());
+    EXPECT_EQ(aclsan::cann::NpusanReportExecContext{}.phyCoreId, std::numeric_limits<std::uint32_t>::max());
+    EXPECT_EQ(aclsan::cann::NpusanSyncPoint{}.exec.phyCoreId, std::numeric_limits<std::uint32_t>::max());
     EXPECT_EQ(aclsan::cann::NpusanSocStateRef{}.ownerCoreId, std::numeric_limits<std::uint32_t>::max());
 }
 
@@ -575,8 +591,8 @@ TEST(ReportRendererTest, UsesRaceAccessCoreForCrossPipeTemplate)
     NpusanRacecheckReport report{};
     report.common.tool = ReportTool::kRacecheck;
     report.common.pattern = static_cast<std::uint32_t>(NpusanRacecheckPattern::kCrossPipeRace);
-    report.first.exec.coreId = 7;
-    report.second.exec.coreId = 7;
+    report.first.exec.phyCoreId = 7;
+    report.second.exec.phyCoreId = 7;
     report.first.exec.pipeName = "MTE2";
     report.second.exec.pipeName = "V";
 
@@ -629,8 +645,9 @@ TEST(ReportRendererTest, UsesFirstRaceSiteAsInvalidRemoteAccessLocation)
     NpusanRacecheckReport report{};
     report.common.tool = ReportTool::kRacecheck;
     report.common.pattern = static_cast<std::uint32_t>(NpusanRacecheckPattern::kInvalidRemoteAccess);
-    report.common.exec.coreId = 1;
-    report.first.exec.coreId = 6;
+    report.common.exec.phyCoreId = 1;
+    report.first.exec.phyCoreId = 6;
+    report.first.exec.blockType = ACLSAN_DEVICE_BLOCK_TYPE_AICORE_CUBE;
     report.first.exec.blockId = 7;
     report.first.exec.pipeName = "MTE2";
     report.first.exec.pc = 0x345;
@@ -641,7 +658,7 @@ TEST(ReportRendererTest, UsesFirstRaceSiteAsInvalidRemoteAccessLocation)
         aclsan::cann::RenderNpusanReportRecord(NpusanReportRecord::From(report), {}, &rendered),
         ReportRenderStatus::kSuccess);
     EXPECT_NE(rendered.find("at pc 0x345 in remote_caller"), std::string::npos);
-    EXPECT_NE(rendered.find("by aicore (6) block (7) pipe (MTE2)"), std::string::npos);
+    EXPECT_NE(rendered.find("by aicore (6) type (AIC) block (7) pipe (MTE2)"), std::string::npos);
 }
 
 TEST(ReportRendererTest, RejectsCrossPipeRaceAcrossDifferentPhysicalCores)
@@ -649,8 +666,8 @@ TEST(ReportRendererTest, RejectsCrossPipeRaceAcrossDifferentPhysicalCores)
     NpusanRacecheckReport report{};
     report.common.tool = ReportTool::kRacecheck;
     report.common.pattern = static_cast<std::uint32_t>(NpusanRacecheckPattern::kCrossPipeRace);
-    report.first.exec.coreId = 2;
-    report.second.exec.coreId = 3;
+    report.first.exec.phyCoreId = 2;
+    report.second.exec.phyCoreId = 3;
 
     std::string rendered = "stale";
     EXPECT_EQ(
@@ -829,6 +846,7 @@ TEST(ReportRendererTest, RendersBundleSummaries)
             {"reason", "wait cannot complete"},
             {"triggerOperation", "WAIT_FLAG"},
             {"triggerCoreId", "2"},
+            {"triggerType", "AIC"},
             {"triggerBlock", "5"},
             {"triggerPipe", "V"},
             {"triggerLocation", "pc 0x5000 in sync_kernel"},
@@ -955,7 +973,7 @@ TEST(ReportRendererTest, RendersUnconsumedGetBufferWithExpectedRelatedPoint)
     report.detailKind = NpusanSyncDetailKind::kPairing;
     report.triggerPoint.operation = "GET_BUF";
     report.triggerPoint.hasExecContext = true;
-    report.triggerPoint.exec.coreId = 1;
+    report.triggerPoint.exec.phyCoreId = 1;
     report.triggerPoint.exec.blockId = 4;
     report.triggerPoint.exec.pipeName = "MTE2";
     report.triggerPoint.exec.function = "AcquireBuf";
@@ -1083,7 +1101,7 @@ TEST(ReportRendererTest, RendersStructuredReportsFromEachCheckerStruct)
     memcheck.common.exec.offset = 0x10;
     memcheck.common.exec.file = "kernel.cpp";
     memcheck.common.exec.line = 42;
-    memcheck.common.exec.coreId = 3;
+    memcheck.common.exec.phyCoreId = 3;
     memcheck.common.exec.blockId = 7;
     memcheck.common.exec.pipeName = "MTE2";
     memcheck.access.memorySpace = NpusanReportMemorySpace::kGm;
@@ -1103,7 +1121,7 @@ TEST(ReportRendererTest, RendersStructuredReportsFromEachCheckerStruct)
     initcheck.common.exec.offset = 0x18;
     initcheck.common.exec.file = "init.cpp";
     initcheck.common.exec.line = 21;
-    initcheck.common.exec.coreId = 4;
+    initcheck.common.exec.phyCoreId = 4;
     initcheck.common.exec.blockId = 2;
     initcheck.common.exec.pipeName = "MTE2";
     initcheck.access.memorySpace = NpusanReportMemorySpace::kGm;
@@ -1117,13 +1135,13 @@ TEST(ReportRendererTest, RendersStructuredReportsFromEachCheckerStruct)
     racecheck.first.access.memorySpace = NpusanReportMemorySpace::kUb;
     racecheck.first.access.address = 0x2000;
     racecheck.first.exec.blockId = 8;
-    racecheck.first.exec.coreId = 0;
+    racecheck.first.exec.phyCoreId = 0;
     racecheck.first.exec.pipeName = "MTE3";
     racecheck.first.exec.function = "writer";
     racecheck.first.exec.offset = 0x20;
     racecheck.first.exec.file = "race.cpp";
     racecheck.first.exec.line = 11;
-    racecheck.second.exec.coreId = 1;
+    racecheck.second.exec.phyCoreId = 1;
     racecheck.second.exec.pipeName = "MTE2";
     racecheck.second.exec.function = "reader";
     racecheck.second.exec.offset = 0x30;
@@ -1142,7 +1160,7 @@ TEST(ReportRendererTest, RendersStructuredReportsFromEachCheckerStruct)
     soccheck.common.exec.offset = 0x4;
     soccheck.common.exec.file = "soc.cpp";
     soccheck.common.exec.line = 9;
-    soccheck.common.exec.coreId = 6;
+    soccheck.common.exec.phyCoreId = 6;
     soccheck.common.exec.blockId = 1;
     soccheck.common.exec.pipeName = "S";
     soccheck.state.registerId = 17;

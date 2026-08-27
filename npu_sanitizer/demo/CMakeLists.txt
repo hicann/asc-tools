@@ -25,7 +25,7 @@ set_target_properties(acl_san PROPERTIES
 set(ACLSAN_DBI_SOURCE_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/../dbi")
 set(ACLSAN_DBI_RUNTIME_SOURCE_DIRECTORY "${CMAKE_BINARY_DIR}/dbi_runtime_sources")
 file(MAKE_DIRECTORY "${ACLSAN_DBI_RUNTIME_SOURCE_DIRECTORY}/probes")
-foreach(probe_source mte1 mte2 mte3 fixpipe sync)
+foreach(probe_source mte1 mte2 mte3 fixpipe register sync)
   configure_file(
     "${ACLSAN_DBI_SOURCE_DIRECTORY}/src/probes/${probe_source}.cpp"
     "${ACLSAN_DBI_RUNTIME_SOURCE_DIRECTORY}/probes/${probe_source}.cpp"
@@ -47,3 +47,5 @@ add_dependencies(npu_check_cli npu_check)
 
 add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/examples/add" examples_add)
 add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/examples/synccheck" examples_synccheck)
+add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/examples/add_datacopy_stride_oob" examples_add_datacopy_stride_oob)
+add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/examples/padding_register_state" examples_padding_register_state)

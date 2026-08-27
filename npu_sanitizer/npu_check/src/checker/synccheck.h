@@ -9,7 +9,7 @@
 #ifndef NPU_CHECK_CHECKER_SYNCCHECK_H
 #define NPU_CHECK_CHECKER_SYNCCHECK_H
 
-#include "aclsan/aclsan_callback.h"
+#include "aclsan/aclsan_cbdata_device.h"
 #include "diagnostic/report_renderer.h"
 
 #include <cstdint>
@@ -45,7 +45,7 @@ private:
     struct SyncPairKey {
         uint64_t launchId = 0;
         uint64_t objectId = 0;
-        uint32_t coreId = 0;
+        uint32_t phyCoreId = 0;
         uint32_t blockId = 0;
         uint32_t syncKind = 0;
         uint32_t scope = 0;
@@ -55,7 +55,7 @@ private:
 
         bool operator==(const SyncPairKey& other) const noexcept
         {
-            return launchId == other.launchId && objectId == other.objectId && coreId == other.coreId &&
+            return launchId == other.launchId && objectId == other.objectId && phyCoreId == other.phyCoreId &&
                    blockId == other.blockId && syncKind == other.syncKind && scope == other.scope &&
                    srcPipe == other.srcPipe && dstPipe == other.dstPipe && mode == other.mode;
         }
@@ -67,7 +67,7 @@ private:
 
     struct BufferOccupancyKey {
         uint64_t objectId = 0;
-        uint32_t coreId = 0;
+        uint32_t phyCoreId = 0;
 
         bool operator==(const BufferOccupancyKey& other) const noexcept;
     };

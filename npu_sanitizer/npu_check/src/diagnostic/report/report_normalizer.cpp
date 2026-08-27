@@ -125,7 +125,8 @@ ReportRecord ToReportRecord(const NpusanRacecheckReport& report)
     fields["blockId"] = std::to_string(report.first.exec.blockId);
     fields["firstAccess"] = AccessModeName(report.first.access.accessMode);
     fields["secondAccess"] = AccessModeName(report.second.access.accessMode);
-    fields["firstCoreId"] = FormatCoreId(report.first.exec.coreId);
+    fields["firstCoreId"] = FormatCoreId(report.first.exec.phyCoreId);
+    fields["firstType"] = FormatBlockType(report.first.exec.blockType);
     fields["firstBlock"] = std::to_string(report.first.exec.blockId);
     fields["firstPipe"] = OrUnknown(report.first.exec.pipeName);
     fields["firstFunction"] = OrUnknown(report.first.exec.function);
@@ -133,7 +134,8 @@ ReportRecord ToReportRecord(const NpusanRacecheckReport& report)
     fields["firstFile"] = OrUnknown(report.first.exec.file);
     fields["firstLine"] = std::to_string(report.first.exec.line);
     fields["firstLocation"] = FormatLocation(report.first.exec, false);
-    fields["secondCoreId"] = FormatCoreId(report.second.exec.coreId);
+    fields["secondCoreId"] = FormatCoreId(report.second.exec.phyCoreId);
+    fields["secondType"] = FormatBlockType(report.second.exec.blockType);
     fields["secondBlock"] = std::to_string(report.second.exec.blockId);
     fields["secondPipe"] = OrUnknown(report.second.exec.pipeName);
     fields["secondFunction"] = OrUnknown(report.second.exec.function);
@@ -148,10 +150,11 @@ ReportRecord ToReportRecord(const NpusanRacecheckReport& report)
         PutFrameLocationFields(*frame, "second", &fields);
     }
     if (report.common.pattern == static_cast<std::uint32_t>(NpusanRacecheckPattern::kCrossPipeRace)) {
-        fields["coreId"] = FormatCoreId(report.first.exec.coreId);
+        fields["coreId"] = FormatCoreId(report.first.exec.phyCoreId);
     } else if (report.common.pattern == static_cast<std::uint32_t>(NpusanRacecheckPattern::kInvalidRemoteAccess)) {
         fields["location"] = "at " + fields["firstLocation"];
-        fields["coreId"] = FormatCoreId(report.first.exec.coreId);
+        fields["coreId"] = FormatCoreId(report.first.exec.phyCoreId);
+        fields["blockType"] = FormatBlockType(report.first.exec.blockType);
         fields["blockId"] = std::to_string(report.first.exec.blockId);
         fields["pipeName"] = OrUnknown(report.first.exec.pipeName);
     }
@@ -214,7 +217,7 @@ bool ValidateToolSpecific(const Report&)
 bool ValidateToolSpecific(const NpusanRacecheckReport& report)
 {
     return report.common.pattern != static_cast<std::uint32_t>(NpusanRacecheckPattern::kCrossPipeRace) ||
-           report.first.exec.coreId == report.second.exec.coreId;
+           report.first.exec.phyCoreId == report.second.exec.phyCoreId;
 }
 
 template <typename Report>

@@ -23,6 +23,7 @@ extern "C" {
 #endif
 
 typedef aclError (*aclrtSetDeviceFunc)(int32_t deviceId);
+typedef aclError (*aclrtGetDeviceFunc)(int32_t* deviceId);
 typedef aclError (*aclrtResetDeviceFunc)(int32_t deviceId);
 typedef aclError (*aclrtCreateStreamFunc)(aclrtStream* stream);
 typedef aclError (*aclrtDestroyStreamFunc)(aclrtStream stream);
@@ -45,6 +46,11 @@ typedef aclError (*aclrtLaunchKernelFunc)(
     aclrtFuncHandle funcHandle, uint32_t numBlocks, const void* argsData, size_t argsSize, aclrtStream stream);
 typedef aclError (*aclrtGetFuncBySymbolFunc)(const void* symbol, aclrtFuncHandle* funcHandle);
 typedef aclError (*aclrtBinaryUnLoadFunc)(aclrtBinHandle binHandle);
+typedef aclError (*aclrtBinaryGetGlobalFunc)(aclrtBinHandle binHandle, const char* name, void** address, size_t* bytes);
+typedef aclError (*aclrtGetFunctionAttributeFunc)(
+    aclrtFuncHandle funcHandle, aclrtFuncAttribute attrType, int64_t* attrValue);
+typedef const char* (*aclrtGetSocNameFunc)(void);
+typedef aclError (*aclrtGetDeviceInfoFunc)(uint32_t deviceId, aclrtDevAttr attr, int64_t* value);
 
 typedef enum {
     ACL_RT_API_aclrtLaunchKernelWithHostArgs = 0,
@@ -64,6 +70,11 @@ typedef enum {
     ACL_RT_API_aclrtGetFuncBySymbol = 14,
     ACL_RT_API_aclrtBinaryUnLoad = 15,
     ACL_RT_API_aclrtSynchronizeStreamWithTimeout = 16,
+    ACL_RT_API_aclrtGetDevice = 17,
+    ACL_RT_API_aclrtBinaryGetGlobal = 18,
+    ACL_RT_API_aclrtGetFunctionAttribute = 19,
+    ACL_RT_API_aclrtGetSocName = 20,
+    ACL_RT_API_aclrtGetDeviceInfo = 21,
     ACL_RT_API_MAX
 } aclrtApiId;
 
@@ -76,6 +87,7 @@ NPU_COMPUTE_EXPORT void* acltoolGetOriginalRuntimeApi(aclrtApiId id);
     NPU_COMPUTE_EXPORT int32_t acltoolRegister##exportName##Callbacks(apiName##Func callback)
 
 NPU_COMPUTE_DECLARE_REGISTRATION(AclrtSetDevice, aclrtSetDevice);
+NPU_COMPUTE_DECLARE_REGISTRATION(AclrtGetDevice, aclrtGetDevice);
 NPU_COMPUTE_DECLARE_REGISTRATION(AclrtResetDevice, aclrtResetDevice);
 NPU_COMPUTE_DECLARE_REGISTRATION(AclrtCreateStream, aclrtCreateStream);
 NPU_COMPUTE_DECLARE_REGISTRATION(AclrtDestroyStream, aclrtDestroyStream);
@@ -92,6 +104,10 @@ NPU_COMPUTE_DECLARE_REGISTRATION(AclrtLaunchKernelWithHostArgs, aclrtLaunchKerne
 NPU_COMPUTE_DECLARE_REGISTRATION(AclrtLaunchKernel, aclrtLaunchKernel);
 NPU_COMPUTE_DECLARE_REGISTRATION(AclrtGetFuncBySymbol, aclrtGetFuncBySymbol);
 NPU_COMPUTE_DECLARE_REGISTRATION(AclrtBinaryUnLoad, aclrtBinaryUnLoad);
+NPU_COMPUTE_DECLARE_REGISTRATION(AclrtBinaryGetGlobal, aclrtBinaryGetGlobal);
+NPU_COMPUTE_DECLARE_REGISTRATION(AclrtGetFunctionAttribute, aclrtGetFunctionAttribute);
+NPU_COMPUTE_DECLARE_REGISTRATION(AclrtGetSocName, aclrtGetSocName);
+NPU_COMPUTE_DECLARE_REGISTRATION(AclrtGetDeviceInfo, aclrtGetDeviceInfo);
 
 #undef NPU_COMPUTE_DECLARE_REGISTRATION
 

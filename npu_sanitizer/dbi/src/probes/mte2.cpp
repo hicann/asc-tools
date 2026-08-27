@@ -16,8 +16,8 @@ extern __attribute__((noinline)) __attribute__((weak)) __aicore__ void __sanitiz
     uint64_t config1)
 {
     aclsan::WriteTraceRecord(
-        memInfo, pc, bid, aclsan::PIPELINE_MTE2, 74, reinterpret_cast<uint64_t>(dst), reinterpret_cast<uint64_t>(src),
-        config0, config1, 0UL);
+        memInfo, pc, bid, aclsan::DeviceInstructionCategory::MemoryAccess, static_cast<uint16_t>(PIPE_MTE2), 74,
+        reinterpret_cast<uint64_t>(dst), reinterpret_cast<uint64_t>(src), config0, config1, 0UL);
 }
 
 // MOV_OUT_TO_L1_ALIGN_V2.b16, API ID 75.
@@ -26,8 +26,8 @@ extern __attribute__((noinline)) __attribute__((weak)) __aicore__ void __sanitiz
     uint64_t config1)
 {
     aclsan::WriteTraceRecord(
-        memInfo, pc, bid, aclsan::PIPELINE_MTE2, 75, reinterpret_cast<uint64_t>(dst), reinterpret_cast<uint64_t>(src),
-        config0, config1, 0UL);
+        memInfo, pc, bid, aclsan::DeviceInstructionCategory::MemoryAccess, static_cast<uint16_t>(PIPE_MTE2), 75,
+        reinterpret_cast<uint64_t>(dst), reinterpret_cast<uint64_t>(src), config0, config1, 0UL);
 }
 
 // MOV_OUT_TO_L1_ALIGN_V2.b32, API ID 76.
@@ -36,8 +36,8 @@ extern __attribute__((noinline)) __attribute__((weak)) __aicore__ void __sanitiz
     uint64_t config1)
 {
     aclsan::WriteTraceRecord(
-        memInfo, pc, bid, aclsan::PIPELINE_MTE2, 76, reinterpret_cast<uint64_t>(dst), reinterpret_cast<uint64_t>(src),
-        config0, config1, 0UL);
+        memInfo, pc, bid, aclsan::DeviceInstructionCategory::MemoryAccess, static_cast<uint16_t>(PIPE_MTE2), 76,
+        reinterpret_cast<uint64_t>(dst), reinterpret_cast<uint64_t>(src), config0, config1, 0UL);
 }
 
 // MOV_OUT_TO_L1_MULTI_DN2NZ.b8, API ID 80.
@@ -47,8 +47,8 @@ __sanitizer_report_copy_gm_to_cbuf_multi_dn2nz_d_b8(
     uint64_t config1)
 {
     aclsan::WriteTraceRecord(
-        memInfo, pc, bid, aclsan::PIPELINE_MTE2, 80, reinterpret_cast<uint64_t>(dst), reinterpret_cast<uint64_t>(src),
-        config0, config1, 0UL);
+        memInfo, pc, bid, aclsan::DeviceInstructionCategory::MemoryAccess, static_cast<uint16_t>(PIPE_MTE2), 80,
+        reinterpret_cast<uint64_t>(dst), reinterpret_cast<uint64_t>(src), config0, config1, 0UL);
 }
 
 // MOV_OUT_TO_L1_MULTI_DN2NZ.b16, API ID 81.
@@ -58,8 +58,8 @@ __sanitizer_report_copy_gm_to_cbuf_multi_dn2nz_d_b16(
     uint64_t config1)
 {
     aclsan::WriteTraceRecord(
-        memInfo, pc, bid, aclsan::PIPELINE_MTE2, 81, reinterpret_cast<uint64_t>(dst), reinterpret_cast<uint64_t>(src),
-        config0, config1, 0UL);
+        memInfo, pc, bid, aclsan::DeviceInstructionCategory::MemoryAccess, static_cast<uint16_t>(PIPE_MTE2), 81,
+        reinterpret_cast<uint64_t>(dst), reinterpret_cast<uint64_t>(src), config0, config1, 0UL);
 }
 
 // MOV_OUT_TO_L1_MULTI_DN2NZ.b32, API ID 82.
@@ -69,8 +69,8 @@ __sanitizer_report_copy_gm_to_cbuf_multi_dn2nz_d_b32(
     uint64_t config1)
 {
     aclsan::WriteTraceRecord(
-        memInfo, pc, bid, aclsan::PIPELINE_MTE2, 82, reinterpret_cast<uint64_t>(dst), reinterpret_cast<uint64_t>(src),
-        config0, config1, 0UL);
+        memInfo, pc, bid, aclsan::DeviceInstructionCategory::MemoryAccess, static_cast<uint16_t>(PIPE_MTE2), 82,
+        reinterpret_cast<uint64_t>(dst), reinterpret_cast<uint64_t>(src), config0, config1, 0UL);
 }
 
 // MOV_OUT_TO_L1_MULTI_ND2NZ.b8, API ID 77.
@@ -80,8 +80,8 @@ __sanitizer_report_copy_gm_to_cbuf_multi_nd2nz_d_b8(
     uint64_t config1)
 {
     aclsan::WriteTraceRecord(
-        memInfo, pc, bid, aclsan::PIPELINE_MTE2, 77, reinterpret_cast<uint64_t>(dst), reinterpret_cast<uint64_t>(src),
-        config0, config1, 0UL);
+        memInfo, pc, bid, aclsan::DeviceInstructionCategory::MemoryAccess, static_cast<uint16_t>(PIPE_MTE2), 77,
+        reinterpret_cast<uint64_t>(dst), reinterpret_cast<uint64_t>(src), config0, config1, 0UL);
 }
 
 // MOV_OUT_TO_L1_MULTI_ND2NZ.b16, API ID 78.
@@ -91,8 +91,8 @@ __sanitizer_report_copy_gm_to_cbuf_multi_nd2nz_d_b16(
     uint64_t config1)
 {
     aclsan::WriteTraceRecord(
-        memInfo, pc, bid, aclsan::PIPELINE_MTE2, 78, reinterpret_cast<uint64_t>(dst), reinterpret_cast<uint64_t>(src),
-        config0, config1, 0UL);
+        memInfo, pc, bid, aclsan::DeviceInstructionCategory::MemoryAccess, static_cast<uint16_t>(PIPE_MTE2), 78,
+        reinterpret_cast<uint64_t>(dst), reinterpret_cast<uint64_t>(src), config0, config1, 0UL);
 }
 
 // MOV_OUT_TO_L1_MULTI_ND2NZ.b32, API ID 79.
@@ -102,8 +102,8 @@ __sanitizer_report_copy_gm_to_cbuf_multi_nd2nz_d_b32(
     uint64_t config1)
 {
     aclsan::WriteTraceRecord(
-        memInfo, pc, bid, aclsan::PIPELINE_MTE2, 79, reinterpret_cast<uint64_t>(dst), reinterpret_cast<uint64_t>(src),
-        config0, config1, 0UL);
+        memInfo, pc, bid, aclsan::DeviceInstructionCategory::MemoryAccess, static_cast<uint16_t>(PIPE_MTE2), 79,
+        reinterpret_cast<uint64_t>(dst), reinterpret_cast<uint64_t>(src), config0, config1, 0UL);
 }
 
 // MOV_OUT_TO_L1_V2, API ID 73.
@@ -112,8 +112,8 @@ extern __attribute__((noinline)) __attribute__((weak)) __aicore__ void __sanitiz
     uint64_t config1)
 {
     aclsan::WriteTraceRecord(
-        memInfo, pc, bid, aclsan::PIPELINE_MTE2, 73, reinterpret_cast<uint64_t>(dst), reinterpret_cast<uint64_t>(src),
-        config0, config1, 0UL);
+        memInfo, pc, bid, aclsan::DeviceInstructionCategory::MemoryAccess, static_cast<uint16_t>(PIPE_MTE2), 73,
+        reinterpret_cast<uint64_t>(dst), reinterpret_cast<uint64_t>(src), config0, config1, 0UL);
 }
 
 // MOV_OUT_TO_UB_ALIGN_V2.b8, API ID 84.
@@ -122,8 +122,8 @@ extern __attribute__((noinline)) __attribute__((weak)) __aicore__ void __sanitiz
     uint64_t config1)
 {
     aclsan::WriteTraceRecord(
-        memInfo, pc, bid, aclsan::PIPELINE_MTE2, 84, reinterpret_cast<uint64_t>(dst), reinterpret_cast<uint64_t>(src),
-        config0, config1, 0UL);
+        memInfo, pc, bid, aclsan::DeviceInstructionCategory::MemoryAccess, static_cast<uint16_t>(PIPE_MTE2), 84,
+        reinterpret_cast<uint64_t>(dst), reinterpret_cast<uint64_t>(src), config0, config1, 0UL);
 }
 
 // MOV_OUT_TO_UB_ALIGN_V2.b16, API ID 85.
@@ -132,8 +132,8 @@ extern __attribute__((noinline)) __attribute__((weak)) __aicore__ void __sanitiz
     uint64_t config1)
 {
     aclsan::WriteTraceRecord(
-        memInfo, pc, bid, aclsan::PIPELINE_MTE2, 85, reinterpret_cast<uint64_t>(dst), reinterpret_cast<uint64_t>(src),
-        config0, config1, 0UL);
+        memInfo, pc, bid, aclsan::DeviceInstructionCategory::MemoryAccess, static_cast<uint16_t>(PIPE_MTE2), 85,
+        reinterpret_cast<uint64_t>(dst), reinterpret_cast<uint64_t>(src), config0, config1, 0UL);
 }
 
 // MOV_OUT_TO_UB_ALIGN_V2.b32, API ID 86.
@@ -142,8 +142,8 @@ extern __attribute__((noinline)) __attribute__((weak)) __aicore__ void __sanitiz
     uint64_t config1)
 {
     aclsan::WriteTraceRecord(
-        memInfo, pc, bid, aclsan::PIPELINE_MTE2, 86, reinterpret_cast<uint64_t>(dst), reinterpret_cast<uint64_t>(src),
-        config0, config1, 0UL);
+        memInfo, pc, bid, aclsan::DeviceInstructionCategory::MemoryAccess, static_cast<uint16_t>(PIPE_MTE2), 86,
+        reinterpret_cast<uint64_t>(dst), reinterpret_cast<uint64_t>(src), config0, config1, 0UL);
 }
 
 // LOAD_OUT_TO_L1_2DV2, API ID 72.
@@ -152,8 +152,8 @@ extern __attribute__((noinline)) __attribute__((weak)) __aicore__ void __sanitiz
     uint64_t config1)
 {
     aclsan::WriteTraceRecord(
-        memInfo, pc, bid, aclsan::PIPELINE_MTE2, 72, reinterpret_cast<uint64_t>(dst), reinterpret_cast<uint64_t>(src),
-        config0, config1, 0UL);
+        memInfo, pc, bid, aclsan::DeviceInstructionCategory::MemoryAccess, static_cast<uint16_t>(PIPE_MTE2), 72,
+        reinterpret_cast<uint64_t>(dst), reinterpret_cast<uint64_t>(src), config0, config1, 0UL);
 }
 
 // ND_DMA_OUT_TO_UB.b8, API ID 87.
@@ -162,8 +162,8 @@ extern __attribute__((noinline)) __attribute__((weak)) __aicore__ void __sanitiz
     uint64_t secConfig)
 {
     aclsan::WriteTraceRecord(
-        memInfo, pc, bid, aclsan::PIPELINE_MTE2, 87, reinterpret_cast<uint64_t>(dst), reinterpret_cast<uint64_t>(src),
-        config, secConfig, 0UL);
+        memInfo, pc, bid, aclsan::DeviceInstructionCategory::MemoryAccess, static_cast<uint16_t>(PIPE_MTE2), 87,
+        reinterpret_cast<uint64_t>(dst), reinterpret_cast<uint64_t>(src), config, secConfig, 0UL);
 }
 
 // ND_DMA_OUT_TO_UB.b16, API ID 88.
@@ -172,8 +172,8 @@ extern __attribute__((noinline)) __attribute__((weak)) __aicore__ void __sanitiz
     uint64_t secConfig)
 {
     aclsan::WriteTraceRecord(
-        memInfo, pc, bid, aclsan::PIPELINE_MTE2, 88, reinterpret_cast<uint64_t>(dst), reinterpret_cast<uint64_t>(src),
-        config, secConfig, 0UL);
+        memInfo, pc, bid, aclsan::DeviceInstructionCategory::MemoryAccess, static_cast<uint16_t>(PIPE_MTE2), 88,
+        reinterpret_cast<uint64_t>(dst), reinterpret_cast<uint64_t>(src), config, secConfig, 0UL);
 }
 
 // ND_DMA_OUT_TO_UB.b32, API ID 89.
@@ -182,8 +182,8 @@ extern __attribute__((noinline)) __attribute__((weak)) __aicore__ void __sanitiz
     uint64_t secConfig)
 {
     aclsan::WriteTraceRecord(
-        memInfo, pc, bid, aclsan::PIPELINE_MTE2, 89, reinterpret_cast<uint64_t>(dst), reinterpret_cast<uint64_t>(src),
-        config, secConfig, 0UL);
+        memInfo, pc, bid, aclsan::DeviceInstructionCategory::MemoryAccess, static_cast<uint16_t>(PIPE_MTE2), 89,
+        reinterpret_cast<uint64_t>(dst), reinterpret_cast<uint64_t>(src), config, secConfig, 0UL);
 }
 
 // SET_L1_2D.b16, API ID 149.
@@ -191,7 +191,8 @@ extern __attribute__((noinline)) __attribute__((weak)) __aicore__ void __sanitiz
     __gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, __cbuf__ void* dst, uint64_t config)
 {
     aclsan::WriteTraceRecord(
-        memInfo, pc, bid, aclsan::PIPELINE_MTE2, 149, reinterpret_cast<uint64_t>(dst), config, 0UL, 0UL, 0UL);
+        memInfo, pc, bid, aclsan::DeviceInstructionCategory::RegisterState, static_cast<uint16_t>(PIPE_MTE2), 149,
+        reinterpret_cast<uint64_t>(dst), config, 0UL, 0UL, 0UL);
 }
 
 // SET_L1_2D.b32, API ID 150.
@@ -199,12 +200,15 @@ extern __attribute__((noinline)) __attribute__((weak)) __aicore__ void __sanitiz
     __gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, __cbuf__ void* dst, uint64_t config)
 {
     aclsan::WriteTraceRecord(
-        memInfo, pc, bid, aclsan::PIPELINE_MTE2, 150, reinterpret_cast<uint64_t>(dst), config, 0UL, 0UL, 0UL);
+        memInfo, pc, bid, aclsan::DeviceInstructionCategory::RegisterState, static_cast<uint16_t>(PIPE_MTE2), 150,
+        reinterpret_cast<uint64_t>(dst), config, 0UL, 0UL, 0UL);
 }
 
 // SET_MTE2_NZ_PARA, API ID 399.
 extern __attribute__((noinline)) __attribute__((weak)) __aicore__ void __sanitizer_report_set_mte2_nz_para(
     __gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, uint64_t config)
 {
-    aclsan::WriteTraceRecord(memInfo, pc, bid, aclsan::PIPELINE_MTE2, 399, config & 0xFFFFUL, 0UL, 0UL, 0UL, 0UL);
+    aclsan::WriteTraceRecord(
+        memInfo, pc, bid, aclsan::DeviceInstructionCategory::RegisterState, static_cast<uint16_t>(PIPE_MTE2), 399,
+        config & 0xFFFFUL, 0UL, 0UL, 0UL, 0UL);
 }

@@ -1,18 +1,10 @@
-/* -------------------------------------------------------------------------
- * This file is part of the MindStudio project.
- * Copyright (c) 2025 Huawei Technologies Co.,Ltd.
- *
- * MindStudio is licensed under Mulan PSL v2.
- * You can use this software according to the terms and conditions of the Mulan PSL v2.
- * You may obtain a copy of Mulan PSL v2 at:
- *
- *          http://license.coscl.org.cn/MulanPSL2
- *
- * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
- * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
- * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
- * See the Mulan PSL v2 for more details.
- * ------------------------------------------------------------------------- */
+// Copyright (c) 2025 Huawei Technologies Co., Ltd.
+// This program is free software, you can redistribute it and/or modify it under the terms and conditions of
+// CANN Open Software License Agreement Version 2.0 (the "License").
+// Please refer to the License for details. You may not use this file except in compliance with the License.
+// THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
+// INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
+// See LICENSE in the root of the software repository for the full text of the License.
 
 #pragma once
 #if !defined(__CCE_IS_AICORE__)
@@ -294,7 +286,7 @@ enum class InstrType {
     FDIV_F32_IMM,
     FEXPDIF_FMIX = 280,
     FEXPDIF_F32,
-    IMAD_S32,  // IMAD_U32 = 347
+    IMAD_S32, // IMAD_U32 = 347
     IMAD_HI_U32,
     IMAD_HI_S32,
     IMAD_WIDE_U32,
@@ -343,7 +335,7 @@ enum class InstrType {
     SHF_S64,
     SHFI_S32,
     SHFI_U32 = 330,
-    SHFI_S64,  // SHFI_U64 = 348
+    SHFI_S64, // SHFI_U64 = 348
     PLOP3,
     LOP3,
     LOP3_IMM,
@@ -497,7 +489,7 @@ enum class InstrType {
 };
 
 #if !defined(__CCE_IS_AICORE__)
-void Bind(InstrType instrType, const std::string &injectedFuncName, const std::vector<uint16_t> &paraMask);
+void Bind(InstrType instrType, const std::string& injectedFuncName, const std::vector<uint16_t>& paraMask);
 #endif
 extern "C" {
 __attribute__((weak)) void MSBitAtInit();

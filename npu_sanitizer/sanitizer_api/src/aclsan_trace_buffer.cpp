@@ -13,77 +13,131 @@
 #include "trace_buffer_abi.h"
 
 #include <cstring>
+#include <map>
 
 namespace aclsan {
+namespace {
+
+struct TraceBlockKey {
+    uint32_t blockType;
+    uint32_t blockId;
+
+    bool operator<(const TraceBlockKey& other) const noexcept
+    {
+        return blockType < other.blockType || (blockType == other.blockType && blockId < other.blockId);
+    }
+};
+
+} // namespace
 
 bool InitializeTraceBuffer(
-    std::vector<uint8_t>& buffer, uint32_t blockCount, uint32_t recordsPerBlock, uint64_t launchId, std::string& error)
+    std::vector<uint8_t>& buffer, uint32_t physicalCoreCount, uint32_t blockCount, uint32_t recordsPerCore,
+    uint64_t launchId, std::string& error)
 {
     size_t bytes = 0;
-    if (!aclsan::TraceBufferBytes(blockCount, recordsPerBlock, &bytes)) {
+    if (blockCount == 0U || !aclsan::TraceBufferBytes(physicalCoreCount, recordsPerCore, &bytes)) {
         buffer.clear();
-        error = "trace buffer dimensions are zero or overflow the V1 layout";
+        error = "trace buffer dimensions are zero or overflow the layout";
         return false;
     }
 
     buffer.assign(bytes, 0);
-    aclsan::AscsanTraceBufferHeader header{};
-    header.magic = aclsan::ASCSAN_TRACE_BUFFER_MAGIC_V1;
+    aclsan::AclsanTraceBufferHeader header{};
+    header.magic = aclsan::ASCSAN_TRACE_BUFFER_MAGIC;
     header.launchId = launchId;
     header.blockCount = blockCount;
-    header.recordsPerBlock = recordsPerBlock;
+    header.recordsPerCore = recordsPerCore;
+    header.physicalCoreCount = physicalCoreCount;
     std::memcpy(buffer.data(), &header, sizeof(header));
+
+    size_t sliceBytes = 0;
+    (void)aclsan::TraceSliceBytes(recordsPerCore, &sliceBytes);
+    const aclsan::AclsanTraceSliceHeader emptySlice{};
+    for (uint32_t sliceIndex = 0; sliceIndex < physicalCoreCount; ++sliceIndex) {
+        const size_t sliceOffset = sizeof(header) + static_cast<size_t>(sliceIndex) * sliceBytes;
+        std::memcpy(buffer.data() + sliceOffset, &emptySlice, sizeof(emptySlice));
+    }
     error.clear();
     return true;
 }
 
 TraceBufferParseResult ParseTraceBuffer(
-    const uint8_t* buffer, size_t bytes, uint32_t expectedBlockCount, uint32_t expectedRecordsPerBlock,
-    uint64_t expectedLaunchId)
+    const uint8_t* buffer, size_t bytes, uint32_t expectedPhysicalCoreCount, uint32_t expectedBlockCount,
+    uint32_t expectedRecordsPerCore, uint64_t expectedLaunchId, uint32_t deviceId)
 {
     TraceBufferParseResult result;
     size_t requiredBytes = 0;
     size_t sliceBytes = 0;
-    if (buffer == nullptr || !aclsan::TraceBufferBytes(expectedBlockCount, expectedRecordsPerBlock, &requiredBytes) ||
-        !aclsan::TraceSliceBytes(expectedRecordsPerBlock, &sliceBytes) || bytes < requiredBytes) {
+    if (buffer == nullptr || expectedBlockCount == 0U ||
+        !aclsan::TraceBufferBytes(expectedPhysicalCoreCount, expectedRecordsPerCore, &requiredBytes) ||
+        !aclsan::TraceSliceBytes(expectedRecordsPerCore, &sliceBytes) || bytes < requiredBytes) {
         result.error = "trace buffer is null, truncated, or has invalid expected dimensions";
         return result;
     }
 
-    aclsan::AscsanTraceBufferHeader header{};
+    aclsan::AclsanTraceBufferHeader header{};
     std::memcpy(&header, buffer, sizeof(header));
-    if (header.magic != aclsan::ASCSAN_TRACE_BUFFER_MAGIC_V1 || header.launchId != expectedLaunchId ||
-        header.blockCount != expectedBlockCount || header.recordsPerBlock != expectedRecordsPerBlock) {
-        result.error = "trace buffer header does not match the launch-owned V1 layout";
+    if (header.magic != aclsan::ASCSAN_TRACE_BUFFER_MAGIC || header.launchId != expectedLaunchId ||
+        header.blockCount != expectedBlockCount || header.recordsPerCore != expectedRecordsPerCore ||
+        header.physicalCoreCount != expectedPhysicalCoreCount || header.reserved != 0U) {
+        result.error = "trace buffer header does not match the launch-owned layout";
         return result;
     }
 
-    result.records.reserve(static_cast<size_t>(expectedBlockCount) * expectedRecordsPerBlock);
-    for (uint32_t block = 0; block < expectedBlockCount; ++block) {
-        const size_t sliceOffset = sizeof(header) + static_cast<size_t>(block) * sliceBytes;
-        aclsan::AscsanTraceSliceHeader slice{};
+    std::map<TraceBlockKey, uint64_t> instructionCounts;
+    result.records.reserve(static_cast<size_t>(expectedPhysicalCoreCount) * expectedRecordsPerCore);
+    for (uint32_t sliceIndex = 0; sliceIndex < expectedPhysicalCoreCount; ++sliceIndex) {
+        const size_t sliceOffset = sizeof(header) + static_cast<size_t>(sliceIndex) * sliceBytes;
+        aclsan::AclsanTraceSliceHeader slice{};
         std::memcpy(&slice, buffer + sliceOffset, sizeof(slice));
-        if (slice.recordCount > expectedRecordsPerBlock) {
+        if (slice.recordCount > expectedRecordsPerCore) {
             result.records.clear();
             result.error = "trace slice record count exceeds its launch-owned capacity";
             return result;
         }
         result.overflowCount += slice.overflowCount;
+        if (slice.recordCount == 0) {
+            continue;
+        }
+
+        const bool isAic = aclsan::IsAicPhysicalCore(sliceIndex, expectedPhysicalCoreCount);
+        const uint32_t expectedPhyCoreId = sliceIndex;
+        const uint32_t blockType =
+            isAic ? ACLSAN_DEVICE_BLOCK_TYPE_AICORE_CUBE : ACLSAN_DEVICE_BLOCK_TYPE_AICORE_VECTOR;
+        if (slice.phyCoreId != expectedPhyCoreId) {
+            result.records.clear();
+            result.error = "trace slice physical core ID does not match its layout index";
+            return result;
+        }
 
         for (uint32_t index = 0; index < slice.recordCount; ++index) {
             const size_t recordOffset =
-                sliceOffset + sizeof(slice) + static_cast<size_t>(index) * sizeof(aclsan::AscsanRawTraceRecord);
-            aclsan::AscsanRawTraceRecord wire{};
+                sliceOffset + sizeof(slice) + static_cast<size_t>(index) * sizeof(aclsan::AclsanRawTraceRecord);
+            aclsan::AclsanRawTraceRecord wire{};
             std::memcpy(&wire, buffer + recordOffset, sizeof(wire));
 
-            sanitizer::AscsanRawTraceRecord record{};
-            record.blockId = block;
-            record.pc = wire.pc;
-            record.instrId = wire.instrId;
-            std::memcpy(record.args, wire.args, sizeof(wire.args));
-            record.siteId = wire.siteId;
-            record.pipeline = wire.pipeline;
-            result.records.push_back(record);
+            ParsedTraceRecord parsed{};
+            parsed.record.pc = wire.pc;
+            parsed.record.instrId = wire.instrId;
+            std::memcpy(parsed.record.args, wire.args, sizeof(wire.args));
+            parsed.record.siteId = wire.siteId;
+            parsed.record.category = wire.category;
+            parsed.record.pipeline = wire.pipeline;
+            parsed.record.blockId = wire.blockId;
+            parsed.record.reserved = wire.reserved;
+            if (!aclsan::IsTraceBlockIdValid(wire.blockId, isAic, expectedBlockCount)) {
+                result.records.clear();
+                result.error = "raw trace logical block ID exceeds the launch-owned range";
+                return result;
+            }
+            const TraceBlockKey blockKey{blockType, wire.blockId};
+            parsed.instrExecId = ++instructionCounts[blockKey];
+            parsed.launchId = header.launchId;
+            parsed.blockId = wire.blockId;
+            parsed.blockType = blockType;
+            parsed.phyCoreId = expectedPhyCoreId;
+            parsed.deviceId = deviceId;
+            result.records.push_back(parsed);
         }
     }
     result.ok = true;

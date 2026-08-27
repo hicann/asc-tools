@@ -12,7 +12,7 @@
 #define ACLSAN_MEMORY_CBDATA_H
 
 #include "aclsan/aclsan_cbdata_device.h"
-#include "cce_instr/cce_instr_struct_dma.h"
+#include "device_instr/common/device_instr_struct_dma.h"
 
 #include <cstdint>
 #include <variant>
@@ -28,17 +28,17 @@ enum class MemoryCbdataStatus : uint8_t {
     RESOURCE_EXHAUSTED,
 };
 
-template <sanitizer::NdNzConversionMode ConversionMode>
+template <NdNzConversionMode ConversionMode>
 struct MultiMemoryField {
-    sanitizer::CopyGmToCbufMultiParamField<ConversionMode> field;
+    CopyGmToCbufMultiParamField<ConversionMode> field;
     uint16_t matrixNum = 0;
 };
 
-using MultiNd2NzMemoryField = MultiMemoryField<sanitizer::NdNzConversionMode::ND2NZ>;
-using MultiDn2NzMemoryField = MultiMemoryField<sanitizer::NdNzConversionMode::DN2NZ>;
+using MultiNd2NzMemoryField = MultiMemoryField<NdNzConversionMode::ND2NZ>;
+using MultiDn2NzMemoryField = MultiMemoryField<NdNzConversionMode::DN2NZ>;
 
 struct FixpipeMemoryField {
-    sanitizer::FixL0cToOutParamField field;
+    FixL0cToOutParamField field;
     uint16_t nSize = 0;
     uint16_t mSize = 0;
     uint32_t dstStride = 0;
@@ -50,8 +50,8 @@ struct FixpipeMemoryField {
 };
 
 using MemoryInstructionField = std::variant<
-    sanitizer::CopyGmToUbufAlignV2ParamField, sanitizer::CopyGmToCbufAlignV2ParamField, MultiNd2NzMemoryField,
-    MultiDn2NzMemoryField, sanitizer::CopyUbufToGmAlignV2ParamField, FixpipeMemoryField>;
+    CopyGmToUbufAlignV2ParamField, CopyGmToCbufAlignV2ParamField, MultiNd2NzMemoryField, MultiDn2NzMemoryField,
+    CopyUbufToGmAlignV2ParamField, FixpipeMemoryField>;
 
 struct MemoryCbdataContext {
     uint64_t pc = 0;
@@ -61,6 +61,9 @@ struct MemoryCbdataContext {
     uint32_t coreId = 0;
     uint32_t blockId = 0;
     uint32_t pipeline = 0;
+    uint64_t launchId = 0;
+    uint32_t deviceId = 0;
+    uint32_t blockType = ACLSAN_DEVICE_BLOCK_TYPE_AICORE;
 };
 
 using MemoryCbdata = std::vector<AclsanDeviceMemoryAccessData>;

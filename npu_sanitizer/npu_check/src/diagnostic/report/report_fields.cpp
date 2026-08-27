@@ -8,6 +8,8 @@
 
 #include "diagnostic/report/report_fields.h"
 
+#include "aclsan/aclsan_cbdata_device.h"
+
 #include <iomanip>
 #include <sstream>
 
@@ -77,6 +79,20 @@ std::string FormatCoreId(std::uint32_t coreId)
     return coreId == std::numeric_limits<std::uint32_t>::max() ? "<unknown>" : std::to_string(coreId);
 }
 
+std::string FormatBlockType(std::uint32_t blockType)
+{
+    switch (blockType) {
+        case ACLSAN_DEVICE_BLOCK_TYPE_AICORE:
+            return "AICORE";
+        case ACLSAN_DEVICE_BLOCK_TYPE_AICORE_VECTOR:
+            return "AIV";
+        case ACLSAN_DEVICE_BLOCK_TYPE_AICORE_CUBE:
+            return "AIC";
+        default:
+            return "<unknown>";
+    }
+}
+
 std::string FormatLocation(const NpusanReportExecContext& exec, bool includeAt)
 {
     std::ostringstream os;
@@ -111,7 +127,8 @@ void PutExecFields(const NpusanReportExecContext& exec, ReportFields* fields)
     (*fields)["line"] = std::to_string(exec.line);
     (*fields)["pc"] = Hex(exec.pc);
     (*fields)["kernelName"] = OrUnknown(exec.kernelName);
-    (*fields)["coreId"] = FormatCoreId(exec.coreId);
+    (*fields)["coreId"] = FormatCoreId(exec.phyCoreId);
+    (*fields)["blockType"] = FormatBlockType(exec.blockType);
     (*fields)["blockId"] = std::to_string(exec.blockId);
     (*fields)["pipeName"] = OrUnknown(exec.pipeName);
     (*fields)["launchId"] = std::to_string(exec.launchId);
@@ -122,7 +139,8 @@ void PutExecFields(const NpusanReportExecContext& exec, ReportFields* fields)
 
 void PutPrefixedExecFields(const NpusanReportExecContext& exec, const std::string& prefix, ReportFields* fields)
 {
-    (*fields)[prefix + "CoreId"] = FormatCoreId(exec.coreId);
+    (*fields)[prefix + "CoreId"] = FormatCoreId(exec.phyCoreId);
+    (*fields)[prefix + "Type"] = FormatBlockType(exec.blockType);
     (*fields)[prefix + "Block"] = std::to_string(exec.blockId);
     (*fields)[prefix + "Pipe"] = OrUnknown(exec.pipeName);
     (*fields)[prefix + "Pc"] = Hex(exec.pc);

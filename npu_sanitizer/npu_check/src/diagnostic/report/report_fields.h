@@ -20,6 +20,7 @@ std::string Hex(std::uint64_t value);
 std::string HexWithPrefix(std::uint64_t value);
 std::string OrUnknown(const std::string& value);
 std::string FormatCoreId(std::uint32_t coreId);
+std::string FormatBlockType(std::uint32_t blockType);
 std::string FormatLocation(const NpusanReportExecContext& exec, bool includeAt);
 std::string FormatLocation(const ReportFrame& frame, bool includeAt);
 

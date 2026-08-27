@@ -9,7 +9,7 @@
  */
 
 #include "aclsan/aclsan_api.h"
-#include "cce_instr/cce_instr_types.h"
+#include "device_instr/common/instruction_id.h"
 #include "internal/aclsan_memory_cbdata.h"
 
 #include <algorithm>
@@ -25,8 +25,6 @@
 namespace aclsan {
 namespace {
 
-constexpr uint64_t kUnknownLaunchId = 0;
-constexpr uint32_t kDefaultDeviceId = 0;
 constexpr uint32_t kBlockTypeAic = 0;
 constexpr uint32_t kBlockTypeAiv = 1;
 constexpr std::size_t kMemoryNdMaxRank = 5;
@@ -66,42 +64,38 @@ struct MemoryInstructionProfile {
 
 class MemoryInstructionProfileFactory final {
 public:
-    static std::optional<MemoryInstructionProfile> Create(
-        const sanitizer::CopyGmToUbufAlignV2ParamField& field) noexcept
+    static std::optional<MemoryInstructionProfile> Create(const CopyGmToUbufAlignV2ParamField& field) noexcept
     {
-        const uint32_t dataBits = VectorReadDataBits(field.instr_id);
+        const uint32_t dataBits = VectorReadDataBits(field.instrId);
         if (dataBits == 0) {
             return std::nullopt;
         }
         return MemoryInstructionProfile{dataBits, ACLSAN_DEVICE_SOURCE_MTE2, kBlockTypeAiv};
     }
 
-    static std::optional<MemoryInstructionProfile> Create(
-        const sanitizer::CopyGmToCbufAlignV2ParamField& field) noexcept
+    static std::optional<MemoryInstructionProfile> Create(const CopyGmToCbufAlignV2ParamField& field) noexcept
     {
-        const uint32_t dataBits = CubeReadDataBits(field.instr_id);
+        const uint32_t dataBits = CubeReadDataBits(field.instrId);
         if (dataBits == 0) {
             return std::nullopt;
         }
         return MemoryInstructionProfile{dataBits, ACLSAN_DEVICE_SOURCE_MTE2, kBlockTypeAic};
     }
 
-    template <sanitizer::NdNzConversionMode ConversionMode>
+    template <NdNzConversionMode ConversionMode>
     static std::optional<MemoryInstructionProfile> Create(
-        const sanitizer::CopyGmToCbufMultiParamField<ConversionMode>& field) noexcept
+        const CopyGmToCbufMultiParamField<ConversionMode>& field) noexcept
     {
-        const uint32_t dataBits = MultiReadDataBits<ConversionMode>(field.instr_id);
+        const uint32_t dataBits = MultiReadDataBits<ConversionMode>(field.instrId);
         if (dataBits == 0) {
             return std::nullopt;
         }
         return MemoryInstructionProfile{dataBits, ACLSAN_DEVICE_SOURCE_MTE2, kBlockTypeAic};
     }
 
-    static std::optional<MemoryInstructionProfile> Create(
-        const sanitizer::CopyUbufToGmAlignV2ParamField& field) noexcept
+    static std::optional<MemoryInstructionProfile> Create(const CopyUbufToGmAlignV2ParamField& field) noexcept
     {
-        if (static_cast<sanitizer::CceInstructionId>(field.instr_id) !=
-            sanitizer::CceInstructionId::CopyUbufToGmAlignV2) {
+        if (static_cast<InstructionId>(field.instrId) != InstructionId::CopyUbufToGmAlignV2) {
             return std::nullopt;
         }
         return MemoryInstructionProfile{0, ACLSAN_DEVICE_SOURCE_MTE3, kBlockTypeAiv};
@@ -109,8 +103,8 @@ public:
 
     static std::optional<MemoryInstructionProfile> Create(const FixpipeMemoryField& field) noexcept
     {
-        const auto id = static_cast<sanitizer::CceInstructionId>(field.field.instr_id);
-        if (id != sanitizer::CceInstructionId::FixL0cToOutF32 && id != sanitizer::CceInstructionId::FixL0cToOutS32) {
+        const auto id = static_cast<InstructionId>(field.field.instrId);
+        if (id != InstructionId::FixL0cToOutF32 && id != InstructionId::FixL0cToOutS32) {
             return std::nullopt;
         }
         return MemoryInstructionProfile{
@@ -120,12 +114,12 @@ public:
 private:
     static uint32_t VectorReadDataBits(uint32_t instructionId) noexcept
     {
-        switch (static_cast<sanitizer::CceInstructionId>(instructionId)) {
-            case sanitizer::CceInstructionId::CopyGmToUbufAlignV2B8:
+        switch (static_cast<InstructionId>(instructionId)) {
+            case InstructionId::CopyGmToUbufAlignV2B8:
                 return 8;
-            case sanitizer::CceInstructionId::CopyGmToUbufAlignV2B16:
+            case InstructionId::CopyGmToUbufAlignV2B16:
                 return 16;
-            case sanitizer::CceInstructionId::CopyGmToUbufAlignV2B32:
+            case InstructionId::CopyGmToUbufAlignV2B32:
                 return 32;
             default:
                 return 0;
@@ -134,40 +128,40 @@ private:
 
     static uint32_t CubeReadDataBits(uint32_t instructionId) noexcept
     {
-        switch (static_cast<sanitizer::CceInstructionId>(instructionId)) {
-            case sanitizer::CceInstructionId::CopyGmToCbufAlignV2B8:
+        switch (static_cast<InstructionId>(instructionId)) {
+            case InstructionId::CopyGmToCbufAlignV2B8:
                 return 8;
-            case sanitizer::CceInstructionId::CopyGmToCbufAlignV2B16:
+            case InstructionId::CopyGmToCbufAlignV2B16:
                 return 16;
-            case sanitizer::CceInstructionId::CopyGmToCbufAlignV2B32:
+            case InstructionId::CopyGmToCbufAlignV2B32:
                 return 32;
             default:
                 return 0;
         }
     }
 
-    template <sanitizer::NdNzConversionMode ConversionMode>
+    template <NdNzConversionMode ConversionMode>
     static uint32_t MultiReadDataBits(uint32_t instructionId) noexcept
     {
-        const auto id = static_cast<sanitizer::CceInstructionId>(instructionId);
-        if constexpr (ConversionMode == sanitizer::NdNzConversionMode::ND2NZ) {
-            if (id == sanitizer::CceInstructionId::CopyGmToCbufMultiNd2NzB8) {
+        const auto id = static_cast<InstructionId>(instructionId);
+        if constexpr (ConversionMode == NdNzConversionMode::ND2NZ) {
+            if (id == InstructionId::CopyGmToCbufMultiNd2NzB8) {
                 return 8;
             }
-            if (id == sanitizer::CceInstructionId::CopyGmToCbufMultiNd2NzB16) {
+            if (id == InstructionId::CopyGmToCbufMultiNd2NzB16) {
                 return 16;
             }
-            if (id == sanitizer::CceInstructionId::CopyGmToCbufMultiNd2NzB32) {
+            if (id == InstructionId::CopyGmToCbufMultiNd2NzB32) {
                 return 32;
             }
         } else {
-            if (id == sanitizer::CceInstructionId::CopyGmToCbufMultiDn2NzB8) {
+            if (id == InstructionId::CopyGmToCbufMultiDn2NzB8) {
                 return 8;
             }
-            if (id == sanitizer::CceInstructionId::CopyGmToCbufMultiDn2NzB16) {
+            if (id == InstructionId::CopyGmToCbufMultiDn2NzB16) {
                 return 16;
             }
-            if (id == sanitizer::CceInstructionId::CopyGmToCbufMultiDn2NzB32) {
+            if (id == InstructionId::CopyGmToCbufMultiDn2NzB32) {
                 return 32;
             }
         }
@@ -320,11 +314,11 @@ private:
     AclsanDeviceEventHeader MakeHeader() const noexcept
     {
         return {ACLSAN_API_VERSION,   static_cast<uint32_t>(sizeof(AclsanDeviceMemoryAccessData)),
-                kUnknownLaunchId,     context_.pc,
+                context_.launchId,    context_.pc,
                 context_.siteId,      static_cast<uint32_t>(profile_.sourceKind),
                 context_.instrExecId, context_.serialNo,
-                kDefaultDeviceId,     context_.coreId,
-                context_.blockId,     profile_.blockType,
+                context_.deviceId,    context_.coreId,
+                context_.blockId,     context_.blockType,
                 context_.pipeline,    ACLSAN_DEVICE_EVENT_FLAG_EXACT};
     }
 
@@ -376,12 +370,12 @@ class MemoryFieldVisitor final {
 public:
     explicit MemoryFieldVisitor(MemoryCbdataContext context) noexcept : context_(context) {}
 
-    MemoryCbdataResult operator()(const sanitizer::CopyGmToUbufAlignV2ParamField& field) const noexcept
+    MemoryCbdataResult operator()(const CopyGmToUbufAlignV2ParamField& field) const noexcept
     {
         return ConvertGmRead(field);
     }
 
-    MemoryCbdataResult operator()(const sanitizer::CopyGmToCbufAlignV2ParamField& field) const noexcept
+    MemoryCbdataResult operator()(const CopyGmToCbufAlignV2ParamField& field) const noexcept
     {
         return ConvertGmRead(field);
     }
@@ -396,7 +390,7 @@ public:
         return ConvertMultiGmRead(field);
     }
 
-    MemoryCbdataResult operator()(const sanitizer::CopyUbufToGmAlignV2ParamField& field) const noexcept
+    MemoryCbdataResult operator()(const CopyUbufToGmAlignV2ParamField& field) const noexcept
     {
         const auto profile = MemoryInstructionProfileFactory::Create(field);
         if (!profile.has_value()) {
@@ -463,7 +457,7 @@ private:
                                     field.burstLen, field.burstSrcStride));
     }
 
-    template <sanitizer::NdNzConversionMode ConversionMode>
+    template <NdNzConversionMode ConversionMode>
     MemoryCbdataResult ConvertMultiGmRead(const MultiMemoryField<ConversionMode>& input) const noexcept
     {
         const auto& field = input.field;
@@ -472,9 +466,8 @@ private:
             return {MemoryCbdataStatus::INVALID_FIELD, {}};
         }
         const uint64_t elementBytes = profile->dataBits / 8U;
-        const uint64_t rowCount = ConversionMode == sanitizer::NdNzConversionMode::ND2NZ ? field.nValue : field.dValue;
-        const uint64_t rowElements =
-            ConversionMode == sanitizer::NdNzConversionMode::ND2NZ ? field.dValue : field.nValue;
+        const uint64_t rowCount = ConversionMode == NdNzConversionMode::ND2NZ ? field.nValue : field.dValue;
+        const uint64_t rowElements = ConversionMode == NdNzConversionMode::ND2NZ ? field.dValue : field.nValue;
         if (input.matrixNum == 0 || rowCount == 0 || rowElements == 0) {
             return {MemoryCbdataStatus::NO_ACCESS, {}};
         }

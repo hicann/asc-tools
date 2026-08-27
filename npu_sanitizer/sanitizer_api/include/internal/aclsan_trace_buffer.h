@@ -10,7 +10,8 @@
 
 #pragma once
 
-#include "cce_instr/raw_data_struct.h"
+#include "aclsan/aclsan_cbdata_device.h"
+#include "trace_buffer_abi.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -19,18 +20,29 @@
 
 namespace aclsan {
 
+struct ParsedTraceRecord {
+    AclsanRawTraceRecord record{};
+    uint64_t instrExecId = 0; // 该(blockType, blockId)运行的第几条probe指令，从1开始
+    uint64_t launchId = 0;
+    uint32_t blockId = 0;
+    uint32_t blockType = ACLSAN_DEVICE_BLOCK_TYPE_AICORE;
+    uint32_t phyCoreId = 0;
+    uint32_t deviceId = 0;
+};
+
 struct TraceBufferParseResult {
     bool ok = false;
     uint64_t overflowCount = 0;
-    std::vector<sanitizer::AscsanRawTraceRecord> records;
+    std::vector<ParsedTraceRecord> records;
     std::string error;
 };
 
 bool InitializeTraceBuffer(
-    std::vector<uint8_t>& buffer, uint32_t blockCount, uint32_t recordsPerBlock, uint64_t launchId, std::string& error);
+    std::vector<uint8_t>& buffer, uint32_t physicalCoreCount, uint32_t blockCount, uint32_t recordsPerCore,
+    uint64_t launchId, std::string& error);
 
 TraceBufferParseResult ParseTraceBuffer(
-    const uint8_t* buffer, size_t bytes, uint32_t expectedBlockCount, uint32_t expectedRecordsPerBlock,
-    uint64_t expectedLaunchId);
+    const uint8_t* buffer, size_t bytes, uint32_t expectedPhysicalCoreCount, uint32_t expectedBlockCount,
+    uint32_t expectedRecordsPerCore, uint64_t expectedLaunchId, uint32_t deviceId);
 
 } // namespace aclsan

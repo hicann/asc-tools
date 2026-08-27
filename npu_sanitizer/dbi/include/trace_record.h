@@ -17,37 +17,41 @@
 
 namespace aclsan {
 
-constexpr uint16_t PIPELINE_SET_WAIT_FLAG = 1U;
-constexpr uint16_t PIPELINE_GET_RLS_BUF = 2U;
-constexpr uint16_t PIPELINE_MTE2 = 3U;
-constexpr uint16_t PIPELINE_MTE3 = 4U;
-constexpr uint16_t PIPELINE_FIXPIPE = 5U;
-constexpr uint16_t PIPELINE_MTE1 = 6U;
-
 __aicore__ inline void WriteTraceRecord(
-    __gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, uint16_t pipeline, uint16_t apiId, uint64_t arg0, uint64_t arg1,
-    uint64_t arg2, uint64_t arg3, uint64_t arg4)
+    __gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, DeviceInstructionCategory category, uint16_t pipeline,
+    uint16_t apiId, uint64_t arg0, uint64_t arg1, uint64_t arg2, uint64_t arg3, uint64_t arg4)
 {
     if (memInfo == nullptr) {
         return;
     }
 
     (void)bid;
-    __gm__ aclsan::AscsanTraceBufferHeader* header = reinterpret_cast<__gm__ aclsan::AscsanTraceBufferHeader*>(memInfo);
-    const uint32_t blockId = static_cast<uint32_t>(AscendC::GetBlockIdx());
-    if (header->magic != aclsan::ASCSAN_TRACE_BUFFER_MAGIC_V1 || blockId >= header->blockCount ||
-        header->recordsPerBlock == 0U) {
+    __gm__ aclsan::AclsanTraceBufferHeader* header = reinterpret_cast<__gm__ aclsan::AclsanTraceBufferHeader*>(memInfo);
+    const uint32_t phyCoreId = static_cast<uint32_t>(get_coreid());
+    const uint32_t blockCount = header->blockCount;
+    const uint32_t physicalCoreCount = header->physicalCoreCount;
+    if (header->magic != aclsan::ASCSAN_TRACE_BUFFER_MAGIC || blockCount == 0U || header->recordsPerCore == 0U ||
+        physicalCoreCount == 0U || physicalCoreCount % aclsan::ASCSAN_PHYSICAL_CORE_TOPOLOGY_UNIT != 0U ||
+        phyCoreId >= physicalCoreCount) {
         return;
     }
 
-    const uint64_t sliceBytes = sizeof(aclsan::AscsanTraceSliceHeader) +
-                                static_cast<uint64_t>(header->recordsPerBlock) * sizeof(aclsan::AscsanRawTraceRecord);
+    const uint32_t blockId = static_cast<uint32_t>(AscendC::GetBlockIdx());
+    const uint32_t coresPerPart = physicalCoreCount / aclsan::ASCSAN_PHYSICAL_CORE_PART_COUNT;
+    const bool isAic = phyCoreId % coresPerPart < coresPerPart / aclsan::ASCSAN_AIC_CORE_RATIO_DENOMINATOR;
+    const uint64_t blockLimit = isAic ? static_cast<uint64_t>(blockCount) : 2ULL * blockCount;
+    if (static_cast<uint64_t>(blockId) >= blockLimit) {
+        return;
+    }
+
+    const uint64_t sliceBytes = sizeof(aclsan::AclsanTraceSliceHeader) +
+                                static_cast<uint64_t>(header->recordsPerCore) * sizeof(aclsan::AclsanRawTraceRecord);
     __gm__ uint8_t* sliceAddress =
-        memInfo + sizeof(aclsan::AscsanTraceBufferHeader) + static_cast<uint64_t>(blockId) * sliceBytes;
-    __gm__ aclsan::AscsanTraceSliceHeader* slice =
-        reinterpret_cast<__gm__ aclsan::AscsanTraceSliceHeader*>(sliceAddress);
+        memInfo + sizeof(aclsan::AclsanTraceBufferHeader) + static_cast<uint64_t>(phyCoreId) * sliceBytes;
+    __gm__ aclsan::AclsanTraceSliceHeader* slice =
+        reinterpret_cast<__gm__ aclsan::AclsanTraceSliceHeader*>(sliceAddress);
     const uint32_t index = slice->recordCount;
-    if (index >= header->recordsPerBlock) {
+    if (index >= header->recordsPerCore) {
         if (slice->overflowCount != UINT32_MAX) {
             slice->overflowCount = slice->overflowCount + 1U;
         }
@@ -55,8 +59,8 @@ __aicore__ inline void WriteTraceRecord(
         return;
     }
 
-    __gm__ aclsan::AscsanRawTraceRecord* record =
-        reinterpret_cast<__gm__ aclsan::AscsanRawTraceRecord*>(sliceAddress + sizeof(aclsan::AscsanTraceSliceHeader)) +
+    __gm__ aclsan::AclsanRawTraceRecord* record =
+        reinterpret_cast<__gm__ aclsan::AclsanRawTraceRecord*>(sliceAddress + sizeof(aclsan::AclsanTraceSliceHeader)) +
         index;
     record->pc = static_cast<uint64_t>(pc);
     record->args[0] = arg0;
@@ -66,8 +70,12 @@ __aicore__ inline void WriteTraceRecord(
     record->args[4] = arg4;
     record->instrId = static_cast<uint64_t>(apiId);
     record->siteId = 0U;
+    record->category = category;
     record->pipeline = pipeline;
+    record->blockId = blockId;
+    record->reserved = 0U;
     dcci(record, cache_line_t::ENTIRE_DATA_CACHE, dcci_dst_t::CACHELINE_OUT);
+    slice->phyCoreId = phyCoreId;
     slice->recordCount = index + 1U;
     dcci(slice, cache_line_t::ENTIRE_DATA_CACHE, dcci_dst_t::CACHELINE_OUT);
 }

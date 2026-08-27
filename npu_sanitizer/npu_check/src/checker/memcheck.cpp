@@ -13,7 +13,9 @@
 #include <chrono>
 #include <iterator>
 #include <limits>
+#include <map>
 #include <optional>
+#include <tuple>
 #include <utility>
 
 namespace npu::sanitizer {
@@ -188,19 +190,25 @@ bool VisitAffineSegments(const AffineLayout& layout, Visitor&& visitor)
     return true;
 }
 
-const char* SourceKindName(uint32_t sourceKind)
+const char* PipelineName(uint32_t pipeline)
 {
-    switch (sourceKind) {
-        case static_cast<uint32_t>(DeviceSourceKind::MTE2):
+    switch (pipeline) {
+        case ACLSAN_DEVICE_PIPE_SCALAR:
+            return "SCALAR";
+        case ACLSAN_DEVICE_PIPE_VECTOR:
+            return "VECTOR";
+        case ACLSAN_DEVICE_PIPE_MATRIX:
+            return "MATRIX";
+        case ACLSAN_DEVICE_PIPE_MTE1:
+            return "MTE1";
+        case ACLSAN_DEVICE_PIPE_MTE2:
             return "MTE2";
-        case static_cast<uint32_t>(DeviceSourceKind::MTE3):
+        case ACLSAN_DEVICE_PIPE_MTE3:
             return "MTE3";
-        case static_cast<uint32_t>(DeviceSourceKind::FIXPIPE):
+        case ACLSAN_DEVICE_PIPE_ALL:
+            return "ALL";
+        case ACLSAN_DEVICE_PIPE_FIXPIPE:
             return "FIXPIPE";
-        case static_cast<uint32_t>(DeviceSourceKind::SET_WAIT_FLAG):
-            return "SET_WAIT_FLAG";
-        case static_cast<uint32_t>(DeviceSourceKind::GET_RLS_BUF):
-            return "GET_RLS_BUF";
         default:
             return "UNKNOWN";
     }
@@ -231,12 +239,12 @@ NpusanReportExecContext ToExecContext(const AclsanDeviceMemoryAccessData& data)
     exec.serialNo = data.header.serialNo;
     exec.pc = data.header.pc;
     exec.deviceId = data.header.deviceId;
-    exec.coreId = data.header.coreId;
+    exec.phyCoreId = data.header.phyCoreId;
     exec.blockId = data.header.blockId;
     exec.blockType = data.header.blockType;
     exec.pipeId = data.header.pipeline;
     exec.siteId = data.header.siteId;
-    exec.pipeName = SourceKindName(data.header.sourceKind);
+    exec.pipeName = PipelineName(data.header.pipeline);
     return exec;
 }
 
@@ -308,7 +316,8 @@ void Memcheck::OnFree(const AclsanResourceData& data)
 }
 
 std::vector<NpusanMemcheckReport> Memcheck::CheckAccess(
-    const AclsanDeviceMemoryAccessData& data, NpusanReportAccessMode accessMode, uint64_t address, uint64_t bytes)
+    const AclsanDeviceMemoryAccessData& data, NpusanReportAccessMode accessMode, uint64_t address, uint64_t bytes,
+    uint64_t groupId)
 {
     const RangeResult range = allocations_.Classify(data.header.deviceId, address, bytes);
     if (range.status == RangeStatus::VALID || (range.status == RangeStatus::UNKNOWN && !strictUnknown_)) {
@@ -317,7 +326,7 @@ std::vector<NpusanMemcheckReport> Memcheck::CheckAccess(
 
     NpusanMemcheckReport report{};
     report.common.reportId = nextReportId_++;
-    report.common.groupId = data.header.instrExecId;
+    report.common.groupId = groupId;
     report.common.timestampNs = TimestampNs();
     report.common.tool = ReportTool::kMemcheck;
     report.common.severity = ReportSeverity::kError;
@@ -357,7 +366,8 @@ void Memcheck::QueueDeviceMemoryAccess(const AclsanDeviceMemoryAccessData& data)
     stats_.pendingDeviceOperations = pendingDeviceAccesses_.size();
 }
 
-std::vector<NpusanMemcheckReport> Memcheck::CheckDeviceMemoryAccess(const AclsanDeviceMemoryAccessData& data)
+std::vector<NpusanMemcheckReport> Memcheck::CheckDeviceMemoryAccess(
+    const AclsanDeviceMemoryAccessData& data, uint64_t groupId)
 {
     const auto markIncomplete = [this]() {
         ++stats_.droppedDeviceOperations;
@@ -392,7 +402,7 @@ std::vector<NpusanMemcheckReport> Memcheck::CheckDeviceMemoryAccess(const Aclsan
     std::vector<NpusanMemcheckReport> reports;
     auto appendAccess = [&](uint64_t address, uint64_t bytes) {
         for (const NpusanReportAccessMode accessMode : accessModes) {
-            auto found = CheckAccess(data, accessMode, address, bytes);
+            auto found = CheckAccess(data, accessMode, address, bytes, groupId);
             reports.insert(reports.end(), std::make_move_iterator(found.begin()), std::make_move_iterator(found.end()));
         }
     };
@@ -454,9 +464,18 @@ std::vector<NpusanMemcheckReport> Memcheck::OnSynchronization()
     accesses.swap(pendingDeviceAccesses_);
     stats_.pendingDeviceOperations = 0;
 
+    using InstructionIdentity = std::tuple<uint32_t, uint64_t, uint32_t, uint32_t, uint64_t>;
+    std::map<InstructionIdentity, uint64_t> instructionGroups;
     std::vector<NpusanMemcheckReport> reports;
     for (const auto& access : accesses) {
-        auto found = CheckDeviceMemoryAccess(access);
+        const InstructionIdentity identity{
+            access.header.deviceId, access.header.launchId, access.header.blockType, access.header.blockId,
+            access.header.instrExecId};
+        const auto [group, inserted] = instructionGroups.try_emplace(identity, nextGroupId_);
+        if (inserted) {
+            ++nextGroupId_;
+        }
+        auto found = CheckDeviceMemoryAccess(access, group->second);
         reports.insert(reports.end(), std::make_move_iterator(found.begin()), std::make_move_iterator(found.end()));
     }
     Count(reports);

@@ -9,7 +9,9 @@
  */
 
 #include "internal/aclsan_active_probe_plan.h"
-#include "internal/aclsan_internal.h"
+#include "device_runtime/device_symbolizer.h"
+#include "internal/aclsan_device_call_stack.h"
+#include "internal/aclsan_runtime_hook.h"
 
 #include <atomic>
 #include <chrono>
@@ -30,7 +32,6 @@
 
 namespace {
 
-std::atomic<uint32_t> g_applyStatus{ACLSAN_STATUS_SUCCESS};
 std::atomic<bool> g_delayApply{false};
 std::atomic<int> g_activeApplyCalls{0};
 std::atomic<int> g_maxActiveApplyCalls{0};
@@ -47,7 +48,7 @@ void RecordMaximum(int value)
 
 namespace aclsan {
 
-AclsanStatus ApplyRuntimeHooks(const std::set<aclrtApiId>&) noexcept
+void ApplyRuntimeHooks(const std::set<aclrtApiId>&) noexcept
 {
     const int activeCalls = g_activeApplyCalls.fetch_add(1, std::memory_order_acq_rel) + 1;
     RecordMaximum(activeCalls);
@@ -55,15 +56,12 @@ AclsanStatus ApplyRuntimeHooks(const std::set<aclrtApiId>&) noexcept
         std::this_thread::sleep_for(std::chrono::milliseconds(30));
     }
     g_activeApplyCalls.fetch_sub(1, std::memory_order_acq_rel);
-    return g_applyStatus.exchange(ACLSAN_STATUS_SUCCESS, std::memory_order_acq_rel);
 }
 
 AclsanStatus ResolveActiveDeviceCallStack(uint64_t, device_runtime::CallStackResult*) noexcept
 {
     return ACLSAN_STATUS_ERROR_INVALID_STATE;
 }
-
-bool IsRuntimeHookStatePoisoned() noexcept { return false; }
 
 } // namespace aclsan
 
@@ -77,9 +75,11 @@ int main()
     using aclsan::PROBE_GROUP_MTE1;
     using aclsan::PROBE_GROUP_MTE2;
     using aclsan::PROBE_GROUP_MTE3;
+    using aclsan::PROBE_GROUP_REGISTER;
     using aclsan::PROBE_GROUP_SYNC;
 
-    constexpr uint32_t memoryProbeMask = PROBE_GROUP_MTE1 | PROBE_GROUP_MTE2 | PROBE_GROUP_MTE3 | PROBE_GROUP_FIXPIPE;
+    constexpr uint32_t memoryProbeMask =
+        PROBE_GROUP_MTE1 | PROBE_GROUP_MTE2 | PROBE_GROUP_MTE3 | PROBE_GROUP_FIXPIPE | PROBE_GROUP_REGISTER;
 
     CHECK(
         aclsan::ProbeGroupMaskForCallback(ACLSAN_CB_DOMAIN_DEVICE_INSTRUCTION, ACLSAN_CBID_DEVICE_MEMORY_ACCESS) ==
@@ -89,9 +89,10 @@ int main()
         PROBE_GROUP_SYNC);
     CHECK(aclsan::ProbeGroupMaskForCallback(ACLSAN_CB_DOMAIN_RESOURCE, ACLSAN_CBID_RESOURCE_MEMORY_ALLOC) == 0);
     CHECK(
-        aclsan::ProbeGroupsFromMask(PROBE_GROUP_SYNC | PROBE_GROUP_MTE3 | PROBE_GROUP_MTE1) ==
+        aclsan::ProbeGroupsFromMask(PROBE_GROUP_SYNC | PROBE_GROUP_MTE3 | PROBE_GROUP_MTE1 | PROBE_GROUP_REGISTER) ==
         (std::vector<aclsan::ProbeGroup>{
-            aclsan::ProbeGroup::Mte1, aclsan::ProbeGroup::Mte3, aclsan::ProbeGroup::Sync}));
+            aclsan::ProbeGroup::Mte1, aclsan::ProbeGroup::Mte3, aclsan::ProbeGroup::Sync,
+            aclsan::ProbeGroup::Register}));
 
     aclsan::CommitActiveProbePlan(memoryProbeMask);
     CHECK(aclsan::SnapshotActiveProbePlan() == memoryProbeMask);
@@ -134,13 +135,6 @@ int main()
         aclsanEnableCallback(0, subscriber, ACLSAN_CB_DOMAIN_DEVICE_INSTRUCTION, ACLSAN_CBID_DEVICE_MEMORY_ACCESS) ==
         ACLSAN_STATUS_SUCCESS);
     CHECK(aclsan::SnapshotActiveProbePlan() == PROBE_GROUP_SYNC);
-
-    g_applyStatus.store(ACLSAN_STATUS_ERROR_INJECTION_FAILED, std::memory_order_release);
-    CHECK(
-        aclsanEnableCallback(1, subscriber, ACLSAN_CB_DOMAIN_DEVICE_INSTRUCTION, ACLSAN_CBID_DEVICE_MEMORY_ACCESS) ==
-        ACLSAN_STATUS_ERROR_INJECTION_FAILED);
-    CHECK(aclsan::SnapshotActiveProbePlan() == PROBE_GROUP_SYNC);
-    g_applyStatus.store(ACLSAN_STATUS_SUCCESS, std::memory_order_release);
 
     CHECK(aclsanUnsubscribe(subscriber) == ACLSAN_STATUS_SUCCESS);
     CHECK(aclsan::SnapshotActiveProbePlan() == 0);

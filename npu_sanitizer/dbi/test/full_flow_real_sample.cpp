@@ -50,6 +50,17 @@ struct CallbackState {
 
 CallbackState g_callbacks;
 
+bool HasValidBlockIdentity(const AclsanDeviceEventHeader& header)
+{
+    if (header.blockType == ACLSAN_DEVICE_BLOCK_TYPE_AICORE_CUBE) {
+        return header.blockId < 2;
+    }
+    if (header.blockType == ACLSAN_DEVICE_BLOCK_TYPE_AICORE_VECTOR) {
+        return header.blockId < 4;
+    }
+    return false;
+}
+
 void Callback(void*, AclsanCallbackDomain domain, AclsanCallbackId id, const void* data)
 {
     if (domain != ACLSAN_CB_DOMAIN_DEVICE_INSTRUCTION || data == nullptr) {
@@ -58,13 +69,13 @@ void Callback(void*, AclsanCallbackDomain domain, AclsanCallbackId id, const voi
     if (id == ACLSAN_CBID_DEVICE_MEMORY_ACCESS) {
         const auto* memory = static_cast<const AclsanDeviceMemoryAccessData*>(data);
         ++g_callbacks.records;
-        g_callbacks.valid =
-            g_callbacks.valid && memory->header.blockId < 2 && memory->header.pipeline == ACLSAN_DEVICE_PIPE_MTE2;
+        g_callbacks.valid = g_callbacks.valid && HasValidBlockIdentity(memory->header) &&
+                            memory->header.pipeline == ACLSAN_DEVICE_PIPE_MTE2;
     } else if (id == ACLSAN_CBID_DEVICE_SYNC) {
         const auto* sync = static_cast<const AclsanDeviceSyncData*>(data);
         ++g_callbacks.records;
-        g_callbacks.valid =
-            g_callbacks.valid && sync->header.blockId < 2 && sync->syncKind == ACLSAN_DEVICE_SYNC_KIND_SET_WAIT_FLAG;
+        g_callbacks.valid = g_callbacks.valid && HasValidBlockIdentity(sync->header) &&
+                            sync->syncKind == ACLSAN_DEVICE_SYNC_KIND_SET_WAIT_FLAG;
     }
 }
 
