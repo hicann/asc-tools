@@ -15,6 +15,7 @@
 #include "npu_compute/runtime_stub_api.h"
 
 #include <array>
+#include <atomic>
 #include <cstdlib>
 #include <cstring>
 #include <dlfcn.h>
@@ -28,6 +29,8 @@ constexpr std::size_t kRuntimeApiCount = 22;
 struct KernelArgs {
     uint8_t* value;
 };
+
+std::atomic<std::int32_t> g_currentDevice{-1};
 
 aclError RealAclrtLaunchKernelWithHostArgs(
     aclrtFuncHandle, uint32_t, aclrtStream, aclrtLaunchKernelCfg*, void*, std::size_t, aclrtPlaceHolderInfo*,
@@ -98,14 +101,22 @@ aclError RealAclrtCreateStream(aclrtStream* stream)
 
 aclError RealAclrtDestroyStream(aclrtStream) { return ACL_SUCCESS; }
 
-aclError RealAclrtSetDevice(std::int32_t) { return ACL_SUCCESS; }
+aclError RealAclrtSetDevice(std::int32_t deviceId)
+{
+    g_currentDevice.store(deviceId, std::memory_order_relaxed);
+    return ACL_SUCCESS;
+}
 
 aclError RealAclrtGetDevice(std::int32_t* deviceId)
 {
     if (deviceId == nullptr) {
         return ACL_ERROR_INVALID_PARAM;
     }
-    *deviceId = 0;
+    const std::int32_t currentDevice = g_currentDevice.load(std::memory_order_relaxed);
+    if (currentDevice < 0) {
+        return ACL_ERROR_RT_CONTEXT_NULL;
+    }
+    *deviceId = currentDevice;
     return ACL_SUCCESS;
 }
 
@@ -125,7 +136,12 @@ aclError RealAclrtGetDeviceInfo(uint32_t, aclrtDevAttr attr, int64_t* value)
     return ACL_ERROR_INVALID_PARAM;
 }
 
-aclError RealAclrtResetDevice(std::int32_t) { return ACL_SUCCESS; }
+aclError RealAclrtResetDevice(std::int32_t deviceId)
+{
+    std::int32_t expectedDevice = deviceId;
+    g_currentDevice.compare_exchange_strong(expectedDevice, -1, std::memory_order_relaxed);
+    return ACL_SUCCESS;
+}
 
 aclError RealAclrtSynchronizeStream(aclrtStream) { return ACL_SUCCESS; }
 
@@ -295,6 +311,17 @@ extern "C" NPU_COMPUTE_EXPORT aclError RuntimeStubSetOrigin(const char* name, ac
     return ACL_SUCCESS;
 }
 
+extern "C" NPU_COMPUTE_EXPORT aclError RuntimeStubClearOrigin(const char* name)
+{
+    std::lock_guard<std::mutex> lock(g_runtimeMutex);
+    RuntimeEntry* entry = FindEntry(name);
+    if (entry == nullptr) {
+        return ACL_ERROR_INVALID_PARAM;
+    }
+    entry->origin = nullptr;
+    return ACL_SUCCESS;
+}
+
 extern "C" aclError aclrtApiInjectionGetFunc(const char* name, aclrtApiFunc* originFunc, aclrtApiFunc* currentFunc)
 {
     if (originFunc == nullptr && currentFunc == nullptr) {
@@ -332,7 +359,11 @@ extern "C" int aclrtInit() { return ProfApiLoadApiInjectionFromEnv(); }
 
 extern "C" aclError aclrtSetDevice(std::int32_t deviceId)
 {
-    return CallCurrent<aclError (*)(std::int32_t)>("aclrtSetDevice", deviceId);
+    const aclError result = CallCurrent<aclError (*)(std::int32_t)>("aclrtSetDevice", deviceId);
+    if (result == ACL_SUCCESS) {
+        g_currentDevice.store(deviceId, std::memory_order_relaxed);
+    }
+    return result;
 }
 
 extern "C" aclError aclrtGetDevice(std::int32_t* deviceId)
@@ -347,7 +378,12 @@ extern "C" aclError aclrtGetDeviceInfo(uint32_t deviceId, aclrtDevAttr attr, int
 
 extern "C" aclError aclrtResetDevice(std::int32_t deviceId)
 {
-    return CallCurrent<aclError (*)(std::int32_t)>("aclrtResetDevice", deviceId);
+    const aclError result = CallCurrent<aclError (*)(std::int32_t)>("aclrtResetDevice", deviceId);
+    if (result == ACL_SUCCESS) {
+        std::int32_t expectedDevice = deviceId;
+        g_currentDevice.compare_exchange_strong(expectedDevice, -1, std::memory_order_relaxed);
+    }
+    return result;
 }
 
 extern "C" aclError aclrtCreateStream(aclrtStream* stream)

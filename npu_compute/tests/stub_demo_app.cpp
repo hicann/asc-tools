@@ -10,6 +10,7 @@
 #include "acl/acl_rt.h"
 
 #include <chrono>
+#include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -43,21 +44,21 @@ const char* EnvironmentValue(const char* name)
     return value == nullptr ? "" : value;
 }
 
-int ReleaseAndReturn(void* dev_ptr, int result)
+int ReleaseAndReturn(void* devPtr, int result)
 {
-    const int free_result = aclrtFree(dev_ptr);
-    if (free_result != 0) {
-        std::fprintf(stderr, "[demo] aclrtFree failed: %d\n", free_result);
+    const int freeResult = aclrtFree(devPtr);
+    if (freeResult != 0) {
+        std::fprintf(stderr, "[demo] aclrtFree failed: %d\n", freeResult);
     }
-    return result == 0 ? free_result : result;
+    return result == 0 ? freeResult : result;
 }
 
 } // namespace
 
 int main(int argc, char** argv)
 {
-    int sleep_milliseconds = 0;
-    int requested_exit_code = 0;
+    int sleepMilliseconds = 0;
+    int requestedExitCode = 0;
     std::fprintf(
         stderr, "[demo] sections=%s replay=%s\n", EnvironmentValue("NPU_COMPUTE_SECTIONS"),
         EnvironmentValue("NPU_COMPUTE_REPLAY_MODE"));
@@ -65,13 +66,13 @@ int main(int argc, char** argv)
     for (int index = 1; index < argc; ++index) {
         std::fprintf(stderr, "[demo] argv[%d]=%s\n", index, argv[index]);
         if (std::strcmp(argv[index], "--sleep-ms") == 0 && index + 1 < argc) {
-            if (!ParseInteger(argv[++index], &sleep_milliseconds)) {
+            if (!ParseInteger(argv[++index], &sleepMilliseconds)) {
                 std::fprintf(stderr, "[demo] invalid --sleep-ms value\n");
                 return 2;
             }
             std::fprintf(stderr, "[demo] argv[%d]=%s\n", index, argv[index]);
         } else if (std::strcmp(argv[index], "--exit-code") == 0 && index + 1 < argc) {
-            if (!ParseInteger(argv[++index], &requested_exit_code)) {
+            if (!ParseInteger(argv[++index], &requestedExitCode)) {
                 std::fprintf(stderr, "[demo] invalid --exit-code value\n");
                 return 2;
             }
@@ -91,50 +92,50 @@ int main(int argc, char** argv)
         return result;
     }
 
-    void* dev_ptr = nullptr;
-    result = aclrtMalloc(&dev_ptr, 4096, ACL_MEM_MALLOC_HUGE_FIRST);
-    std::fprintf(stderr, "[demo] aclrtMalloc result=%d ptr=%p\n", result, dev_ptr);
+    void* devPtr = nullptr;
+    result = aclrtMalloc(&devPtr, 4096, ACL_MEM_MALLOC_HUGE_FIRST);
+    std::fprintf(stderr, "[demo] aclrtMalloc result=%d ptr=%p\n", result, devPtr);
     if (result != 0) {
         return result;
     }
 
-    result = aclrtMemset(dev_ptr, 4096, 0, 4096);
+    result = aclrtMemset(devPtr, 4096, 0, 4096);
     if (result != 0) {
         std::fprintf(stderr, "[demo] aclrtMemset failed: %d\n", result);
-        return ReleaseAndReturn(dev_ptr, result);
+        return ReleaseAndReturn(devPtr, result);
     }
 
-    uint8_t initial_value = 5;
-    result = aclrtMemcpy(dev_ptr, 4096, &initial_value, 1, ACL_MEMCPY_HOST_TO_DEVICE);
+    std::uint8_t initialValue = 5;
+    result = aclrtMemcpy(devPtr, 4096, &initialValue, 1, ACL_MEMCPY_HOST_TO_DEVICE);
     if (result != 0) {
         std::fprintf(stderr, "[demo] aclrtMemcpy H2D failed: %d\n", result);
-        return ReleaseAndReturn(dev_ptr, result);
+        return ReleaseAndReturn(devPtr, result);
     }
 
-    KernelArgs args{static_cast<uint8_t*>(dev_ptr)};
+    KernelArgs args{static_cast<std::uint8_t*>(devPtr)};
     result = aclrtLaunchKernel(nullptr, 1, &args, sizeof(args), nullptr);
     if (result != 0) {
         std::fprintf(stderr, "[demo] aclrtLaunchKernel failed: %d\n", result);
-        return ReleaseAndReturn(dev_ptr, result);
+        return ReleaseAndReturn(devPtr, result);
     }
 
-    uint8_t output = 0;
-    result = aclrtMemcpy(&output, sizeof(output), dev_ptr, 1, ACL_MEMCPY_DEVICE_TO_HOST);
+    std::uint8_t output = 0;
+    result = aclrtMemcpy(&output, sizeof(output), devPtr, 1, ACL_MEMCPY_DEVICE_TO_HOST);
     if (result == 0 && output != 6) {
         std::fprintf(stderr, "[demo] unexpected kernel output: %u\n", static_cast<unsigned>(output));
         result = -1;
     }
-    result = ReleaseAndReturn(dev_ptr, result);
+    result = ReleaseAndReturn(devPtr, result);
     if (result != 0) {
         return result;
     }
 
-    if (sleep_milliseconds > 0) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(sleep_milliseconds));
+    if (sleepMilliseconds > 0) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(sleepMilliseconds));
     }
-    if (requested_exit_code != 0) {
-        std::fprintf(stderr, "[demo] exiting with requested status %d\n", requested_exit_code);
-        return requested_exit_code;
+    if (requestedExitCode != 0) {
+        std::fprintf(stderr, "[demo] exiting with requested status %d\n", requestedExitCode);
+        return requestedExitCode;
     }
     std::fprintf(stderr, "[demo] completed\n");
     return 0;

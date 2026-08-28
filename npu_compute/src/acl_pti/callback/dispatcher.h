@@ -7,12 +7,14 @@
  * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
  * See LICENSE in the root of the software repository for the full text of the License.
  */
+/**
+ * @file dispatcher.h
+ * @brief Stores subscriber state and dispatches enabled runtime API callbacks.
+ */
 #ifndef NPU_COMPUTE_ACLPTI_CALLBACK_DISPATCHER_H_
 #define NPU_COMPUTE_ACLPTI_CALLBACK_DISPATCHER_H_
 
 #include "aclpti/aclpti_callback.h"
-
-#include "registry.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -23,7 +25,7 @@ struct aclptiSubscriber_st {
     bool activityEnabled = false;
     aclptiCallbackFunc callback = nullptr;
     void* userData = nullptr;
-    std::unordered_set<uint64_t> enabledCallbacks;
+    std::unordered_set<std::uint64_t> enabledCallbacks;
     std::mutex callbackMutex;
 };
 
@@ -31,25 +33,38 @@ namespace npu_compute::aclpti::callback {
 
 class Dispatcher {
 public:
+    /// Returns the handle of the process-wide subscriber state.
     aclptiSubscribeHandle SubscriberHandle();
+
+    /// Reports whether a handle identifies the process-wide subscriber.
     bool IsValidSubscriber(aclptiSubscribeHandle subscriber) const;
-    bool RegisterDomain(aclptiCallbackDomain domain, std::initializer_list<aclptiCallbackId> callbackIds);
+
+    /// Replaces the subscriber callback and user data and clears enabled callbacks.
     void Configure(aclptiCallbackFunc callback, void* userData);
+
+    /// Enables or disables delivery for one callback domain and callback ID.
     aclptiResult Enable(
         bool enable, aclptiSubscribeHandle subscriber, aclptiCallbackDomain domain, aclptiCallbackId cbid);
+
+    /// Writes the callback domains supported by this dispatcher.
     aclptiResult SupportedDomains(std::size_t* domainCount, aclptiCallbackDomain* domains) const;
+
+    /// Delivers one runtime API callback event when its callback ID is enabled.
     void Dispatch(
         aclptiCallbackDomain domain, aclptiCallbackId cbid, aclptiCallbackSite site, void* functionParams,
         aclError retval);
+
+    /// Updates activity collection state for a valid subscriber.
     void SetActivityEnabled(aclptiSubscribeHandle subscriber, bool enabled);
 
 private:
-    static uint64_t MakeCallbackKey(aclptiCallbackDomain domain, aclptiCallbackId cbid);
+    /// Combines a callback domain and callback ID into an enabled-set key.
+    static std::uint64_t MakeCallbackKey(aclptiCallbackDomain domain, aclptiCallbackId cbid);
 
-    Registry registry_;
     aclptiSubscriber_st subscriber_;
 };
 
+/// Returns the process-wide callback dispatcher.
 Dispatcher& GetDispatcher();
 
 } // namespace npu_compute::aclpti::callback

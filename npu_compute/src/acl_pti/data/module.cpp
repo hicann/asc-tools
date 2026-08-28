@@ -21,6 +21,7 @@
 #include <cstring>
 #include <map>
 #include <mutex>
+#include <new>
 #include <optional>
 #include <stdexcept>
 #include <thread>
@@ -484,7 +485,7 @@ public:
         }
     }
 
-    ~Impl() { ForceShutdown(); }
+    ~Impl() { (void)ForceShutdown(); }
 
     aclptiResult Initialize()
     {
@@ -585,14 +586,23 @@ public:
                 static_cast<unsigned long long>(active_->info.replayId));
             return ACLPTI_ERROR_REPLAY_ACTIVE;
         }
-        if (!replayIds_.insert(info.replayId).second) {
+        try {
+            if (!replayIds_.insert(info.replayId).second) {
+                npu_compute::detail::DebugLog(
+                    "aclpti-data", "prepare replay rejected: duplicate replay=%llu",
+                    static_cast<unsigned long long>(info.replayId));
+                return ACLPTI_ERROR_INVALID_PARAMETER;
+            }
+            auto session = std::make_shared<ReplaySession>(info);
+            sessions_.push_back(session);
+            active_ = std::move(session);
+        } catch (const std::bad_alloc&) {
+            replayIds_.erase(info.replayId);
             npu_compute::detail::DebugLog(
-                "aclpti-data", "prepare replay rejected: duplicate replay=%llu",
+                "aclpti-data", "prepare replay failed: replay=%llu out of memory",
                 static_cast<unsigned long long>(info.replayId));
-            return ACLPTI_ERROR_INVALID_PARAMETER;
+            return ACLPTI_ERROR_OUT_OF_MEMORY;
         }
-        active_ = std::make_shared<ReplaySession>(info);
-        sessions_.push_back(active_);
         npu_compute::detail::DebugLog(
             "aclpti-data", "prepare replay accepted: replay=%llu sessions=%zu",
             static_cast<unsigned long long>(info.replayId), sessions_.size());
@@ -681,7 +691,16 @@ public:
                     static_cast<unsigned long long>(replayId), ReplayStateName(active_->state));
                 return ACLPTI_ERROR_INVALID_STATE;
             }
-            if (!rawQueue_.Push(ReplayEnd{active_})) {
+            bool pushed = false;
+            try {
+                pushed = rawQueue_.Push(ReplayEnd{active_});
+            } catch (const std::bad_alloc&) {
+                npu_compute::detail::DebugLog(
+                    "aclpti-data", "release replay failed: replay=%llu out of memory",
+                    static_cast<unsigned long long>(replayId));
+                return ACLPTI_ERROR_OUT_OF_MEMORY;
+            }
+            if (!pushed) {
                 npu_compute::detail::DebugLog(
                     "aclpti-data", "release replay rejected: replay=%llu raw queue is closed",
                     static_cast<unsigned long long>(replayId));
@@ -773,6 +792,28 @@ public:
         npu_compute::detail::DebugLog(
             "aclpti-data", "shutdown complete: external callback status=%d", static_cast<int>(shutdownStatus_));
         return shutdownStatus_;
+    }
+
+    aclptiResult ForceShutdown()
+    {
+        std::shared_ptr<ReplaySession> session;
+        {
+            std::lock_guard<std::mutex> routerLock(routerMutex_);
+            std::lock_guard<std::mutex> lock(mutex_);
+            if (state_ == ModuleState::Running && active_) {
+                session = active_;
+                std::lock_guard<std::mutex> sessionLock(session->mutex);
+                session->state = ReplayState::Released;
+                active_.reset();
+                npu_compute::detail::DebugLog(
+                    "aclpti-data", "force shutdown releasing active replay=%llu",
+                    static_cast<unsigned long long>(session->info.replayId));
+            }
+        }
+        if (session) {
+            rawQueue_.Push(ReplayEnd{std::move(session)});
+        }
+        return Shutdown();
     }
 
 private:
@@ -934,28 +975,6 @@ private:
         npu_compute::detail::DebugLog("aclpti-data", "assemble thread stopped");
     }
 
-    void ForceShutdown()
-    {
-        std::shared_ptr<ReplaySession> session;
-        {
-            std::lock_guard<std::mutex> routerLock(routerMutex_);
-            std::lock_guard<std::mutex> lock(mutex_);
-            if (state_ == ModuleState::Running && active_) {
-                session = active_;
-                std::lock_guard<std::mutex> sessionLock(session->mutex);
-                session->state = ReplayState::Released;
-                active_.reset();
-                npu_compute::detail::DebugLog(
-                    "aclpti-data", "force shutdown releasing active replay=%llu",
-                    static_cast<unsigned long long>(session->info.replayId));
-            }
-        }
-        if (session) {
-            rawQueue_.Push(ReplayEnd{std::move(session)});
-        }
-        Shutdown();
-    }
-
     aclptiPmuDataCallback callback_;
     std::mutex mutex_;
     ModuleState state_ = ModuleState::Created;
@@ -1015,5 +1034,6 @@ aclptiResult Module::PrepareReplay(const ReplayPrepareInfo& info) { return impl_
 ReplayResult Module::RecordReplayStatus(const ReplayStopInfo& info) { return impl_->RecordReplayStatus(info); }
 aclptiResult Module::ReleaseReplay(uint64_t replayId) { return impl_->ReleaseReplay(replayId); }
 aclptiResult Module::Shutdown() { return impl_->Shutdown(); }
+aclptiResult Module::ForceShutdown() { return impl_->ForceShutdown(); }
 
 } // namespace npu_compute::aclpti::data

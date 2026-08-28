@@ -56,6 +56,10 @@ if(NOT NPUCOMPUTE_ACL_INCLUDE_DIR OR NOT NPUCOMPUTE_PROFILING_INCLUDE_DIR)
     "to the architecture package directory containing include/ and pkg_inc/."
   )
 endif()
+get_filename_component(NPUCOMPUTE_ACL_INCLUDE_REALPATH
+  "${NPUCOMPUTE_ACL_INCLUDE_DIR}" REALPATH)
+get_filename_component(NPUCOMPUTE_CANN_ARCH_ROOT
+  "${NPUCOMPUTE_ACL_INCLUDE_REALPATH}" DIRECTORY)
 
 if(NPU_COMPUTE_BUILD_REAL_HARDWARE_TESTS AND NOT NPU_COMPUTE_BUILD_TESTS)
   message(FATAL_ERROR
@@ -108,8 +112,6 @@ if(NPU_COMPUTE_USE_STUB_BACKEND)
   target_link_libraries(acl_runtime_backend INTERFACE acl_runtime_stub)
   target_link_libraries(acl_prof_api_backend INTERFACE acl_prof_api_stub)
 else()
-  get_filename_component(
-    NPUCOMPUTE_CANN_ARCH_ROOT "${NPUCOMPUTE_ACL_INCLUDE_DIR}" DIRECTORY)
   find_library(NPUCOMPUTE_ACL_RT_LIBRARY
     NAMES acl_rt
     HINTS
@@ -159,10 +161,6 @@ install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/sections/"
   DESTINATION share/npu-compute/sections
   COMPONENT asc-tools
 )
-
-if(NPU_COMPUTE_USE_STUB_BACKEND)
-  add_subdirectory(demo)
-endif()
 
 if(NPU_COMPUTE_BUILD_TESTS)
   add_subdirectory(stubs/acl_pti_callback)

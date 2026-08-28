@@ -7,14 +7,20 @@
  * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
  * See LICENSE in the root of the software repository for the full text of the License.
  */
-#include "aclpti/aclpti_range_profiler.h"
+/**
+ * @file initialization.h
+ * @brief Coordinates one-time initialization of shared ACL PTI dependencies.
+ */
+#ifndef NPU_COMPUTE_ACLPTI_INITIALIZATION_H_
+#define NPU_COMPUTE_ACLPTI_INITIALIZATION_H_
 
-#include "acl_pti/profiling/replay_runtime.h"
-#include "common/debug_log.h"
+#include "aclpti/aclpti_types.h"
 
-extern "C" ACLPTI_EXPORT aclptiResult aclptiRangeProfilerSetConfig(aclptiRangeProfilerSetConfigParams* pParams)
-{
-    const aclptiResult result = npu_compute::aclpti::profiling::GetReplayRuntime().SetSections(pParams);
-    npu_compute::detail::DebugLog("aclpti", "range config result=%d", static_cast<int>(result));
-    return result;
-}
+namespace npu_compute::aclpti::initialization {
+
+/// Initializes runtime hooks, replacements, and profiling dependencies once.
+aclptiResult InitializeDependencies();
+
+} // namespace npu_compute::aclpti::initialization
+
+#endif // NPU_COMPUTE_ACLPTI_INITIALIZATION_H_

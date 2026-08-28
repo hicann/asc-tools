@@ -9,7 +9,7 @@
  */
 #include "dispatcher.h"
 
-#include <algorithm>
+#include "aclpti/aclpti_runtime_api.h"
 
 namespace npu_compute::aclpti::callback {
 
@@ -17,14 +17,9 @@ aclptiSubscribeHandle Dispatcher::SubscriberHandle() { return &subscriber_; }
 
 bool Dispatcher::IsValidSubscriber(aclptiSubscribeHandle subscriber) const { return subscriber == &subscriber_; }
 
-bool Dispatcher::RegisterDomain(aclptiCallbackDomain domain, std::initializer_list<aclptiCallbackId> callbackIds)
+std::uint64_t Dispatcher::MakeCallbackKey(aclptiCallbackDomain domain, aclptiCallbackId cbid)
 {
-    return registry_.RegisterDomain(domain, callbackIds);
-}
-
-uint64_t Dispatcher::MakeCallbackKey(aclptiCallbackDomain domain, aclptiCallbackId cbid)
-{
-    return (static_cast<uint64_t>(domain) << 32U) | static_cast<uint64_t>(cbid);
+    return (static_cast<std::uint64_t>(domain) << 32U) | static_cast<std::uint64_t>(cbid);
 }
 
 void Dispatcher::Configure(aclptiCallbackFunc callback, void* userData)
@@ -41,8 +36,11 @@ aclptiResult Dispatcher::Enable(
     if (!IsValidSubscriber(subscriber)) {
         return ACLPTI_ERROR_INVALID_SUBSCRIBER;
     }
-    if (!registry_.IsSupported(domain, cbid)) {
-        return domain == ACLPTI_CB_DOMAIN_RUNTIME_API ? ACLPTI_ERROR_INVALID_PARAMETER : ACLPTI_ERROR_NOT_SUPPORTED;
+    if (domain != ACLPTI_CB_DOMAIN_RUNTIME_API) {
+        return ACLPTI_ERROR_NOT_SUPPORTED;
+    }
+    if (cbid >= ACLPTI_RUNTIME_CBID_SIZE) {
+        return ACLPTI_ERROR_INVALID_PARAMETER;
     }
 
     std::lock_guard<std::mutex> lock(subscriber_.callbackMutex);
@@ -63,17 +61,16 @@ aclptiResult Dispatcher::SupportedDomains(std::size_t* domainCount, aclptiCallba
     if (domainCount == nullptr) {
         return ACLPTI_ERROR_INVALID_PARAMETER;
     }
-    const auto supportedDomains = registry_.SupportedDomains();
     if (domains == nullptr) {
-        *domainCount = supportedDomains.size();
+        *domainCount = 1;
         return ACLPTI_SUCCESS;
     }
-    if (*domainCount < supportedDomains.size()) {
-        *domainCount = supportedDomains.size();
+    if (*domainCount < 1) {
+        *domainCount = 1;
         return ACLPTI_ERROR_INVALID_PARAMETER;
     }
-    std::copy(supportedDomains.begin(), supportedDomains.end(), domains);
-    *domainCount = supportedDomains.size();
+    domains[0] = ACLPTI_CB_DOMAIN_RUNTIME_API;
+    *domainCount = 1;
     return ACLPTI_SUCCESS;
 }
 
@@ -113,3 +110,5 @@ Dispatcher& GetDispatcher()
 }
 
 } // namespace npu_compute::aclpti::callback
+
+// 为每个文件添加注释说明其功能

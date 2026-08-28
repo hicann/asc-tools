@@ -7,6 +7,10 @@
  * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
  * See LICENSE in the root of the software repository for the full text of the License.
  */
+/**
+ * @file control.h
+ * @brief Validates subscriber activity requests and updates activity collection state.
+ */
 #ifndef NPU_COMPUTE_ACLPTI_ACTIVITY_CONTROL_H_
 #define NPU_COMPUTE_ACLPTI_ACTIVITY_CONTROL_H_
 
@@ -15,7 +19,10 @@
 
 namespace npu_compute::aclpti::activity {
 
+/// Validates and enables activity collection for a subscriber.
 aclptiResult Enable(aclptiSubscribeHandle subscriber, aclptiActivityKind kind, const aclptiActivityConfig* config);
+
+/// Validates and disables activity collection for a subscriber.
 aclptiResult Disable(aclptiSubscribeHandle subscriber, aclptiActivityKind kind, const aclptiActivityConfig* config);
 
 } // namespace npu_compute::aclpti::activity

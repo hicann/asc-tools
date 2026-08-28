@@ -55,7 +55,7 @@ int main()
     CHECK(RuntimeStubSetOriginFunction("aclrtSynchronizeStream", &DummySynchronize) == 0);
 
     aclptiSubscribeHandle subscriber = nullptr;
-    CHECK(aclptiSubscribe(&subscriber, nullptr, nullptr, nullptr) == ACLPTI_ERROR_INITIALIZATION_FAILED);
+    CHECK(aclptiSubscribe(&subscriber, nullptr, nullptr, nullptr) == ACLPTI_ERROR_INTERNAL);
     CHECK(subscriber == nullptr);
     return 0;
 }

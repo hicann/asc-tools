@@ -29,7 +29,6 @@ namespace {
 std::size_t g_launch_calls = 0;
 std::size_t g_start_calls = 0;
 std::size_t g_stop_calls = 0;
-uint64_t g_prof_switch = 0;
 
 int RealMalloc(void** pointer, std::size_t size, aclrtMemMallocPolicy)
 {
@@ -75,7 +74,6 @@ int ProfilerStart(uint32_t, const void* config, uint32_t length)
     if (config == nullptr || length != sizeof(MsprofConfig)) {
         return -1;
     }
-    g_prof_switch = static_cast<const MsprofConfig*>(config)->profSwitch;
     return 0;
 }
 
@@ -121,6 +119,5 @@ int main()
     CHECK(g_launch_calls == 2);
     CHECK(g_start_calls == 1);
     CHECK(g_stop_calls == 1);
-    CHECK(g_prof_switch == (PROF_AICORE_METRICS_MASK | PROF_TASK_TIME_MASK));
     return 0;
 }

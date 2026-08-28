@@ -7,9 +7,14 @@
  * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
  * See LICENSE in the root of the software repository for the full text of the License.
  */
+/**
+ * @file replay_memory.h
+ * @brief Mirrors device memory operations and restores captured state before kernel replay.
+ */
 #ifndef NPU_COMPUTE_ACLPTI_PROFILING_REPLAY_MEMORY_H_
 #define NPU_COMPUTE_ACLPTI_PROFILING_REPLAY_MEMORY_H_
 
+#include "aclpti/aclpti_types.h"
 #include "npu_compute/injection_hook.h"
 
 #include <cstddef>
@@ -20,26 +25,36 @@ namespace npu_compute::aclpti::profiling {
 
 class ReplayMemory {
 public:
-    int MirrorMalloc(
-        aclrtMallocFunc mallocFunction, aclrtFreeFunc freeFunction, void** devPtr, std::size_t size,
-        aclrtMemMallocPolicy policy);
-    int MirrorFree(aclrtFreeFunc freeFunction, void* devPtr);
-    int MirrorMemcpy(
-        aclrtMemcpyFunc memcpyFunction, void* destination, std::size_t destinationSize, const void* source,
-        std::size_t count, aclrtMemcpyKind kind);
-    int MirrorMemset(
-        aclrtMemsetFunc memsetFunction, void* devPtr, std::size_t maxCount, std::int32_t value, std::size_t count);
-    int Restore(aclrtMemcpyFunc memcpyFunction) const;
+    /// Allocates and records a shadow buffer for a successful device allocation.
+    aclptiResult MirrorMalloc(void** devPtr, std::size_t size, aclrtMemMallocPolicy policy);
+
+    /// Releases and forgets the shadow buffer associated with a device allocation.
+    aclptiResult MirrorFree(void* devPtr);
+
+    /// Mirrors a supported copy into the corresponding shadow buffer.
+    aclptiResult MirrorMemcpy(
+        void* destination, std::size_t destinationSize, const void* source, std::size_t count, aclrtMemcpyKind kind);
+
+    /// Mirrors a device memset into the corresponding shadow buffer.
+    aclptiResult MirrorMemset(void* devPtr, std::size_t maxCount, std::int32_t value, std::size_t count);
+
+    /// Restores all tracked device allocations from their shadow buffers.
+    aclptiResult Restore() const;
 
 private:
     struct ShadowBuffer {
         void* shadow;
         std::size_t size;
+        bool orphaned;
     };
 
+    /// Finds the shadow buffer and byte offset covering a device memory range.
     bool FindShadowBuffer(const void* pointer, std::size_t count, ShadowBuffer* buffer, std::size_t* offset) const;
 
-    std::map<uintptr_t, ShadowBuffer> shadowBuffers_;
+    /// Retries shadow frees that previously failed after the user allocation was released.
+    aclptiResult RetryOrphanedShadows(aclrtFreeFunc freeFunction);
+
+    std::map<std::uintptr_t, ShadowBuffer> shadowBuffers_;
 };
 
 } // namespace npu_compute::aclpti::profiling

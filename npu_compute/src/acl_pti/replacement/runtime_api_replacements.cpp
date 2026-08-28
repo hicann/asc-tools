@@ -10,18 +10,37 @@
 #include "runtime_api_replacements.h"
 
 #include "acl_pti/callback/dispatcher.h"
+#include "acl_pti/profiling/replay_runtime.h"
 #include "common/debug_log.h"
 #include "npu_compute/injection_hook.h"
+
+#include "aclpti/aclpti_runtime_api.h"
 
 #include <utility>
 
 namespace npu_compute::aclpti::replacement {
 namespace {
 
-template <typename Function>
-Function GetOriginalRuntimeFunction(aclrtApiId id)
+void LogOriginalFailure(const char* apiName, aclError status)
 {
-    return reinterpret_cast<Function>(acltoolGetOriginalRuntimeApi(id));
+    npu_compute::detail::DebugLog(
+        "aclpti", "error operation=original_call status=%d api=%s", status, apiName == nullptr ? "unknown" : apiName);
+}
+
+aclError MissingOriginalFunction(const char* apiName)
+{
+    npu_compute::detail::DebugLog(
+        "aclpti", "error operation=original_lookup status=%d api=%s", ACL_ERROR_INTERNAL_ERROR,
+        apiName == nullptr ? "unknown" : apiName);
+    return ACL_ERROR_INTERNAL_ERROR;
+}
+
+aclError MapProfilingResult(aclptiResult status)
+{
+    if (status == ACLPTI_SUCCESS) {
+        return ACL_SUCCESS;
+    }
+    return status == ACLPTI_ERROR_RESULT_UNRELIABLE ? ACL_ERROR_INTERNAL_ERROR : ACL_ERROR_PROFILING_FAILURE;
 }
 
 template <typename Params, typename Operation>
@@ -34,322 +53,311 @@ aclError InvokeRuntimeCallback(aclptiCallbackId cbid, Params& params, Operation&
 }
 
 template <typename Function, typename Params, typename Operation>
-aclError ForwardRuntimeApi(aclptiCallbackId cbid, aclrtApiId apiId, Params& params, Operation&& operation)
+aclError ForwardRuntimeApi(
+    aclptiCallbackId cbid, aclrtApiId apiId, const char* apiName, Params& params, Operation&& operation)
 {
     return InvokeRuntimeCallback(
-        cbid, params, [apiId, operation = std::forward<Operation>(operation)]() mutable -> aclError {
-            const auto function = GetOriginalRuntimeFunction<Function>(apiId);
-            return function == nullptr ? -1 : operation(function);
+        cbid, params, [apiId, apiName, operation = std::forward<Operation>(operation)]() mutable -> aclError {
+            const auto function = reinterpret_cast<Function>(acltoolGetOriginalRuntimeApi(apiId));
+            if (function == nullptr) {
+                return MissingOriginalFunction(apiName);
+            }
+            const aclError result = operation(function);
+            if (result != ACL_SUCCESS) {
+                LogOriginalFailure(apiName, result);
+            }
+            return result;
         });
 }
 
-#define ACLPTI_ASSERT_CBID(apiName)                                     \
-    static_assert(                                                      \
-        static_cast<aclptiCallbackId>(ACLPTI_RUNTIME_CBID_##apiName) == \
-            static_cast<aclptiCallbackId>(ACL_RT_API_##apiName),        \
-        "ACLPTI callback IDs must match injection hook runtime API IDs")
-
-ACLPTI_ASSERT_CBID(aclrtLaunchKernelWithHostArgs);
-ACLPTI_ASSERT_CBID(aclrtMemcpy);
-ACLPTI_ASSERT_CBID(aclrtBinaryLoadFromData);
-ACLPTI_ASSERT_CBID(aclrtBinaryGetFunction);
-ACLPTI_ASSERT_CBID(aclrtMalloc);
-ACLPTI_ASSERT_CBID(aclrtMemset);
-ACLPTI_ASSERT_CBID(aclrtFree);
-ACLPTI_ASSERT_CBID(aclrtCreateStream);
-ACLPTI_ASSERT_CBID(aclrtDestroyStream);
-ACLPTI_ASSERT_CBID(aclrtSetDevice);
-ACLPTI_ASSERT_CBID(aclrtResetDevice);
-ACLPTI_ASSERT_CBID(aclrtSynchronizeStream);
-ACLPTI_ASSERT_CBID(aclrtBinaryGetFunctionByEntry);
-ACLPTI_ASSERT_CBID(aclrtLaunchKernel);
-
-#undef ACLPTI_ASSERT_CBID
-
-} // namespace
-
-RuntimeApiReplacements& RuntimeApiReplacements::Instance() { return GetRuntimeApiReplacements(); }
-
-RuntimeApiReplacements& GetRuntimeApiReplacements()
+template <typename Function>
+bool RegisterRuntimeReplacement(aclrtApiId apiId, std::int32_t (*registerCallback)(Function), Function replacement)
 {
-    static RuntimeApiReplacements replacements;
-    return replacements;
+    const std::int32_t result = registerCallback(replacement);
+    npu_compute::detail::DebugLog(
+        "aclpti", "register runtime replacement apiId=%d result=%d", static_cast<int>(apiId), result);
+    return result == 0;
 }
 
-bool RuntimeApiReplacements::RegisterCallbacks(callback::Dispatcher& dispatcher)
-{
-    return dispatcher.RegisterDomain(
-        ACLPTI_CB_DOMAIN_RUNTIME_API,
-        {ACLPTI_RUNTIME_CBID_aclrtLaunchKernelWithHostArgs, ACLPTI_RUNTIME_CBID_aclrtMemcpy,
-         ACLPTI_RUNTIME_CBID_aclrtBinaryLoadFromData, ACLPTI_RUNTIME_CBID_aclrtBinaryGetFunction,
-         ACLPTI_RUNTIME_CBID_aclrtMalloc, ACLPTI_RUNTIME_CBID_aclrtMemset, ACLPTI_RUNTIME_CBID_aclrtFree,
-         ACLPTI_RUNTIME_CBID_aclrtCreateStream, ACLPTI_RUNTIME_CBID_aclrtDestroyStream,
-         ACLPTI_RUNTIME_CBID_aclrtSetDevice, ACLPTI_RUNTIME_CBID_aclrtResetDevice,
-         ACLPTI_RUNTIME_CBID_aclrtSynchronizeStream, ACLPTI_RUNTIME_CBID_aclrtBinaryGetFunctionByEntry,
-         ACLPTI_RUNTIME_CBID_aclrtLaunchKernel});
-}
-
-bool RuntimeApiReplacements::Initialize(profiling::ReplayMemory& replayMemory, profiling::RangeProfiler& rangeProfiler)
-{
-    if (initialized_) {
-        return true;
-    }
-    replayMemory_ = &replayMemory;
-    rangeProfiler_ = &rangeProfiler;
-    if (!RegisterReplacements()) {
-        return false;
-    }
-    if (!rangeProfiler_->Initialize()) {
-        return false;
-    }
-    initialized_ = true;
-    return true;
-}
-
-bool RuntimeApiReplacements::RegisterReplacements()
-{
-    if (acltoolRegisterAclrtLaunchKernelWithHostArgsCallbacks(
-            &RuntimeApiReplacements::AclrtLaunchKernelWithHostArgsReplacement) != 0 ||
-        acltoolRegisterAclrtMemcpyCallbacks(&RuntimeApiReplacements::AclrtMemcpyReplacement) != 0 ||
-        acltoolRegisterAclrtBinaryLoadFromDataCallbacks(&RuntimeApiReplacements::AclrtBinaryLoadFromDataReplacement) !=
-            0 ||
-        acltoolRegisterAclrtBinaryGetFunctionCallbacks(&RuntimeApiReplacements::AclrtBinaryGetFunctionReplacement) !=
-            0 ||
-        acltoolRegisterAclrtMallocCallbacks(&RuntimeApiReplacements::AclrtMallocReplacement) != 0 ||
-        acltoolRegisterAclrtMemsetCallbacks(&RuntimeApiReplacements::AclrtMemsetReplacement) != 0 ||
-        acltoolRegisterAclrtFreeCallbacks(&RuntimeApiReplacements::AclrtFreeReplacement) != 0 ||
-        acltoolRegisterAclrtCreateStreamCallbacks(&RuntimeApiReplacements::AclrtCreateStreamReplacement) != 0 ||
-        acltoolRegisterAclrtDestroyStreamCallbacks(&RuntimeApiReplacements::AclrtDestroyStreamReplacement) != 0 ||
-        acltoolRegisterAclrtSetDeviceCallbacks(&RuntimeApiReplacements::AclrtSetDeviceReplacement) != 0 ||
-        acltoolRegisterAclrtResetDeviceCallbacks(&RuntimeApiReplacements::AclrtResetDeviceReplacement) != 0 ||
-        acltoolRegisterAclrtSynchronizeStreamCallbacks(&RuntimeApiReplacements::AclrtSynchronizeStreamReplacement) !=
-            0 ||
-        acltoolRegisterAclrtBinaryGetFunctionByEntryCallbacks(
-            &RuntimeApiReplacements::AclrtBinaryGetFunctionByEntryReplacement) != 0 ||
-        acltoolRegisterAclrtLaunchKernelCallbacks(&RuntimeApiReplacements::AclrtLaunchKernelReplacement) != 0) {
-        return false;
-    }
-    npu_compute::detail::DebugLog("aclpti", "runtime replacement registration complete");
-    return true;
-}
-
-aclError RuntimeApiReplacements::AclrtLaunchKernelWithHostArgsReplacement(
-    aclrtFuncHandle funcHandle, uint32_t numBlocks, aclrtStream stream, aclrtLaunchKernelCfg* cfg, void* hostArgs,
+aclError AclrtLaunchKernelWithHostArgsReplacement(
+    aclrtFuncHandle funcHandle, std::uint32_t numBlocks, aclrtStream stream, aclrtLaunchKernelCfg* cfg, void* hostArgs,
     std::size_t argsSize, aclrtPlaceHolderInfo* placeHolderArray, std::size_t placeHolderNum)
 {
     aclptiAclrtLaunchKernelWithHostArgsParams params{funcHandle, numBlocks, stream,           cfg,
                                                      hostArgs,   argsSize,  placeHolderArray, placeHolderNum};
     return InvokeRuntimeCallback(ACLPTI_RUNTIME_CBID_aclrtLaunchKernelWithHostArgs, params, [&params]() -> aclError {
-        const auto launchFunction =
-            GetOriginalRuntimeFunction<aclrtLaunchKernelWithHostArgsFunc>(ACL_RT_API_aclrtLaunchKernelWithHostArgs);
+        const auto launchFunction = reinterpret_cast<aclrtLaunchKernelWithHostArgsFunc>(
+            acltoolGetOriginalRuntimeApi(ACL_RT_API_aclrtLaunchKernelWithHostArgs));
         if (launchFunction == nullptr) {
-            return -1;
+            return MissingOriginalFunction("aclrtLaunchKernelWithHostArgs");
         }
         const aclError result = launchFunction(
             params.funcHandle, params.numBlocks, params.stream, params.cfg, params.hostArgs, params.argsSize,
             params.placeHolderArray, params.placeHolderNum);
         if (result != ACL_SUCCESS) {
+            LogOriginalFailure("aclrtLaunchKernelWithHostArgs", result);
             return result;
         }
-        RuntimeApiReplacements& replacements = RuntimeApiReplacements::Instance();
-        const auto synchronizeFunction =
-            GetOriginalRuntimeFunction<aclrtSynchronizeStreamFunc>(ACL_RT_API_aclrtSynchronizeStream);
-        return replacements.rangeProfiler_->ReplayKernel(
-            *replacements.replayMemory_, GetOriginalRuntimeFunction<aclrtMemcpyFunc>(ACL_RT_API_aclrtMemcpy),
+        npu_compute::detail::DebugLog(
+            "aclpti", "launch kernel with host args original succeeded blocks=%u argsSize=%zu", params.numBlocks,
+            params.argsSize);
+        const aclptiResult replayStatus = profiling::GetReplayRuntime().ReplayKernel(
             [launchFunction, &params]() -> aclError {
                 return launchFunction(
                     params.funcHandle, params.numBlocks, params.stream, params.cfg, params.hostArgs, params.argsSize,
                     params.placeHolderArray, params.placeHolderNum);
             },
-            synchronizeFunction, params.stream, replacements.currentDeviceId_.load());
+            params.stream);
+        npu_compute::detail::DebugLog(
+            "aclpti", "launch kernel with host args replay result=%d", static_cast<int>(replayStatus));
+        return MapProfilingResult(replayStatus);
     });
 }
 
-aclError RuntimeApiReplacements::AclrtMemcpyReplacement(
+aclError AclrtMemcpyReplacement(
     void* destination, std::size_t destinationSize, const void* source, std::size_t count, aclrtMemcpyKind kind)
 {
     aclptiAclrtMemcpyParams params{destination, destinationSize, source, count, kind};
     return InvokeRuntimeCallback(ACLPTI_RUNTIME_CBID_aclrtMemcpy, params, [&params]() -> aclError {
-        const auto function = GetOriginalRuntimeFunction<aclrtMemcpyFunc>(ACL_RT_API_aclrtMemcpy);
+        const auto function = reinterpret_cast<aclrtMemcpyFunc>(acltoolGetOriginalRuntimeApi(ACL_RT_API_aclrtMemcpy));
         if (function == nullptr) {
-            return -1;
+            return MissingOriginalFunction("aclrtMemcpy");
         }
         const aclError result = function(params.dst, params.destMax, params.src, params.count, params.kind);
         if (result != ACL_SUCCESS) {
+            LogOriginalFailure("aclrtMemcpy", result);
             return result;
         }
-        return RuntimeApiReplacements::Instance().replayMemory_->MirrorMemcpy(
-            function, params.dst, params.destMax, params.src, params.count, params.kind);
+        const aclptiResult mirrorStatus = profiling::GetReplayRuntime().MirrorMemcpy(
+            params.dst, params.destMax, params.src, params.count, params.kind);
+        return MapProfilingResult(mirrorStatus);
     });
 }
 
-aclError RuntimeApiReplacements::AclrtBinaryLoadFromDataReplacement(
+aclError AclrtBinaryLoadFromDataReplacement(
     const void* data, std::size_t length, const aclrtBinaryLoadOptions* options, aclrtBinHandle* binHandle)
 {
     aclptiAclrtBinaryLoadFromDataParams params{data, length, options, binHandle};
     return ForwardRuntimeApi<aclrtBinaryLoadFromDataFunc>(
-        ACLPTI_RUNTIME_CBID_aclrtBinaryLoadFromData, ACL_RT_API_aclrtBinaryLoadFromData, params,
-        [&params](aclrtBinaryLoadFromDataFunc function) {
+        ACLPTI_RUNTIME_CBID_aclrtBinaryLoadFromData, ACL_RT_API_aclrtBinaryLoadFromData, "aclrtBinaryLoadFromData",
+        params, [&params](aclrtBinaryLoadFromDataFunc function) {
             return function(params.data, params.length, params.options, params.binHandle);
         });
 }
 
-aclError RuntimeApiReplacements::AclrtBinaryGetFunctionReplacement(
+aclError AclrtBinaryGetFunctionReplacement(
     const aclrtBinHandle binHandle, const char* kernelName, aclrtFuncHandle* funcHandle)
 {
     aclptiAclrtBinaryGetFunctionParams params{binHandle, kernelName, funcHandle};
     return ForwardRuntimeApi<aclrtBinaryGetFunctionFunc>(
-        ACLPTI_RUNTIME_CBID_aclrtBinaryGetFunction, ACL_RT_API_aclrtBinaryGetFunction, params,
+        ACLPTI_RUNTIME_CBID_aclrtBinaryGetFunction, ACL_RT_API_aclrtBinaryGetFunction, "aclrtBinaryGetFunction", params,
         [&params](aclrtBinaryGetFunctionFunc function) {
             return function(params.binHandle, params.kernelName, params.funcHandle);
         });
 }
 
-aclError RuntimeApiReplacements::AclrtMallocReplacement(void** devPtr, std::size_t size, aclrtMemMallocPolicy policy)
+aclError AclrtMallocReplacement(void** devPtr, std::size_t size, aclrtMemMallocPolicy policy)
 {
     aclptiAclrtMallocParams params{devPtr, size, policy};
     return InvokeRuntimeCallback(ACLPTI_RUNTIME_CBID_aclrtMalloc, params, [&params]() -> aclError {
-        const auto mallocFunction = GetOriginalRuntimeFunction<aclrtMallocFunc>(ACL_RT_API_aclrtMalloc);
-        const auto freeFunction = GetOriginalRuntimeFunction<aclrtFreeFunc>(ACL_RT_API_aclrtFree);
-        if (mallocFunction == nullptr || freeFunction == nullptr) {
-            return -1;
+        const auto mallocFunction =
+            reinterpret_cast<aclrtMallocFunc>(acltoolGetOriginalRuntimeApi(ACL_RT_API_aclrtMalloc));
+        if (mallocFunction == nullptr) {
+            return MissingOriginalFunction("aclrtMalloc");
         }
         const aclError result = mallocFunction(params.devPtr, params.size, params.policy);
         if (result != ACL_SUCCESS) {
+            LogOriginalFailure("aclrtMalloc", result);
             return result;
         }
-        return RuntimeApiReplacements::Instance().replayMemory_->MirrorMalloc(
-            mallocFunction, freeFunction, params.devPtr, params.size, params.policy);
+        const aclptiResult mirrorStatus =
+            profiling::GetReplayRuntime().MirrorMalloc(params.devPtr, params.size, params.policy);
+        return MapProfilingResult(mirrorStatus);
     });
 }
 
-aclError RuntimeApiReplacements::AclrtMemsetReplacement(
-    void* devPtr, std::size_t maxCount, std::int32_t value, std::size_t count)
+aclError AclrtMemsetReplacement(void* devPtr, std::size_t maxCount, std::int32_t value, std::size_t count)
 {
     aclptiAclrtMemsetParams params{devPtr, maxCount, value, count};
     return InvokeRuntimeCallback(ACLPTI_RUNTIME_CBID_aclrtMemset, params, [&params]() -> aclError {
-        const auto function = GetOriginalRuntimeFunction<aclrtMemsetFunc>(ACL_RT_API_aclrtMemset);
+        const auto function = reinterpret_cast<aclrtMemsetFunc>(acltoolGetOriginalRuntimeApi(ACL_RT_API_aclrtMemset));
         if (function == nullptr) {
-            return -1;
+            return MissingOriginalFunction("aclrtMemset");
         }
         const aclError result = function(params.devPtr, params.maxCount, params.value, params.count);
         if (result != ACL_SUCCESS) {
+            LogOriginalFailure("aclrtMemset", result);
             return result;
         }
-        return RuntimeApiReplacements::Instance().replayMemory_->MirrorMemset(
-            function, params.devPtr, params.maxCount, params.value, params.count);
+        const aclptiResult mirrorStatus =
+            profiling::GetReplayRuntime().MirrorMemset(params.devPtr, params.maxCount, params.value, params.count);
+        return MapProfilingResult(mirrorStatus);
     });
 }
 
-aclError RuntimeApiReplacements::AclrtFreeReplacement(void* devPtr)
+aclError AclrtFreeReplacement(void* devPtr)
 {
     aclptiAclrtFreeParams params{devPtr};
     return InvokeRuntimeCallback(ACLPTI_RUNTIME_CBID_aclrtFree, params, [&params]() -> aclError {
-        const auto function = GetOriginalRuntimeFunction<aclrtFreeFunc>(ACL_RT_API_aclrtFree);
+        const auto function = reinterpret_cast<aclrtFreeFunc>(acltoolGetOriginalRuntimeApi(ACL_RT_API_aclrtFree));
         if (function == nullptr) {
-            return -1;
+            return MissingOriginalFunction("aclrtFree");
         }
         const aclError result = function(params.devPtr);
         if (result != ACL_SUCCESS) {
+            LogOriginalFailure("aclrtFree", result);
             return result;
         }
-        return RuntimeApiReplacements::Instance().replayMemory_->MirrorFree(function, params.devPtr);
+        const aclptiResult mirrorStatus = profiling::GetReplayRuntime().MirrorFree(params.devPtr);
+        return MapProfilingResult(mirrorStatus);
     });
 }
 
-aclError RuntimeApiReplacements::AclrtCreateStreamReplacement(aclrtStream* stream)
+aclError AclrtCreateStreamReplacement(aclrtStream* stream)
 {
     aclptiAclrtCreateStreamParams params{stream};
     return ForwardRuntimeApi<aclrtCreateStreamFunc>(
-        ACLPTI_RUNTIME_CBID_aclrtCreateStream, ACL_RT_API_aclrtCreateStream, params,
+        ACLPTI_RUNTIME_CBID_aclrtCreateStream, ACL_RT_API_aclrtCreateStream, "aclrtCreateStream", params,
         [&params](aclrtCreateStreamFunc function) { return function(params.stream); });
 }
 
-aclError RuntimeApiReplacements::AclrtDestroyStreamReplacement(aclrtStream stream)
+aclError AclrtDestroyStreamReplacement(aclrtStream stream)
 {
     aclptiAclrtDestroyStreamParams params{stream};
     return ForwardRuntimeApi<aclrtDestroyStreamFunc>(
-        ACLPTI_RUNTIME_CBID_aclrtDestroyStream, ACL_RT_API_aclrtDestroyStream, params,
+        ACLPTI_RUNTIME_CBID_aclrtDestroyStream, ACL_RT_API_aclrtDestroyStream, "aclrtDestroyStream", params,
         [&params](aclrtDestroyStreamFunc function) { return function(params.stream); });
 }
 
-aclError RuntimeApiReplacements::AclrtSetDeviceReplacement(std::int32_t deviceId)
+aclError AclrtSetDeviceReplacement(std::int32_t deviceId)
 {
     aclptiAclrtSetDeviceParams params{deviceId};
-    return InvokeRuntimeCallback(ACLPTI_RUNTIME_CBID_aclrtSetDevice, params, [&params]() -> aclError {
-        const auto function = GetOriginalRuntimeFunction<aclrtSetDeviceFunc>(ACL_RT_API_aclrtSetDevice);
-        if (function == nullptr) {
-            return -1;
-        }
-        const aclError result = function(params.deviceId);
-        if (result == ACL_SUCCESS && params.deviceId >= 0) {
-            RuntimeApiReplacements::Instance().currentDeviceId_.store(params.deviceId);
-        }
-        return result;
-    });
+    return ForwardRuntimeApi<aclrtSetDeviceFunc>(
+        ACLPTI_RUNTIME_CBID_aclrtSetDevice, ACL_RT_API_aclrtSetDevice, "aclrtSetDevice", params,
+        [&params](aclrtSetDeviceFunc function) { return function(params.deviceId); });
 }
 
-aclError RuntimeApiReplacements::AclrtResetDeviceReplacement(std::int32_t deviceId)
+aclError AclrtResetDeviceReplacement(std::int32_t deviceId)
 {
     aclptiAclrtResetDeviceParams params{deviceId};
-    return InvokeRuntimeCallback(ACLPTI_RUNTIME_CBID_aclrtResetDevice, params, [&params]() -> aclError {
-        const auto function = GetOriginalRuntimeFunction<aclrtResetDeviceFunc>(ACL_RT_API_aclrtResetDevice);
-        if (function == nullptr) {
-            return -1;
-        }
-        const aclError result = function(params.deviceId);
-        if (result == ACL_SUCCESS) {
-            std::int32_t expectedDeviceId = params.deviceId;
-            RuntimeApiReplacements::Instance().currentDeviceId_.compare_exchange_strong(expectedDeviceId, -1);
-        }
-        return result;
-    });
+    return ForwardRuntimeApi<aclrtResetDeviceFunc>(
+        ACLPTI_RUNTIME_CBID_aclrtResetDevice, ACL_RT_API_aclrtResetDevice, "aclrtResetDevice", params,
+        [&params](aclrtResetDeviceFunc function) { return function(params.deviceId); });
 }
 
-aclError RuntimeApiReplacements::AclrtSynchronizeStreamReplacement(aclrtStream stream)
+aclError AclrtSynchronizeStreamReplacement(aclrtStream stream)
 {
     aclptiAclrtSynchronizeStreamParams params{stream};
     return ForwardRuntimeApi<aclrtSynchronizeStreamFunc>(
-        ACLPTI_RUNTIME_CBID_aclrtSynchronizeStream, ACL_RT_API_aclrtSynchronizeStream, params,
+        ACLPTI_RUNTIME_CBID_aclrtSynchronizeStream, ACL_RT_API_aclrtSynchronizeStream, "aclrtSynchronizeStream", params,
         [&params](aclrtSynchronizeStreamFunc function) { return function(params.stream); });
 }
 
-aclError RuntimeApiReplacements::AclrtBinaryGetFunctionByEntryReplacement(
-    aclrtBinHandle binHandle, uint64_t funcEntry, aclrtFuncHandle* funcHandle)
+aclError AclrtBinaryGetFunctionByEntryReplacement(
+    aclrtBinHandle binHandle, std::uint64_t funcEntry, aclrtFuncHandle* funcHandle)
 {
     aclptiAclrtBinaryGetFunctionByEntryParams params{binHandle, funcEntry, funcHandle};
     return ForwardRuntimeApi<aclrtBinaryGetFunctionByEntryFunc>(
-        ACLPTI_RUNTIME_CBID_aclrtBinaryGetFunctionByEntry, ACL_RT_API_aclrtBinaryGetFunctionByEntry, params,
-        [&params](aclrtBinaryGetFunctionByEntryFunc function) {
+        ACLPTI_RUNTIME_CBID_aclrtBinaryGetFunctionByEntry, ACL_RT_API_aclrtBinaryGetFunctionByEntry,
+        "aclrtBinaryGetFunctionByEntry", params, [&params](aclrtBinaryGetFunctionByEntryFunc function) {
             return function(params.binHandle, params.funcEntry, params.funcHandle);
         });
 }
 
-aclError RuntimeApiReplacements::AclrtLaunchKernelReplacement(
-    aclrtFuncHandle function, uint32_t blockCount, const void* argsData, std::size_t argsSize, aclrtStream stream)
+aclError AclrtLaunchKernelReplacement(
+    aclrtFuncHandle function, std::uint32_t blockCount, const void* argsData, std::size_t argsSize, aclrtStream stream)
 {
     aclptiAclrtLaunchKernelParams params{function, blockCount, argsData, argsSize, stream};
     return InvokeRuntimeCallback(ACLPTI_RUNTIME_CBID_aclrtLaunchKernel, params, [&params]() -> aclError {
-        const auto launchFunction = GetOriginalRuntimeFunction<aclrtLaunchKernelFunc>(ACL_RT_API_aclrtLaunchKernel);
+        const auto launchFunction =
+            reinterpret_cast<aclrtLaunchKernelFunc>(acltoolGetOriginalRuntimeApi(ACL_RT_API_aclrtLaunchKernel));
         if (launchFunction == nullptr) {
-            return -1;
+            return MissingOriginalFunction("aclrtLaunchKernel");
         }
         const aclError result =
             launchFunction(params.funcHandle, params.numBlocks, params.argsData, params.argsSize, params.stream);
         if (result != ACL_SUCCESS) {
+            LogOriginalFailure("aclrtLaunchKernel", result);
             return result;
         }
-        RuntimeApiReplacements& replacements = RuntimeApiReplacements::Instance();
-        const auto synchronizeFunction =
-            GetOriginalRuntimeFunction<aclrtSynchronizeStreamFunc>(ACL_RT_API_aclrtSynchronizeStream);
-        return replacements.rangeProfiler_->ReplayKernel(
-            *replacements.replayMemory_, GetOriginalRuntimeFunction<aclrtMemcpyFunc>(ACL_RT_API_aclrtMemcpy),
+        npu_compute::detail::DebugLog(
+            "aclpti", "launch kernel original succeeded blocks=%u argsSize=%zu", params.numBlocks, params.argsSize);
+        const aclptiResult replayStatus = profiling::GetReplayRuntime().ReplayKernel(
             [launchFunction, &params]() -> aclError {
                 return launchFunction(
                     params.funcHandle, params.numBlocks, params.argsData, params.argsSize, params.stream);
             },
-            synchronizeFunction, params.stream, replacements.currentDeviceId_.load());
+            params.stream);
+        npu_compute::detail::DebugLog("aclpti", "launch kernel replay result=%d", static_cast<int>(replayStatus));
+        return MapProfilingResult(replayStatus);
     });
+}
+
+aclError AclrtGetFuncBySymbolReplacement(const void* symbol, aclrtFuncHandle* funcHandle)
+{
+    aclptiAclrtGetFuncBySymbolParams params{symbol, funcHandle};
+    return ForwardRuntimeApi<aclrtGetFuncBySymbolFunc>(
+        ACLPTI_RUNTIME_CBID_aclrtGetFuncBySymbol, ACL_RT_API_aclrtGetFuncBySymbol, "aclrtGetFuncBySymbol", params,
+        [&params](aclrtGetFuncBySymbolFunc function) { return function(params.symbol, params.funcHandle); });
+}
+
+aclError AclrtBinaryUnLoadReplacement(aclrtBinHandle binHandle)
+{
+    aclptiAclrtBinaryUnLoadParams params{binHandle};
+    return ForwardRuntimeApi<aclrtBinaryUnLoadFunc>(
+        ACLPTI_RUNTIME_CBID_aclrtBinaryUnLoad, ACL_RT_API_aclrtBinaryUnLoad, "aclrtBinaryUnLoad", params,
+        [&params](aclrtBinaryUnLoadFunc function) { return function(params.binHandle); });
+}
+
+} // namespace
+
+bool RegisterRuntimeApiReplacements()
+{
+    const bool registered =
+        RegisterRuntimeReplacement(
+            ACL_RT_API_aclrtLaunchKernelWithHostArgs, acltoolRegisterAclrtLaunchKernelWithHostArgsCallbacks,
+            &AclrtLaunchKernelWithHostArgsReplacement) &&
+        RegisterRuntimeReplacement(
+            ACL_RT_API_aclrtMemcpy, acltoolRegisterAclrtMemcpyCallbacks, &AclrtMemcpyReplacement) &&
+        RegisterRuntimeReplacement(
+            ACL_RT_API_aclrtBinaryLoadFromData, acltoolRegisterAclrtBinaryLoadFromDataCallbacks,
+            &AclrtBinaryLoadFromDataReplacement) &&
+        RegisterRuntimeReplacement(
+            ACL_RT_API_aclrtBinaryGetFunction, acltoolRegisterAclrtBinaryGetFunctionCallbacks,
+            &AclrtBinaryGetFunctionReplacement) &&
+        RegisterRuntimeReplacement(
+            ACL_RT_API_aclrtMalloc, acltoolRegisterAclrtMallocCallbacks, &AclrtMallocReplacement) &&
+        RegisterRuntimeReplacement(
+            ACL_RT_API_aclrtMemset, acltoolRegisterAclrtMemsetCallbacks, &AclrtMemsetReplacement) &&
+        RegisterRuntimeReplacement(ACL_RT_API_aclrtFree, acltoolRegisterAclrtFreeCallbacks, &AclrtFreeReplacement) &&
+        RegisterRuntimeReplacement(
+            ACL_RT_API_aclrtCreateStream, acltoolRegisterAclrtCreateStreamCallbacks, &AclrtCreateStreamReplacement) &&
+        RegisterRuntimeReplacement(
+            ACL_RT_API_aclrtDestroyStream, acltoolRegisterAclrtDestroyStreamCallbacks,
+            &AclrtDestroyStreamReplacement) &&
+        RegisterRuntimeReplacement(
+            ACL_RT_API_aclrtSetDevice, acltoolRegisterAclrtSetDeviceCallbacks, &AclrtSetDeviceReplacement) &&
+        RegisterRuntimeReplacement(
+            ACL_RT_API_aclrtResetDevice, acltoolRegisterAclrtResetDeviceCallbacks, &AclrtResetDeviceReplacement) &&
+        RegisterRuntimeReplacement(
+            ACL_RT_API_aclrtSynchronizeStream, acltoolRegisterAclrtSynchronizeStreamCallbacks,
+            &AclrtSynchronizeStreamReplacement) &&
+        RegisterRuntimeReplacement(
+            ACL_RT_API_aclrtBinaryGetFunctionByEntry, acltoolRegisterAclrtBinaryGetFunctionByEntryCallbacks,
+            &AclrtBinaryGetFunctionByEntryReplacement) &&
+        RegisterRuntimeReplacement(
+            ACL_RT_API_aclrtLaunchKernel, acltoolRegisterAclrtLaunchKernelCallbacks, &AclrtLaunchKernelReplacement) &&
+        RegisterRuntimeReplacement(
+            ACL_RT_API_aclrtGetFuncBySymbol, acltoolRegisterAclrtGetFuncBySymbolCallbacks,
+            &AclrtGetFuncBySymbolReplacement) &&
+        RegisterRuntimeReplacement(
+            ACL_RT_API_aclrtBinaryUnLoad, acltoolRegisterAclrtBinaryUnLoadCallbacks, &AclrtBinaryUnLoadReplacement);
+    if (!registered) {
+        npu_compute::detail::DebugLog("aclpti", "runtime replacement registration failed");
+        return false;
+    }
+    npu_compute::detail::DebugLog("aclpti", "runtime replacement registration complete");
+    return true;
 }
 
 } // namespace npu_compute::aclpti::replacement

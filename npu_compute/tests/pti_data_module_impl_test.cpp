@@ -435,6 +435,21 @@ int TestFailedReplay()
     CHECK(decodeResult->errorStats.failedRecordCountByReplay.at(8) == 1);
     CHECK(decodeResult->pmuLogs.empty());
 
+    setenv("NPU_COMPUTE_SKIP_DATA_PARSE", "1", 1);
+    ResultSink skippedSink;
+    data::Module skippedModule([&skippedSink](const auto& skippedResult) { return skippedSink.Accept(skippedResult); });
+    CHECK(skippedModule.Initialize() == ACLPTI_SUCCESS);
+    CHECK(skippedModule.PrepareReplay({9, "SkipDecode", PmuEvents({0x8, 0xa})}) == ACLPTI_SUCCESS);
+    CHECK(skippedModule.GetRawDataCallback()(&malformedRaw) == 0);
+    CHECK(skippedModule.RecordReplayStatus({9, ACLPTI_SUCCESS}).status == ACLPTI_SUCCESS);
+    CHECK(skippedModule.ReleaseReplay(9) == ACLPTI_SUCCESS);
+    CHECK(skippedModule.Shutdown() == ACLPTI_SUCCESS);
+    unsetenv("NPU_COMPUTE_SKIP_DATA_PARSE");
+    const auto skippedResult = skippedSink.Wait();
+    CHECK(skippedResult != nullptr);
+    CHECK(skippedResult->status == ACLPTI_SUCCESS);
+    CHECK(skippedResult->pmuLogs.empty());
+
     bool threw = false;
     try {
         data::Module invalid(aclptiPmuDataCallback{});
@@ -442,6 +457,23 @@ int TestFailedReplay()
         threw = true;
     }
     CHECK(threw);
+    return 0;
+}
+
+int TestForceShutdownActiveReplay()
+{
+    ResultSink sink;
+    data::Module module([&sink](const auto& result) { return sink.Accept(result); });
+    CHECK(module.Initialize() == ACLPTI_SUCCESS);
+    CHECK(module.PrepareReplay({9, "ForcedShutdown", PmuEvents({0x8})}) == ACLPTI_SUCCESS);
+    CHECK(module.Shutdown() == ACLPTI_ERROR_REPLAY_ACTIVE);
+    CHECK(module.ForceShutdown() == ACLPTI_SUCCESS);
+    CHECK(module.Shutdown() == ACLPTI_SUCCESS);
+
+    const auto result = sink.Wait();
+    CHECK(result != nullptr);
+    CHECK(result->status == ACLPTI_SUCCESS);
+    CHECK(result->pmuLogs.empty());
     return 0;
 }
 
@@ -684,6 +716,9 @@ int main()
         return 1;
     }
     if (TestFailedReplay() != 0) {
+        return 1;
+    }
+    if (TestForceShutdownActiveReplay() != 0) {
         return 1;
     }
     if (TestInvalidChunkDiagnostics() != 0) {

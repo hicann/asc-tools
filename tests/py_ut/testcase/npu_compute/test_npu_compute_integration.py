@@ -23,7 +23,7 @@ BIN_DIR = Path(
     )
 )
 CLI = BIN_DIR / "npu-compute"
-APP = BIN_DIR / "npu_compute_demo_app"
+APP = BIN_DIR / "npu_compute_stub_demo_app"
 
 HARDWARE_INFO_TEST_APP = r"""
 import os
@@ -201,6 +201,14 @@ def test_collection_runs_the_connected_replay_chain():
     assert "[demo] argv[1]=--app-value" in result.stderr
     assert "[demo] argv[2]=value-from-user" in result.stderr
     assert result.stderr.count("[aclpti] subscribe result=0") == 1
+    completion_marker = "[aclpti] runtime replacement registration complete"
+    initialization_log, marker, _ = result.stderr.partition(completion_marker)
+    assert marker, f"missing completion marker: {completion_marker}"
+    for api_id in range(16):
+        expected_log = f"[aclpti] register runtime replacement apiId={api_id} result=0"
+        assert expected_log in initialization_log, (
+            f"missing eager registration before completion: {expected_log}"
+        )
     assert elapsed >= 0.18
     assert_markers_in_order(
         result.stderr,

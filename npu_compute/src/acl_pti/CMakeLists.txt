@@ -10,18 +10,18 @@
 find_package(Threads REQUIRED)
 
 add_library(acl_pti SHARED
-  manager.cpp
+  initialization.cpp
   activity/api.cpp
   activity/control.cpp
   callback/api.cpp
   callback/dispatcher.cpp
-  callback/registry.cpp
   data/api.cpp
   data/module.cpp
   data/raw_data_decoder.cpp
   profiling/api.cpp
   profiling/range_profiler.cpp
   profiling/replay_memory.cpp
+  profiling/replay_runtime.cpp
   replacement/runtime_api_replacements.cpp
 )
 target_include_directories(acl_pti PRIVATE

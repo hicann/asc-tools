@@ -30,20 +30,19 @@ npu-compute
 | NPU Compute CLI | `npu-compute` | Validate options, launch and supervise the target, package collection files, and unpack imported reports |
 | NPU Compute library | `libnpu-compute.so` | Export `acltoolInitialize`/`acltoolShutdown`, configure ACLPTI, collect HardwareInfo, and write profiling CSV files |
 | ACLPTI | `libacl_pti.so` | Expand sections to PMU events, maintain shadow memory, and replay kernel launches |
-| Prof API stub | `libprofapi.so` | Register the Runtime table, load the injection library, and simulate direct Msprof calls |
-| Injection hook stub | `libacl_tool_injection.so` | Register API-shaped callbacks, install Runtime wrappers, and expose original Runtime functions |
+| CANN Prof API | `libprofapi.so` | Register the Runtime table, load the injection library, and receive profiling data |
+| Injection Hook | `libacl_tool_injection.so` | Register API replacements and expose original Runtime functions |
 | PTI data module | compiled into `libacl_pti.so` | Decode profiler chunks, aggregate task/PMU rows, and notify the registered shutdown handler after draining |
-| Runtime stub | `libruntime.so` | Provide a complete local Runtime API table for integration tests |
-| Demo application | `npu_compute_demo_app` | Exercise initialization, allocation, H2D initialization, kernel launch, and cleanup |
+| CANN Runtime | `libacl_rt.so`, `libruntime.so` | Provide Runtime APIs and API injection dispatch |
 
-The prof API, injection hook, Runtime, and demo in this repository are
-standalone integration stubs. The PTI replay-data implementation is compiled
-into `libacl_pti.so` and used by NPU Compute through that library. These components
-do not define a complete production framework.
+The production build uses the Prof API and Runtime libraries from the configured
+CANN package. The Prof API and Runtime implementations in this repository are
+for unit tests only. The PTI replay-data implementation is compiled into
+`libacl_pti.so`, and NPU Compute uses the implementation through that library.
 
 ACLPTI's private C++ implementation is organized under
-`npu_compute::aclpti::{callback,activity,data,profiling,runtime_replacement}`.
-Only the cross-domain `Manager` remains in `npu_compute::aclpti`. Public
+`npu_compute::aclpti::{callback,activity,data,profiling,replacement}`.
+Only the cross-domain initialization module remains in `npu_compute::aclpti`. Public
 `aclptiXxx` APIs stay in the global namespace, and file-local helpers stay in
 anonymous namespaces.
 
@@ -193,56 +192,42 @@ returns collection error 3 and prints the retained staging directory.
 
 ## Build
 
-The non-integration build creates `libnpu-compute.so` and the CLI without the
-repository's local dependency implementations:
+Load the target CANN package environment before building the production
+artifacts. Use the following commands for the current test environment:
 
 ```bash
-cmake -S npu_compute -B /tmp/asc_tools_npu_compute_product
+source /home/chenning/AscendEnv/test_profiling/cann-9.2.0/set_env.sh
+cmake -S npu_compute -B /tmp/asc_tools_npu_compute_product \
+  -DCMAKE_ASC_ARCHITECTURES=dav-3510
 cmake --build /tmp/asc_tools_npu_compute_product -j2
 ```
 
-This command verifies only those two artifacts. A runnable production stack
-must provide an external complete `libacl_pti.so`, including the PTI data
-module APIs. This configuration is therefore not a validated runnable
-collection stack.
+The build derives the CANN architecture package from the header location under
+`ASCEND_HOME_PATH`. Set `NPUCOMPUTE_CANN_ROOT` only to override that environment.
+Set `CMAKE_ASC_ARCHITECTURES` to match the target NPU (`dav-2201` or `dav-3510`).
+The build generates `libnpu-compute.so`, `libacl_pti.so`,
+`libacl_tool_injection.so`, and the `npu-compute` CLI. It links the Prof API and
+Runtime from CANN instead of the repository stubs.
 
-For a runnable local integration stack, explicitly enable the repository's
-ACLPTI implementation and its ProfAPI, Injection Hook, and Runtime stubs
-together with the tests:
+Unit tests automatically use the Prof API and Runtime stubs from this
+repository. The Runtime stub only overrides the injection declarations. Its
+`#include_next` still requires CANN headers from the loaded environment:
 
 ```bash
-cmake -S npu_compute -B /tmp/asc_tools_npu_compute_integration \
-  -DNPU_COMPUTE_BUILD_INTEGRATION_STUBS=ON \
+source /home/chenning/AscendEnv/test_profiling/cann-9.2.0/set_env.sh
+cmake -S npu_compute -B /tmp/asc_tools_npu_compute_ut \
   -DNPU_COMPUTE_BUILD_TESTS=ON
-cmake --build /tmp/asc_tools_npu_compute_integration -j2
+cmake --build /tmp/asc_tools_npu_compute_ut -j2
+LD_LIBRARY_PATH=/tmp/asc_tools_npu_compute_ut/bin:${LD_LIBRARY_PATH} \
+  ctest --test-dir /tmp/asc_tools_npu_compute_ut --output-on-failure
 ```
 
-The asc-tools top-level build exposes the same switches:
+The asc-tools top-level build provides the NPU Compute test switch:
 
 ```bash
 cmake -S . -B build \
   -DASC_TOOLS_BUILD_NPU_COMPUTE=ON \
-  -DNPU_COMPUTE_BUILD_INTEGRATION_STUBS=ON \
   -DNPU_COMPUTE_BUILD_TESTS=ON
-```
-
-## Run The Connected Demo
-
-```bash
-/tmp/asc_tools_npu_compute_integration/bin/npu-compute \
-  --section PipeUtilization \
-  /tmp/asc_tools_npu_compute_integration/bin/npu_compute_demo_app
-```
-
-Set `NPU_COMPUTE_DEBUG=1` to expose the Runtime registration, replacement
-installation, shadow-memory operations, replay rounds, Msprof calls, and PTI
-collection lifecycle:
-
-```bash
-NPU_COMPUTE_DEBUG=1 \
-  /tmp/asc_tools_npu_compute_integration/bin/npu-compute \
-    --section PipeUtilization \
-    /tmp/asc_tools_npu_compute_integration/bin/npu_compute_demo_app
 ```
 
 ## Installation
@@ -286,8 +271,8 @@ $ASCEND_HOME_PATH/share/npu-compute/sections/
 
 The matching base CANN Runtime package provides `libprofapi.so` and
 `libacl_rt.so` under the same public `lib64` path. The ProfAPI and Runtime stubs
-and the demo application remain build-tree test artifacts and are not installed
-by the asc-tools run package.
+remain build-tree test artifacts and are not installed by the asc-tools run
+package.
 
 ## Replay Contract
 

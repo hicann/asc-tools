@@ -7,18 +7,24 @@
  * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
  * See LICENSE in the root of the software repository for the full text of the License.
  */
-#include "manager.h"
+#include "initialization.h"
 
-#include "acl_pti/callback/dispatcher.h"
+#include "acl_pti/profiling/replay_runtime.h"
 #include "acl_pti/replacement/runtime_api_replacements.h"
 #include "common/debug_log.h"
 #include "npu_compute/injection_hook.h"
 
-namespace npu_compute::aclpti {
+#include <mutex>
 
-aclptiResult Manager::Initialize()
+namespace npu_compute::aclpti::initialization {
+
+aclptiResult InitializeDependencies()
 {
-    if (initialized_) {
+    static std::mutex initializationMutex;
+    static bool initialized = false;
+
+    std::lock_guard<std::mutex> lock(initializationMutex);
+    if (initialized) {
         npu_compute::detail::DebugLog("aclpti", "dependencies already initialized");
         return ACLPTI_SUCCESS;
     }
@@ -30,39 +36,18 @@ aclptiResult Manager::Initialize()
         return ACLPTI_ERROR_INITIALIZATION_FAILED;
     }
 
-    const aclptiResult callbackStatus = EnsureCallbackDomainsRegistered();
-    if (callbackStatus != ACLPTI_SUCCESS) {
-        return callbackStatus;
+    const aclptiResult replayResult = profiling::GetReplayRuntime().Initialize();
+    if (replayResult != ACLPTI_SUCCESS) {
+        npu_compute::detail::DebugLog("aclpti", "replay runtime initialization failed");
+        return replayResult;
     }
-    auto& replacements = replacement::GetRuntimeApiReplacements();
-    if (!replacements.Initialize(replayMemory_, rangeProfiler_)) {
+    if (!replacement::RegisterRuntimeApiReplacements()) {
+        npu_compute::detail::DebugLog("aclpti", "runtime replacement registration failed");
         return ACLPTI_ERROR_INITIALIZATION_FAILED;
     }
-    initialized_ = true;
+    initialized = true;
+    npu_compute::detail::DebugLog("aclpti", "dependencies initialized");
     return ACLPTI_SUCCESS;
 }
 
-aclptiResult Manager::EnsureCallbackDomainsRegistered()
-{
-    if (callbacksRegistered_) {
-        return ACLPTI_SUCCESS;
-    }
-    if (!replacement::GetRuntimeApiReplacements().RegisterCallbacks(callback::GetDispatcher())) {
-        return ACLPTI_ERROR_INITIALIZATION_FAILED;
-    }
-    callbacksRegistered_ = true;
-    return ACLPTI_SUCCESS;
-}
-
-aclptiResult Manager::SetSections(const aclptiRangeProfilerSetConfigParams* params)
-{
-    return rangeProfiler_.SetSections(params);
-}
-
-Manager& GetManager()
-{
-    static Manager manager;
-    return manager;
-}
-
-} // namespace npu_compute::aclpti
+} // namespace npu_compute::aclpti::initialization

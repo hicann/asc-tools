@@ -18,6 +18,7 @@ extern "C" {
 #endif
 
 NPU_COMPUTE_EXPORT aclError RuntimeStubSetOrigin(const char* name, aclrtApiFunc function);
+NPU_COMPUTE_EXPORT aclError RuntimeStubClearOrigin(const char* name);
 
 #ifdef __cplusplus
 }

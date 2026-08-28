@@ -28,7 +28,7 @@ TEXT_SUFFIXES = {
     ".py",
     ".txt",
 }
-TARGET_DECLARATION = re.compile(r"add_(?:library|executable)\(([A-Za-z0-9_]+)")
+TARGET_DECLARATION = re.compile(r"add_(?:library|executable)\(\s*([^\s)]+)")
 
 
 def test_npu_compute_product_naming_is_consistent():
@@ -85,17 +85,28 @@ def test_npu_compute_build_and_log_names_are_consistent():
 
 def test_cmake_targets_use_component_prefixes_and_merge_data_module():
     product_root = REPO_ROOT / "npu_compute"
+    product_cmake = (product_root / "CMakeLists.txt").read_text(encoding="utf-8")
+    assert "NPU_COMPUTE_BUILD_DEMO" not in product_cmake
+    assert "add_subdirectory(demo)" not in product_cmake
+
     cmake_files = list(product_root.rglob("CMakeLists.txt"))
     cmake_content = "\n".join(path.read_text(encoding="utf-8") for path in cmake_files)
     targets = TARGET_DECLARATION.findall(cmake_content)
+    local_targets = [target for target in targets if "::" not in target]
 
-    assert targets
+    assert local_targets
     assert all(
         target.startswith(("acl_", "acl_pti_", "npu_compute"))
         or target in {"acl_pti", "npu_compute"}
-        for target in targets
+        for target in local_targets
     )
     assert "asc_cc_" not in cmake_content
+
+    demo_cmake = (product_root / "demo" / "CMakeLists.txt").read_text(encoding="utf-8")
+    assert "project(npu_compute_demo LANGUAGES CXX)" in demo_cmake
+    assert "ascendc_kernel_cmake" in demo_cmake
+    assert "add_executable(npu_compute_demo" in demo_cmake
+    assert "OUTPUT_NAME demo" in demo_cmake
 
     acl_pti_cmake = (product_root / "src" / "acl_pti" / "CMakeLists.txt").read_text(
         encoding="utf-8"
@@ -113,12 +124,27 @@ def test_runtime_replacements_use_specific_flat_names():
     replacement_source = acl_pti_source / "replacement"
     header = replacement_source / "runtime_api_replacements.h"
     source = replacement_source / "runtime_api_replacements.cpp"
+    replay_runtime_header = acl_pti_source / "profiling" / "replay_runtime.h"
 
     assert not (acl_pti_source / "runtime_replacement").exists()
     assert header.is_file()
     assert source.is_file()
+    assert replay_runtime_header.is_file()
 
     header_content = header.read_text(encoding="utf-8")
     assert "namespace npu_compute::aclpti::replacement" in header_content
-    assert "class RuntimeApiReplacements" in header_content
-    assert "RuntimeApiReplacements& GetRuntimeApiReplacements();" in header_content
+    assert "class RuntimeApiReplacements" not in header_content
+    assert "bool RegisterRuntimeApiReplacements();" in header_content
+    assert "ReplayMemory*" not in header_content
+    assert "RangeProfiler*" not in header_content
+
+    replay_runtime_content = replay_runtime_header.read_text(encoding="utf-8")
+    assert "class ReplayRuntime" in replay_runtime_content
+    assert "ReplayMemory replayMemory_;" in replay_runtime_content
+    assert "RangeProfiler rangeProfiler_;" in replay_runtime_content
+    assert "ReplayRuntime& GetReplayRuntime();" in replay_runtime_content
+
+    assert not (acl_pti_source / "manager.h").exists()
+    assert not (acl_pti_source / "manager.cpp").exists()
+    assert (acl_pti_source / "initialization.h").is_file()
+    assert (acl_pti_source / "initialization.cpp").is_file()

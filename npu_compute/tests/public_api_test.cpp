@@ -22,6 +22,7 @@ static_assert(std::is_same_v<
               aclptiResult (*)(aclptiDataModuleShutdownCallback, void*)>);
 static_assert(ACLPTI_ERROR_NOT_INITIALIZED > ACLPTI_ERROR_INTERNAL);
 static_assert(ACLPTI_ERROR_CSV_WRITE > ACLPTI_ERROR_NOT_INITIALIZED);
+static_assert(ACLPTI_ERROR_RESULT_UNRELIABLE > ACLPTI_ERROR_CSV_WRITE);
 
 namespace {
 
@@ -54,7 +55,6 @@ int main()
     CHECK(aclptiSubscribe(nullptr, nullptr, nullptr, nullptr) == ACLPTI_ERROR_INVALID_PARAMETER);
     CHECK(aclptiActivityEnable(nullptr, ACLPTI_ACTIVITY_KIND_FULL, nullptr) == ACLPTI_ERROR_INVALID_SUBSCRIBER);
     CHECK(aclptiRangeProfilerSetConfig(nullptr) == ACLPTI_ERROR_INVALID_PARAMETER);
-
     aclptiSubscribeParams invalid_params{1};
     aclptiSubscribeHandle invalid_subscriber = nullptr;
     CHECK(aclptiSubscribe(&invalid_subscriber, nullptr, nullptr, &invalid_params) == ACLPTI_ERROR_INVALID_PARAMETER);

@@ -9,7 +9,7 @@
  */
 #include "aclpti/aclpti_callback.h"
 
-#include "acl_pti/manager.h"
+#include "acl_pti/initialization.h"
 #include "dispatcher.h"
 #include "common/debug_log.h"
 
@@ -22,7 +22,7 @@ extern "C" ACLPTI_EXPORT aclptiResult aclptiSubscribe(
     }
 
     *subscriber = nullptr;
-    const aclptiResult result = npu_compute::aclpti::GetManager().Initialize();
+    const aclptiResult result = npu_compute::aclpti::initialization::InitializeDependencies();
     if (result == ACLPTI_SUCCESS) {
         auto& dispatcher = npu_compute::aclpti::callback::GetDispatcher();
         dispatcher.Configure(callback, userData);
@@ -36,14 +36,20 @@ extern "C" ACLPTI_EXPORT aclptiResult aclptiSubscribe(
 extern "C" ACLPTI_EXPORT aclptiResult
 aclptiEnableCallback(bool enable, aclptiSubscribeHandle subscriber, aclptiCallbackDomain domain, aclptiCallbackId cbid)
 {
-    return npu_compute::aclpti::callback::GetDispatcher().Enable(enable, subscriber, domain, cbid);
+    auto& dispatcher = npu_compute::aclpti::callback::GetDispatcher();
+    const aclptiResult result = dispatcher.Enable(enable, subscriber, domain, cbid);
+    npu_compute::detail::DebugLog(
+        "aclpti", "callback enable=%d domain=%d cbid=%u result=%d", static_cast<int>(enable), static_cast<int>(domain),
+        static_cast<unsigned int>(cbid), static_cast<int>(result));
+    return result;
 }
 
 extern "C" ACLPTI_EXPORT aclptiResult aclptiSupportedDomains(std::size_t* domainCount, aclptiCallbackDomain* domains)
 {
-    const aclptiResult result = npu_compute::aclpti::GetManager().EnsureCallbackDomainsRegistered();
-    if (result != ACLPTI_SUCCESS) {
-        return result;
-    }
-    return npu_compute::aclpti::callback::GetDispatcher().SupportedDomains(domainCount, domains);
+    const aclptiResult supportedResult =
+        npu_compute::aclpti::callback::GetDispatcher().SupportedDomains(domainCount, domains);
+    npu_compute::detail::DebugLog(
+        "aclpti", "supported domains result=%d count=%zu", static_cast<int>(supportedResult),
+        domainCount == nullptr ? 0U : *domainCount);
+    return supportedResult;
 }

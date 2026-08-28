@@ -96,7 +96,7 @@ def test_default_component_installs_the_declared_layout(install_root):
     assert not (architecture_root / "include/npu_compute/pti_data_module.h").exists()
 
     assert (install_root / "share/npu-compute/sections").is_dir()
-    assert not (architecture_root / "bin/npu_compute_demo_app").exists()
+    assert not (architecture_root / "bin/npu_compute_stub_demo_app").exists()
     assert not (architecture_root / "lib64/libpti_data_module.so").exists()
     assert not (architecture_root / "lib64/libpti_data_module_impl.so").exists()
     assert not (architecture_root / "lib64/libprofapi.so").exists()
@@ -173,7 +173,7 @@ def test_installed_layout_runs_the_minimal_stub_chain(
             str(cli),
             "--section",
             "PipeUtilization",
-            str(BIN_DIR / "npu_compute_demo_app"),
+            str(BIN_DIR / "npu_compute_stub_demo_app"),
         ],
         cwd=public_install_root,
         env=environment,

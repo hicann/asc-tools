@@ -44,10 +44,9 @@ struct KernelArgs {
 };
 
 struct ObservedConfig {
-    uint64_t profSwitch;
-    uint32_t devNums;
-    uint32_t deviceId;
-    std::array<uint32_t, COMPUTE_AICORE_METRICS_NUM> pmuEvents;
+    std::uint32_t devNums;
+    std::uint32_t deviceId;
+    std::array<std::uint32_t, COMPUTE_AICORE_METRICS_NUM> pmuEvents;
 };
 
 std::size_t g_malloc_calls = 0;
@@ -59,6 +58,7 @@ std::size_t g_sync_calls = 0;
 std::size_t g_set_device_calls = 0;
 std::size_t g_reset_device_calls = 0;
 std::size_t g_get_device_calls = 0;
+std::int32_t g_current_device = -1;
 std::size_t g_soc_name_calls = 0;
 std::size_t g_start_calls = 0;
 std::size_t g_stop_calls = 0;
@@ -133,13 +133,21 @@ int RealSynchronize(void*)
 int RealSetDevice(std::int32_t deviceId)
 {
     ++g_set_device_calls;
-    return deviceId < 0 ? -1 : 0;
+    if (deviceId < 0) {
+        return -1;
+    }
+    g_current_device = deviceId;
+    return 0;
 }
 
 int RealResetDevice(std::int32_t deviceId)
 {
     ++g_reset_device_calls;
-    return deviceId < 0 ? -1 : 0;
+    if (deviceId < 0 || deviceId != g_current_device) {
+        return -1;
+    }
+    g_current_device = -1;
+    return 0;
 }
 
 int ProfilerStart(uint32_t, const void* config, uint32_t length)
@@ -153,7 +161,7 @@ int ProfilerStart(uint32_t, const void* config, uint32_t length)
         msprofConfig->configInfo.attrs[0].id != PROF_CONFIG_ATTR_AICORE_METRICS) {
         return -1;
     }
-    ObservedConfig observed{msprofConfig->profSwitch, msprofConfig->devNums, msprofConfig->devIdList[0], {}};
+    ObservedConfig observed{msprofConfig->devNums, msprofConfig->devIdList[0], {}};
     std::memcpy(
         observed.pmuEvents.data(), msprofConfig->configInfo.attrs[0].value.aicoreMetrics, sizeof(observed.pmuEvents));
     g_configs.push_back(observed);
@@ -203,6 +211,16 @@ std::int32_t MsprofRegisterDataCallback(uint32_t type, void* function)
 {
     g_callback_type = type;
     return RegisterRawData(type, reinterpret_cast<MsprofRawDataCallback>(function));
+}
+
+extern "C" aclError aclrtGetDevice(std::int32_t* deviceId)
+{
+    ++g_get_device_calls;
+    if (deviceId == nullptr || g_current_device < 0) {
+        return ACL_ERROR_RT_CONTEXT_NULL;
+    }
+    *deviceId = g_current_device;
+    return ACL_SUCCESS;
 }
 
 int main()
@@ -263,11 +281,6 @@ int main()
     KernelArgs args{static_cast<uint8_t*>(allocation)};
     g_expected_args_data = &args;
 
-    CHECK(aclrtLaunchKernel(nullptr, 1, &args, sizeof(args), nullptr) == static_cast<int>(ACLPTI_ERROR_INVALID_STATE));
-    CHECK(g_start_calls == 0);
-    CHECK(g_stop_calls == 0);
-    CHECK(g_sync_calls == 0);
-
     CHECK(aclrtSetDevice(7) == 0);
     CHECK(g_set_device_calls == 1);
     CHECK(aclrtLaunchKernel(nullptr, 1, &args, sizeof(args), nullptr) == 0);
@@ -275,54 +288,53 @@ int main()
     CHECK(g_stop_calls == 3);
     CHECK(g_start_data_type == 8);
     CHECK(g_stop_data_type == 8);
-    CHECK(g_launch_calls == 5);
-    CHECK(g_sync_calls == 3);
-    CHECK(g_get_device_calls == 0);
+    CHECK(g_launch_calls == 4);
+    CHECK(g_sync_calls == 4);
+    CHECK(g_get_device_calls == 1);
     CHECK(g_soc_name_calls == 0);
-    CHECK((g_kernel_inputs == std::vector<uint8_t>{5, 6, 5, 5, 5}));
-    CHECK(*static_cast<uint8_t*>(allocation) == 6);
+    CHECK((g_kernel_inputs == std::vector<std::uint8_t>{5, 5, 5, 5}));
+    CHECK(*static_cast<std::uint8_t*>(allocation) == 6);
 
     CHECK(g_configs.size() == 3);
-    const auto expected_first = ExpectedPmus({0, 1, 10, 36, 52, 53, 514, 515, 769, 810});
-    const auto expected_second = ExpectedPmus({1281, 1794, 1812, 1813, 11, 12, 13, 14, 15, 1344});
-    const auto expected_third = ExpectedPmus({1366, 1376, 1377, 1378, 1379});
+    const auto expected_first = ExpectedPmus({0, 1, 10, 36, 52, 53, 514, 515, 810, 1281});
+    const auto expected_second = ExpectedPmus({1794, 1812, 1813, 11, 12, 13, 14, 15, 1344, 1366});
+    const auto expected_third = ExpectedPmus({1376, 1377, 1378, 1379});
     CHECK(g_configs[0].pmuEvents == expected_first);
-    CHECK(g_configs[0].profSwitch == (PROF_AICORE_METRICS_MASK | PROF_TASK_TIME_MASK));
     CHECK(g_configs[0].devNums == 1);
     CHECK(g_configs[0].deviceId == 7);
     CHECK(g_configs[1].pmuEvents == expected_second);
-    CHECK(g_configs[1].profSwitch == (PROF_AICORE_METRICS_MASK | PROF_TASK_TIME_MASK));
     CHECK(g_configs[1].devNums == 1);
     CHECK(g_configs[1].deviceId == 7);
     CHECK(g_configs[2].pmuEvents == expected_third);
-    CHECK(g_configs[2].profSwitch == (PROF_AICORE_METRICS_MASK | PROF_TASK_TIME_MASK));
     CHECK(g_configs[2].devNums == 1);
     CHECK(g_configs[2].deviceId == 7);
 
     const std::size_t starts_after_first_launch = g_start_calls;
     const std::size_t syncs_after_first_launch = g_sync_calls;
     initial_value = 10;
-    CHECK(aclrtMemcpy(allocation, 1, &initial_value, 1, ACL_MEMCPY_HOST_TO_DEVICE) == 0);
-    CHECK(
-        aclrtLaunchKernel(nullptr, 1, &args, sizeof(args), nullptr) == static_cast<int>(ACLPTI_ERROR_NOT_INITIALIZED));
+    CHECK(aclrtMemcpy(allocation, 1, &initial_value, 1, ACL_MEMCPY_HOST_TO_DEVICE) == ACL_ERROR_PROFILING_FAILURE);
+    CHECK(aclrtLaunchKernel(nullptr, 1, &args, sizeof(args), nullptr) == ACL_ERROR_PROFILING_FAILURE);
     CHECK(g_start_calls == starts_after_first_launch);
     CHECK(g_sync_calls == syncs_after_first_launch);
-    CHECK(g_launch_calls == 6);
+    CHECK(g_launch_calls == 5);
+    CHECK(g_get_device_calls == 1);
     CHECK(g_kernel_inputs.back() == 10);
-    CHECK(*static_cast<uint8_t*>(allocation) == 10);
+    CHECK(*static_cast<std::uint8_t*>(allocation) == 11);
 
     const std::size_t starts_before_host_args = g_start_calls;
     const std::size_t syncs_before_host_args = g_sync_calls;
     CHECK(
         aclrtLaunchKernelWithHostArgs(nullptr, 1, nullptr, nullptr, nullptr, 0, nullptr, 0) ==
-        static_cast<int>(ACLPTI_ERROR_NOT_INITIALIZED));
+        ACL_ERROR_PROFILING_FAILURE);
     CHECK(g_launch_with_host_args_calls == 1);
+    CHECK(g_get_device_calls == 1);
     CHECK(g_start_calls == starts_before_host_args);
     CHECK(g_sync_calls == syncs_before_host_args);
 
     CHECK(aclrtResetDevice(7) == 0);
     CHECK(g_reset_device_calls == 1);
-    CHECK(aclrtLaunchKernel(nullptr, 1, &args, sizeof(args), nullptr) == static_cast<int>(ACLPTI_ERROR_INVALID_STATE));
+    CHECK(aclrtLaunchKernel(nullptr, 1, &args, sizeof(args), nullptr) == ACL_ERROR_PROFILING_FAILURE);
+    CHECK(g_get_device_calls == 1);
     CHECK(g_start_calls == starts_before_host_args);
     CHECK(g_sync_calls == syncs_before_host_args);
     CHECK(aclrtFree(allocation) == 0);

@@ -30,19 +30,18 @@ npu-compute
 | NPU Compute CLI | `npu-compute` | 校验参数、启动并监控目标程序、打包采集文件以及解包导入的报告 |
 | NPU Compute 库 | `libnpu-compute.so` | 导出 `acltoolInitialize`/`acltoolShutdown`、配置 ACLPTI、采集 HardwareInfo 并写入性能分析 CSV 文件 |
 | ACLPTI | `libacl_pti.so` | 将 Section 展开为 PMU 事件、维护影子内存并重放 Kernel |
-| Prof API 桩 | `libprofapi.so` | 注册 Runtime 表、加载注入库并模拟 Msprof 直接调用 |
-| Injection Hook 桩 | `libacl_tool_injection.so` | 注册与 API 形式一致的回调、安装 Runtime 包装函数并提供原始 Runtime 函数 |
+| CANN Prof API | `libprofapi.so` | 注册 Runtime 表、加载注入库并接收 profiling 数据 |
+| Injection Hook | `libacl_tool_injection.so` | 注册 API replacement 并提供原始 Runtime 函数 |
 | PTI 数据模块 | 编译到 `libacl_pti.so` | 解码性能分析数据块、聚合 Task/PMU 数据行，并在数据排空后通知已注册的关闭处理函数 |
-| Runtime 桩 | `libruntime.so` | 为集成测试提供完整的本地 Runtime API 表 |
-| 示例应用 | `npu_compute_demo_app` | 覆盖初始化、内存分配、H2D 初始化、Kernel 启动和资源清理流程 |
+| CANN Runtime | `libacl_rt.so`、`libruntime.so` | 提供 Runtime API 和 API injection 分发 |
 
-本仓库中的 Prof API、Injection Hook、Runtime 和示例应用是独立的集成测试桩。
-PTI 重放数据实现被编译到 `libacl_pti.so` 中，NPU Compute 通过该库使用此实现。
-这些组件并不构成完整的生产框架。
+生产构建使用所配置 CANN 软件包中的 Prof API 和 Runtime 库。仓库内的 Prof API
+和 Runtime 实现仅用于单元测试。PTI 重放数据实现被编译到 `libacl_pti.so` 中，
+NPU Compute 通过该库使用此实现。
 
 ACLPTI 的私有 C++ 实现位于
-`npu_compute::aclpti::{callback,activity,data,profiling,runtime_replacement}`
-命名空间下。只有跨域的 `Manager` 保留在 `npu_compute::aclpti` 中。
+`npu_compute::aclpti::{callback,activity,data,profiling,replacement}`
+命名空间下。只有跨域的初始化模块保留在 `npu_compute::aclpti` 中。
 公共 `aclptiXxx` API 保持在全局命名空间中，文件内辅助函数保持在匿名命名空间中。
 
 ## 支持的 Section
@@ -175,51 +174,39 @@ HardwareInfo 采集默认启用，CLI 不提供对应开关。不要将 `Hardwar
 
 ## 构建
 
-非集成构建会生成 `libnpu-compute.so` 和 CLI，但不构建仓库中的本地依赖实现：
+构建生产产物前需要加载目标 CANN 软件包环境。当前测试环境可使用：
 
 ```bash
-cmake -S npu_compute -B /tmp/asc_tools_npu_compute_product
+source /home/chenning/AscendEnv/test_profiling/cann-9.2.0/set_env.sh
+cmake -S npu_compute -B /tmp/asc_tools_npu_compute_product \
+  -DCMAKE_ASC_ARCHITECTURES=dav-3510
 cmake --build /tmp/asc_tools_npu_compute_product -j2
 ```
 
-该命令仅验证上述两个产物。可运行的生产栈必须提供外部完整的 `libacl_pti.so`，
-其中包括 PTI 数据模块 API。因此，该配置不是经过验证的可运行采集栈。
+CANN 架构软件包从 `ASCEND_HOME_PATH` 对应的头文件位置推导；只有需要覆盖该环境时
+才显式设置 `NPUCOMPUTE_CANN_ROOT`。`CMAKE_ASC_ARCHITECTURES` 应与目标 NPU
+匹配（`dav-2201` 或 `dav-3510`）。构建会生成 `libnpu-compute.so`、
+`libacl_pti.so`、`libacl_tool_injection.so` 和 `npu-compute` CLI，并链接 CANN
+提供的 Prof API 和 Runtime，而不是仓库中的测试桩。
 
-如需构建可运行的本地集成栈，请显式启用仓库中的 ACLPTI 实现及其 ProfAPI、
-Injection Hook 和 Runtime 桩，并同时启用测试：
+单元测试会自动选择仓库内的 Prof API 和 Runtime 测试桩。Runtime 测试桩只覆盖
+injection 声明，其 `#include_next` 仍需要从已加载的环境中获得 CANN 头文件：
 
 ```bash
-cmake -S npu_compute -B /tmp/asc_tools_npu_compute_integration \
-  -DNPU_COMPUTE_BUILD_INTEGRATION_STUBS=ON \
+source /home/chenning/AscendEnv/test_profiling/cann-9.2.0/set_env.sh
+cmake -S npu_compute -B /tmp/asc_tools_npu_compute_ut \
   -DNPU_COMPUTE_BUILD_TESTS=ON
-cmake --build /tmp/asc_tools_npu_compute_integration -j2
+cmake --build /tmp/asc_tools_npu_compute_ut -j2
+LD_LIBRARY_PATH=/tmp/asc_tools_npu_compute_ut/bin:${LD_LIBRARY_PATH} \
+  ctest --test-dir /tmp/asc_tools_npu_compute_ut --output-on-failure
 ```
 
-asc-tools 顶层构建提供相同的开关：
+asc-tools 顶层构建提供 NPU Compute 测试开关：
 
 ```bash
 cmake -S . -B build \
   -DASC_TOOLS_BUILD_NPU_COMPUTE=ON \
-  -DNPU_COMPUTE_BUILD_INTEGRATION_STUBS=ON \
   -DNPU_COMPUTE_BUILD_TESTS=ON
-```
-
-## 运行连通性示例
-
-```bash
-/tmp/asc_tools_npu_compute_integration/bin/npu-compute \
-  --section PipeUtilization \
-  /tmp/asc_tools_npu_compute_integration/bin/npu_compute_demo_app
-```
-
-设置 `NPU_COMPUTE_DEBUG=1` 可输出 Runtime 注册、替换函数安装、影子内存操作、
-重放轮次、Msprof 调用和 PTI 采集生命周期：
-
-```bash
-NPU_COMPUTE_DEBUG=1 \
-  /tmp/asc_tools_npu_compute_integration/bin/npu-compute \
-    --section PipeUtilization \
-    /tmp/asc_tools_npu_compute_integration/bin/npu_compute_demo_app
 ```
 
 ## 安装
@@ -261,8 +248,8 @@ $ASCEND_HOME_PATH/share/npu-compute/sections/
 ```
 
 匹配的 CANN Runtime 基础包会在同一公共 `lib64` 路径下提供 `libprofapi.so` 和
-`libacl_rt.so`。ProfAPI 桩、Runtime 桩和示例应用保留为构建目录中的测试产物，
-不会由 asc-tools run 包安装。
+`libacl_rt.so`。ProfAPI 桩和 Runtime 桩保留为构建目录中的测试产物，不会由
+asc-tools run 包安装。
 
 ## 重放约定
 

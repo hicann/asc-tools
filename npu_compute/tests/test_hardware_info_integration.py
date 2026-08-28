@@ -17,7 +17,7 @@ BIN_DIR = Path(os.environ["NPU_COMPUTE_TEST_BIN_DIR"])
 CALLBACK_STUB = Path(os.environ["NPU_COMPUTE_CALLBACK_STUB"])
 HARDWARE_API_STUB = Path(os.environ["NPU_COMPUTE_HARDWARE_API_STUB"])
 CLI = BIN_DIR / "npu-compute"
-APP = BIN_DIR / "npu_compute_demo_app"
+APP = BIN_DIR / "npu_compute_stub_demo_app"
 
 
 def extract_staging_path(stderr):

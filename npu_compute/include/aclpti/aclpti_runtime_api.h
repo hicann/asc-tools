@@ -36,7 +36,9 @@ typedef enum aclptiRuntimeCallbackId {
     ACLPTI_RUNTIME_CBID_aclrtSynchronizeStream = 11,
     ACLPTI_RUNTIME_CBID_aclrtBinaryGetFunctionByEntry = 12,
     ACLPTI_RUNTIME_CBID_aclrtLaunchKernel = 13,
-    ACLPTI_RUNTIME_CBID_SIZE = 14,
+    ACLPTI_RUNTIME_CBID_aclrtGetFuncBySymbol = 14,
+    ACLPTI_RUNTIME_CBID_aclrtBinaryUnLoad = 15,
+    ACLPTI_RUNTIME_CBID_SIZE = 16,
 } aclptiRuntimeCallbackId;
 
 typedef struct aclptiAclrtLaunchKernelWithHostArgsParams {
@@ -121,6 +123,15 @@ typedef struct aclptiAclrtLaunchKernelParams {
     size_t argsSize;
     aclrtStream stream;
 } aclptiAclrtLaunchKernelParams;
+
+typedef struct aclptiAclrtGetFuncBySymbolParams {
+    const void* symbol;
+    aclrtFuncHandle* funcHandle;
+} aclptiAclrtGetFuncBySymbolParams;
+
+typedef struct aclptiAclrtBinaryUnLoadParams {
+    aclrtBinHandle binHandle;
+} aclptiAclrtBinaryUnLoadParams;
 
 #ifdef __cplusplus
 }

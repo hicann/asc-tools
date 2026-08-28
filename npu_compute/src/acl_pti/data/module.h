@@ -80,6 +80,9 @@ public:
     aclptiResult ReleaseReplay(uint64_t replayId) override;
     aclptiResult Shutdown() override;
 
+    /// Releases an active replay, drains queued data, and shuts down the module.
+    aclptiResult ForceShutdown();
+
 private:
     class NPU_COMPUTE_LOCAL Impl;
     std::unique_ptr<Impl> impl_;

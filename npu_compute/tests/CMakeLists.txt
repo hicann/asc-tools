@@ -72,6 +72,11 @@ add_executable(npu_compute_rep_fixture_app rep_fixture_app.cpp)
 add_dependencies(npu_compute_rep_fixture_app npu_compute_cli npu_compute)
 npu_compute_set_output(npu_compute_rep_fixture_app)
 
+add_executable(npu_compute_stub_demo_app stub_demo_app.cpp)
+target_link_libraries(npu_compute_stub_demo_app PRIVATE acl_runtime_stub)
+add_dependencies(npu_compute_stub_demo_app npu_compute acl_pti)
+npu_compute_set_output(npu_compute_stub_demo_app)
+
 add_executable(acl_pti_public_api_test public_api_test.cpp)
 target_link_libraries(acl_pti_public_api_test
   PRIVATE acl_pti ${NPU_COMPUTE_ACLPTI_TEST_BACKENDS}
@@ -129,6 +134,45 @@ set_target_properties(acl_pti_runtime_failure_short_circuit_test
 )
 add_test(NAME npu_compute.runtime_failure_short_circuit
   COMMAND acl_pti_runtime_failure_short_circuit_test
+)
+
+add_executable(acl_pti_hook_failure_domain_test hook_failure_domain_test.cpp)
+target_link_libraries(acl_pti_hook_failure_domain_test
+  PRIVATE acl_pti ${NPU_COMPUTE_ACLPTI_TEST_BACKENDS}
+)
+set_target_properties(acl_pti_hook_failure_domain_test PROPERTIES ENABLE_EXPORTS YES)
+add_test(NAME npu_compute.hook_failure.shadow_malloc_stop
+  COMMAND acl_pti_hook_failure_domain_test shadow-malloc-stop
+)
+add_test(NAME npu_compute.hook_failure.replay_sync
+  COMMAND acl_pti_hook_failure_domain_test replay-sync
+)
+add_test(NAME npu_compute.hook_failure.replay_initial_sync
+  COMMAND acl_pti_hook_failure_domain_test replay-initial-sync
+)
+add_test(NAME npu_compute.hook_failure.profiling_flow
+  COMMAND acl_pti_hook_failure_domain_test profiling-flow
+)
+add_test(NAME npu_compute.hook_failure.shadow_free
+  COMMAND acl_pti_hook_failure_domain_test shadow-free
+)
+add_test(NAME npu_compute.hook_failure.null_free
+  COMMAND acl_pti_hook_failure_domain_test null-free
+)
+add_test(NAME npu_compute.hook_failure.shadow_memcpy_stop
+  COMMAND acl_pti_hook_failure_domain_test shadow-memcpy-stop
+)
+add_test(NAME npu_compute.hook_failure.missing_memcpy_mirror
+  COMMAND acl_pti_hook_failure_domain_test missing-memcpy-mirror
+)
+add_test(NAME npu_compute.hook_failure.missing_memset_mirror
+  COMMAND acl_pti_hook_failure_domain_test missing-memset-mirror
+)
+add_test(NAME npu_compute.hook_failure.malloc_missing_free
+  COMMAND acl_pti_hook_failure_domain_test malloc-missing-free
+)
+add_test(NAME npu_compute.hook_failure.shadow_metadata_oom
+  COMMAND acl_pti_hook_failure_domain_test shadow-metadata-oom
 )
 
 add_library(acl_prof_api_loader_test_plugin SHARED loader_test_plugin.cpp)
