@@ -72,7 +72,7 @@ bool CheckTensorSizeOverflow(
 bool TikcppBaseCheck::CheckTensorOverflowHigh(
     const uint32_t dtypeSize, const uint64_t bufferSize, const uint32_t calCount, const std::string& tensorName) const
 {
-    uint64_t needSize = static_cast<uint64_t>(dtypeSize * calCount);
+    uint64_t needSize = static_cast<uint64_t>(dtypeSize) * calCount;
     if (Int4Setter::Instance().GetInt4()) {
         needSize = static_cast<uint64_t>(calCount / INT4_TWO);
         Int4Setter::Instance().ResetInt4();

@@ -22,7 +22,7 @@ namespace check {
 bool TikcppVecBinaryCheck::CheckCmpTensorOverflowHigh(
     const uint32_t dtypeSize, const uint64_t bufferSize, const uint32_t calCount, const std::string& tensorName)
 {
-    uint64_t needSize = static_cast<uint64_t>(dtypeSize * calCount / 8); // 1 uint8 equal to 8 bits
+    uint64_t needSize = static_cast<uint64_t>(dtypeSize) * calCount / 8; // 1 uint8 equal to 8 bits
     ASCENDC_CHECK(CheckTensorSizeOverflow(needSize, bufferSize, tensorName, apiName));
     return true;
 }
