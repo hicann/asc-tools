@@ -51,8 +51,7 @@ using DeviceInstructionParamField = std::variant<
 
 struct DecodedInstruction {
     DeviceInstructionKind kind = DeviceInstructionKind::InvalidInstruction;
-    AclsanDevicePipeline pipeline = ACLSAN_DEVICE_PIPE_INVALID; // 该条指令对应的流水
-    DeviceInstructionParamField params{};                       // 该条自会零对应的paramField
+    DeviceInstructionParamField params{}; // 该条指令对应的ParamField
 };
 
 // 输入：一条raw data 输出：解码成功时为DecodedInstruction，失败时为std::nullopt

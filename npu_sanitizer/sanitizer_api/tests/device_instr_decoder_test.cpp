@@ -103,7 +103,6 @@ void TestDecodesDav3510CopyInstruction()
 
     assert(decoded.has_value());
     assert(decoded->kind == aclsan::DeviceInstructionKind::CopyGmToCbufAlignV2);
-    assert(decoded->pipeline == ACLSAN_DEVICE_PIPE_MTE2);
     const auto* params = std::get_if<aclsan::CopyGmToCbufAlignV2ParamField>(&decoded->params);
     assert(params != nullptr);
     assert(params->instrId == 75);
@@ -124,7 +123,6 @@ void TestDecodesDav3510CopyInstruction()
     const std::optional<aclsan::DecodedInstruction> gmToUbuf = decoder->decode(record);
     assert(gmToUbuf.has_value());
     assert(gmToUbuf->kind == aclsan::DeviceInstructionKind::CopyGmToUbufAlignV2);
-    assert(gmToUbuf->pipeline == ACLSAN_DEVICE_PIPE_MTE2);
     const auto* gmToUbufParams = std::get_if<aclsan::CopyGmToUbufAlignV2ParamField>(&gmToUbuf->params);
     assert(gmToUbufParams != nullptr);
     assert(gmToUbufParams->instrId == 85);
@@ -174,7 +172,6 @@ void TestDecodesDav3510CopyUbufToGmAlignV2Instruction()
 
     assert(decoded.has_value());
     assert(decoded->kind == aclsan::DeviceInstructionKind::CopyUbufToGmAlignV2);
-    assert(decoded->pipeline == ACLSAN_DEVICE_PIPE_MTE3);
     const auto* params = std::get_if<aclsan::CopyUbufToGmAlignV2ParamField>(&decoded->params);
     assert(params != nullptr);
     assert(params->instrId == 83);
@@ -193,7 +190,6 @@ void AssertCopyGmToCbufMultiParams(
     const aclsan::DecodedInstruction& decoded, uint64_t instructionId, uint32_t expectedDataBits)
 {
     assert(decoded.kind == aclsan::DeviceInstructionKind::CopyGmToCbufMulti);
-    assert(decoded.pipeline == ACLSAN_DEVICE_PIPE_MTE2);
     const auto* params = std::get_if<ParamField>(&decoded.params);
     assert(params != nullptr);
     assert(params->instrId == instructionId);
@@ -248,7 +244,6 @@ void TestDecodesDav3510CopyGmToCbufV2Instruction()
 
     assert(decoded.has_value());
     assert(decoded->kind == aclsan::DeviceInstructionKind::CopyGmToCbufV2);
-    assert(decoded->pipeline == ACLSAN_DEVICE_PIPE_MTE2);
     const auto* params = std::get_if<aclsan::CopyGmToCbufV2ParamField>(&decoded->params);
     assert(params != nullptr);
     assert(params->instrId == 73);
@@ -279,7 +274,6 @@ void TestDecodesDav3510LoadGmToCbuf2DV2Instruction()
 
     assert(decoded.has_value());
     assert(decoded->kind == aclsan::DeviceInstructionKind::LoadGmToCbuf2DV2);
-    assert(decoded->pipeline == ACLSAN_DEVICE_PIPE_MTE2);
     const auto* params = std::get_if<aclsan::LoadGmToCbuf2DV2ParamField>(&decoded->params);
     assert(params != nullptr);
     assert(params->instrId == 72);
@@ -311,7 +305,6 @@ void TestDecodesDav3510NdDmaOutToUbufInstruction()
 
     assert(decoded.has_value());
     assert(decoded->kind == aclsan::DeviceInstructionKind::NdDmaOutToUbuf);
-    assert(decoded->pipeline == ACLSAN_DEVICE_PIPE_MTE2);
     const auto* params = std::get_if<aclsan::NdDmaOutToUbufParamField>(&decoded->params);
     assert(params != nullptr);
     assert(params->instrId == 87);
@@ -344,7 +337,6 @@ void TestDecodesDav3510SetL12DInstruction()
 
     assert(decoded.has_value());
     assert(decoded->kind == aclsan::DeviceInstructionKind::SetL12D);
-    assert(decoded->pipeline == ACLSAN_DEVICE_PIPE_MTE2);
     const auto* params = std::get_if<aclsan::SetL12DParamField>(&decoded->params);
     assert(params != nullptr);
     assert(params->instrId == 149);
@@ -368,7 +360,6 @@ void TestDecodesDav3510SetPaddingInstruction()
 
     assert(decoded.has_value());
     assert(decoded->kind == aclsan::DeviceInstructionKind::SetPadding);
-    assert(decoded->pipeline == ACLSAN_DEVICE_PIPE_SCALAR);
     const auto* params = std::get_if<aclsan::SetPaddingParamField>(&decoded->params);
     assert(params != nullptr);
     assert(params->value == UINT64_C(0xfedcba9876543210));
@@ -392,7 +383,6 @@ void TestDecodesDav3510FixL0cToOutInstruction()
 
     assert(decoded.has_value());
     assert(decoded->kind == aclsan::DeviceInstructionKind::FixL0cToOut);
-    assert(decoded->pipeline == ACLSAN_DEVICE_PIPE_FIXPIPE);
     const auto* params = std::get_if<aclsan::FixL0cToOutParamField>(&decoded->params);
     assert(params != nullptr);
     assert(params->instrId == 91);
@@ -439,7 +429,6 @@ void TestDecodesDav3510SyncInstruction()
 
     assert(decoded.has_value());
     assert(decoded->kind == aclsan::DeviceInstructionKind::SetFlag);
-    assert(decoded->pipeline == ACLSAN_DEVICE_PIPE_SCALAR);
     const auto* params = std::get_if<aclsan::FlagParamField>(&decoded->params);
     assert(params != nullptr);
     assert(params->srcPipe == 2);
@@ -462,7 +451,6 @@ void TestDecodesDav3510BufferInstruction()
 
     assert(decoded.has_value());
     assert(decoded->kind == aclsan::DeviceInstructionKind::GetBuf);
-    assert(decoded->pipeline == ACLSAN_DEVICE_PIPE_SCALAR);
     const auto* params = std::get_if<aclsan::SyncBufParamField>(&decoded->params);
     assert(params != nullptr);
     assert(params->instrId == 448);
@@ -519,45 +507,44 @@ void TestClassifiesCurrentDav3510InstructionSet()
     struct ExpectedInstruction {
         uint64_t instructionId;
         aclsan::DeviceInstructionKind kind;
-        AclsanDevicePipeline pipeline;
     };
     const ExpectedInstruction expectedInstructions[] = {
-        {72, aclsan::DeviceInstructionKind::LoadGmToCbuf2DV2, ACLSAN_DEVICE_PIPE_MTE2},
-        {73, aclsan::DeviceInstructionKind::CopyGmToCbufV2, ACLSAN_DEVICE_PIPE_MTE2},
-        {77, aclsan::DeviceInstructionKind::CopyGmToCbufMulti, ACLSAN_DEVICE_PIPE_MTE2},
-        {78, aclsan::DeviceInstructionKind::CopyGmToCbufMulti, ACLSAN_DEVICE_PIPE_MTE2},
-        {79, aclsan::DeviceInstructionKind::CopyGmToCbufMulti, ACLSAN_DEVICE_PIPE_MTE2},
-        {80, aclsan::DeviceInstructionKind::CopyGmToCbufMulti, ACLSAN_DEVICE_PIPE_MTE2},
-        {81, aclsan::DeviceInstructionKind::CopyGmToCbufMulti, ACLSAN_DEVICE_PIPE_MTE2},
-        {82, aclsan::DeviceInstructionKind::CopyGmToCbufMulti, ACLSAN_DEVICE_PIPE_MTE2},
-        {83, aclsan::DeviceInstructionKind::CopyUbufToGmAlignV2, ACLSAN_DEVICE_PIPE_MTE3},
-        {84, aclsan::DeviceInstructionKind::CopyGmToUbufAlignV2, ACLSAN_DEVICE_PIPE_MTE2},
-        {85, aclsan::DeviceInstructionKind::CopyGmToUbufAlignV2, ACLSAN_DEVICE_PIPE_MTE2},
-        {86, aclsan::DeviceInstructionKind::CopyGmToUbufAlignV2, ACLSAN_DEVICE_PIPE_MTE2},
-        {87, aclsan::DeviceInstructionKind::NdDmaOutToUbuf, ACLSAN_DEVICE_PIPE_MTE2},
-        {88, aclsan::DeviceInstructionKind::NdDmaOutToUbuf, ACLSAN_DEVICE_PIPE_MTE2},
-        {89, aclsan::DeviceInstructionKind::NdDmaOutToUbuf, ACLSAN_DEVICE_PIPE_MTE2},
-        {91, aclsan::DeviceInstructionKind::FixL0cToOut, ACLSAN_DEVICE_PIPE_FIXPIPE},
-        {92, aclsan::DeviceInstructionKind::FixL0cToOut, ACLSAN_DEVICE_PIPE_FIXPIPE},
-        {149, aclsan::DeviceInstructionKind::SetL12D, ACLSAN_DEVICE_PIPE_MTE2},
-        {150, aclsan::DeviceInstructionKind::SetL12D, ACLSAN_DEVICE_PIPE_MTE2},
-        {392, aclsan::DeviceInstructionKind::SetPadding, ACLSAN_DEVICE_PIPE_SCALAR},
-        {440, aclsan::DeviceInstructionKind::SetFlag, ACLSAN_DEVICE_PIPE_SCALAR},
-        {441, aclsan::DeviceInstructionKind::SetFlag, ACLSAN_DEVICE_PIPE_SCALAR},
-        {442, aclsan::DeviceInstructionKind::WaitFlag, ACLSAN_DEVICE_PIPE_SCALAR},
-        {443, aclsan::DeviceInstructionKind::WaitFlag, ACLSAN_DEVICE_PIPE_SCALAR},
-        {448, aclsan::DeviceInstructionKind::GetBuf, ACLSAN_DEVICE_PIPE_SCALAR},
-        {449, aclsan::DeviceInstructionKind::GetBuf, ACLSAN_DEVICE_PIPE_SCALAR},
-        {450, aclsan::DeviceInstructionKind::RlsBuf, ACLSAN_DEVICE_PIPE_SCALAR},
-        {451, aclsan::DeviceInstructionKind::RlsBuf, ACLSAN_DEVICE_PIPE_SCALAR},
-        {456, aclsan::DeviceInstructionKind::SetFlag, ACLSAN_DEVICE_PIPE_SCALAR},
-        {457, aclsan::DeviceInstructionKind::SetFlag, ACLSAN_DEVICE_PIPE_SCALAR},
-        {458, aclsan::DeviceInstructionKind::WaitFlag, ACLSAN_DEVICE_PIPE_SCALAR},
-        {459, aclsan::DeviceInstructionKind::WaitFlag, ACLSAN_DEVICE_PIPE_SCALAR},
-        {460, aclsan::DeviceInstructionKind::GetBuf, ACLSAN_DEVICE_PIPE_SCALAR},
-        {461, aclsan::DeviceInstructionKind::GetBuf, ACLSAN_DEVICE_PIPE_SCALAR},
-        {462, aclsan::DeviceInstructionKind::RlsBuf, ACLSAN_DEVICE_PIPE_SCALAR},
-        {463, aclsan::DeviceInstructionKind::RlsBuf, ACLSAN_DEVICE_PIPE_SCALAR},
+        {72, aclsan::DeviceInstructionKind::LoadGmToCbuf2DV2},
+        {73, aclsan::DeviceInstructionKind::CopyGmToCbufV2},
+        {77, aclsan::DeviceInstructionKind::CopyGmToCbufMulti},
+        {78, aclsan::DeviceInstructionKind::CopyGmToCbufMulti},
+        {79, aclsan::DeviceInstructionKind::CopyGmToCbufMulti},
+        {80, aclsan::DeviceInstructionKind::CopyGmToCbufMulti},
+        {81, aclsan::DeviceInstructionKind::CopyGmToCbufMulti},
+        {82, aclsan::DeviceInstructionKind::CopyGmToCbufMulti},
+        {83, aclsan::DeviceInstructionKind::CopyUbufToGmAlignV2},
+        {84, aclsan::DeviceInstructionKind::CopyGmToUbufAlignV2},
+        {85, aclsan::DeviceInstructionKind::CopyGmToUbufAlignV2},
+        {86, aclsan::DeviceInstructionKind::CopyGmToUbufAlignV2},
+        {87, aclsan::DeviceInstructionKind::NdDmaOutToUbuf},
+        {88, aclsan::DeviceInstructionKind::NdDmaOutToUbuf},
+        {89, aclsan::DeviceInstructionKind::NdDmaOutToUbuf},
+        {91, aclsan::DeviceInstructionKind::FixL0cToOut},
+        {92, aclsan::DeviceInstructionKind::FixL0cToOut},
+        {149, aclsan::DeviceInstructionKind::SetL12D},
+        {150, aclsan::DeviceInstructionKind::SetL12D},
+        {392, aclsan::DeviceInstructionKind::SetPadding},
+        {440, aclsan::DeviceInstructionKind::SetFlag},
+        {441, aclsan::DeviceInstructionKind::SetFlag},
+        {442, aclsan::DeviceInstructionKind::WaitFlag},
+        {443, aclsan::DeviceInstructionKind::WaitFlag},
+        {448, aclsan::DeviceInstructionKind::GetBuf},
+        {449, aclsan::DeviceInstructionKind::GetBuf},
+        {450, aclsan::DeviceInstructionKind::RlsBuf},
+        {451, aclsan::DeviceInstructionKind::RlsBuf},
+        {456, aclsan::DeviceInstructionKind::SetFlag},
+        {457, aclsan::DeviceInstructionKind::SetFlag},
+        {458, aclsan::DeviceInstructionKind::WaitFlag},
+        {459, aclsan::DeviceInstructionKind::WaitFlag},
+        {460, aclsan::DeviceInstructionKind::GetBuf},
+        {461, aclsan::DeviceInstructionKind::GetBuf},
+        {462, aclsan::DeviceInstructionKind::RlsBuf},
+        {463, aclsan::DeviceInstructionKind::RlsBuf},
     };
 
     const aclsan::DeviceInstructionDecoder* decoder = aclsan::FindDeviceInstructionDecoder("Ascend950PR_9599");
@@ -575,7 +562,6 @@ void TestClassifiesCurrentDav3510InstructionSet()
         const std::optional<aclsan::DecodedInstruction> decoded = decoder->decode(record);
         assert(decoded.has_value());
         assert(decoded->kind == expected.kind);
-        assert(decoded->pipeline == expected.pipeline);
     }
 }
 

@@ -716,8 +716,7 @@ void TestRejectsUnsupportedCallbackParamField()
 {
     aclsan::ParsedTraceRecord parsed{};
     const aclsan::DecodedInstruction decoded{
-        aclsan::DeviceInstructionKind::CopyGmToCbufMulti, ACLSAN_DEVICE_PIPE_MTE2,
-        aclsan::CopyGmToCbufMultiDn2NzParamField{}};
+        aclsan::DeviceInstructionKind::CopyGmToCbufMulti, aclsan::CopyGmToCbufMultiDn2NzParamField{}};
 
     assert(!aclsan::TranslateDecodedTraceToCallbackData(parsed, decoded).has_value());
 }

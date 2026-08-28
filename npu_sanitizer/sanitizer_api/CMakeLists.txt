@@ -227,6 +227,9 @@ if(ENABLE_TEST)
 
   add_executable(cce_instruction_pipeline_test
     tests/cce_instruction_pipeline_test.cpp
+    src/aclsan/aclsan_device_data_log.cpp
+    src/aclsan/aclsan_translate_device_data.cpp
+    src/aclsan_memory_cbdata.cpp
     src/device_instr/decoder_registry.cpp
     src/device_instr/arch/dav_3510/decoder.cpp
   )

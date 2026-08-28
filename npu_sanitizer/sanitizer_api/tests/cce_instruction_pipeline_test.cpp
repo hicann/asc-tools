@@ -10,67 +10,57 @@
 
 #include "device_instr/common/instruction_id.h"
 #include "device_instr/decoder_registry.h"
+#include "internal/aclsan_device_data.h"
 
-#include <array>
 #include <cassert>
 #include <cstdint>
 
 namespace {
 
-struct ExpectedPipeline {
-    aclsan::InstructionId instructionId;
-    AclsanDevicePipeline pipeline;
-};
-
-void TestSupportedInstructionPipelines()
+void TestCallbackUsesRawRecordPipeline()
 {
-    static constexpr std::array<ExpectedPipeline, 36> EXPECTED_PIPELINES = {{
-        {aclsan::InstructionId::LoadGmToCbuf2DV2, ACLSAN_DEVICE_PIPE_MTE2},
-        {aclsan::InstructionId::CopyGmToCbufV2, ACLSAN_DEVICE_PIPE_MTE2},
-        {aclsan::InstructionId::CopyGmToCbufMultiNd2NzB8, ACLSAN_DEVICE_PIPE_MTE2},
-        {aclsan::InstructionId::CopyGmToCbufMultiNd2NzB16, ACLSAN_DEVICE_PIPE_MTE2},
-        {aclsan::InstructionId::CopyGmToCbufMultiNd2NzB32, ACLSAN_DEVICE_PIPE_MTE2},
-        {aclsan::InstructionId::CopyGmToCbufMultiDn2NzB8, ACLSAN_DEVICE_PIPE_MTE2},
-        {aclsan::InstructionId::CopyGmToCbufMultiDn2NzB16, ACLSAN_DEVICE_PIPE_MTE2},
-        {aclsan::InstructionId::CopyGmToCbufMultiDn2NzB32, ACLSAN_DEVICE_PIPE_MTE2},
-        {aclsan::InstructionId::CopyUbufToGmAlignV2, ACLSAN_DEVICE_PIPE_MTE3},
-        {aclsan::InstructionId::CopyGmToUbufAlignV2B8, ACLSAN_DEVICE_PIPE_MTE2},
-        {aclsan::InstructionId::CopyGmToUbufAlignV2B16, ACLSAN_DEVICE_PIPE_MTE2},
-        {aclsan::InstructionId::CopyGmToUbufAlignV2B32, ACLSAN_DEVICE_PIPE_MTE2},
-        {aclsan::InstructionId::NdDmaOutToUbufB8, ACLSAN_DEVICE_PIPE_MTE2},
-        {aclsan::InstructionId::NdDmaOutToUbufB16, ACLSAN_DEVICE_PIPE_MTE2},
-        {aclsan::InstructionId::NdDmaOutToUbufB32, ACLSAN_DEVICE_PIPE_MTE2},
-        {aclsan::InstructionId::FixL0cToOutF32, ACLSAN_DEVICE_PIPE_FIXPIPE},
-        {aclsan::InstructionId::FixL0cToOutS32, ACLSAN_DEVICE_PIPE_FIXPIPE},
-        {aclsan::InstructionId::SetL12DB16, ACLSAN_DEVICE_PIPE_MTE2},
-        {aclsan::InstructionId::SetL12DB32, ACLSAN_DEVICE_PIPE_MTE2},
-        {aclsan::InstructionId::SetPadding, ACLSAN_DEVICE_PIPE_SCALAR},
-        {aclsan::InstructionId::SetFlag, ACLSAN_DEVICE_PIPE_SCALAR},
-        {aclsan::InstructionId::SetFlagI, ACLSAN_DEVICE_PIPE_SCALAR},
-        {aclsan::InstructionId::WaitFlag, ACLSAN_DEVICE_PIPE_SCALAR},
-        {aclsan::InstructionId::WaitFlagI, ACLSAN_DEVICE_PIPE_SCALAR},
-        {aclsan::InstructionId::GetBuf, ACLSAN_DEVICE_PIPE_SCALAR},
-        {aclsan::InstructionId::GetBufI, ACLSAN_DEVICE_PIPE_SCALAR},
-        {aclsan::InstructionId::RlsBuf, ACLSAN_DEVICE_PIPE_SCALAR},
-        {aclsan::InstructionId::RlsBufI, ACLSAN_DEVICE_PIPE_SCALAR},
-        {aclsan::InstructionId::SetFlagV, ACLSAN_DEVICE_PIPE_SCALAR},
-        {aclsan::InstructionId::SetFlagIV, ACLSAN_DEVICE_PIPE_SCALAR},
-        {aclsan::InstructionId::WaitFlagV, ACLSAN_DEVICE_PIPE_SCALAR},
-        {aclsan::InstructionId::WaitFlagIV, ACLSAN_DEVICE_PIPE_SCALAR},
-        {aclsan::InstructionId::GetBufV, ACLSAN_DEVICE_PIPE_SCALAR},
-        {aclsan::InstructionId::GetBufIV, ACLSAN_DEVICE_PIPE_SCALAR},
-        {aclsan::InstructionId::RlsBufV, ACLSAN_DEVICE_PIPE_SCALAR},
-        {aclsan::InstructionId::RlsBufIV, ACLSAN_DEVICE_PIPE_SCALAR},
-    }};
+    aclsan::AclsanRawTraceRecord record{};
+    record.instrId = static_cast<uint32_t>(aclsan::InstructionId::SetFlag);
+    record.pipeline = ACLSAN_DEVICE_PIPE_MTE3;
+    record.args[0] = ACLSAN_DEVICE_PIPE_SCALAR;
+    record.args[1] = ACLSAN_DEVICE_PIPE_MTE2;
+    record.args[2] = 7;
 
+    aclsan::ParsedTraceRecord parsed{};
+    parsed.record = record;
     const aclsan::DeviceInstructionDecoder* decoder = aclsan::FindDeviceInstructionDecoder("Ascend950PR_9599");
     assert(decoder != nullptr);
-    for (const ExpectedPipeline& expected : EXPECTED_PIPELINES) {
-        aclsan::AclsanRawTraceRecord record{};
-        record.instrId = static_cast<uint32_t>(expected.instructionId);
-        const auto decoded = decoder->decode(record);
-        assert(decoded.has_value());
-        assert(decoded->pipeline == expected.pipeline);
+    const auto decoded = decoder->decode(record);
+    assert(decoded.has_value());
+    const auto callback = aclsan::TranslateDecodedTraceToCallbackData(parsed, *decoded);
+    assert(callback.has_value());
+    const auto* sync = std::get_if<AclsanDeviceSyncData>(&*callback);
+    assert(sync != nullptr);
+    assert(sync->header.pipeline == record.pipeline);
+}
+
+void TestMemoryCallbackUsesRawRecordPipeline()
+{
+    aclsan::AclsanRawTraceRecord record{};
+    record.instrId = static_cast<uint32_t>(aclsan::InstructionId::CopyGmToCbufV2);
+    record.pipeline = ACLSAN_DEVICE_PIPE_MTE3;
+    record.args[0] = 0x2000;
+    record.args[1] = 0x1000;
+    record.args[2] = (UINT64_C(1) << 4U) | (UINT64_C(1) << 25U);
+
+    aclsan::ParsedTraceRecord parsed{};
+    parsed.record = record;
+    const aclsan::DeviceInstructionDecoder* decoder = aclsan::FindDeviceInstructionDecoder("Ascend950PR_9599");
+    assert(decoder != nullptr);
+    const auto decoded = decoder->decode(record);
+    assert(decoded.has_value());
+    const auto callback = aclsan::TranslateDecodedTraceToCallbackData(parsed, *decoded);
+    assert(callback.has_value());
+    const auto* accesses = std::get_if<aclsan::DeviceMemoryAccessDataList>(&*callback);
+    assert(accesses != nullptr);
+    assert(!accesses->empty());
+    for (const AclsanDeviceMemoryAccessData& access : *accesses) {
+        assert(access.header.pipeline == record.pipeline);
     }
 }
 
@@ -96,7 +86,8 @@ void TestUnknownInstructionReturnsNoDecodedResult()
 
 int main()
 {
-    TestSupportedInstructionPipelines();
+    TestCallbackUsesRawRecordPipeline();
+    TestMemoryCallbackUsesRawRecordPipeline();
     TestKnownUnhandledInstructionReturnsNoDecodedResult();
     TestUnknownInstructionReturnsNoDecodedResult();
     return 0;

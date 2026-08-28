@@ -343,9 +343,7 @@ aclError aclrtSynchronizeStreamHook(aclrtStream stream) noexcept
 {
     const auto original = GetOriginalRuntimeFunction<ACL_RT_API_aclrtSynchronizeStream>("aclrtSynchronizeStream");
     const aclError result = original(stream);
-    if (result == ACL_SUCCESS) {
-        aclsan::CollectTraceStream(stream);
-    }
+    aclsan::CollectTraceStream(stream);
     const AclsanSynchronizeData callbackData = MakeSynchronizeData("aclrtSynchronizeStream", stream, result);
     aclsan::AclsanCallbackDispatcher::DispatchSynchronizeEnd(callbackData);
     return result;
@@ -357,9 +355,7 @@ aclError aclrtSynchronizeStreamWithTimeoutHook(aclrtStream stream, int32_t timeo
     const auto original =
         GetOriginalRuntimeFunction<ACL_RT_API_aclrtSynchronizeStreamWithTimeout>("aclrtSynchronizeStreamWithTimeout");
     const aclError result = original(stream, timeout);
-    if (result == ACL_SUCCESS) {
-        aclsan::CollectTraceStream(stream);
-    }
+    aclsan::CollectTraceStream(stream);
     const AclsanSynchronizeData callbackData = MakeSynchronizeData("aclrtSynchronizeStreamWithTimeout", stream, result);
     aclsan::AclsanCallbackDispatcher::DispatchSynchronizeEnd(callbackData);
     return result;

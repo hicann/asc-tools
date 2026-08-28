@@ -26,6 +26,7 @@ void TestEmptyFieldProducesNoCbdata()
 {
     CopyGmToUbufAlignV2ParamField field{};
     field.instrId = RawInstructionId(InstructionId::CopyGmToUbufAlignV2B16);
+    field.dataBits = 16;
 
     const auto result = aclsan::MemoryFieldToCbdataConverter{{}}.Convert(aclsan::MemoryInstructionField{field});
     assert(result.status == aclsan::MemoryCbdataStatus::NO_ACCESS);
@@ -36,6 +37,7 @@ void TestFieldAndContextProduceCbdata()
 {
     CopyGmToUbufAlignV2ParamField field{};
     field.instrId = RawInstructionId(InstructionId::CopyGmToUbufAlignV2B16);
+    field.dataBits = 16;
     field.srcAddr = 0x1000;
     field.burstNum = 3;
     field.burstLen = 32;
@@ -58,12 +60,38 @@ void TestFieldAndContextProduceCbdata()
     assert(access.accessMode == ACLSAN_DEVICE_MEMORY_ACCESS_READ);
     assert(access.accessIndex == 0);
     assert(access.accessCount == 1);
-    assert(access.dataBits == 16);
+    assert(access.dataBits == field.dataBits);
     assert(access.layoutKind == ACLSAN_MEM_LAYOUT_BLOCK_REPEAT);
     assert(access.layout.blockRepeat.blockNum == 1);
     assert(access.layout.blockRepeat.blockSize == field.burstLen);
     assert(access.layout.blockRepeat.repeatTimes == field.burstNum);
     assert(access.layout.blockRepeat.repeatStride == static_cast<int64_t>(field.burstSrcStride));
+}
+
+void TestCubeAndMultiFieldsUseDecodedDataBits()
+{
+    aclsan::CopyGmToCbufAlignV2ParamField cubeField{};
+    cubeField.instrId = RawInstructionId(InstructionId::CopyGmToCbufAlignV2B16);
+    cubeField.dataBits = 16;
+    cubeField.srcAddr = 0x2000;
+    cubeField.burstNum = 1;
+    cubeField.burstLen = 8;
+    const auto cubeResult = aclsan::MemoryFieldToCbdataConverter{{}}.Convert(aclsan::MemoryInstructionField{cubeField});
+    assert(cubeResult.status == aclsan::MemoryCbdataStatus::SUCCESS);
+    assert(cubeResult.data.size() == 1);
+    assert(cubeResult.data.front().dataBits == cubeField.dataBits);
+
+    aclsan::CopyGmToCbufMultiNd2NzParamField multiField{};
+    multiField.instrId = RawInstructionId(InstructionId::CopyGmToCbufMultiNd2NzB16);
+    multiField.dataBits = 16;
+    multiField.srcAddr = 0x3000;
+    multiField.nValue = 1;
+    multiField.dValue = 1;
+    const aclsan::MultiNd2NzMemoryField input{multiField, 1};
+    const auto multiResult = aclsan::MemoryFieldToCbdataConverter{{}}.Convert(aclsan::MemoryInstructionField{input});
+    assert(multiResult.status == aclsan::MemoryCbdataStatus::SUCCESS);
+    assert(multiResult.data.size() == 1);
+    assert(multiResult.data.front().dataBits == multiField.dataBits);
 }
 
 void TestOneFieldCanProduceMultipleCbdataRecords()
@@ -103,10 +131,11 @@ void TestInvalidFieldIsRejected()
     assert(result.data.empty());
 }
 
-void TestMismatchedInstructionIdIsRejected()
+void TestUnsupportedDataBitsIsRejected()
 {
     CopyGmToUbufAlignV2ParamField field{};
-    field.instrId = RawInstructionId(InstructionId::CopyGmToCbufAlignV2B16);
+    field.instrId = RawInstructionId(InstructionId::CopyGmToUbufAlignV2B16);
+    field.dataBits = 64;
     field.srcAddr = 0x1000;
     field.burstNum = 1;
     field.burstLen = 32;
@@ -122,8 +151,9 @@ int main()
 {
     TestEmptyFieldProducesNoCbdata();
     TestFieldAndContextProduceCbdata();
+    TestCubeAndMultiFieldsUseDecodedDataBits();
     TestOneFieldCanProduceMultipleCbdataRecords();
     TestInvalidFieldIsRejected();
-    TestMismatchedInstructionIdIsRejected();
+    TestUnsupportedDataBitsIsRejected();
     return 0;
 }

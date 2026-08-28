@@ -116,13 +116,14 @@ public:
     static std::optional<DeviceCallbackData> TranslateToCallbackData(
         const ParsedTraceRecord& parsed, const aclsan::DecodedInstruction& decoded) noexcept
     {
+        const auto pipeline = static_cast<AclsanDevicePipeline>(parsed.record.pipeline);
         return std::visit(
             [&](const auto& value) noexcept -> std::optional<DeviceCallbackData> {
                 using ParamField = std::decay_t<decltype(value)>;
                 if constexpr (IsMemoryAccessParamField<ParamField>()) {
-                    return MakeDeviceMemoryAccessCallbackData(parsed, decoded.pipeline, value);
+                    return MakeDeviceMemoryAccessCallbackData(parsed, pipeline, value);
                 } else if constexpr (IsSyncParamField<ParamField>()) {
-                    return MakeDeviceSyncData(parsed, decoded.kind, decoded.pipeline, value);
+                    return MakeDeviceSyncData(parsed, decoded.kind, pipeline, value);
                 } else {
                     return std::nullopt;
                 }

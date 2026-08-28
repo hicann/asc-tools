@@ -66,8 +66,8 @@ class MemoryInstructionProfileFactory final {
 public:
     static std::optional<MemoryInstructionProfile> Create(const CopyGmToUbufAlignV2ParamField& field) noexcept
     {
-        const uint32_t dataBits = VectorReadDataBits(field.instrId);
-        if (dataBits == 0) {
+        const uint32_t dataBits = field.dataBits;
+        if (!IsSupportedReadDataBits(dataBits)) {
             return std::nullopt;
         }
         return MemoryInstructionProfile{dataBits, ACLSAN_DEVICE_SOURCE_MTE2, kBlockTypeAiv};
@@ -75,8 +75,8 @@ public:
 
     static std::optional<MemoryInstructionProfile> Create(const CopyGmToCbufAlignV2ParamField& field) noexcept
     {
-        const uint32_t dataBits = CubeReadDataBits(field.instrId);
-        if (dataBits == 0) {
+        const uint32_t dataBits = field.dataBits;
+        if (!IsSupportedReadDataBits(dataBits)) {
             return std::nullopt;
         }
         return MemoryInstructionProfile{dataBits, ACLSAN_DEVICE_SOURCE_MTE2, kBlockTypeAic};
@@ -86,8 +86,8 @@ public:
     static std::optional<MemoryInstructionProfile> Create(
         const CopyGmToCbufMultiParamField<ConversionMode>& field) noexcept
     {
-        const uint32_t dataBits = MultiReadDataBits<ConversionMode>(field.instrId);
-        if (dataBits == 0) {
+        const uint32_t dataBits = field.dataBits;
+        if (!IsSupportedReadDataBits(dataBits)) {
             return std::nullopt;
         }
         return MemoryInstructionProfile{dataBits, ACLSAN_DEVICE_SOURCE_MTE2, kBlockTypeAic};
@@ -112,60 +112,9 @@ public:
     }
 
 private:
-    static uint32_t VectorReadDataBits(uint32_t instructionId) noexcept
+    static bool IsSupportedReadDataBits(uint32_t dataBits) noexcept
     {
-        switch (static_cast<InstructionId>(instructionId)) {
-            case InstructionId::CopyGmToUbufAlignV2B8:
-                return 8;
-            case InstructionId::CopyGmToUbufAlignV2B16:
-                return 16;
-            case InstructionId::CopyGmToUbufAlignV2B32:
-                return 32;
-            default:
-                return 0;
-        }
-    }
-
-    static uint32_t CubeReadDataBits(uint32_t instructionId) noexcept
-    {
-        switch (static_cast<InstructionId>(instructionId)) {
-            case InstructionId::CopyGmToCbufAlignV2B8:
-                return 8;
-            case InstructionId::CopyGmToCbufAlignV2B16:
-                return 16;
-            case InstructionId::CopyGmToCbufAlignV2B32:
-                return 32;
-            default:
-                return 0;
-        }
-    }
-
-    template <NdNzConversionMode ConversionMode>
-    static uint32_t MultiReadDataBits(uint32_t instructionId) noexcept
-    {
-        const auto id = static_cast<InstructionId>(instructionId);
-        if constexpr (ConversionMode == NdNzConversionMode::ND2NZ) {
-            if (id == InstructionId::CopyGmToCbufMultiNd2NzB8) {
-                return 8;
-            }
-            if (id == InstructionId::CopyGmToCbufMultiNd2NzB16) {
-                return 16;
-            }
-            if (id == InstructionId::CopyGmToCbufMultiNd2NzB32) {
-                return 32;
-            }
-        } else {
-            if (id == InstructionId::CopyGmToCbufMultiDn2NzB8) {
-                return 8;
-            }
-            if (id == InstructionId::CopyGmToCbufMultiDn2NzB16) {
-                return 16;
-            }
-            if (id == InstructionId::CopyGmToCbufMultiDn2NzB32) {
-                return 32;
-            }
-        }
-        return 0;
+        return dataBits == 8 || dataBits == 16 || dataBits == 32;
     }
 };
 

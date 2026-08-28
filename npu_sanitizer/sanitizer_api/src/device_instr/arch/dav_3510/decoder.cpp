@@ -49,11 +49,10 @@ ParamField DecodeMovAlignV2Params(const aclsan::AclsanRawTraceRecord& record, ui
 
 template <typename ParamField>
 std::optional<DecodedInstruction> DecodeMovAlignV2(
-    const aclsan::AclsanRawTraceRecord& record, DeviceInstructionKind kind, AclsanDevicePipeline pipeline,
-    uint32_t dataBits) noexcept
+    const aclsan::AclsanRawTraceRecord& record, DeviceInstructionKind kind, uint32_t dataBits) noexcept
 {
     const ParamField params = DecodeMovAlignV2Params<ParamField>(record, dataBits);
-    return DecodedInstruction{kind, pipeline, params};
+    return DecodedInstruction{kind, params};
 }
 
 std::optional<DecodedInstruction> DecodeCopyUbufToGmAlignV2(const aclsan::AclsanRawTraceRecord& record) noexcept
@@ -69,7 +68,7 @@ std::optional<DecodedInstruction> DecodeCopyUbufToGmAlignV2(const aclsan::Aclsan
     params.dstStride = ExtractBitRange(record.args[3], MovAlignV2Layout::BURST_SRC_STRIDE);
     params.srcStride = static_cast<uint32_t>(ExtractBitRange(record.args[3], MovAlignV2Layout::BURST_DST_STRIDE));
 
-    return DecodedInstruction{DeviceInstructionKind::CopyUbufToGmAlignV2, ACLSAN_DEVICE_PIPE_MTE3, params};
+    return DecodedInstruction{DeviceInstructionKind::CopyUbufToGmAlignV2, params};
 }
 
 template <typename ParamField>
@@ -89,7 +88,7 @@ DecodedInstruction DecodeCopyGmToCbufMulti(const aclsan::AclsanRawTraceRecord& r
     params.loop4SrcStride = ExtractBitRange(record.args[3], CopyGmToCbufMultiLayout::LOOP4_SRC_STRIDE);
     params.smallC0Enable = ExtractBitRange(record.args[3], CopyGmToCbufMultiLayout::SMALL_C0_ENABLE) != 0;
 
-    return DecodedInstruction{DeviceInstructionKind::CopyGmToCbufMulti, ACLSAN_DEVICE_PIPE_MTE2, params};
+    return DecodedInstruction{DeviceInstructionKind::CopyGmToCbufMulti, params};
 }
 
 std::optional<DecodedInstruction> DecodeCopyGmToCbufV2(const aclsan::AclsanRawTraceRecord& record) noexcept
@@ -108,7 +107,7 @@ std::optional<DecodedInstruction> DecodeCopyGmToCbufV2(const aclsan::AclsanRawTr
     params.srcStride = ExtractBitRange(record.args[3], CopyGmToCbufV2Layout::SRC_STRIDE);
     params.dstStride = static_cast<uint32_t>(ExtractBitRange(record.args[3], CopyGmToCbufV2Layout::DST_STRIDE));
 
-    return DecodedInstruction{DeviceInstructionKind::CopyGmToCbufV2, ACLSAN_DEVICE_PIPE_MTE2, params};
+    return DecodedInstruction{DeviceInstructionKind::CopyGmToCbufV2, params};
 }
 
 DecodedInstruction DecodeLoadGmToCbuf2DV2(const aclsan::AclsanRawTraceRecord& record) noexcept
@@ -129,7 +128,7 @@ DecodedInstruction DecodeLoadGmToCbuf2DV2(const aclsan::AclsanRawTraceRecord& re
     params.l2CacheControl =
         static_cast<uint8_t>(ExtractBitRange(record.args[3], LoadGmToCbuf2DV2Layout::L2_CACHE_CONTROL));
 
-    return DecodedInstruction{DeviceInstructionKind::LoadGmToCbuf2DV2, ACLSAN_DEVICE_PIPE_MTE2, params};
+    return DecodedInstruction{DeviceInstructionKind::LoadGmToCbuf2DV2, params};
 }
 
 DecodedInstruction DecodeNdDmaOutToUbuf(const aclsan::AclsanRawTraceRecord& record, uint32_t dataBits) noexcept
@@ -152,7 +151,7 @@ DecodedInstruction DecodeNdDmaOutToUbuf(const aclsan::AclsanRawTraceRecord& reco
     params.paddingMode = ExtractBitRange(record.args[3], NdDmaLayout::PADDING_MODE) != 0;
     params.l2CacheControl = static_cast<uint8_t>(ExtractBitRange(record.args[3], NdDmaLayout::L2_CACHE_CONTROL));
 
-    return DecodedInstruction{DeviceInstructionKind::NdDmaOutToUbuf, ACLSAN_DEVICE_PIPE_MTE2, params};
+    return DecodedInstruction{DeviceInstructionKind::NdDmaOutToUbuf, params};
 }
 
 DecodedInstruction DecodeSetL12D(const aclsan::AclsanRawTraceRecord& record, uint32_t dataBits) noexcept
@@ -165,13 +164,13 @@ DecodedInstruction DecodeSetL12D(const aclsan::AclsanRawTraceRecord& record, uin
     params.blockNum = static_cast<uint16_t>(ExtractBitRange(record.args[1], SetL12DLayout::BLOCK_NUM));
     params.repeatGap = static_cast<uint16_t>(ExtractBitRange(record.args[1], SetL12DLayout::REPEAT_GAP));
 
-    return DecodedInstruction{DeviceInstructionKind::SetL12D, ACLSAN_DEVICE_PIPE_MTE2, params};
+    return DecodedInstruction{DeviceInstructionKind::SetL12D, params};
 }
 
 DecodedInstruction DecodeSetPadding(const aclsan::AclsanRawTraceRecord& record) noexcept
 {
     const SetPaddingParamField params{record.args[0]};
-    return DecodedInstruction{DeviceInstructionKind::SetPadding, ACLSAN_DEVICE_PIPE_SCALAR, params};
+    return DecodedInstruction{DeviceInstructionKind::SetPadding, params};
 }
 
 DecodedInstruction DecodeFixL0cToOut(const aclsan::AclsanRawTraceRecord& record, uint32_t dataBits) noexcept
@@ -208,7 +207,7 @@ DecodedInstruction DecodeFixL0cToOut(const aclsan::AclsanRawTraceRecord& record,
     params.brcbEnable = ExtractBitRange(record.args[3], FixL0cToOutLayout::BRCB_ENABLE) != 0;
     params.nz2dnEnable = ExtractBitRange(record.args[3], FixL0cToOutLayout::NZ2DN_ENABLE) != 0;
 
-    return DecodedInstruction{DeviceInstructionKind::FixL0cToOut, ACLSAN_DEVICE_PIPE_FIXPIPE, params};
+    return DecodedInstruction{DeviceInstructionKind::FixL0cToOut, params};
 }
 
 std::optional<DecodedInstruction> DecodeFlag(
@@ -217,7 +216,7 @@ std::optional<DecodedInstruction> DecodeFlag(
     const FlagParamField params{
         static_cast<uint32_t>(record.instrId), static_cast<uint32_t>(record.args[0]),
         static_cast<uint32_t>(record.args[1]), record.args[2]};
-    return DecodedInstruction{kind, ACLSAN_DEVICE_PIPE_SCALAR, params};
+    return DecodedInstruction{kind, params};
 }
 
 std::optional<DecodedInstruction> DecodeBuffer(
@@ -229,7 +228,7 @@ std::optional<DecodedInstruction> DecodeBuffer(
     const SyncBufParamField params{
         static_cast<uint32_t>(record.instrId), static_cast<uint32_t>(record.args[0]), record.args[1],
         static_cast<uint8_t>(record.args[2])};
-    return DecodedInstruction{kind, ACLSAN_DEVICE_PIPE_SCALAR, params};
+    return DecodedInstruction{kind, params};
 }
 
 std::optional<DecodedInstruction> Decode(const aclsan::AclsanRawTraceRecord& record) noexcept
@@ -242,13 +241,13 @@ std::optional<DecodedInstruction> Decode(const aclsan::AclsanRawTraceRecord& rec
 
         case RawId(InstructionId::CopyGmToCbufAlignV2B8):
             return DecodeMovAlignV2<CopyGmToCbufAlignV2ParamField>(
-                record, DeviceInstructionKind::CopyGmToCbufAlignV2, ACLSAN_DEVICE_PIPE_MTE2, DATA_BITS_B8);
+                record, DeviceInstructionKind::CopyGmToCbufAlignV2, DATA_BITS_B8);
         case RawId(InstructionId::CopyGmToCbufAlignV2B16):
             return DecodeMovAlignV2<CopyGmToCbufAlignV2ParamField>(
-                record, DeviceInstructionKind::CopyGmToCbufAlignV2, ACLSAN_DEVICE_PIPE_MTE2, DATA_BITS_B16);
+                record, DeviceInstructionKind::CopyGmToCbufAlignV2, DATA_BITS_B16);
         case RawId(InstructionId::CopyGmToCbufAlignV2B32):
             return DecodeMovAlignV2<CopyGmToCbufAlignV2ParamField>(
-                record, DeviceInstructionKind::CopyGmToCbufAlignV2, ACLSAN_DEVICE_PIPE_MTE2, DATA_BITS_B32);
+                record, DeviceInstructionKind::CopyGmToCbufAlignV2, DATA_BITS_B32);
 
         case RawId(InstructionId::CopyGmToCbufMultiNd2NzB8):
             return DecodeCopyGmToCbufMulti<CopyGmToCbufMultiNd2NzParamField>(record, DATA_BITS_B8);
@@ -269,13 +268,13 @@ std::optional<DecodedInstruction> Decode(const aclsan::AclsanRawTraceRecord& rec
 
         case RawId(InstructionId::CopyGmToUbufAlignV2B8):
             return DecodeMovAlignV2<CopyGmToUbufAlignV2ParamField>(
-                record, DeviceInstructionKind::CopyGmToUbufAlignV2, ACLSAN_DEVICE_PIPE_MTE2, DATA_BITS_B8);
+                record, DeviceInstructionKind::CopyGmToUbufAlignV2, DATA_BITS_B8);
         case RawId(InstructionId::CopyGmToUbufAlignV2B16):
             return DecodeMovAlignV2<CopyGmToUbufAlignV2ParamField>(
-                record, DeviceInstructionKind::CopyGmToUbufAlignV2, ACLSAN_DEVICE_PIPE_MTE2, DATA_BITS_B16);
+                record, DeviceInstructionKind::CopyGmToUbufAlignV2, DATA_BITS_B16);
         case RawId(InstructionId::CopyGmToUbufAlignV2B32):
             return DecodeMovAlignV2<CopyGmToUbufAlignV2ParamField>(
-                record, DeviceInstructionKind::CopyGmToUbufAlignV2, ACLSAN_DEVICE_PIPE_MTE2, DATA_BITS_B32);
+                record, DeviceInstructionKind::CopyGmToUbufAlignV2, DATA_BITS_B32);
 
         case RawId(InstructionId::NdDmaOutToUbufB8):
             return DecodeNdDmaOutToUbuf(record, DATA_BITS_B8);
