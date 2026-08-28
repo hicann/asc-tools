@@ -97,14 +97,14 @@ TEST(DefaultBinaryInstrumentationConfigTest, ReadsRuntimeCompilationEnvironment)
 TEST(DefaultBinaryInstrumentationConfigTest, SelectsProbeGroupsFromEnvironmentOrActiveMask)
 {
     EnvironmentRestore environment({"NPU_CHECK_DBI_PROBE_SET"});
-    ASSERT_EQ(setenv("NPU_CHECK_DBI_PROBE_SET", "mte2,sync,register", 1), 0);
+    ASSERT_EQ(setenv("NPU_CHECK_DBI_PROBE_SET", "mte2,scalar,sync", 1), 0);
 
     EXPECT_EQ(
         DefaultBinaryInstrumentationConfig().probeGroups,
-        (std::vector<ProbeGroup>{ProbeGroup::Mte2, ProbeGroup::Sync, ProbeGroup::Register}));
+        (std::vector<ProbeGroup>{ProbeGroup::Mte2, ProbeGroup::Scalar, ProbeGroup::Sync}));
     EXPECT_EQ(
-        DefaultBinaryInstrumentationConfig(PROBE_GROUP_MTE1 | PROBE_GROUP_FIXPIPE | PROBE_GROUP_REGISTER).probeGroups,
-        (std::vector<ProbeGroup>{ProbeGroup::Mte1, ProbeGroup::Fixpipe, ProbeGroup::Register}));
+        DefaultBinaryInstrumentationConfig(PROBE_GROUP_MTE1 | PROBE_GROUP_FIXPIPE | PROBE_GROUP_SCALAR).probeGroups,
+        (std::vector<ProbeGroup>{ProbeGroup::Mte1, ProbeGroup::Fixpipe, ProbeGroup::Scalar}));
 }
 
 TEST(DefaultBinaryInstrumentationConfigTest, DoesNotEnableProbeGroupsWithoutExplicitSelection)

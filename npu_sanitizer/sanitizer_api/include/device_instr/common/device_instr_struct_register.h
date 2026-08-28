@@ -24,6 +24,19 @@ struct SetPaddingParamField {
     uint64_t value = 0;
 };
 
+struct Mte2SourceParamField {
+    uint64_t srcStride = 0;
+};
+
+struct NdDmaLoopStrideParamField {
+    uint32_t loopIndex = 0;
+    uint64_t srcStride = 0;
+};
+
+struct Mte2NzParamField {
+    uint16_t matrixNum = 0;
+};
+
 } // namespace aclsan
 
 #endif // NPU_SANITIZER_SANITIZER_API_DEVICE_INSTR_COMMON_DEVICE_INSTR_STRUCT_REGISTER_H_

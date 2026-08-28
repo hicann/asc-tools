@@ -304,15 +304,19 @@ bool ToolchainPaths::Complete() const
 std::vector<ProbeGroup> NormalizeProbeGroups(const std::vector<ProbeGroup>& groups)
 {
     std::set<ProbeGroup> unique(groups.begin(), groups.end());
+    // MTE2 memory operations consume configuration written by scalar SET_* instructions.
+    if (unique.find(ProbeGroup::Mte2) != unique.end()) {
+        unique.insert(ProbeGroup::Scalar);
+    }
     return {unique.begin(), unique.end()};
 }
 
 std::vector<ProbeGroup> ProbeGroupsFromMask(uint32_t mask)
 {
     const std::pair<uint32_t, ProbeGroup> groups[] = {
-        {PROBE_GROUP_MTE1, ProbeGroup::Mte1}, {PROBE_GROUP_MTE2, ProbeGroup::Mte2},
-        {PROBE_GROUP_MTE3, ProbeGroup::Mte3}, {PROBE_GROUP_FIXPIPE, ProbeGroup::Fixpipe},
-        {PROBE_GROUP_SYNC, ProbeGroup::Sync}, {PROBE_GROUP_REGISTER, ProbeGroup::Register},
+        {PROBE_GROUP_MTE1, ProbeGroup::Mte1},     {PROBE_GROUP_MTE2, ProbeGroup::Mte2},
+        {PROBE_GROUP_MTE3, ProbeGroup::Mte3},     {PROBE_GROUP_FIXPIPE, ProbeGroup::Fixpipe},
+        {PROBE_GROUP_SCALAR, ProbeGroup::Scalar}, {PROBE_GROUP_SYNC, ProbeGroup::Sync},
     };
     std::vector<ProbeGroup> selected;
     for (const auto& group : groups) {
@@ -320,7 +324,7 @@ std::vector<ProbeGroup> ProbeGroupsFromMask(uint32_t mask)
             selected.push_back(group.second);
         }
     }
-    return selected;
+    return NormalizeProbeGroups(selected);
 }
 
 std::string ProbeGroupName(ProbeGroup group)
@@ -334,10 +338,10 @@ std::string ProbeGroupName(ProbeGroup group)
             return "mte3";
         case ProbeGroup::Fixpipe:
             return "fixpipe";
+        case ProbeGroup::Scalar:
+            return "scalar";
         case ProbeGroup::Sync:
             return "sync";
-        case ProbeGroup::Register:
-            return "register";
     }
     return {};
 }

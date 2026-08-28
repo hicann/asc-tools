@@ -25,7 +25,7 @@ set_target_properties(acl_san PROPERTIES
 set(ACLSAN_DBI_SOURCE_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/../dbi")
 set(ACLSAN_DBI_RUNTIME_SOURCE_DIRECTORY "${CMAKE_BINARY_DIR}/dbi_runtime_sources")
 file(MAKE_DIRECTORY "${ACLSAN_DBI_RUNTIME_SOURCE_DIRECTORY}/probes")
-foreach(probe_source mte1 mte2 mte3 fixpipe register sync)
+foreach(probe_source mte1 mte2 mte3 fixpipe scalar sync)
   configure_file(
     "${ACLSAN_DBI_SOURCE_DIRECTORY}/src/probes/${probe_source}.cpp"
     "${ACLSAN_DBI_RUNTIME_SOURCE_DIRECTORY}/probes/${probe_source}.cpp"

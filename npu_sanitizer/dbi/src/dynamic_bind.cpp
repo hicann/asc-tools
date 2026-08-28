@@ -32,14 +32,27 @@ struct BindingSpec {
 
 thread_local const std::vector<aclsan::ProbeGroup>* g_selectedGroups = nullptr;
 
+std::vector<aclsan::ProbeGroup> NormalizeBindingGroups(const std::vector<aclsan::ProbeGroup>& groups)
+{
+    std::vector<aclsan::ProbeGroup> selected(groups);
+    std::sort(selected.begin(), selected.end());
+    selected.erase(std::unique(selected.begin(), selected.end()), selected.end());
+    if (std::find(selected.begin(), selected.end(), aclsan::ProbeGroup::Mte2) != selected.end()) {
+        selected.push_back(aclsan::ProbeGroup::Scalar);
+        std::sort(selected.begin(), selected.end());
+        selected.erase(std::unique(selected.begin(), selected.end()), selected.end());
+    }
+    return selected;
+}
+
 aclsan::ProbeGroup BindingGroup(const BindingSpec& binding)
 {
     using aclsan::ProbeGroup;
     const uint16_t id = binding.apiId;
-    if (id == 392) {
-        return ProbeGroup::Register;
+    if (id == 124 || (id >= 132 && id <= 136) || id == 392 || id == 399) {
+        return ProbeGroup::Scalar;
     }
-    if ((id >= 72 && id <= 82) || (id >= 84 && id <= 89) || id == 149 || id == 150 || id == 399) {
+    if ((id >= 72 && id <= 82) || (id >= 84 && id <= 89) || id == 149 || id == 150) {
         return ProbeGroup::Mte2;
     }
     if (id == 83 || id == 173) {
@@ -112,13 +125,20 @@ const std::vector<BindingSpec>& AllBindings()
         {InstrType::SET_L1_2D_B32, 150, "__sanitizer_report_set_l1_2d_b32", {0, 1}},
         // SET_MTE2_NZ_PARA. The low 16 bits provide matrixNum for subsequent MULTI copies in the same block.
         {InstrType::SET_MTE2_NZ_PARA, 399, "__sanitizer_report_set_mte2_nz_para", {0}},
+        // Scalar SET_* configuration required to reconstruct subsequent MTE2 GM layouts.
+        {InstrType::MTE2_SRC_PARA, 124, "__sanitizer_report_set_mte2_src_para", {0}},
+        {InstrType::LOOP0_STRIDE_NDDMA, 132, "__sanitizer_report_set_loop0_stride_nddma", {0}},
+        {InstrType::LOOP1_STRIDE_NDDMA, 133, "__sanitizer_report_set_loop1_stride_nddma", {0}},
+        {InstrType::LOOP2_STRIDE_NDDMA, 134, "__sanitizer_report_set_loop2_stride_nddma", {0}},
+        {InstrType::LOOP3_STRIDE_NDDMA, 135, "__sanitizer_report_set_loop3_stride_nddma", {0}},
+        {InstrType::LOOP4_STRIDE_NDDMA, 136, "__sanitizer_report_set_loop4_stride_nddma", {0}},
 
         // MTE3: MOV_UB_TO_OUT_ALIGN_V2.
         {InstrType::COPY_UBUF_TO_GM_ALIGN_V2, 83, "__sanitizer_report_copy_ubuf_to_gm_align_v2", {0, 1, 2, 3}},
         // MOV_UB_TO_L1.
         {InstrType::COPY_UBUF_TO_CBUF, 173, "__sanitizer_report_copy_ubuf_to_cbuf", {0, 1, 2}},
 
-        // Register: SET_PADDING.
+        // Scalar: SET_PADDING.
         {InstrType::SET_PADDING, 392, "__sanitizer_report_set_padding", {0}},
         // MTE1: LOAD_L1_TO_L0B_2D_TRANSPOSE.b8/b16/b32/b4.
         {InstrType::LOAD_CBUF_TO_CB_TRANSPOSE_B8,
@@ -292,15 +312,16 @@ namespace aclsan {
 
 std::vector<ProbeGroup> AllProbeGroups()
 {
-    return {ProbeGroup::Mte1,    ProbeGroup::Mte2, ProbeGroup::Mte3,
-            ProbeGroup::Fixpipe, ProbeGroup::Sync, ProbeGroup::Register};
+    return {ProbeGroup::Mte1,    ProbeGroup::Mte2,   ProbeGroup::Mte3,
+            ProbeGroup::Fixpipe, ProbeGroup::Scalar, ProbeGroup::Sync};
 }
 
 std::vector<std::string> BindingSymbols(const std::vector<ProbeGroup>& groups)
 {
     std::vector<std::string> symbols;
+    const auto selected = NormalizeBindingGroups(groups);
     for (const auto& binding : AllBindings()) {
-        if (std::find(groups.begin(), groups.end(), BindingGroup(binding)) != groups.end()) {
+        if (std::find(selected.begin(), selected.end(), BindingGroup(binding)) != selected.end()) {
             symbols.emplace_back(binding.stubName);
         }
     }
@@ -309,9 +330,7 @@ std::vector<std::string> BindingSymbols(const std::vector<ProbeGroup>& groups)
 
 bool GenerateCtrlBin(const std::string& outputPath, const std::vector<ProbeGroup>& groups, std::string& diagnostic)
 {
-    std::vector<ProbeGroup> selected(groups.begin(), groups.end());
-    std::sort(selected.begin(), selected.end());
-    selected.erase(std::unique(selected.begin(), selected.end()), selected.end());
+    std::vector<ProbeGroup> selected = NormalizeBindingGroups(groups);
     if (selected.empty()) {
         diagnostic = "probe set is empty";
         return false;

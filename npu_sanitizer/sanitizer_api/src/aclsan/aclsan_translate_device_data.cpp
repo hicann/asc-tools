@@ -204,35 +204,6 @@ private:
         return MakeDeviceMemoryAccessDataList(header, {source, destination});
     }
 
-    // TODO: 待填充转cbdata的逻辑
-    static std::optional<DeviceMemoryAccessDataList> MakeDeviceMemoryAccessData(
-        const AclsanDeviceEventHeader& header, const aclsan::LoadGmToCbuf2DV2ParamField& params) noexcept
-    {
-        // 复杂指令的访问范围尚未确认，零字节 RANGE 保留端点信息并让下游跳过范围检查。
-        AclsanDeviceMemoryAccessData source = MakeBaseDeviceMemoryAccessData(
-            header, params.srcAddr, ACLSAN_DEVICE_MEMORY_SPACE_GM, ACLSAN_DEVICE_MEMORY_ACCESS_READ);
-        AclsanDeviceMemoryAccessData destination = MakeBaseDeviceMemoryAccessData(
-            header, params.dstAddr, ACLSAN_DEVICE_MEMORY_SPACE_L1, ACLSAN_DEVICE_MEMORY_ACCESS_WRITE);
-        if (!ConfigureMemoryAccessLayout(source, 0, 0, 0) || !ConfigureMemoryAccessLayout(destination, 0, 0, 0)) {
-            return std::nullopt;
-        }
-        return MakeDeviceMemoryAccessDataList(header, {source, destination});
-    }
-
-    // TODO: 待填充转cbdata的逻辑
-    static std::optional<DeviceMemoryAccessDataList> MakeDeviceMemoryAccessData(
-        const AclsanDeviceEventHeader& header, const aclsan::NdDmaParamField& params) noexcept
-    {
-        AclsanDeviceMemoryAccessData source = MakeBaseDeviceMemoryAccessData(
-            header, params.srcAddr, ACLSAN_DEVICE_MEMORY_SPACE_GM, ACLSAN_DEVICE_MEMORY_ACCESS_READ, params.dataBits);
-        AclsanDeviceMemoryAccessData destination = MakeBaseDeviceMemoryAccessData(
-            header, params.dstAddr, ACLSAN_DEVICE_MEMORY_SPACE_UB, ACLSAN_DEVICE_MEMORY_ACCESS_WRITE, params.dataBits);
-        if (!ConfigureMemoryAccessLayout(source, 0, 0, 0) || !ConfigureMemoryAccessLayout(destination, 0, 0, 0)) {
-            return std::nullopt;
-        }
-        return MakeDeviceMemoryAccessDataList(header, {source, destination});
-    }
-
     template <typename ParamField>
     static std::optional<DeviceCallbackData> MakeDeviceMemoryAccessCallbackData(
         const ParsedTraceRecord& parsed, AclsanDevicePipeline pipeline, const ParamField& params) noexcept
@@ -242,7 +213,9 @@ private:
                                              std::is_same_v<ParamField, CopyGmToCbufMultiNd2NzParamField> ||
                                              std::is_same_v<ParamField, CopyGmToCbufMultiDn2NzParamField> ||
                                              std::is_same_v<ParamField, CopyUbufToGmAlignV2ParamField> ||
-                                             std::is_same_v<ParamField, FixL0cToOutParamField>;
+                                             std::is_same_v<ParamField, FixL0cToOutParamField> ||
+                                             std::is_same_v<ParamField, LoadGmToCbuf2DV2ParamField> ||
+                                             std::is_same_v<ParamField, NdDmaOutToUbufParamField>;
         if constexpr (useExactGmConverter) {
             MemoryInstructionField memoryField;
             if constexpr (std::is_same_v<ParamField, CopyGmToCbufMultiNd2NzParamField>) {

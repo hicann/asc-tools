@@ -32,6 +32,9 @@ enum class DeviceInstructionKind : uint32_t {
     CopyGmToCbufV2,      // InstructionId::CopyGmToCbufV2                -> CopyGmToCbufV2ParamField
     LoadGmToCbuf2DV2,    // InstructionId::LoadGmToCbuf2DV2              -> LoadGmToCbuf2DV2ParamField
     NdDmaOutToUbuf,      // InstructionId::NdDmaOutToUbufB8/B16/B32      -> NdDmaOutToUbufParamField
+    Mte2SourceParam,     // InstructionId::Mte2SrcPara                 -> Mte2SourceParamField
+    NdDmaLoopStride,     // InstructionId::NdDmaLoop*Stride            -> NdDmaLoopStrideParamField
+    Mte2NzParam,         // InstructionId::SetMte2NzPara               -> Mte2NzParamField
     SetL12D,             // InstructionId::SetL12DB16/B32                -> SetL12DParamField
     FixL0cToOut,         // InstructionId::FixL0cToOutF32/S32            -> FixL0cToOutParamField
     SetPadding,          // InstructionId::SetPadding                    -> SetPaddingParamField
@@ -45,9 +48,9 @@ enum class DeviceInstructionKind : uint32_t {
 using DeviceInstructionParamField = std::variant<
     std::monostate, // 默认构造为空
     CopyGmToUbufAlignV2ParamField, CopyGmToCbufAlignV2ParamField, CopyUbufToGmAlignV2ParamField,
-    CopyGmToCbufMultiDn2NzParamField, CopyGmToCbufMultiNd2NzParamField, CopyGmToCbufV2ParamField,
-    LoadGmToCbuf2DV2ParamField, NdDmaOutToUbufParamField, SetL12DParamField, FixL0cToOutParamField,
-    SetPaddingParamField, FlagParamField, SyncBufParamField>;
+    CopyGmToCbufMultiDn2NzParamField, CopyGmToCbufMultiNd2NzParamField, CopyGmToCbufV2ParamField, Mte2SourceParamField,
+    NdDmaLoopStrideParamField, Mte2NzParamField, LoadGmToCbuf2DV2ParamField, NdDmaOutToUbufParamField,
+    SetL12DParamField, FixL0cToOutParamField, SetPaddingParamField, FlagParamField, SyncBufParamField>;
 
 struct DecodedInstruction {
     DeviceInstructionKind kind = DeviceInstructionKind::InvalidInstruction;

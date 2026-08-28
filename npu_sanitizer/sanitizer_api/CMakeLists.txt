@@ -188,7 +188,9 @@ if(ENABLE_TEST)
   )
   target_compile_features(aclsan_memory_cbdata_test PRIVATE cxx_std_17)
   target_compile_options(aclsan_memory_cbdata_test PRIVATE -Wall -Wextra -Werror)
-  target_include_directories(aclsan_memory_cbdata_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
+  target_include_directories(aclsan_memory_cbdata_test PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+    ${CMAKE_CURRENT_LIST_DIR}/../dbi/include)
   target_link_libraries(aclsan_memory_cbdata_test PRIVATE npu_compute_integration_headers)
   add_test(NAME aclsan_memory_cbdata_test COMMAND aclsan_memory_cbdata_test)
   add_executable(aclsan_trace_buffer_test

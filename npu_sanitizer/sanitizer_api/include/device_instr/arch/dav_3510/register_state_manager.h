@@ -14,6 +14,7 @@
 #include "device_instr/common/device_instr_struct_dma.h"
 #include "device_instr/common/device_instr_struct_register.h"
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <optional>
@@ -31,6 +32,9 @@ struct Dav3510CoreKey {
 struct Dav3510CoreRegisterState {
     std::optional<VectorMaskParamField> vectorMask;
     std::optional<SetL12DParamField> setL12D;
+    std::optional<Mte2SourceParamField> mte2Source;
+    std::array<std::optional<NdDmaLoopStrideParamField>, 5> ndDmaLoopStrides{};
+    std::optional<Mte2NzParamField> mte2Nz;
     std::optional<SetPaddingParamField> setPadding;
 };
 
@@ -39,6 +43,9 @@ public:
     explicit Dav3510RegisterStateManager(uint64_t launchId) noexcept;
 
     void Update(const Dav3510CoreKey& key, const VectorMaskParamField& params) noexcept;
+    void Update(const Dav3510CoreKey& key, const Mte2SourceParamField& params) noexcept;
+    void Update(const Dav3510CoreKey& key, const NdDmaLoopStrideParamField& params) noexcept;
+    void Update(const Dav3510CoreKey& key, const Mte2NzParamField& params) noexcept;
     void Update(const Dav3510CoreKey& key, const SetL12DParamField& params) noexcept;
     void Update(const Dav3510CoreKey& key, const SetPaddingParamField& params) noexcept;
     std::optional<Dav3510CoreRegisterState> Get(const Dav3510CoreKey& key) const noexcept;

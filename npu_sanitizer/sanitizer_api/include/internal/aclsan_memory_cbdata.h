@@ -51,7 +51,7 @@ struct FixpipeMemoryField {
 
 using MemoryInstructionField = std::variant<
     CopyGmToUbufAlignV2ParamField, CopyGmToCbufAlignV2ParamField, MultiNd2NzMemoryField, MultiDn2NzMemoryField,
-    CopyUbufToGmAlignV2ParamField, FixpipeMemoryField>;
+    CopyUbufToGmAlignV2ParamField, FixpipeMemoryField, LoadGmToCbuf2DV2ParamField, NdDmaOutToUbufParamField>;
 
 struct MemoryCbdataContext {
     uint64_t pc = 0;

@@ -173,6 +173,27 @@ DecodedInstruction DecodeSetPadding(const aclsan::AclsanRawTraceRecord& record) 
     return DecodedInstruction{DeviceInstructionKind::SetPadding, params};
 }
 
+DecodedInstruction DecodeMte2SourceParam(const aclsan::AclsanRawTraceRecord& record) noexcept
+{
+    const uint32_t bits = static_cast<uint32_t>(record.args[0]);
+    const uint64_t stride = (bits & (1U << 31U)) == 0 ? bits : static_cast<uint64_t>(~bits) + 1U;
+    return DecodedInstruction{DeviceInstructionKind::Mte2SourceParam, Mte2SourceParamField{stride}};
+}
+
+DecodedInstruction DecodeNdDmaLoopStride(const aclsan::AclsanRawTraceRecord& record) noexcept
+{
+    const uint32_t first = static_cast<uint32_t>(InstructionId::NdDmaLoop0Stride);
+    const auto loopIndex = static_cast<uint32_t>(record.instrId) - first;
+    const uint64_t stride = (record.args[0] >> 20U) & ((1ULL << 40U) - 1U);
+    return DecodedInstruction{DeviceInstructionKind::NdDmaLoopStride, NdDmaLoopStrideParamField{loopIndex, stride}};
+}
+
+DecodedInstruction DecodeMte2NzParam(const aclsan::AclsanRawTraceRecord& record) noexcept
+{
+    return DecodedInstruction{
+        DeviceInstructionKind::Mte2NzParam, Mte2NzParamField{static_cast<uint16_t>(record.args[0])}};
+}
+
 DecodedInstruction DecodeFixL0cToOut(const aclsan::AclsanRawTraceRecord& record, uint32_t dataBits) noexcept
 {
     FixL0cToOutParamField params{};
@@ -282,6 +303,17 @@ std::optional<DecodedInstruction> Decode(const aclsan::AclsanRawTraceRecord& rec
             return DecodeNdDmaOutToUbuf(record, DATA_BITS_B16);
         case RawId(InstructionId::NdDmaOutToUbufB32):
             return DecodeNdDmaOutToUbuf(record, DATA_BITS_B32);
+
+        case RawId(InstructionId::Mte2SrcPara):
+            return DecodeMte2SourceParam(record);
+        case RawId(InstructionId::NdDmaLoop0Stride):
+        case RawId(InstructionId::NdDmaLoop1Stride):
+        case RawId(InstructionId::NdDmaLoop2Stride):
+        case RawId(InstructionId::NdDmaLoop3Stride):
+        case RawId(InstructionId::NdDmaLoop4Stride):
+            return DecodeNdDmaLoopStride(record);
+        case RawId(InstructionId::SetMte2NzPara):
+            return DecodeMte2NzParam(record);
 
         case RawId(InstructionId::FixL0cToOutF32):
             return DecodeFixL0cToOut(record, DATA_BITS_B32);

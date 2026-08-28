@@ -28,9 +28,10 @@ namespace {
 TEST(DbiPipelineTest, NormalizesProbeGroupsAndRejectsDuplicates)
 {
     const auto groups = NormalizeProbeGroups({ProbeGroup::Sync, ProbeGroup::Mte2, ProbeGroup::Sync});
-    ASSERT_EQ(groups.size(), 2U);
+    ASSERT_EQ(groups.size(), 3U);
     EXPECT_EQ(groups[0], ProbeGroup::Mte2);
-    EXPECT_EQ(groups[1], ProbeGroup::Sync);
+    EXPECT_EQ(groups[1], ProbeGroup::Scalar);
+    EXPECT_EQ(groups[2], ProbeGroup::Sync);
 }
 
 TEST(DbiPipelineTest, MapsProbeGroupsToTranslationUnits)
@@ -40,7 +41,7 @@ TEST(DbiPipelineTest, MapsProbeGroupsToTranslationUnits)
     EXPECT_EQ(ProbeSourceName(ProbeGroup::Mte3), "mte3.cpp");
     EXPECT_EQ(ProbeSourceName(ProbeGroup::Fixpipe), "fixpipe.cpp");
     EXPECT_EQ(ProbeSourceName(ProbeGroup::Sync), "sync.cpp");
-    EXPECT_EQ(ProbeSourceName(ProbeGroup::Register), "register.cpp");
+    EXPECT_EQ(ProbeSourceName(ProbeGroup::Scalar), "scalar.cpp");
 }
 
 TEST(DbiPipelineTest, ValidatesRequestFields)
@@ -93,6 +94,7 @@ TEST(DbiPipelineTest, SourceDigestIncludesSharedTraceProtocolHeaders)
     const std::filesystem::path root = std::filesystem::temp_directory_path() / "dbi_source_digest_test";
     std::filesystem::remove_all(root);
     std::filesystem::create_directories(root / "probes");
+    std::ofstream(root / "probes/scalar.cpp") << "scalar";
     std::ofstream(root / "probes/mte2.cpp") << "probe";
     std::ofstream(root / "trace_record.h") << "record-v1";
     std::ofstream(root / "trace_buffer_abi.h") << "abi-v1";
@@ -119,7 +121,7 @@ std::string ReadGeneratedFile(const std::filesystem::path& path)
 TEST(CtrlbinGeneratorTest, FiltersBindingsToSelectedProbeGroups)
 {
     const auto symbols = BindingSymbols({ProbeGroup::Mte2});
-    EXPECT_EQ(symbols.size(), 20U);
+    EXPECT_EQ(symbols.size(), 27U);
     for (const auto& symbol : symbols) {
         EXPECT_NE(symbol.find("sanitizer_report_"), std::string::npos);
     }
@@ -134,12 +136,16 @@ TEST(CtrlbinGeneratorTest, FiltersBindingsToSelectedProbeGroups)
     const auto mte1Symbols = BindingSymbols({ProbeGroup::Mte1});
     EXPECT_EQ(std::find(mte1Symbols.begin(), mte1Symbols.end(), "__sanitizer_report_set_padding"), mte1Symbols.end());
 
-    const auto registerSymbols = BindingSymbols({ProbeGroup::Register});
-    ASSERT_EQ(registerSymbols.size(), 1U);
-    EXPECT_EQ(registerSymbols[0], "__sanitizer_report_set_padding");
+    const auto scalarSymbols = BindingSymbols({ProbeGroup::Scalar});
+    ASSERT_EQ(scalarSymbols.size(), 8U);
+    EXPECT_NE(
+        std::find(scalarSymbols.begin(), scalarSymbols.end(), "__sanitizer_report_set_padding"), scalarSymbols.end());
+    EXPECT_EQ(
+        std::find(scalarSymbols.begin(), scalarSymbols.end(), "__sanitizer_report_set_l1_2d_b16"), scalarSymbols.end());
+    EXPECT_NE(std::find(symbols.begin(), symbols.end(), "__sanitizer_report_set_l1_2d_b16"), symbols.end());
 }
 
-TEST(CtrlbinGeneratorTest, AllGroupsPreserveBindingCount) { EXPECT_EQ(BindingSymbols(AllProbeGroups()).size(), 77U); }
+TEST(CtrlbinGeneratorTest, AllGroupsPreserveBindingCount) { EXPECT_EQ(BindingSymbols(AllProbeGroups()).size(), 83U); }
 
 TEST(CtrlbinGeneratorTest, ConcurrentRequestsRemainIsolated)
 {

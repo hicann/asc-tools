@@ -111,6 +111,36 @@ public:
             static_cast<uint32_t>(field.dstElementBytes) * 8U, ACLSAN_DEVICE_SOURCE_FIXPIPE, kBlockTypeAic};
     }
 
+    static std::optional<MemoryInstructionProfile> Create(const LoadGmToCbuf2DV2ParamField& field) noexcept
+    {
+        if (static_cast<InstructionId>(field.instrId) != InstructionId::LoadGmToCbuf2DV2 || field.decompMode != 0) {
+            return std::nullopt;
+        }
+        return MemoryInstructionProfile{0, ACLSAN_DEVICE_SOURCE_MTE2, kBlockTypeAic};
+    }
+
+    static std::optional<MemoryInstructionProfile> Create(const NdDmaOutToUbufParamField& field) noexcept
+    {
+        uint32_t dataBits = 0;
+        switch (static_cast<InstructionId>(field.instrId)) {
+            case InstructionId::NdDmaOutToUbufB8:
+                dataBits = 8;
+                break;
+            case InstructionId::NdDmaOutToUbufB16:
+                dataBits = 16;
+                break;
+            case InstructionId::NdDmaOutToUbufB32:
+                dataBits = 32;
+                break;
+            default:
+                return std::nullopt;
+        }
+        if (field.dataBits != dataBits) {
+            return std::nullopt;
+        }
+        return MemoryInstructionProfile{dataBits, ACLSAN_DEVICE_SOURCE_MTE2, kBlockTypeAiv};
+    }
+
 private:
     static bool IsSupportedReadDataBits(uint32_t dataBits) noexcept
     {
@@ -193,6 +223,14 @@ public:
             layout.strideBytes[index] = sparseAxes[index].stride;
         }
         return {address, ACLSAN_DEVICE_MEMORY_ACCESS_READ, dataBits, layout};
+    }
+
+    static MemoryAccessDescriptor NdRead(
+        uint64_t address, uint32_t dataBits, uint64_t elementBytes, const std::array<uint64_t, 5>& counts,
+        const std::array<uint64_t, 5>& strides) noexcept
+    {
+        return {
+            address, ACLSAN_DEVICE_MEMORY_ACCESS_READ, dataBits, NdAffineDescriptor{5, elementBytes, counts, strides}};
     }
 };
 
@@ -388,6 +426,68 @@ public:
         return ConvertFixpipeNz(field, profile->dataBits, dstStrideBytes, std::move(builder));
     }
 
+    MemoryCbdataResult operator()(const LoadGmToCbuf2DV2ParamField& field) const noexcept
+    {
+        constexpr uint64_t kFractalBytes = 512;
+        const auto profile = MemoryInstructionProfileFactory::Create(field);
+        if (!profile.has_value()) {
+            return {MemoryCbdataStatus::INVALID_FIELD, {}};
+        }
+        if (field.mStep == 0 || field.kStep == 0) {
+            return {MemoryCbdataStatus::NO_ACCESS, {}};
+        }
+        if (field.srcStride > std::numeric_limits<uint64_t>::max() / kFractalBytes) {
+            return {MemoryCbdataStatus::ARITHMETIC_OVERFLOW, {}};
+        }
+        const uint64_t repeatStrideBytes = field.srcStride * kFractalBytes;
+        if (repeatStrideBytes > static_cast<uint64_t>(std::numeric_limits<int64_t>::max())) {
+            return {MemoryCbdataStatus::ARITHMETIC_OVERFLOW, {}};
+        }
+        if (field.kStartPosition != 0 &&
+            field.srcStride > (std::numeric_limits<uint64_t>::max() - field.mStartPosition) / field.kStartPosition) {
+            return {MemoryCbdataStatus::ARITHMETIC_OVERFLOW, {}};
+        }
+        const uint64_t firstFractal =
+            static_cast<uint64_t>(field.kStartPosition) * field.srcStride + field.mStartPosition;
+        if (firstFractal > (std::numeric_limits<uint64_t>::max() - field.srcAddr) / kFractalBytes) {
+            return {MemoryCbdataStatus::ARITHMETIC_OVERFLOW, {}};
+        }
+        const uint64_t firstAddress = field.srcAddr + firstFractal * kFractalBytes;
+        MemoryCbdataBuilder builder(context_, *profile);
+        return BuildSingleAccess(
+            std::move(builder),
+            MemoryAccessDescriptorFactory::NdRead(
+                firstAddress, profile->dataBits, kFractalBytes, std::array<uint64_t, 2>{field.mStep, field.kStep},
+                std::array<uint64_t, 2>{kFractalBytes, repeatStrideBytes}));
+    }
+
+    MemoryCbdataResult operator()(const NdDmaOutToUbufParamField& field) const noexcept
+    {
+        const auto profile = MemoryInstructionProfileFactory::Create(field);
+        if (!profile.has_value()) {
+            return {MemoryCbdataStatus::INVALID_FIELD, {}};
+        }
+        const std::array<uint64_t, 5> counts{
+            field.loop0Size, field.loop1Size, field.loop2Size, field.loop3Size, field.loop4Size};
+        if (std::any_of(counts.begin(), counts.end(), [](uint64_t count) { return count == 0; })) {
+            return {MemoryCbdataStatus::NO_ACCESS, {}};
+        }
+
+        const uint64_t elementBytes = profile->dataBits / 8U;
+        std::array<uint64_t, 5> strideBytes{};
+        for (std::size_t index = 0; index < strideBytes.size(); ++index) {
+            if (field.loopSrcStrides[index] > std::numeric_limits<uint64_t>::max() / elementBytes) {
+                return {MemoryCbdataStatus::ARITHMETIC_OVERFLOW, {}};
+            }
+            strideBytes[index] = field.loopSrcStrides[index] * elementBytes;
+        }
+
+        MemoryCbdataBuilder builder(context_, *profile);
+        return BuildSingleAccess(
+            std::move(builder),
+            MemoryAccessDescriptorFactory::NdRead(field.srcAddr, profile->dataBits, elementBytes, counts, strideBytes));
+    }
+
 private:
     template <typename Field>
     MemoryCbdataResult ConvertGmRead(const Field& field) const noexcept
@@ -428,7 +528,8 @@ private:
         return BuildSingleAccess(
             std::move(builder), MemoryAccessDescriptorFactory::NdRead(
                                     field.srcAddr, profile->dataBits, rowElements * elementBytes,
-                                    {rowCount, input.matrixNum}, {field.loop1SrcStride, field.loop4SrcStride}));
+                                    std::array<uint64_t, 2>{rowCount, input.matrixNum},
+                                    std::array<uint64_t, 2>{field.loop1SrcStride, field.loop4SrcStride}));
     }
 
     static MemoryCbdataResult BuildSingleAccess(

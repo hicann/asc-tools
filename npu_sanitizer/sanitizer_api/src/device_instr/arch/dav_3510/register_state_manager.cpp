@@ -52,6 +52,37 @@ void Dav3510RegisterStateManager::Update(const Dav3510CoreKey& key, const SetPad
         static_cast<unsigned long long>(params.value));
 }
 
+void Dav3510RegisterStateManager::Update(const Dav3510CoreKey& key, const Mte2SourceParamField& params) noexcept
+{
+    states_[key].mte2Source = params;
+    ASC_SAN_DEBUG(
+        "[register] action=update register=mte2_source launchId=%llu blockType=%u blockId=%u srcStride=%llu",
+        static_cast<unsigned long long>(launchId_), key.blockType, key.blockId,
+        static_cast<unsigned long long>(params.srcStride));
+}
+
+void Dav3510RegisterStateManager::Update(const Dav3510CoreKey& key, const NdDmaLoopStrideParamField& params) noexcept
+{
+    if (params.loopIndex >= states_[key].ndDmaLoopStrides.size()) {
+        return;
+    }
+    states_[key].ndDmaLoopStrides[params.loopIndex] = params;
+    ASC_SAN_DEBUG(
+        "[register] action=update register=nddma_loop_stride launchId=%llu blockType=%u blockId=%u "
+        "loopIndex=%u srcStride=%llu",
+        static_cast<unsigned long long>(launchId_), key.blockType, key.blockId, params.loopIndex,
+        static_cast<unsigned long long>(params.srcStride));
+}
+
+void Dav3510RegisterStateManager::Update(const Dav3510CoreKey& key, const Mte2NzParamField& params) noexcept
+{
+    states_[key].mte2Nz = params;
+    ASC_SAN_DEBUG(
+        "[register] action=update register=mte2_nz launchId=%llu blockType=%u blockId=%u matrixNum=%u",
+        static_cast<unsigned long long>(launchId_), key.blockType, key.blockId,
+        static_cast<unsigned int>(params.matrixNum));
+}
+
 std::optional<Dav3510CoreRegisterState> Dav3510RegisterStateManager::Get(const Dav3510CoreKey& key) const noexcept
 {
     const auto state = states_.find(key);

@@ -16,56 +16,64 @@
 namespace aclsan {
 
 // Instruction IDs are stable across chips. Each architecture decoder defines the subset it handles.
+// “已完成”表示该指令已完成 RawData -> ParamField -> CBData 全链路转换。
 enum class InstructionId : uint32_t {
     // MTE2
-    LoadGmToCbuf2DV2 = 72,          // LOAD_OUT_TO_L1_2DV2
-    CopyGmToCbufV2 = 73,            // MOV_OUT_TO_L1_V2
-    CopyGmToCbufAlignV2B8 = 74,     // MOV_OUT_TO_L1_ALIGN_V2.b8
-    CopyGmToCbufAlignV2B16 = 75,    // MOV_OUT_TO_L1_ALIGN_V2.b16
-    CopyGmToCbufAlignV2B32 = 76,    // MOV_OUT_TO_L1_ALIGN_V2.b32
-    CopyGmToCbufMultiNd2NzB8 = 77,  // MOV_OUT_TO_L1_MULTI_ND2NZ.b8
-    CopyGmToCbufMultiNd2NzB16 = 78, // MOV_OUT_TO_L1_MULTI_ND2NZ.b16
-    CopyGmToCbufMultiNd2NzB32 = 79, // MOV_OUT_TO_L1_MULTI_ND2NZ.b32
-    CopyGmToCbufMultiDn2NzB8 = 80,  // MOV_OUT_TO_L1_MULTI_DN2NZ.b8
-    CopyGmToCbufMultiDn2NzB16 = 81, // MOV_OUT_TO_L1_MULTI_DN2NZ.b16
-    CopyGmToCbufMultiDn2NzB32 = 82, // MOV_OUT_TO_L1_MULTI_DN2NZ.b32
-    CopyGmToUbufAlignV2B8 = 84,     // MOV_OUT_TO_UB_ALIGN_V2.b8
-    CopyGmToUbufAlignV2B16 = 85,    // MOV_OUT_TO_UB_ALIGN_V2.b16
-    CopyGmToUbufAlignV2B32 = 86,    // MOV_OUT_TO_UB_ALIGN_V2.b32
-    NdDmaOutToUbufB8 = 87,          // ND_DMA_OUT_TO_UB.b8
-    NdDmaOutToUbufB16 = 88,         // ND_DMA_OUT_TO_UB.b16
-    NdDmaOutToUbufB32 = 89,         // ND_DMA_OUT_TO_UB.b32
+    LoadGmToCbuf2DV2 = 72,          // 已完成：LoadGmToCbuf2DV2ParamField
+    CopyGmToCbufV2 = 73,            // 已完成：CopyGmToCbufV2ParamField
+    CopyGmToCbufAlignV2B8 = 74,     // 已完成：CopyGmToCbufAlignV2ParamField
+    CopyGmToCbufAlignV2B16 = 75,    // 已完成：CopyGmToCbufAlignV2ParamField
+    CopyGmToCbufAlignV2B32 = 76,    // 已完成：CopyGmToCbufAlignV2ParamField
+    CopyGmToCbufMultiNd2NzB8 = 77,  // 已完成：CopyGmToCbufMultiNd2NzParamField
+    CopyGmToCbufMultiNd2NzB16 = 78, // 已完成：CopyGmToCbufMultiNd2NzParamField
+    CopyGmToCbufMultiNd2NzB32 = 79, // 已完成：CopyGmToCbufMultiNd2NzParamField
+    CopyGmToCbufMultiDn2NzB8 = 80,  // 已完成：CopyGmToCbufMultiDn2NzParamField
+    CopyGmToCbufMultiDn2NzB16 = 81, // 已完成：CopyGmToCbufMultiDn2NzParamField
+    CopyGmToCbufMultiDn2NzB32 = 82, // 已完成：CopyGmToCbufMultiDn2NzParamField
+    CopyGmToUbufAlignV2B8 = 84,     // 已完成：CopyGmToUbufAlignV2ParamField
+    CopyGmToUbufAlignV2B16 = 85,    // 已完成：CopyGmToUbufAlignV2ParamField
+    CopyGmToUbufAlignV2B32 = 86,    // 已完成：CopyGmToUbufAlignV2ParamField
+    Mte2SrcPara = 124,              // MTE2_SRC_PARA
+    NdDmaLoop0Stride = 132,         // LOOP0_STRIDE_NDDMA
+    NdDmaLoop1Stride = 133,         // LOOP1_STRIDE_NDDMA
+    NdDmaLoop2Stride = 134,         // LOOP2_STRIDE_NDDMA
+    NdDmaLoop3Stride = 135,         // LOOP3_STRIDE_NDDMA
+    NdDmaLoop4Stride = 136,         // LOOP4_STRIDE_NDDMA
+    NdDmaOutToUbufB8 = 87,          // 已完成：NdDmaOutToUbufParamField
+    NdDmaOutToUbufB16 = 88,         // 已完成：NdDmaOutToUbufParamField
+    NdDmaOutToUbufB32 = 89,         // 已完成：NdDmaOutToUbufParamField
     SetL12DB16 = 149,               // SET_L1_2D.b16
     SetL12DB32 = 150,               // SET_L1_2D.b32
+    SetMte2NzPara = 399,            // SET_MTE2_NZ_PARA
 
     // MTE3
-    CopyUbufToGmAlignV2 = 83, // MOV_UB_TO_OUT_ALIGN_V2
+    CopyUbufToGmAlignV2 = 83, // 已完成：CopyUbufToGmAlignV2ParamField
     CopyUbufToCbuf = 173,     // MOV_UB_TO_L1
 
     // FIX
-    FixL0cToOutF32 = 91, // FIX_L0C_TO_OUT.f32
-    FixL0cToOutS32 = 92, // FIX_L0C_TO_OUT.s32
+    FixL0cToOutF32 = 91, // 已完成：FixL0cToOutParamField
+    FixL0cToOutS32 = 92, // 已完成：FixL0cToOutParamField
 
     // REGISTER
     SetPadding = 392, // SET_PADDING
 
     // SYNCCHECK
-    SetFlag = 440,    // SET_FLAG.<src_pipe>.<dst_pipe>
-    SetFlagI = 441,   // SET_FLAGI.<src_pipe>.<dst_pipe>
-    WaitFlag = 442,   // WAIT_FLAG.<src_pipe>.<dst_pipe>
-    WaitFlagI = 443,  // WAIT_FLAGI.<src_pipe>.<dst_pipe>
-    GetBuf = 448,     // GET_BUF.<pipe>
-    GetBufI = 449,    // GET_BUFI.<pipe>
-    RlsBuf = 450,     // RLS_BUF.<pipe>
-    RlsBufI = 451,    // RLS_BUFI.<pipe>
-    SetFlagV = 456,   // SET_FLAG_V.<dst_pipe>
-    SetFlagIV = 457,  // SET_FLAGI_V.<dst_pipe>
-    WaitFlagV = 458,  // WAIT_FLAG_V.<src_pipe>
-    WaitFlagIV = 459, // WAIT_FLAGI_V.<src_pipe>
-    GetBufV = 460,    // GET_BUF_V
-    GetBufIV = 461,   // GET_BUFI_V
-    RlsBufV = 462,    // RLS_BUF_V
-    RlsBufIV = 463,   // RLS_BUFI_V
+    SetFlag = 440,    // 已完成：FlagParamField
+    SetFlagI = 441,   // 已完成：FlagParamField
+    WaitFlag = 442,   // 已完成：FlagParamField
+    WaitFlagI = 443,  // 已完成：FlagParamField
+    GetBuf = 448,     // 已完成：SyncBufParamField
+    GetBufI = 449,    // 已完成：SyncBufParamField
+    RlsBuf = 450,     // 已完成：SyncBufParamField
+    RlsBufI = 451,    // 已完成：SyncBufParamField
+    SetFlagV = 456,   // 已完成：FlagParamField
+    SetFlagIV = 457,  // 已完成：FlagParamField
+    WaitFlagV = 458,  // 已完成：FlagParamField
+    WaitFlagIV = 459, // 已完成：FlagParamField
+    GetBufV = 460,    // 已完成：SyncBufParamField
+    GetBufIV = 461,   // 已完成：SyncBufParamField
+    RlsBufV = 462,    // 已完成：SyncBufParamField
+    RlsBufIV = 463,   // 已完成：SyncBufParamField
 };
 
 } // namespace aclsan

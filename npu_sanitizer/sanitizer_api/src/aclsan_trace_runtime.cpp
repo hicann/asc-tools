@@ -28,7 +28,6 @@
 #include <cstdlib>
 #include <cstring>
 #include <limits>
-#include <unordered_map>
 #include <mutex>
 #include <new>
 #include <utility>
@@ -229,42 +228,17 @@ aclError ResolveLaunchContext(PreparedTraceLaunch& prepared) noexcept
 void DispatchTraceRecords(
     const std::vector<ParsedTraceRecord>& records, const aclsan::DeviceInstructionDecoder& decoder) noexcept
 {
-    constexpr uint64_t SET_MTE2_NZ_PARA_INSTRUCTION_ID = 399;
     const auto isMultiInstruction = [](uint64_t instructionId) noexcept {
         return instructionId >= static_cast<uint64_t>(InstructionId::CopyGmToCbufMultiNd2NzB8) &&
                instructionId <= static_cast<uint64_t>(InstructionId::CopyGmToCbufMultiDn2NzB32);
     };
-    const auto blockKey = [](const ParsedTraceRecord& parsed) noexcept {
-        return (static_cast<uint64_t>(parsed.blockType) << 32U) | parsed.blockId;
-    };
-
     if (records.empty()) {
         return;
     }
+
     dav3510::Dav3510RegisterStateManager registerState(records.front().launchId);
-    std::unordered_map<uint64_t, uint16_t> matrixNumByBlock;
     for (const ParsedTraceRecord& parsed : records) {
-        if (parsed.record.instrId == SET_MTE2_NZ_PARA_INSTRUCTION_ID) {
-            LogRawRecord(parsed);
-            matrixNumByBlock[blockKey(parsed)] = static_cast<uint16_t>(parsed.record.args[0]);
-            continue;
-        }
-
-        ParsedTraceRecord enriched = parsed;
-        if (isMultiInstruction(parsed.record.instrId)) {
-            const auto matrixNum = matrixNumByBlock.find(blockKey(parsed));
-            if (matrixNum == matrixNumByBlock.end()) {
-                ASC_SAN_ERROR(
-                    "acl_san trace: multi memory instruction has no preceding SET_MTE2_NZ_PARA: instrId=%llu "
-                    "pc=0x%llx block=%u",
-                    static_cast<unsigned long long>(parsed.record.instrId),
-                    static_cast<unsigned long long>(parsed.record.pc), parsed.blockId);
-                continue;
-            }
-            enriched.record.args[4] = matrixNum->second;
-        }
-
-        const std::optional<aclsan::DecodedInstruction> decoded = decoder.decode(enriched.record);
+        std::optional<aclsan::DecodedInstruction> decoded = decoder.decode(parsed.record);
         if (!decoded.has_value()) {
             ASC_SAN_ERROR(
                 "acl_san trace: unsupported raw trace instrId=%llu pc=0x%llx block=%u",
@@ -272,12 +246,63 @@ void DispatchTraceRecords(
                 static_cast<unsigned long long>(parsed.record.pc), parsed.blockId);
             continue;
         }
-        if (const auto* setPadding = std::get_if<SetPaddingParamField>(&decoded->params)) {
+
+        const dav3510::Dav3510CoreKey key{parsed.blockType, parsed.blockId};
+        bool stateInstruction = true;
+        if (const auto* value = std::get_if<Mte2SourceParamField>(&decoded->params)) {
+            registerState.Update(key, *value);
+        } else if (const auto* value = std::get_if<NdDmaLoopStrideParamField>(&decoded->params)) {
+            registerState.Update(key, *value);
+        } else if (const auto* value = std::get_if<Mte2NzParamField>(&decoded->params)) {
+            registerState.Update(key, *value);
+        } else if (const auto* value = std::get_if<SetL12DParamField>(&decoded->params)) {
+            registerState.Update(key, *value);
+        } else if (const auto* value = std::get_if<SetPaddingParamField>(&decoded->params)) {
+            registerState.Update(key, *value);
+        } else {
+            stateInstruction = false;
+        }
+        if (stateInstruction) {
             LogRawRecord(parsed);
             LogParamField(decoded->params);
-            registerState.Update({parsed.blockType, parsed.blockId}, *setPadding);
             continue;
         }
+
+        ParsedTraceRecord enriched = parsed;
+        const std::optional<dav3510::Dav3510CoreRegisterState> state = registerState.Get(key);
+        bool stateComplete = true;
+        if (isMultiInstruction(parsed.record.instrId)) {
+            stateComplete = state.has_value() && state->mte2Nz.has_value();
+            if (stateComplete) {
+                enriched.record.args[4] = state->mte2Nz->matrixNum;
+            }
+        } else if (auto* value = std::get_if<LoadGmToCbuf2DV2ParamField>(&decoded->params)) {
+            stateComplete = state.has_value() && state->mte2Source.has_value();
+            if (stateComplete) {
+                value->srcStride = state->mte2Source->srcStride;
+            }
+        } else if (auto* value = std::get_if<NdDmaOutToUbufParamField>(&decoded->params)) {
+            const uint32_t loopSizes[] = {
+                value->loop0Size, value->loop1Size, value->loop2Size, value->loop3Size, value->loop4Size};
+            for (std::size_t index = 0; index < value->loopSrcStrides.size(); ++index) {
+                if (loopSizes[index] <= 1) {
+                    continue;
+                }
+                if (!state.has_value() || !state->ndDmaLoopStrides[index].has_value()) {
+                    stateComplete = false;
+                    break;
+                }
+                value->loopSrcStrides[index] = state->ndDmaLoopStrides[index]->srcStride;
+            }
+        }
+        if (!stateComplete) {
+            ASC_SAN_ERROR(
+                "acl_san trace: memory instruction has incomplete scalar state: instrId=%llu pc=0x%llx block=%u",
+                static_cast<unsigned long long>(parsed.record.instrId),
+                static_cast<unsigned long long>(parsed.record.pc), parsed.blockId);
+            continue;
+        }
+
         const auto callbackData = TranslateDecodedTraceToCallbackData(enriched, *decoded);
         if (!callbackData.has_value()) {
             ASC_SAN_ERROR(

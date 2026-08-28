@@ -81,6 +81,7 @@ TEST(DbiIntegrationTest, CompilesLinksAndPatchesSelectedProbeSet)
     WriteFile(
         root / "toolchain/x86_64-linux/ascendc/include/highlevel_api/kernel_tiling/kernel_tiling.h", "// marker\n");
     WriteFile(root / "sources/probes/mte2.cpp", "// mte2 source\n");
+    WriteFile(root / "sources/probes/scalar.cpp", "// scalar source\n");
     WriteFile(root / "input.o", "kernel\n");
     WriteFile(root / "commands.log", "");
     ASSERT_EQ(setenv("DBI_FAKE_LOG", (root / "commands.log").c_str(), 1), 0);
@@ -133,7 +134,7 @@ TEST(DbiIntegrationTest, CompilesLinksAndPatchesSelectedProbeSet)
     EXPECT_NE(commands.find("<-execute-probe>"), std::string::npos) << commands;
     EXPECT_NE(commands.find("bisheng-tune <--action=instru-probe>"), std::string::npos) << commands;
     EXPECT_NE(commands.find("<--dbi-config="), std::string::npos) << commands;
-    EXPECT_EQ(CountOccurrences(commands, "bisheng <-xcce>"), 1U) << commands;
+    EXPECT_EQ(CountOccurrences(commands, "bisheng <-xcce>"), 2U) << commands;
     EXPECT_EQ(CountOccurrences(commands, "ld.lld <-r>"), 1U) << commands;
     EXPECT_EQ(CountOccurrences(commands, "bisheng-tune <--action=instru-probe>"), 2U) << commands;
     unsetenv("DBI_FAKE_LOG");
@@ -152,6 +153,7 @@ TEST(DbiIntegrationTest, FailedProbeLinkDoesNotPublishPartialCacheArtifact)
     WriteFile(
         root / "toolchain/x86_64-linux/ascendc/include/highlevel_api/kernel_tiling/kernel_tiling.h", "// marker\n");
     WriteFile(root / "sources/probes/mte2.cpp", "// mte2 source\n");
+    WriteFile(root / "sources/probes/scalar.cpp", "// scalar source\n");
     WriteFile(root / "input.o", "kernel\n");
     WriteFile(root / "commands.log", "");
     ASSERT_EQ(setenv("DBI_FAKE_LOG", (root / "commands.log").c_str(), 1), 0);
@@ -196,6 +198,7 @@ TEST(DbiIntegrationTest, DoesNotAcceptStalePatchedOutputWhenTuneCreatesNothing)
     WriteFile(
         root / "toolchain/x86_64-linux/ascendc/include/highlevel_api/kernel_tiling/kernel_tiling.h", "// marker\n");
     WriteFile(root / "sources/probes/mte2.cpp", "// mte2 source\n");
+    WriteFile(root / "sources/probes/scalar.cpp", "// scalar source\n");
     WriteFile(root / "input.o", "kernel\n");
     WriteFile(root / "patched.o", "stale\n");
     WriteFile(root / "commands.log", "");

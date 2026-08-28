@@ -20,7 +20,7 @@ test -x "${demo_dir}/tests/check_padding_register_state_end_to_end.sh"
 
 grep -Fq 'add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/examples/padding_register_state"' \
     "${demo_dir}/CMakeLists.txt"
-grep -Fq 'foreach(probe_source mte1 mte2 mte3 fixpipe register sync)' "${demo_dir}/CMakeLists.txt"
+grep -Fq 'foreach(probe_source mte1 mte2 mte3 fixpipe scalar sync)' "${demo_dir}/CMakeLists.txt"
 grep -Fq 'add_executable(aclsan_demo_padding_register_state padding_register_state.asc)' \
     "${example_dir}/CMakeLists.txt"
 grep -Fq 'uint64_t reserved, uint64_t firstValue, uint64_t secondValue' \

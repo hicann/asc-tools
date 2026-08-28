@@ -75,11 +75,11 @@ int main()
     using aclsan::PROBE_GROUP_MTE1;
     using aclsan::PROBE_GROUP_MTE2;
     using aclsan::PROBE_GROUP_MTE3;
-    using aclsan::PROBE_GROUP_REGISTER;
+    using aclsan::PROBE_GROUP_SCALAR;
     using aclsan::PROBE_GROUP_SYNC;
 
     constexpr uint32_t memoryProbeMask =
-        PROBE_GROUP_MTE1 | PROBE_GROUP_MTE2 | PROBE_GROUP_MTE3 | PROBE_GROUP_FIXPIPE | PROBE_GROUP_REGISTER;
+        PROBE_GROUP_MTE1 | PROBE_GROUP_MTE2 | PROBE_GROUP_MTE3 | PROBE_GROUP_FIXPIPE | PROBE_GROUP_SCALAR;
 
     CHECK(
         aclsan::ProbeGroupMaskForCallback(ACLSAN_CB_DOMAIN_DEVICE_INSTRUCTION, ACLSAN_CBID_DEVICE_MEMORY_ACCESS) ==
@@ -89,10 +89,9 @@ int main()
         PROBE_GROUP_SYNC);
     CHECK(aclsan::ProbeGroupMaskForCallback(ACLSAN_CB_DOMAIN_RESOURCE, ACLSAN_CBID_RESOURCE_MEMORY_ALLOC) == 0);
     CHECK(
-        aclsan::ProbeGroupsFromMask(PROBE_GROUP_SYNC | PROBE_GROUP_MTE3 | PROBE_GROUP_MTE1 | PROBE_GROUP_REGISTER) ==
+        aclsan::ProbeGroupsFromMask(PROBE_GROUP_SYNC | PROBE_GROUP_MTE3 | PROBE_GROUP_MTE1 | PROBE_GROUP_SCALAR) ==
         (std::vector<aclsan::ProbeGroup>{
-            aclsan::ProbeGroup::Mte1, aclsan::ProbeGroup::Mte3, aclsan::ProbeGroup::Sync,
-            aclsan::ProbeGroup::Register}));
+            aclsan::ProbeGroup::Mte1, aclsan::ProbeGroup::Mte3, aclsan::ProbeGroup::Scalar, aclsan::ProbeGroup::Sync}));
 
     aclsan::CommitActiveProbePlan(memoryProbeMask);
     CHECK(aclsan::SnapshotActiveProbePlan() == memoryProbeMask);

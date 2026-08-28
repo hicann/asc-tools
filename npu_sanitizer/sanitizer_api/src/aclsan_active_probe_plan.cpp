@@ -27,7 +27,7 @@ uint32_t ProbeGroupMaskForCallback(AclsanCallbackDomain domain, AclsanCallbackId
         return 0;
     }
     if (id == ACLSAN_CBID_DEVICE_MEMORY_ACCESS) {
-        return PROBE_GROUP_MTE1 | PROBE_GROUP_MTE2 | PROBE_GROUP_MTE3 | PROBE_GROUP_FIXPIPE | PROBE_GROUP_REGISTER;
+        return PROBE_GROUP_MTE1 | PROBE_GROUP_MTE2 | PROBE_GROUP_MTE3 | PROBE_GROUP_FIXPIPE | PROBE_GROUP_SCALAR;
     }
     if (id == ACLSAN_CBID_DEVICE_SYNC) {
         return PROBE_GROUP_SYNC;

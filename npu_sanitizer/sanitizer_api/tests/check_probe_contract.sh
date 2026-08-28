@@ -33,7 +33,7 @@ required_files=(
     "${dbi_dir}/include/trace_buffer_abi.h"
     "${dbi_dir}/include/dbi_pipeline.h"
     "${dbi_dir}/src/dbi_pipeline.cpp"
-    "${dbi_dir}/src/acl_hook.cpp"
+    "${dbi_dir}/src/binary_instrumenter.cpp"
     "${dbi_dir}/src/probes/mte2.cpp"
     "${dbi_dir}/src/probes/sync.cpp"
 )
@@ -98,7 +98,7 @@ fi
 trace_runtime="${api_dir}/src/aclsan_trace_runtime.cpp"
 grep -Fq 'aclsan::FindDeviceInstructionDecoder(getSocName())' "${trace_runtime}" || \
     Fail 'trace runtime does not select the local instruction decoder'
-grep -Fq 'TranslateDecodedTraceToCallbackData(parsed, *decoded)' "${trace_runtime}" || \
+grep -Fq 'TranslateDecodedTraceToCallbackData(enriched, *decoded)' "${trace_runtime}" || \
     Fail 'decoded DBI records are not translated to public callback data'
 trace_translator="${api_dir}/src/aclsan/aclsan_translate_device_data.cpp"
 device_data_header="${api_dir}/include/internal/aclsan_device_data.h"
@@ -122,21 +122,31 @@ if rg -n '\bTraceCallbackContext\b' \
 fi
 grep -Fq 'std::get_if<SetPaddingParamField>' "${trace_runtime}" || \
     Fail 'trace runtime does not recognize decoded SET_PADDING state'
-grep -Fq 'registerState.Update({parsed.blockType, parsed.blockId}, *setPadding);' "${trace_runtime}" || \
+grep -Fq 'registerState.Update(key, *value);' "${trace_runtime}" || \
     Fail 'trace runtime does not update SET_PADDING state by block type and block ID'
 
 binding_source="${dbi_dir}/src/dynamic_bind.cpp"
-register_probe="${dbi_dir}/src/probes/register.cpp"
+scalar_probe="${dbi_dir}/src/probes/scalar.cpp"
+mte2_probe="${dbi_dir}/src/probes/mte2.cpp"
 grep -Fq '{InstrType::SET_PADDING, 392, "__sanitizer_report_set_padding", {0}}' "${binding_source}" || \
     Fail 'DBI does not bind SET_PADDING argument 0 to instruction ID 392'
-grep -Fq 'return ProbeGroup::Register;' "${binding_source}" || \
-    Fail 'SET_PADDING is not assigned to the Register probe group'
-grep -Fq '__sanitizer_report_set_padding(' "${register_probe}" || Fail 'Register SET_PADDING probe is missing'
-grep -Fq 'static_cast<uint16_t>(PIPE_S), 392, value' "${register_probe}" || \
+grep -Fq 'return ProbeGroup::Scalar;' "${binding_source}" || \
+    Fail 'SET_PADDING is not assigned to the Scalar probe group'
+grep -Fq '__sanitizer_report_set_padding(' "${scalar_probe}" || Fail 'Scalar SET_PADDING probe is missing'
+grep -Fq 'static_cast<uint16_t>(PIPE_S), 392, value' "${scalar_probe}" || \
     Fail 'SET_PADDING probe does not record PIPE_S and preserve value in raw argument 0'
+if grep -Fq '__sanitizer_report_set_l1_2d_' "${scalar_probe}"; then
+    Fail 'SET_L1_2D probes must not be assigned to the Scalar probe source'
+fi
+grep -Fq '__sanitizer_report_set_l1_2d_b16(' "${mte2_probe}" || Fail 'MTE2 SET_L1_2D.b16 probe is missing'
+grep -Fq '__sanitizer_report_set_l1_2d_b32(' "${mte2_probe}" || Fail 'MTE2 SET_L1_2D.b32 probe is missing'
+grep -Fq 'static_cast<uint16_t>(PIPE_MTE2), 149' "${mte2_probe}" || \
+    Fail 'SET_L1_2D.b16 probe does not record PIPE_MTE2'
+grep -Fq 'static_cast<uint16_t>(PIPE_MTE2), 150' "${mte2_probe}" || \
+    Fail 'SET_L1_2D.b32 probe does not record PIPE_MTE2'
 
 hook_source="${api_dir}/src/aclsan/aclsan_hook_aclrt.cpp"
-grep -Fq 'HandleBinaryLoadFromDataWithDefaultConfig' "${hook_source}" || \
+grep -Fq 'InstrumentRuntimeBinary' "${hook_source}" || \
     Fail 'binary-load hook does not use the DBI engine'
 grep -Fq 'SnapshotActiveProbePlan()' "${hook_source}" || Fail 'binary-load hook does not snapshot the active DBI plan'
 grep -Fq 'PrepareTraceLaunch(' "${hook_source}" || Fail 'launch hook does not prepare a DBI trace buffer'
@@ -146,7 +156,7 @@ grep -Fq 'CollectTraceStream(' "${hook_source}" || Fail 'synchronize hook does n
 if rg -n \
     'ACLSAN_PROBE_|ACLSAN_BUILD_DEVICE_PROBE_RESOURCES|sanitizer_api/src/probe|src/probe/|ProbeRuntime|ProbeParseResult|DispatchProbeRecords' \
     "${api_dir}/CMakeLists.txt" "${api_dir}/include" "${api_dir}/src" "${api_dir}/tests" \
-    --glob '!check_probe_contract.sh'; then
+    --glob '!check_probe_contract.sh' --glob '!aclsan_binary_load_dbi_hook.cpp'; then
     Fail 'legacy sanitizer_api probe implementation is still referenced'
 fi
 

@@ -139,10 +139,10 @@ BinaryInstrumentationConfig DefaultBinaryInstrumentationConfig()
                 config.probeGroups.push_back(ProbeGroup::Mte3);
             else if (group == "fixpipe")
                 config.probeGroups.push_back(ProbeGroup::Fixpipe);
+            else if (group == "scalar")
+                config.probeGroups.push_back(ProbeGroup::Scalar);
             else if (group == "sync")
                 config.probeGroups.push_back(ProbeGroup::Sync);
-            else if (group == "register")
-                config.probeGroups.push_back(ProbeGroup::Register);
         }
     }
     const std::string compilerArgCount = Env("NPU_CHECK_DBI_COMPILER_ARG_COUNT");
@@ -161,6 +161,7 @@ BinaryInstrumentationConfig DefaultBinaryInstrumentationConfig()
             }
         }
     }
+    config.probeGroups = NormalizeProbeGroups(config.probeGroups);
     return config;
 }
 

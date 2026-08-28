@@ -142,7 +142,9 @@ aclError OriginalLaunch(
     if (g_writeMultiMemoryRecords) {
         record->args[0] = 2;
         record->instrId = 399;
-        record->pipeline = ACLSAN_DEVICE_PIPE_MTE2;
+        record->category = aclsan::DeviceInstructionCategory::RegisterState;
+        record->pipeline = ACLSAN_DEVICE_PIPE_SCALAR;
+        record->blockId = 1;
 
         auto* multi = record + 1;
         multi->pc = 0x1238;
@@ -151,7 +153,10 @@ aclError OriginalLaunch(
         multi->args[3] = 8ULL | (512ULL << 21U);
         multi->instrId = 78;
         multi->siteId = 39;
+        multi->category = aclsan::DeviceInstructionCategory::MemoryAccess;
         multi->pipeline = ACLSAN_DEVICE_PIPE_MTE2;
+        multi->blockId = 1;
+        slice->phyCoreId = phyCoreId;
         slice->recordCount = 2;
         return ACL_SUCCESS;
     }
@@ -368,7 +373,7 @@ int main()
         aclrtLaunchKernelWithHostArgs(function, 2, stream1, nullptr, arguments, sizeof(arguments), nullptr, 0) ==
         ACL_SUCCESS);
     CHECK(aclrtSynchronizeStream(stream1) == ACL_ERROR_FAILURE);
-    CHECK(g_records.size() == 4);
+    CHECK(g_records.size() == 6);
     g_failSync = false;
     CHECK(aclrtSynchronizeStream(stream1) == ACL_SUCCESS);
     CHECK(g_records.size() == 6);

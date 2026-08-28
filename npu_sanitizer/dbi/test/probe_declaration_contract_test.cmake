@@ -7,7 +7,7 @@ set(probe_sources
   "${DBI_ROOT}/src/probes/mte1.cpp"
   "${DBI_ROOT}/src/probes/mte2.cpp"
   "${DBI_ROOT}/src/probes/mte3.cpp"
-  "${DBI_ROOT}/src/probes/register.cpp"
+  "${DBI_ROOT}/src/probes/scalar.cpp"
   "${DBI_ROOT}/src/probes/sync.cpp"
 )
 
@@ -69,8 +69,8 @@ if(NOT synchronization_category_count EQUAL 24)
 endif()
 string(REGEX MATCHALL "DeviceInstructionCategory::RegisterState" register_state_categories "${probe_content}")
 list(LENGTH register_state_categories register_state_category_count)
-if(NOT register_state_category_count EQUAL 4)
-  message(FATAL_ERROR "expected 4 register-state probe categories, found ${register_state_category_count}")
+if(NOT register_state_category_count EQUAL 10)
+  message(FATAL_ERROR "expected 10 register-state probe categories, found ${register_state_category_count}")
 endif()
 foreach(expected_pipeline IN ITEMS PIPE_S PIPE_MTE1 PIPE_MTE2 PIPE_MTE3 PIPE_FIX)
   if(NOT probe_content MATCHES "static_cast<uint16_t>\\(${expected_pipeline}\\)")
@@ -99,8 +99,8 @@ string(REGEX MATCHALL
   "__sanitizer_report_[A-Za-z0-9_]+[ \t\r\n]*\\("
   probe_definitions "${probe_content}")
 list(LENGTH probe_definitions probe_count)
-if(NOT probe_count EQUAL 77)
-  message(FATAL_ERROR "expected 77 probe definitions, found ${probe_count}")
+if(NOT probe_count EQUAL 83)
+  message(FATAL_ERROR "expected 83 probe definitions, found ${probe_count}")
 endif()
 
 string(CONCAT explicit_declaration
@@ -109,6 +109,6 @@ string(CONCAT explicit_declaration
   "__sanitizer_report_[A-Za-z0-9_]+[ \t\r\n]*\\(")
 string(REGEX MATCHALL "${explicit_declaration}" explicit_probes "${probe_content}")
 list(LENGTH explicit_probes explicit_probe_count)
-if(NOT explicit_probe_count EQUAL 77)
-  message(FATAL_ERROR "expected 77 explicit probe declarations, found ${explicit_probe_count}")
+if(NOT explicit_probe_count EQUAL 83)
+  message(FATAL_ERROR "expected 83 explicit probe declarations, found ${explicit_probe_count}")
 endif()
