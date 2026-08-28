@@ -222,6 +222,10 @@ aclError aclrtMemsetAsync(void* devPtr, size_t maxCount, int32_t value, size_t c
 aclError aclrtMemcpy(void* dst, size_t destMax, const void* src, size_t count, aclrtMemcpyKind kind)
 {
     (void)kind;
+    if (dst == nullptr || src == nullptr) {
+        printf("[ERROR] The parameter is invalid.\n");
+        return ACL_ERROR_INVALID_PARAM;
+    }
     auto ret = memcpy_s(dst, destMax, src, count);
     if (ret != EOK) {
         return ACL_ERROR_BAD_ALLOC;
@@ -232,20 +236,15 @@ aclError aclrtMemcpy(void* dst, size_t destMax, const void* src, size_t count, a
 aclError aclrtMemcpyAsync(
     void* dst, size_t destMax, const void* src, size_t count, aclrtMemcpyKind kind, aclrtStream stream)
 {
-    (void)kind;
     (void)stream;
-    auto ret = memcpy_s(dst, destMax, src, count);
-    if (ret != EOK) {
-        return ACL_ERROR_BAD_ALLOC;
-    }
-    return ACL_SUCCESS;
+    return aclrtMemcpy(dst, destMax, src, count, kind);
 }
 
 aclError aclrtMemcpy2d(
     void* dst, size_t dpitch, const void* src, size_t spitch, size_t width, size_t height, aclrtMemcpyKind kind)
 {
     (void)kind;
-    if (src == nullptr) {
+    if (dst == nullptr || src == nullptr || width > spitch) {
         printf("[ERROR] The parameter is invalid.\n");
         return ACL_ERROR_INVALID_PARAM;
     }
