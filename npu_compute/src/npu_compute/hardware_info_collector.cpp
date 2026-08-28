@@ -13,7 +13,6 @@
 #include "hardware_info_host.h"
 #include "hardware_info_json.h"
 
-#include <atomic>
 #include <condition_variable>
 #include <cstdio>
 #include <exception>
@@ -21,7 +20,6 @@
 #include <mutex>
 #include <string>
 #include <string_view>
-#include <thread>
 #include <utility>
 
 namespace npu_compute {
@@ -57,85 +55,90 @@ public:
 
     bool Initialize(const std::filesystem::path& outputDirectory, std::string* error)
     {
-        std::lock_guard<std::mutex> lifecycleLock(lifecycleMutex_);
+        std::lock_guard<std::mutex> lock(stateMutex_);
         if (error != nullptr) {
             error->clear();
         }
-        if (state_.load(std::memory_order_acquire) != HardwareCollectionState::Created) {
+        if (state_ != HardwareCollectionState::Created) {
             SetError(error, "HardwareInfoCollector is already initialized");
             return false;
         }
         if (!dependencies_.collectHostInfo || dependencies_.deviceApi == nullptr || !dependencies_.publish) {
-            state_.store(HardwareCollectionState::Failed, std::memory_order_release);
+            state_ = HardwareCollectionState::Failed;
             SetError(error, "HardwareInfoCollector dependencies are incomplete");
             return false;
         }
 
         try {
             outputDirectory_ = outputDirectory;
-            {
-                std::lock_guard<std::mutex> lock(waitMutex_);
-                stopRequested_ = false;
-            }
-            state_.store(HardwareCollectionState::WaitingRuntime, std::memory_order_release);
-            worker_ = std::thread(&Impl::Worker, this);
+            state_ = HardwareCollectionState::WaitingKernel;
         } catch (const std::exception& exception) {
-            state_.store(HardwareCollectionState::Failed, std::memory_order_release);
-            SetError(error, std::string("start HardwareInfo worker failed: ") + exception.what());
+            state_ = HardwareCollectionState::Failed;
+            SetError(error, std::string("initialize HardwareInfo collector failed: ") + exception.what());
             return false;
         } catch (...) {
-            state_.store(HardwareCollectionState::Failed, std::memory_order_release);
-            SetError(error, "start HardwareInfo worker failed: unknown exception");
+            state_ = HardwareCollectionState::Failed;
+            SetError(error, "initialize HardwareInfo collector failed: unknown exception");
             return false;
         }
         return true;
     }
 
-    void NotifyRuntimeReady() noexcept
+    void CollectOnKernelLaunch() noexcept
     {
-        bool notifyWorker = false;
         try {
-            std::lock_guard<std::mutex> lock(waitMutex_);
-            HardwareCollectionState expected = HardwareCollectionState::WaitingRuntime;
-            notifyWorker = state_.compare_exchange_strong(
-                expected, HardwareCollectionState::Collecting, std::memory_order_acq_rel, std::memory_order_acquire);
+            {
+                std::unique_lock<std::mutex> lock(stateMutex_);
+                if (state_ == HardwareCollectionState::Collecting) {
+                    stateCondition_.wait(lock, [this] { return state_ != HardwareCollectionState::Collecting; });
+                    return;
+                }
+                if (state_ != HardwareCollectionState::WaitingKernel) {
+                    return;
+                }
+                state_ = HardwareCollectionState::Collecting;
+            }
+
+            HardwareCollectionState finalState = HardwareCollectionState::Failed;
+            try {
+                finalState = Collect() ? HardwareCollectionState::Completed : HardwareCollectionState::Failed;
+            } catch (const std::exception& exception) {
+                Report(std::string("HardwareInfo collection failed: ") + exception.what());
+            } catch (...) {
+                Report("HardwareInfo collection failed: unknown exception");
+            }
+            SetFinalState(finalState);
         } catch (...) {
-            state_.store(HardwareCollectionState::Failed, std::memory_order_release);
-            Report("notify HardwareInfo worker failed");
-            return;
-        }
-        if (notifyWorker) {
-            waitCondition_.notify_one();
+            SetFinalState(HardwareCollectionState::Failed);
+            Report("HardwareInfo collection synchronization failed");
         }
     }
 
     void Stop() noexcept
     {
-        std::lock_guard<std::mutex> lifecycleLock(lifecycleMutex_);
-        {
-            std::lock_guard<std::mutex> lock(waitMutex_);
-            stopRequested_ = true;
-            HardwareCollectionState expected = HardwareCollectionState::WaitingRuntime;
-            state_.compare_exchange_strong(
-                expected, HardwareCollectionState::NoRuntimeReady, std::memory_order_acq_rel,
-                std::memory_order_acquire);
-        }
-        waitCondition_.notify_one();
-
-        if (worker_.joinable()) {
-            try {
-                worker_.join();
-            } catch (const std::exception& exception) {
-                state_.store(HardwareCollectionState::Failed, std::memory_order_release);
-                Report(std::string("join HardwareInfo worker failed: ") + exception.what());
-            } catch (...) {
-                state_.store(HardwareCollectionState::Failed, std::memory_order_release);
-                Report("join HardwareInfo worker failed: unknown exception");
+        try {
+            std::unique_lock<std::mutex> lock(stateMutex_);
+            if (state_ == HardwareCollectionState::WaitingKernel) {
+                state_ = HardwareCollectionState::NoKernelLaunch;
+                lock.unlock();
+                stateCondition_.notify_all();
+                return;
             }
+            stateCondition_.wait(lock, [this] { return state_ != HardwareCollectionState::Collecting; });
+        } catch (...) {
+            Report("stop HardwareInfo collector failed");
         }
     }
 
-    HardwareCollectionState State() const noexcept { return state_.load(std::memory_order_acquire); }
+    HardwareCollectionState State() const noexcept
+    {
+        try {
+            std::lock_guard<std::mutex> lock(stateMutex_);
+            return state_;
+        } catch (...) {
+            return HardwareCollectionState::Failed;
+        }
+    }
 
 private:
     static void SetError(std::string* error, const std::string& message)
@@ -155,74 +158,53 @@ private:
         }
     }
 
-    void Worker() noexcept
+    void SetFinalState(HardwareCollectionState finalState) noexcept
     {
         try {
-            {
-                std::unique_lock<std::mutex> lock(waitMutex_);
-                waitCondition_.wait(lock, [this] {
-                    return stopRequested_ ||
-                           state_.load(std::memory_order_acquire) == HardwareCollectionState::Collecting;
-                });
+            std::lock_guard<std::mutex> lock(stateMutex_);
+            if (state_ == HardwareCollectionState::Collecting) {
+                state_ = finalState;
             }
-
-            if (state_.load(std::memory_order_acquire) != HardwareCollectionState::Collecting) {
-                return;
-            }
-            Collect();
-        } catch (const std::exception& exception) {
-            state_.store(HardwareCollectionState::Failed, std::memory_order_release);
-            Report(std::string("HardwareInfo collection failed: ") + exception.what());
         } catch (...) {
-            state_.store(HardwareCollectionState::Failed, std::memory_order_release);
-            Report("HardwareInfo collection failed: unknown exception");
         }
+        stateCondition_.notify_all();
     }
 
-    void Collect()
+    bool Collect()
     {
         HardwareInfoSnapshot snapshot;
         DiagnosticSink* diagnostics = dependencies_.diagnostics ? &dependencies_.diagnostics : nullptr;
         if (!dependencies_.collectHostInfo(outputDirectory_, &snapshot.host, diagnostics)) {
-            Fail("Host HardwareInfo collection failed");
-            return;
+            Report("Host HardwareInfo collection failed");
+            return false;
         }
         if (!CollectDevice0Info(
                 *dependencies_.deviceApi, &snapshot.device, &snapshot.cpu, &snapshot.aiCore, &snapshot.memory,
                 diagnostics)) {
-            Fail("Device HardwareInfo collection failed");
-            return;
+            Report("Device HardwareInfo collection failed");
+            return false;
         }
 
         std::string jsonl;
         std::string error;
         if (!SerializeHardwareInfoJsonl(snapshot, &jsonl, &error)) {
-            Fail("HardwareInfo JSONL serialization failed: " + error);
-            return;
+            Report("HardwareInfo JSONL serialization failed: " + error);
+            return false;
         }
 
         const PublishResult result = dependencies_.publish(outputDirectory_, jsonl, &error);
         if (result == PublishResult::Failed) {
-            Fail("HardwareInfo publication failed: " + error);
-            return;
+            Report("HardwareInfo publication failed: " + error);
+            return false;
         }
-        state_.store(HardwareCollectionState::Completed, std::memory_order_release);
-    }
-
-    void Fail(const std::string& message) noexcept
-    {
-        state_.store(HardwareCollectionState::Failed, std::memory_order_release);
-        Report(message);
+        return true;
     }
 
     HardwareInfoDependencies dependencies_;
     std::filesystem::path outputDirectory_;
-    std::atomic<HardwareCollectionState> state_{HardwareCollectionState::Created};
-    std::mutex lifecycleMutex_;
-    std::mutex waitMutex_;
-    std::condition_variable waitCondition_;
-    bool stopRequested_ = false;
-    std::thread worker_;
+    mutable std::mutex stateMutex_;
+    std::condition_variable stateCondition_;
+    HardwareCollectionState state_ = HardwareCollectionState::Created;
 };
 
 HardwareInfoCollector::HardwareInfoCollector() : impl_(std::make_unique<Impl>(MakeDefaultDependencies())) {}
@@ -238,7 +220,7 @@ bool HardwareInfoCollector::Initialize(const std::filesystem::path& outputDirect
     return impl_->Initialize(outputDirectory, error);
 }
 
-void HardwareInfoCollector::NotifyRuntimeReady() noexcept { impl_->NotifyRuntimeReady(); }
+void HardwareInfoCollector::CollectOnKernelLaunch() noexcept { impl_->CollectOnKernelLaunch(); }
 
 void HardwareInfoCollector::Stop() noexcept { impl_->Stop(); }
 

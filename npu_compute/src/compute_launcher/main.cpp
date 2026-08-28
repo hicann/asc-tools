@@ -54,11 +54,11 @@ int main(int argc, char** argv)
         return 0;
     }
 
-    std::string staging_directory;
+    std::string collection_data_directory;
     std::string report_path;
-    int result = npu_compute::compute_launcher::LaunchTarget(config, &staging_directory, &report_path, &error);
-    if (!staging_directory.empty()) {
-        std::fprintf(stderr, "npu-compute: staging=%s\n", staging_directory.c_str());
+    int result = npu_compute::compute_launcher::LaunchTarget(config, &collection_data_directory, &report_path, &error);
+    if (!collection_data_directory.empty()) {
+        std::fprintf(stderr, "npu-compute: data-directory=%s\n", collection_data_directory.c_str());
     }
     if (result != 0) {
         if (!error.empty()) {

@@ -389,7 +389,8 @@ bool RunCli(
 
 bool HasRuntimeCollectionOutput(const std::string& standardError)
 {
-    return standardError.find("staging=") != std::string::npos || standardError.find("report=") != std::string::npos ||
+    return standardError.find("data-directory=") != std::string::npos ||
+           standardError.find("report=") != std::string::npos ||
            standardError.find("[prof_api_stub]") != std::string::npos ||
            standardError.find("[aclpti]") != std::string::npos;
 }

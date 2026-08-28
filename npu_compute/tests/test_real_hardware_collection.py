@@ -13,6 +13,8 @@ import subprocess
 import tempfile
 from pathlib import Path
 
+import pytest
+
 
 EXPECTED_KEYS = [
     [
@@ -133,7 +135,7 @@ def _assert_real_library_sources(output_directory, app):
     )
 
 
-def _assert_callback_flow(stderr):
+def _assert_callback_flow(stderr, callback_id):
     assert stderr.count("[acl_pti_callback_stub] subscribe") == 1
 
     enable_lines = [
@@ -141,21 +143,39 @@ def _assert_callback_flow(stderr):
         for line in stderr.splitlines()
         if "[acl_pti_callback_stub] enable=1" in line
     ]
-    assert len(enable_lines) == 3
-    for line, cbid in zip(enable_lines, (9, 4, 13)):
+    assert len(enable_lines) == 2
+    for line, cbid in zip(enable_lines, (13, 0)):
         assert f"cbid={cbid}" in line
         assert "result=0" in line
 
-    for cbid in (9, 4, 13):
-        event = (
-            f"[acl_pti_callback_stub] event domain=1 cbid={cbid} "
-            "site=1 retval=0 dispatched=1"
-        )
-        assert event in stderr
-    assert "runtime callback domain=1 cbid=9 site=1 retval=0 accepted=1" in stderr
-    assert (
-        stderr.count("[real_hardware_callback_app] HardwareInfo.jsonl published") == 1
+    disable_lines = [
+        line
+        for line in stderr.splitlines()
+        if "[acl_pti_callback_stub] enable=0" in line
+    ]
+    assert len(disable_lines) == 2
+    for line, cbid in zip(disable_lines, (0, 13)):
+        assert f"cbid={cbid}" in line
+        assert "result=0" in line
+
+    event = (
+        f"[acl_pti_callback_stub] event domain=1 cbid={callback_id} "
+        "site=1 retval=0 dispatched=1"
     )
+    assert event in stderr
+    assert stderr.count("[acl_pti_callback_stub] event domain=1") == 1
+    assert (
+        f"runtime callback domain=1 cbid={callback_id} site=1 retval=0 accepted=1"
+        in stderr
+    )
+    published = (
+        "[real_hardware_callback_app] HardwareInfo.jsonl available after "
+        f"callback cbid={callback_id}"
+    )
+    cleaned = "[real_hardware_callback_app] Device cleanup completed"
+    assert stderr.count(published) == 1
+    assert stderr.count(cleaned) == 1
+    assert stderr.index(published) < stderr.index(cleaned)
 
 
 def _assert_hardware_info(output_directory):
@@ -202,13 +222,17 @@ def _assert_hardware_info(output_directory):
     assert memory["hbm frequency(MHZ)"] > 0
 
 
-def test_real_hardware_collection_with_callback_stub():
+@pytest.mark.parametrize("callback_id", [13, 0])
+def test_real_hardware_collection_with_callback_stub(callback_id):
     app = _required_path("NPU_COMPUTE_REAL_HW_APP")
     test_library = _required_path("NPU_COMPUTE_REAL_HW_LIBRARY")
     output_root = _required_path("NPU_COMPUTE_REAL_HW_OUTPUT_ROOT")
     assert output_root.is_dir(), f"output root is not a directory: {output_root}"
     output_directory = Path(
-        tempfile.mkdtemp(prefix="npu-compute-real-hardware-", dir=output_root)
+        tempfile.mkdtemp(
+            prefix=f"npu-compute-real-hardware-cbid-{callback_id}-",
+            dir=output_root,
+        )
     ).resolve()
 
     environment = os.environ.copy()
@@ -219,7 +243,7 @@ def test_real_hardware_collection_with_callback_stub():
     environment["LD_DEBUG_OUTPUT"] = str(output_directory / "loader")
 
     result = subprocess.run(
-        [str(app), str(test_library), str(output_directory)],
+        [str(app), str(test_library), str(output_directory), str(callback_id)],
         text=True,
         capture_output=True,
         env=environment,
@@ -231,7 +255,7 @@ def test_real_hardware_collection_with_callback_stub():
         f"stdout:\n{result.stdout}\nstderr:\n{result.stderr}"
     )
 
-    _assert_callback_flow(result.stderr)
+    _assert_callback_flow(result.stderr, callback_id)
     assert "[libnpu-compute] HardwareInfo:" not in result.stderr
     _assert_hardware_info(output_directory)
     _assert_real_library_sources(output_directory, app)

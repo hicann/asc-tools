@@ -9,18 +9,24 @@
  */
 #include "npu_compute/acl_pti_callback_stub.h"
 #include "npu_compute/npu_compute.h"
+#include "npu_compute_runtime.h"
 
 #include <acl/acl.h>
 
 #include <algorithm>
 #include <array>
+#include <atomic>
+#include <chrono>
+#include <condition_variable>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <iterator>
+#include <mutex>
 #include <string>
+#include <thread>
 #include <vector>
 
 #include <fcntl.h>
@@ -32,11 +38,17 @@ namespace {
 constexpr char kSections[] = "PipeUtilization,Memory";
 constexpr char kHardwareInfoFile[] = "HardwareInfo.jsonl";
 constexpr char kDeviceCountFile[] = "device_count.calls";
-constexpr std::array<aclptiCallbackId, 3> kHardwareReadyCbids = {
-    ACLPTI_RUNTIME_CBID_aclrtSetDevice,
-    ACLPTI_RUNTIME_CBID_aclrtMalloc,
+constexpr std::array<aclptiCallbackId, 2> kHardwareInfoTriggerCbids = {
     ACLPTI_RUNTIME_CBID_aclrtLaunchKernel,
+    ACLPTI_RUNTIME_CBID_aclrtLaunchKernelWithHostArgs,
 };
+using namespace std::chrono_literals;
+
+std::mutex g_deviceCountMutex;
+std::condition_variable g_deviceCountCondition;
+bool g_blockDeviceCount = false;
+bool g_deviceCountStarted = false;
+bool g_releaseDeviceCount = false;
 
 #define CHECK(expression)                                                                 \
     do {                                                                                  \
@@ -75,7 +87,6 @@ private:
 
 bool SetScenarioEnvironment(const std::filesystem::path& output)
 {
-    ::unsetenv("NPU_COMPUTE_DISABLE_HARDWARE_INFO");
     return ::setenv("NPU_COMPUTE_OUTPUT", output.c_str(), 1) == 0 &&
            ::setenv("NPU_COMPUTE_SECTIONS", kSections, 1) == 0;
 }
@@ -87,11 +98,13 @@ bool CheckSubscribeAndEnableContract()
     CHECK(npu_compute::test::AclPtiSubscribeCount() == 1);
     CHECK(npu_compute::test::CapturedAclPtiCallback() != nullptr);
     CHECK(npu_compute::test::CapturedAclPtiUserData() != nullptr);
+    CHECK(
+        npu_compute::test::CapturedAclPtiUserData() != static_cast<void*>(&npu_compute::NpuComputeRuntime::Instance()));
     const aclptiSubscribeHandle subscriber = npu_compute::test::CapturedAclPtiSubscriber();
     CHECK(subscriber != nullptr);
 
     const std::vector<AclPtiEnableCall> enableCalls = npu_compute::test::CapturedAclPtiEnableCalls();
-    CHECK(enableCalls.size() == kHardwareReadyCbids.size());
+    CHECK(enableCalls.size() == kHardwareInfoTriggerCbids.size());
     std::size_t previousSequence = npu_compute::test::AclPtiSubscribeSequence();
     CHECK(previousSequence > 0);
     for (std::size_t index = 0; index < enableCalls.size(); ++index) {
@@ -100,7 +113,7 @@ bool CheckSubscribeAndEnableContract()
         CHECK(call.enable);
         CHECK(call.subscriber == subscriber);
         CHECK(call.domain == ACLPTI_CB_DOMAIN_RUNTIME_API);
-        CHECK(call.cbid == kHardwareReadyCbids[index]);
+        CHECK(call.cbid == kHardwareInfoTriggerCbids[index]);
         CHECK(call.result == ACLPTI_SUCCESS);
         previousSequence = call.sequence;
     }
@@ -112,6 +125,22 @@ bool CheckSubscribeAndEnableContract()
     return true;
 }
 
+bool CheckDisableContract()
+{
+    using npu_compute::test::AclPtiEnableCall;
+
+    const std::vector<AclPtiEnableCall> calls = npu_compute::test::CapturedAclPtiEnableCalls();
+    CHECK(calls.size() == kHardwareInfoTriggerCbids.size() * 2);
+    for (std::size_t index = 0; index < kHardwareInfoTriggerCbids.size(); ++index) {
+        const AclPtiEnableCall& call = calls[kHardwareInfoTriggerCbids.size() + index];
+        CHECK(!call.enable);
+        CHECK(call.domain == ACLPTI_CB_DOMAIN_RUNTIME_API);
+        CHECK(call.cbid == kHardwareInfoTriggerCbids[kHardwareInfoTriggerCbids.size() - index - 1]);
+        CHECK(call.result == ACLPTI_SUCCESS);
+    }
+    return true;
+}
+
 void InvokeCallbackDirectly(aclptiCallbackDomain domain, aclptiCallbackId cbid, const aclptiCallbackData& callbackData)
 {
     const aclptiCallbackFunc callback = npu_compute::test::CapturedAclPtiCallback();
@@ -120,16 +149,147 @@ void InvokeCallbackDirectly(aclptiCallbackDomain domain, aclptiCallbackId cbid, 
     }
 }
 
-bool RunSuccessChild(const std::filesystem::path& output)
+std::size_t CountLines(const std::filesystem::path& path);
+
+bool RunSuccessChild(const std::string& scenario, const std::filesystem::path& output)
 {
     CHECK(SetScenarioEnvironment(output));
     npu_compute::test::ResetAclPtiCallbackStub();
     CHECK(acltoolInitialize() == ACLPTI_SUCCESS);
     CHECK(CheckSubscribeAndEnableContract());
-    CHECK(npu_compute::test::InvokeAclPtiCallback(
-        ACLPTI_CB_DOMAIN_RUNTIME_API, ACLPTI_RUNTIME_CBID_aclrtSetDevice, ACLPTI_API_EXIT, ACL_SUCCESS, nullptr));
-    CHECK(npu_compute::test::InvokeAclPtiCallback(
-        ACLPTI_CB_DOMAIN_RUNTIME_API, ACLPTI_RUNTIME_CBID_aclrtMalloc, ACLPTI_API_EXIT, ACL_SUCCESS, nullptr));
+
+    if (scenario == "success-launch") {
+        CHECK(npu_compute::test::InvokeAclPtiCallback(
+            ACLPTI_CB_DOMAIN_RUNTIME_API, ACLPTI_RUNTIME_CBID_aclrtLaunchKernel, ACLPTI_API_EXIT, ACL_SUCCESS,
+            nullptr));
+        CHECK(std::filesystem::is_regular_file(output / kHardwareInfoFile));
+        CHECK(CountLines(output / kHardwareInfoFile) == 5);
+        return true;
+    }
+    if (scenario == "success-host-args") {
+        CHECK(npu_compute::test::InvokeAclPtiCallback(
+            ACLPTI_CB_DOMAIN_RUNTIME_API, ACLPTI_RUNTIME_CBID_aclrtLaunchKernelWithHostArgs, ACLPTI_API_EXIT,
+            ACL_SUCCESS, nullptr));
+        CHECK(std::filesystem::is_regular_file(output / kHardwareInfoFile));
+        CHECK(CountLines(output / kHardwareInfoFile) == 5);
+        return true;
+    }
+    if (scenario == "success-repeated") {
+        CHECK(npu_compute::test::InvokeAclPtiCallback(
+            ACLPTI_CB_DOMAIN_RUNTIME_API, ACLPTI_RUNTIME_CBID_aclrtLaunchKernel, ACLPTI_API_EXIT, ACL_SUCCESS,
+            nullptr));
+        CHECK(std::filesystem::is_regular_file(output / kHardwareInfoFile));
+        CHECK(CountLines(output / kHardwareInfoFile) == 5);
+        CHECK(npu_compute::test::InvokeAclPtiCallback(
+            ACLPTI_CB_DOMAIN_RUNTIME_API, ACLPTI_RUNTIME_CBID_aclrtLaunchKernelWithHostArgs, ACLPTI_API_EXIT,
+            ACL_SUCCESS, nullptr));
+        CHECK(npu_compute::test::InvokeAclPtiCallback(
+            ACLPTI_CB_DOMAIN_RUNTIME_API, ACLPTI_RUNTIME_CBID_aclrtLaunchKernel, ACLPTI_API_EXIT, ACL_SUCCESS,
+            nullptr));
+        return true;
+    }
+    return false;
+}
+
+void InvokeSuccessfulExitDirectly(aclptiCallbackId cbid)
+{
+    const aclptiCallbackData callbackData{ACLPTI_CB_DOMAIN_RUNTIME_API, cbid, ACLPTI_API_EXIT, nullptr, ACL_SUCCESS};
+    InvokeCallbackDirectly(ACLPTI_CB_DOMAIN_RUNTIME_API, cbid, callbackData);
+}
+
+bool RunNormalStopChild(const std::filesystem::path& output)
+{
+    CHECK(SetScenarioEnvironment(output));
+    npu_compute::test::ResetAclPtiCallbackStub();
+    CHECK(acltoolInitialize() == ACLPTI_SUCCESS);
+    CHECK(CheckSubscribeAndEnableContract());
+    npu_compute::NpuComputeRuntime::Instance().Stop();
+    CHECK(CheckDisableContract());
+    for (aclptiCallbackId cbid : kHardwareInfoTriggerCbids) {
+        CHECK(!npu_compute::test::InvokeAclPtiCallback(
+            ACLPTI_CB_DOMAIN_RUNTIME_API, cbid, ACLPTI_API_EXIT, ACL_SUCCESS, nullptr));
+    }
+    return true;
+}
+
+bool RunStopDuringCollectionChild(const std::filesystem::path& output)
+{
+    CHECK(SetScenarioEnvironment(output));
+    npu_compute::test::ResetAclPtiCallbackStub();
+    {
+        std::lock_guard<std::mutex> lock(g_deviceCountMutex);
+        g_blockDeviceCount = true;
+        g_deviceCountStarted = false;
+        g_releaseDeviceCount = false;
+    }
+    CHECK(acltoolInitialize() == ACLPTI_SUCCESS);
+    CHECK(CheckSubscribeAndEnableContract());
+
+    std::atomic<bool> callbackReturned{false};
+    std::atomic<bool> callbackDispatched{false};
+    std::thread callbackThread([&callbackReturned, &callbackDispatched] {
+        callbackDispatched = npu_compute::test::InvokeAclPtiCallback(
+            ACLPTI_CB_DOMAIN_RUNTIME_API, ACLPTI_RUNTIME_CBID_aclrtLaunchKernel, ACLPTI_API_EXIT, ACL_SUCCESS, nullptr);
+        callbackReturned = true;
+    });
+
+    bool deviceCountStarted = false;
+    {
+        std::unique_lock<std::mutex> lock(g_deviceCountMutex);
+        deviceCountStarted = g_deviceCountCondition.wait_for(lock, 10s, [] { return g_deviceCountStarted; });
+    }
+
+    std::atomic<bool> stopReturned{false};
+    std::thread stopThread([&stopReturned] {
+        npu_compute::NpuComputeRuntime::Instance().Stop();
+        stopReturned = true;
+    });
+
+    bool callbacksDisabled = false;
+    if (deviceCountStarted) {
+        const auto deadline = std::chrono::steady_clock::now() + 10s;
+        while (std::chrono::steady_clock::now() < deadline) {
+            if (npu_compute::test::CapturedAclPtiEnableCalls().size() == kHardwareInfoTriggerCbids.size() * 2) {
+                callbacksDisabled = true;
+                break;
+            }
+            std::this_thread::sleep_for(1ms);
+        }
+    }
+
+    std::atomic<bool> drainReturned{false};
+    std::atomic<int> drainStatus{npu_compute::kInitializeFailed};
+    std::thread drainThread([&drainReturned, &drainStatus] {
+        drainStatus = npu_compute::NpuComputeRuntime::Instance().ShutdownAfterPtiDrain();
+        drainReturned = true;
+    });
+    const auto drainDeadline = std::chrono::steady_clock::now() + 500ms;
+    while (!drainReturned.load() && std::chrono::steady_clock::now() < drainDeadline) {
+        std::this_thread::sleep_for(1ms);
+    }
+
+    const bool callbackReturnedBeforeRelease = callbackReturned.load();
+    const bool stopReturnedBeforeRelease = stopReturned.load();
+    const bool drainReturnedBeforeRelease = drainReturned.load();
+    {
+        std::lock_guard<std::mutex> lock(g_deviceCountMutex);
+        g_releaseDeviceCount = true;
+    }
+    g_deviceCountCondition.notify_all();
+    callbackThread.join();
+    stopThread.join();
+    drainThread.join();
+
+    CHECK(deviceCountStarted);
+    CHECK(callbacksDisabled);
+    CHECK(callbackDispatched.load());
+    CHECK(!callbackReturnedBeforeRelease);
+    CHECK(!stopReturnedBeforeRelease);
+    CHECK(drainReturnedBeforeRelease);
+    CHECK(drainStatus.load() == 0);
+    CHECK(CheckDisableContract());
+    CHECK(std::filesystem::is_regular_file(output / kHardwareInfoFile));
+    CHECK(CountLines(output / kHardwareInfoFile) == 5);
     return true;
 }
 
@@ -142,13 +302,22 @@ bool RunIgnoredEventChild(const std::string& scenario, const std::filesystem::pa
 
     if (scenario == "ignore-enter") {
         CHECK(npu_compute::test::InvokeAclPtiCallback(
-            ACLPTI_CB_DOMAIN_RUNTIME_API, ACLPTI_RUNTIME_CBID_aclrtSetDevice, ACLPTI_API_ENTER, ACL_SUCCESS, nullptr));
+            ACLPTI_CB_DOMAIN_RUNTIME_API, ACLPTI_RUNTIME_CBID_aclrtLaunchKernel, ACLPTI_API_ENTER, ACL_SUCCESS,
+            nullptr));
         return true;
     }
     if (scenario == "ignore-failed-exit") {
         CHECK(npu_compute::test::InvokeAclPtiCallback(
-            ACLPTI_CB_DOMAIN_RUNTIME_API, ACLPTI_RUNTIME_CBID_aclrtMalloc, ACLPTI_API_EXIT, ACL_ERROR_INVALID_PARAM,
-            nullptr));
+            ACLPTI_CB_DOMAIN_RUNTIME_API, ACLPTI_RUNTIME_CBID_aclrtLaunchKernelWithHostArgs, ACLPTI_API_EXIT,
+            ACL_ERROR_INVALID_PARAM, nullptr));
+        return true;
+    }
+    if (scenario == "ignore-set-device") {
+        InvokeSuccessfulExitDirectly(ACLPTI_RUNTIME_CBID_aclrtSetDevice);
+        return true;
+    }
+    if (scenario == "ignore-malloc") {
+        InvokeSuccessfulExitDirectly(ACLPTI_RUNTIME_CBID_aclrtMalloc);
         return true;
     }
     if (scenario == "ignore-nontarget") {
@@ -157,10 +326,17 @@ bool RunIgnoredEventChild(const std::string& scenario, const std::filesystem::pa
         InvokeCallbackDirectly(ACLPTI_CB_DOMAIN_RUNTIME_API, ACLPTI_RUNTIME_CBID_aclrtMemcpy, callbackData);
         return true;
     }
+    if (scenario == "ignore-domain") {
+        const aclptiCallbackData callbackData{
+            ACLPTI_CB_DOMAIN_INVALID, ACLPTI_RUNTIME_CBID_aclrtLaunchKernel, ACLPTI_API_EXIT, nullptr, ACL_SUCCESS};
+        InvokeCallbackDirectly(ACLPTI_CB_DOMAIN_INVALID, ACLPTI_RUNTIME_CBID_aclrtLaunchKernel, callbackData);
+        return true;
+    }
     if (scenario == "ignore-mismatched-metadata") {
         const aclptiCallbackData callbackData{
-            ACLPTI_CB_DOMAIN_RUNTIME_API, ACLPTI_RUNTIME_CBID_aclrtMalloc, ACLPTI_API_EXIT, nullptr, ACL_SUCCESS};
-        InvokeCallbackDirectly(ACLPTI_CB_DOMAIN_RUNTIME_API, ACLPTI_RUNTIME_CBID_aclrtSetDevice, callbackData);
+            ACLPTI_CB_DOMAIN_RUNTIME_API, ACLPTI_RUNTIME_CBID_aclrtLaunchKernelWithHostArgs, ACLPTI_API_EXIT, nullptr,
+            ACL_SUCCESS};
+        InvokeCallbackDirectly(ACLPTI_CB_DOMAIN_RUNTIME_API, ACLPTI_RUNTIME_CBID_aclrtLaunchKernel, callbackData);
         return true;
     }
     return false;
@@ -190,21 +366,22 @@ bool RunEnableFailureChild(const std::filesystem::path& output, aclptiCallbackId
     CHECK(npu_compute::test::AclPtiSubscribeCount() == 1);
     CHECK(npu_compute::test::AclPtiRangeConfigCount() == 0);
 
-    const auto failurePosition = std::find(kHardwareReadyCbids.begin(), kHardwareReadyCbids.end(), failedCbid);
-    CHECK(failurePosition != kHardwareReadyCbids.end());
+    const auto failurePosition =
+        std::find(kHardwareInfoTriggerCbids.begin(), kHardwareInfoTriggerCbids.end(), failedCbid);
+    CHECK(failurePosition != kHardwareInfoTriggerCbids.end());
     const std::size_t successfulEnableCount =
-        static_cast<std::size_t>(std::distance(kHardwareReadyCbids.begin(), failurePosition));
+        static_cast<std::size_t>(std::distance(kHardwareInfoTriggerCbids.begin(), failurePosition));
     const std::vector<npu_compute::test::AclPtiEnableCall> calls = npu_compute::test::CapturedAclPtiEnableCalls();
     CHECK(calls.size() == successfulEnableCount * 2 + 1);
 
     for (std::size_t index = 0; index <= successfulEnableCount; ++index) {
         CHECK(calls[index].enable);
         CHECK(calls[index].domain == ACLPTI_CB_DOMAIN_RUNTIME_API);
-        CHECK(calls[index].cbid == kHardwareReadyCbids[index]);
+        CHECK(calls[index].cbid == kHardwareInfoTriggerCbids[index]);
         CHECK(calls[index].result == (index == successfulEnableCount ? ACLPTI_ERROR_NOT_SUPPORTED : ACLPTI_SUCCESS));
     }
     for (std::size_t index = 0; index < successfulEnableCount; ++index) {
-        const aclptiCallbackId enabledCbid = kHardwareReadyCbids[index];
+        const aclptiCallbackId enabledCbid = kHardwareInfoTriggerCbids[index];
         std::size_t disableCount = 0;
         for (std::size_t callIndex = successfulEnableCount + 1; callIndex < calls.size(); ++callIndex) {
             if (!calls[callIndex].enable && calls[callIndex].cbid == enabledCbid &&
@@ -227,38 +404,18 @@ bool RunConfigFailureChild(const std::filesystem::path& output)
     CHECK(acltoolInitialize() == ACLPTI_ERROR_PROFILING_FAILED);
     CHECK(npu_compute::test::AclPtiSubscribeCount() == 1);
     CHECK(npu_compute::test::AclPtiRangeConfigCount() == 1);
-    const std::vector<npu_compute::test::AclPtiEnableCall> calls = npu_compute::test::CapturedAclPtiEnableCalls();
-    CHECK(calls.size() == kHardwareReadyCbids.size() * 2);
-    for (aclptiCallbackId cbid : kHardwareReadyCbids) {
+    CHECK(CheckDisableContract());
+    for (aclptiCallbackId cbid : kHardwareInfoTriggerCbids) {
         CHECK(!npu_compute::test::InvokeAclPtiCallback(
             ACLPTI_CB_DOMAIN_RUNTIME_API, cbid, ACLPTI_API_EXIT, ACL_SUCCESS, nullptr));
     }
     return true;
 }
 
-bool RunHardwareInfoDisabledChild(const std::filesystem::path& output)
-{
-    CHECK(SetScenarioEnvironment(output));
-    CHECK(::setenv("NPU_COMPUTE_DISABLE_HARDWARE_INFO", "1", 1) == 0);
-    npu_compute::test::ResetAclPtiCallbackStub();
-    CHECK(acltoolInitialize() == ACLPTI_SUCCESS);
-    CHECK(npu_compute::test::AclPtiSubscribeCount() == 1);
-    CHECK(npu_compute::test::CapturedAclPtiCallback() == nullptr);
-    CHECK(npu_compute::test::CapturedAclPtiUserData() == nullptr);
-    CHECK(npu_compute::test::CapturedAclPtiSubscriber() != nullptr);
-    CHECK(npu_compute::test::AclPtiEnableCount() == 0);
-    CHECK(npu_compute::test::AclPtiRangeConfigCount() == 1);
-    const std::vector<std::string> sections = npu_compute::test::CapturedAclPtiSections();
-    CHECK(sections == std::vector<std::string>({"PipeUtilization", "Memory"}));
-    CHECK(!npu_compute::test::InvokeAclPtiCallback(
-        ACLPTI_CB_DOMAIN_RUNTIME_API, ACLPTI_RUNTIME_CBID_aclrtSetDevice, ACLPTI_API_EXIT, ACL_SUCCESS, nullptr));
-    return true;
-}
-
 bool RunChildScenario(const std::string& scenario, const std::filesystem::path& output)
 {
-    if (scenario == "success") {
-        return RunSuccessChild(output);
+    if (scenario.rfind("success-", 0) == 0) {
+        return RunSuccessChild(scenario, output);
     }
     if (scenario.rfind("ignore-", 0) == 0) {
         return RunIgnoredEventChild(scenario, output);
@@ -266,20 +423,20 @@ bool RunChildScenario(const std::string& scenario, const std::filesystem::path& 
     if (scenario == "subscribe-failure") {
         return RunSubscribeFailureChild(output);
     }
-    if (scenario == "enable-failure-set-device") {
-        return RunEnableFailureChild(output, ACLPTI_RUNTIME_CBID_aclrtSetDevice);
-    }
-    if (scenario == "enable-failure-malloc") {
-        return RunEnableFailureChild(output, ACLPTI_RUNTIME_CBID_aclrtMalloc);
-    }
     if (scenario == "enable-failure-launch") {
         return RunEnableFailureChild(output, ACLPTI_RUNTIME_CBID_aclrtLaunchKernel);
+    }
+    if (scenario == "enable-failure-host-args") {
+        return RunEnableFailureChild(output, ACLPTI_RUNTIME_CBID_aclrtLaunchKernelWithHostArgs);
     }
     if (scenario == "config-failure") {
         return RunConfigFailureChild(output);
     }
-    if (scenario == "hardware-info-disabled") {
-        return RunHardwareInfoDisabledChild(output);
+    if (scenario == "normal-stop") {
+        return RunNormalStopChild(output);
+    }
+    if (scenario == "stop-during-collection") {
+        return RunStopDuringCollectionChild(output);
     }
     std::fprintf(stderr, "unknown child scenario: %s\n", scenario.c_str());
     return false;
@@ -315,22 +472,27 @@ std::size_t CountLines(const std::filesystem::path& path)
 
 bool TestSuccessAndNormalExit(const char* executable)
 {
-    TempDirectory temporary;
-    CHECK(!temporary.Path().empty());
-    CHECK(LaunchChild(executable, "success", temporary.Path()));
-    CHECK(std::filesystem::is_regular_file(temporary.Path() / kHardwareInfoFile));
-    CHECK(CountLines(temporary.Path() / kHardwareInfoFile) == 5);
-    CHECK(std::filesystem::file_size(temporary.Path() / kDeviceCountFile) == 1);
+    constexpr std::array<const char*, 3> scenarios = {
+        "success-launch",
+        "success-host-args",
+        "success-repeated",
+    };
+    for (const char* scenario : scenarios) {
+        TempDirectory temporary;
+        CHECK(!temporary.Path().empty());
+        CHECK(LaunchChild(executable, scenario, temporary.Path()));
+        CHECK(std::filesystem::is_regular_file(temporary.Path() / kHardwareInfoFile));
+        CHECK(CountLines(temporary.Path() / kHardwareInfoFile) == 5);
+        CHECK(std::filesystem::file_size(temporary.Path() / kDeviceCountFile) == 1);
+    }
     return true;
 }
 
 bool TestIgnoredEvents(const char* executable)
 {
-    constexpr std::array<const char*, 4> scenarios = {
-        "ignore-enter",
-        "ignore-failed-exit",
-        "ignore-nontarget",
-        "ignore-mismatched-metadata",
+    constexpr std::array<const char*, 7> scenarios = {
+        "ignore-enter",     "ignore-failed-exit", "ignore-set-device",          "ignore-malloc",
+        "ignore-nontarget", "ignore-domain",      "ignore-mismatched-metadata",
     };
     for (const char* scenario : scenarios) {
         TempDirectory temporary;
@@ -344,8 +506,10 @@ bool TestIgnoredEvents(const char* executable)
 
 bool TestInitializationFailures(const char* executable)
 {
-    constexpr std::array<const char*, 5> scenarios = {
-        "subscribe-failure", "enable-failure-set-device", "enable-failure-malloc", "enable-failure-launch",
+    constexpr std::array<const char*, 4> scenarios = {
+        "subscribe-failure",
+        "enable-failure-launch",
+        "enable-failure-host-args",
         "config-failure",
     };
     for (const char* scenario : scenarios) {
@@ -357,13 +521,21 @@ bool TestInitializationFailures(const char* executable)
     return true;
 }
 
-bool TestHardwareInfoDisabled(const char* executable)
+bool TestNormalStop(const char* executable)
 {
     TempDirectory temporary;
     CHECK(!temporary.Path().empty());
-    CHECK(LaunchChild(executable, "hardware-info-disabled", temporary.Path()));
+    CHECK(LaunchChild(executable, "normal-stop", temporary.Path()));
     CHECK(!std::filesystem::exists(temporary.Path() / kHardwareInfoFile));
     CHECK(!std::filesystem::exists(temporary.Path() / kDeviceCountFile));
+    return true;
+}
+
+bool TestStopDuringCollectionDoesNotHoldRuntimeMutex(const char* executable)
+{
+    TempDirectory temporary;
+    CHECK(!temporary.Path().empty());
+    CHECK(LaunchChild(executable, "stop-during-collection", temporary.Path()));
     return true;
 }
 
@@ -378,6 +550,14 @@ extern "C" aclError aclrtGetDeviceCount(uint32_t* count)
     const char* output = std::getenv("NPU_COMPUTE_OUTPUT");
     if (output == nullptr) {
         return ACL_ERROR_FAILURE;
+    }
+    {
+        std::unique_lock<std::mutex> lock(g_deviceCountMutex);
+        if (g_blockDeviceCount) {
+            g_deviceCountStarted = true;
+            g_deviceCountCondition.notify_all();
+            g_deviceCountCondition.wait(lock, [] { return g_releaseDeviceCount; });
+        }
     }
     const std::filesystem::path countPath = std::filesystem::path(output) / kDeviceCountFile;
     const int descriptor = ::open(countPath.c_str(), O_WRONLY | O_CREAT | O_APPEND | O_CLOEXEC, 0600);
@@ -400,7 +580,7 @@ int main(int argc, char** argv)
         return 2;
     }
     return TestSuccessAndNormalExit(argv[0]) && TestIgnoredEvents(argv[0]) && TestInitializationFailures(argv[0]) &&
-                   TestHardwareInfoDisabled(argv[0]) ?
+                   TestNormalStop(argv[0]) && TestStopDuringCollectionDoesNotHoldRuntimeMutex(argv[0]) ?
                0 :
                1;
 }

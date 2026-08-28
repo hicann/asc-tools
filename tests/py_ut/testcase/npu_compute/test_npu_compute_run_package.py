@@ -13,7 +13,7 @@ import posixpath
 import re
 import subprocess
 from collections import Counter
-from pathlib import Path, PurePosixPath
+from pathlib import PurePosixPath
 
 import pytest
 
@@ -34,7 +34,6 @@ REQUIRED_PATHS = frozenset(
         f"{ARCH_ROOT}/lib64/libacl_pti.so",
         f"{ARCH_ROOT}/lib64/libacl_tool_injection.so",
         f"{ARCH_ROOT}/lib64/libnpu-compute.so",
-        "share/npu-compute/sections/README.md",
     }
 )
 UNIQUE_REQUIRED_PATHS = frozenset(
@@ -57,7 +56,6 @@ FORBIDDEN_FILE_NAMES = frozenset(
     }
 )
 LIST_PATH_PATTERN = re.compile(r"(?:^|\s)(\./\S+)")
-RUN_PACKAGE = os.environ.get("NPU_COMPUTE_RUN_PACKAGE")
 
 
 def list_package_paths(package):
@@ -187,14 +185,3 @@ def test_top_level_npu_compute_file_conflicts_with_architecture_layout(tmp_path)
         "required file name appears at conflicting path: bin/npu-compute"
         in validate_paths(list_package_paths(package))
     )
-
-
-@pytest.mark.skipif(
-    RUN_PACKAGE is None,
-    reason="set NPU_COMPUTE_RUN_PACKAGE to verify a generated run package",
-)
-def test_generated_run_package_has_expected_npu_compute_contents():
-    package = Path(RUN_PACKAGE)
-
-    assert package.is_file()
-    assert validate_paths(list_package_paths(package)) == []

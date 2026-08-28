@@ -108,20 +108,26 @@ def extract_path(stderr: str, key: str) -> Path:
     return values[0]
 
 
-def run_fixture(tmp_path: Path, exit_code: Optional[int] = None):
-    work_directory = tmp_path / "work"
-    temporary_root = tmp_path / "tmp"
-    work_directory.mkdir()
-    temporary_root.mkdir()
+def run_fixture(
+    tmp_path: Path,
+    exit_code: Optional[int] = None,
+    export_path: Optional[Path] = None,
+    work_directory: Optional[Path] = None,
+):
+    if work_directory is None:
+        work_directory = tmp_path / "work"
+    work_directory.mkdir(parents=True, exist_ok=True)
     environment = os.environ.copy()
-    environment["TMPDIR"] = str(temporary_root)
+    environment["TMPDIR"] = str(tmp_path / "missing-tmp")
     environment["NPU_COMPUTE_DEBUG"] = "1"
     command = [
         str(CLI),
         "--section",
         "PipeUtilization",
-        str(FIXTURE_APP),
     ]
+    if export_path is not None:
+        command.extend(("--export", str(export_path)))
+    command.append(str(FIXTURE_APP))
     if exit_code is not None:
         command.extend(("--exit-code", str(exit_code)))
     result = subprocess.run(
@@ -135,19 +141,31 @@ def run_fixture(tmp_path: Path, exit_code: Optional[int] = None):
     return result, work_directory
 
 
+def assert_collection_data_directory(path: Path, work_directory: Path):
+    assert path.is_absolute() and path.is_dir()
+    assert path.parent == work_directory.resolve()
+    assert re.fullmatch(r"npu-compute-[0-9]+-[0-9]+-[A-Za-z0-9]{6}", path.name)
+
+
+def assert_no_temporary_report_files(work_directory: Path):
+    assert list(work_directory.glob(".*.npu-rep.tmp.*")) == []
+
+
 def test_cli_recursively_packages_fixture_files(tmp_path):
     result, work_directory = run_fixture(tmp_path)
 
     assert result.returncode == 0, result.stderr
     assert "[aclpti]" not in result.stderr
     assert "[prof_api_stub]" not in result.stderr
-    staging = extract_path(result.stderr, "staging")
+    data_directory = extract_path(result.stderr, "data-directory")
     report = extract_path(result.stderr, "report")
-    assert staging.is_absolute() and staging.is_dir()
+    assert_collection_data_directory(data_directory, work_directory)
     assert report.is_absolute() and report.is_file()
     assert report.parent == work_directory.resolve()
     assert re.fullmatch(r"report_[0-9]+_[0-9a-f]{8}\.npu-rep", report.name)
     assert list(work_directory.glob("*.npu-rep")) == [report]
+    assert_no_temporary_report_files(work_directory)
+    assert (data_directory / ".hardware_info.lock").is_file()
 
     top = decode_rep(report.read_bytes())
     assert [entry.name for entry in top.entries] == [
@@ -180,16 +198,48 @@ def test_cli_recursively_packages_fixture_files(tmp_path):
     assert details.entries[0].payload == L2_CACHE_CSV
 
 
+def test_cli_uses_explicit_report_file_and_existing_report_directory(tmp_path):
+    explicit_work = tmp_path / "explicit-work"
+    explicit_report = tmp_path / "reports" / "explicit.npu-rep"
+    explicit_report.parent.mkdir()
+    explicit_result, _ = run_fixture(
+        tmp_path, export_path=explicit_report, work_directory=explicit_work
+    )
+
+    assert explicit_result.returncode == 0, explicit_result.stderr
+    assert extract_path(explicit_result.stderr, "report") == explicit_report
+    assert_collection_data_directory(
+        extract_path(explicit_result.stderr, "data-directory"), explicit_work
+    )
+    assert explicit_report.is_file()
+    assert_no_temporary_report_files(explicit_report.parent)
+
+    directory_work = tmp_path / "directory-work"
+    report_directory = tmp_path / "report-directory"
+    report_directory.mkdir()
+    directory_result, _ = run_fixture(
+        tmp_path, export_path=report_directory, work_directory=directory_work
+    )
+
+    assert directory_result.returncode == 0, directory_result.stderr
+    report = extract_path(directory_result.stderr, "report")
+    assert report.parent == report_directory
+    assert report.is_file()
+    assert re.fullmatch(r"report_[0-9]+_[0-9a-f]{8}\.npu-rep", report.name)
+    assert_collection_data_directory(
+        extract_path(directory_result.stderr, "data-directory"), directory_work
+    )
+    assert_no_temporary_report_files(report_directory)
+
+
 def test_cli_import_recursively_restores_report_files(tmp_path):
     result, work_directory = run_fixture(tmp_path)
 
     assert result.returncode == 0, result.stderr
     report = extract_path(result.stderr, "report")
     output = tmp_path / "unpacked"
-    import_tmp = tmp_path / "import-tmp"
-    import_tmp.mkdir()
     environment = os.environ.copy()
-    environment["TMPDIR"] = str(import_tmp)
+    environment["TMPDIR"] = str(tmp_path / "missing-import-tmp")
     environment["ACL_API_INJECTION"] = "/npu-compute-import-must-not-load.so"
     imported = subprocess.run(
         [str(CLI), "--import", str(report), "--export", str(output)],
@@ -202,11 +252,10 @@ def test_cli_import_recursively_restores_report_files(tmp_path):
 
     assert imported.returncode == 0, imported.stderr
     assert extract_path(imported.stderr, "unpacked") == output
-    assert "npu-compute: staging=" not in imported.stderr
+    assert "npu-compute: data-directory=" not in imported.stderr
     assert "npu-compute: report=" not in imported.stderr
     assert "[prof_api_stub]" not in imported.stderr
     assert "[aclpti]" not in imported.stderr
-    assert list(import_tmp.iterdir()) == []
     files = sorted(
         path.relative_to(output).as_posix()
         for path in output.rglob("*")
@@ -231,8 +280,76 @@ def test_failed_app_does_not_publish_report(tmp_path):
     result, work_directory = run_fixture(tmp_path, exit_code=17)
 
     assert result.returncode == 17
-    staging = extract_path(result.stderr, "staging")
-    assert staging.is_dir()
+    data_directory = extract_path(result.stderr, "data-directory")
+    assert_collection_data_directory(data_directory, work_directory)
     assert "npu-compute: report=" not in result.stderr
     assert list(work_directory.glob("*.npu-rep")) == []
+    assert_no_temporary_report_files(work_directory)
     assert "APP exited with status 17" in result.stderr
+
+
+def test_sequential_collections_use_unique_data_directories_and_reports(tmp_path):
+    work_directory = tmp_path / "work"
+    first_result, _ = run_fixture(tmp_path, work_directory=work_directory)
+    second_result, _ = run_fixture(tmp_path, work_directory=work_directory)
+
+    assert first_result.returncode == 0, first_result.stderr
+    assert second_result.returncode == 0, second_result.stderr
+    data_directories = {
+        extract_path(first_result.stderr, "data-directory"),
+        extract_path(second_result.stderr, "data-directory"),
+    }
+    reports = {
+        extract_path(first_result.stderr, "report"),
+        extract_path(second_result.stderr, "report"),
+    }
+    assert len(data_directories) == 2
+    assert len(reports) == 2
+    for data_directory in data_directories:
+        assert_collection_data_directory(data_directory, work_directory)
+    for report in reports:
+        assert report.parent == work_directory
+        assert report.is_file()
+    assert_no_temporary_report_files(work_directory)
+
+
+def test_concurrent_collections_use_unique_data_directories_and_reports(tmp_path):
+    work_directory = tmp_path / "work"
+    work_directory.mkdir()
+    environment = os.environ.copy()
+    environment["TMPDIR"] = str(tmp_path / "missing-tmp")
+    command = [str(CLI), "--section", "PipeUtilization", str(FIXTURE_APP)]
+    processes = [
+        subprocess.Popen(
+            command,
+            cwd=work_directory,
+            env=environment,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+        for _ in range(2)
+    ]
+    results = [process.communicate() for process in processes]
+
+    standard_errors = []
+    for process, (_, standard_error) in zip(processes, results):
+        assert process.returncode == 0, standard_error
+        standard_errors.append(standard_error)
+
+    data_directories = [
+        extract_path(standard_error, "data-directory")
+        for standard_error in standard_errors
+    ]
+    reports = [
+        extract_path(standard_error, "report") for standard_error in standard_errors
+    ]
+    assert len(set(data_directories)) == 2
+    assert len(set(reports)) == 2
+    for data_directory in data_directories:
+        assert_collection_data_directory(data_directory, work_directory)
+        assert (data_directory / "HardwareInfo.jsonl").read_bytes() == HARDWARE_INFO
+    for report in reports:
+        assert report.parent == work_directory
+        assert report.is_file()
+    assert_no_temporary_report_files(work_directory)

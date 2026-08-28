@@ -68,6 +68,10 @@ add_dependencies(npu_compute_launcher_test npu_compute)
 npu_compute_set_output(npu_compute_launcher_test)
 add_test(NAME npu_compute.launcher COMMAND npu_compute_launcher_test)
 
+add_executable(npu_compute_staging_directory_test staging_directory_test.cpp)
+target_link_libraries(npu_compute_staging_directory_test PRIVATE npu_compute_launcher_core)
+add_test(NAME npu_compute.staging_directory COMMAND npu_compute_staging_directory_test)
+
 add_executable(npu_compute_rep_fixture_app rep_fixture_app.cpp)
 add_dependencies(npu_compute_rep_fixture_app npu_compute_cli npu_compute)
 npu_compute_set_output(npu_compute_rep_fixture_app)

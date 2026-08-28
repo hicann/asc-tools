@@ -24,11 +24,11 @@ namespace npu_compute {
 
 enum class HardwareCollectionState {
     Created,
-    WaitingRuntime,
+    WaitingKernel,
     Collecting,
     Completed,
     Failed,
-    NoRuntimeReady,
+    NoKernelLaunch,
 };
 
 using HostInfoCollectionFunction = std::function<bool(const std::filesystem::path&, HostInfo*, DiagnosticSink*)>;
@@ -54,7 +54,7 @@ public:
     HardwareInfoCollector& operator=(HardwareInfoCollector&&) = delete;
 
     bool Initialize(const std::filesystem::path& outputDirectory, std::string* error);
-    void NotifyRuntimeReady() noexcept;
+    void CollectOnKernelLaunch() noexcept;
     void Stop() noexcept;
     HardwareCollectionState State() const noexcept;
 

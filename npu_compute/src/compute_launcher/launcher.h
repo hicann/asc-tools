@@ -19,7 +19,8 @@ namespace npu_compute::compute_launcher {
 inline constexpr int kCollectionErrorExitCode = 3;
 inline constexpr int kReportErrorExitCode = 4;
 
-int LaunchTarget(const CliConfig& config, std::string* staging_directory, std::string* report_path, std::string* error);
+int LaunchTarget(
+    const CliConfig& config, std::string* collection_data_directory, std::string* report_path, std::string* error);
 
 } // namespace npu_compute::compute_launcher
 

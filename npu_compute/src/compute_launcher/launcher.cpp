@@ -18,6 +18,7 @@
 
 #include <cerrno>
 #include <cstring>
+#include <filesystem>
 #include <string>
 #include <vector>
 
@@ -54,7 +55,7 @@ void SetEnvironmentValue(const std::string& name, const std::string& value, std:
 }
 
 bool BuildChildEnvironment(
-    const CliConfig& config, const std::string& staging_directory, std::vector<std::string>* environment,
+    const CliConfig& config, const std::string& collection_data_directory, std::vector<std::string>* environment,
     std::string* error)
 {
     std::string injection_path;
@@ -69,14 +70,14 @@ bool BuildChildEnvironment(
     SetEnvironmentValue("ACL_API_INJECTION", injection_path, environment);
     SetEnvironmentValue("NPU_COMPUTE_SECTIONS", sections, environment);
     SetEnvironmentValue("NPU_COMPUTE_REPLAY_MODE", ReplayModeName(config.replay_mode), environment);
-    SetEnvironmentValue("NPU_COMPUTE_OUTPUT", staging_directory, environment);
-    SetEnvironmentValue("NPU_COMPUTE_CSV_OUTPUT_DIR", staging_directory, environment);
+    SetEnvironmentValue("NPU_COMPUTE_OUTPUT", collection_data_directory, environment);
+    SetEnvironmentValue("NPU_COMPUTE_CSV_OUTPUT_DIR", collection_data_directory, environment);
     return true;
 }
 
-bool ValidateHardwareInfoResult(const std::string& stagingDirectory, std::string* error)
+bool ValidateHardwareInfoResult(const std::string& collectionDataDirectory, std::string* error)
 {
-    const std::string path = stagingDirectory + "/HardwareInfo.jsonl";
+    const std::string path = collectionDataDirectory + "/HardwareInfo.jsonl";
     struct stat status {};
     if (::lstat(path.c_str(), &status) != 0) {
         if (errno == ENOENT) {
@@ -108,52 +109,61 @@ void SetStageError(const std::string& stage, const std::string& detail, std::str
 
 } // namespace
 
-int LaunchTarget(const CliConfig& config, std::string* staging_directory, std::string* report_path, std::string* error)
+int LaunchTarget(
+    const CliConfig& config, std::string* collection_data_directory, std::string* report_path, std::string* error)
 {
     if (error != nullptr) {
         error->clear();
     }
-    if (staging_directory != nullptr) {
-        staging_directory->clear();
+    if (collection_data_directory != nullptr) {
+        collection_data_directory->clear();
     }
     if (report_path != nullptr) {
         report_path->clear();
     }
 
-    StagingDirectory staging;
-    if (!StagingDirectory::Create(&staging, error)) {
+    std::string stage_error;
+    ReportTarget target;
+    if (!ResolveReportTarget(config.export_path, &target, &stage_error)) {
+        SetStageError("resolve report target failed", stage_error, error);
+        return kReportErrorExitCode;
+    }
+
+    std::error_code current_directory_error;
+    const std::filesystem::path current_directory = std::filesystem::current_path(current_directory_error);
+    if (current_directory_error) {
+        SetStageError("get current directory failed", current_directory_error.message(), error);
         return 5;
     }
-    if (staging_directory != nullptr) {
-        *staging_directory = staging.Path();
+
+    StagingDirectory collection_data;
+    if (!StagingDirectory::Create(current_directory, &collection_data, error)) {
+        return 5;
+    }
+    if (collection_data_directory != nullptr) {
+        *collection_data_directory = collection_data.Path();
     }
 
     ProcessLaunchRequest request;
     request.program = config.program;
     request.arguments = config.program_arguments;
-    if (!BuildChildEnvironment(config, staging.Path(), &request.environment, error)) {
+    if (!BuildChildEnvironment(config, collection_data.Path(), &request.environment, error)) {
         return 5;
     }
     const int appResult = LaunchProcessAndWait(request, error);
     if (appResult != 0) {
         return appResult;
     }
-    if (!ValidateHardwareInfoResult(staging.Path(), error)) {
+    if (!ValidateHardwareInfoResult(collection_data.Path(), error)) {
         return kCollectionErrorExitCode;
     }
 
     std::vector<uint8_t> encoded;
-    std::string stage_error;
-    if (!PackDirectoryToRep(staging.Path(), &encoded, &stage_error)) {
+    if (!PackDirectoryToRep(collection_data.Path(), &encoded, &stage_error)) {
         SetStageError("pack collection results failed", stage_error, error);
         return kReportErrorExitCode;
     }
 
-    ReportTarget target;
-    if (!ResolveReportTarget(config.export_path, &target, &stage_error)) {
-        SetStageError("resolve report target failed", stage_error, error);
-        return kReportErrorExitCode;
-    }
     if (!PublishRepReport(encoded, target, &stage_error)) {
         SetStageError("publish report failed", stage_error, error);
         return kReportErrorExitCode;

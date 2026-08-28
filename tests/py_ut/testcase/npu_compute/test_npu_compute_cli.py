@@ -32,14 +32,15 @@ SECTIONS = [
 HARDWARE_INFO_PROLOGUE = (
     "import os, pathlib; "
     "pathlib.Path(os.environ['NPU_COMPUTE_OUTPUT'], 'HardwareInfo.jsonl')"
-    ".write_text('{}\\n', encoding='utf-8'); "
+    ".write_text('{}\\n' * 5, encoding='utf-8'); "
 )
 
 
-def run_cli(*arguments):
+def run_cli(*arguments, cwd=None):
     assert CLI.is_file(), f"npu-compute was not built: {CLI}"
     return subprocess.run(
         [str(CLI), *arguments],
+        cwd=cwd,
         text=True,
         capture_output=True,
         check=False,
@@ -73,11 +74,11 @@ def test_list_sections_outputs_only_ids_in_fixed_order():
 
 
 @pytest.mark.parametrize("section", SECTIONS)
-def test_each_supported_section_is_accepted(section):
+def test_each_supported_section_is_accepted(section, tmp_path):
     code = HARDWARE_INFO_PROLOGUE + (
         "print('NPU_COMPUTE_SECTIONS=' + os.environ['NPU_COMPUTE_SECTIONS'])"
     )
-    result = run_cli("--section", section, sys.executable, "-c", code)
+    result = run_cli("--section", section, sys.executable, "-c", code, cwd=tmp_path)
 
     assert result.returncode == 0
     environment = dict(
@@ -105,7 +106,7 @@ def test_long_option_abbreviations_are_rejected(abbreviation):
     assert "unknown option" in result.stderr
 
 
-def test_collection_deduplicates_sections_and_sets_default_replay_mode():
+def test_collection_deduplicates_sections_and_sets_default_replay_mode(tmp_path):
     code = HARDWARE_INFO_PROLOGUE + (
         "print('NPU_COMPUTE_SECTIONS=' + os.environ['NPU_COMPUTE_SECTIONS']); "
         "print('NPU_COMPUTE_REPLAY_MODE=' + os.environ['NPU_COMPUTE_REPLAY_MODE'])"
@@ -120,6 +121,7 @@ def test_collection_deduplicates_sections_and_sets_default_replay_mode():
         sys.executable,
         "-c",
         code,
+        cwd=tmp_path,
     )
 
     assert result.returncode == 0
@@ -130,7 +132,7 @@ def test_collection_deduplicates_sections_and_sets_default_replay_mode():
     assert environment["NPU_COMPUTE_REPLAY_MODE"] == "kernel"
 
 
-def test_arguments_after_program_are_passed_to_the_app_verbatim():
+def test_arguments_after_program_are_passed_to_the_app_verbatim(tmp_path):
     code = HARDWARE_INFO_PROLOGUE + ("import sys; print('\\n'.join(sys.argv[1:]))")
     result = run_cli(
         "--section",
@@ -140,6 +142,7 @@ def test_arguments_after_program_are_passed_to_the_app_verbatim():
         code,
         "--section",
         "app-owned-value",
+        cwd=tmp_path,
     )
 
     assert result.returncode == 0
@@ -182,16 +185,32 @@ def test_invalid_options_and_combinations_exit_two(arguments):
 @pytest.mark.parametrize(
     "arguments",
     [
-        ("--import", "input.repo"),
-        ("--import", "input.repo", "--export", "output.repo"),
-        ("--section", "Memory", "--export", "output.repo", "/bin/true"),
+        ("--import", "missing.npu-rep"),
+        ("--import", "missing.npu-rep", "--export", "restored"),
     ],
 )
-def test_repo_paths_are_recognized_but_reported_as_not_available(arguments):
-    result = run_cli(*arguments)
+def test_missing_import_report_returns_report_error(arguments, tmp_path):
+    result = run_cli(*arguments, cwd=tmp_path)
 
     assert result.returncode == 4
-    assert "repo import/export is not available" in result.stderr
+    assert "inspect imported rep failed: missing.npu-rep" in result.stderr
+
+
+def test_collection_rejects_export_path_without_report_suffix(tmp_path):
+    result = run_cli(
+        "--section",
+        "Memory",
+        "--export",
+        "output.repo",
+        "/bin/true",
+        cwd=tmp_path,
+    )
+
+    assert result.returncode == 4
+    assert (
+        "report export path must be an existing directory or end with .npu-rep"
+        in result.stderr
+    )
 
 
 @pytest.mark.parametrize(

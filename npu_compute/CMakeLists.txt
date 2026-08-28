@@ -157,11 +157,6 @@ add_subdirectory(src/acl_pti)
 add_subdirectory(src/npu_compute)
 add_subdirectory(src/compute_launcher)
 
-install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/sections/"
-  DESTINATION share/npu-compute/sections
-  COMPONENT asc-tools
-)
-
 if(NPU_COMPUTE_BUILD_TESTS)
   add_subdirectory(stubs/acl_pti_callback)
   add_subdirectory(stubs/hardware_api)

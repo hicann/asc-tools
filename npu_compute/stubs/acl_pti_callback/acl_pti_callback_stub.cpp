@@ -170,7 +170,7 @@ bool InvokeAclPtiCallback(
 bool InvokeAclPtiRuntimeReady()
 {
     return InvokeAclPtiCallback(
-        ACLPTI_CB_DOMAIN_RUNTIME_API, ACLPTI_RUNTIME_CBID_aclrtSetDevice, ACLPTI_API_EXIT, ACL_SUCCESS, nullptr);
+        ACLPTI_CB_DOMAIN_RUNTIME_API, ACLPTI_RUNTIME_CBID_aclrtLaunchKernel, ACLPTI_API_EXIT, ACL_SUCCESS, nullptr);
 }
 
 } // namespace npu_compute::test

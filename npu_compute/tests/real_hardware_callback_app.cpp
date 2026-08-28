@@ -11,14 +11,13 @@
 
 #include <acl/acl.h>
 
-#include <chrono>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <filesystem>
+#include <fstream>
 #include <string>
-#include <thread>
 #include <type_traits>
 
 #include <dlfcn.h>
@@ -26,10 +25,9 @@
 
 namespace {
 
-constexpr std::int32_t kDeviceId = 0;
+constexpr int32_t kDeviceId = 0;
 constexpr char kHardwareInfoFile[] = "HardwareInfo.jsonl";
 constexpr char kSections[] = "PipeUtilization";
-constexpr auto kOutputTimeout = std::chrono::seconds(60);
 
 class AclRuntimeGuard {
 public:
@@ -107,50 +105,78 @@ bool EmitSuccessfulExit(aclptiCallbackId cbid)
 {
     return AclPtiCallbackStubEmitRuntimeEvent(
                static_cast<uint32_t>(cbid), static_cast<uint32_t>(ACLPTI_API_EXIT),
-               static_cast<std::int32_t>(ACL_SUCCESS)) == 1;
+               static_cast<int32_t>(ACL_SUCCESS)) == 1;
 }
 
-bool WaitForHardwareInfo(const std::filesystem::path& outputDirectory)
+bool ParseCallbackId(const char* argument, aclptiCallbackId* cbid)
 {
-    const std::filesystem::path output = outputDirectory / kHardwareInfoFile;
-    const auto deadline = std::chrono::steady_clock::now() + kOutputTimeout;
-    while (std::chrono::steady_clock::now() < deadline) {
-        std::error_code error;
-        if (std::filesystem::is_regular_file(output, error) && !error) {
-            return true;
-        }
-        std::this_thread::sleep_for(std::chrono::milliseconds(20));
+    if (std::strcmp(argument, "13") == 0) {
+        *cbid = ACLPTI_RUNTIME_CBID_aclrtLaunchKernel;
+        return true;
+    }
+    if (std::strcmp(argument, "0") == 0) {
+        *cbid = ACLPTI_RUNTIME_CBID_aclrtLaunchKernelWithHostArgs;
+        return true;
     }
     return false;
+}
+
+bool HardwareInfoIsComplete(const std::filesystem::path& outputDirectory)
+{
+    const std::filesystem::path output = outputDirectory / kHardwareInfoFile;
+    std::error_code error;
+    if (!std::filesystem::is_regular_file(output, error) || error || std::filesystem::is_symlink(output, error) ||
+        error) {
+        return false;
+    }
+
+    std::ifstream stream(output);
+    if (!stream) {
+        return false;
+    }
+    std::size_t lineCount = 0;
+    std::string line;
+    while (std::getline(stream, line)) {
+        if (line.empty()) {
+            return false;
+        }
+        ++lineCount;
+    }
+    return !stream.bad() && lineCount == 5;
 }
 
 } // namespace
 
 int main(int argc, char** argv)
 {
-    if (argc != 3) {
-        std::fprintf(stderr, "usage: %s <test-libnpu-compute.so> <output-directory>\n", argv[0]);
+    if (argc != 4) {
+        std::fprintf(stderr, "usage: %s <test-libnpu-compute.so> <output-directory> <callback-id: 13|0>\n", argv[0]);
         return 2;
     }
 
     const std::filesystem::path injectionLibrary = std::filesystem::absolute(argv[1]);
     const std::filesystem::path outputDirectory = argv[2];
-    if (!PrepareEnvironment(outputDirectory)) {
+    aclptiCallbackId callbackId = ACLPTI_RUNTIME_CBID_SIZE;
+    if (!ParseCallbackId(argv[3], &callbackId)) {
+        std::fprintf(stderr, "[real_hardware_callback_app] unsupported callback ID: %s\n", argv[3]);
         return 3;
+    }
+    if (!PrepareEnvironment(outputDirectory)) {
+        return 4;
     }
 
     AclRuntimeGuard aclRuntime;
     aclError result = aclInit(nullptr);
     if (result != ACL_SUCCESS) {
         std::fprintf(stderr, "[real_hardware_callback_app] aclInit failed: %d\n", static_cast<int>(result));
-        return 4;
+        return 5;
     }
     aclRuntime.MarkInitialized();
 
     void* injectionHandle = ::dlopen(injectionLibrary.c_str(), RTLD_NOW | RTLD_GLOBAL);
     if (injectionHandle == nullptr) {
         std::fprintf(stderr, "[real_hardware_callback_app] dlopen failed: %s\n", ::dlerror());
-        return 5;
+        return 6;
     }
     // acltoolInitialize registers an atexit handler in this library.
     // Keep the handle loaded until process exit so that handler remains valid.
@@ -163,12 +189,12 @@ int main(int argc, char** argv)
         std::fprintf(
             stderr, "[real_hardware_callback_app] dlsym failed: %s\n",
             symbolError == nullptr ? "acltoolInitialize is null" : symbolError);
-        return 6;
+        return 7;
     }
     const int initializeResult = initialize();
     if (initializeResult != ACLPTI_SUCCESS) {
         std::fprintf(stderr, "[real_hardware_callback_app] acltoolInitialize failed: %d\n", initializeResult);
-        return 7;
+        return 8;
     }
     // On later failures, process exit stops the collector before the OS tears
     // down ACL. The success path performs explicit cleanup after publication.
@@ -177,24 +203,25 @@ int main(int argc, char** argv)
     result = aclrtSetDevice(kDeviceId);
     if (result != ACL_SUCCESS) {
         std::fprintf(stderr, "[real_hardware_callback_app] aclrtSetDevice failed: %d\n", static_cast<int>(result));
-        return 8;
+        return 9;
     }
     aclRuntime.MarkDeviceSet();
 
-    if (!EmitSuccessfulExit(ACLPTI_RUNTIME_CBID_aclrtSetDevice) ||
-        !EmitSuccessfulExit(ACLPTI_RUNTIME_CBID_aclrtMalloc) ||
-        !EmitSuccessfulExit(ACLPTI_RUNTIME_CBID_aclrtLaunchKernel)) {
+    if (!EmitSuccessfulExit(callbackId)) {
         std::fprintf(stderr, "[real_hardware_callback_app] callback event was not dispatched\n");
-        return 9;
-    }
-
-    if (!WaitForHardwareInfo(outputDirectory)) {
-        std::fprintf(stderr, "[real_hardware_callback_app] HardwareInfo.jsonl timed out\n");
         return 10;
     }
-    if (!aclRuntime.Cleanup()) {
+    if (!HardwareInfoIsComplete(outputDirectory)) {
+        std::fprintf(
+            stderr, "[real_hardware_callback_app] HardwareInfo.jsonl is incomplete after callback cbid=%u\n",
+            callbackId);
         return 11;
     }
-    std::fprintf(stderr, "[real_hardware_callback_app] HardwareInfo.jsonl published\n");
+    std::fprintf(
+        stderr, "[real_hardware_callback_app] HardwareInfo.jsonl available after callback cbid=%u\n", callbackId);
+    if (!aclRuntime.Cleanup()) {
+        return 12;
+    }
+    std::fprintf(stderr, "[real_hardware_callback_app] Device cleanup completed\n");
     return 0;
 }

@@ -20,15 +20,17 @@ CLI = BIN_DIR / "npu-compute"
 APP = BIN_DIR / "npu_compute_stub_demo_app"
 
 
-def extract_staging_path(stderr):
-    prefix = "npu-compute: staging="
+def extract_data_directory(stderr):
+    prefix = "npu-compute: data-directory="
     for line in stderr.splitlines():
         if line.startswith(prefix):
             return Path(line[len(prefix) :])
-    raise AssertionError(f"missing staging path in:\n{stderr}")
+    raise AssertionError(f"missing data directory in:\n{stderr}")
 
 
-def test_cli_profapi_callback_collector_and_jsonl_end_to_end():
+def test_cli_profapi_callback_collector_and_jsonl_end_to_end(tmp_path):
+    work_directory = tmp_path / "callback-events"
+    work_directory.mkdir()
     environment = os.environ.copy()
     existing_preload = environment.get("LD_PRELOAD", "")
     environment["LD_PRELOAD"] = os.pathsep.join(
@@ -45,28 +47,47 @@ def test_cli_profapi_callback_collector_and_jsonl_end_to_end():
     result = subprocess.run(
         [str(CLI), "--section", "PipeUtilization", str(APP)],
         env=environment,
+        cwd=work_directory,
         text=True,
         capture_output=True,
+        timeout=60,
         check=False,
     )
 
     assert result.returncode == 0, result.stderr
     assert "[demo] completed" in result.stderr
     assert result.stderr.count("[acl_pti_callback_stub] subscribe") == 1
-    assert result.stderr.count("[acl_pti_callback_stub] enable=1") == 3
-    assert result.stderr.count("[acl_pti_callback_stub] enable=0") == 3
+    assert result.stderr.count("[acl_pti_callback_stub] enable=1") == 2
+    assert result.stderr.count("[acl_pti_callback_stub] enable=0") == 2
+    for cbid in (13, 0):
+        assert (
+            f"[acl_pti_callback_stub] enable=1 domain=1 cbid={cbid} result=0"
+            in result.stderr
+        )
+        assert (
+            f"[acl_pti_callback_stub] enable=0 domain=1 cbid={cbid} result=0"
+            in result.stderr
+        )
     assert result.stderr.count("[acl_pti_callback_stub] event") == 4
-    assert result.stderr.count("site=0 retval=0 dispatched=1") == 2
-    assert result.stderr.count("site=1 retval=0 dispatched=1") == 2
+    for site in (0, 1):
+        assert (
+            f"[acl_pti_callback_stub] event domain=1 cbid=4 site={site} "
+            "retval=0 dispatched=0" in result.stderr
+        )
+        assert (
+            f"[acl_pti_callback_stub] event domain=1 cbid=13 site={site} "
+            "retval=0 dispatched=1" in result.stderr
+        )
     assert result.stderr.count("[hardware_api_stub] aclrtGetDeviceCount") == 1
     assert "[aclpti] initialize dependencies" not in result.stderr
 
-    staging = extract_staging_path(result.stderr)
-    hardware_info = staging / "HardwareInfo.jsonl"
-    assert staging.is_dir()
+    data_directory = extract_data_directory(result.stderr)
+    hardware_info = data_directory / "HardwareInfo.jsonl"
+    assert data_directory.is_dir()
+    assert data_directory.parent == work_directory
     assert hardware_info.is_file()
     assert not hardware_info.is_symlink()
-    assert list(staging.glob("HardwareInfo*.jsonl")) == [hardware_info]
+    assert list(data_directory.glob("HardwareInfo*.jsonl")) == [hardware_info]
 
     content = hardware_info.read_text(encoding="utf-8")
     lines = content.splitlines()
@@ -107,7 +128,9 @@ def test_cli_profapi_callback_collector_and_jsonl_end_to_end():
     assert content == expected
 
 
-def test_cli_real_aclpti_callback_chain():
+def test_cli_real_aclpti_callback_chain(tmp_path):
+    work_directory = tmp_path / "aclpti-chain"
+    work_directory.mkdir()
     environment = os.environ.copy()
     existing_preload = environment.get("LD_PRELOAD", "")
     environment["LD_PRELOAD"] = os.pathsep.join(
@@ -123,28 +146,35 @@ def test_cli_real_aclpti_callback_chain():
     result = subprocess.run(
         [str(CLI), "--section", "PipeUtilization", str(APP)],
         env=environment,
+        cwd=work_directory,
         text=True,
         capture_output=True,
+        timeout=60,
         check=False,
     )
 
     assert result.returncode == 0, result.stderr
     assert "[aclpti] subscribe result=0" in result.stderr
-    for cbid in (9, 4, 13):
+    for cbid in (13, 0):
         assert f"[libnpu-compute] enabled ACL PTI callback cbid={cbid}" in result.stderr
         assert (
             f"[libnpu-compute] disabled ACL PTI callback cbid={cbid}" in result.stderr
         )
-    for cbid in (4, 13):
-        assert f"runtime callback domain=1 cbid={cbid} site=0" in result.stderr
+    for cbid in (9, 4):
         assert (
-            f"runtime callback domain=1 cbid={cbid} site=1 retval=0 accepted=1"
-            in result.stderr
+            f"[libnpu-compute] enabled ACL PTI callback cbid={cbid}"
+            not in result.stderr
         )
+        assert f"runtime callback domain=1 cbid={cbid}" not in result.stderr
+    assert "runtime callback domain=1 cbid=13 site=0" in result.stderr
+    assert (
+        "runtime callback domain=1 cbid=13 site=1 retval=0 accepted=1" in result.stderr
+    )
     assert "disable ACL PTI callback failed" not in result.stderr
 
-    staging = extract_staging_path(result.stderr)
-    hardware_info = staging / "HardwareInfo.jsonl"
+    data_directory = extract_data_directory(result.stderr)
+    hardware_info = data_directory / "HardwareInfo.jsonl"
     assert hardware_info.is_file()
     assert len(hardware_info.read_text(encoding="utf-8").splitlines()) == 5
-    assert list(staging.glob("HardwareInfo*.jsonl")) == [hardware_info]
+    assert data_directory.parent == work_directory
+    assert list(data_directory.glob("HardwareInfo*.jsonl")) == [hardware_info]

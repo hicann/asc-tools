@@ -95,7 +95,7 @@ def test_default_component_installs_the_declared_layout(install_root):
     assert not (architecture_root / "include/npu_compute/acl_pti.h").exists()
     assert not (architecture_root / "include/npu_compute/pti_data_module.h").exists()
 
-    assert (install_root / "share/npu-compute/sections").is_dir()
+    assert not (install_root / "share/npu-compute").exists()
     assert not (architecture_root / "bin/npu_compute_stub_demo_app").exists()
     assert not (architecture_root / "lib64/libpti_data_module.so").exists()
     assert not (architecture_root / "lib64/libpti_data_module_impl.so").exists()

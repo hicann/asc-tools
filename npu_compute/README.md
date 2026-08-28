@@ -7,19 +7,19 @@ NPU Compute 是一个命令行性能分析原型工具，由注入式采集库�
 
 ```text
 npu-compute
-  -> 为本次运行创建独立的暂存目录
+  -> 在当前工作目录创建独立的采集数据目录
   -> 使用 ACL_API_INJECTION=libnpu-compute.so 和
-     NPU_COMPUTE_OUTPUT=<staging-directory> 启动目标程序
+     NPU_COMPUTE_OUTPUT=<data-directory> 启动目标程序
   -> 目标程序初始化 Runtime
   -> prof_api 加载 libnpu-compute.so
   -> acltoolInitialize
   -> ACLPTI 订阅流程初始化 Hook 和重放依赖
   -> 启用 Runtime 回调并配置采集 Section
   -> Hook Runtime 调用、维护影子内存并重放 Kernel
-  -> 目标程序首次成功的 Runtime EXIT 回调触发 HardwareInfo 采集
+  -> 目标程序首次成功的目标 Kernel 启动 Runtime EXIT 回调触发 HardwareInfo 采集
   -> Msprof 原始数据回调和内部重放数据生命周期处理
   -> CLI 通过 waitpid 观察到目标程序成功退出
-  -> CLI 校验 HardwareInfo.jsonl，并递归打包暂存目录
+  -> CLI 校验 HardwareInfo.jsonl，并递归打包采集数据目录
   -> CLI 以原子方式发布 report_<epoch_ms>_<random_id>.npu-rep 报告
 ```
 
@@ -57,8 +57,8 @@ L2Cache
 ```
 
 `HardwareInfo` 不是 Section。每条采集命令默认启用 HardwareInfo 采集，且该采集
-独立于所选的 PMU Section。目标程序首次成功的 Runtime EXIT 回调会启动唯一一次
-采集。重复的 Section 会被去重，同时保留首次出现的顺序。
+独立于所选的 PMU Section。目标程序首次成功的目标 Kernel 启动 Runtime EXIT 回调
+会启动唯一一次采集。重复的 Section 会被去重，同时保留首次出现的顺序。
 
 ## CLI
 
@@ -80,8 +80,8 @@ npu-compute [options] [program] [program-arguments]
 执行采集时必须至少指定一个 `--section` 和一个目标程序。目标程序之后的参数会
 原样传递给应用。CLI 作为父进程运行，将 `SIGINT`、`SIGTERM` 和 `SIGHUP` 转发
 给目标进程组，回收子进程，并保留正常退出状态或由信号产生的退出状态。每条采集
-命令都会获得唯一的暂存目录。如果应用成功退出，但 `HardwareInfo.jsonl` 缺失或
-不是普通文件，CLI 会输出暂存路径并返回采集错误码 3。
+命令都会在执行命令时的当前工作目录中获得唯一的采集数据目录。如果应用成功退出，但
+`HardwareInfo.jsonl` 缺失或不是普通文件，CLI 会输出采集数据目录路径并返回采集错误码 3。
 
 对于采集命令，`--export` 用于指定报告目标路径。以 `.npu-rep` 结尾时，该路径
 将作为报告文件的完整目标路径；如果指定已存在的目录，则在该目录中生成自动命名的报告。
@@ -114,7 +114,7 @@ npu-compute --import result.npu-rep --export restored-results
 
 ## 报告打包与导入
 
-目标程序成功退出后，CLI 会校验采集输出并递归打包暂存目录。支持的叶子文件会
+目标程序成功退出后，CLI 会校验采集输出并递归打包采集数据目录。支持的叶子文件会
 保留原始文件名和字节内容。每个子目录会被编码为一个名为 `<directory>.npu.rep`、
 `type=NpuRep` 的条目；其载荷是一个完整的嵌套 REP，偏移量从自身字节空间的 0
 开始计算。该规则会递归应用，不设固定深度限制。
@@ -128,7 +128,7 @@ npu-compute --import result.npu-rep --export restored-results
 文件不会被覆盖。采集成功后会输出以下两个保留的诊断路径：
 
 ```text
-npu-compute: staging=<absolute-staging-directory>
+npu-compute: data-directory=<absolute-data-directory>
 npu-compute: report=<absolute-report-path>
 ```
 
@@ -152,12 +152,16 @@ HardwareInfo 采集默认启用，CLI 不提供对应开关。不要将 `Hardwar
 `--section`。
 
 执行 `acltoolInitialize` 时，`libnpu-compute.so` 会订阅 ACLPTI Runtime 回调，
-并依次启用 `aclrtSetDevice`、`aclrtMalloc` 和 `aclrtLaunchKernel`。ACLPTI 可能
-同时上报 ENTER 和 EXIT 事件。该库只接受上述三个 API 中任意一个成功的 EXIT
-事件。首个被接受的事件会唤醒工作线程；后续被接受的事件不会再次启动采集。
+并依次启用 `aclrtLaunchKernel` 和 `aclrtLaunchKernelWithHostArgs`。ACLPTI 可能
+同时上报 ENTER 和 EXIT 事件。该库只接受上述两个 API 中任意一个成功的 EXIT
+事件。首个被接受的事件所在回调线程依次采集主机信息和 Device 信息，然后序列化
+并以原子方式发布 `<data-directory>/HardwareInfo.jsonl`。该回调在发布完成或采集
+进入失败状态后返回。
 
-工作线程采集主机信息和 Device 0 信息，然后以原子方式发布
-`<staging-directory>/HardwareInfo.jsonl`。成功发布的文件按以下顺序包含五个 JSON 对象：
+同一目标进程中，如果其他线程在采集期间同时进入被接受的回调，它们等待本次采集
+进入完成或失败状态后返回，不会重复采集。关闭时先禁用已启用的回调；如果采集正在
+执行，则等待采集进入最终状态。未收到有效 Kernel EXIT 回调时不生成
+`HardwareInfo.jsonl`。成功发布的文件按以下顺序包含五个 JSON 对象：
 
 ```jsonl
 {"category":"Host Info","cpu physical count":0,"cpu logical count":0,"memory total size(MB)":0,"disk total size(GB)":0}
@@ -167,10 +171,10 @@ HardwareInfo 采集默认启用，CLI 不提供对应开关。不要将 `Hardwar
 {"category":"Memory Information","hbm total(MB)":0,"hbm used(MB)":0,"hbm frequency(MHZ)":0}
 ```
 
-当前实现支持单卡采集，并查询 Device 0。单个设备字段查询失败时，会以
+当前实现支持单卡采集，并查询 Device。单个设备字段查询失败时，会以
 `[libnpu-compute] HardwareInfo:` 为前缀向 `stderr` 输出错误，并将该字段保留为
 默认值。初始化、主机信息采集、序列化或发布失败时也会输出诊断信息；如果最终没有
-发布普通文件，CLI 会返回采集错误码 3，并输出保留的暂存目录。
+发布普通文件，CLI 会返回采集错误码 3，并输出保留的采集数据目录。
 
 ## 构建
 
@@ -232,7 +236,6 @@ bash build.sh --pkg
 <arch>-linux/lib64/libacl_pti.so
 <arch>-linux/lib64/libacl_tool_injection.so
 <arch>-linux/include/aclpti/*.h
-share/npu-compute/sections/
 ```
 
 安装期间，CANN 通过顶层的 `bin`、`lib64` 和 `include` 符号链接公开架构相关
@@ -244,7 +247,6 @@ $ASCEND_HOME_PATH/lib64/libnpu-compute.so
 $ASCEND_HOME_PATH/lib64/libacl_pti.so
 $ASCEND_HOME_PATH/lib64/libacl_tool_injection.so
 $ASCEND_HOME_PATH/include/aclpti/*.h
-$ASCEND_HOME_PATH/share/npu-compute/sections/
 ```
 
 匹配的 CANN Runtime 基础包会在同一公共 `lib64` 路径下提供 `libprofapi.so` 和

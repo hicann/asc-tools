@@ -7,19 +7,19 @@ The product path is:
 
 ```text
 npu-compute
-  -> create a per-run staging directory
+  -> create a per-run collection data directory in the current working directory
   -> launch target with ACL_API_INJECTION=libnpu-compute.so
-     and NPU_COMPUTE_OUTPUT=<staging-directory>
+     and NPU_COMPUTE_OUTPUT=<data-directory>
   -> target Runtime initialization
   -> prof_api loads libnpu-compute.so
   -> acltoolInitialize
   -> ACLPTI subscription initializes hooks and replay dependencies
   -> Runtime callback enablement and section configuration
   -> hooked Runtime calls, shadow memory, and kernel replay
-  -> first successful target Runtime EXIT triggers HardwareInfo collection
+  -> first successful target kernel-launch Runtime EXIT triggers HardwareInfo collection
   -> Msprof raw callback and internal replay-data lifecycle
   -> CLI waitpid observes a successful target exit
-  -> CLI validates HardwareInfo.jsonl and recursively packs the staging tree
+  -> CLI validates HardwareInfo.jsonl and recursively packs the collection data directory
   -> CLI atomically publishes a report_<epoch_ms>_<random_id>.npu-rep report
 ```
 
@@ -60,8 +60,9 @@ L2Cache
 
 `HardwareInfo` is not a section. Its collection is enabled by default for every
 collection command and is independent of the selected PMU sections. The first
-successful target Runtime EXIT starts the single collection attempt.
-Repeated sections are deduplicated while preserving first-occurrence order.
+successful target kernel-launch Runtime EXIT starts the single collection
+attempt. Repeated sections are deduplicated while preserving first-occurrence
+order.
 
 ## CLI
 
@@ -84,9 +85,10 @@ Collection requires at least one `--section` and a target program. Arguments
 after the target program are passed to the application unchanged. The CLI stays
 as the parent process, forwards `SIGINT`, `SIGTERM`, and `SIGHUP` to the target
 process group, reaps the child, and preserves normal or signal-derived exit
-status. Each collection command receives a unique staging directory. If the
-application exits successfully but `HardwareInfo.jsonl` is missing or is not a
-regular file, the CLI reports the staging path and returns collection error 3.
+status. Each collection command receives a unique collection data directory in
+the command's current working directory. If the application exits successfully
+but `HardwareInfo.jsonl` is missing or is not a regular file, the CLI reports
+the collection data directory path and returns collection error 3.
 
 For a collection command, `--export` selects the report destination. A path
 ending in `.npu-rep` is the exact report file. An existing directory receives
@@ -122,7 +124,7 @@ npu-compute --import result.npu-rep --export restored-results
 ## Report Packaging And Import
 
 After the target exits successfully, the CLI validates the collection output
-and recursively packages the staging directory. Supported leaf files retain
+and recursively packages the collection data directory. Supported leaf files retain
 their original names and bytes. Every child directory is encoded as a
 `type=NpuRep` entry named `<directory>.npu.rep`; that payload is a complete
 nested REP with offsets starting from zero in its own byte space. This rule is
@@ -140,7 +142,7 @@ synchronizes the destination directory. Existing report files are never
 overwritten. A successful collection prints both retained diagnostic paths:
 
 ```text
-npu-compute: staging=<absolute-staging-directory>
+npu-compute: data-directory=<absolute-data-directory>
 npu-compute: report=<absolute-report-path>
 ```
 
@@ -166,14 +168,20 @@ HardwareInfo collection is enabled by default and has no CLI switch. Do not
 pass `HardwareInfo` to `--section`.
 
 During `acltoolInitialize`, `libnpu-compute.so` subscribes an ACLPTI Runtime
-callback and enables `aclrtSetDevice`, `aclrtMalloc`, and `aclrtLaunchKernel` in
+callback and enables `aclrtLaunchKernel` and `aclrtLaunchKernelWithHostArgs` in
 that order. ACLPTI may report both ENTER and EXIT events. The library accepts
-only a successful EXIT for one of those three APIs. The first accepted event
-wakes a worker thread; later accepted events do not start another collection.
+only a successful EXIT for one of those two APIs. The callback thread for the
+first accepted event collects host information and Device information in that
+order, serializes the result, and atomically publishes
+`<data-directory>/HardwareInfo.jsonl`. The callback returns after publication
+completes or the collection enters the failed state.
 
-The worker collects host information and Device 0 information, then atomically
-publishes `<staging-directory>/HardwareInfo.jsonl`. A successfully published
-file contains five JSON objects in this order:
+If other threads in the same target process enter an accepted callback while
+collection is in progress, they wait until that collection completes or fails
+and do not collect again. Shutdown first disables the enabled callbacks and
+waits for an in-progress collection to reach a final state. If no valid Kernel
+EXIT callback is received, `HardwareInfo.jsonl` is not generated. A successfully
+published file contains five JSON objects in this order:
 
 ```jsonl
 {"category":"Host Info","cpu physical count":0,"cpu logical count":0,"memory total size(MB)":0,"disk total size(GB)":0}
@@ -183,12 +191,12 @@ file contains five JSON objects in this order:
 {"category":"Memory Information","hbm total(MB)":0,"hbm used(MB)":0,"hbm frequency(MHZ)":0}
 ```
 
-This implementation supports a single-card collection and queries Device 0.
+This implementation supports a single-card collection and queries Device.
 An individual device-field query failure is written to `stderr` with the
 `[libnpu-compute] HardwareInfo:` prefix and leaves that field at its default
 value. Initialization, host collection, serialization, or publication failure
 also produces a diagnostic; when no final regular file is published, the CLI
-returns collection error 3 and prints the retained staging directory.
+returns collection error 3 and prints the retained collection data directory.
 
 ## Build
 
@@ -253,7 +261,6 @@ architecture directory. Here, `<arch>` is the value reported by `uname -m`:
 <arch>-linux/lib64/libacl_pti.so
 <arch>-linux/lib64/libacl_tool_injection.so
 <arch>-linux/include/aclpti/*.h
-share/npu-compute/sections/
 ```
 
 During installation, CANN exposes the architecture-dependent directories
@@ -266,7 +273,6 @@ $ASCEND_HOME_PATH/lib64/libnpu-compute.so
 $ASCEND_HOME_PATH/lib64/libacl_pti.so
 $ASCEND_HOME_PATH/lib64/libacl_tool_injection.so
 $ASCEND_HOME_PATH/include/aclpti/*.h
-$ASCEND_HOME_PATH/share/npu-compute/sections/
 ```
 
 The matching base CANN Runtime package provides `libprofapi.so` and

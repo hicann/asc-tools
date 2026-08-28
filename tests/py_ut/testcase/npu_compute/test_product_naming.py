@@ -83,6 +83,18 @@ def test_npu_compute_build_and_log_names_are_consistent():
     assert '"[libnpu-compute]' in library_source
 
 
+def test_default_package_build_enables_npu_compute():
+    build_script = (REPO_ROOT / "build.sh").read_text(encoding="utf-8")
+    package_configuration = re.search(
+        r'if \[ "\$\{PKG\}" == "true" \];then\n(?P<body>.*?)\n  fi',
+        build_script,
+        re.DOTALL,
+    )
+
+    assert package_configuration is not None
+    assert "-DASC_TOOLS_BUILD_NPU_COMPUTE=ON" in package_configuration.group("body")
+
+
 def test_cmake_targets_use_component_prefixes_and_merge_data_module():
     product_root = REPO_ROOT / "npu_compute"
     product_cmake = (product_root / "CMakeLists.txt").read_text(encoding="utf-8")

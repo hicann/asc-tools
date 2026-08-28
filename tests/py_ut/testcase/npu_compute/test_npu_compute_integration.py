@@ -99,15 +99,15 @@ def extract_output_path(stderr):
     raise AssertionError(f"missing demo output path in:\n{stderr}")
 
 
-def extract_staging_path(stderr):
-    prefix = "npu-compute: staging="
+def extract_data_directory(stderr):
+    prefix = "npu-compute: data-directory="
     for line in stderr.splitlines():
         if line.startswith(prefix):
             return Path(line[len(prefix) :])
-    raise AssertionError(f"missing CLI staging path in:\n{stderr}")
+    raise AssertionError(f"missing CLI data directory in:\n{stderr}")
 
 
-def run_hardware_info_result_app(mode, exit_code=0):
+def run_hardware_info_result_app(mode, work_directory, exit_code=0):
     environment = os.environ.copy()
     existing_library_path = environment.get("LD_LIBRARY_PATH", "")
     environment["LD_LIBRARY_PATH"] = os.pathsep.join(
@@ -125,48 +125,53 @@ def run_hardware_info_result_app(mode, exit_code=0):
             str(exit_code),
         ],
         env=environment,
+        cwd=work_directory,
         text=True,
         capture_output=True,
         check=False,
     )
 
 
-def test_cli_accepts_regular_hardware_info_file():
-    result = run_hardware_info_result_app("regular")
+def test_cli_accepts_regular_hardware_info_file(tmp_path):
+    result = run_hardware_info_result_app("regular", tmp_path)
 
     assert result.returncode == 0, result.stderr
-    staging = extract_staging_path(result.stderr)
-    hardware_info = staging / "HardwareInfo.jsonl"
-    assert staging.is_absolute()
+    data_directory = extract_data_directory(result.stderr)
+    hardware_info = data_directory / "HardwareInfo.jsonl"
+    assert data_directory.is_absolute()
+    assert data_directory.parent == tmp_path
     assert hardware_info.is_file()
     assert not hardware_info.is_symlink()
 
 
-def test_cli_rejects_missing_hardware_info_file():
-    result = run_hardware_info_result_app("missing")
+def test_cli_rejects_missing_hardware_info_file(tmp_path):
+    result = run_hardware_info_result_app("missing", tmp_path)
 
     assert result.returncode == 3
-    staging = extract_staging_path(result.stderr)
-    assert staging.is_dir()
+    data_directory = extract_data_directory(result.stderr)
+    assert data_directory.parent == tmp_path
+    assert data_directory.is_dir()
     assert "HardwareInfo.jsonl is missing" in result.stderr
 
 
 @pytest.mark.parametrize("mode", ("directory", "symlink"))
-def test_cli_rejects_non_regular_hardware_info_path(mode):
-    result = run_hardware_info_result_app(mode)
+def test_cli_rejects_non_regular_hardware_info_path(mode, tmp_path):
+    result = run_hardware_info_result_app(mode, tmp_path)
 
     assert result.returncode == 3
-    staging = extract_staging_path(result.stderr)
-    assert staging.is_dir()
+    data_directory = extract_data_directory(result.stderr)
+    assert data_directory.parent == tmp_path
+    assert data_directory.is_dir()
     assert "HardwareInfo.jsonl is not a regular file" in result.stderr
 
 
-def test_app_failure_takes_priority_over_missing_hardware_info():
-    result = run_hardware_info_result_app("missing", exit_code=7)
+def test_app_failure_takes_priority_over_missing_hardware_info(tmp_path):
+    result = run_hardware_info_result_app("missing", tmp_path, exit_code=7)
 
     assert result.returncode == 7
-    staging = extract_staging_path(result.stderr)
-    assert staging.is_dir()
+    data_directory = extract_data_directory(result.stderr)
+    assert data_directory.parent == tmp_path
+    assert data_directory.is_dir()
     assert "APP exited with status 7" in result.stderr
     assert "HardwareInfo.jsonl is missing" not in result.stderr
 

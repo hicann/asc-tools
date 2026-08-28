@@ -31,28 +31,21 @@
 namespace npu_compute {
 namespace {
 
-constexpr std::array<aclptiCallbackId, 3> kHardwareReadyCallbackIds = {
-    ACLPTI_RUNTIME_CBID_aclrtSetDevice,
-    ACLPTI_RUNTIME_CBID_aclrtMalloc,
+constexpr std::array<aclptiCallbackId, 2> kHardwareInfoTriggerCallbackIds = {
     ACLPTI_RUNTIME_CBID_aclrtLaunchKernel,
+    ACLPTI_RUNTIME_CBID_aclrtLaunchKernelWithHostArgs,
 };
 constexpr double kMsopprofA5FallbackFrequencyMhz = 1650.0;
 
-bool IsHardwareReadyCallback(aclptiCallbackId cbid)
+bool IsHardwareInfoTriggerCallback(aclptiCallbackId cbid)
 {
-    return std::find(kHardwareReadyCallbackIds.begin(), kHardwareReadyCallbackIds.end(), cbid) !=
-           kHardwareReadyCallbackIds.end();
+    return std::find(kHardwareInfoTriggerCallbackIds.begin(), kHardwareInfoTriggerCallbackIds.end(), cbid) !=
+           kHardwareInfoTriggerCallbackIds.end();
 }
 
 bool DebugEnabled()
 {
     const char* value = std::getenv("NPU_COMPUTE_DEBUG");
-    return value != nullptr && value[0] == '1' && value[1] == '\0';
-}
-
-bool EnvironmentFlagEnabled(const char* name)
-{
-    const char* value = std::getenv(name);
     return value != nullptr && value[0] == '1' && value[1] == '\0';
 }
 
@@ -260,60 +253,46 @@ int NpuComputeRuntime::Initialize()
     }
     pmu_consumer_ = std::move(consumer);
 
-    hardware_info_enabled_ = !EnvironmentFlagEnabled("NPU_COMPUTE_DISABLE_HARDWARE_INFO");
-    runtime_ready_callback_enabled_ = hardware_info_enabled_;
-    if (hardware_info_enabled_) {
-        if (!hardware_info_collector_.Initialize(outputDirectory, &error)) {
-            std::fprintf(stderr, "[libnpu-compute] initialize HardwareInfo collector failed: %s\n", error.c_str());
-            pmu_consumer_->ShutdownAndDrain();
-            pmu_consumer_.reset();
-            hardware_info_enabled_ = false;
-            return kInitializeFailed;
-        }
+    if (!hardware_info_collector_.Initialize(outputDirectory, &error)) {
+        std::fprintf(stderr, "[libnpu-compute] initialize HardwareInfo collector failed: %s\n", error.c_str());
+        pmu_consumer_->ShutdownAndDrain();
+        pmu_consumer_.reset();
+        return kInitializeFailed;
     }
 
     aclptiResult result = aclptiSubscribe(
-        &subscriber_, runtime_ready_callback_enabled_ ? &NpuComputeRuntime::RuntimeReadyCallback : nullptr,
-        runtime_ready_callback_enabled_ ? static_cast<void*>(this) : nullptr, nullptr);
+        &subscriber_, &NpuComputeRuntime::HardwareInfoTriggerCallback, static_cast<void*>(&hardware_info_collector_),
+        nullptr);
     if (result != ACLPTI_SUCCESS) {
         std::fprintf(stderr, "[libnpu-compute] aclptiSubscribe failed: %d\n", result);
         pmu_consumer_->ShutdownAndDrain();
         pmu_consumer_.reset();
-        if (hardware_info_enabled_) {
-            hardware_info_collector_.Stop();
-            hardware_info_enabled_ = false;
-        }
+        hardware_info_collector_.Stop();
         return result;
     }
     if (subscriber_ == nullptr) {
         std::fprintf(stderr, "[libnpu-compute] aclptiSubscribe returned a null handle\n");
         pmu_consumer_->ShutdownAndDrain();
         pmu_consumer_.reset();
-        if (hardware_info_enabled_) {
-            hardware_info_collector_.Stop();
-            hardware_info_enabled_ = false;
-        }
+        hardware_info_collector_.Stop();
         return kInitializeFailed;
     }
     std::fprintf(stderr, "[libnpu-compute] subscriber initialized\n");
 
     enabled_hardware_callback_count_ = 0;
-    if (runtime_ready_callback_enabled_) {
-        for (aclptiCallbackId cbid : kHardwareReadyCallbackIds) {
-            result = aclptiEnableCallback(true, subscriber_, ACLPTI_CB_DOMAIN_RUNTIME_API, cbid);
-            if (result != ACLPTI_SUCCESS) {
-                std::fprintf(stderr, "[libnpu-compute] aclptiEnableCallback failed for cbid=%u: %d\n", cbid, result);
-                DisableHardwareCallbacks();
-                pmu_consumer_->ShutdownAndDrain();
-                pmu_consumer_.reset();
-                hardware_info_collector_.Stop();
-                hardware_info_enabled_ = false;
-                return result;
-            }
-            ++enabled_hardware_callback_count_;
-            if (DebugEnabled()) {
-                std::fprintf(stderr, "[libnpu-compute] enabled ACL PTI callback cbid=%u\n", cbid);
-            }
+    for (aclptiCallbackId cbid : kHardwareInfoTriggerCallbackIds) {
+        result = aclptiEnableCallback(true, subscriber_, ACLPTI_CB_DOMAIN_RUNTIME_API, cbid);
+        if (result != ACLPTI_SUCCESS) {
+            std::fprintf(stderr, "[libnpu-compute] aclptiEnableCallback failed for cbid=%u: %d\n", cbid, result);
+            DisableHardwareCallbacks();
+            pmu_consumer_->ShutdownAndDrain();
+            pmu_consumer_.reset();
+            hardware_info_collector_.Stop();
+            return result;
+        }
+        ++enabled_hardware_callback_count_;
+        if (DebugEnabled()) {
+            std::fprintf(stderr, "[libnpu-compute] enabled ACL PTI callback cbid=%u\n", cbid);
         }
     }
 
@@ -323,10 +302,7 @@ int NpuComputeRuntime::Initialize()
         DisableHardwareCallbacks();
         pmu_consumer_->ShutdownAndDrain();
         pmu_consumer_.reset();
-        if (hardware_info_enabled_) {
-            hardware_info_collector_.Stop();
-            hardware_info_enabled_ = false;
-        }
+        hardware_info_collector_.Stop();
         return result;
     }
     std::fprintf(stderr, "[libnpu-compute] configured sections=%s\n", section_config_.JoinedSections().c_str());
@@ -335,19 +311,17 @@ int NpuComputeRuntime::Initialize()
 
 void NpuComputeRuntime::Stop() noexcept
 {
-    std::lock_guard<std::mutex> lock(mutex_);
-    DisableHardwareCallbacks();
-    if (hardware_info_enabled_) {
-        hardware_info_collector_.Stop();
-        hardware_info_enabled_ = false;
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        DisableHardwareCallbacks();
     }
-    runtime_ready_callback_enabled_ = false;
+    hardware_info_collector_.Stop();
 }
 
 void NpuComputeRuntime::DisableHardwareCallbacks() noexcept
 {
     while (enabled_hardware_callback_count_ > 0) {
-        const aclptiCallbackId cbid = kHardwareReadyCallbackIds[enabled_hardware_callback_count_ - 1];
+        const aclptiCallbackId cbid = kHardwareInfoTriggerCallbackIds[enabled_hardware_callback_count_ - 1];
         const aclptiResult result = aclptiEnableCallback(false, subscriber_, ACLPTI_CB_DOMAIN_RUNTIME_API, cbid);
         if (result != ACLPTI_SUCCESS) {
             std::fprintf(stderr, "[libnpu-compute] disable ACL PTI callback failed for cbid=%u: %d\n", cbid, result);
@@ -355,18 +329,6 @@ void NpuComputeRuntime::DisableHardwareCallbacks() noexcept
             std::fprintf(stderr, "[libnpu-compute] disabled ACL PTI callback cbid=%u\n", cbid);
         }
         --enabled_hardware_callback_count_;
-    }
-}
-
-void NpuComputeRuntime::HandleRuntimeReady() noexcept
-{
-    try {
-        std::lock_guard<std::mutex> lock(mutex_);
-        if (hardware_info_enabled_) {
-            hardware_info_collector_.NotifyRuntimeReady();
-        }
-    } catch (...) {
-        std::fprintf(stderr, "[libnpu-compute] Runtime Ready handling failed\n");
     }
 }
 
@@ -395,18 +357,8 @@ aclptiResult NpuComputeRuntime::ProcessPmuData(std::shared_ptr<const aclptiPmuDa
         }
     }
     PmuCsvConfig csvConfig;
-    bool stopHardwareInfo = false;
-    {
-        std::lock_guard<std::mutex> lock(mutex_);
-        if (hardware_info_enabled_) {
-            stopHardwareInfo = true;
-            hardware_info_enabled_ = false;
-            runtime_ready_callback_enabled_ = false;
-        }
-    }
-    if (stopHardwareInfo) {
-        hardware_info_collector_.Stop();
-    }
+    // Kernel EXIT is delivered after PMU processing on the replay call path.
+    // Stopping here would suppress the callback that publishes HardwareInfo.
     {
         std::lock_guard<std::mutex> lock(mutex_);
         if (!csv_hardware_metadata_loaded_) {
@@ -425,15 +377,15 @@ aclptiResult NpuComputeRuntime::ProcessPmuData(std::shared_ptr<const aclptiPmuDa
     return ACLPTI_SUCCESS;
 }
 
-void NpuComputeRuntime::RuntimeReadyCallback(
+void NpuComputeRuntime::HardwareInfoTriggerCallback(
     void* userData, aclptiCallbackDomain domain, aclptiCallbackId cbid, const aclptiCallbackData* callbackData) noexcept
 {
     if (userData == nullptr) {
-        std::fprintf(stderr, "[libnpu-compute] HardwareInfo Runtime Ready callback received null userData\n");
+        std::fprintf(stderr, "[libnpu-compute] HardwareInfo trigger callback received null userData\n");
         return;
     }
     if (domain != ACLPTI_CB_DOMAIN_RUNTIME_API || callbackData == nullptr || callbackData->domain != domain ||
-        callbackData->cbid != cbid || !IsHardwareReadyCallback(cbid)) {
+        callbackData->cbid != cbid || !IsHardwareInfoTriggerCallback(cbid)) {
         return;
     }
     const bool accepted = callbackData->callbackSite == ACLPTI_API_EXIT && callbackData->retval == ACL_SUCCESS;
@@ -447,10 +399,10 @@ void NpuComputeRuntime::RuntimeReadyCallback(
         return;
     }
     try {
-        auto* runtime = static_cast<NpuComputeRuntime*>(userData);
-        runtime->HandleRuntimeReady();
+        auto* collector = static_cast<HardwareInfoCollector*>(userData);
+        collector->CollectOnKernelLaunch();
     } catch (...) {
-        std::fprintf(stderr, "[libnpu-compute] Runtime Ready callback failed\n");
+        std::fprintf(stderr, "[libnpu-compute] HardwareInfo trigger callback failed\n");
     }
 }
 

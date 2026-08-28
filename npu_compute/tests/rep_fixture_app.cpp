@@ -86,7 +86,7 @@ int main(int argc, char** argv)
 
     if (!WriteFile(output / "HardwareInfo.jsonl", kHardwareInfo) ||
         !WriteFile(output / "PipeUtilization.csv", kPipeCsv) || !WriteFile(device / "Memory.csv", kMemoryCsv) ||
-        !WriteFile(details / "L2Cache.csv", kL2CacheCsv)) {
+        !WriteFile(details / "L2Cache.csv", kL2CacheCsv) || !WriteFile(output / ".hardware_info.lock", "lock")) {
         return 2;
     }
     std::fprintf(stderr, "[rep-fixture] files written\n");
