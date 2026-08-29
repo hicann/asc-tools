@@ -182,7 +182,10 @@ int main()
     static_assert(ACL_RT_API_aclrtGetFunctionAttribute == 19);
     static_assert(ACL_RT_API_aclrtGetSocName == 20);
     static_assert(ACL_RT_API_aclrtGetDeviceInfo == 21);
-    static_assert(ACL_RT_API_MAX == 22);
+    static_assert(ACL_RT_API_aclrtLaunchSIMTKernelWithHostArgs == 22);
+    static_assert(ACL_RT_API_aclrtLaunchKernelWithArgsArray == 23);
+    static_assert(ACL_RT_API_aclrtLaunchSIMTKernelWithArgsArray == 24);
+    static_assert(ACL_RT_API_MAX == 25);
 
     CHECK(RuntimeStubSetOriginFunction("aclrtMalloc", &OriginalMalloc) == 0);
     CHECK(RuntimeStubSetOriginFunction("aclrtFree", &OriginalFree) == 0);

@@ -102,6 +102,25 @@ target_link_libraries(acl_pti_replay_test
 set_target_properties(acl_pti_replay_test PROPERTIES ENABLE_EXPORTS YES)
 add_test(NAME npu_compute.replay COMMAND acl_pti_replay_test)
 
+add_executable(acl_pti_simt_replay_test simt_replay_test.cpp)
+target_link_libraries(acl_pti_simt_replay_test
+  PRIVATE acl_pti ${NPU_COMPUTE_ACLPTI_TEST_BACKENDS}
+)
+set_target_properties(acl_pti_simt_replay_test PROPERTIES ENABLE_EXPORTS YES)
+add_test(NAME npu_compute.simt_replay COMMAND acl_pti_simt_replay_test)
+
+add_executable(acl_pti_args_array_replay_test args_array_replay_test.cpp)
+target_link_libraries(acl_pti_args_array_replay_test
+  PRIVATE acl_pti ${NPU_COMPUTE_ACLPTI_TEST_BACKENDS}
+)
+set_target_properties(acl_pti_args_array_replay_test PROPERTIES ENABLE_EXPORTS YES)
+add_test(NAME npu_compute.args_array_replay
+  COMMAND acl_pti_args_array_replay_test normal
+)
+add_test(NAME npu_compute.simt_args_array_replay
+  COMMAND acl_pti_args_array_replay_test simt
+)
+
 add_executable(acl_pti_shadow_memory_test shadow_memory_test.cpp)
 target_link_libraries(acl_pti_shadow_memory_test
   PRIVATE acl_pti ${NPU_COMPUTE_ACLPTI_TEST_BACKENDS}

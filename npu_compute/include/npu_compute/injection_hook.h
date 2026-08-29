@@ -42,6 +42,14 @@ typedef aclError (*aclrtBinaryGetFunctionByEntryFunc)(
 typedef aclError (*aclrtLaunchKernelWithHostArgsFunc)(
     aclrtFuncHandle funcHandle, uint32_t numBlocks, aclrtStream stream, aclrtLaunchKernelCfg* cfg, void* hostArgs,
     size_t argsSize, aclrtPlaceHolderInfo* placeHolderArray, size_t placeHolderNum);
+typedef aclError (*aclrtLaunchSIMTKernelWithHostArgsFunc)(
+    void* func, dim3 gridDim, dim3 blockDim, size_t dynUbufSize, aclrtStream stream, aclrtLaunchKernelCfg* cfg,
+    void* hostArgs, size_t argsSize, aclrtPlaceHolderInfo* placeHolderArray, size_t placeHolderNum);
+typedef aclError (*aclrtLaunchKernelWithArgsArrayFunc)(
+    void* func, uint32_t numBlocks, aclrtStream stream, aclrtLaunchKernelCfg* cfg, void** args);
+typedef aclError (*aclrtLaunchSIMTKernelWithArgsArrayFunc)(
+    void* func, dim3 gridDim, dim3 blockDim, size_t dynUbufSize, aclrtStream stream, aclrtLaunchKernelCfg* cfg,
+    void** args);
 typedef aclError (*aclrtLaunchKernelFunc)(
     aclrtFuncHandle funcHandle, uint32_t numBlocks, const void* argsData, size_t argsSize, aclrtStream stream);
 typedef aclError (*aclrtGetFuncBySymbolFunc)(const void* symbol, aclrtFuncHandle* funcHandle);
@@ -75,6 +83,9 @@ typedef enum {
     ACL_RT_API_aclrtGetFunctionAttribute = 19,
     ACL_RT_API_aclrtGetSocName = 20,
     ACL_RT_API_aclrtGetDeviceInfo = 21,
+    ACL_RT_API_aclrtLaunchSIMTKernelWithHostArgs = 22,
+    ACL_RT_API_aclrtLaunchKernelWithArgsArray = 23,
+    ACL_RT_API_aclrtLaunchSIMTKernelWithArgsArray = 24,
     ACL_RT_API_MAX
 } aclrtApiId;
 
@@ -101,6 +112,9 @@ NPU_COMPUTE_DECLARE_REGISTRATION(AclrtBinaryLoadFromData, aclrtBinaryLoadFromDat
 NPU_COMPUTE_DECLARE_REGISTRATION(AclrtBinaryGetFunction, aclrtBinaryGetFunction);
 NPU_COMPUTE_DECLARE_REGISTRATION(AclrtBinaryGetFunctionByEntry, aclrtBinaryGetFunctionByEntry);
 NPU_COMPUTE_DECLARE_REGISTRATION(AclrtLaunchKernelWithHostArgs, aclrtLaunchKernelWithHostArgs);
+NPU_COMPUTE_DECLARE_REGISTRATION(AclrtLaunchSIMTKernelWithHostArgs, aclrtLaunchSIMTKernelWithHostArgs);
+NPU_COMPUTE_DECLARE_REGISTRATION(AclrtLaunchKernelWithArgsArray, aclrtLaunchKernelWithArgsArray);
+NPU_COMPUTE_DECLARE_REGISTRATION(AclrtLaunchSIMTKernelWithArgsArray, aclrtLaunchSIMTKernelWithArgsArray);
 NPU_COMPUTE_DECLARE_REGISTRATION(AclrtLaunchKernel, aclrtLaunchKernel);
 NPU_COMPUTE_DECLARE_REGISTRATION(AclrtGetFuncBySymbol, aclrtGetFuncBySymbol);
 NPU_COMPUTE_DECLARE_REGISTRATION(AclrtBinaryUnLoad, aclrtBinaryUnLoad);

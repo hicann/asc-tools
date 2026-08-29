@@ -114,6 +114,102 @@ aclError AclrtLaunchKernelWithHostArgsReplacement(
     });
 }
 
+aclError AclrtLaunchSIMTKernelWithHostArgsReplacement(
+    void* func, dim3 gridDim, dim3 blockDim, std::size_t dynUbufSize, aclrtStream stream, aclrtLaunchKernelCfg* cfg,
+    void* hostArgs, std::size_t argsSize, aclrtPlaceHolderInfo* placeHolderArray, std::size_t placeHolderNum)
+{
+    aclptiAclrtLaunchSIMTKernelWithHostArgsParams params{func, gridDim,  blockDim, dynUbufSize,      stream,
+                                                         cfg,  hostArgs, argsSize, placeHolderArray, placeHolderNum};
+    return InvokeRuntimeCallback(
+        ACLPTI_RUNTIME_CBID_aclrtLaunchSIMTKernelWithHostArgs, params, [&params]() -> aclError {
+            const auto launchFunction = reinterpret_cast<aclrtLaunchSIMTKernelWithHostArgsFunc>(
+                acltoolGetOriginalRuntimeApi(ACL_RT_API_aclrtLaunchSIMTKernelWithHostArgs));
+            if (launchFunction == nullptr) {
+                return MissingOriginalFunction("aclrtLaunchSIMTKernelWithHostArgs");
+            }
+            const aclError result = launchFunction(
+                params.func, params.gridDim, params.blockDim, params.dynUbufSize, params.stream, params.cfg,
+                params.hostArgs, params.argsSize, params.placeHolderArray, params.placeHolderNum);
+            if (result != ACL_SUCCESS) {
+                LogOriginalFailure("aclrtLaunchSIMTKernelWithHostArgs", result);
+                return result;
+            }
+            npu_compute::detail::DebugLog(
+                "aclpti", "launch SIMT kernel with host args original succeeded argsSize=%zu", params.argsSize);
+            const aclptiResult replayStatus = profiling::GetReplayRuntime().ReplayKernel(
+                [launchFunction, &params]() -> aclError {
+                    return launchFunction(
+                        params.func, params.gridDim, params.blockDim, params.dynUbufSize, params.stream, params.cfg,
+                        params.hostArgs, params.argsSize, params.placeHolderArray, params.placeHolderNum);
+                },
+                params.stream);
+            npu_compute::detail::DebugLog(
+                "aclpti", "launch SIMT kernel with host args replay result=%d", static_cast<int>(replayStatus));
+            return MapProfilingResult(replayStatus);
+        });
+}
+
+aclError AclrtLaunchKernelWithArgsArrayReplacement(
+    void* func, std::uint32_t numBlocks, aclrtStream stream, aclrtLaunchKernelCfg* cfg, void** args)
+{
+    aclptiAclrtLaunchKernelWithArgsArrayParams params{func, numBlocks, stream, cfg, args};
+    return InvokeRuntimeCallback(ACLPTI_RUNTIME_CBID_aclrtLaunchKernelWithArgsArray, params, [&params]() -> aclError {
+        const auto launchFunction = reinterpret_cast<aclrtLaunchKernelWithArgsArrayFunc>(
+            acltoolGetOriginalRuntimeApi(ACL_RT_API_aclrtLaunchKernelWithArgsArray));
+        if (launchFunction == nullptr) {
+            return MissingOriginalFunction("aclrtLaunchKernelWithArgsArray");
+        }
+        const aclError result = launchFunction(params.func, params.numBlocks, params.stream, params.cfg, params.args);
+        if (result != ACL_SUCCESS) {
+            LogOriginalFailure("aclrtLaunchKernelWithArgsArray", result);
+            return result;
+        }
+        npu_compute::detail::DebugLog(
+            "aclpti", "launch kernel with args array original succeeded blocks=%u", params.numBlocks);
+        const aclptiResult replayStatus = profiling::GetReplayRuntime().ReplayKernel(
+            [launchFunction, &params]() -> aclError {
+                return launchFunction(params.func, params.numBlocks, params.stream, params.cfg, params.args);
+            },
+            params.stream);
+        npu_compute::detail::DebugLog(
+            "aclpti", "launch kernel with args array replay result=%d", static_cast<int>(replayStatus));
+        return MapProfilingResult(replayStatus);
+    });
+}
+
+aclError AclrtLaunchSIMTKernelWithArgsArrayReplacement(
+    void* func, dim3 gridDim, dim3 blockDim, std::size_t dynUbufSize, aclrtStream stream, aclrtLaunchKernelCfg* cfg,
+    void** args)
+{
+    aclptiAclrtLaunchSIMTKernelWithArgsArrayParams params{func, gridDim, blockDim, dynUbufSize, stream, cfg, args};
+    return InvokeRuntimeCallback(
+        ACLPTI_RUNTIME_CBID_aclrtLaunchSIMTKernelWithArgsArray, params, [&params]() -> aclError {
+            const auto launchFunction = reinterpret_cast<aclrtLaunchSIMTKernelWithArgsArrayFunc>(
+                acltoolGetOriginalRuntimeApi(ACL_RT_API_aclrtLaunchSIMTKernelWithArgsArray));
+            if (launchFunction == nullptr) {
+                return MissingOriginalFunction("aclrtLaunchSIMTKernelWithArgsArray");
+            }
+            const aclError result = launchFunction(
+                params.func, params.gridDim, params.blockDim, params.dynUbufSize, params.stream, params.cfg,
+                params.args);
+            if (result != ACL_SUCCESS) {
+                LogOriginalFailure("aclrtLaunchSIMTKernelWithArgsArray", result);
+                return result;
+            }
+            npu_compute::detail::DebugLog("aclpti", "launch SIMT kernel with args array original succeeded");
+            const aclptiResult replayStatus = profiling::GetReplayRuntime().ReplayKernel(
+                [launchFunction, &params]() -> aclError {
+                    return launchFunction(
+                        params.func, params.gridDim, params.blockDim, params.dynUbufSize, params.stream, params.cfg,
+                        params.args);
+                },
+                params.stream);
+            npu_compute::detail::DebugLog(
+                "aclpti", "launch SIMT kernel with args array replay result=%d", static_cast<int>(replayStatus));
+            return MapProfilingResult(replayStatus);
+        });
+}
+
 aclError AclrtMemcpyReplacement(
     void* destination, std::size_t destinationSize, const void* source, std::size_t count, aclrtMemcpyKind kind)
 {
@@ -317,6 +413,15 @@ bool RegisterRuntimeApiReplacements()
         RegisterRuntimeReplacement(
             ACL_RT_API_aclrtLaunchKernelWithHostArgs, acltoolRegisterAclrtLaunchKernelWithHostArgsCallbacks,
             &AclrtLaunchKernelWithHostArgsReplacement) &&
+        RegisterRuntimeReplacement(
+            ACL_RT_API_aclrtLaunchSIMTKernelWithHostArgs, acltoolRegisterAclrtLaunchSIMTKernelWithHostArgsCallbacks,
+            &AclrtLaunchSIMTKernelWithHostArgsReplacement) &&
+        RegisterRuntimeReplacement(
+            ACL_RT_API_aclrtLaunchKernelWithArgsArray, acltoolRegisterAclrtLaunchKernelWithArgsArrayCallbacks,
+            &AclrtLaunchKernelWithArgsArrayReplacement) &&
+        RegisterRuntimeReplacement(
+            ACL_RT_API_aclrtLaunchSIMTKernelWithArgsArray, acltoolRegisterAclrtLaunchSIMTKernelWithArgsArrayCallbacks,
+            &AclrtLaunchSIMTKernelWithArgsArrayReplacement) &&
         RegisterRuntimeReplacement(
             ACL_RT_API_aclrtMemcpy, acltoolRegisterAclrtMemcpyCallbacks, &AclrtMemcpyReplacement) &&
         RegisterRuntimeReplacement(

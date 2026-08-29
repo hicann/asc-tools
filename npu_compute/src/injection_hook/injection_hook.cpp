@@ -50,6 +50,9 @@ constexpr const char* kRuntimeApiNames[ACL_RT_API_MAX] = {
     "aclrtGetFunctionAttribute",
     "aclrtGetSocName",
     "aclrtGetDeviceInfo",
+    "aclrtLaunchSIMTKernelWithHostArgs",
+    "aclrtLaunchKernelWithArgsArray",
+    "aclrtLaunchSIMTKernelWithArgsArray",
 };
 
 std::mutex g_initMutex;
@@ -363,6 +366,51 @@ extern "C" aclError aclrtLaunchKernelWithHostArgsHook(
     return result;
 }
 
+extern "C" aclError aclrtLaunchSIMTKernelWithHostArgsHook(
+    void* func, dim3 gridDim, dim3 blockDim, size_t dynUbufSize, aclrtStream stream, aclrtLaunchKernelCfg* cfg,
+    void* hostArgs, size_t argsSize, aclrtPlaceHolderInfo* placeHolderArray, size_t placeHolderNum)
+{
+    constexpr aclrtApiId id = ACL_RT_API_aclrtLaunchSIMTKernelWithHostArgs;
+    const auto callback = GetDispatchTarget<aclrtLaunchSIMTKernelWithHostArgsFunc>(id);
+    if (callback == nullptr) {
+        LogMissingCallback("aclrtLaunchSIMTKernelWithHostArgs", id);
+        return ACL_ERROR_UNINITIALIZE;
+    }
+    const aclError result = callback(
+        func, gridDim, blockDim, dynUbufSize, stream, cfg, hostArgs, argsSize, placeHolderArray, placeHolderNum);
+    LogHookResult("aclrtLaunchSIMTKernelWithHostArgs", id, result);
+    return result;
+}
+
+extern "C" aclError aclrtLaunchKernelWithArgsArrayHook(
+    void* func, uint32_t numBlocks, aclrtStream stream, aclrtLaunchKernelCfg* cfg, void** args)
+{
+    constexpr aclrtApiId id = ACL_RT_API_aclrtLaunchKernelWithArgsArray;
+    const auto callback = GetDispatchTarget<aclrtLaunchKernelWithArgsArrayFunc>(id);
+    if (callback == nullptr) {
+        LogMissingCallback("aclrtLaunchKernelWithArgsArray", id);
+        return ACL_ERROR_UNINITIALIZE;
+    }
+    const aclError result = callback(func, numBlocks, stream, cfg, args);
+    LogHookResult("aclrtLaunchKernelWithArgsArray", id, result);
+    return result;
+}
+
+extern "C" aclError aclrtLaunchSIMTKernelWithArgsArrayHook(
+    void* func, dim3 gridDim, dim3 blockDim, size_t dynUbufSize, aclrtStream stream, aclrtLaunchKernelCfg* cfg,
+    void** args)
+{
+    constexpr aclrtApiId id = ACL_RT_API_aclrtLaunchSIMTKernelWithArgsArray;
+    const auto callback = GetDispatchTarget<aclrtLaunchSIMTKernelWithArgsArrayFunc>(id);
+    if (callback == nullptr) {
+        LogMissingCallback("aclrtLaunchSIMTKernelWithArgsArray", id);
+        return ACL_ERROR_UNINITIALIZE;
+    }
+    const aclError result = callback(func, gridDim, blockDim, dynUbufSize, stream, cfg, args);
+    LogHookResult("aclrtLaunchSIMTKernelWithArgsArray", id, result);
+    return result;
+}
+
 extern "C" aclError aclrtLaunchKernelHook(
     aclrtFuncHandle funcHandle, uint32_t numBlocks, const void* argsData, size_t argsSize, aclrtStream stream)
 {
@@ -482,6 +530,9 @@ aclApiTable g_aclApiTable = {
         FunctionToAddress(&aclrtGetFunctionAttributeHook),
         FunctionToAddress(&aclrtGetSocNameHook),
         FunctionToAddress(&aclrtGetDeviceInfoHook),
+        FunctionToAddress(&aclrtLaunchSIMTKernelWithHostArgsHook),
+        FunctionToAddress(&aclrtLaunchKernelWithArgsArrayHook),
+        FunctionToAddress(&aclrtLaunchSIMTKernelWithArgsArrayHook),
     },
     {},
     {},
@@ -670,6 +721,24 @@ extern "C" NPU_COMPUTE_EXPORT int32_t
 acltoolRegisterAclrtLaunchKernelWithHostArgsCallbacks(aclrtLaunchKernelWithHostArgsFunc callback)
 {
     return RegisterCallback(ACL_RT_API_aclrtLaunchKernelWithHostArgs, FunctionToAddress(callback));
+}
+
+extern "C" NPU_COMPUTE_EXPORT int32_t
+acltoolRegisterAclrtLaunchSIMTKernelWithHostArgsCallbacks(aclrtLaunchSIMTKernelWithHostArgsFunc callback)
+{
+    return RegisterCallback(ACL_RT_API_aclrtLaunchSIMTKernelWithHostArgs, FunctionToAddress(callback));
+}
+
+extern "C" NPU_COMPUTE_EXPORT int32_t
+acltoolRegisterAclrtLaunchKernelWithArgsArrayCallbacks(aclrtLaunchKernelWithArgsArrayFunc callback)
+{
+    return RegisterCallback(ACL_RT_API_aclrtLaunchKernelWithArgsArray, FunctionToAddress(callback));
+}
+
+extern "C" NPU_COMPUTE_EXPORT int32_t
+acltoolRegisterAclrtLaunchSIMTKernelWithArgsArrayCallbacks(aclrtLaunchSIMTKernelWithArgsArrayFunc callback)
+{
+    return RegisterCallback(ACL_RT_API_aclrtLaunchSIMTKernelWithArgsArray, FunctionToAddress(callback));
 }
 
 extern "C" NPU_COMPUTE_EXPORT int32_t acltoolRegisterAclrtLaunchKernelCallbacks(aclrtLaunchKernelFunc callback)

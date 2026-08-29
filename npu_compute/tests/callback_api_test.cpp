@@ -122,6 +122,13 @@ std::int32_t MsprofStop(uint32_t, const void*, uint32_t) { return 0; }
 
 std::int32_t MsprofRegisterDataCallback(uint32_t, void* function) { return function == nullptr ? -1 : 0; }
 
+static_assert(ACLPTI_RUNTIME_CBID_aclrtGetFuncBySymbol == 14);
+static_assert(ACLPTI_RUNTIME_CBID_aclrtBinaryUnLoad == 15);
+static_assert(ACLPTI_RUNTIME_CBID_aclrtLaunchSIMTKernelWithHostArgs == 16);
+static_assert(ACLPTI_RUNTIME_CBID_aclrtLaunchKernelWithArgsArray == 17);
+static_assert(ACLPTI_RUNTIME_CBID_aclrtLaunchSIMTKernelWithArgsArray == 18);
+static_assert(ACLPTI_RUNTIME_CBID_SIZE == 19);
+
 int main()
 {
     std::size_t domainCount = 0;

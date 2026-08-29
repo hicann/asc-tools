@@ -38,7 +38,10 @@ typedef enum aclptiRuntimeCallbackId {
     ACLPTI_RUNTIME_CBID_aclrtLaunchKernel = 13,
     ACLPTI_RUNTIME_CBID_aclrtGetFuncBySymbol = 14,
     ACLPTI_RUNTIME_CBID_aclrtBinaryUnLoad = 15,
-    ACLPTI_RUNTIME_CBID_SIZE = 16,
+    ACLPTI_RUNTIME_CBID_aclrtLaunchSIMTKernelWithHostArgs = 16,
+    ACLPTI_RUNTIME_CBID_aclrtLaunchKernelWithArgsArray = 17,
+    ACLPTI_RUNTIME_CBID_aclrtLaunchSIMTKernelWithArgsArray = 18,
+    ACLPTI_RUNTIME_CBID_SIZE = 19,
 } aclptiRuntimeCallbackId;
 
 typedef struct aclptiAclrtLaunchKernelWithHostArgsParams {
@@ -51,6 +54,37 @@ typedef struct aclptiAclrtLaunchKernelWithHostArgsParams {
     aclrtPlaceHolderInfo* placeHolderArray;
     size_t placeHolderNum;
 } aclptiAclrtLaunchKernelWithHostArgsParams;
+
+typedef struct aclptiAclrtLaunchSIMTKernelWithHostArgsParams {
+    void* func;
+    dim3 gridDim;
+    dim3 blockDim;
+    size_t dynUbufSize;
+    aclrtStream stream;
+    aclrtLaunchKernelCfg* cfg;
+    void* hostArgs;
+    size_t argsSize;
+    aclrtPlaceHolderInfo* placeHolderArray;
+    size_t placeHolderNum;
+} aclptiAclrtLaunchSIMTKernelWithHostArgsParams;
+
+typedef struct aclptiAclrtLaunchKernelWithArgsArrayParams {
+    void* func;
+    uint32_t numBlocks;
+    aclrtStream stream;
+    aclrtLaunchKernelCfg* cfg;
+    void** args;
+} aclptiAclrtLaunchKernelWithArgsArrayParams;
+
+typedef struct aclptiAclrtLaunchSIMTKernelWithArgsArrayParams {
+    void* func;
+    dim3 gridDim;
+    dim3 blockDim;
+    size_t dynUbufSize;
+    aclrtStream stream;
+    aclrtLaunchKernelCfg* cfg;
+    void** args;
+} aclptiAclrtLaunchSIMTKernelWithArgsArrayParams;
 
 typedef struct aclptiAclrtMemcpyParams {
     void* dst;

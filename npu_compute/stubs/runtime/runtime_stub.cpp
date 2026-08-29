@@ -24,7 +24,7 @@
 
 namespace {
 
-constexpr std::size_t kRuntimeApiCount = 22;
+constexpr std::size_t kRuntimeApiCount = 25;
 
 struct KernelArgs {
     uint8_t* value;
@@ -35,6 +35,24 @@ std::atomic<std::int32_t> g_currentDevice{-1};
 aclError RealAclrtLaunchKernelWithHostArgs(
     aclrtFuncHandle, uint32_t, aclrtStream, aclrtLaunchKernelCfg*, void*, std::size_t, aclrtPlaceHolderInfo*,
     std::size_t)
+{
+    return ACL_SUCCESS;
+}
+
+aclError RealAclrtLaunchSIMTKernelWithHostArgs(
+    void*, dim3, dim3, std::size_t, aclrtStream, aclrtLaunchKernelCfg*, void*, std::size_t, aclrtPlaceHolderInfo*,
+    std::size_t)
+{
+    return ACL_SUCCESS;
+}
+
+aclError RealAclrtLaunchKernelWithArgsArray(void*, uint32_t, aclrtStream, aclrtLaunchKernelCfg*, void**)
+{
+    return ACL_SUCCESS;
+}
+
+aclError RealAclrtLaunchSIMTKernelWithArgsArray(
+    void*, dim3, dim3, std::size_t, aclrtStream, aclrtLaunchKernelCfg*, void**)
 {
     return ACL_SUCCESS;
 }
@@ -249,6 +267,12 @@ std::array<RuntimeEntry, kRuntimeApiCount> g_runtimeEntries = {{
      ToGenericFunction(&RealAclrtGetFunctionAttribute)},
     {"aclrtGetSocName", ToGenericFunction(&RealAclrtGetSocName), ToGenericFunction(&RealAclrtGetSocName)},
     {"aclrtGetDeviceInfo", ToGenericFunction(&RealAclrtGetDeviceInfo), ToGenericFunction(&RealAclrtGetDeviceInfo)},
+    {"aclrtLaunchSIMTKernelWithHostArgs", ToGenericFunction(&RealAclrtLaunchSIMTKernelWithHostArgs),
+     ToGenericFunction(&RealAclrtLaunchSIMTKernelWithHostArgs)},
+    {"aclrtLaunchKernelWithArgsArray", ToGenericFunction(&RealAclrtLaunchKernelWithArgsArray),
+     ToGenericFunction(&RealAclrtLaunchKernelWithArgsArray)},
+    {"aclrtLaunchSIMTKernelWithArgsArray", ToGenericFunction(&RealAclrtLaunchSIMTKernelWithArgsArray),
+     ToGenericFunction(&RealAclrtLaunchSIMTKernelWithArgsArray)},
 }};
 
 std::mutex g_runtimeMutex;
@@ -490,6 +514,32 @@ extern "C" aclError aclrtLaunchKernelWithHostArgs(
         std::size_t)>(
         "aclrtLaunchKernelWithHostArgs", funcHandle, numBlocks, stream, cfg, hostArgs, argsSize, placeHolderArray,
         placeHolderNum);
+}
+
+extern "C" aclError aclrtLaunchSIMTKernelWithHostArgs(
+    void* func, dim3 gridDim, dim3 blockDim, std::size_t dynUbufSize, aclrtStream stream, aclrtLaunchKernelCfg* cfg,
+    void* hostArgs, std::size_t argsSize, aclrtPlaceHolderInfo* placeHolderArray, std::size_t placeHolderNum)
+{
+    return CallCurrent<aclError (*)(
+        void*, dim3, dim3, std::size_t, aclrtStream, aclrtLaunchKernelCfg*, void*, std::size_t, aclrtPlaceHolderInfo*,
+        std::size_t)>(
+        "aclrtLaunchSIMTKernelWithHostArgs", func, gridDim, blockDim, dynUbufSize, stream, cfg, hostArgs, argsSize,
+        placeHolderArray, placeHolderNum);
+}
+
+extern "C" aclError aclrtLaunchKernelWithArgsArray(
+    void* func, uint32_t numBlocks, aclrtStream stream, aclrtLaunchKernelCfg* cfg, void** args)
+{
+    return CallCurrent<aclError (*)(void*, uint32_t, aclrtStream, aclrtLaunchKernelCfg*, void**)>(
+        "aclrtLaunchKernelWithArgsArray", func, numBlocks, stream, cfg, args);
+}
+
+extern "C" aclError aclrtLaunchSIMTKernelWithArgsArray(
+    void* func, dim3 gridDim, dim3 blockDim, std::size_t dynUbufSize, aclrtStream stream, aclrtLaunchKernelCfg* cfg,
+    void** args)
+{
+    return CallCurrent<aclError (*)(void*, dim3, dim3, std::size_t, aclrtStream, aclrtLaunchKernelCfg*, void**)>(
+        "aclrtLaunchSIMTKernelWithArgsArray", func, gridDim, blockDim, dynUbufSize, stream, cfg, args);
 }
 
 extern "C" aclError aclrtLaunchKernel(
