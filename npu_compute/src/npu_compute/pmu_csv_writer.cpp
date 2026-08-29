@@ -25,9 +25,11 @@
 #include <initializer_list>
 #include <map>
 #include <optional>
+#include <set>
 #include <sstream>
 #include <string_view>
 #include <system_error>
+#include <utility>
 
 #include <unistd.h>
 
@@ -269,6 +271,31 @@ RowMetrics MakeRowMetrics(aclptiBlockKey key, const aclptiPmuDataRow& row)
     return metrics;
 }
 
+struct BlockCounts {
+    uint32_t aic = 0;
+    uint32_t aiv = 0;
+};
+
+// 从采集结果统计真实启动的 AIC / AIV block 数，按 (blockId, subBlockId) 去重。
+// core type 判定方式与 MakeRowMetrics 保持一致：优先看 coreData，各 core 按自身
+// coreType 归类；coreData 为空时退回用 row.coreType。
+BlockCounts ComputeBlockCounts(const std::map<aclptiBlockKey, aclptiPmuDataRow>& pmuLogs)
+{
+    std::set<std::pair<uint16_t, uint16_t>> aicBlocks;
+    std::set<std::pair<uint16_t, uint16_t>> aivBlocks;
+    for (const auto& [key, row] : pmuLogs) {
+        const std::pair<uint16_t, uint16_t> block{key.blockId, key.subBlockId};
+        if (!row.coreData.empty()) {
+            for (const auto& core : row.coreData) {
+                (core.coreType == ACLPTI_CORE_TYPE_AIC ? aicBlocks : aivBlocks).insert(block);
+            }
+        } else {
+            (row.coreType == ACLPTI_CORE_TYPE_AIC ? aicBlocks : aivBlocks).insert(block);
+        }
+    }
+    return {static_cast<uint32_t>(aicBlocks.size()), static_cast<uint32_t>(aivBlocks.size())};
+}
+
 std::optional<double> Ratio(double numerator, double denominator)
 {
     if (denominator == 0.0) {
@@ -484,9 +511,15 @@ uint32_t AicCoreCount(const PmuCsvConfig& config) { return config.aicCoreCount; 
 
 uint32_t AivCoreCount(const PmuCsvConfig& config) { return config.aivCoreCount; }
 
-uint32_t AicBlockCount(const PmuCsvConfig& config) { return config.aicCoreCount; }
+uint32_t AicBlockCount(const PmuCsvConfig& config)
+{
+    return config.aicBlockCount != 0 ? config.aicBlockCount : config.aicCoreCount;
+}
 
-uint32_t AivBlockCount(const PmuCsvConfig& config) { return config.aivCoreCount; }
+uint32_t AivBlockCount(const PmuCsvConfig& config)
+{
+    return config.aivBlockCount != 0 ? config.aivBlockCount : config.aivCoreCount;
+}
 
 double MaxBandwidth(std::string_view soc, std::string_view kind)
 {
@@ -1185,9 +1218,6 @@ aclptiResult PmuCsvWriter::Write(
         "npu-compute", "CSV write requested: output=%s sections=%zu pmuBlocks=%zu status=%d failedRecords=%llu",
         outputDirectory.c_str(), sections.size(), result.pmuLogs.size(), static_cast<int>(result.status),
         static_cast<unsigned long long>(result.errorStats.failedRecordCount));
-    npu_compute::detail::DebugLog(
-        "npu-compute", "CSV timing config: aicBlockCount=%u aicCoreCount=%u aivBlockCount=%u aivCoreCount=%u",
-        AicBlockCount(config), AicCoreCount(config), AivBlockCount(config), AivCoreCount(config));
     if (IsEmptySuccessfulResult(result)) {
         npu_compute::detail::DebugLog("npu-compute", "CSV write skipped: empty successful result");
         return ACLPTI_SUCCESS;
@@ -1198,8 +1228,15 @@ aclptiResult PmuCsvWriter::Write(
             static_cast<int>(result.status), static_cast<unsigned long long>(result.errorStats.failedRecordCount));
         return ACLPTI_SUCCESS;
     }
-    const double aicFrequencyMhz = AicFrequencyMhz(config);
-    const double aivFrequencyMhz = AivFrequencyMhz(config);
+    PmuCsvConfig csvConfig = config;
+    const BlockCounts blockCounts = ComputeBlockCounts(result.pmuLogs);
+    csvConfig.aicBlockCount = blockCounts.aic;
+    csvConfig.aivBlockCount = blockCounts.aiv;
+    npu_compute::detail::DebugLog(
+        "npu-compute", "CSV timing config: aicBlockCount=%u aicCoreCount=%u aivBlockCount=%u aivCoreCount=%u",
+        AicBlockCount(csvConfig), AicCoreCount(csvConfig), AivBlockCount(csvConfig), AivCoreCount(csvConfig));
+    const double aicFrequencyMhz = AicFrequencyMhz(csvConfig);
+    const double aivFrequencyMhz = AivFrequencyMhz(csvConfig);
     if (aicFrequencyMhz <= 0.0 || !std::isfinite(aicFrequencyMhz) || aivFrequencyMhz <= 0.0 ||
         !std::isfinite(aivFrequencyMhz)) {
         npu_compute::detail::DebugLog(
@@ -1243,7 +1280,7 @@ aclptiResult PmuCsvWriter::Write(
             CsvSectionStats stats;
             WriteCsvLine(output, header);
             for (const auto& [key, row] : result.pmuLogs) {
-                const CsvRow values = writer->row(MakeRowMetrics(key, row), config);
+                const CsvRow values = writer->row(MakeRowMetrics(key, row), csvConfig);
                 UpdateMissingStats(header, values, &stats);
                 WriteCsvLine(output, values);
             }

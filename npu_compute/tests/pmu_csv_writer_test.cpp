@@ -359,5 +359,107 @@ int main()
     } else {
         CHECK(unsetenv("NPU_COMPUTE_DEBUG") == 0);
     }
+
+    // === 场景 1：实际 block 数等于硬件核数（2 blocks，2 cores）===
+    // scale = ceil(2/2)/2 = 0.5，aic_time = 4000/1000 * 0.5 = 2.0
+    // 新旧行为一致，验证无回归。
+    {
+        const auto s1Dir = std::filesystem::temp_directory_path() /
+                           ("npu_compute_csv_block_scale1_" +
+                            std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+        aclptiPmuDataResult s1Result;
+        for (uint16_t i = 0; i < 2; ++i) {
+            aclptiPmuDataRow row{};
+            row.blockId = i;
+            row.subBlockId = 0;
+            row.coreType = ACLPTI_CORE_TYPE_AIC;
+            row.coreId = 0;
+            row.coreData.push_back(Core(ACLPTI_CORE_TYPE_AIC, 0, 4000.0, {}));
+            s1Result.pmuLogs.emplace(aclptiBlockKey{i, 0, ACLPTI_CORE_TYPE_AIC, 0}, row);
+        }
+        npu_compute::PmuCsvConfig s1Config;
+        s1Config.outputDirectory = s1Dir.string();
+        s1Config.frequencyMhz = 1000.0;
+        s1Config.aicCoreCount = 2;
+        CHECK(npu_compute::PmuCsvWriter::Write(s1Result, {"L2Cache"}, s1Config) == ACLPTI_SUCCESS);
+        CHECK(ReadFile(s1Dir / "L2Cache.csv").find("0,cube0,2,") != std::string::npos);
+        std::filesystem::remove_all(s1Dir);
+    }
+
+    // === 场景 2：实际 block 数小于硬件核数（1 block，4 cores）===
+    // scale = ceil(1/4)/1 = 1.0，aic_time = 4000/1000 * 1.0 = 4.0
+    // 旧逻辑（blockCount=coreCount=4）：scale=0.25，time=1.0（偏小）。
+    {
+        const auto s2Dir = std::filesystem::temp_directory_path() /
+                           ("npu_compute_csv_block_scale2_" +
+                            std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+        aclptiPmuDataResult s2Result;
+        aclptiPmuDataRow s2Row{};
+        s2Row.blockId = 5;
+        s2Row.subBlockId = 0;
+        s2Row.coreType = ACLPTI_CORE_TYPE_AIC;
+        s2Row.coreId = 0;
+        s2Row.coreData.push_back(Core(ACLPTI_CORE_TYPE_AIC, 0, 4000.0, {}));
+        s2Result.pmuLogs.emplace(aclptiBlockKey{5, 0, ACLPTI_CORE_TYPE_AIC, 0}, s2Row);
+        npu_compute::PmuCsvConfig s2Config;
+        s2Config.outputDirectory = s2Dir.string();
+        s2Config.frequencyMhz = 1000.0;
+        s2Config.aicCoreCount = 4;
+        CHECK(npu_compute::PmuCsvWriter::Write(s2Result, {"L2Cache"}, s2Config) == ACLPTI_SUCCESS);
+        CHECK(ReadFile(s2Dir / "L2Cache.csv").find("5,cube0,4,") != std::string::npos);
+        std::filesystem::remove_all(s2Dir);
+    }
+
+    // === 场景 3：实际 block 数大于硬件核数（3 blocks，2 cores）===
+    // waves = ceil(3/2) = 2，scale = 2/3，aic_time = 3000/1000 * (2/3) = 2.0
+    // 旧逻辑（blockCount=coreCount=2）：scale=0.5，time=1.5（偏小）。
+    {
+        const auto s3Dir = std::filesystem::temp_directory_path() /
+                           ("npu_compute_csv_block_scale3_" +
+                            std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+        aclptiPmuDataResult s3Result;
+        for (uint16_t i = 0; i < 3; ++i) {
+            aclptiPmuDataRow row{};
+            row.blockId = i;
+            row.subBlockId = 0;
+            row.coreType = ACLPTI_CORE_TYPE_AIC;
+            row.coreId = 0;
+            row.coreData.push_back(Core(ACLPTI_CORE_TYPE_AIC, 0, 3000.0, {}));
+            s3Result.pmuLogs.emplace(aclptiBlockKey{i, 0, ACLPTI_CORE_TYPE_AIC, 0}, row);
+        }
+        npu_compute::PmuCsvConfig s3Config;
+        s3Config.outputDirectory = s3Dir.string();
+        s3Config.frequencyMhz = 1000.0;
+        s3Config.aicCoreCount = 2;
+        CHECK(npu_compute::PmuCsvWriter::Write(s3Result, {"L2Cache"}, s3Config) == ACLPTI_SUCCESS);
+        CHECK(ReadFile(s3Dir / "L2Cache.csv").find("0,cube0,2,") != std::string::npos);
+        std::filesystem::remove_all(s3Dir);
+    }
+
+    // === 场景 4：AIV 侧 block 数小于核数（1 AIV block，4 AIV cores）===
+    // aivBlockCount 从 pmuLogs 统计得 1，scale = ceil(1/4)/1 = 1.0
+    // aiv_time = 4000/1000 * 1.0 = 4.0；aic_time = NA（无 AIC 数据）。
+    // 旧逻辑（blockCount=aivCoreCount=4）：scale=0.25，time=1.0（偏小）。
+    {
+        const auto s4Dir = std::filesystem::temp_directory_path() /
+                           ("npu_compute_csv_block_scale4_" +
+                            std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+        aclptiPmuDataResult s4Result;
+        aclptiPmuDataRow s4Row{};
+        s4Row.blockId = 10;
+        s4Row.subBlockId = 0;
+        s4Row.coreType = ACLPTI_CORE_TYPE_AIV;
+        s4Row.coreId = 0;
+        s4Row.coreData.push_back(Core(ACLPTI_CORE_TYPE_AIV, 0, 4000.0, {}));
+        s4Result.pmuLogs.emplace(aclptiBlockKey{10, 0, ACLPTI_CORE_TYPE_AIV, 0}, s4Row);
+        npu_compute::PmuCsvConfig s4Config;
+        s4Config.outputDirectory = s4Dir.string();
+        s4Config.frequencyMhz = 1000.0;
+        s4Config.aivCoreCount = 4;
+        CHECK(npu_compute::PmuCsvWriter::Write(s4Result, {"L2Cache"}, s4Config) == ACLPTI_SUCCESS);
+        CHECK(ReadFile(s4Dir / "L2Cache.csv").find("10,vector0,NA,NA,4,") != std::string::npos);
+        std::filesystem::remove_all(s4Dir);
+    }
+
     return 0;
 }
