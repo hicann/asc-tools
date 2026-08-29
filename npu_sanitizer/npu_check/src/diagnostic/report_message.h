@@ -23,43 +23,43 @@ inline constexpr std::size_t kNpusanReportStackMax = 8;
 inline constexpr std::size_t kNpusanReportFrameMax = 16;
 
 enum class ReportTool {
-    kMemcheck = 1,
-    kInitcheck = 2,
-    kRacecheck = 3,
-    kSynccheck = 4,
-    kSoccheck = 5,
+    MEMCHECK = 1,
+    INITCHECK = 2,
+    RACECHECK = 3,
+    SYNCCHECK = 4,
+    SOCCHECK = 5,
 };
 
 enum class ReportSeverity {
-    kInfo = 1,
-    kWarning = 2,
-    kError = 3,
-    kFatal = 4,
+    INFO = 1,
+    WARNING = 2,
+    ERROR = 3,
+    FATAL = 4,
 };
 
 enum class ReportStackRole {
-    kNone = 0,
-    kFaultDevice = 1,
-    kHostLaunch = 2,
-    kHostAlloc = 3,
-    kHostFree = 4,
-    kRelatedAccessA = 5,
-    kRelatedAccessB = 6,
-    kSyncProducer = 7,
-    kSyncConsumer = 8,
-    kStateProducer = 9,
-    kStateConsumer = 10,
-    kPeerDevice = 11,
-    kSyncTrigger = 12,
-    kSyncRelated = 13,
-    kHostApiCall = 14,
+    NONE = 0,
+    FAULT_DEVICE = 1,
+    HOST_LAUNCH = 2,
+    HOST_ALLOC = 3,
+    HOST_FREE = 4,
+    RELATED_ACCESS_A = 5,
+    RELATED_ACCESS_B = 6,
+    SYNC_PRODUCER = 7,
+    SYNC_CONSUMER = 8,
+    STATE_PRODUCER = 9,
+    STATE_CONSUMER = 10,
+    PEER_DEVICE = 11,
+    SYNC_TRIGGER = 12,
+    SYNC_RELATED = 13,
+    HOST_API_CALL = 14,
 };
 
 enum class ReportStackFormat {
-    kNone = 0,
-    kRawText = 1,
-    kFrames = 2,
-    kBoth = 3,
+    NONE = 0,
+    RAW_TEXT = 1,
+    FRAMES = 2,
+    BOTH = 3,
 };
 
 struct ReportFrame {
@@ -67,122 +67,122 @@ struct ReportFrame {
     std::uint64_t offset = 0;
     std::string function;
     std::string file;
-    std::uint32_t line = 0;
-    std::uint32_t column = 0;
-    std::uint32_t inlineDepth = 0;
-    std::uint32_t flags = 0;
+    std::uint32_t line = 0;        // One-based source line; 0 means unknown.
+    std::uint32_t column = 0;      // One-based source column; 0 means unknown.
+    std::uint32_t inlineDepth = 0; // Inline call depth; 0 is the physical frame.
+    std::uint32_t flags = 0;       // Frame metadata bit mask; no bits are defined in P0.
 };
 
 struct ReportCallStack {
-    ReportStackRole role = ReportStackRole::kFaultDevice;
-    ReportStackFormat format = ReportStackFormat::kNone;
+    ReportStackRole role = ReportStackRole::FAULT_DEVICE;
+    ReportStackFormat format = ReportStackFormat::NONE;
     std::string rawText;
     std::vector<ReportFrame> frames;
 };
 
 enum class NpusanReportMemorySpace {
-    kUnknown = 0,
-    kGm = 1,
-    kUb = 2,
-    kL1 = 3,
-    kL0A = 4,
-    kL0B = 5,
-    kL0C = 6,
-    kBt = 7,
-    kPrivate = 8,
-    kHost = 9,
+    UNKNOWN = 0,
+    GM = 1,
+    UB = 2,
+    L1 = 3,
+    L0_A = 4,
+    L0_B = 5,
+    L0_C = 6,
+    BT = 7,
+    PRIVATE = 8,
+    HOST = 9,
 };
 
 enum class NpusanReportAccessMode {
-    kRead = 1,
-    kWrite = 2,
-    kReadWrite = 3,
-    kFree = 4,
+    READ = 1,
+    WRITE = 2,
+    READ_WRITE = 3,
+    FREE = 4,
 };
 
 enum class NpusanReportDistanceKind {
-    kUnknown = 0,
-    kInside = 1,
-    kBefore = 2,
-    kAfter = 3,
+    UNKNOWN = 0,
+    INSIDE = 1,
+    BEFORE = 2,
+    AFTER = 3,
 };
 
 enum class NpusanMemcheckPattern {
-    kInvalidAccess = 1,
-    kMisalignedAccess = 2,
-    kUseAfterFree = 3,
-    kUseBeforeAlloc = 4,
-    kInvalidFree = 5,
-    kDoubleFree = 6,
-    kLeak = 7,
-    kApiError = 8,
+    INVALID_ACCESS = 1,
+    MISALIGNED_ACCESS = 2,
+    USE_AFTER_FREE = 3,
+    USE_BEFORE_ALLOC = 4,
+    INVALID_FREE = 5,
+    DOUBLE_FREE = 6,
+    LEAK = 7,
+    API_ERROR = 8,
 };
 
 enum class NpusanInitcheckPattern {
-    kUninitializedRead = 1,
-    kPartialUninitializedRead = 2,
-    kUnusedMemory = 3,
-    kApiReadUninitialized = 4,
+    UNINITIALIZED_READ = 1,
+    PARTIAL_UNINITIALIZED_READ = 2,
+    UNUSED_MEMORY = 3,
+    API_READ_UNINITIALIZED = 4,
 };
 
 enum class NpusanRacecheckPattern {
-    kAnalysis = 1,
-    kHazardRaw = 2,
-    kHazardWar = 3,
-    kHazardWaw = 4,
-    kAtomicRace = 5,
-    kCrossPipeRace = 6,
-    kInterCoreRace = 7,
-    kInvalidRemoteAccess = 8,
+    ANALYSIS = 1,
+    HAZARD_RAW = 2,
+    HAZARD_WAR = 3,
+    HAZARD_WAW = 4,
+    ATOMIC_RACE = 5,
+    CROSS_PIPE_RACE = 6,
+    INTER_CORE_RACE = 7,
+    INVALID_REMOTE_ACCESS = 8,
 };
 
 enum class NpusanSynccheckPattern {
-    kIntraCoreDivergent = 1,
-    kInterCoreDivergent = 2,
-    kInvalidArgument = 3,
-    kPairingMismatch = 4,
-    kParticipantMismatch = 5,
-    kDeadlock = 6,
-    kObjectNotInitialized = 7,
-    kInstructionSequenceMismatch = 8,
+    INTRA_CORE_DIVERGENT = 1,
+    INTER_CORE_DIVERGENT = 2,
+    INVALID_ARGUMENT = 3,
+    PAIRING_MISMATCH = 4,
+    PARTICIPANT_MISMATCH = 5,
+    DEADLOCK = 6,
+    OBJECT_NOT_INITIALIZED = 7,
+    INSTRUCTION_SEQUENCE_MISMATCH = 8,
 };
 
 enum class NpusanSyncMismatchReason {
-    kUnknown = 0,
-    kDuplicateOpen = 1,
-    kUnmatchedClose = 2,
-    kUnconsumedOpen = 3,
+    UNKNOWN = 0,
+    DUPLICATE_OPEN = 1,
+    UNMATCHED_CLOSE = 2,
+    UNCONSUMED_OPEN = 3,
 };
 
 enum class NpusanSyncPairKind {
-    kUnknown = 0,
-    kSetWaitFlag = 1,
-    kGetRlsBuf = 2,
+    UNKNOWN = 0,
+    SET_WAIT_FLAG = 1,
+    GET_RLS_BUF = 2,
 };
 
 enum class NpusanSyncDetailKind {
-    kBarrier = 1,
-    kPairing = 2,
-    kSequence = 3,
-    kObject = 4,
+    BARRIER = 1,
+    PAIRING = 2,
+    SEQUENCE = 3,
+    OBJECT = 4,
 };
 
 enum class NpusanSyncPrimitiveKind {
-    kUnknown = 0,
-    kBarrier = 1,
-    kSetWaitFlag = 2,
-    kGetRlsBuf = 3,
-    kInstructionSequence = 4,
-    kSyncObject = 5,
+    UNKNOWN = 0,
+    BARRIER = 1,
+    SET_WAIT_FLAG = 2,
+    GET_RLS_BUF = 3,
+    INSTRUCTION_SEQUENCE = 4,
+    SYNC_OBJECT = 5,
 };
 
 enum class NpusanSoccheckPattern {
-    kUninitializedStateRead = 1,
-    kRegisterMismatch = 2,
-    kIllegalStateTransition = 3,
-    kStateNotRestored = 4,
-    kCrossCoreStateInconsistent = 5,
-    kScopeViolation = 6,
+    UNINITIALIZED_STATE_READ = 1,
+    REGISTER_MISMATCH = 2,
+    ILLEGAL_STATE_TRANSITION = 3,
+    STATE_NOT_RESTORED = 4,
+    CROSS_CORE_STATE_INCONSISTENT = 5,
+    SCOPE_VIOLATION = 6,
 };
 
 struct NpusanReportExecContext {
@@ -194,14 +194,15 @@ struct NpusanReportExecContext {
     std::uint64_t pc = 0;
     std::uint64_t offset = 0;
 
-    std::uint32_t deviceId = 0;
-    std::uint32_t phyCoreId = std::numeric_limits<std::uint32_t>::max();
-    std::uint32_t blockId = 0;
-    std::uint32_t blockType = 0;
-    std::uint32_t pipeId = 0;
-    std::uint32_t siteId = 0;
-    std::uint32_t line = 0;
-    std::uint32_t column = 0;
+    std::uint32_t deviceId = 0; // Runtime logical device identifier.
+    std::uint32_t phyCoreId =
+        std::numeric_limits<std::uint32_t>::max(); // Physical AI Core index; UINT32_MAX means unknown.
+    std::uint32_t blockId = 0;                     // Logical block identifier within the kernel launch.
+    std::uint32_t blockType = 0;                   // AclsanDeviceBlockType value from the device callback ABI.
+    std::uint32_t pipeId = 0;                      // AclsanDevicePipeline value from the device callback ABI.
+    std::uint32_t siteId = 0;                      // Instrumentation site identifier; 0 means unavailable.
+    std::uint32_t line = 0;                        // One-based source line; 0 means unknown.
+    std::uint32_t column = 0;                      // One-based source column; 0 means unknown.
 
     std::string function;
     std::string file;
@@ -216,21 +217,21 @@ struct NpusanReportCommon {
     std::uint64_t groupId = 0;
     std::uint64_t timestampNs = 0;
 
-    ReportTool tool = ReportTool::kMemcheck;
-    ReportSeverity severity = ReportSeverity::kError;
-    std::uint32_t pattern = 0;
-    std::uint32_t flags = 0;
+    ReportTool tool = ReportTool::MEMCHECK;
+    ReportSeverity severity = ReportSeverity::ERROR;
+    std::uint32_t pattern = 0; // Underlying value of the tool-specific pattern enum selected by tool.
+    std::uint32_t flags = 0;   // NpusanReportCommon flags bit mask.
 
     NpusanReportExecContext exec;
-    std::uint32_t stackCount = 0;
+    std::uint32_t stackCount = 0; // Number of active entries in the compact stacks prefix.
     std::array<ReportCallStack, kNpusanReportStackMax> stacks{};
 };
 
 struct NpusanReportMemoryAccess {
-    NpusanReportMemorySpace memorySpace = NpusanReportMemorySpace::kUnknown;
-    NpusanReportAccessMode accessMode = NpusanReportAccessMode::kRead;
-    std::uint32_t accessBytes = 0;
-    std::uint32_t requiredAlign = 0;
+    NpusanReportMemorySpace memorySpace = NpusanReportMemorySpace::UNKNOWN;
+    NpusanReportAccessMode accessMode = NpusanReportAccessMode::READ;
+    std::uint32_t accessBytes = 0;   // Number of bytes accessed by the reported operation.
+    std::uint32_t requiredAlign = 0; // Required byte alignment; 0 means no known requirement.
 
     std::uint64_t address = 0;
     std::uint64_t rangeBegin = 0;
@@ -244,24 +245,24 @@ struct NpusanReportAllocation {
     std::uint64_t allocSerialNo = 0;
     std::uint64_t freeSerialNo = 0;
 
-    NpusanReportMemorySpace memorySpace = NpusanReportMemorySpace::kUnknown;
-    std::uint32_t deviceId = 0;
-    std::uint32_t state = 0;
-    std::uint32_t flags = 0;
+    NpusanReportMemorySpace memorySpace = NpusanReportMemorySpace::UNKNOWN;
+    std::uint32_t deviceId = 0; // Runtime logical device that owns the allocation.
+    std::uint32_t state = 0;    // Checker-defined allocation lifecycle state; 0 means unknown.
+    std::uint32_t flags = 0;    // Checker-defined allocation metadata bit mask.
 };
 
 struct NpusanSyncPoint {
     std::string operation;
     bool hasExecContext = false;
     NpusanReportExecContext exec;
-    ReportStackRole stackRole = ReportStackRole::kNone;
+    ReportStackRole stackRole = ReportStackRole::NONE;
 };
 
 struct NpusanSyncPairKey {
-    NpusanSyncPairKind pairKind = NpusanSyncPairKind::kUnknown;
-    std::uint32_t srcPipe = 0;
-    std::uint32_t dstPipe = 0;
-    std::uint32_t mode = 0;
+    NpusanSyncPairKind pairKind = NpusanSyncPairKind::UNKNOWN;
+    std::uint32_t srcPipe = 0; // AclsanDevicePipeline source value for SET_FLAG/WAIT_FLAG pairs.
+    std::uint32_t dstPipe = 0; // AclsanDevicePipeline destination or buffer-pipeline value.
+    std::uint32_t mode = 0;    // GET_BUF/RLS_BUF mode; 0 for SET_FLAG/WAIT_FLAG pairs.
     std::uint64_t id = 0;
 };
 
@@ -274,13 +275,13 @@ struct NpusanSyncBarrierError {
 };
 
 struct NpusanSyncPairingError {
-    NpusanSyncMismatchReason reason = NpusanSyncMismatchReason::kUnknown;
+    NpusanSyncMismatchReason reason = NpusanSyncMismatchReason::UNKNOWN;
     NpusanSyncPairKey key;
 };
 
 struct NpusanSyncSequenceError {
     std::string reason;
-    std::uint32_t sequenceIndex = 0;
+    std::uint32_t sequenceIndex = 0; // Zero-based position in the observed synchronization sequence.
     std::uint64_t activeMask = 0;
 };
 
@@ -301,15 +302,16 @@ struct NpusanRaceAccessSite {
 
     std::uint64_t value = 0;
     bool hasValue = false;
-    std::uint32_t syncEpoch = 0;
-    std::uint32_t flags = 0;
+    std::uint32_t syncEpoch = 0; // Checker-defined happens-before epoch; 0 means unavailable.
+    std::uint32_t flags = 0;     // Checker-defined access-site metadata bit mask.
 };
 
 struct NpusanSocStateRef {
-    std::uint32_t stateKind = 0;
-    std::uint32_t scope = 0;
-    std::uint32_t registerId = 0;
-    std::uint32_t ownerCoreId = std::numeric_limits<std::uint32_t>::max();
+    std::uint32_t stateKind = 0;  // Checker-defined SOC state category; 0 means unknown.
+    std::uint32_t scope = 0;      // Checker-defined state visibility scope; 0 means unknown.
+    std::uint32_t registerId = 0; // Register identifier when stateKind denotes a register.
+    std::uint32_t ownerCoreId =
+        std::numeric_limits<std::uint32_t>::max(); // Owning physical AI Core; UINT32_MAX means unknown.
 
     std::uint64_t stateId = 0;
     std::uint64_t oldValue = 0;
@@ -325,9 +327,9 @@ struct NpusanMemcheckReport {
     NpusanReportAllocation nearestAllocation;
 
     std::int64_t distanceBytes = 0;
-    NpusanReportDistanceKind distanceKind = NpusanReportDistanceKind::kUnknown;
-    std::uint32_t mallocFreeErrorKind = 0;
-    std::uint32_t apiErrorCode = 0;
+    NpusanReportDistanceKind distanceKind = NpusanReportDistanceKind::UNKNOWN;
+    std::uint32_t mallocFreeErrorKind = 0; // Checker-defined allocation API error category; 0 means unknown.
+    std::uint32_t apiErrorCode = 0;        // Runtime API status code reported by the failing call.
 
     std::string apiName;
     std::string apiErrorName;
@@ -345,16 +347,16 @@ struct NpusanInitcheckReport {
     std::uint64_t initializedBytes = 0;
 
     std::uint64_t unusedBytes = 0;
-    std::uint32_t unusedPercent = 0;
-    std::uint32_t flags = 0;
+    std::uint32_t unusedPercent = 0; // Integer percentage of allocation bytes never initialized.
+    std::uint32_t flags = 0;         // Checker-defined initcheck metadata bit mask.
 };
 
 struct NpusanRacecheckReport {
     NpusanReportCommon common;
-    std::uint32_t hazardKind = 0;
-    std::uint32_t reportMode = 0;
-    std::uint32_t scope = 0;
-    std::uint32_t flags = 0;
+    std::uint32_t hazardKind = 0; // Checker-defined RAW/WAR/WAW/atomic hazard category; 0 means unknown.
+    std::uint32_t reportMode = 0; // Checker-defined race reporting mode; 0 means the default mode.
+    std::uint32_t scope = 0;      // Checker-defined synchronization scope; 0 means unknown.
+    std::uint32_t flags = 0;      // Checker-defined race metadata bit mask.
 
     std::uint64_t hazardCount = 0;
     NpusanRaceAccessSite first;
@@ -366,8 +368,8 @@ struct NpusanRacecheckReport {
 
 struct NpusanSynccheckReport {
     NpusanReportCommon common;
-    NpusanSyncPrimitiveKind primitiveKind = NpusanSyncPrimitiveKind::kUnknown;
-    NpusanSyncDetailKind detailKind = NpusanSyncDetailKind::kBarrier;
+    NpusanSyncPrimitiveKind primitiveKind = NpusanSyncPrimitiveKind::UNKNOWN;
+    NpusanSyncDetailKind detailKind = NpusanSyncDetailKind::BARRIER;
     bool hasRelatedPoint = false;
     NpusanSyncPoint triggerPoint;
     NpusanSyncPoint relatedPoint;
@@ -385,9 +387,10 @@ struct NpusanSoccheckReport {
     std::uint64_t stateFlags = 0;
 };
 
-struct NpusanReportRecord {
-    ReportTool tool = ReportTool::kMemcheck;
-    std::uint32_t pattern = 0;
+class NpusanReportRecord {
+public:
+    ReportTool tool = ReportTool::MEMCHECK;
+    std::uint32_t pattern = 0; // Underlying value of the tool-specific pattern enum selected by tool.
 
     using Payload = std::variant<
         std::monostate, const NpusanMemcheckReport*, const NpusanInitcheckReport*, const NpusanRacecheckReport*,
@@ -398,7 +401,7 @@ struct NpusanReportRecord {
     static NpusanReportRecord From(const NpusanMemcheckReport& report)
     {
         NpusanReportRecord record{};
-        record.tool = ReportTool::kMemcheck;
+        record.tool = ReportTool::MEMCHECK;
         record.pattern = report.common.pattern;
         record.payload_ = &report;
         return record;
@@ -407,7 +410,7 @@ struct NpusanReportRecord {
     static NpusanReportRecord From(const NpusanInitcheckReport& report)
     {
         NpusanReportRecord record{};
-        record.tool = ReportTool::kInitcheck;
+        record.tool = ReportTool::INITCHECK;
         record.pattern = report.common.pattern;
         record.payload_ = &report;
         return record;
@@ -416,7 +419,7 @@ struct NpusanReportRecord {
     static NpusanReportRecord From(const NpusanRacecheckReport& report)
     {
         NpusanReportRecord record{};
-        record.tool = ReportTool::kRacecheck;
+        record.tool = ReportTool::RACECHECK;
         record.pattern = report.common.pattern;
         record.payload_ = &report;
         return record;
@@ -425,7 +428,7 @@ struct NpusanReportRecord {
     static NpusanReportRecord From(const NpusanSynccheckReport& report)
     {
         NpusanReportRecord record{};
-        record.tool = ReportTool::kSynccheck;
+        record.tool = ReportTool::SYNCCHECK;
         record.pattern = report.common.pattern;
         record.payload_ = &report;
         return record;
@@ -434,7 +437,7 @@ struct NpusanReportRecord {
     static NpusanReportRecord From(const NpusanSoccheckReport& report)
     {
         NpusanReportRecord record{};
-        record.tool = ReportTool::kSoccheck;
+        record.tool = ReportTool::SOCCHECK;
         record.pattern = report.common.pattern;
         record.payload_ = &report;
         return record;

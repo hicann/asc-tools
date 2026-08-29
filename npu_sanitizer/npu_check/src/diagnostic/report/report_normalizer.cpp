@@ -20,25 +20,25 @@ namespace {
 const char* DistanceDirectionName(NpusanReportDistanceKind kind)
 {
     switch (kind) {
-        case NpusanReportDistanceKind::kBefore:
+        case NpusanReportDistanceKind::BEFORE:
             return "before";
-        case NpusanReportDistanceKind::kAfter:
+        case NpusanReportDistanceKind::AFTER:
             return "after";
-        case NpusanReportDistanceKind::kInside:
+        case NpusanReportDistanceKind::INSIDE:
             return "inside";
-        case NpusanReportDistanceKind::kUnknown:
+        case NpusanReportDistanceKind::UNKNOWN:
             return "from";
     }
     return "from";
 }
 
-const char* MemcheckPatternName(std::uint32_t pattern) { return PatternName(ReportTool::kMemcheck, pattern); }
+const char* MemcheckPatternName(std::uint32_t pattern) { return PatternName(ReportTool::MEMCHECK, pattern); }
 
-const char* InitcheckPatternName(std::uint32_t pattern) { return PatternName(ReportTool::kInitcheck, pattern); }
+const char* InitcheckPatternName(std::uint32_t pattern) { return PatternName(ReportTool::INITCHECK, pattern); }
 
-const char* RacecheckPatternName(std::uint32_t pattern) { return PatternName(ReportTool::kRacecheck, pattern); }
+const char* RacecheckPatternName(std::uint32_t pattern) { return PatternName(ReportTool::RACECHECK, pattern); }
 
-const char* SoccheckPatternName(std::uint32_t pattern) { return PatternName(ReportTool::kSoccheck, pattern); }
+const char* SoccheckPatternName(std::uint32_t pattern) { return PatternName(ReportTool::SOCCHECK, pattern); }
 
 bool ValidateReportCommon(const NpusanReportCommon& common, ReportTool expectedTool, std::uint32_t envelopePattern)
 {
@@ -49,10 +49,9 @@ bool ValidateReportCommon(const NpusanReportCommon& common, ReportTool expectedT
     for (std::uint32_t i = 0; i < common.stackCount; ++i) {
         const int role = static_cast<int>(common.stacks[i].role);
         const int format = static_cast<int>(common.stacks[i].format);
-        if (role < static_cast<int>(ReportStackRole::kFaultDevice) ||
-            role > static_cast<int>(ReportStackRole::kHostApiCall) ||
-            format < static_cast<int>(ReportStackFormat::kNone) ||
-            format > static_cast<int>(ReportStackFormat::kBoth) ||
+        if (role < static_cast<int>(ReportStackRole::FAULT_DEVICE) ||
+            role > static_cast<int>(ReportStackRole::HOST_API_CALL) ||
+            format < static_cast<int>(ReportStackFormat::NONE) || format > static_cast<int>(ReportStackFormat::BOTH) ||
             common.stacks[i].frames.size() > kNpusanReportFrameMax) {
             return false;
         }
@@ -79,14 +78,14 @@ ReportRecord ToReportRecord(const NpusanMemcheckReport& report)
     fields["apiErrorName"] = report.apiErrorName;
     fields["apiErrorCode"] = std::to_string(report.apiErrorCode);
     fields["apiErrorMessage"] = report.apiErrorMessage;
-    if (report.common.pattern == static_cast<std::uint32_t>(NpusanMemcheckPattern::kInvalidAccess)) {
+    if (report.common.pattern == static_cast<std::uint32_t>(NpusanMemcheckPattern::INVALID_ACCESS)) {
         fields["base"] = Hex(report.nearestAllocation.base);
         fields["bytes"] = std::to_string(report.nearestAllocation.bytes);
-    } else if (report.common.pattern == static_cast<std::uint32_t>(NpusanMemcheckPattern::kLeak)) {
+    } else if (report.common.pattern == static_cast<std::uint32_t>(NpusanMemcheckPattern::LEAK)) {
         fields["space"] = MemorySpaceName(report.allocation.memorySpace);
     }
     return ReportRecord{
-        {ReportTool::kMemcheck, MemcheckPatternName(report.common.pattern)},
+        {ReportTool::MEMCHECK, MemcheckPatternName(report.common.pattern)},
         report.common.severity,
         fields,
         ActiveCallStacks(report.common)};
@@ -106,11 +105,11 @@ ReportRecord ToReportRecord(const NpusanInitcheckReport& report)
     fields["initializedBytes"] = std::to_string(report.initializedBytes);
     fields["unusedBytes"] = std::to_string(report.unusedBytes);
     fields["unusedPercent"] = std::to_string(report.unusedPercent);
-    if (report.common.pattern == static_cast<std::uint32_t>(NpusanInitcheckPattern::kUnusedMemory)) {
+    if (report.common.pattern == static_cast<std::uint32_t>(NpusanInitcheckPattern::UNUSED_MEMORY)) {
         fields["space"] = MemorySpaceName(report.allocation.memorySpace);
     }
     return ReportRecord{
-        {ReportTool::kInitcheck, InitcheckPatternName(report.common.pattern)},
+        {ReportTool::INITCHECK, InitcheckPatternName(report.common.pattern)},
         report.common.severity,
         fields,
         ActiveCallStacks(report.common)};
@@ -143,15 +142,15 @@ ReportRecord ToReportRecord(const NpusanRacecheckReport& report)
     fields["secondFile"] = OrUnknown(report.second.exec.file);
     fields["secondLine"] = std::to_string(report.second.exec.line);
     fields["secondLocation"] = FormatLocation(report.second.exec, false);
-    if (const ReportFrame* frame = FirstStructuredFrame(report.common, ReportStackRole::kRelatedAccessA)) {
+    if (const ReportFrame* frame = FirstStructuredFrame(report.common, ReportStackRole::RELATED_ACCESS_A)) {
         PutFrameLocationFields(*frame, "first", &fields);
     }
-    if (const ReportFrame* frame = FirstStructuredFrame(report.common, ReportStackRole::kRelatedAccessB)) {
+    if (const ReportFrame* frame = FirstStructuredFrame(report.common, ReportStackRole::RELATED_ACCESS_B)) {
         PutFrameLocationFields(*frame, "second", &fields);
     }
-    if (report.common.pattern == static_cast<std::uint32_t>(NpusanRacecheckPattern::kCrossPipeRace)) {
+    if (report.common.pattern == static_cast<std::uint32_t>(NpusanRacecheckPattern::CROSS_PIPE_RACE)) {
         fields["coreId"] = FormatCoreId(report.first.exec.phyCoreId);
-    } else if (report.common.pattern == static_cast<std::uint32_t>(NpusanRacecheckPattern::kInvalidRemoteAccess)) {
+    } else if (report.common.pattern == static_cast<std::uint32_t>(NpusanRacecheckPattern::INVALID_REMOTE_ACCESS)) {
         fields["location"] = "at " + fields["firstLocation"];
         fields["coreId"] = FormatCoreId(report.first.exec.phyCoreId);
         fields["blockType"] = FormatBlockType(report.first.exec.blockType);
@@ -164,7 +163,7 @@ ReportRecord ToReportRecord(const NpusanRacecheckReport& report)
     fields["scope"] = std::to_string(report.scope);
     fields["remoteState"] = "is unavailable";
     return ReportRecord{
-        {ReportTool::kRacecheck, RacecheckPatternName(report.common.pattern)},
+        {ReportTool::RACECHECK, RacecheckPatternName(report.common.pattern)},
         report.common.severity,
         fields,
         ActiveCallStacks(report.common)};
@@ -187,26 +186,26 @@ ReportRecord ToReportRecord(const NpusanSoccheckReport& report)
     fields["expectedValue"] = Hex(report.state.expectedValue);
     fields["observedValue"] = Hex(report.state.observedValue);
     return ReportRecord{
-        {ReportTool::kSoccheck, SoccheckPatternName(report.common.pattern)},
+        {ReportTool::SOCCHECK, SoccheckPatternName(report.common.pattern)},
         report.common.severity,
         fields,
         ActiveCallStacks(report.common)};
 }
 
 template <typename Report>
-inline constexpr ReportTool kReportTool = ReportTool::kMemcheck;
+inline constexpr ReportTool kReportTool = ReportTool::MEMCHECK;
 
 template <>
-inline constexpr ReportTool kReportTool<NpusanInitcheckReport> = ReportTool::kInitcheck;
+inline constexpr ReportTool kReportTool<NpusanInitcheckReport> = ReportTool::INITCHECK;
 
 template <>
-inline constexpr ReportTool kReportTool<NpusanRacecheckReport> = ReportTool::kRacecheck;
+inline constexpr ReportTool kReportTool<NpusanRacecheckReport> = ReportTool::RACECHECK;
 
 template <>
-inline constexpr ReportTool kReportTool<NpusanSynccheckReport> = ReportTool::kSynccheck;
+inline constexpr ReportTool kReportTool<NpusanSynccheckReport> = ReportTool::SYNCCHECK;
 
 template <>
-inline constexpr ReportTool kReportTool<NpusanSoccheckReport> = ReportTool::kSoccheck;
+inline constexpr ReportTool kReportTool<NpusanSoccheckReport> = ReportTool::SOCCHECK;
 
 template <typename Report>
 bool ValidateToolSpecific(const Report&)
@@ -216,7 +215,7 @@ bool ValidateToolSpecific(const Report&)
 
 bool ValidateToolSpecific(const NpusanRacecheckReport& report)
 {
-    return report.common.pattern != static_cast<std::uint32_t>(NpusanRacecheckPattern::kCrossPipeRace) ||
+    return report.common.pattern != static_cast<std::uint32_t>(NpusanRacecheckPattern::CROSS_PIPE_RACE) ||
            report.first.exec.phyCoreId == report.second.exec.phyCoreId;
 }
 
@@ -240,7 +239,7 @@ ReportRenderStatus NormalizeReport(const NpusanReportRecord& record, ReportRecor
         return ReportRenderStatus::kInvalidArgument;
     }
     const int tool = static_cast<int>(record.tool);
-    if (tool < static_cast<int>(ReportTool::kMemcheck) || tool > static_cast<int>(ReportTool::kSoccheck)) {
+    if (tool < static_cast<int>(ReportTool::MEMCHECK) || tool > static_cast<int>(ReportTool::SOCCHECK)) {
         return ReportRenderStatus::kUnknownTemplate;
     }
     return std::visit(

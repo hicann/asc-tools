@@ -75,7 +75,7 @@ void PopulateDeviceCallStack(aclsan::cann::NpusanMemcheckReport& report) noexcep
     std::uint32_t stackIndex = report.common.stackCount;
     for (std::uint32_t index = 0; index < report.common.stackCount && index < aclsan::cann::kNpusanReportStackMax;
          ++index) {
-        if (report.common.stacks[index].role == aclsan::cann::ReportStackRole::kFaultDevice) {
+        if (report.common.stacks[index].role == aclsan::cann::ReportStackRole::FAULT_DEVICE) {
             stackIndex = index;
             break;
         }
@@ -96,13 +96,13 @@ void PopulateDeviceCallStack(aclsan::cann::NpusanMemcheckReport& report) noexcep
 
         auto& stack = report.common.stacks[stackIndex];
         stack.rawText.swap(callStackText);
-        stack.role = aclsan::cann::ReportStackRole::kFaultDevice;
+        stack.role = aclsan::cann::ReportStackRole::FAULT_DEVICE;
         if (!frames.empty()) {
             stack.frames.swap(frames);
         }
         const bool hasStructuredFrames = !stack.frames.empty();
         stack.format =
-            hasStructuredFrames ? aclsan::cann::ReportStackFormat::kBoth : aclsan::cann::ReportStackFormat::kRawText;
+            hasStructuredFrames ? aclsan::cann::ReportStackFormat::BOTH : aclsan::cann::ReportStackFormat::RAW_TEXT;
         if (callStack->binaryId != 0) {
             report.common.exec.binaryId = callStack->binaryId;
         }
@@ -147,7 +147,7 @@ void PopulateSyncPointCallStack(
         stack.role = role;
         stack.frames.swap(frames);
         stack.format =
-            stack.frames.empty() ? aclsan::cann::ReportStackFormat::kRawText : aclsan::cann::ReportStackFormat::kBoth;
+            stack.frames.empty() ? aclsan::cann::ReportStackFormat::RAW_TEXT : aclsan::cann::ReportStackFormat::BOTH;
         if (callStack->binaryId != 0) {
             point.exec.binaryId = callStack->binaryId;
         }
@@ -162,9 +162,9 @@ void PopulateSyncPointCallStack(
 
 void PopulateDeviceCallStack(aclsan::cann::NpusanSynccheckReport& report) noexcept
 {
-    PopulateSyncPointCallStack(report.common, report.triggerPoint, aclsan::cann::ReportStackRole::kSyncTrigger);
+    PopulateSyncPointCallStack(report.common, report.triggerPoint, aclsan::cann::ReportStackRole::SYNC_TRIGGER);
     report.common.exec = report.triggerPoint.exec;
-    PopulateSyncPointCallStack(report.common, report.relatedPoint, aclsan::cann::ReportStackRole::kSyncRelated);
+    PopulateSyncPointCallStack(report.common, report.relatedPoint, aclsan::cann::ReportStackRole::SYNC_RELATED);
 }
 
 struct CallbackSpec {

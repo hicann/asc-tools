@@ -225,7 +225,7 @@ NpusanReportAllocation ToReportAllocation(const std::optional<Allocation>& alloc
     result.bytes = allocation->bytes;
     result.allocSerialNo = allocation->allocSequence;
     result.freeSerialNo = allocation->freeSequence;
-    result.memorySpace = NpusanReportMemorySpace::kGm;
+    result.memorySpace = NpusanReportMemorySpace::GM;
     result.deviceId = allocation->deviceId;
     result.state = allocation->freeSequence == 0 ? kAllocationStateLive : kAllocationStateFreed;
     return result;
@@ -266,26 +266,26 @@ void SetDistance(
         return;
     }
     if (address < allocation->base) {
-        report.distanceKind = NpusanReportDistanceKind::kBefore;
+        report.distanceKind = NpusanReportDistanceKind::BEFORE;
         report.distanceBytes = ClampDistance(allocation->base - address);
         return;
     }
     if (!accessEnd) {
-        report.distanceKind = NpusanReportDistanceKind::kAfter;
+        report.distanceKind = NpusanReportDistanceKind::AFTER;
         report.distanceBytes = std::numeric_limits<int64_t>::max();
         return;
     }
     if (address >= *allocationEnd) {
-        report.distanceKind = NpusanReportDistanceKind::kAfter;
+        report.distanceKind = NpusanReportDistanceKind::AFTER;
         report.distanceBytes = ClampDistance(address - *allocationEnd);
         return;
     }
     if (*accessEnd > *allocationEnd) {
-        report.distanceKind = NpusanReportDistanceKind::kAfter;
+        report.distanceKind = NpusanReportDistanceKind::AFTER;
         report.distanceBytes = ClampDistance(*accessEnd - *allocationEnd);
         return;
     }
-    report.distanceKind = NpusanReportDistanceKind::kInside;
+    report.distanceKind = NpusanReportDistanceKind::INSIDE;
 }
 
 } // namespace
@@ -328,15 +328,15 @@ std::vector<NpusanMemcheckReport> Memcheck::CheckAccess(
     report.common.reportId = nextReportId_++;
     report.common.groupId = groupId;
     report.common.timestampNs = TimestampNs();
-    report.common.tool = ReportTool::kMemcheck;
-    report.common.severity = ReportSeverity::kError;
+    report.common.tool = ReportTool::MEMCHECK;
+    report.common.severity = ReportSeverity::ERROR;
     report.common.flags = aclsan::cann::kNpusanReportCommonHasExecContext;
     report.common.exec = ToExecContext(data);
-    report.common.pattern = static_cast<uint32_t>(
-        range.status == RangeStatus::USE_AFTER_FREE ? NpusanMemcheckPattern::kUseAfterFree :
-                                                      NpusanMemcheckPattern::kInvalidAccess);
+    report.common.pattern = static_cast<std::uint32_t>(
+        range.status == RangeStatus::USE_AFTER_FREE ? NpusanMemcheckPattern::USE_AFTER_FREE :
+                                                      NpusanMemcheckPattern::INVALID_ACCESS);
 
-    report.access.memorySpace = NpusanReportMemorySpace::kGm;
+    report.access.memorySpace = NpusanReportMemorySpace::GM;
     report.access.accessMode = accessMode;
     report.access.accessBytes = bytes > std::numeric_limits<uint32_t>::max() ? std::numeric_limits<uint32_t>::max() :
                                                                                static_cast<uint32_t>(bytes);
@@ -381,14 +381,14 @@ std::vector<NpusanMemcheckReport> Memcheck::CheckDeviceMemoryAccess(
     std::vector<NpusanReportAccessMode> accessModes;
     switch (data.accessMode) {
         case ACLSAN_DEVICE_MEMORY_ACCESS_READ:
-            accessModes.push_back(NpusanReportAccessMode::kRead);
+            accessModes.push_back(NpusanReportAccessMode::READ);
             break;
         case ACLSAN_DEVICE_MEMORY_ACCESS_WRITE:
-            accessModes.push_back(NpusanReportAccessMode::kWrite);
+            accessModes.push_back(NpusanReportAccessMode::WRITE);
             break;
         case ACLSAN_DEVICE_MEMORY_ACCESS_READ_WRITE:
-            accessModes.push_back(NpusanReportAccessMode::kRead);
-            accessModes.push_back(NpusanReportAccessMode::kWrite);
+            accessModes.push_back(NpusanReportAccessMode::READ);
+            accessModes.push_back(NpusanReportAccessMode::WRITE);
             break;
         default:
             return markIncomplete();
@@ -492,9 +492,9 @@ MemcheckStats Memcheck::Stats() const
 void Memcheck::Count(const std::vector<NpusanMemcheckReport>& reports)
 {
     for (const auto& report : reports) {
-        if (report.common.severity == ReportSeverity::kError || report.common.severity == ReportSeverity::kFatal) {
+        if (report.common.severity == ReportSeverity::ERROR || report.common.severity == ReportSeverity::FATAL) {
             ++stats_.errors;
-        } else if (report.common.severity == ReportSeverity::kWarning) {
+        } else if (report.common.severity == ReportSeverity::WARNING) {
             ++stats_.warnings;
         }
     }

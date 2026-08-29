@@ -18,25 +18,25 @@ namespace aclsan::cann::detail {
 const char* MemorySpaceName(NpusanReportMemorySpace space)
 {
     switch (space) {
-        case NpusanReportMemorySpace::kGm:
+        case NpusanReportMemorySpace::GM:
             return "GM";
-        case NpusanReportMemorySpace::kUb:
+        case NpusanReportMemorySpace::UB:
             return "UB";
-        case NpusanReportMemorySpace::kL1:
+        case NpusanReportMemorySpace::L1:
             return "L1";
-        case NpusanReportMemorySpace::kL0A:
+        case NpusanReportMemorySpace::L0_A:
             return "L0A";
-        case NpusanReportMemorySpace::kL0B:
+        case NpusanReportMemorySpace::L0_B:
             return "L0B";
-        case NpusanReportMemorySpace::kL0C:
+        case NpusanReportMemorySpace::L0_C:
             return "L0C";
-        case NpusanReportMemorySpace::kBt:
+        case NpusanReportMemorySpace::BT:
             return "BT";
-        case NpusanReportMemorySpace::kPrivate:
+        case NpusanReportMemorySpace::PRIVATE:
             return "private";
-        case NpusanReportMemorySpace::kHost:
+        case NpusanReportMemorySpace::HOST:
             return "host";
-        case NpusanReportMemorySpace::kUnknown:
+        case NpusanReportMemorySpace::UNKNOWN:
             return "unknown";
     }
     return "unknown";
@@ -45,13 +45,13 @@ const char* MemorySpaceName(NpusanReportMemorySpace space)
 const char* AccessModeName(NpusanReportAccessMode mode)
 {
     switch (mode) {
-        case NpusanReportAccessMode::kRead:
+        case NpusanReportAccessMode::READ:
             return "read";
-        case NpusanReportAccessMode::kWrite:
+        case NpusanReportAccessMode::WRITE:
             return "write";
-        case NpusanReportAccessMode::kReadWrite:
+        case NpusanReportAccessMode::READ_WRITE:
             return "read/write";
-        case NpusanReportAccessMode::kFree:
+        case NpusanReportAccessMode::FREE:
             return "free";
     }
     return "access";
@@ -199,8 +199,7 @@ const ReportCallStack* FindStackByRole(const NpusanReportCommon& common, ReportS
 const ReportFrame* FirstStructuredFrame(const NpusanReportCommon& common, ReportStackRole role)
 {
     const ReportCallStack* stack = FindStackByRole(common, role);
-    if (stack == nullptr ||
-        (stack->format != ReportStackFormat::kFrames && stack->format != ReportStackFormat::kBoth)) {
+    if (stack == nullptr || (stack->format != ReportStackFormat::FRAMES && stack->format != ReportStackFormat::BOTH)) {
         return nullptr;
     }
     for (const ReportFrame& frame : stack->frames) {
@@ -222,7 +221,7 @@ void PutFrameLocationFields(const ReportFrame& frame, const std::string& prefix,
 
 void PutFaultLocationFields(const NpusanReportCommon& common, ReportFields* fields)
 {
-    const ReportFrame* frame = FirstStructuredFrame(common, ReportStackRole::kFaultDevice);
+    const ReportFrame* frame = FirstStructuredFrame(common, ReportStackRole::FAULT_DEVICE);
     if (frame == nullptr) {
         return;
     }

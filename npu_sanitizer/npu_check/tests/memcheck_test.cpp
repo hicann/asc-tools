@@ -86,15 +86,15 @@ TEST(MemcheckTest, ReportsOutOfBoundsReadAtSynchronization)
 
     ASSERT_EQ(reports.size(), 1U);
     const auto& report = reports.front();
-    EXPECT_EQ(report.common.pattern, static_cast<uint32_t>(NpusanMemcheckPattern::kInvalidAccess));
-    EXPECT_EQ(report.access.accessMode, NpusanReportAccessMode::kRead);
+    EXPECT_EQ(report.common.pattern, static_cast<std::uint32_t>(NpusanMemcheckPattern::INVALID_ACCESS));
+    EXPECT_EQ(report.access.accessMode, NpusanReportAccessMode::READ);
     EXPECT_EQ(report.common.exec.pc, invalidRead.header.pc);
     EXPECT_TRUE(report.common.exec.file.empty());
     EXPECT_EQ(report.common.exec.line, 0U);
     EXPECT_EQ(report.common.stackCount, 0U);
     EXPECT_EQ(report.nearestAllocation.base, 0x100000U);
     EXPECT_EQ(report.nearestAllocation.bytes, 4096U);
-    EXPECT_EQ(report.distanceKind, NpusanReportDistanceKind::kAfter);
+    EXPECT_EQ(report.distanceKind, NpusanReportDistanceKind::AFTER);
     EXPECT_EQ(report.distanceBytes, 48);
 
     std::string rendered;
@@ -131,7 +131,7 @@ TEST(MemcheckTest, ReportsOutOfBoundsWriteAndIgnoresNonGmAccesses)
 
     const auto reports = checker.OnSynchronization();
     ASSERT_EQ(reports.size(), 1U);
-    EXPECT_EQ(reports.front().access.accessMode, NpusanReportAccessMode::kWrite);
+    EXPECT_EQ(reports.front().access.accessMode, NpusanReportAccessMode::WRITE);
 
     auto nonGm = invalidWrite;
     nonGm.memorySpace = ACLSAN_DEVICE_MEMORY_SPACE_UB;
@@ -154,7 +154,7 @@ TEST(MemcheckTest, ExpandsBlockRepeatAndAffineLayouts)
     checker.QueueDeviceMemoryAccess(blockRepeat);
     auto reports = checker.OnSynchronization();
     ASSERT_EQ(reports.size(), 1U);
-    EXPECT_EQ(reports.front().common.pattern, static_cast<uint32_t>(NpusanMemcheckPattern::kInvalidAccess));
+    EXPECT_EQ(reports.front().common.pattern, static_cast<std::uint32_t>(NpusanMemcheckPattern::INVALID_ACCESS));
 
     auto ndAffine = Access(DeviceSourceKind::MTE3, 0x2001f8, 1);
     ndAffine.layoutKind = ACLSAN_MEM_LAYOUT_ND_AFFINE;
@@ -165,7 +165,7 @@ TEST(MemcheckTest, ExpandsBlockRepeatAndAffineLayouts)
     checker.QueueDeviceMemoryAccess(ndAffine);
     reports = checker.OnSynchronization();
     ASSERT_EQ(reports.size(), 1U);
-    EXPECT_EQ(reports.front().common.pattern, static_cast<uint32_t>(NpusanMemcheckPattern::kInvalidAccess));
+    EXPECT_EQ(reports.front().common.pattern, static_cast<std::uint32_t>(NpusanMemcheckPattern::INVALID_ACCESS));
 }
 
 TEST(MemcheckTest, UsesByteStrideForSparseGmAccesses)
@@ -222,7 +222,7 @@ TEST(MemcheckTest, ProcessesMoreThanFourRangesFromOneInstruction)
     const auto reports = checker.OnSynchronization();
 
     ASSERT_EQ(reports.size(), 1U);
-    EXPECT_EQ(reports.front().common.pattern, static_cast<uint32_t>(NpusanMemcheckPattern::kInvalidAccess));
+    EXPECT_EQ(reports.front().common.pattern, static_cast<std::uint32_t>(NpusanMemcheckPattern::INVALID_ACCESS));
     EXPECT_EQ(reports.front().access.address, kBase + (kAccessCount - 1) * kStride);
     EXPECT_EQ(reports.front().access.accessBytes, kAccessBytes);
     EXPECT_EQ(reports.front().common.exec.instrExecId, kInstrExecId);
@@ -466,8 +466,8 @@ TEST(MemcheckTest, SeparatesReadWriteAndHonorsPredicate)
     const auto reports = checker.OnSynchronization();
 
     ASSERT_EQ(reports.size(), 2U);
-    EXPECT_EQ(reports[0].access.accessMode, NpusanReportAccessMode::kRead);
-    EXPECT_EQ(reports[1].access.accessMode, NpusanReportAccessMode::kWrite);
+    EXPECT_EQ(reports[0].access.accessMode, NpusanReportAccessMode::READ);
+    EXPECT_EQ(reports[1].access.accessMode, NpusanReportAccessMode::WRITE);
     EXPECT_NE(reports[0].common.reportId, reports[1].common.reportId);
 
     readWrite.header.flags = kDeviceEventFlagPredicated;
@@ -491,7 +491,7 @@ TEST(MemcheckTest, HonorsStrictModeAndFreedRanges)
     const auto diagnostics = checker.OnSynchronization();
 
     ASSERT_EQ(diagnostics.size(), 1U);
-    EXPECT_EQ(diagnostics.front().common.pattern, static_cast<uint32_t>(NpusanMemcheckPattern::kUseAfterFree));
+    EXPECT_EQ(diagnostics.front().common.pattern, static_cast<std::uint32_t>(NpusanMemcheckPattern::USE_AFTER_FREE));
     EXPECT_EQ(diagnostics.front().allocation.state, 2U);
 }
 
@@ -505,7 +505,7 @@ TEST(MemcheckTest, UsesDeviceSpecificAllocationRanges)
     const auto reports = checker.OnSynchronization();
 
     ASSERT_EQ(reports.size(), 1U);
-    EXPECT_EQ(reports.front().common.pattern, static_cast<uint32_t>(NpusanMemcheckPattern::kInvalidAccess));
+    EXPECT_EQ(reports.front().common.pattern, static_cast<std::uint32_t>(NpusanMemcheckPattern::INVALID_ACCESS));
     EXPECT_EQ(reports.front().common.exec.deviceId, 0U);
 }
 

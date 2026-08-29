@@ -71,12 +71,12 @@ ReportRenderStatus ParseTemplateKey(const std::string& text, ReportTemplateKey* 
         return ReportRenderStatus::kMalformedTemplate;
     }
 
-    ReportTool tool = ReportTool::kMemcheck;
+    ReportTool tool = ReportTool::MEMCHECK;
     const std::string toolName = text.substr(0, dot);
     bool found = false;
     for (const ReportTool candidate :
-         {ReportTool::kMemcheck, ReportTool::kInitcheck, ReportTool::kRacecheck, ReportTool::kSynccheck,
-          ReportTool::kSoccheck}) {
+         {ReportTool::MEMCHECK, ReportTool::INITCHECK, ReportTool::RACECHECK, ReportTool::SYNCCHECK,
+          ReportTool::SOCCHECK}) {
         if (toolName == ReportToolName(candidate)) {
             tool = candidate;
             found = true;
@@ -157,12 +157,12 @@ void PutDerivedLocations(ReportFields* fields)
 
 bool HasRawStack(ReportStackFormat format)
 {
-    return format == ReportStackFormat::kRawText || format == ReportStackFormat::kBoth;
+    return format == ReportStackFormat::RAW_TEXT || format == ReportStackFormat::BOTH;
 }
 
 bool HasFrameStack(ReportStackFormat format)
 {
-    return format == ReportStackFormat::kFrames || format == ReportStackFormat::kBoth;
+    return format == ReportStackFormat::FRAMES || format == ReportStackFormat::BOTH;
 }
 
 void EnsureTrailingNewline(std::string* out)
@@ -323,22 +323,22 @@ ReportRenderStatus LoadReportTemplateOverridesFromFile(const std::string& path, 
 const char* ReportStackRoleTitle(ReportStackRole role)
 {
     switch (role) {
-        case ReportStackRole::kHostLaunch:
-        case ReportStackRole::kHostAlloc:
-        case ReportStackRole::kHostFree:
-        case ReportStackRole::kHostApiCall:
+        case ReportStackRole::HOST_LAUNCH:
+        case ReportStackRole::HOST_ALLOC:
+        case ReportStackRole::HOST_FREE:
+        case ReportStackRole::HOST_API_CALL:
             return "Host Frames:";
-        case ReportStackRole::kNone:
-        case ReportStackRole::kFaultDevice:
-        case ReportStackRole::kRelatedAccessA:
-        case ReportStackRole::kRelatedAccessB:
-        case ReportStackRole::kSyncProducer:
-        case ReportStackRole::kSyncConsumer:
-        case ReportStackRole::kStateProducer:
-        case ReportStackRole::kStateConsumer:
-        case ReportStackRole::kPeerDevice:
-        case ReportStackRole::kSyncTrigger:
-        case ReportStackRole::kSyncRelated:
+        case ReportStackRole::NONE:
+        case ReportStackRole::FAULT_DEVICE:
+        case ReportStackRole::RELATED_ACCESS_A:
+        case ReportStackRole::RELATED_ACCESS_B:
+        case ReportStackRole::SYNC_PRODUCER:
+        case ReportStackRole::SYNC_CONSUMER:
+        case ReportStackRole::STATE_PRODUCER:
+        case ReportStackRole::STATE_CONSUMER:
+        case ReportStackRole::PEER_DEVICE:
+        case ReportStackRole::SYNC_TRIGGER:
+        case ReportStackRole::SYNC_RELATED:
             return "Device Frames:";
     }
     return "Device Frames:";

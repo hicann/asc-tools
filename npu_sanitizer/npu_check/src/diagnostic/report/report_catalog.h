@@ -17,6 +17,7 @@
 namespace aclsan::cann::detail {
 
 struct PatternDescriptor {
+    // Underlying value of the tool-specific pattern enum selected by ReportTemplateKey::tool.
     std::uint32_t value;
     ReportTemplate reportTemplate;
 };

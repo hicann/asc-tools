@@ -35,6 +35,7 @@ using aclsan::cann::NpusanRacecheckPattern;
 using aclsan::cann::NpusanRacecheckReport;
 using aclsan::cann::NpusanReportAccessMode;
 using aclsan::cann::NpusanReportAllocation;
+using aclsan::cann::NpusanReportCommon;
 using aclsan::cann::NpusanReportDistanceKind;
 using aclsan::cann::NpusanReportMemoryAccess;
 using aclsan::cann::NpusanReportMemorySpace;
@@ -85,24 +86,35 @@ struct HasSummaryTag : std::false_type {};
 template <typename Descriptor>
 struct HasSummaryTag<Descriptor, std::void_t<decltype(std::declval<Descriptor>().summaryTag)>> : std::true_type {};
 
+template <typename Report, typename = void>
+struct HasPattern : std::false_type {};
+
+template <typename Report>
+struct HasPattern<Report, std::void_t<decltype(std::declval<Report>().pattern)>> : std::true_type {};
+
 static_assert(
     !CanCreateNpusanRecordFrom<NpusanMemcheckReport&&>::value, "NpusanReportRecord must not borrow a temporary report");
 static_assert(
     !CanCreateNpusanRecordFrom<const NpusanMemcheckReport&&>::value,
     "NpusanReportRecord must not borrow a const temporary report");
-static_assert(static_cast<int>(NpusanSynccheckPattern::kPairingMismatch) == 4);
-static_assert(static_cast<int>(NpusanSynccheckPattern::kParticipantMismatch) == 5);
-static_assert(static_cast<int>(NpusanSynccheckPattern::kDeadlock) == 6);
-static_assert(static_cast<int>(NpusanSynccheckPattern::kObjectNotInitialized) == 7);
-static_assert(static_cast<int>(NpusanSynccheckPattern::kInstructionSequenceMismatch) == 8);
+static_assert(static_cast<int>(NpusanSynccheckPattern::PAIRING_MISMATCH) == 4);
+static_assert(static_cast<int>(NpusanSynccheckPattern::PARTICIPANT_MISMATCH) == 5);
+static_assert(static_cast<int>(NpusanSynccheckPattern::DEADLOCK) == 6);
+static_assert(static_cast<int>(NpusanSynccheckPattern::OBJECT_NOT_INITIALIZED) == 7);
+static_assert(static_cast<int>(NpusanSynccheckPattern::INSTRUCTION_SEQUENCE_MISMATCH) == 8);
 static_assert(std::is_same_v<aclsan::cann::detail::PatternCatalog::key_type, ReportTemplateKey>);
 static_assert(!HasDefaultSeverity<aclsan::cann::detail::PatternDescriptor>::value);
 static_assert(!HasSummaryTag<aclsan::cann::detail::PatternDescriptor>::value);
-
+static_assert(std::is_same_v<decltype(NpusanReportCommon{}.pattern), std::uint32_t>);
+static_assert(!HasPattern<NpusanMemcheckReport>::value);
+static_assert(!HasPattern<NpusanInitcheckReport>::value);
+static_assert(!HasPattern<NpusanRacecheckReport>::value);
+static_assert(!HasPattern<NpusanSynccheckReport>::value);
+static_assert(!HasPattern<NpusanSoccheckReport>::value);
 TEST(ReportFieldsTest, FormatsBlockTypes)
 {
     using aclsan::cann::detail::FormatBlockType;
-    static_assert(std::is_same_v<decltype(FormatBlockType(0)), std::string>);
+    static_assert(std::is_same_v<decltype(FormatBlockType(ACLSAN_DEVICE_BLOCK_TYPE_AICORE)), std::string>);
 
     EXPECT_EQ(FormatBlockType(ACLSAN_DEVICE_BLOCK_TYPE_AICORE), "AICORE");
     EXPECT_EQ(FormatBlockType(ACLSAN_DEVICE_BLOCK_TYPE_AICORE_VECTOR), "AIV");
@@ -130,8 +142,8 @@ std::size_t CountOccurrences(const std::string& text, const std::string& needle)
 ReportRecord MakeMemcheckInvalidAccessRecord()
 {
     return ReportRecord{
-        {ReportTool::kMemcheck, "invalid_access"},
-        ReportSeverity::kError,
+        {ReportTool::MEMCHECK, "invalid_access"},
+        ReportSeverity::ERROR,
         {
             {"space", "GM"},
             {"access", "read"},
@@ -158,8 +170,8 @@ ReportRecord MakeMemcheckInvalidAccessRecord()
 ReportRecord MakeInitcheckRecord()
 {
     return ReportRecord{
-        {ReportTool::kInitcheck, "uninitialized_read"},
-        ReportSeverity::kError,
+        {ReportTool::INITCHECK, "uninitialized_read"},
+        ReportSeverity::ERROR,
         {
             {"space", "GM"},
             {"accessBytes", "32"},
@@ -178,8 +190,8 @@ ReportRecord MakeInitcheckRecord()
 ReportRecord MakeRaceRecord()
 {
     return ReportRecord{
-        {ReportTool::kRacecheck, "hazard_raw"},
-        ReportSeverity::kWarning,
+        {ReportTool::RACECHECK, "hazard_raw"},
+        ReportSeverity::WARNING,
         {
             {"space", "UB"},
             {"address", "2000"},
@@ -203,8 +215,8 @@ ReportRecord MakeRaceRecord()
 ReportRecord MakeSyncRecord()
 {
     return ReportRecord{
-        {ReportTool::kSynccheck, "pairing_mismatch"},
-        ReportSeverity::kError,
+        {ReportTool::SYNCCHECK, "pairing_mismatch"},
+        ReportSeverity::ERROR,
         {
             {"reasonText", "unmatched"},
             {"triggerOperation", "WAIT_FLAG"},
@@ -223,13 +235,13 @@ ReportRecord MakeSyncRecord()
 NpusanSynccheckReport MakePairingReport(NpusanSyncMismatchReason reason, NpusanSyncPairKind pairKind)
 {
     NpusanSynccheckReport report{};
-    report.common.tool = ReportTool::kSynccheck;
-    report.common.pattern = static_cast<std::uint32_t>(NpusanSynccheckPattern::kPairingMismatch);
-    report.common.severity = ReportSeverity::kError;
+    report.common.tool = ReportTool::SYNCCHECK;
+    report.common.pattern = static_cast<std::uint32_t>(NpusanSynccheckPattern::PAIRING_MISMATCH);
+    report.common.severity = ReportSeverity::ERROR;
     report.common.flags = aclsan::cann::kNpusanReportCommonHasExecContext;
-    report.primitiveKind = pairKind == NpusanSyncPairKind::kSetWaitFlag ? NpusanSyncPrimitiveKind::kSetWaitFlag :
-                                                                          NpusanSyncPrimitiveKind::kGetRlsBuf;
-    report.detailKind = NpusanSyncDetailKind::kPairing;
+    report.primitiveKind = pairKind == NpusanSyncPairKind::SET_WAIT_FLAG ? NpusanSyncPrimitiveKind::SET_WAIT_FLAG :
+                                                                           NpusanSyncPrimitiveKind::GET_RLS_BUF;
+    report.detailKind = NpusanSyncDetailKind::PAIRING;
     report.hasRelatedPoint = true;
     report.triggerPoint.hasExecContext = true;
     report.triggerPoint.exec.phyCoreId = 1;
@@ -241,10 +253,10 @@ NpusanSynccheckReport MakePairingReport(NpusanSyncMismatchReason reason, NpusanS
     report.triggerPoint.exec.line = 30;
     report.common.exec = report.triggerPoint.exec;
 
-    const bool setWait = pairKind == NpusanSyncPairKind::kSetWaitFlag;
+    const bool setWait = pairKind == NpusanSyncPairKind::SET_WAIT_FLAG;
     const char* open = setWait ? "SET_FLAG" : "GET_BUF";
     const char* close = setWait ? "WAIT_FLAG" : "RLS_BUF";
-    if (reason == NpusanSyncMismatchReason::kDuplicateOpen) {
+    if (reason == NpusanSyncMismatchReason::DUPLICATE_OPEN) {
         report.triggerPoint.operation = open;
         report.relatedPoint.operation = open;
         report.relatedPoint.hasExecContext = true;
@@ -252,7 +264,7 @@ NpusanSynccheckReport MakePairingReport(NpusanSyncMismatchReason reason, NpusanS
         report.relatedPoint.exec.pc = 0x1010;
         report.relatedPoint.exec.offset = 0x10;
         report.relatedPoint.exec.line = 24;
-    } else if (reason == NpusanSyncMismatchReason::kUnmatchedClose) {
+    } else if (reason == NpusanSyncMismatchReason::UNMATCHED_CLOSE) {
         report.triggerPoint.operation = close;
         report.relatedPoint.operation = open;
     } else {
@@ -262,20 +274,20 @@ NpusanSynccheckReport MakePairingReport(NpusanSyncMismatchReason reason, NpusanS
     report.detail =
         setWait ?
             NpusanSyncPairingError{reason, {pairKind, ACLSAN_DEVICE_PIPE_VECTOR, ACLSAN_DEVICE_PIPE_MTE2, 0, 42}} :
-            NpusanSyncPairingError{reason, {pairKind, 0, ACLSAN_DEVICE_PIPE_MTE2, 3, 42}};
+            NpusanSyncPairingError{reason, {pairKind, ACLSAN_DEVICE_PIPE_SCALAR, ACLSAN_DEVICE_PIPE_MTE2, 3, 42}};
     return report;
 }
 
 NpusanSynccheckReport MakeSynccheckReport(NpusanSynccheckPattern pattern)
 {
-    if (pattern == NpusanSynccheckPattern::kPairingMismatch) {
-        return MakePairingReport(NpusanSyncMismatchReason::kUnmatchedClose, NpusanSyncPairKind::kSetWaitFlag);
+    if (pattern == NpusanSynccheckPattern::PAIRING_MISMATCH) {
+        return MakePairingReport(NpusanSyncMismatchReason::UNMATCHED_CLOSE, NpusanSyncPairKind::SET_WAIT_FLAG);
     }
 
     NpusanSynccheckReport report{};
-    report.common.tool = ReportTool::kSynccheck;
+    report.common.tool = ReportTool::SYNCCHECK;
     report.common.pattern = static_cast<std::uint32_t>(pattern);
-    report.common.severity = ReportSeverity::kError;
+    report.common.severity = ReportSeverity::ERROR;
     report.common.flags = aclsan::cann::kNpusanReportCommonHasExecContext;
     report.triggerPoint.operation = "SYNC_OPERATION";
     report.triggerPoint.hasExecContext = true;
@@ -287,28 +299,28 @@ NpusanSynccheckReport MakeSynccheckReport(NpusanSynccheckPattern pattern)
     report.common.exec = report.triggerPoint.exec;
 
     switch (pattern) {
-        case NpusanSynccheckPattern::kIntraCoreDivergent:
-        case NpusanSynccheckPattern::kInterCoreDivergent:
-        case NpusanSynccheckPattern::kParticipantMismatch:
-            report.primitiveKind = NpusanSyncPrimitiveKind::kBarrier;
-            report.detailKind = NpusanSyncDetailKind::kBarrier;
+        case NpusanSynccheckPattern::INTRA_CORE_DIVERGENT:
+        case NpusanSynccheckPattern::INTER_CORE_DIVERGENT:
+        case NpusanSynccheckPattern::PARTICIPANT_MISMATCH:
+            report.primitiveKind = NpusanSyncPrimitiveKind::BARRIER;
+            report.detailKind = NpusanSyncDetailKind::BARRIER;
             report.detail = NpusanSyncBarrierError{"participant set differs", "AICore", 0x3, 0xf, 1};
             break;
-        case NpusanSynccheckPattern::kInvalidArgument:
-        case NpusanSynccheckPattern::kObjectNotInitialized:
-        case NpusanSynccheckPattern::kDeadlock:
-            report.primitiveKind = NpusanSyncPrimitiveKind::kSyncObject;
-            report.detailKind = NpusanSyncDetailKind::kObject;
+        case NpusanSynccheckPattern::INVALID_ARGUMENT:
+        case NpusanSynccheckPattern::OBJECT_NOT_INITIALIZED:
+        case NpusanSynccheckPattern::DEADLOCK:
+            report.primitiveKind = NpusanSyncPrimitiveKind::SYNC_OBJECT;
+            report.detailKind = NpusanSyncDetailKind::OBJECT;
             report.detail = NpusanSyncObjectError{"sync object error", 1, 0x1000, 0x3, 1000};
             break;
-        case NpusanSynccheckPattern::kInstructionSequenceMismatch:
-            report.primitiveKind = NpusanSyncPrimitiveKind::kInstructionSequence;
-            report.detailKind = NpusanSyncDetailKind::kSequence;
+        case NpusanSynccheckPattern::INSTRUCTION_SEQUENCE_MISMATCH:
+            report.primitiveKind = NpusanSyncPrimitiveKind::INSTRUCTION_SEQUENCE;
+            report.detailKind = NpusanSyncDetailKind::SEQUENCE;
             report.hasRelatedPoint = true;
             report.relatedPoint.operation = "EXPECTED_OPERATION";
             report.detail = NpusanSyncSequenceError{"instruction order differs", 2, 0x3};
             break;
-        case NpusanSynccheckPattern::kPairingMismatch:
+        case NpusanSynccheckPattern::PAIRING_MISMATCH:
             break;
     }
     return report;
@@ -317,8 +329,8 @@ NpusanSynccheckReport MakeSynccheckReport(NpusanSynccheckPattern pattern)
 ReportRecord MakeSocRecord()
 {
     return ReportRecord{
-        {ReportTool::kSoccheck, "register_mismatch"},
-        ReportSeverity::kFatal,
+        {ReportTool::SOCCHECK, "register_mismatch"},
+        ReportSeverity::FATAL,
         {
             {"function", "soc_kernel"},
             {"offset", "4"},
@@ -378,11 +390,10 @@ TEST(ReportRendererTest, ListsAndRendersBuiltinTemplates)
     const auto builtinKeys = aclsan::cann::ListBuiltinReportTemplates();
     EXPECT_GE(builtinKeys.size(), 34U);
     EXPECT_NE(
-        std::find(builtinKeys.begin(), builtinKeys.end(), ReportTemplateKey{ReportTool::kMemcheck, "invalid_access"}),
+        std::find(builtinKeys.begin(), builtinKeys.end(), ReportTemplateKey{ReportTool::MEMCHECK, "invalid_access"}),
         builtinKeys.end());
     EXPECT_NE(
-        std::find(
-            builtinKeys.begin(), builtinKeys.end(), ReportTemplateKey{ReportTool::kSynccheck, "pairing_mismatch"}),
+        std::find(builtinKeys.begin(), builtinKeys.end(), ReportTemplateKey{ReportTool::SYNCCHECK, "pairing_mismatch"}),
         builtinKeys.end());
 
     std::string rendered;
@@ -413,12 +424,12 @@ TEST(ReportRendererTest, CatalogOwnsCompletePatternMetadata)
     using aclsan::cann::detail::GetPatternCatalog;
 
     const auto* invalidAccess =
-        FindPatternDescriptor(ReportTool::kMemcheck, static_cast<std::uint32_t>(NpusanMemcheckPattern::kInvalidAccess));
+        FindPatternDescriptor(ReportTool::MEMCHECK, static_cast<std::uint32_t>(NpusanMemcheckPattern::INVALID_ACCESS));
     ASSERT_NE(invalidAccess, nullptr);
     EXPECT_FALSE(invalidAccess->reportTemplate.text.empty());
-    EXPECT_EQ(invalidAccess, FindPatternDescriptor(ReportTemplateKey{ReportTool::kMemcheck, "invalid_access"}));
+    EXPECT_EQ(invalidAccess, FindPatternDescriptor(ReportTemplateKey{ReportTool::MEMCHECK, "invalid_access"}));
 
-    const auto* unused = FindPatternDescriptor(ReportTemplateKey{ReportTool::kInitcheck, "unused_memory"});
+    const auto* unused = FindPatternDescriptor(ReportTemplateKey{ReportTool::INITCHECK, "unused_memory"});
     ASSERT_NE(unused, nullptr);
     EXPECT_FALSE(unused->reportTemplate.text.empty());
 
@@ -436,14 +447,14 @@ TEST(ReportRendererTest, AppendsStructuredCallStacks)
     ReportRecord record = MakeMemcheckInvalidAccessRecord();
 
     ReportCallStack rawStack{};
-    rawStack.role = ReportStackRole::kHostLaunch;
-    rawStack.format = ReportStackFormat::kRawText;
+    rawStack.role = ReportStackRole::HOST_LAUNCH;
+    rawStack.format = ReportStackFormat::RAW_TEXT;
     rawStack.rawText = "aclrtLaunchKernel [0x400123] in libacl.so\n";
     record.stacks.push_back(rawStack);
 
     ReportCallStack frameStack{};
-    frameStack.role = ReportStackRole::kFaultDevice;
-    frameStack.format = ReportStackFormat::kFrames;
+    frameStack.role = ReportStackRole::FAULT_DEVICE;
+    frameStack.format = ReportStackFormat::FRAMES;
     ReportFrame deviceFrame{};
     deviceFrame.pc = 0x100;
     deviceFrame.offset = 0x10;
@@ -477,20 +488,27 @@ TEST(ReportRendererTest, AppendsStructuredCallStacks)
 TEST(ReportRendererTest, UsesOnlyDeviceOrHostCallStackHeadings)
 {
     const std::array<ReportStackRole, 4> hostRoles = {
-        ReportStackRole::kHostLaunch,
-        ReportStackRole::kHostAlloc,
-        ReportStackRole::kHostFree,
-        ReportStackRole::kHostApiCall,
+        ReportStackRole::HOST_LAUNCH,
+        ReportStackRole::HOST_ALLOC,
+        ReportStackRole::HOST_FREE,
+        ReportStackRole::HOST_API_CALL,
     };
     for (const ReportStackRole role : hostRoles) {
         EXPECT_STREQ(aclsan::cann::ReportStackRoleTitle(role), "Host Frames:");
     }
 
     const std::array<ReportStackRole, 11> deviceRoles = {
-        ReportStackRole::kNone,           ReportStackRole::kFaultDevice,   ReportStackRole::kRelatedAccessA,
-        ReportStackRole::kRelatedAccessB, ReportStackRole::kSyncProducer,  ReportStackRole::kSyncConsumer,
-        ReportStackRole::kStateProducer,  ReportStackRole::kStateConsumer, ReportStackRole::kPeerDevice,
-        ReportStackRole::kSyncTrigger,    ReportStackRole::kSyncRelated,
+        ReportStackRole::NONE,
+        ReportStackRole::FAULT_DEVICE,
+        ReportStackRole::RELATED_ACCESS_A,
+        ReportStackRole::RELATED_ACCESS_B,
+        ReportStackRole::SYNC_PRODUCER,
+        ReportStackRole::SYNC_CONSUMER,
+        ReportStackRole::STATE_PRODUCER,
+        ReportStackRole::STATE_CONSUMER,
+        ReportStackRole::PEER_DEVICE,
+        ReportStackRole::SYNC_TRIGGER,
+        ReportStackRole::SYNC_RELATED,
     };
     for (const ReportStackRole role : deviceRoles) {
         EXPECT_STREQ(aclsan::cann::ReportStackRoleTitle(role), "Device Frames:");
@@ -500,18 +518,18 @@ TEST(ReportRendererTest, UsesOnlyDeviceOrHostCallStackHeadings)
 TEST(ReportRendererTest, RendersOnlyActiveCommonCallStackPrefix)
 {
     NpusanMemcheckReport report{};
-    report.common.tool = ReportTool::kMemcheck;
-    report.common.pattern = static_cast<std::uint32_t>(NpusanMemcheckPattern::kApiError);
+    report.common.tool = ReportTool::MEMCHECK;
+    report.common.pattern = static_cast<std::uint32_t>(NpusanMemcheckPattern::API_ERROR);
     report.common.stackCount = 1;
     report.apiName = "aclrtLaunchKernel";
     report.apiErrorName = "ACL_ERROR_FAILURE";
     report.apiErrorMessage = "launch failed";
 
-    report.common.stacks[0].role = ReportStackRole::kHostLaunch;
-    report.common.stacks[0].format = ReportStackFormat::kRawText;
+    report.common.stacks[0].role = ReportStackRole::HOST_LAUNCH;
+    report.common.stacks[0].format = ReportStackFormat::RAW_TEXT;
     report.common.stacks[0].rawText = "active host frame";
-    report.common.stacks[1].role = ReportStackRole::kHostLaunch;
-    report.common.stacks[1].format = ReportStackFormat::kRawText;
+    report.common.stacks[1].role = ReportStackRole::HOST_LAUNCH;
+    report.common.stacks[1].format = ReportStackFormat::RAW_TEXT;
     report.common.stacks[1].rawText = "inactive host frame";
 
     std::string rendered;
@@ -533,20 +551,20 @@ TEST(ReportRendererTest, UsesExplicitUnknownPhysicalCoreSentinel)
 TEST(ReportRendererTest, PrefersStructuredFaultFrameForSourceLocation)
 {
     NpusanMemcheckReport report{};
-    report.common.tool = ReportTool::kMemcheck;
-    report.common.pattern = static_cast<std::uint32_t>(NpusanMemcheckPattern::kInvalidAccess);
+    report.common.tool = ReportTool::MEMCHECK;
+    report.common.pattern = static_cast<std::uint32_t>(NpusanMemcheckPattern::INVALID_ACCESS);
     report.common.exec.function = "fallback_function";
     report.common.exec.offset = 0x10;
     report.common.exec.file = "fallback.cpp";
     report.common.exec.line = 7;
     report.common.stackCount = 2;
-    report.common.stacks[0].role = ReportStackRole::kFaultDevice;
-    report.common.stacks[0].format = ReportStackFormat::kFrames;
+    report.common.stacks[0].role = ReportStackRole::FAULT_DEVICE;
+    report.common.stacks[0].format = ReportStackFormat::FRAMES;
     report.common.stacks[0].frames.push_back(ReportFrame{});
     report.common.stacks[0].frames.push_back(
         ReportFrame{0x100, 0x20, "symbolized_function", "symbolized.cpp", 42, 0, 0, 0});
-    report.common.stacks[1].role = ReportStackRole::kHostLaunch;
-    report.common.stacks[1].format = ReportStackFormat::kRawText;
+    report.common.stacks[1].role = ReportStackRole::HOST_LAUNCH;
+    report.common.stacks[1].format = ReportStackFormat::RAW_TEXT;
     report.common.stacks[1].rawText = "real host frame";
     report.access.accessBytes = 4;
 
@@ -563,10 +581,10 @@ TEST(ReportRendererTest, PrefersStructuredFaultFrameForSourceLocation)
 TEST(ReportRendererTest, UsesAllocationMemorySpaceForAllocationPatterns)
 {
     NpusanMemcheckReport leak{};
-    leak.common.tool = ReportTool::kMemcheck;
-    leak.common.pattern = static_cast<std::uint32_t>(NpusanMemcheckPattern::kLeak);
-    leak.access.memorySpace = NpusanReportMemorySpace::kUb;
-    leak.allocation.memorySpace = NpusanReportMemorySpace::kGm;
+    leak.common.tool = ReportTool::MEMCHECK;
+    leak.common.pattern = static_cast<std::uint32_t>(NpusanMemcheckPattern::LEAK);
+    leak.access.memorySpace = NpusanReportMemorySpace::UB;
+    leak.allocation.memorySpace = NpusanReportMemorySpace::GM;
 
     std::string rendered;
     EXPECT_EQ(
@@ -575,10 +593,10 @@ TEST(ReportRendererTest, UsesAllocationMemorySpaceForAllocationPatterns)
     EXPECT_NE(rendered.find("memory space GM"), std::string::npos);
 
     NpusanInitcheckReport unused{};
-    unused.common.tool = ReportTool::kInitcheck;
-    unused.common.pattern = static_cast<std::uint32_t>(NpusanInitcheckPattern::kUnusedMemory);
-    unused.access.memorySpace = NpusanReportMemorySpace::kUb;
-    unused.allocation.memorySpace = NpusanReportMemorySpace::kL1;
+    unused.common.tool = ReportTool::INITCHECK;
+    unused.common.pattern = static_cast<std::uint32_t>(NpusanInitcheckPattern::UNUSED_MEMORY);
+    unused.access.memorySpace = NpusanReportMemorySpace::UB;
+    unused.allocation.memorySpace = NpusanReportMemorySpace::L1;
 
     EXPECT_EQ(
         aclsan::cann::RenderNpusanReportRecord(NpusanReportRecord::From(unused), {}, &rendered),
@@ -589,8 +607,8 @@ TEST(ReportRendererTest, UsesAllocationMemorySpaceForAllocationPatterns)
 TEST(ReportRendererTest, UsesRaceAccessCoreForCrossPipeTemplate)
 {
     NpusanRacecheckReport report{};
-    report.common.tool = ReportTool::kRacecheck;
-    report.common.pattern = static_cast<std::uint32_t>(NpusanRacecheckPattern::kCrossPipeRace);
+    report.common.tool = ReportTool::RACECHECK;
+    report.common.pattern = static_cast<std::uint32_t>(NpusanRacecheckPattern::CROSS_PIPE_RACE);
     report.first.exec.phyCoreId = 7;
     report.second.exec.phyCoreId = 7;
     report.first.exec.pipeName = "MTE2";
@@ -607,8 +625,8 @@ TEST(ReportRendererTest, UsesRaceAccessCoreForCrossPipeTemplate)
 TEST(ReportRendererTest, FallsBackToProgramCounterWhenFaultIsNotSymbolized)
 {
     NpusanMemcheckReport report{};
-    report.common.tool = ReportTool::kMemcheck;
-    report.common.pattern = static_cast<std::uint32_t>(NpusanMemcheckPattern::kMisalignedAccess);
+    report.common.tool = ReportTool::MEMCHECK;
+    report.common.pattern = static_cast<std::uint32_t>(NpusanMemcheckPattern::MISALIGNED_ACCESS);
     report.common.exec.pc = 0xabc;
     report.common.exec.kernelName = "fallback_kernel";
 
@@ -625,8 +643,8 @@ TEST(ReportRendererTest, FallsBackToProgramCounterWhenFaultIsNotSymbolized)
 TEST(ReportRendererTest, FallsBackToEachRaceSiteProgramCounter)
 {
     NpusanRacecheckReport report{};
-    report.common.tool = ReportTool::kRacecheck;
-    report.common.pattern = static_cast<std::uint32_t>(NpusanRacecheckPattern::kHazardRaw);
+    report.common.tool = ReportTool::RACECHECK;
+    report.common.pattern = static_cast<std::uint32_t>(NpusanRacecheckPattern::HAZARD_RAW);
     report.first.exec.pc = 0x111;
     report.first.exec.kernelName = "writer_kernel";
     report.second.exec.pc = 0x222;
@@ -643,8 +661,8 @@ TEST(ReportRendererTest, FallsBackToEachRaceSiteProgramCounter)
 TEST(ReportRendererTest, UsesFirstRaceSiteAsInvalidRemoteAccessLocation)
 {
     NpusanRacecheckReport report{};
-    report.common.tool = ReportTool::kRacecheck;
-    report.common.pattern = static_cast<std::uint32_t>(NpusanRacecheckPattern::kInvalidRemoteAccess);
+    report.common.tool = ReportTool::RACECHECK;
+    report.common.pattern = static_cast<std::uint32_t>(NpusanRacecheckPattern::INVALID_REMOTE_ACCESS);
     report.common.exec.phyCoreId = 1;
     report.first.exec.phyCoreId = 6;
     report.first.exec.blockType = ACLSAN_DEVICE_BLOCK_TYPE_AICORE_CUBE;
@@ -664,8 +682,8 @@ TEST(ReportRendererTest, UsesFirstRaceSiteAsInvalidRemoteAccessLocation)
 TEST(ReportRendererTest, RejectsCrossPipeRaceAcrossDifferentPhysicalCores)
 {
     NpusanRacecheckReport report{};
-    report.common.tool = ReportTool::kRacecheck;
-    report.common.pattern = static_cast<std::uint32_t>(NpusanRacecheckPattern::kCrossPipeRace);
+    report.common.tool = ReportTool::RACECHECK;
+    report.common.pattern = static_cast<std::uint32_t>(NpusanRacecheckPattern::CROSS_PIPE_RACE);
     report.first.exec.phyCoreId = 2;
     report.second.exec.phyCoreId = 3;
 
@@ -679,8 +697,8 @@ TEST(ReportRendererTest, RejectsCrossPipeRaceAcrossDifferentPhysicalCores)
 TEST(ReportRendererTest, RejectsCommonCallStackCountBeyondFixedCapacity)
 {
     NpusanMemcheckReport report{};
-    report.common.tool = ReportTool::kMemcheck;
-    report.common.pattern = static_cast<std::uint32_t>(NpusanMemcheckPattern::kApiError);
+    report.common.tool = ReportTool::MEMCHECK;
+    report.common.pattern = static_cast<std::uint32_t>(NpusanMemcheckPattern::API_ERROR);
     report.common.stackCount = 9;
 
     std::string rendered = "stale";
@@ -693,8 +711,8 @@ TEST(ReportRendererTest, RejectsCommonCallStackCountBeyondFixedCapacity)
 TEST(ReportRendererTest, RejectsRecordToolMismatch)
 {
     NpusanMemcheckReport report{};
-    report.common.tool = ReportTool::kInitcheck;
-    report.common.pattern = static_cast<std::uint32_t>(NpusanMemcheckPattern::kApiError);
+    report.common.tool = ReportTool::INITCHECK;
+    report.common.pattern = static_cast<std::uint32_t>(NpusanMemcheckPattern::API_ERROR);
 
     std::string rendered = "stale";
     EXPECT_EQ(
@@ -706,11 +724,11 @@ TEST(ReportRendererTest, RejectsRecordToolMismatch)
 TEST(ReportRendererTest, RejectsOuterToolAndPayloadMismatchSafely)
 {
     NpusanMemcheckReport report{};
-    report.common.tool = ReportTool::kMemcheck;
-    report.common.pattern = static_cast<std::uint32_t>(NpusanMemcheckPattern::kApiError);
+    report.common.tool = ReportTool::MEMCHECK;
+    report.common.pattern = static_cast<std::uint32_t>(NpusanMemcheckPattern::API_ERROR);
     NpusanReportRecord record = NpusanReportRecord::From(report);
     ASSERT_TRUE(std::holds_alternative<const NpusanMemcheckReport*>(record.GetPayload()));
-    record.tool = ReportTool::kInitcheck;
+    record.tool = ReportTool::INITCHECK;
 
     std::string rendered = "stale";
     EXPECT_EQ(aclsan::cann::RenderNpusanReportRecord(record, {}, &rendered), ReportRenderStatus::kInvalidArgument);
@@ -720,10 +738,10 @@ TEST(ReportRendererTest, RejectsOuterToolAndPayloadMismatchSafely)
 TEST(ReportRendererTest, RejectsRecordPatternMismatch)
 {
     NpusanMemcheckReport report{};
-    report.common.tool = ReportTool::kMemcheck;
-    report.common.pattern = static_cast<std::uint32_t>(NpusanMemcheckPattern::kApiError);
+    report.common.tool = ReportTool::MEMCHECK;
+    report.common.pattern = static_cast<std::uint32_t>(NpusanMemcheckPattern::API_ERROR);
     NpusanReportRecord record = NpusanReportRecord::From(report);
-    record.pattern = static_cast<std::uint32_t>(NpusanMemcheckPattern::kLeak);
+    record.pattern = static_cast<std::uint32_t>(NpusanMemcheckPattern::LEAK);
 
     std::string rendered = "stale";
     EXPECT_EQ(aclsan::cann::RenderNpusanReportRecord(record, {}, &rendered), ReportRenderStatus::kInvalidArgument);
@@ -733,8 +751,8 @@ TEST(ReportRendererTest, RejectsRecordPatternMismatch)
 TEST(ReportRendererTest, RejectsNullSelectedReportPointer)
 {
     NpusanReportRecord record{};
-    record.tool = ReportTool::kMemcheck;
-    record.pattern = static_cast<std::uint32_t>(NpusanMemcheckPattern::kApiError);
+    record.tool = ReportTool::MEMCHECK;
+    record.pattern = static_cast<std::uint32_t>(NpusanMemcheckPattern::API_ERROR);
 
     std::string rendered = "stale";
     EXPECT_EQ(aclsan::cann::RenderNpusanReportRecord(record, {}, &rendered), ReportRenderStatus::kInvalidArgument);
@@ -744,11 +762,11 @@ TEST(ReportRendererTest, RejectsNullSelectedReportPointer)
 TEST(ReportRendererTest, RejectsDuplicateActiveCallStackRoles)
 {
     NpusanMemcheckReport report{};
-    report.common.tool = ReportTool::kMemcheck;
-    report.common.pattern = static_cast<std::uint32_t>(NpusanMemcheckPattern::kApiError);
+    report.common.tool = ReportTool::MEMCHECK;
+    report.common.pattern = static_cast<std::uint32_t>(NpusanMemcheckPattern::API_ERROR);
     report.common.stackCount = 2;
-    report.common.stacks[0].role = ReportStackRole::kHostLaunch;
-    report.common.stacks[1].role = ReportStackRole::kHostLaunch;
+    report.common.stacks[0].role = ReportStackRole::HOST_LAUNCH;
+    report.common.stacks[1].role = ReportStackRole::HOST_LAUNCH;
 
     std::string rendered = "stale";
     EXPECT_EQ(
@@ -760,12 +778,12 @@ TEST(ReportRendererTest, RejectsDuplicateActiveCallStackRoles)
 TEST(ReportRendererTest, ValidatesActiveCallStackMetadataAndBoundaries)
 {
     NpusanMemcheckReport report{};
-    report.common.tool = ReportTool::kMemcheck;
-    report.common.pattern = static_cast<std::uint32_t>(NpusanMemcheckPattern::kApiError);
+    report.common.tool = ReportTool::MEMCHECK;
+    report.common.pattern = static_cast<std::uint32_t>(NpusanMemcheckPattern::API_ERROR);
     report.common.stackCount = aclsan::cann::kNpusanReportStackMax;
     for (std::uint32_t i = 0; i < report.common.stackCount; ++i) {
         report.common.stacks[i].role = static_cast<ReportStackRole>(i + 1);
-        report.common.stacks[i].format = ReportStackFormat::kNone;
+        report.common.stacks[i].format = ReportStackFormat::NONE;
     }
 
     std::string rendered;
@@ -779,13 +797,13 @@ TEST(ReportRendererTest, ValidatesActiveCallStackMetadataAndBoundaries)
         aclsan::cann::RenderNpusanReportRecord(NpusanReportRecord::From(report), {}, &rendered),
         ReportRenderStatus::kInvalidArgument);
 
-    report.common.stacks[0].role = ReportStackRole::kFaultDevice;
+    report.common.stacks[0].role = ReportStackRole::FAULT_DEVICE;
     report.common.stacks[0].format = static_cast<ReportStackFormat>(99);
     EXPECT_EQ(
         aclsan::cann::RenderNpusanReportRecord(NpusanReportRecord::From(report), {}, &rendered),
         ReportRenderStatus::kInvalidArgument);
 
-    report.common.stacks[0].format = ReportStackFormat::kFrames;
+    report.common.stacks[0].format = ReportStackFormat::FRAMES;
     report.common.stacks[0].frames.resize(17);
     EXPECT_EQ(
         aclsan::cann::RenderNpusanReportRecord(NpusanReportRecord::From(report), {}, &rendered),
@@ -809,15 +827,15 @@ TEST(ReportRendererTest, LoadsTemplateOverrides)
         ReportRenderStatus::kSuccess);
     EXPECT_EQ(rendered, "USER ERROR 1000\n");
 
-    const ReportRecord unknownRecord{{ReportTool::kMemcheck, "unknown"}, ReportSeverity::kError, {}};
+    const ReportRecord unknownRecord{{ReportTool::MEMCHECK, "unknown"}, ReportSeverity::ERROR, {}};
     EXPECT_EQ(aclsan::cann::RenderReportRecord(unknownRecord, {}, &rendered), ReportRenderStatus::kUnknownTemplate);
 }
 
 TEST(ReportRendererTest, RendersBundleSummaries)
 {
     const ReportRecord leakRecord{
-        {ReportTool::kMemcheck, "leak"},
-        ReportSeverity::kWarning,
+        {ReportTool::MEMCHECK, "leak"},
+        ReportSeverity::WARNING,
         {
             {"bytes", "128"},
             {"base", "0fc0"},
@@ -828,8 +846,8 @@ TEST(ReportRendererTest, RendersBundleSummaries)
             {"hostBinary", "libacl.so"},
         }};
     const ReportRecord unusedRecord{
-        {ReportTool::kInitcheck, "unused_memory"},
-        ReportSeverity::kInfo,
+        {ReportTool::INITCHECK, "unused_memory"},
+        ReportSeverity::INFO,
         {
             {"space", "GM"},
             {"base", "0fc0"},
@@ -840,8 +858,8 @@ TEST(ReportRendererTest, RendersBundleSummaries)
             {"unusedPercent", "50"},
         }};
     const ReportRecord deadlockRecord{
-        {ReportTool::kSynccheck, "deadlock"},
-        ReportSeverity::kError,
+        {ReportTool::SYNCCHECK, "deadlock"},
+        ReportSeverity::ERROR,
         {
             {"reason", "wait cannot complete"},
             {"triggerOperation", "WAIT_FLAG"},
@@ -882,6 +900,37 @@ TEST(ReportRendererTest, RendersBundleSummaries)
         std::string::npos);
 }
 
+TEST(ReportRendererTest, SummarizesOnlyToolsPresentInBundle)
+{
+    const std::vector<ReportRecord> records{MakeMemcheckInvalidAccessRecord()};
+
+    std::string rendered;
+    ASSERT_EQ(aclsan::cann::RenderReportBundle(records, {}, &rendered), ReportRenderStatus::kSuccess);
+    EXPECT_NE(rendered.find("========= MEMCHECK SUMMARY:"), std::string::npos);
+    EXPECT_NE(rendered.find("=========     MEMCHECK:"), std::string::npos);
+    EXPECT_EQ(rendered.find("INITCHECK SUMMARY"), std::string::npos);
+    EXPECT_EQ(rendered.find("RACECHECK SUMMARY"), std::string::npos);
+    EXPECT_EQ(rendered.find("SYNCCHECK SUMMARY"), std::string::npos);
+    EXPECT_EQ(rendered.find("SOCCHECK SUMMARY"), std::string::npos);
+    EXPECT_EQ(rendered.find("=========     INITCHECK:"), std::string::npos);
+    EXPECT_EQ(rendered.find("=========     RACECHECK:"), std::string::npos);
+    EXPECT_EQ(rendered.find("=========     SYNCCHECK:"), std::string::npos);
+    EXPECT_EQ(rendered.find("=========     SOCCHECK:"), std::string::npos);
+}
+
+TEST(ReportRendererTest, EmptyBundleHasOnlyGlobalSummary)
+{
+    std::string rendered;
+    ASSERT_EQ(aclsan::cann::RenderReportBundle({}, {}, &rendered), ReportRenderStatus::kSuccess);
+    EXPECT_EQ(rendered.find("MEMCHECK SUMMARY"), std::string::npos);
+    EXPECT_EQ(rendered.find("INITCHECK SUMMARY"), std::string::npos);
+    EXPECT_EQ(rendered.find("RACECHECK SUMMARY"), std::string::npos);
+    EXPECT_EQ(rendered.find("SYNCCHECK SUMMARY"), std::string::npos);
+    EXPECT_EQ(rendered.find("SOCCHECK SUMMARY"), std::string::npos);
+    EXPECT_NE(rendered.find("========= ERROR SUMMARY: 0 errors\n"), std::string::npos);
+    EXPECT_NE(rendered.find("=========     FATAL: 0 fatal errors\n"), std::string::npos);
+}
+
 TEST(ReportRendererTest, RendersPairingMismatchReasonForDifferentOperationKinds)
 {
     struct Case {
@@ -891,13 +940,13 @@ TEST(ReportRendererTest, RendersPairingMismatchReasonForDifferentOperationKinds)
         const char* expectedRelated;
     };
     const Case cases[] = {
-        {NpusanSyncPairKind::kSetWaitFlag, NpusanSyncMismatchReason::kDuplicateOpen,
+        {NpusanSyncPairKind::SET_WAIT_FLAG, NpusanSyncMismatchReason::DUPLICATE_OPEN,
          "Synchronization pairing mismatch: duplicate SET_FLAG.",
          "related point: previous SET_FLAG at SyncOperation+0x10 in sync.cpp:24 is still pending"},
-        {NpusanSyncPairKind::kSetWaitFlag, NpusanSyncMismatchReason::kUnmatchedClose,
+        {NpusanSyncPairKind::SET_WAIT_FLAG, NpusanSyncMismatchReason::UNMATCHED_CLOSE,
          "Synchronization pairing mismatch: unmatched WAIT_FLAG.",
          "related point: expected SET_FLAG, but no matching point exists for this pair key"},
-        {NpusanSyncPairKind::kGetRlsBuf, NpusanSyncMismatchReason::kUnconsumedOpen,
+        {NpusanSyncPairKind::GET_RLS_BUF, NpusanSyncMismatchReason::UNCONSUMED_OPEN,
          "Synchronization pairing mismatch: redundant GET_BUF.",
          "related point: expected RLS_BUF, but no matching point was observed"},
     };
@@ -917,11 +966,11 @@ TEST(ReportRendererTest, RendersPairingMismatchReasonForDifferentOperationKinds)
 
 TEST(ReportRendererTest, SeparatesBundleRecordsWithOneEmptyLine)
 {
-    const ReportTemplateKey key{ReportTool::kMemcheck, "invalid_access"};
+    const ReportTemplateKey key{ReportTool::MEMCHECK, "invalid_access"};
     const ReportTemplateOverrides overrides{{key, {"{{recordName}}\n"}}};
     const std::vector<ReportRecord> records{
-        {key, ReportSeverity::kError, {{"recordName", "first record"}}},
-        {key, ReportSeverity::kError, {{"recordName", "second record"}}},
+        {key, ReportSeverity::ERROR, {{"recordName", "first record"}}},
+        {key, ReportSeverity::ERROR, {{"recordName", "second record"}}},
     };
 
     std::string rendered;
@@ -933,16 +982,16 @@ TEST(ReportRendererTest, SeparatesBundleRecordsWithOneEmptyLine)
 TEST(ReportRendererTest, RendersStructuredPairingMismatchEvidence)
 {
     NpusanSynccheckReport report =
-        MakePairingReport(NpusanSyncMismatchReason::kDuplicateOpen, NpusanSyncPairKind::kSetWaitFlag);
+        MakePairingReport(NpusanSyncMismatchReason::DUPLICATE_OPEN, NpusanSyncPairKind::SET_WAIT_FLAG);
     report.common.stackCount = 2;
-    report.common.stacks[0].role = ReportStackRole::kSyncTrigger;
-    report.common.stacks[0].format = ReportStackFormat::kFrames;
+    report.common.stacks[0].role = ReportStackRole::SYNC_TRIGGER;
+    report.common.stacks[0].format = ReportStackFormat::FRAMES;
     report.common.stacks[0].frames.push_back(ReportFrame{0, 0x20, "SecondSet", "sync.cpp", 30});
-    report.common.stacks[1].role = ReportStackRole::kSyncRelated;
-    report.common.stacks[1].format = ReportStackFormat::kFrames;
+    report.common.stacks[1].role = ReportStackRole::SYNC_RELATED;
+    report.common.stacks[1].format = ReportStackFormat::FRAMES;
     report.common.stacks[1].frames.push_back(ReportFrame{0x1010, 0x10, "FirstSet", "sync.cpp", 24});
-    report.triggerPoint.stackRole = ReportStackRole::kSyncTrigger;
-    report.relatedPoint.stackRole = ReportStackRole::kSyncRelated;
+    report.triggerPoint.stackRole = ReportStackRole::SYNC_TRIGGER;
+    report.relatedPoint.stackRole = ReportStackRole::SYNC_RELATED;
 
     std::string rendered;
     ASSERT_EQ(
@@ -965,12 +1014,12 @@ TEST(ReportRendererTest, RendersStructuredPairingMismatchEvidence)
 TEST(ReportRendererTest, RendersUnconsumedGetBufferWithExpectedRelatedPoint)
 {
     NpusanSynccheckReport report{};
-    report.common.tool = ReportTool::kSynccheck;
-    report.common.pattern = static_cast<std::uint32_t>(NpusanSynccheckPattern::kPairingMismatch);
-    report.common.severity = ReportSeverity::kError;
+    report.common.tool = ReportTool::SYNCCHECK;
+    report.common.pattern = static_cast<std::uint32_t>(NpusanSynccheckPattern::PAIRING_MISMATCH);
+    report.common.severity = ReportSeverity::ERROR;
     report.common.flags = aclsan::cann::kNpusanReportCommonHasExecContext;
-    report.primitiveKind = NpusanSyncPrimitiveKind::kGetRlsBuf;
-    report.detailKind = NpusanSyncDetailKind::kPairing;
+    report.primitiveKind = NpusanSyncPrimitiveKind::GET_RLS_BUF;
+    report.detailKind = NpusanSyncDetailKind::PAIRING;
     report.triggerPoint.operation = "GET_BUF";
     report.triggerPoint.hasExecContext = true;
     report.triggerPoint.exec.phyCoreId = 1;
@@ -984,8 +1033,8 @@ TEST(ReportRendererTest, RendersUnconsumedGetBufferWithExpectedRelatedPoint)
     report.hasRelatedPoint = true;
     report.relatedPoint.operation = "RLS_BUF";
     report.detail = NpusanSyncPairingError{
-        NpusanSyncMismatchReason::kUnconsumedOpen,
-        {NpusanSyncPairKind::kGetRlsBuf, 0, ACLSAN_DEVICE_PIPE_MTE2, 3, 42},
+        NpusanSyncMismatchReason::UNCONSUMED_OPEN,
+        {NpusanSyncPairKind::GET_RLS_BUF, ACLSAN_DEVICE_PIPE_SCALAR, ACLSAN_DEVICE_PIPE_MTE2, 3, 42},
     };
 
     std::string rendered;
@@ -1002,39 +1051,39 @@ TEST(ReportRendererTest, RejectsInvalidPairingMismatchMetadata)
     std::string rendered;
     {
         NpusanSynccheckReport report =
-            MakePairingReport(NpusanSyncMismatchReason::kUnmatchedClose, NpusanSyncPairKind::kSetWaitFlag);
-        report.detailKind = NpusanSyncDetailKind::kBarrier;
+            MakePairingReport(NpusanSyncMismatchReason::UNMATCHED_CLOSE, NpusanSyncPairKind::SET_WAIT_FLAG);
+        report.detailKind = NpusanSyncDetailKind::BARRIER;
         EXPECT_EQ(
             aclsan::cann::RenderNpusanReportRecord(NpusanReportRecord::From(report), {}, &rendered),
             ReportRenderStatus::kInvalidArgument);
     }
     {
         NpusanSynccheckReport report =
-            MakePairingReport(NpusanSyncMismatchReason::kUnmatchedClose, NpusanSyncPairKind::kSetWaitFlag);
-        std::get<NpusanSyncPairingError>(report.detail).reason = NpusanSyncMismatchReason::kUnknown;
+            MakePairingReport(NpusanSyncMismatchReason::UNMATCHED_CLOSE, NpusanSyncPairKind::SET_WAIT_FLAG);
+        std::get<NpusanSyncPairingError>(report.detail).reason = NpusanSyncMismatchReason::UNKNOWN;
         EXPECT_EQ(
             aclsan::cann::RenderNpusanReportRecord(NpusanReportRecord::From(report), {}, &rendered),
             ReportRenderStatus::kInvalidArgument);
     }
     {
         NpusanSynccheckReport report =
-            MakePairingReport(NpusanSyncMismatchReason::kUnconsumedOpen, NpusanSyncPairKind::kGetRlsBuf);
-        report.primitiveKind = NpusanSyncPrimitiveKind::kSetWaitFlag;
+            MakePairingReport(NpusanSyncMismatchReason::UNCONSUMED_OPEN, NpusanSyncPairKind::GET_RLS_BUF);
+        report.primitiveKind = NpusanSyncPrimitiveKind::SET_WAIT_FLAG;
         EXPECT_EQ(
             aclsan::cann::RenderNpusanReportRecord(NpusanReportRecord::From(report), {}, &rendered),
             ReportRenderStatus::kInvalidArgument);
     }
     {
         NpusanSynccheckReport report =
-            MakePairingReport(NpusanSyncMismatchReason::kUnconsumedOpen, NpusanSyncPairKind::kGetRlsBuf);
-        std::get<NpusanSyncPairingError>(report.detail).key.srcPipe = 1;
+            MakePairingReport(NpusanSyncMismatchReason::UNCONSUMED_OPEN, NpusanSyncPairKind::GET_RLS_BUF);
+        std::get<NpusanSyncPairingError>(report.detail).key.srcPipe = ACLSAN_DEVICE_PIPE_VECTOR;
         EXPECT_EQ(
             aclsan::cann::RenderNpusanReportRecord(NpusanReportRecord::From(report), {}, &rendered),
             ReportRenderStatus::kInvalidArgument);
     }
     {
         NpusanSynccheckReport report =
-            MakePairingReport(NpusanSyncMismatchReason::kUnconsumedOpen, NpusanSyncPairKind::kGetRlsBuf);
+            MakePairingReport(NpusanSyncMismatchReason::UNCONSUMED_OPEN, NpusanSyncPairKind::GET_RLS_BUF);
         report.relatedPoint.hasExecContext = true;
         EXPECT_EQ(
             aclsan::cann::RenderNpusanReportRecord(NpusanReportRecord::From(report), {}, &rendered),
@@ -1042,7 +1091,7 @@ TEST(ReportRendererTest, RejectsInvalidPairingMismatchMetadata)
     }
     {
         NpusanSynccheckReport report =
-            MakePairingReport(NpusanSyncMismatchReason::kDuplicateOpen, NpusanSyncPairKind::kSetWaitFlag);
+            MakePairingReport(NpusanSyncMismatchReason::DUPLICATE_OPEN, NpusanSyncPairKind::SET_WAIT_FLAG);
         report.common.exec.pc = 0xdead;
         EXPECT_EQ(
             aclsan::cann::RenderNpusanReportRecord(NpusanReportRecord::From(report), {}, &rendered),
@@ -1054,7 +1103,7 @@ TEST(ReportRendererTest, RejectsOrphanRelatedPointAndMismatchedPointStackPc)
 {
     std::string rendered;
     {
-        NpusanSynccheckReport report = MakeSynccheckReport(NpusanSynccheckPattern::kIntraCoreDivergent);
+        NpusanSynccheckReport report = MakeSynccheckReport(NpusanSynccheckPattern::INTRA_CORE_DIVERGENT);
         report.relatedPoint.operation = "UNREFERENCED_OPERATION";
         EXPECT_EQ(
             aclsan::cann::RenderNpusanReportRecord(NpusanReportRecord::From(report), {}, &rendered),
@@ -1062,13 +1111,13 @@ TEST(ReportRendererTest, RejectsOrphanRelatedPointAndMismatchedPointStackPc)
     }
     {
         NpusanSynccheckReport report =
-            MakePairingReport(NpusanSyncMismatchReason::kDuplicateOpen, NpusanSyncPairKind::kSetWaitFlag);
+            MakePairingReport(NpusanSyncMismatchReason::DUPLICATE_OPEN, NpusanSyncPairKind::SET_WAIT_FLAG);
         report.triggerPoint.exec.pc = 0x1000;
         report.common.exec = report.triggerPoint.exec;
-        report.triggerPoint.stackRole = ReportStackRole::kSyncTrigger;
+        report.triggerPoint.stackRole = ReportStackRole::SYNC_TRIGGER;
         report.common.stackCount = 1;
-        report.common.stacks[0].role = ReportStackRole::kSyncTrigger;
-        report.common.stacks[0].format = ReportStackFormat::kFrames;
+        report.common.stacks[0].role = ReportStackRole::SYNC_TRIGGER;
+        report.common.stacks[0].format = ReportStackFormat::FRAMES;
         report.common.stacks[0].frames.push_back(ReportFrame{0x2000, 0x20, "DifferentInstruction", "sync.cpp", 30});
         EXPECT_EQ(
             aclsan::cann::RenderNpusanReportRecord(NpusanReportRecord::From(report), {}, &rendered),
@@ -1076,14 +1125,14 @@ TEST(ReportRendererTest, RejectsOrphanRelatedPointAndMismatchedPointStackPc)
     }
     {
         NpusanSynccheckReport report =
-            MakePairingReport(NpusanSyncMismatchReason::kUnmatchedClose, NpusanSyncPairKind::kSetWaitFlag);
+            MakePairingReport(NpusanSyncMismatchReason::UNMATCHED_CLOSE, NpusanSyncPairKind::SET_WAIT_FLAG);
         report.common.flags = 0;
         EXPECT_EQ(
             aclsan::cann::RenderNpusanReportRecord(NpusanReportRecord::From(report), {}, &rendered),
             ReportRenderStatus::kInvalidArgument);
     }
     {
-        NpusanSynccheckReport report = MakeSynccheckReport(NpusanSynccheckPattern::kInvalidArgument);
+        NpusanSynccheckReport report = MakeSynccheckReport(NpusanSynccheckPattern::INVALID_ARGUMENT);
         report.primitiveKind = static_cast<NpusanSyncPrimitiveKind>(99);
         EXPECT_EQ(
             aclsan::cann::RenderNpusanReportRecord(NpusanReportRecord::From(report), {}, &rendered),
@@ -1094,9 +1143,9 @@ TEST(ReportRendererTest, RejectsOrphanRelatedPointAndMismatchedPointStackPc)
 TEST(ReportRendererTest, RendersStructuredReportsFromEachCheckerStruct)
 {
     NpusanMemcheckReport memcheck{};
-    memcheck.common.tool = ReportTool::kMemcheck;
-    memcheck.common.pattern = static_cast<std::uint32_t>(NpusanMemcheckPattern::kInvalidAccess);
-    memcheck.common.severity = ReportSeverity::kError;
+    memcheck.common.tool = ReportTool::MEMCHECK;
+    memcheck.common.pattern = static_cast<std::uint32_t>(NpusanMemcheckPattern::INVALID_ACCESS);
+    memcheck.common.severity = ReportSeverity::ERROR;
     memcheck.common.exec.function = "kernel";
     memcheck.common.exec.offset = 0x10;
     memcheck.common.exec.file = "kernel.cpp";
@@ -1104,19 +1153,19 @@ TEST(ReportRendererTest, RendersStructuredReportsFromEachCheckerStruct)
     memcheck.common.exec.phyCoreId = 3;
     memcheck.common.exec.blockId = 7;
     memcheck.common.exec.pipeName = "MTE2";
-    memcheck.access.memorySpace = NpusanReportMemorySpace::kGm;
-    memcheck.access.accessMode = NpusanReportAccessMode::kRead;
+    memcheck.access.memorySpace = NpusanReportMemorySpace::GM;
+    memcheck.access.accessMode = NpusanReportAccessMode::READ;
     memcheck.access.accessBytes = 16;
     memcheck.access.address = 0x1000;
     memcheck.nearestAllocation.base = 0x0fc0;
     memcheck.nearestAllocation.bytes = 128;
-    memcheck.distanceKind = NpusanReportDistanceKind::kAfter;
+    memcheck.distanceKind = NpusanReportDistanceKind::AFTER;
     memcheck.distanceBytes = 64;
 
     NpusanInitcheckReport initcheck{};
-    initcheck.common.tool = ReportTool::kInitcheck;
-    initcheck.common.pattern = static_cast<std::uint32_t>(NpusanInitcheckPattern::kUninitializedRead);
-    initcheck.common.severity = ReportSeverity::kError;
+    initcheck.common.tool = ReportTool::INITCHECK;
+    initcheck.common.pattern = static_cast<std::uint32_t>(NpusanInitcheckPattern::UNINITIALIZED_READ);
+    initcheck.common.severity = ReportSeverity::ERROR;
     initcheck.common.exec.function = "init_kernel";
     initcheck.common.exec.offset = 0x18;
     initcheck.common.exec.file = "init.cpp";
@@ -1124,15 +1173,15 @@ TEST(ReportRendererTest, RendersStructuredReportsFromEachCheckerStruct)
     initcheck.common.exec.phyCoreId = 4;
     initcheck.common.exec.blockId = 2;
     initcheck.common.exec.pipeName = "MTE2";
-    initcheck.access.memorySpace = NpusanReportMemorySpace::kGm;
+    initcheck.access.memorySpace = NpusanReportMemorySpace::GM;
     initcheck.access.accessBytes = 32;
     initcheck.access.address = 0x3000;
 
     NpusanRacecheckReport racecheck{};
-    racecheck.common.tool = ReportTool::kRacecheck;
-    racecheck.common.pattern = static_cast<std::uint32_t>(NpusanRacecheckPattern::kHazardRaw);
-    racecheck.common.severity = ReportSeverity::kWarning;
-    racecheck.first.access.memorySpace = NpusanReportMemorySpace::kUb;
+    racecheck.common.tool = ReportTool::RACECHECK;
+    racecheck.common.pattern = static_cast<std::uint32_t>(NpusanRacecheckPattern::HAZARD_RAW);
+    racecheck.common.severity = ReportSeverity::WARNING;
+    racecheck.first.access.memorySpace = NpusanReportMemorySpace::UB;
     racecheck.first.access.address = 0x2000;
     racecheck.first.exec.blockId = 8;
     racecheck.first.exec.phyCoreId = 0;
@@ -1150,12 +1199,12 @@ TEST(ReportRendererTest, RendersStructuredReportsFromEachCheckerStruct)
     racecheck.currentValue = 0xab;
 
     NpusanSynccheckReport synccheck =
-        MakePairingReport(NpusanSyncMismatchReason::kUnmatchedClose, NpusanSyncPairKind::kSetWaitFlag);
+        MakePairingReport(NpusanSyncMismatchReason::UNMATCHED_CLOSE, NpusanSyncPairKind::SET_WAIT_FLAG);
 
     NpusanSoccheckReport soccheck{};
-    soccheck.common.tool = ReportTool::kSoccheck;
-    soccheck.common.pattern = static_cast<std::uint32_t>(NpusanSoccheckPattern::kRegisterMismatch);
-    soccheck.common.severity = ReportSeverity::kFatal;
+    soccheck.common.tool = ReportTool::SOCCHECK;
+    soccheck.common.pattern = static_cast<std::uint32_t>(NpusanSoccheckPattern::REGISTER_MISMATCH);
+    soccheck.common.severity = ReportSeverity::FATAL;
     soccheck.common.exec.function = "soc_kernel";
     soccheck.common.exec.offset = 0x4;
     soccheck.common.exec.file = "soc.cpp";
@@ -1193,50 +1242,50 @@ TEST(ReportRendererTest, RendersAllStructuredPatternTemplates)
     std::string rendered;
 
     for (const auto pattern :
-         {NpusanMemcheckPattern::kInvalidAccess, NpusanMemcheckPattern::kMisalignedAccess,
-          NpusanMemcheckPattern::kUseAfterFree, NpusanMemcheckPattern::kUseBeforeAlloc,
-          NpusanMemcheckPattern::kInvalidFree, NpusanMemcheckPattern::kDoubleFree, NpusanMemcheckPattern::kLeak,
-          NpusanMemcheckPattern::kApiError}) {
+         {NpusanMemcheckPattern::INVALID_ACCESS, NpusanMemcheckPattern::MISALIGNED_ACCESS,
+          NpusanMemcheckPattern::USE_AFTER_FREE, NpusanMemcheckPattern::USE_BEFORE_ALLOC,
+          NpusanMemcheckPattern::INVALID_FREE, NpusanMemcheckPattern::DOUBLE_FREE, NpusanMemcheckPattern::LEAK,
+          NpusanMemcheckPattern::API_ERROR}) {
         NpusanMemcheckReport report{};
-        report.common.tool = ReportTool::kMemcheck;
+        report.common.tool = ReportTool::MEMCHECK;
         report.common.pattern = static_cast<std::uint32_t>(pattern);
-        report.common.severity = ReportSeverity::kError;
+        report.common.severity = ReportSeverity::ERROR;
         EXPECT_EQ(
             aclsan::cann::RenderNpusanReportRecord(NpusanReportRecord::From(report), {}, &rendered),
             ReportRenderStatus::kSuccess);
     }
 
     for (const auto pattern :
-         {NpusanInitcheckPattern::kUninitializedRead, NpusanInitcheckPattern::kPartialUninitializedRead,
-          NpusanInitcheckPattern::kUnusedMemory, NpusanInitcheckPattern::kApiReadUninitialized}) {
+         {NpusanInitcheckPattern::UNINITIALIZED_READ, NpusanInitcheckPattern::PARTIAL_UNINITIALIZED_READ,
+          NpusanInitcheckPattern::UNUSED_MEMORY, NpusanInitcheckPattern::API_READ_UNINITIALIZED}) {
         NpusanInitcheckReport report{};
-        report.common.tool = ReportTool::kInitcheck;
+        report.common.tool = ReportTool::INITCHECK;
         report.common.pattern = static_cast<std::uint32_t>(pattern);
-        report.common.severity = ReportSeverity::kError;
+        report.common.severity = ReportSeverity::ERROR;
         EXPECT_EQ(
             aclsan::cann::RenderNpusanReportRecord(NpusanReportRecord::From(report), {}, &rendered),
             ReportRenderStatus::kSuccess);
     }
 
     for (const auto pattern :
-         {NpusanRacecheckPattern::kAnalysis, NpusanRacecheckPattern::kHazardRaw, NpusanRacecheckPattern::kHazardWar,
-          NpusanRacecheckPattern::kHazardWaw, NpusanRacecheckPattern::kAtomicRace,
-          NpusanRacecheckPattern::kCrossPipeRace, NpusanRacecheckPattern::kInterCoreRace,
-          NpusanRacecheckPattern::kInvalidRemoteAccess}) {
+         {NpusanRacecheckPattern::ANALYSIS, NpusanRacecheckPattern::HAZARD_RAW, NpusanRacecheckPattern::HAZARD_WAR,
+          NpusanRacecheckPattern::HAZARD_WAW, NpusanRacecheckPattern::ATOMIC_RACE,
+          NpusanRacecheckPattern::CROSS_PIPE_RACE, NpusanRacecheckPattern::INTER_CORE_RACE,
+          NpusanRacecheckPattern::INVALID_REMOTE_ACCESS}) {
         NpusanRacecheckReport report{};
-        report.common.tool = ReportTool::kRacecheck;
+        report.common.tool = ReportTool::RACECHECK;
         report.common.pattern = static_cast<std::uint32_t>(pattern);
-        report.common.severity = ReportSeverity::kWarning;
+        report.common.severity = ReportSeverity::WARNING;
         EXPECT_EQ(
             aclsan::cann::RenderNpusanReportRecord(NpusanReportRecord::From(report), {}, &rendered),
             ReportRenderStatus::kSuccess);
     }
 
     for (const auto pattern :
-         {NpusanSynccheckPattern::kIntraCoreDivergent, NpusanSynccheckPattern::kInterCoreDivergent,
-          NpusanSynccheckPattern::kInvalidArgument, NpusanSynccheckPattern::kPairingMismatch,
-          NpusanSynccheckPattern::kParticipantMismatch, NpusanSynccheckPattern::kDeadlock,
-          NpusanSynccheckPattern::kObjectNotInitialized, NpusanSynccheckPattern::kInstructionSequenceMismatch}) {
+         {NpusanSynccheckPattern::INTRA_CORE_DIVERGENT, NpusanSynccheckPattern::INTER_CORE_DIVERGENT,
+          NpusanSynccheckPattern::INVALID_ARGUMENT, NpusanSynccheckPattern::PAIRING_MISMATCH,
+          NpusanSynccheckPattern::PARTICIPANT_MISMATCH, NpusanSynccheckPattern::DEADLOCK,
+          NpusanSynccheckPattern::OBJECT_NOT_INITIALIZED, NpusanSynccheckPattern::INSTRUCTION_SEQUENCE_MISMATCH}) {
         NpusanSynccheckReport report = MakeSynccheckReport(pattern);
         EXPECT_EQ(
             aclsan::cann::RenderNpusanReportRecord(NpusanReportRecord::From(report), {}, &rendered),
@@ -1244,13 +1293,13 @@ TEST(ReportRendererTest, RendersAllStructuredPatternTemplates)
     }
 
     for (const auto pattern :
-         {NpusanSoccheckPattern::kUninitializedStateRead, NpusanSoccheckPattern::kRegisterMismatch,
-          NpusanSoccheckPattern::kIllegalStateTransition, NpusanSoccheckPattern::kStateNotRestored,
-          NpusanSoccheckPattern::kCrossCoreStateInconsistent, NpusanSoccheckPattern::kScopeViolation}) {
+         {NpusanSoccheckPattern::UNINITIALIZED_STATE_READ, NpusanSoccheckPattern::REGISTER_MISMATCH,
+          NpusanSoccheckPattern::ILLEGAL_STATE_TRANSITION, NpusanSoccheckPattern::STATE_NOT_RESTORED,
+          NpusanSoccheckPattern::CROSS_CORE_STATE_INCONSISTENT, NpusanSoccheckPattern::SCOPE_VIOLATION}) {
         NpusanSoccheckReport report{};
-        report.common.tool = ReportTool::kSoccheck;
+        report.common.tool = ReportTool::SOCCHECK;
         report.common.pattern = static_cast<std::uint32_t>(pattern);
-        report.common.severity = ReportSeverity::kError;
+        report.common.severity = ReportSeverity::ERROR;
         EXPECT_EQ(
             aclsan::cann::RenderNpusanReportRecord(NpusanReportRecord::From(report), {}, &rendered),
             ReportRenderStatus::kSuccess);

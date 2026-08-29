@@ -31,23 +31,22 @@ using SummaryCounter = std::uint64_t ToolSummary::*;
 const std::map<ReportTemplateKey, SummaryCounter>& SummaryCounters()
 {
     static const std::map<ReportTemplateKey, SummaryCounter> counters = {
-        {{ReportTool::kMemcheck, "leak"}, &ToolSummary::leaks},
-        {{ReportTool::kInitcheck, "unused_memory"}, &ToolSummary::unused},
-        {{ReportTool::kRacecheck, "hazard_raw"}, &ToolSummary::hazards},
-        {{ReportTool::kRacecheck, "hazard_war"}, &ToolSummary::hazards},
-        {{ReportTool::kRacecheck, "hazard_waw"}, &ToolSummary::hazards},
-        {{ReportTool::kRacecheck, "atomic_race"}, &ToolSummary::hazards},
-        {{ReportTool::kRacecheck, "cross_pipe_race"}, &ToolSummary::hazards},
-        {{ReportTool::kRacecheck, "inter_core_race"}, &ToolSummary::hazards},
-        {{ReportTool::kRacecheck, "invalid_remote_access"}, &ToolSummary::hazards},
-        {{ReportTool::kSynccheck, "deadlock"}, &ToolSummary::deadlocks},
+        {{ReportTool::MEMCHECK, "leak"}, &ToolSummary::leaks},
+        {{ReportTool::INITCHECK, "unused_memory"}, &ToolSummary::unused},
+        {{ReportTool::RACECHECK, "hazard_raw"}, &ToolSummary::hazards},
+        {{ReportTool::RACECHECK, "hazard_war"}, &ToolSummary::hazards},
+        {{ReportTool::RACECHECK, "hazard_waw"}, &ToolSummary::hazards},
+        {{ReportTool::RACECHECK, "atomic_race"}, &ToolSummary::hazards},
+        {{ReportTool::RACECHECK, "cross_pipe_race"}, &ToolSummary::hazards},
+        {{ReportTool::RACECHECK, "inter_core_race"}, &ToolSummary::hazards},
+        {{ReportTool::RACECHECK, "invalid_remote_access"}, &ToolSummary::hazards},
+        {{ReportTool::SYNCCHECK, "deadlock"}, &ToolSummary::deadlocks},
     };
     return counters;
 }
 
 constexpr std::array<ReportTool, 5> kReportTools = {
-    ReportTool::kMemcheck,  ReportTool::kInitcheck, ReportTool::kRacecheck,
-    ReportTool::kSynccheck, ReportTool::kSoccheck,
+    ReportTool::MEMCHECK, ReportTool::INITCHECK, ReportTool::RACECHECK, ReportTool::SYNCCHECK, ReportTool::SOCCHECK,
 };
 
 void IncrementPatternMetric(const ReportTemplateKey& key, ToolSummary* summary)
@@ -61,14 +60,14 @@ void IncrementPatternMetric(const ReportTemplateKey& key, ToolSummary* summary)
 void AccumulateSummary(const ReportRecord& record, Summaries* summaries, std::uint64_t* fatalCount)
 {
     ToolSummary& summary = (*summaries)[record.key.tool];
-    if (record.severity == ReportSeverity::kError || record.severity == ReportSeverity::kFatal) {
+    if (record.severity == ReportSeverity::ERROR || record.severity == ReportSeverity::FATAL) {
         ++summary.errors;
-    } else if (record.severity == ReportSeverity::kWarning) {
+    } else if (record.severity == ReportSeverity::WARNING) {
         ++summary.warnings;
-    } else if (record.severity == ReportSeverity::kInfo) {
+    } else if (record.severity == ReportSeverity::INFO) {
         ++summary.infos;
     }
-    if (record.severity == ReportSeverity::kFatal) {
+    if (record.severity == ReportSeverity::FATAL) {
         ++*fatalCount;
     }
     IncrementPatternMetric(record.key, &summary);
@@ -84,52 +83,69 @@ void AppendSeverityCounts(const ToolSummary& summary, std::string* out)
     out->append(" infos");
 }
 
+void AppendToolSummary(ReportTool tool, const ToolSummary& summary, std::string* out)
+{
+    switch (tool) {
+        case ReportTool::MEMCHECK:
+            out->append("========= MEMCHECK SUMMARY: ");
+            AppendSeverityCounts(summary, out);
+            out->append(", ");
+            out->append(std::to_string(summary.leaks));
+            out->append(" leaks\n");
+            return;
+        case ReportTool::INITCHECK:
+            out->append("========= INITCHECK SUMMARY: ");
+            AppendSeverityCounts(summary, out);
+            out->append(", ");
+            out->append(std::to_string(summary.unused));
+            out->append(" unused memory reports\n");
+            return;
+        case ReportTool::RACECHECK:
+            out->append("========= RACECHECK SUMMARY: ");
+            out->append(std::to_string(summary.hazards));
+            out->append(" hazard displayed (");
+            AppendSeverityCounts(summary, out);
+            out->append(")\n");
+            return;
+        case ReportTool::SYNCCHECK:
+            out->append("========= SYNCCHECK SUMMARY: ");
+            AppendSeverityCounts(summary, out);
+            out->append(", ");
+            out->append(std::to_string(summary.deadlocks));
+            out->append(" deadlocks\n");
+            return;
+        case ReportTool::SOCCHECK:
+            out->append("========= SOCCHECK SUMMARY: ");
+            AppendSeverityCounts(summary, out);
+            out->push_back('\n');
+            return;
+    }
+}
+
 void AppendToolSummaries(const Summaries& summaries, std::string* out)
 {
-    const ToolSummary& memcheck = summaries.at(ReportTool::kMemcheck);
-    out->append("========= MEMCHECK SUMMARY: ");
-    AppendSeverityCounts(memcheck, out);
-    out->append(", ");
-    out->append(std::to_string(memcheck.leaks));
-    out->append(" leaks\n");
-
-    const ToolSummary& initcheck = summaries.at(ReportTool::kInitcheck);
-    out->append("========= INITCHECK SUMMARY: ");
-    AppendSeverityCounts(initcheck, out);
-    out->append(", ");
-    out->append(std::to_string(initcheck.unused));
-    out->append(" unused memory reports\n");
-
-    const ToolSummary& racecheck = summaries.at(ReportTool::kRacecheck);
-    out->append("========= RACECHECK SUMMARY: ");
-    out->append(std::to_string(racecheck.hazards));
-    out->append(" hazard displayed (");
-    AppendSeverityCounts(racecheck, out);
-    out->append(")\n");
-
-    const ToolSummary& synccheck = summaries.at(ReportTool::kSynccheck);
-    out->append("========= SYNCCHECK SUMMARY: ");
-    AppendSeverityCounts(synccheck, out);
-    out->append(", ");
-    out->append(std::to_string(synccheck.deadlocks));
-    out->append(" deadlocks\n");
-
-    const ToolSummary& soccheck = summaries.at(ReportTool::kSoccheck);
-    out->append("========= SOCCHECK SUMMARY: ");
-    AppendSeverityCounts(soccheck, out);
-    out->push_back('\n');
+    for (const ReportTool tool : kReportTools) {
+        const auto found = summaries.find(tool);
+        if (found != summaries.end()) {
+            AppendToolSummary(tool, found->second, out);
+        }
+    }
 }
 
 void AppendGlobalSummary(const Summaries& summaries, std::uint64_t fatalCount, std::string* out)
 {
     std::uint64_t totalErrorCount = 0;
-    for (const ReportTool tool : kReportTools) {
-        totalErrorCount += summaries.at(tool).errors;
+    for (const auto& entry : summaries) {
+        totalErrorCount += entry.second.errors;
     }
     out->append("========= ERROR SUMMARY: ");
     out->append(std::to_string(totalErrorCount));
     out->append(" errors\n");
     for (const ReportTool tool : kReportTools) {
+        const auto found = summaries.find(tool);
+        if (found == summaries.end()) {
+            continue;
+        }
         std::string toolName = ReportToolName(tool);
         for (char& ch : toolName) {
             ch = static_cast<char>(std::toupper(static_cast<unsigned char>(ch)));
@@ -137,7 +153,7 @@ void AppendGlobalSummary(const Summaries& summaries, std::uint64_t fatalCount, s
         out->append("=========     ");
         out->append(toolName);
         out->append(": ");
-        out->append(std::to_string(summaries.at(tool).errors));
+        out->append(std::to_string(found->second.errors));
         out->append(" errors\n");
     }
     out->append("=========     FATAL: ");
@@ -150,9 +166,6 @@ void AppendGlobalSummary(const Summaries& summaries, std::uint64_t fatalCount, s
 void AppendReportSummaries(const std::vector<ReportRecord>& records, std::string* out)
 {
     Summaries summaries;
-    for (const ReportTool tool : kReportTools) {
-        summaries.emplace(tool, ToolSummary{});
-    }
     std::uint64_t fatalCount = 0;
     for (const ReportRecord& record : records) {
         AccumulateSummary(record, &summaries, &fatalCount);

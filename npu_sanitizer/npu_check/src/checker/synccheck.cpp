@@ -46,7 +46,7 @@ const char* OperationName(uint32_t syncKind, uint32_t action)
 const char* ExpectedOperation(uint32_t kind, uint32_t reason)
 {
     const bool setWait = kind == ACLSAN_DEVICE_SYNC_KIND_SET_WAIT_FLAG;
-    if (reason == static_cast<uint32_t>(NpusanSyncMismatchReason::kUnmatchedClose)) {
+    if (reason == static_cast<uint32_t>(NpusanSyncMismatchReason::UNMATCHED_CLOSE)) {
         return setWait ? "SET_FLAG" : "GET_BUF";
     }
     return setWait ? "WAIT_FLAG" : "RLS_BUF";
@@ -163,7 +163,7 @@ std::vector<Synccheck::Report> Synccheck::OnDeviceSync(const AclsanDeviceSyncDat
             // set_flag(V, MTE2, 3) -> set_flag(V, MTE2, 3).
             ++stats_.duplicateOpens;
             reports.push_back(
-                BuildMismatch(data, &open->second, static_cast<uint32_t>(NpusanSyncMismatchReason::kDuplicateOpen)));
+                BuildMismatch(data, &open->second, static_cast<uint32_t>(NpusanSyncMismatchReason::DUPLICATE_OPEN)));
         }
     } else if (data.action == ACLSAN_DEVICE_SYNC_ACTION_GET) {
         const BufferOccupancyKey occupancyKey = BuildBufferOccupancyKey(data);
@@ -175,7 +175,7 @@ std::vector<Synccheck::Report> Synccheck::OnDeviceSync(const AclsanDeviceSyncDat
             ++stats_.duplicateOpens;
             const auto& open = state.pending.at(active->second);
             reports.push_back(
-                BuildMismatch(data, &open, static_cast<uint32_t>(NpusanSyncMismatchReason::kDuplicateOpen)));
+                BuildMismatch(data, &open, static_cast<uint32_t>(NpusanSyncMismatchReason::DUPLICATE_OPEN)));
         } else {
             state.pending.emplace(key, data);
             state.activeBuffers.emplace(occupancyKey, key);
@@ -189,7 +189,7 @@ std::vector<Synccheck::Report> Synccheck::OnDeviceSync(const AclsanDeviceSyncDat
             // get_buf(MTE2, 2, 0) -> rls_buf(MTE2, 2, 1).
             ++stats_.unmatchedCloses;
             reports.push_back(
-                BuildMismatch(data, nullptr, static_cast<uint32_t>(NpusanSyncMismatchReason::kUnmatchedClose)));
+                BuildMismatch(data, nullptr, static_cast<uint32_t>(NpusanSyncMismatchReason::UNMATCHED_CLOSE)));
         } else {
             if (data.action == ACLSAN_DEVICE_SYNC_ACTION_RELEASE) {
                 state.activeBuffers.erase(BuildBufferOccupancyKey(data));
@@ -219,7 +219,7 @@ std::vector<Synccheck::Report> Synccheck::OnSynchronization()
         // get_buf(MTE2, 2, 1) -> synchronize.
         ++stats_.unconsumedOpens;
         reports.push_back(
-            BuildMismatch(entry.second, nullptr, static_cast<uint32_t>(NpusanSyncMismatchReason::kUnconsumedOpen)));
+            BuildMismatch(entry.second, nullptr, static_cast<uint32_t>(NpusanSyncMismatchReason::UNCONSUMED_OPEN)));
     }
     launchStates_.erase(state);
     stats_.pendingOpens = 0;
@@ -251,14 +251,14 @@ Synccheck::Report Synccheck::BuildMismatch(
     const AclsanDeviceSyncData& trigger, const AclsanDeviceSyncData* related, uint32_t reason)
 {
     Report report{};
-    report.common.tool = ReportTool::kSynccheck;
-    report.common.severity = ReportSeverity::kError;
-    report.common.pattern = static_cast<uint32_t>(NpusanSynccheckPattern::kPairingMismatch);
+    report.common.tool = ReportTool::SYNCCHECK;
+    report.common.severity = ReportSeverity::ERROR;
+    report.common.pattern = static_cast<std::uint32_t>(NpusanSynccheckPattern::PAIRING_MISMATCH);
     report.common.flags = kNpusanReportCommonHasExecContext;
     report.primitiveKind = trigger.syncKind == ACLSAN_DEVICE_SYNC_KIND_SET_WAIT_FLAG ?
-                               NpusanSyncPrimitiveKind::kSetWaitFlag :
-                               NpusanSyncPrimitiveKind::kGetRlsBuf;
-    report.detailKind = NpusanSyncDetailKind::kPairing;
+                               NpusanSyncPrimitiveKind::SET_WAIT_FLAG :
+                               NpusanSyncPrimitiveKind::GET_RLS_BUF;
+    report.detailKind = NpusanSyncDetailKind::PAIRING;
     report.hasRelatedPoint = true;
     report.triggerPoint = ActualPoint(trigger);
     report.common.exec = report.triggerPoint.exec;
@@ -267,8 +267,9 @@ Synccheck::Report Synccheck::BuildMismatch(
     NpusanSyncPairingError detail{};
     detail.reason = static_cast<NpusanSyncMismatchReason>(reason);
     const SyncPairKey key = BuildExactKey(trigger);
-    detail.key.pairKind = trigger.syncKind == ACLSAN_DEVICE_SYNC_KIND_SET_WAIT_FLAG ? NpusanSyncPairKind::kSetWaitFlag :
-                                                                                      NpusanSyncPairKind::kGetRlsBuf;
+    detail.key.pairKind = trigger.syncKind == ACLSAN_DEVICE_SYNC_KIND_SET_WAIT_FLAG ?
+                              NpusanSyncPairKind::SET_WAIT_FLAG :
+                              NpusanSyncPairKind::GET_RLS_BUF;
     detail.key.srcPipe = key.srcPipe;
     detail.key.dstPipe = key.dstPipe;
     detail.key.mode = key.mode;
