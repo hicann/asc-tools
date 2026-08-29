@@ -70,11 +70,10 @@ int32_t CaptureInstrumentedBinary(const void* data, size_t length, void* userdat
 TEST(DefaultBinaryInstrumentationConfigTest, ReadsRuntimeCompilationEnvironment)
 {
     EnvironmentRestore environment(
-        {"NPU_CHECK_DBI_ARCH", "NPU_CHECK_DBI_ARG_SIZE", "NPU_CHECK_DBI_WORK_DIR", "NPU_CHECK_DBI_CACHE_DIR",
-         "NPU_CHECK_DBI_STRICT", "NPU_CHECK_DBI_KEEP_TEMP", "NPU_CHECK_DBI_COMPILER_ARG_COUNT",
-         "NPU_CHECK_DBI_COMPILER_ARG_0", "NPU_CHECK_DBI_COMPILER_ARG_1"});
+        {"NPU_CHECK_DBI_ARCH", "NPU_CHECK_DBI_WORK_DIR", "NPU_CHECK_DBI_CACHE_DIR", "NPU_CHECK_DBI_STRICT",
+         "NPU_CHECK_DBI_KEEP_TEMP", "NPU_CHECK_DBI_COMPILER_ARG_COUNT", "NPU_CHECK_DBI_COMPILER_ARG_0",
+         "NPU_CHECK_DBI_COMPILER_ARG_1"});
     ASSERT_EQ(setenv("NPU_CHECK_DBI_ARCH", "dav-3510", 1), 0);
-    ASSERT_EQ(setenv("NPU_CHECK_DBI_ARG_SIZE", "24", 1), 0);
     ASSERT_EQ(setenv("NPU_CHECK_DBI_WORK_DIR", "/tmp/npu-check-work", 1), 0);
     ASSERT_EQ(setenv("NPU_CHECK_DBI_CACHE_DIR", "/tmp/npu-check-cache", 1), 0);
     ASSERT_EQ(setenv("NPU_CHECK_DBI_STRICT", "1", 1), 0);
@@ -86,7 +85,6 @@ TEST(DefaultBinaryInstrumentationConfigTest, ReadsRuntimeCompilationEnvironment)
     const BinaryInstrumentationConfig config = DefaultBinaryInstrumentationConfig();
 
     EXPECT_EQ(config.arch, "dav-3510");
-    EXPECT_EQ(config.argSize, 24U);
     EXPECT_EQ(config.workDirectory, "/tmp/npu-check-work");
     EXPECT_EQ(config.cacheDirectory, "/tmp/npu-check-cache");
     EXPECT_TRUE(config.strict);
@@ -203,7 +201,6 @@ protected:
         ASSERT_NE(created, nullptr);
         directory_ = created;
         state_.config.arch = "dav-c220-vec";
-        state_.config.argSize = 64;
         state_.config.probeGroups = {ProbeGroup::Mte2};
         state_.config.workDirectory = directory_;
         state_.config.cacheDirectory = directory_ + "/cache";
@@ -231,6 +228,17 @@ TEST_F(BinaryInstrumenterTest, ReturnsPatchedBytes)
     EXPECT_EQ(state_.runnerCalls, 1);
     EXPECT_EQ(state_.inputContents, original);
     EXPECT_EQ(std::string(result.binary.begin(), result.binary.end()), "patched");
+}
+
+TEST_F(BinaryInstrumenterTest, InstrumentsWithoutKernelArgumentSizeMetadata)
+{
+    const std::string original = "kernel-without-argument-size-metadata";
+
+    const BinaryInstrumentationResult result =
+        InstrumentBinary(state_.config, original.data(), original.size(), &FakePatch, &state_);
+
+    EXPECT_EQ(result.status, BinaryInstrumentationStatus::Instrumented);
+    EXPECT_EQ(state_.runnerCalls, 1);
 }
 
 TEST_F(BinaryInstrumenterTest, SkipsIncompleteConfiguration)
@@ -305,10 +313,8 @@ TEST_F(BinaryInstrumenterTest, ExceptionReturnsFailureAndCleansTemporaryDirector
 
 TEST_F(BinaryInstrumenterTest, RuntimeFacadeConsumesPatchedBytesAcrossAnAbiStableBoundary)
 {
-    EnvironmentRestore environment(
-        {"NPU_CHECK_DBI_ARCH", "NPU_CHECK_DBI_ARG_SIZE", "NPU_CHECK_DBI_PROBE_SET", "NPU_CHECK_DBI_STRICT"});
+    EnvironmentRestore environment({"NPU_CHECK_DBI_ARCH", "NPU_CHECK_DBI_PROBE_SET", "NPU_CHECK_DBI_STRICT"});
     ASSERT_EQ(setenv("NPU_CHECK_DBI_ARCH", "dav-c220-vec", 1), 0);
-    ASSERT_EQ(setenv("NPU_CHECK_DBI_ARG_SIZE", "64", 1), 0);
     ASSERT_EQ(setenv("NPU_CHECK_DBI_STRICT", "1", 1), 0);
     const std::string original = "kernel-data";
     std::vector<uint8_t> consumed;

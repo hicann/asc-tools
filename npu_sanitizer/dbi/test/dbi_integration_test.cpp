@@ -90,7 +90,6 @@ TEST(DbiIntegrationTest, CompilesLinksAndPatchesSelectedProbeSet)
     request.inputKernel = (root / "input.o").string();
     request.outputKernel = (root / "patched.o").string();
     request.arch = "dav-c220";
-    request.argSize = 128;
     request.probeGroups = {ProbeGroup::Mte2};
     request.toolchainRoot = (root / "toolchain").string();
     request.sourceRoot = (root / "sources").string();
@@ -133,6 +132,7 @@ TEST(DbiIntegrationTest, CompilesLinksAndPatchesSelectedProbeSet)
     EXPECT_NE(commands.find("llvm-objdump <--syms>"), std::string::npos) << commands;
     EXPECT_NE(commands.find("<-execute-probe>"), std::string::npos) << commands;
     EXPECT_NE(commands.find("bisheng-tune <--action=instru-probe>"), std::string::npos) << commands;
+    EXPECT_EQ(commands.find("--tune-argsize="), std::string::npos) << commands;
     EXPECT_NE(commands.find("<--dbi-config="), std::string::npos) << commands;
     EXPECT_EQ(CountOccurrences(commands, "bisheng <-xcce>"), 2U) << commands;
     EXPECT_EQ(CountOccurrences(commands, "ld.lld <-r>"), 1U) << commands;
@@ -163,7 +163,6 @@ TEST(DbiIntegrationTest, FailedProbeLinkDoesNotPublishPartialCacheArtifact)
     request.inputKernel = (root / "input.o").string();
     request.outputKernel = (root / "first-patched.o").string();
     request.arch = "dav-c220";
-    request.argSize = 128;
     request.probeGroups = {ProbeGroup::Mte2};
     request.toolchainRoot = (root / "toolchain").string();
     request.sourceRoot = (root / "sources").string();
@@ -209,7 +208,6 @@ TEST(DbiIntegrationTest, DoesNotAcceptStalePatchedOutputWhenTuneCreatesNothing)
     request.inputKernel = (root / "input.o").string();
     request.outputKernel = (root / "patched.o").string();
     request.arch = "dav-c220";
-    request.argSize = 128;
     request.probeGroups = {ProbeGroup::Mte2};
     request.toolchainRoot = (root / "toolchain").string();
     request.sourceRoot = (root / "sources").string();

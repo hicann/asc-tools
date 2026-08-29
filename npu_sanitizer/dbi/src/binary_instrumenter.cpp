@@ -65,7 +65,6 @@ DbiRequest MakeRequest(
     request.inputKernel = input;
     request.outputKernel = output;
     request.arch = config.arch;
-    request.argSize = config.argSize;
     request.probeGroups = config.probeGroups;
     request.toolchainRoot = config.toolchainRoot;
     request.sourceRoot = config.sourceRoot.empty() ? DefaultSourceRoot() : config.sourceRoot;
@@ -119,14 +118,6 @@ BinaryInstrumentationConfig DefaultBinaryInstrumentationConfig()
     config.cacheDirectory = Env("NPU_CHECK_DBI_CACHE_DIR");
     config.strict = Env("NPU_CHECK_DBI_STRICT") == "1";
     config.keepTemp = Env("NPU_CHECK_DBI_KEEP_TEMP") == "1";
-    const std::string argSize = Env("NPU_CHECK_DBI_ARG_SIZE");
-    if (!argSize.empty()) {
-        char* end = nullptr;
-        const unsigned long value = std::strtoul(argSize.c_str(), &end, 10);
-        if (end != argSize.c_str() && *end == '\0' && value <= UINT32_MAX) {
-            config.argSize = static_cast<uint32_t>(value);
-        }
-    }
     const std::string groups = Env("NPU_CHECK_DBI_PROBE_SET");
     if (!groups.empty()) {
         std::istringstream input(groups);
@@ -176,8 +167,7 @@ BinaryInstrumentationResult InstrumentBinary(
     const BinaryInstrumentationConfig& config, const void* data, size_t length, DbiPipelineRunner runner,
     void* runnerData)
 {
-    if (data == nullptr || length == 0 || runner == nullptr || config.arch.empty() || config.argSize == 0 ||
-        config.probeGroups.empty()) {
+    if (data == nullptr || length == 0 || runner == nullptr || config.arch.empty() || config.probeGroups.empty()) {
         return {};
     }
 

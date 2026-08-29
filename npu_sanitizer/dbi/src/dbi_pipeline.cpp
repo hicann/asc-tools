@@ -359,9 +359,6 @@ std::string ValidateRequest(const DbiRequest& request)
     if (request.arch.empty()) {
         return "architecture is empty";
     }
-    if (request.argSize == 0) {
-        return "argument size is zero";
-    }
     if (NormalizeProbeGroups(request.probeGroups).empty()) {
         return "probe set is empty";
     }
@@ -631,7 +628,6 @@ DbiResult RunDbiPipeline(const DbiRequest& request)
     std::vector<std::string> tuneArguments{
         tools.bishengTune,
         "--action=instru-probe",
-        "--tune-argsize=" + std::to_string(request.argSize),
         "--instru-memprobe",
         mergedKernel.string(),
         "--dbi-config=" + ctrlBin.string(),

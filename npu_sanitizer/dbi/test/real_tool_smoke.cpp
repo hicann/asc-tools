@@ -8,23 +8,14 @@
 
 #include "dbi_pipeline.h"
 
-#include <cerrno>
-#include <cstdlib>
 #include <filesystem>
 #include <iostream>
 
 int main(int argc, char** argv)
 {
-    if (argc != 9) {
-        std::cerr << "usage: real_tool_smoke <input> <output> <arch> <arg-size> <toolchain-root> "
-                     "<source-root> <work-dir> <cache-dir>\n";
-        return 2;
-    }
-    char* end = nullptr;
-    errno = 0;
-    const unsigned long parsedArgSize = std::strtoul(argv[4], &end, 10);
-    if (errno != 0 || end == argv[4] || *end != '\0' || parsedArgSize == 0 || parsedArgSize > UINT32_MAX) {
-        std::cerr << "invalid argument size: " << argv[4] << '\n';
+    if (argc != 8) {
+        std::cerr << "usage: real_tool_smoke <input> <output> <arch> <toolchain-root> <source-root> <work-dir> "
+                     "<cache-dir>\n";
         return 2;
     }
 
@@ -32,12 +23,11 @@ int main(int argc, char** argv)
     request.inputKernel = argv[1];
     request.outputKernel = argv[2];
     request.arch = argv[3];
-    request.argSize = static_cast<uint32_t>(parsedArgSize);
     request.probeGroups = {aclsan::ProbeGroup::Mte2};
-    request.toolchainRoot = argv[5];
-    request.sourceRoot = argv[6];
-    request.workDirectory = argv[7];
-    request.cacheDirectory = argv[8];
+    request.toolchainRoot = argv[4];
+    request.sourceRoot = argv[5];
+    request.workDirectory = argv[6];
+    request.cacheDirectory = argv[7];
     request.keepTemp = true;
 
     const auto result = aclsan::RunDbiPipeline(request);

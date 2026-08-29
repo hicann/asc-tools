@@ -94,6 +94,23 @@ void TestCubeAndMultiFieldsUseDecodedDataBits()
     assert(multiResult.data.front().dataBits == multiField.dataBits);
 }
 
+void TestNdDmaFieldUsesDecodedDataBits()
+{
+    aclsan::NdDmaOutToUbufParamField field{};
+    field.dataBits = 16;
+    field.srcAddr = 0x4000;
+    field.loop0Size = 1;
+    field.loop1Size = 1;
+    field.loop2Size = 1;
+    field.loop3Size = 1;
+    field.loop4Size = 1;
+
+    const auto result = aclsan::MemoryFieldToCbdataConverter{{}}.Convert(aclsan::MemoryInstructionField{field});
+    assert(result.status == aclsan::MemoryCbdataStatus::SUCCESS);
+    assert(result.data.size() == 1);
+    assert(result.data.front().dataBits == field.dataBits);
+}
+
 void TestOneFieldCanProduceMultipleCbdataRecords()
 {
     aclsan::FixpipeMemoryField field{};
@@ -152,6 +169,7 @@ int main()
     TestEmptyFieldProducesNoCbdata();
     TestFieldAndContextProduceCbdata();
     TestCubeAndMultiFieldsUseDecodedDataBits();
+    TestNdDmaFieldUsesDecodedDataBits();
     TestOneFieldCanProduceMultipleCbdataRecords();
     TestInvalidFieldIsRejected();
     TestUnsupportedDataBitsIsRejected();

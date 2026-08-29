@@ -42,7 +42,6 @@ execute_process(
   COMMAND "${CMAKE_COMMAND}" -E env
     "DBI_FAKE_LOG=${TEST_ROOT}/commands.log"
     "NPU_CHECK_DBI_ARCH=dav-c220"
-    "NPU_CHECK_DBI_ARG_SIZE=16"
     "NPU_CHECK_DBI_PROBE_SET=mte2,sync"
     "NPU_CHECK_DBI_TOOLCHAIN_ROOT=${TEST_ROOT}/toolchain"
     "NPU_CHECK_DBI_SOURCE_ROOT=${staged_sources}"
@@ -93,6 +92,11 @@ foreach(fragment IN LISTS required_tools)
     message(FATAL_ERROR "missing DBI tool invocation '${fragment}':\n${tool_log}")
   endif()
 endforeach()
+
+string(FIND "${tool_log}" "--tune-argsize=" tune_argsize_position)
+if(NOT tune_argsize_position EQUAL -1)
+  message(FATAL_ERROR "DBI tool invocation unexpectedly configures tune argument size:\n${tool_log}")
+endif()
 
 file(GLOB probe_objects "${TEST_ROOT}/cache/*/probe.o")
 file(GLOB control_files "${TEST_ROOT}/cache/*/ctrl.bin")

@@ -97,7 +97,6 @@ void Callback(void*, AclsanCallbackDomain, AclsanCallbackId, const void*) {}
 int main()
 {
     ScopedEnvironmentVariable dbiArch("NPU_CHECK_DBI_ARCH");
-    ScopedEnvironmentVariable dbiArgSize("NPU_CHECK_DBI_ARG_SIZE");
     ScopedEnvironmentVariable dbiStrict("NPU_CHECK_DBI_STRICT");
     ScopedEnvironmentVariable dbiSourceRoot("NPU_CHECK_DBI_SOURCE_ROOT");
     ScopedEnvironmentVariable probeObject("ACLSAN_PROBE_OBJECT");
@@ -107,7 +106,6 @@ int main()
     ScopedEnvironmentVariable probeArgumentBytes("ACLSAN_PROBE_ARGUMENT_BYTES");
 
     CHECK(dbiArch.Unset() == 0);
-    CHECK(dbiArgSize.Unset() == 0);
     CHECK(dbiStrict.Unset() == 0);
     CHECK(dbiSourceRoot.Set("/missing/dbi-source") == 0);
     CHECK(probeObject.Set("/missing/probe.o") == 0);
@@ -149,7 +147,6 @@ int main()
     CHECK(aclrtBinaryLoadFromData(binary, sizeof(binary), &dataOptions, &dataHandle) == 81);
 
     CHECK(dbiArch.Set("dav-c310") == 0);
-    CHECK(dbiArgSize.Set("24") == 0);
     const int dataCallsBeforeRecursion = g_originalDataCalls;
     g_recurseDataLoad = true;
     CHECK(aclrtBinaryLoadFromData(binary, sizeof(binary), &dataOptions, &dataHandle) == 81);

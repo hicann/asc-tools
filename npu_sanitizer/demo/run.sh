@@ -25,8 +25,8 @@ case "${example_name}" in
         example_work_dir="${demo_dir}"
         asc_architecture="dav-3510"
         ;;
-    add_datacopy_stride_oob)
-        example_target="aclsan_demo_add_datacopy_stride_oob"
+    datacopy_stride)
+        example_target="aclsan_demo_datacopy_stride"
         example_executable="${bin_dir}/${example_target}"
         example_work_dir="${demo_dir}"
         asc_architecture="dav-3510"
@@ -79,7 +79,7 @@ case "${asc_architecture}" in
 esac
 
 if [[ $# -gt 1 ]]; then
-    printf 'usage: %s [add|add_datacopy_stride_oob|padding_register_state|matmul_basic_api|' \
+    printf 'usage: %s [add|datacopy_stride|padding_register_state|matmul_basic_api|' \
         'matmul_leakyrelu_basic_api|synccheck/<sample>]\n' \
         "${BASH_SOURCE[0]}" >&2
     exit 2
@@ -113,7 +113,7 @@ source "${cann_install_dir}/set_env.sh"
 set -u
 cmake_args+=("-DNPUCOMPUTE_CANN_ROOT=${NPUCOMPUTE_CANN_ROOT}")
 cmake "${cmake_args[@]}"
-if [[ "${example_name}" == "add" || "${example_name}" == "add_datacopy_stride_oob" ||
+if [[ "${example_name}" == "add" || "${example_name}" == "datacopy_stride" ||
     "${example_name}" == "padding_register_state" || "${example_name}" == synccheck/* ]]; then
     cmake --build "${build_dir}" --target npu_check_cli "${example_target}" --parallel
 else
@@ -156,7 +156,6 @@ export NPU_SAN_DEBUG=1                       # npu_check的日志开启
 # export NPU_COMPUTE_DEBUG=1                 # lib_acl_tool_injection.so的日志开启
 
 export NPU_CHECK_DBI_ARCH="${dbi_architecture}"
-export NPU_CHECK_DBI_ARG_SIZE=24
 export NPU_CHECK_DBI_TOOLCHAIN_ROOT="${cann_install_dir}"
 export NPU_CHECK_DBI_SOURCE_ROOT="${build_dir}/dbi_runtime_sources"
 export LD_LIBRARY_PATH="${bin_dir}:${cann_lib_dir}${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"

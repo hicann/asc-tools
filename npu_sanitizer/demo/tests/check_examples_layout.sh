@@ -16,9 +16,9 @@ output=$(mktemp)
 trap 'rm -f -- "${output}"' EXIT
 
 test -f "${demo_dir}/examples/add/add.asc"
-test -f "${demo_dir}/examples/add_datacopy_stride_oob/add_datacopy_stride_oob.asc"
-test -f "${demo_dir}/examples/add_datacopy_stride_oob/CMakeLists.txt"
-test -x "${demo_dir}/tests/check_datacopy_stride_oob_end_to_end.sh"
+test -f "${demo_dir}/examples/datacopy_stride/datacopy_stride.asc"
+test -f "${demo_dir}/examples/datacopy_stride/CMakeLists.txt"
+test -x "${demo_dir}/tests/check_datacopy_stride_end_to_end.sh"
 test ! -e "${demo_dir}/examples/test"
 test -x "${demo_dir}/examples/matmul_basic_api/run.sh"
 test -x "${demo_dir}/examples/matmul_leakyrelu_basic_api/run.sh"
@@ -26,8 +26,8 @@ grep -Fq 'matmul_basic_api)' "${demo_dir}/run.sh"
 grep -Fq 'matmul_leakyrelu_basic_api)' "${demo_dir}/run.sh"
 grep -Fq 'aclsan_demo_matmul_basic_api' "${demo_dir}/run.sh"
 grep -Fq 'aclsan_demo_matmul_leakyrelu_basic_api' "${demo_dir}/run.sh"
-grep -Fq 'add_datacopy_stride_oob)' "${demo_dir}/run.sh"
-grep -Fq 'aclsan_demo_add_datacopy_stride_oob' "${demo_dir}/run.sh"
+grep -Fq 'datacopy_stride)' "${demo_dir}/run.sh"
+grep -Fq 'aclsan_demo_datacopy_stride' "${demo_dir}/run.sh"
 grep -Fq 'scripts/verify_result.py' "${demo_dir}/run.sh"
 for example in matmul_basic_api matmul_leakyrelu_basic_api; do
     grep -Fq "add_executable(aclsan_demo_${example}" "${demo_dir}/examples/${example}/CMakeLists.txt"
@@ -52,10 +52,17 @@ if grep -Fq 'examples/test' "${demo_dir}/CMakeLists.txt"; then
 fi
 grep -Fq 'add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/examples/add" examples_add)' "${demo_dir}/CMakeLists.txt"
 grep -Fq \
-    'add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/examples/add_datacopy_stride_oob" examples_add_datacopy_stride_oob)' \
+    'add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/examples/datacopy_stride" examples_datacopy_stride)' \
     "${demo_dir}/CMakeLists.txt"
-grep -Fq 'add_executable(aclsan_demo_add_datacopy_stride_oob' \
-    "${demo_dir}/examples/add_datacopy_stride_oob/CMakeLists.txt"
+grep -Fq 'add_executable(aclsan_demo_datacopy_stride' \
+    "${demo_dir}/examples/datacopy_stride/CMakeLists.txt"
+datacopy_stride_source="${demo_dir}/examples/datacopy_stride/datacopy_stride.asc"
+grep -Fq '#define ACL_CHECK' "${datacopy_stride_source}"
+grep -Fq 'ACL_CHECK(aclInit(nullptr));' "${datacopy_stride_source}"
+if grep -Eq 'RuntimeResources|InitializeRuntimeResources|ReleaseRuntimeResources' "${datacopy_stride_source}"; then
+    printf 'datacopy_stride still hides ACL Runtime calls behind resource helpers\n' >&2
+    exit 1
+fi
 grep -Fq 'example_name=${1:-add}' "${demo_dir}/run.sh"
 grep -Fq 'case "${example_name}" in' "${demo_dir}/run.sh"
 grep -Fq 'add)' "${demo_dir}/run.sh"

@@ -126,6 +126,7 @@ uint64_t AllocateLaunchId()
     return id;
 }
 
+// 为已经DBI插桩的kernel扩展HostArgs，在原始参数中插入隐藏的device trace buffer指针
 aclError ExpandArguments(
     const void* hostArgs, size_t argsSize, const aclrtPlaceHolderInfo* placeholders, size_t placeholderCount,
     PreparedTraceLaunch& prepared, size_t& insertionOffset)
@@ -150,11 +151,7 @@ aclError ExpandArguments(
         insertionOffset = (argsSize + 7U) & ~static_cast<size_t>(7U);
     }
 
-    uint32_t configuredOffset = 0;
-    if (!ParsePositiveUint32("NPU_CHECK_DBI_ARG_SIZE", configuredOffset) || configuredOffset != insertionOffset ||
-        insertionOffset > std::numeric_limits<size_t>::max() - sizeof(void*)) {
-        ASC_SAN_ERROR(
-            "acl_san trace: HostArgs insertion offset %zu does not match NPU_CHECK_DBI_ARG_SIZE", insertionOffset);
+    if (insertionOffset > std::numeric_limits<size_t>::max() - sizeof(void*)) {
         return ACL_ERROR_INVALID_PARAM;
     }
 

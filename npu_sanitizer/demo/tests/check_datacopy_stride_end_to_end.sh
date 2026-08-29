@@ -16,7 +16,7 @@ output=$(mktemp)
 trap 'status=$?; if [[ ${status} -ne 0 ]]; then cat "${output}" >&2; fi; rm -f -- "${output}"' EXIT
 
 set +e
-bash "${demo_dir}/run.sh" add_datacopy_stride_oob >"${output}" 2>&1
+bash "${demo_dir}/run.sh" datacopy_stride >"${output}" 2>&1
 run_status=$?
 set -e
 
@@ -26,13 +26,20 @@ if [[ ${run_status} -ne 2 ]]; then
 fi
 
 grep -F 'npu_check: handshake=ready tool=memcheck' "${output}"
-grep -E '\[raw\] type=AscsanRawTraceRecord .*instrId=86 ' "${output}"
+grep -E '\[raw\] type=AclsanRawTraceRecord .*instrId=86 ' "${output}"
 grep -E '\[param\] type=CopyGmToUbufAlignV2ParamField .*burstNum=3 burstLen=32 .*burstSrcStride=48' "${output}"
-grep -F '[cbdata] layout=block_repeat blockNum=3 blockSize=32 blockStride=48 repeatTimes=1 repeatStride=0' \
+grep -F '[cbdata] layout=block_repeat blockNum=1 blockSize=32 blockStride=0 repeatTimes=3 repeatStride=48' \
     "${output}"
-grep -F 'Invalid GM read of size 32 bytes' "${output}"
-grep -F '16 bytes after the nearest allocation' "${output}"
-grep -E 'npu_check: SUMMARY .*errors=1' "${output}"
+test "$(grep -Fc 'Invalid GM read of size 32 bytes' "${output}")" -eq 4
+test "$(grep -Fc '16 bytes after the nearest allocation' "${output}")" -eq 4
+test "$(grep -Ec '^=========       #3 DataCopyStrideSingleInput at ' "${output}")" -eq 1
+test "$(grep -Ec '^=========       #3 DataCopyStrideDualInput at ' "${output}")" -eq 3
+test "$(grep -Ec '^=========     by aicore .* type \(AIC\)' "${output}")" -eq 1
+test "$(grep -Ec '^=========     by aicore .* type \(AIV\)' "${output}")" -eq 3
+grep -F 'DataCopyStrideSingleInput' "${output}"
+grep -F 'DataCopyStrideDualInput' "${output}"
+grep -E 'npu_check: SUMMARY .*errors=4' "${output}"
 grep -F 'npu_check: SESSION_END status=complete' "${output}"
 grep -F 'npu_check: child_exit=0 handshake=ready session_end=complete' "${output}"
-grep -F 'non-contiguous DataCopy kernel completed' "${output}"
+grep -F 'DataCopyStrideSingleInput completed' "${output}"
+grep -F 'DataCopyStrideDualInput completed' "${output}"

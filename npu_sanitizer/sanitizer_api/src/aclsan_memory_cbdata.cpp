@@ -121,21 +121,8 @@ public:
 
     static std::optional<MemoryInstructionProfile> Create(const NdDmaOutToUbufParamField& field) noexcept
     {
-        uint32_t dataBits = 0;
-        switch (static_cast<InstructionId>(field.instrId)) {
-            case InstructionId::NdDmaOutToUbufB8:
-                dataBits = 8;
-                break;
-            case InstructionId::NdDmaOutToUbufB16:
-                dataBits = 16;
-                break;
-            case InstructionId::NdDmaOutToUbufB32:
-                dataBits = 32;
-                break;
-            default:
-                return std::nullopt;
-        }
-        if (field.dataBits != dataBits) {
+        const uint32_t dataBits = field.dataBits;
+        if (!IsSupportedReadDataBits(dataBits)) {
             return std::nullopt;
         }
         return MemoryInstructionProfile{dataBits, ACLSAN_DEVICE_SOURCE_MTE2, kBlockTypeAiv};

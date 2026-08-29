@@ -41,7 +41,6 @@ struct DbiRequest {
     std::string inputKernel;
     std::string outputKernel;
     std::string arch;
-    uint32_t argSize = 0;
     std::vector<ProbeGroup> probeGroups;
     std::string toolchainRoot;
     std::string sourceRoot;

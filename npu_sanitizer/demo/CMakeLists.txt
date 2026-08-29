@@ -47,5 +47,5 @@ add_dependencies(npu_check_cli npu_check)
 
 add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/examples/add" examples_add)
 add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/examples/synccheck" examples_synccheck)
-add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/examples/add_datacopy_stride_oob" examples_add_datacopy_stride_oob)
+add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/examples/datacopy_stride" examples_datacopy_stride)
 add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/examples/padding_register_state" examples_padding_register_state)

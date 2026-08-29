@@ -276,7 +276,6 @@ void Callback(void*, AclsanCallbackDomain domain, AclsanCallbackId id, const voi
 
 int main()
 {
-    setenv("NPU_CHECK_DBI_ARG_SIZE", "16", 1);
     setenv("NPU_CHECK_TRACE_RECORDS_PER_BLOCK", "2", 1);
     CHECK(RuntimeStubSetOriginFunction("aclrtMalloc", &OriginalMalloc) == ACL_SUCCESS);
     CHECK(RuntimeStubSetOriginFunction("aclrtFree", &OriginalFree) == ACL_SUCCESS);
@@ -419,7 +418,7 @@ int main()
     g_vectorCoreCount = 72;
     CHECK(g_mallocCalls == mallocCallsBeforeInvalidTopology);
 
-    setenv("NPU_CHECK_DBI_ARG_SIZE", "8", 1);
+    aclsanTestMarkInstrumentedFunction(function);
     g_expectedHiddenOffset = 8;
     g_expectedPlaceholderDataOffset = 16;
     aclrtPlaceHolderInfo placeholder{0, 8};
@@ -438,7 +437,6 @@ int main()
     CHECK(g_mallocCalls == g_freeCalls);
 
     CHECK(aclsanUnsubscribe(subscriber) == ACLSAN_STATUS_SUCCESS);
-    unsetenv("NPU_CHECK_DBI_ARG_SIZE");
     unsetenv("NPU_CHECK_TRACE_RECORDS_PER_BLOCK");
     return 0;
 }

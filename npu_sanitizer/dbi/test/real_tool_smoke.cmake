@@ -9,7 +9,6 @@ execute_process(
     "${INPUT_KERNEL}"
     "${OUTPUT_KERNEL}"
     "${ARCH}"
-    "${ARG_SIZE}"
     "${TOOLCHAIN_ROOT}"
     "${SOURCE_ROOT}"
     "${WORK_DIRECTORY}"

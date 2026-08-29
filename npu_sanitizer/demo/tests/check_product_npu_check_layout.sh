@@ -51,7 +51,6 @@ if grep -Fq 'export NPU_CHECK_DBI_ARCH="${asc_architecture}"' "${demo_dir}/run.s
     printf 'demo runner passes the ASC architecture directly to the DBI compiler\n' >&2
     exit 1
 fi
-grep -Fq 'export NPU_CHECK_DBI_ARG_SIZE=24' "${demo_dir}/run.sh"
 grep -Fq 'export NPU_CHECK_DBI_TOOLCHAIN_ROOT="${cann_install_dir}"' "${demo_dir}/run.sh"
 grep -Fq 'export NPU_CHECK_DBI_SOURCE_ROOT="${build_dir}/dbi_runtime_sources"' "${demo_dir}/run.sh"
 rg -U -Fq '"${bin_dir}/npu_check" --tool "${example_tool}" --strict --keep-temp \

@@ -19,7 +19,6 @@ namespace aclsan {
 
 struct BinaryInstrumentationConfig {
     std::string arch;
-    uint32_t argSize = 0;
     std::vector<ProbeGroup> probeGroups;
     std::string toolchainRoot;
     std::string sourceRoot;
