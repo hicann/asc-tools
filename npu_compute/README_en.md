@@ -99,10 +99,11 @@ in the current directory:
 report_<epoch_ms>_<8-lowercase-hex-digits>.npu-rep
 ```
 
-For an Import command, `--export` instead selects the output directory. The
-directory must not already exist. Without `--export`, the CLI removes
-`.npu-rep`, `.npu.rep`, or `.rep` from the input file name and creates that
-directory under the current directory.
+For an Import command, `--export` selects an existing directory. Each import
+creates a unique result subdirectory in that directory. Without `--export`,
+the CLI creates a unique result subdirectory in the current directory. The
+result directory name has the format
+`npu-compute-import-<milliseconds>-<process-id>-<random-suffix>`.
 
 Examples:
 
@@ -114,10 +115,11 @@ npu-compute --section PipeUtilization ./application
 npu-compute --section PipeUtilization \
   --export result.npu-rep ./application
 
-# Import: restore files to ./result/.
+# Import: create a unique result directory in the current directory.
 npu-compute --import result.npu-rep
 
-# Import: restore files to the specified new directory.
+# Import: create a unique result directory in an existing directory.
+mkdir restored-results
 npu-compute --import result.npu-rep --export restored-results
 ```
 
@@ -151,12 +153,12 @@ or `libnpu-compute.so`. The CLI validates the outer REP and every nested REP,
 then restores leaf payloads without changing their bytes. A nested
 `<name>.npu.rep` or `<name>.rep` entry becomes the directory `<name>`.
 
-Import first writes into a private temporary directory beside the requested
-destination. Leaf files are created exclusively without following symbolic
-links and are synchronized before close. The complete directory is then
-published with a no-replace rename. Existing output paths are never
-overwritten, and a failed Import does not publish a partial final directory.
-A successful Import prints:
+Import first writes into a private temporary directory in the parent directory
+of the result subdirectory. Leaf files are created exclusively without
+following symbolic links and are synchronized before close. The complete
+directory is then published as the result subdirectory with a no-replace
+rename. Existing files are never overwritten, and a failed Import does not
+publish a partial result directory. A successful Import prints:
 
 ```text
 npu-compute: unpacked=<absolute-output-directory>

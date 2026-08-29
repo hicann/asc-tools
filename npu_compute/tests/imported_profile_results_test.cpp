@@ -395,6 +395,31 @@ bool HasRuntimeCollectionOutput(const std::string& standardError)
            standardError.find("[aclpti]") != std::string::npos;
 }
 
+bool ExtractUnpackedPath(const ProcessResult& result, std::filesystem::path* output)
+{
+    constexpr char kPrefix[] = "npu-compute: unpacked=";
+    const std::size_t begin = result.standard_error.find(kPrefix);
+    if (begin == std::string::npos || result.standard_error.find(kPrefix, begin + 1U) != std::string::npos) {
+        return false;
+    }
+    const std::size_t pathBegin = begin + sizeof(kPrefix) - 1U;
+    const std::size_t end = result.standard_error.find('\n', pathBegin);
+    *output = result.standard_error.substr(pathBegin, end - pathBegin);
+    return output->is_absolute();
+}
+
+bool HasTemporaryImportDirectory(const std::filesystem::path& outputRoot)
+{
+    constexpr char kPrefix[] = ".npu-compute-import-";
+    for (const std::filesystem::directory_entry& entry : std::filesystem::directory_iterator(outputRoot)) {
+        const std::string name = entry.path().filename().string();
+        if (name.compare(0, sizeof(kPrefix) - 1U, kPrefix) == 0) {
+            return true;
+        }
+    }
+    return false;
+}
+
 int TestCliImportUnpacksResults(const std::filesystem::path& cli)
 {
     TempDirectory temporary;
@@ -409,36 +434,41 @@ int TestCliImportUnpacksResults(const std::filesystem::path& cli)
     const std::filesystem::path input = temporary.Path() / "input.npu-rep";
     CHECK(WriteFile(input, encoded));
 
-    const std::filesystem::path defaultOutput = work / "input";
     ProcessResult defaultResult;
     CHECK(RunCli(cli, {"--import", input.string()}, runtime_tmp, work, &defaultResult));
     CHECK(defaultResult.exit_code == 0);
-    CHECK(defaultResult.standard_error.find("unpacked=" + defaultOutput.string()) != std::string::npos);
+    std::filesystem::path defaultOutput;
+    CHECK(ExtractUnpackedPath(defaultResult, &defaultOutput));
+    CHECK(defaultOutput.parent_path() == work);
     CHECK(!HasRuntimeCollectionOutput(defaultResult.standard_error));
     CHECK(SameDirectoryTrees(fixture, defaultOutput));
     CHECK(std::filesystem::is_empty(runtime_tmp));
 
-    const std::filesystem::path explicitOutput = temporary.Path() / "exported";
-    ProcessResult explicitResult;
-    CHECK(RunCli(
-        cli, {"--import", input.string(), "--export", explicitOutput.string()}, runtime_tmp, work, &explicitResult));
-    CHECK(explicitResult.exit_code == 0);
-    CHECK(explicitResult.standard_error.find("unpacked=" + explicitOutput.string()) != std::string::npos);
-    CHECK(!HasRuntimeCollectionOutput(explicitResult.standard_error));
-    CHECK(SameDirectoryTrees(fixture, explicitOutput));
+    const std::filesystem::path outputRoot = temporary.Path() / "exported";
+    CHECK(std::filesystem::create_directory(outputRoot));
+    CHECK(WriteFile(outputRoot / "keep.txt", Bytes("keep")));
+    ProcessResult firstResult;
+    CHECK(RunCli(cli, {"--import", input.string(), "--export", outputRoot.string()}, runtime_tmp, work, &firstResult));
+    CHECK(firstResult.exit_code == 0);
+    std::filesystem::path firstOutput;
+    CHECK(ExtractUnpackedPath(firstResult, &firstOutput));
+    CHECK(firstOutput.parent_path() == outputRoot);
+    CHECK(!HasRuntimeCollectionOutput(firstResult.standard_error));
+    CHECK(SameDirectoryTrees(fixture, firstOutput));
     CHECK(std::filesystem::is_empty(runtime_tmp));
 
-    const std::filesystem::path existingOutput = temporary.Path() / "existing";
-    CHECK(std::filesystem::create_directory(existingOutput));
-    CHECK(WriteFile(existingOutput / "keep.txt", Bytes("keep")));
-    ProcessResult existingResult;
-    CHECK(RunCli(
-        cli, {"--import", input.string(), "--export", existingOutput.string()}, runtime_tmp, work, &existingResult));
-    CHECK(existingResult.exit_code == 4);
-    CHECK(existingResult.standard_error.find("already exists") != std::string::npos);
+    ProcessResult secondResult;
+    CHECK(RunCli(cli, {"--import", input.string(), "--export", outputRoot.string()}, runtime_tmp, work, &secondResult));
+    CHECK(secondResult.exit_code == 0);
+    std::filesystem::path secondOutput;
+    CHECK(ExtractUnpackedPath(secondResult, &secondOutput));
+    CHECK(secondOutput.parent_path() == outputRoot);
+    CHECK(firstOutput != secondOutput);
+    CHECK(SameDirectoryTrees(fixture, secondOutput));
     std::vector<uint8_t> actual;
-    CHECK(ReadFile(existingOutput / "keep.txt", &actual));
+    CHECK(ReadFile(outputRoot / "keep.txt", &actual));
     CHECK(actual == Bytes("keep"));
+    CHECK(!HasTemporaryImportDirectory(outputRoot));
 
     const std::filesystem::path invalid = temporary.Path() / "invalid.npu-rep";
     CHECK(WriteFile(invalid, Bytes("invalid")));
@@ -446,12 +476,28 @@ int TestCliImportUnpacksResults(const std::filesystem::path& cli)
     CHECK(RunCli(cli, {"--import", invalid.string()}, runtime_tmp, work, &invalidResult));
     CHECK(invalidResult.exit_code == 4);
     CHECK(invalidResult.standard_error.find("invalid") != std::string::npos);
-    CHECK(!std::filesystem::exists(work / "invalid"));
+    CHECK(!HasTemporaryImportDirectory(work));
+
+    const std::filesystem::path missingRoot = temporary.Path() / "missing-output-root";
+    ProcessResult missingRootResult;
+    CHECK(RunCli(
+        cli, {"--import", input.string(), "--export", missingRoot.string()}, runtime_tmp, work, &missingRootResult));
+    CHECK(missingRootResult.exit_code == 4);
+    CHECK(missingRootResult.standard_error.find("does not exist") != std::string::npos);
+    CHECK(!std::filesystem::exists(missingRoot));
+
+    const std::filesystem::path regularFile = temporary.Path() / "regular-file";
+    CHECK(WriteFile(regularFile, Bytes("keep")));
+    ProcessResult regularFileResult;
+    CHECK(RunCli(
+        cli, {"--import", input.string(), "--export", regularFile.string()}, runtime_tmp, work, &regularFileResult));
+    CHECK(regularFileResult.exit_code == 4);
+    CHECK(regularFileResult.standard_error.find("not a directory") != std::string::npos);
+    CHECK(ReadFile(regularFile, &actual));
+    CHECK(actual == Bytes("keep"));
 
     ProcessResult writeFailure;
-    CHECK(RunCli(
-        cli, {"--import", input.string(), "--export", "/proc/npu-compute-import-forbidden"}, runtime_tmp, work,
-        &writeFailure));
+    CHECK(RunCli(cli, {"--import", input.string(), "--export", "/proc"}, runtime_tmp, work, &writeFailure));
     CHECK(writeFailure.exit_code == 4);
     CHECK(writeFailure.standard_error.find("create import temporary directory failed") != std::string::npos);
     CHECK(std::filesystem::is_empty(runtime_tmp));

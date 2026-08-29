@@ -151,6 +151,33 @@ def assert_no_temporary_report_files(work_directory: Path):
     assert list(work_directory.glob(".*.npu-rep.tmp.*")) == []
 
 
+def assert_import_output_directory(path: Path, output_root: Path):
+    assert path.is_absolute() and path.is_dir()
+    assert path.parent == output_root.resolve()
+    assert re.fullmatch(r"npu-compute-import-[0-9]+-[0-9]+-[A-Za-z0-9]{6}", path.name)
+
+
+def assert_imported_fixture_files(output: Path):
+    files = sorted(
+        path.relative_to(output).as_posix()
+        for path in output.rglob("*")
+        if path.is_file()
+    )
+    assert files == [
+        "HardwareInfo.jsonl",
+        "PipeUtilization.csv",
+        "device_0/Memory.csv",
+        "device_0/details/L2Cache.csv",
+    ]
+    assert (output / "HardwareInfo.jsonl").read_bytes() == HARDWARE_INFO
+    assert (output / "PipeUtilization.csv").read_bytes() == PIPE_CSV
+    assert (output / "device_0" / "Memory.csv").read_bytes() == MEMORY_CSV
+    assert (
+        output / "device_0" / "details" / "L2Cache.csv"
+    ).read_bytes() == L2_CACHE_CSV
+    assert not (output / ".hardware_info.lock").exists()
+
+
 def test_cli_recursively_packages_fixture_files(tmp_path):
     result, work_directory = run_fixture(tmp_path)
 
@@ -237,12 +264,24 @@ def test_cli_import_recursively_restores_report_files(tmp_path):
 
     assert result.returncode == 0, result.stderr
     report = extract_path(result.stderr, "report")
-    output = tmp_path / "unpacked"
+    output_root = tmp_path / "unpacked"
+    output_root.mkdir()
+    keep = output_root / "keep.txt"
+    keep.write_bytes(b"keep")
     environment = os.environ.copy()
     environment["TMPDIR"] = str(tmp_path / "missing-import-tmp")
     environment["ACL_API_INJECTION"] = "/npu-compute-import-must-not-load.so"
-    imported = subprocess.run(
-        [str(CLI), "--import", str(report), "--export", str(output)],
+    command = [str(CLI), "--import", str(report), "--export", str(output_root)]
+    first_import = subprocess.run(
+        command,
+        cwd=work_directory,
+        env=environment,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    second_import = subprocess.run(
+        command,
         cwd=work_directory,
         env=environment,
         text=True,
@@ -250,30 +289,23 @@ def test_cli_import_recursively_restores_report_files(tmp_path):
         check=False,
     )
 
-    assert imported.returncode == 0, imported.stderr
-    assert extract_path(imported.stderr, "unpacked") == output
-    assert "npu-compute: data-directory=" not in imported.stderr
-    assert "npu-compute: report=" not in imported.stderr
-    assert "[prof_api_stub]" not in imported.stderr
-    assert "[aclpti]" not in imported.stderr
-    files = sorted(
-        path.relative_to(output).as_posix()
-        for path in output.rglob("*")
-        if path.is_file()
-    )
-    assert files == [
-        "HardwareInfo.jsonl",
-        "PipeUtilization.csv",
-        "device_0/Memory.csv",
-        "device_0/details/L2Cache.csv",
-    ]
-    assert (output / "HardwareInfo.jsonl").read_bytes() == HARDWARE_INFO
-    assert (output / "PipeUtilization.csv").read_bytes() == PIPE_CSV
-    assert (output / "device_0" / "Memory.csv").read_bytes() == MEMORY_CSV
-    assert (
-        output / "device_0" / "details" / "L2Cache.csv"
-    ).read_bytes() == L2_CACHE_CSV
-    assert not (output / ".hardware_info.lock").exists()
+    assert first_import.returncode == 0, first_import.stderr
+    assert second_import.returncode == 0, second_import.stderr
+    first_output = extract_path(first_import.stderr, "unpacked")
+    second_output = extract_path(second_import.stderr, "unpacked")
+    assert first_output != second_output
+    for imported, output in (
+        (first_import, first_output),
+        (second_import, second_output),
+    ):
+        assert_import_output_directory(output, output_root)
+        assert "npu-compute: data-directory=" not in imported.stderr
+        assert "npu-compute: report=" not in imported.stderr
+        assert "[prof_api_stub]" not in imported.stderr
+        assert "[aclpti]" not in imported.stderr
+        assert_imported_fixture_files(output)
+    assert keep.read_bytes() == b"keep"
+    assert list(output_root.glob(".npu-compute-import-*")) == []
 
 
 def test_failed_app_does_not_publish_report(tmp_path):

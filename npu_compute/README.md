@@ -91,9 +91,9 @@ npu-compute [options] [program] [program-arguments]
 report_<epoch_ms>_<8-lowercase-hex-digits>.npu-rep
 ```
 
-对于导入命令，`--export` 用于指定输出目录。该目录必须不存在。未指定
-`--export` 时，CLI 从输入文件名中移除 `.npu-rep`、`.npu.rep` 或 `.rep`
-后缀，并在当前目录下创建对应目录。
+对于导入命令，`--export` 用于指定已有目录。每次导入都会在该目录中创建唯一的
+结果子目录。未指定 `--export` 时，CLI 在当前目录中创建唯一的结果子目录。结果目录
+名称格式为 `npu-compute-import-<毫秒时间戳>-<进程 ID>-<随机后缀>`。
 
 示例：
 
@@ -105,10 +105,11 @@ npu-compute --section PipeUtilization ./application
 npu-compute --section PipeUtilization \
   --export result.npu-rep ./application
 
-# 导入：将文件恢复到 ./result/。
+# 导入：在当前目录中创建唯一结果目录。
 npu-compute --import result.npu-rep
 
-# 导入：将文件恢复到指定的新目录。
+# 导入：在指定已有目录中创建唯一结果目录。
+mkdir restored-results
 npu-compute --import result.npu-rep --export restored-results
 ```
 
@@ -137,10 +138,10 @@ npu-compute: report=<absolute-report-path>
 的情况下恢复叶子文件。名为 `<name>.npu.rep` 或 `<name>.rep` 的嵌套条目会
 恢复为 `<name>` 目录。
 
-导入操作首先在请求的目标目录旁创建私有临时目录。叶子文件以独占创建方式创建，
+导入操作首先在结果子目录的父目录中创建私有临时目录。叶子文件以独占创建方式创建，
 目标已存在时失败，同时不跟随符号链接，并在关闭前同步文件。完整目录随后通过不覆盖
-已有目标的重命名操作发布。
-已有输出路径不会被覆盖，导入失败时也不会发布不完整的最终目录。导入成功后输出：
+已有目标的重命名操作发布为结果子目录。已有文件不会被覆盖，导入失败时不会发布
+不完整的结果目录。导入成功后输出：
 
 ```text
 npu-compute: unpacked=<absolute-output-directory>

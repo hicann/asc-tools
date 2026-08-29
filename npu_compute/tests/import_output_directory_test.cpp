@@ -15,6 +15,7 @@
 #include <filesystem>
 #include <fstream>
 #include <optional>
+#include <regex>
 #include <string>
 
 namespace {
@@ -89,6 +90,18 @@ private:
     bool active_ = false;
 };
 
+bool MatchesFinalDirectoryName(const std::filesystem::path& path)
+{
+    const std::string pattern = "^npu-compute-import-[0-9]+-" + std::to_string(::getpid()) + "-[A-Za-z0-9]{6}$";
+    return std::regex_match(path.filename().string(), std::regex(pattern));
+}
+
+bool MatchesTemporaryDirectoryName(const std::filesystem::path& path)
+{
+    const std::string pattern = "^\\.npu-compute-import-[0-9]+-" + std::to_string(::getpid()) + "-tmp-[A-Za-z0-9]{6}$";
+    return std::regex_match(path.filename().string(), std::regex(pattern));
+}
+
 int TestDefaultOutputDirectory()
 {
     TempDirectory temporary;
@@ -101,7 +114,10 @@ int TestDefaultOutputDirectory()
     CHECK(npu_compute::compute_launcher::ImportOutputDirectory::Create(
         "/input/report_demo.npu-rep", std::nullopt, &directory, &error));
     CHECK(error.empty());
-    CHECK(directory.FinalPath() == temporary.Path() / "report_demo");
+    CHECK(directory.FinalPath().parent_path() == temporary.Path());
+    CHECK(directory.TemporaryPath().parent_path() == temporary.Path());
+    CHECK(MatchesFinalDirectoryName(directory.FinalPath()));
+    CHECK(MatchesTemporaryDirectoryName(directory.TemporaryPath()));
     CHECK(std::filesystem::is_directory(directory.TemporaryPath()));
     CHECK(!std::filesystem::exists(directory.FinalPath()));
     return 0;
@@ -120,42 +136,55 @@ std::string ReadFile(const std::filesystem::path& path)
     return std::string(std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>());
 }
 
-int TestExplicitOutputAndPublish()
+int TestExistingOutputRootAndPublish()
 {
     TempDirectory temporary;
     CHECK(!temporary.Path().empty());
     CurrentDirectory currentDirectory(temporary.Path());
     CHECK(currentDirectory.Active());
+    const std::filesystem::path outputRoot = temporary.Path() / "custom-output";
+    CHECK(std::filesystem::create_directory(outputRoot));
+    CHECK(WriteFile(outputRoot / "keep.txt", "keep"));
 
     npu_compute::compute_launcher::ImportOutputDirectory directory;
     std::string error;
     CHECK(npu_compute::compute_launcher::ImportOutputDirectory::Create(
         "/input/report_demo.npu-rep", std::optional<std::string>("custom-output"), &directory, &error));
-    CHECK(directory.FinalPath() == temporary.Path() / "custom-output");
+    CHECK(error.empty());
+    CHECK(directory.FinalPath().parent_path() == outputRoot);
+    CHECK(directory.TemporaryPath().parent_path() == outputRoot);
+    CHECK(MatchesFinalDirectoryName(directory.FinalPath()));
+    CHECK(MatchesTemporaryDirectoryName(directory.TemporaryPath()));
     CHECK(WriteFile(directory.TemporaryPath() / "marker.csv", "name,value\npipe,1\n"));
     CHECK(directory.Publish(&error));
     CHECK(error.empty());
     CHECK(directory.TemporaryPath().empty());
     CHECK(std::filesystem::is_directory(directory.FinalPath()));
     CHECK(ReadFile(directory.FinalPath() / "marker.csv") == "name,value\npipe,1\n");
+    CHECK(ReadFile(outputRoot / "keep.txt") == "keep");
     return 0;
 }
 
-int TestExistingOutputIsRejected()
+int TestCreatesUniqueDirectoriesUnderOneRoot()
 {
     TempDirectory temporary;
     CHECK(!temporary.Path().empty());
-    const std::filesystem::path existing = temporary.Path() / "existing";
-    CHECK(std::filesystem::create_directory(existing));
-    CHECK(WriteFile(existing / "keep.txt", "keep"));
+    const std::filesystem::path outputRoot = temporary.Path() / "output";
+    CHECK(std::filesystem::create_directory(outputRoot));
 
-    npu_compute::compute_launcher::ImportOutputDirectory directory;
+    npu_compute::compute_launcher::ImportOutputDirectory first;
+    npu_compute::compute_launcher::ImportOutputDirectory second;
     std::string error;
-    CHECK(!npu_compute::compute_launcher::ImportOutputDirectory::Create(
-        temporary.Path() / "input.npu-rep", std::optional<std::string>(existing.string()), &directory, &error));
-    CHECK(error.find("already exists") != std::string::npos);
-    CHECK(ReadFile(existing / "keep.txt") == "keep");
-    CHECK(directory.TemporaryPath().empty());
+    CHECK(npu_compute::compute_launcher::ImportOutputDirectory::Create(
+        temporary.Path() / "input.npu-rep", std::optional<std::string>(outputRoot.string()), &first, &error));
+    CHECK(error.empty());
+    CHECK(npu_compute::compute_launcher::ImportOutputDirectory::Create(
+        temporary.Path() / "input.npu-rep", std::optional<std::string>(outputRoot.string()), &second, &error));
+    CHECK(error.empty());
+    CHECK(first.FinalPath().parent_path() == outputRoot);
+    CHECK(second.FinalPath().parent_path() == outputRoot);
+    CHECK(first.FinalPath() != second.FinalPath());
+    CHECK(first.TemporaryPath() != second.TemporaryPath());
     return 0;
 }
 
@@ -163,13 +192,14 @@ int TestTemporaryCleanupAndPublishFailure()
 {
     TempDirectory temporary;
     CHECK(!temporary.Path().empty());
+    const std::filesystem::path outputRoot = temporary.Path() / "output";
+    CHECK(std::filesystem::create_directory(outputRoot));
     std::filesystem::path abandoned;
     {
         npu_compute::compute_launcher::ImportOutputDirectory directory;
         std::string error;
         CHECK(npu_compute::compute_launcher::ImportOutputDirectory::Create(
-            temporary.Path() / "input.npu-rep", std::optional<std::string>((temporary.Path() / "first").string()),
-            &directory, &error));
+            temporary.Path() / "input.npu-rep", std::optional<std::string>(outputRoot.string()), &directory, &error));
         abandoned = directory.TemporaryPath();
         CHECK(std::filesystem::is_directory(abandoned));
     }
@@ -177,10 +207,10 @@ int TestTemporaryCleanupAndPublishFailure()
 
     npu_compute::compute_launcher::ImportOutputDirectory directory;
     std::string error;
-    const std::filesystem::path finalPath = temporary.Path() / "second";
     CHECK(npu_compute::compute_launcher::ImportOutputDirectory::Create(
-        temporary.Path() / "input.npu-rep", std::optional<std::string>(finalPath.string()), &directory, &error));
+        temporary.Path() / "input.npu-rep", std::optional<std::string>(outputRoot.string()), &directory, &error));
     const std::filesystem::path temporaryPath = directory.TemporaryPath();
+    const std::filesystem::path finalPath = directory.FinalPath();
     CHECK(std::filesystem::create_directory(finalPath));
     CHECK(WriteFile(finalPath / "keep.txt", "keep"));
     CHECK(!directory.Publish(&error));
@@ -203,10 +233,16 @@ int TestInvalidTargets()
         "/input/report.unknown", std::nullopt, &directory, &error));
     CHECK(error.find("must end") != std::string::npos);
     CHECK(!npu_compute::compute_launcher::ImportOutputDirectory::Create(
-        "/input/report.npu-rep", std::optional<std::string>("missing/output"), &directory, &error));
-    CHECK(error.find("parent") != std::string::npos);
+        "/input/report.npu-rep", std::optional<std::string>("missing-output-root"), &directory, &error));
+    CHECK(error.find("does not exist") != std::string::npos);
+    const std::filesystem::path regularFile = temporary.Path() / "regular-file";
+    CHECK(WriteFile(regularFile, "keep"));
     CHECK(!npu_compute::compute_launcher::ImportOutputDirectory::Create(
-        "/input/report.npu-rep", std::optional<std::string>("/proc/npu-compute-output"), &directory, &error));
+        "/input/report.npu-rep", std::optional<std::string>(regularFile.string()), &directory, &error));
+    CHECK(error.find("not a directory") != std::string::npos);
+    CHECK(ReadFile(regularFile) == "keep");
+    CHECK(!npu_compute::compute_launcher::ImportOutputDirectory::Create(
+        "/input/report.npu-rep", std::optional<std::string>("/proc"), &directory, &error));
     CHECK(error.find("create import temporary directory") != std::string::npos);
     CHECK(!npu_compute::compute_launcher::ImportOutputDirectory::Create(
         "/input/report.npu-rep", std::nullopt, nullptr, &error));
@@ -218,8 +254,8 @@ int TestInvalidTargets()
 
 int main()
 {
-    if (TestDefaultOutputDirectory() != 0 || TestExplicitOutputAndPublish() != 0 ||
-        TestExistingOutputIsRejected() != 0 || TestTemporaryCleanupAndPublishFailure() != 0 ||
+    if (TestExistingOutputRootAndPublish() != 0 || TestDefaultOutputDirectory() != 0 ||
+        TestCreatesUniqueDirectoriesUnderOneRoot() != 0 || TestTemporaryCleanupAndPublishFailure() != 0 ||
         TestInvalidTargets() != 0) {
         return 1;
     }

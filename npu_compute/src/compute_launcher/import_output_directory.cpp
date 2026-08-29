@@ -15,6 +15,8 @@
 #include <unistd.h>
 
 #include <cerrno>
+#include <chrono>
+#include <cstddef>
 #include <cstring>
 #include <string>
 #include <system_error>
@@ -26,6 +28,8 @@ namespace {
 constexpr char kNpuRepSuffix[] = ".npu-rep";
 constexpr char kNestedNpuRepSuffix[] = ".npu.rep";
 constexpr char kRepSuffix[] = ".rep";
+constexpr std::size_t kMaximumNameAttempts = 128U;
+constexpr std::size_t kMkdtempRandomLength = 6U;
 
 bool Fail(const std::string& message, std::string* error)
 {
@@ -75,10 +79,23 @@ bool RemoveSuffix(std::string* name)
     return false;
 }
 
-bool ResolveFinalPath(
-    const std::filesystem::path& inputRep, const std::optional<std::string>& exportPath,
-    std::filesystem::path* finalPath, std::string* error)
+bool ValidateInputName(const std::filesystem::path& inputRep, std::string* error)
 {
+    std::string name = inputRep.filename().string();
+    if (!RemoveSuffix(&name)) {
+        return Fail("import input name must end with .npu-rep, .npu.rep, or .rep", error);
+    }
+    return true;
+}
+
+bool ResolveOutputRoot(
+    const std::filesystem::path& inputRep, const std::optional<std::string>& exportPath,
+    std::filesystem::path* outputRoot, std::string* error)
+{
+    if (!ValidateInputName(inputRep, error)) {
+        return false;
+    }
+
     std::error_code currentPathError;
     const std::filesystem::path currentDirectory = std::filesystem::current_path(currentPathError);
     if (currentPathError) {
@@ -89,49 +106,69 @@ bool ResolveFinalPath(
         if (exportPath->empty()) {
             return Fail("import export path is empty", error);
         }
-        *finalPath = ResolvePath(*exportPath, currentDirectory);
+        *outputRoot = ResolvePath(*exportPath, currentDirectory);
     } else {
-        std::string name = inputRep.filename().string();
-        if (!RemoveSuffix(&name)) {
-            return Fail("import input name must end with .npu-rep, .npu.rep, or .rep", error);
-        }
-        *finalPath = currentDirectory / name;
+        *outputRoot = currentDirectory;
     }
 
-    if (finalPath->filename().empty() || finalPath->filename() == "." || finalPath->filename() == "..") {
-        return Fail("import output directory name is invalid: " + finalPath->string(), error);
-    }
-
-    std::filesystem::file_status parentStatus;
-    if (!ReadStatus(finalPath->parent_path(), &parentStatus, error)) {
+    std::filesystem::file_status outputRootStatus;
+    if (!ReadStatus(*outputRoot, &outputRootStatus, error)) {
         return false;
     }
-    if (!std::filesystem::is_directory(parentStatus)) {
-        return Fail("import output parent is not a directory: " + finalPath->parent_path().string(), error);
+    if (!std::filesystem::exists(outputRootStatus)) {
+        return Fail("import output root does not exist: " + outputRoot->string(), error);
     }
-
-    std::filesystem::file_status finalStatus;
-    if (!ReadStatus(*finalPath, &finalStatus, error)) {
-        return false;
-    }
-    if (std::filesystem::exists(finalStatus)) {
-        return Fail("import output directory already exists: " + finalPath->string(), error);
+    if (!std::filesystem::is_directory(outputRootStatus)) {
+        return Fail("import output root is not a directory: " + outputRoot->string(), error);
     }
     return true;
 }
 
 bool CreateTemporaryDirectory(
-    const std::filesystem::path& finalPath, std::filesystem::path* temporaryPath, std::string* error)
+    const std::filesystem::path& outputRoot, std::filesystem::path* temporaryPath, std::filesystem::path* finalPath,
+    std::string* error)
 {
-    std::string pathTemplate =
-        (finalPath.parent_path() / (".npu-compute-import-" + finalPath.filename().string() + ".tmp.XXXXXX")).string();
-    pathTemplate.push_back('\0');
-    char* created = ::mkdtemp(pathTemplate.data());
-    if (created == nullptr) {
-        return FailErrno("create import temporary directory failed", error);
+    const auto milliseconds =
+        std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch());
+    if (milliseconds.count() < 0) {
+        return Fail("import output directory timestamp is before the Unix epoch", error);
     }
-    *temporaryPath = created;
-    return true;
+
+    const std::string namePrefix =
+        "npu-compute-import-" + std::to_string(milliseconds.count()) + "-" + std::to_string(::getpid()) + "-";
+    for (std::size_t attempt = 0; attempt < kMaximumNameAttempts; ++attempt) {
+        std::string pathTemplate = (outputRoot / ("." + namePrefix + "tmp-XXXXXX")).string();
+        pathTemplate.push_back('\0');
+        char* created = ::mkdtemp(pathTemplate.data());
+        if (created == nullptr) {
+            return FailErrno("create import temporary directory failed", error);
+        }
+
+        const std::filesystem::path createdPath = created;
+        const std::string temporaryName = createdPath.filename().string();
+        const std::string randomSuffix = temporaryName.substr(temporaryName.size() - kMkdtempRandomLength);
+        const std::filesystem::path candidateFinalPath = outputRoot / (namePrefix + randomSuffix);
+        std::filesystem::file_status finalStatus;
+        if (!ReadStatus(candidateFinalPath, &finalStatus, error)) {
+            std::error_code removeError;
+            std::filesystem::remove(createdPath, removeError);
+            return false;
+        }
+        if (!std::filesystem::exists(finalStatus)) {
+            *temporaryPath = createdPath;
+            *finalPath = candidateFinalPath;
+            return true;
+        }
+
+        std::error_code removeError;
+        if (!std::filesystem::remove(createdPath, removeError)) {
+            return Fail(
+                "remove colliding import temporary directory failed: " + createdPath.string() + ": " +
+                    removeError.message(),
+                error);
+        }
+    }
+    return Fail("unable to generate a unique import output directory after 128 attempts", error);
 }
 
 bool SyncDirectory(const std::filesystem::path& directory, std::string* error)
@@ -172,11 +209,11 @@ bool ImportOutputDirectory::Create(
     directory->CleanupTemporaryDirectory();
     directory->finalPath_.clear();
 
-    if (!ResolveFinalPath(inputRep, exportPath, &directory->finalPath_, error)) {
-        directory->finalPath_.clear();
+    std::filesystem::path outputRoot;
+    if (!ResolveOutputRoot(inputRep, exportPath, &outputRoot, error)) {
         return false;
     }
-    if (!CreateTemporaryDirectory(directory->finalPath_, &directory->temporaryPath_, error)) {
+    if (!CreateTemporaryDirectory(outputRoot, &directory->temporaryPath_, &directory->finalPath_, error)) {
         directory->finalPath_.clear();
         return false;
     }
