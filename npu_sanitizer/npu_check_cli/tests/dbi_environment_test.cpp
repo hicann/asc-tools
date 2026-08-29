@@ -47,7 +47,7 @@ private:
 
 TEST(DbiEnvironmentTest, PreservesResolvedSessionConfigurationAndCompilerArguments)
 {
-    ipc::ToolConfig config{};
+    DbiSettings config{};
     config.workDir = "/tmp/session";
     config.probeCacheDir = "/var/tmp/probe-cache";
     config.strict = false;

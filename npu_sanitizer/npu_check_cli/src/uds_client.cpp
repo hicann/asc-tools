@@ -53,8 +53,10 @@ bool UdsClient::ConnectWithRetry(
         return false;
     }
 
+    const ipc::DeadlineMs start = ipc::MonotonicNowMs();
     int backoffMs = kInitialBackoffMs;
     int lastError = ECONNREFUSED;
+    uint64_t attempt = 1;
     while (true) {
         if (ipc::MonotonicNowMs() >= deadline) {
             error = std::string("connect timed out: ") + std::strerror(lastError);
@@ -82,6 +84,8 @@ bool UdsClient::ConnectWithRetry(
             return false;
         }
         if (connect(fd_, reinterpret_cast<const sockaddr*>(&address), addrLen) == 0) {
+            Log("[UDS] phase=connect attempt=" + std::to_string(attempt) +
+                " errno=0 elapsed_ms=" + std::to_string(ipc::MonotonicNowMs() - start));
             return true;
         }
         lastError = errno;
@@ -100,6 +104,7 @@ bool UdsClient::ConnectWithRetry(
         const auto napMs = static_cast<int>(std::min<int64_t>(remain, backoffMs));
         std::this_thread::sleep_for(std::chrono::milliseconds(napMs));
         backoffMs = std::min(backoffMs * 2, kMaxBackoffMs);
+        ++attempt;
     }
 }
 
@@ -138,6 +143,8 @@ bool UdsClient::CheckServerIdentity(uint32_t childPid, ipc::DeadlineMs deadline,
     if (!ipc::DecodeHello(response.payload, hello, error)) {
         return false;
     }
+    // 对端 minor 取自 ServerHello 的帧头，与本实现取较小值。收到更高的 minor 不是错误。
+    negotiatedMinor_ = ipc::NegotiateMinor(response.minor);
     // Hello 里的 pid/uid 必须与 SO_PEERCRED 的结果交叉比对：前者是对端自行声明的，
     // 后者由内核填写。两者不一致说明对端实现有问题或存在冒充，按协议错误断连。
     if (hello.pid != childPid || hello.uid != getuid()) {
@@ -148,18 +155,17 @@ bool UdsClient::CheckServerIdentity(uint32_t childPid, ipc::DeadlineMs deadline,
 }
 
 bool UdsClient::ConnectAndConfigure(
-    const std::string& udsName, uint64_t sessionId, uint32_t childPid, int timeoutMs, const ipc::ToolConfig& config,
-    std::string& ready, std::string& error)
+    const std::string& udsName, uint64_t sessionId, uint32_t childPid, ipc::DeadlineMs deadline,
+    const ipc::ConfigureRequest& configure, std::string& error)
 {
     sessionId_ = sessionId;
     sendSequence_ = 1;
     receiveSequence_ = 1;
 
-    // 全流程唯一的一次换算。从这里往下传的都是同一个绝对时刻，覆盖 connect 重试、
-    // Hello 往返、Configure 发送、Ready 接收的全过程，而不是每步各算一次 —— 后者
-    // 最坏会把用户设定的超时放大到步数倍，破坏该值"总时长"的语义。
-    const ipc::DeadlineMs deadline = ipc::DeadlineAfterMs(timeoutMs);
-
+    // deadline 是调用方在 fork 之前算好的绝对时刻，覆盖 connect 重试、Hello 往返、
+    // Configure 发送、Ready 接收的全过程，而不是每步各算一次 —— 后者最坏会把用户
+    // 设定的超时放大到步数倍，破坏该值"总时长"的语义。
+    const ipc::DeadlineMs start = ipc::MonotonicNowMs();
     if (!ConnectWithRetry(udsName, deadline, static_cast<pid_t>(childPid), error)) {
         return false;
     }
@@ -168,13 +174,30 @@ bool UdsClient::ConnectAndConfigure(
     hello.uid = static_cast<uint32_t>(getuid());
     if (!Send(ipc::MessageType::CLIENT_HELLO, ipc::EncodeHello(hello), deadline, error) ||
         !CheckServerIdentity(childPid, deadline, error)) {
+        Log("[UDS] phase=handshake result=failed");
         return false;
     }
-    const auto encodedConfig = ipc::EncodeToolConfig(config);
-    if (encodedConfig.empty()) {
+    Log("[UDS] phase=handshake peer_pid=" + std::to_string(childPid) + " peer_uid=" + std::to_string(getuid()) +
+        " cred_match=1 negotiated_minor=" + std::to_string(negotiatedMinor_) + " result=ok");
+
+    // 在发送之前查：用户请求了当前协商版本不支持的选项时，直接报"版本不支持"，
+    // 而不是把对端无法理解的配置送上线路再等它回 Error。
+    if (!ipc::ValidateConfigureMinor(configure, negotiatedMinor_, error)) {
+        return false;
+    }
+    const auto encodedConfig = ipc::EncodeConfigure(configure);
+    // 空编码只可能来自超限；Configure 本身允许为空工具集合以外的任何合法组合。
+    if (encodedConfig.empty() && !configure.tools.empty()) {
         error = "cannot encode tool configuration";
         return false;
     }
+    size_t optionCount = 0;
+    for (const auto& tool : configure.tools) {
+        optionCount += tool.options.size();
+    }
+    Log("[UDS] phase=configure tool_count=" + std::to_string(configure.tools.size()) + " option_count=" +
+        std::to_string(optionCount) + " length=" + std::to_string(ipc::kWireHeaderSize + encodedConfig.size()) +
+        " payload_size=" + std::to_string(encodedConfig.size()));
     if (!Send(ipc::MessageType::CONFIGURE, encodedConfig, deadline, error)) {
         return false;
     }
@@ -183,22 +206,28 @@ bool UdsClient::ConnectAndConfigure(
         return false;
     }
     if (response.type == ipc::MessageType::ERROR) {
-        std::string message;
+        ipc::ErrorPayload failure{};
         std::string decodeError;
-        if (!ipc::DecodeText(response.payload, message, decodeError)) {
+        if (!ipc::DecodeError(response.payload, failure, decodeError)) {
             error = "injected library returned a malformed initialization error: " + decodeError;
             return false;
         }
-        error = "injected library initialization failed: " + message;
+        // domain/code 是稳定取值，进诊断文本的前缀；message 只原样转述，不参与任何判定。
+        error =
+            "injected library initialization failed (domain=" + std::to_string(static_cast<unsigned>(failure.domain)) +
+            " code=" + std::to_string(failure.code) + "): " + failure.message;
         return false;
     }
     if (response.type != ipc::MessageType::READY) {
         error = "expected READY frame";
         return false;
     }
-    if (!ipc::DecodeText(response.payload, ready, error)) {
+    // Ready 的 payload 必须为空；非空说明对端实现与本协议版本不一致。
+    if (!response.payload.empty()) {
+        error = "READY frame carries an unexpected payload";
         return false;
     }
+    Log("[UDS] phase=wait_ready elapsed_ms=" + std::to_string(ipc::MonotonicNowMs() - start) + " result=ready");
     // 握手到此结束，deadline 使命完成。之后进入采集阶段，等待由调用方按 kNoDeadline 驱动。
     return true;
 }

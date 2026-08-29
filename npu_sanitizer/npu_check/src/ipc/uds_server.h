@@ -29,20 +29,33 @@ public:
     UdsServer(const UdsServer&) = delete;
     UdsServer& operator=(const UdsServer&) = delete;
 
-    bool StartAndHandshake(ToolConfig& config, std::string& error);
-    bool SendReady(const std::string& message, std::string& error);
+    bool StartAndHandshake(ConfigureRequest& configure, std::string& error);
+    // Ready 的 payload 必须为空：它只表达"会话就绪"这一个事实。会话细节（工具、回调数
+    // 等）属于 Server 自己的维测信息，写本地日志，不占线路。
+    bool SendReady(std::string& error);
     bool Publish(MessageType type, const std::string& message);
-    void SendInitializationError(const std::string& message);
-    void SendFlowError(const std::string& message) noexcept;
-    void Shutdown(const std::string& summary, const std::string& sessionEnd);
+    // 握手阶段的失败。domain/code 见 wire_protocol.h，供 CLI 记结构化日志；message 只供人读。
+    void SendInitializationError(ErrorDomain domain, uint16_t code, const std::string& message);
+    // Ready 之后的失败。与 Result 互斥，发出后不再发任何 Result 分片。
+    void SendError(ErrorDomain domain, uint16_t code, const std::string& message) noexcept;
+    // 把整份报告作为一个 Result 分片序列发出。除末帧外都置 kFlagMore，hasErrors 与
+    // truncated 只体现在末帧上。内部会先停掉 publisher 线程，保证分片之间不被插入
+    // 实时诊断帧。
+    bool SendResult(const std::string& report, bool hasErrors, bool truncated, std::string& error);
+    // 排空实时诊断队列并结束 publisher 线程。调用方需要在统计"丢弃了多少消息"之前
+    // 先调它，否则拿到的是尚未落定的中间值。可重复调用。
+    void StopPublisher();
+    void Shutdown();
 
     uint64_t SessionId() const;
     uint64_t DroppedMessages() const;
     bool TransportComplete() const;
+    // 与对端协商出的 minor，取双方较小值。V1 恒为 0，记入日志供跨版本定位。
+    uint16_t NegotiatedMinor() const;
 
 private:
     struct QueuedMessage {
-        MessageType type = MessageType::LOG;
+        MessageType type = MessageType::DIAGNOSTIC_STREAM;
         std::vector<uint8_t> payload;
     };
 
@@ -52,9 +65,9 @@ private:
     // 收一帧并做统一校验：跳过 must-ignore 类型、校验 session_id、校验 sequence 严格
     // 递增、再确认类型符合预期。
     bool ReceiveChecked(Frame& frame, MessageType expected, DeadlineMs deadline, std::string& error);
-    bool ExchangeHandshake(ToolConfig& config, std::string& error);
+    bool ExchangeHandshake(ConfigureRequest& configure, std::string& error);
     bool SendSynchronous(
-        MessageType type, const std::vector<uint8_t>& payload, DeadlineMs deadline, std::string& error);
+        MessageType type, const std::vector<uint8_t>& payload, uint16_t flags, DeadlineMs deadline, std::string& error);
     void StartPublisher();
     void PublisherLoop();
     void CloseDescriptors();
@@ -64,6 +77,7 @@ private:
     // 抽象命名空间地址名（含前导 '@'），不是文件路径。
     std::string udsName_;
     uint64_t sessionId_ = 0;
+    uint16_t negotiatedMinor_ = kProtocolMinor;
     uint32_t expectedCliPid_ = 0;
     int handshakeTimeoutMs_ = 10000;
     // 握手阶段的绝对截止时刻，在 AcceptClient 中一次算出，覆盖 accept、Hello 往返、
@@ -79,6 +93,7 @@ private:
     std::deque<QueuedMessage> queue_;
     std::thread publisher_;
     bool publisherStarted_ = false;
+    bool publisherStopped_ = false;
     bool closing_ = false;
     bool transportComplete_ = true;
     uint64_t droppedMessages_ = 0;

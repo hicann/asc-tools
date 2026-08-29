@@ -12,6 +12,7 @@
 #include "aclsan/aclsan_api.h"
 #include "checker/memcheck.h"
 #include "checker/synccheck.h"
+#include "diagnostic/report_buffer.h"
 #include "ipc/uds_server.h"
 #include "logging/logger.h"
 #include "wire_protocol.h"
@@ -57,6 +58,8 @@ private:
     void LeaveCallback();
     bool ConfigureSanitizer(std::string& error);
     bool EnableCallbacks(std::string& error);
+    // 本次是否启用了某个工具。
+    bool IsToolEnabled(ipc::ToolId toolId) const;
     void RollbackSanitizer();
     void LogHandshakeFailure(const std::string& reason) noexcept;
     void PublishDiagnostics(std::vector<aclsan::cann::NpusanMemcheckReport> reports);
@@ -66,6 +69,10 @@ private:
     void LogCallback(AclsanCallbackDomain domain, AclsanCallbackId cbid, const void* cbdata);
     std::string BuildReadyMessage() const;
     std::string BuildSummaryMessage() const;
+    // 把一条已渲染的诊断同时送进两条路径：聚合进最终 Result，并作为实时流发出去。
+    void RecordDiagnostic(const std::string& rendered, const char* what);
+    // 本次检查是否检出问题，对应 Result 末帧的 kFlagHasErrors。
+    bool HasDetectedErrors() const;
 
     template <typename T>
     static const T* ValidateCallbackData(const void* cbdata)
@@ -101,8 +108,14 @@ private:
     bool initialized_ = false;
     bool subscribed_ = false;
 
-    ipc::ToolConfig config_{};
+    // 本次会话启用的工具及其子选项，按 toolId 升序。多个工具可以同时启用。
+    ipc::ConfigureRequest configure_{};
+    // 工作目录：npu_check.log 与 probe 缓存的落点，由环境变量传入（Configure 只承载
+    // 工具与子选项，不承载路径）。
+    std::string workDir_;
     ipc::UdsServer server_{};
+    // 权威报告的聚合缓冲。callback 线程只往里追加，退出路径上一次性取走发出。
+    diagnostic::ReportBuffer report_{};
     AclsanSubscriberHandle subscriber_ = nullptr;
     std::unique_ptr<Memcheck> memcheck_;
     std::unique_ptr<Synccheck> synccheck_;

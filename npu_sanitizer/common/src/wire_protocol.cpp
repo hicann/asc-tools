@@ -10,6 +10,8 @@
 
 #include "wire_protocol.h"
 
+#include <algorithm>
+#include <cstddef>
 #include <limits>
 #include <utility>
 
@@ -49,6 +51,8 @@ public:
         data_.insert(data_.end(), value.begin(), value.end());
         return true;
     }
+
+    void PutBytes(const std::vector<uint8_t>& value) { data_.insert(data_.end(), value.begin(), value.end()); }
 
     std::vector<uint8_t> Take() { return std::move(data_); }
 
@@ -119,6 +123,17 @@ public:
         return true;
     }
 
+    // 定长字节串。长度由调用方（注册表）给出，线路上不再重复携带。
+    bool GetBytes(std::vector<uint8_t>& value, size_t length)
+    {
+        if (!Need(length)) {
+            return false;
+        }
+        value.assign(data_ + offset_, data_ + offset_ + length);
+        offset_ += length;
+        return true;
+    }
+
     bool Done() const { return offset_ == size_; }
 
 private:
@@ -144,10 +159,7 @@ bool IsKnownMustUnderstandType(uint16_t type)
         case MessageType::SERVER_HELLO:
         case MessageType::CONFIGURE:
         case MessageType::READY:
-        case MessageType::DIAGNOSTIC:
-        case MessageType::LOG:
-        case MessageType::SUMMARY:
-        case MessageType::SESSION_END:
+        case MessageType::RESULT:
         case MessageType::ERROR:
             return true;
         case MessageType::DIAGNOSTIC_STREAM:
@@ -215,9 +227,10 @@ bool DecodeFrame(const uint8_t* data, size_t size, Frame& frame, std::string& er
     if (major != kProtocolMajor) {
         return Fail(error, "incompatible protocol major version");
     }
-    if (minor > kProtocolMinor) {
-        return Fail(error, "unsupported protocol minor version");
-    }
+    // minor 不参与拒绝判定：同一 major 下帧头格式稳定，收到比自己高的 minor 只说明对端
+    // 更新，不说明这一帧无法解析。原样带回给上层去 NegotiateMinor，高位 minor 新增的
+    // 消息类型和标志位分别由 must-ignore 规则兜住。
+    // 曾经这里是 `minor > kProtocolMinor 即拒绝`，那会让新版本永远连不上旧版本。
     // length 与 payload_size 表达的是同一信息（相差常数 kWireHeaderSize），任何一侧编码
     // 出错都会让它们矛盾，因此必须强制交叉校验。三条都在分配 payload 缓冲区之前执行。
     if (payloadSize > kMaxPayloadSize) {
@@ -243,6 +256,7 @@ bool DecodeFrame(const uint8_t* data, size_t size, Frame& frame, std::string& er
     }
     frame.type = static_cast<MessageType>(type);
     frame.flags = flags;
+    frame.minor = minor;
     frame.sessionId = sessionId;
     frame.sequence = sequence;
     frame.payload.assign(data + kWireHeaderSize, data + size);
@@ -268,56 +282,185 @@ bool DecodeHello(const std::vector<uint8_t>& payload, HelloPayload& hello, std::
     return true;
 }
 
-std::vector<uint8_t> EncodeToolConfig(const ToolConfig& config)
+bool ValidateConfigureMinor(const ConfigureRequest& request, uint16_t negotiatedMinor, std::string& error)
 {
-    if (config.compileOptions.size() > kMaxCompileOptions) {
+    for (const auto& tool : request.tools) {
+        for (const auto& option : tool.options) {
+            const OptionRegistryEntry* entry = LookupOptionById(option.optionId);
+            if (entry == nullptr) {
+                error = "unknown option id in configure";
+                return false;
+            }
+            if (entry->introducedMinor > negotiatedMinor) {
+                error = std::string("option '--") + entry->name + "' requires protocol minor " +
+                        std::to_string(entry->introducedMinor) + " but the session negotiated " +
+                        std::to_string(negotiatedMinor);
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
+std::vector<uint8_t> EncodeConfigure(const ConfigureRequest& request)
+{
+    // 布局：global_flags u16 / tool_count u16
+    //       每工具：tool_id u16 / option_count u16
+    //               每选项：option_id u16 / value_size u16 / value[value_size]
+    //
+    // 线路上不出现值类型字段，也不出现任何原始命令行字符串：option_id 在共享注册表里
+    // 唯一确定所属工具、值编码与校验规则，两端查同一张表即可。
+    if (request.tools.size() > std::numeric_limits<uint16_t>::max()) {
         return {};
     }
     Encoder encoder;
-    encoder.PutU8(config.strict ? 1 : 0);
-    encoder.PutU8(config.keepTemp ? 1 : 0);
-    encoder.PutU16(0);
-    if (!encoder.PutString(config.toolName) || !encoder.PutString(config.logFile) ||
-        !encoder.PutString(config.workDir) || !encoder.PutString(config.probeCacheDir)) {
-        return {};
-    }
-    encoder.PutU32(static_cast<uint32_t>(config.compileOptions.size()));
-    for (const auto& option : config.compileOptions) {
-        if (!encoder.PutString(option)) {
+    encoder.PutU16(request.globalFlags);
+    encoder.PutU16(static_cast<uint16_t>(request.tools.size()));
+    for (const auto& tool : request.tools) {
+        if (tool.options.size() > std::numeric_limits<uint16_t>::max()) {
             return {};
+        }
+        encoder.PutU16(static_cast<uint16_t>(tool.toolId));
+        encoder.PutU16(static_cast<uint16_t>(tool.options.size()));
+        for (const auto& option : tool.options) {
+            if (option.value.size() > std::numeric_limits<uint16_t>::max()) {
+                return {};
+            }
+            encoder.PutU16(static_cast<uint16_t>(option.optionId));
+            encoder.PutU16(static_cast<uint16_t>(option.value.size()));
+            encoder.PutBytes(option.value);
         }
     }
     auto payload = encoder.Take();
     return payload.size() <= kMaxPayloadSize ? payload : std::vector<uint8_t>{};
 }
 
-bool DecodeToolConfig(const std::vector<uint8_t>& payload, ToolConfig& config, std::string& error)
+bool DecodeConfigure(const std::vector<uint8_t>& payload, ConfigureRequest& request, std::string& error)
 {
     Decoder decoder(payload.data(), payload.size());
-    uint8_t strict = 0;
-    uint8_t keepTemp = 0;
-    uint16_t reserved = 0;
-    uint32_t optionCount = 0;
-    if (!decoder.GetU8(strict) || !decoder.GetU8(keepTemp) || !decoder.GetU16(reserved) || strict > 1 || keepTemp > 1 ||
-        reserved != 0 || !decoder.GetString(config.toolName, 32) || !decoder.GetString(config.logFile, 4096) ||
-        !decoder.GetString(config.workDir, 4096) || !decoder.GetString(config.probeCacheDir, 4096) ||
-        !decoder.GetU32(optionCount) || optionCount > kMaxCompileOptions) {
-        return Fail(error, "malformed tool configuration");
+    uint16_t toolCount = 0;
+    if (!decoder.GetU16(request.globalFlags) || !decoder.GetU16(toolCount)) {
+        return Fail(error, "malformed configure header");
     }
-    config.strict = strict != 0;
-    config.keepTemp = keepTemp != 0;
-    config.compileOptions.clear();
-    config.compileOptions.reserve(optionCount);
-    for (uint32_t i = 0; i < optionCount; ++i) {
-        std::string option;
-        if (!decoder.GetString(option, 4096)) {
-            return Fail(error, "malformed compile option");
+    if (request.globalFlags != 0) {
+        return Fail(error, "unsupported configure global flags");
+    }
+    request.tools.clear();
+    request.tools.reserve(toolCount);
+
+    // 严格递增即同时覆盖"已排序"与"不重复"两条约束，因此不需要额外的集合去重。
+    // 拒绝未排序或重复的编码不是洁癖：规范化编码唯一是"子选项换个位置写、编码结果
+    // 不变"这条性质的前提，接受了非规范编码，这条性质就无法断言。
+    bool hasPreviousTool = false;
+    uint16_t previousToolId = 0;
+    for (uint16_t toolIndex = 0; toolIndex < toolCount; ++toolIndex) {
+        uint16_t toolId = 0;
+        uint16_t optionCount = 0;
+        if (!decoder.GetU16(toolId) || !decoder.GetU16(optionCount)) {
+            return Fail(error, "malformed tool entry");
         }
-        config.compileOptions.push_back(std::move(option));
+        if (hasPreviousTool && toolId <= previousToolId) {
+            return Fail(error, "configure tools are not sorted or contain duplicates");
+        }
+        if (!IsKnownTool(toolId)) {
+            return Fail(error, "unknown tool id in configure");
+        }
+        hasPreviousTool = true;
+        previousToolId = toolId;
+
+        ToolRequest tool;
+        tool.toolId = static_cast<ToolId>(toolId);
+        tool.options.reserve(optionCount);
+        bool hasPreviousOption = false;
+        uint16_t previousOptionId = 0;
+        for (uint16_t optionIndex = 0; optionIndex < optionCount; ++optionIndex) {
+            uint16_t optionId = 0;
+            uint16_t valueSize = 0;
+            if (!decoder.GetU16(optionId) || !decoder.GetU16(valueSize)) {
+                return Fail(error, "malformed option entry");
+            }
+            if (hasPreviousOption && optionId <= previousOptionId) {
+                return Fail(error, "configure options are not sorted or contain duplicates");
+            }
+            hasPreviousOption = true;
+            previousOptionId = optionId;
+
+            const OptionRegistryEntry* entry = LookupOptionById(static_cast<OptionId>(optionId));
+            if (entry == nullptr) {
+                return Fail(error, "unknown option id in configure");
+            }
+            // 归属必须与所在的 tool 一致：option_id 已经唯一确定了所属工具，两者不符
+            // 说明对端编码有问题，静默接受会让选项作用到错误的 checker 上。
+            if (entry->toolId != tool.toolId) {
+                return Fail(error, "option does not belong to the enclosing tool");
+            }
+            if (valueSize != entry->valueSize) {
+                return Fail(error, "option value size does not match the registry");
+            }
+            OptionValue option;
+            option.optionId = static_cast<OptionId>(optionId);
+            if (!decoder.GetBytes(option.value, valueSize)) {
+                return Fail(error, "truncated option value");
+            }
+            // V1 全部是"出现即为真"的开关，值域只有 presentValue 一个合法取值。
+            if (option.value.size() != 1 || option.value[0] != entry->presentValue) {
+                return Fail(error, "option value is out of range");
+            }
+            tool.options.push_back(std::move(option));
+        }
+        request.tools.push_back(std::move(tool));
     }
     if (!decoder.Done()) {
-        return Fail(error, "trailing configuration data");
+        return Fail(error, "trailing configure data");
     }
+    return true;
+}
+
+std::vector<uint8_t> EncodeError(const ErrorPayload& payload)
+{
+    // 布局：domain u16 / code u16 / message_size u16 / reserved u16 / message[message_size]
+    //
+    // 超长文案截断而不是整体失败：Error 本身就是"出事了"的通道，若因为文案太长而编不出
+    // 帧，对端就只剩连接关闭可看，反而丢掉了最需要的那点信息。
+    const size_t messageSize = std::min(payload.message.size(), kMaxErrorMessageSize);
+    Encoder encoder;
+    encoder.PutU16(static_cast<uint16_t>(payload.domain));
+    encoder.PutU16(payload.code);
+    encoder.PutU16(static_cast<uint16_t>(messageSize));
+    encoder.PutU16(0); // reserved
+    auto bytes = encoder.Take();
+    bytes.insert(
+        bytes.end(), payload.message.begin(), payload.message.begin() + static_cast<std::ptrdiff_t>(messageSize));
+    return bytes;
+}
+
+bool DecodeError(const std::vector<uint8_t>& payload, ErrorPayload& decoded, std::string& error)
+{
+    Decoder decoder(payload.data(), payload.size());
+    uint16_t domain = 0;
+    uint16_t code = 0;
+    uint16_t messageSize = 0;
+    uint16_t reserved = 0;
+    if (!decoder.GetU16(domain) || !decoder.GetU16(code) || !decoder.GetU16(messageSize) || !decoder.GetU16(reserved)) {
+        return Fail(error, "short error payload");
+    }
+    if (reserved != 0) {
+        return Fail(error, "reserved error field is not zero");
+    }
+    if (messageSize > kMaxErrorMessageSize) {
+        return Fail(error, "error message exceeds the maximum size");
+    }
+    // 8 字节头之后必须恰好剩 message_size 字节，不允许尾随数据。
+    if (payload.size() != kErrorHeaderSize + messageSize) {
+        return Fail(error, "error payload length does not match the declared message size");
+    }
+    if (domain < static_cast<uint16_t>(ErrorDomain::kInjection) ||
+        domain > static_cast<uint16_t>(ErrorDomain::kInternal)) {
+        return Fail(error, "unknown error domain");
+    }
+    decoded.domain = static_cast<ErrorDomain>(domain);
+    decoded.code = code;
+    decoded.message.assign(payload.begin() + static_cast<std::ptrdiff_t>(kErrorHeaderSize), payload.end());
     return true;
 }
 
@@ -351,14 +494,8 @@ const char* MessageTypeName(MessageType type)
             return "CONFIGURE";
         case MessageType::READY:
             return "READY";
-        case MessageType::DIAGNOSTIC:
-            return "DIAGNOSTIC";
-        case MessageType::LOG:
-            return "LOG";
-        case MessageType::SUMMARY:
-            return "SUMMARY";
-        case MessageType::SESSION_END:
-            return "SESSION_END";
+        case MessageType::RESULT:
+            return "RESULT";
         case MessageType::ERROR:
             return "ERROR";
         case MessageType::DIAGNOSTIC_STREAM:
@@ -415,6 +552,26 @@ const OptionRegistryEntry* LookupOption(const std::string& name)
         }
     }
     return nullptr;
+}
+
+const OptionRegistryEntry* LookupOptionById(OptionId optionId)
+{
+    for (const auto& entry : OptionRegistry()) {
+        if (optionId == entry.optionId) {
+            return &entry;
+        }
+    }
+    return nullptr;
+}
+
+bool IsKnownTool(uint16_t toolId)
+{
+    switch (static_cast<ToolId>(toolId)) {
+        case ToolId::kMemcheck:
+        case ToolId::kSynccheck:
+            return true;
+    }
+    return false;
 }
 
 } // namespace npu::sanitizer::ipc

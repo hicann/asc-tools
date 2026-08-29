@@ -26,7 +26,9 @@ constexpr uint16_t kProtocolMinor = 0;
 constexpr size_t kWireHeaderSize = 36;
 constexpr size_t kMaxPayloadSize = 64 * 1024;
 constexpr size_t kMaxFrameSize = kWireHeaderSize + kMaxPayloadSize; // 65572
-constexpr size_t kMaxCompileOptions = 128;
+// 单次会话的报告总长上限。两侧共用同一个常量：发送侧据此决定何时停止追加并置
+// kFlagTruncated，接收侧据此拒绝超量的分片序列，避免对端异常时把 CLI 的内存吃光。
+constexpr size_t kMaxResultBytes = 64u * 1024u * 1024u;
 
 // 帧头 flags 的位定义。
 //
@@ -47,6 +49,9 @@ constexpr const char* kUdsNameEnv = "NPU_CHECK_UDS_NAME";
 constexpr const char* kSessionIdEnv = "NPU_CHECK_SESSION_ID";
 constexpr const char* kCliPidEnv = "NPU_CHECK_CLI_PID";
 constexpr const char* kHandshakeTimeoutEnv = "NPU_CHECK_HANDSHAKE_TIMEOUT_MS";
+// 工作目录：注入库的 npu_check.log 与 probe 缓存落在这里。改用注册表编码之后，
+// Configure 只承载工具与子选项，不再承载路径，因此这类字段改由环境变量传递。
+constexpr const char* kWorkDirEnv = "NPU_CHECK_WORK_DIR";
 
 // 消息类型。
 //
@@ -58,10 +63,9 @@ enum class MessageType : uint16_t {
     SERVER_HELLO = 0x0002,
     CONFIGURE = 0x0003,
     READY = 0x0004,
-    DIAGNOSTIC = 5,
-    LOG = 6,
-    SUMMARY = 7,
-    SESSION_END = 8,
+    // 本次检查的权威报告，也是唯一的报告出口。报告可能远大于单帧上限，因此以分片序列
+    // 发送：除末帧外都置 kFlagMore，结论位只在末帧上有效。
+    RESULT = 0x0005,
     ERROR = 0x00ff,
 
     // must-ignore 区间。实时诊断只供人阅读，不参与退出码判定；权威结论由 Result 承载。
@@ -74,10 +78,23 @@ constexpr bool IsMustIgnoreType(uint16_t type) { return (type & 0x8000u) != 0; }
 struct Frame {
     MessageType type = MessageType::ERROR;
     uint16_t flags = 0;
+    // 对端在帧头声明的 minor。仅接收方向有意义；发送时一律写本实现的 kProtocolMinor。
+    uint16_t minor = kProtocolMinor;
     uint64_t sessionId = 0;
     uint64_t sequence = 0;
     std::vector<uint8_t> payload;
 };
+
+// 协商 minor 取双方较小值。
+//
+// 注意这里"不拒绝"比"取较小值"更重要：同一 major 下 Hello 的基础格式保持稳定，因此
+// 收到比自己高的 minor 绝不能判为错误。一旦拒绝，新版本就永远无法与旧版本互通，minor
+// 这个字段也就失去了存在意义 —— 它的全部用途就是让两端在不同版本下仍能谈拢一个共同
+// 子集。高位 minor 新增的消息和标志位另有 must-ignore 规则兜底。
+constexpr uint16_t NegotiateMinor(uint16_t peerMinor)
+{
+    return peerMinor < kProtocolMinor ? peerMinor : kProtocolMinor;
+}
 
 // Hello payload 固定 8 字节。这两个字段的唯一用途是与 SO_PEERCRED 的结果交叉比对；
 // 会话归属由帧头的 session_id 承担，payload 不再携带任何会话秘密。
@@ -91,14 +108,40 @@ struct HelloPayload {
     uint32_t uid = 0;
 };
 
-struct ToolConfig {
-    std::string toolName;
-    bool strict = true;
-    bool keepTemp = true;
-    std::string logFile;
-    std::string workDir;
-    std::string probeCacheDir;
-    std::vector<std::string> compileOptions;
+// Error payload：8 字节固定头 + 变长 UTF-8 文本。
+//
+// domain/code 是给机器看的稳定取值，进 CLI 的结构化日志；message 只供人读，接收端
+// 不得依赖它的内容做任何分支判断 —— 否则文案一改，判定逻辑就跟着坏。
+enum class ErrorDomain : uint16_t {
+    kInjection = 1,     // 注入 / 初始化：环境变量、bind/listen、日志打开
+    kConfiguration = 2, // 配置：Configure 解码、注册表校验、checker 构造
+    kProtocol = 3,      // 协议：会话号、序号、长度交叉校验、消息顺序
+    kInternal = 4,      // 库内部：报告不可用、回调框架异常
+};
+
+// 域内错误码，取值仅在所属 domain 内唯一。V1 只区分到"能让日志有稳定取值"的粒度，
+// 具体原因由 message 承载。
+namespace error_code {
+// ErrorDomain::kInjection
+constexpr uint16_t kEnvironmentInvalid = 1;
+constexpr uint16_t kListenFailed = 2;
+constexpr uint16_t kLoggerOpenFailed = 3;
+// ErrorDomain::kConfiguration
+constexpr uint16_t kToolInitializationFailed = 1;
+constexpr uint16_t kConfigureMalformed = 2;
+// ErrorDomain::kProtocol
+constexpr uint16_t kFrameRejected = 1;
+// ErrorDomain::kInternal
+constexpr uint16_t kReportUnavailable = 1;
+} // namespace error_code
+
+constexpr size_t kErrorHeaderSize = 8;
+constexpr size_t kMaxErrorMessageSize = 1024;
+
+struct ErrorPayload {
+    ErrorDomain domain = ErrorDomain::kInternal;
+    uint16_t code = 0;
+    std::string message; // UTF-8，不以 NUL 结尾；超长时由编码器截断
 };
 
 // ---------------------------------------------------------------------------
@@ -106,9 +149,6 @@ struct ToolConfig {
 //
 // 本节是 ToolId / OptionId / OptionValue / ToolRequest 的唯一定义处。CLI 与注入库
 // 链接同一 common 目标，两端禁止各自复制一份 ID 或编码表。
-//
-// 注意：当前 Configure 线路格式仍是上面字符串式的 ToolConfig。下列类型先行落地，
-// 供 CLI 的参数解析使用；Configure 编码迁移到本注册表属于后续改动。
 // ---------------------------------------------------------------------------
 
 enum class ToolId : uint16_t {
@@ -133,6 +173,14 @@ struct ToolRequest {
     std::vector<OptionValue> options; // 按 optionId 升序，不重复
 };
 
+// Configure 的完整请求。规范化编码唯一：tools 按 toolId 升序不重复，每个工具内 options
+// 按 optionId 升序不重复。接收端必须拒绝未排序或重复的编码 —— 只有这样，"子选项换个
+// 位置写、编码结果不变"才是可断言的性质。
+struct ConfigureRequest {
+    uint16_t globalFlags = 0; // V1 必须为 0
+    std::vector<ToolRequest> tools;
+};
+
 // 工具子选项的注册项。名称在 CLI 中全局唯一，因此子选项可以出现在所属 --tool 之前或
 // 之后，解析器不依赖"当前工具"状态，也不通过参数相邻关系推断归属。
 struct OptionRegistryEntry {
@@ -151,6 +199,12 @@ bool LookupTool(const std::string& name, ToolId& id);
 // 按命令行名称（不含 "--"）查注册项；未注册时返回 nullptr。
 const OptionRegistryEntry* LookupOption(const std::string& name);
 
+// 按 optionId 查注册项，供 Server 解码 Configure 时校验归属、值宽度与值域。
+const OptionRegistryEntry* LookupOptionById(OptionId optionId);
+
+// toolId 是否为本实现认识的工具。未知工具必须被拒绝，不能静默忽略。
+bool IsKnownTool(uint16_t toolId);
+
 // 全量注册表，供帮助文本和测试遍历。
 const std::vector<OptionRegistryEntry>& OptionRegistry();
 
@@ -160,8 +214,17 @@ bool DecodeFrame(const uint8_t* data, size_t size, Frame& frame, std::string& er
 std::vector<uint8_t> EncodeHello(const HelloPayload& hello);
 bool DecodeHello(const std::vector<uint8_t>& payload, HelloPayload& hello, std::string& error);
 
-std::vector<uint8_t> EncodeToolConfig(const ToolConfig& config);
-bool DecodeToolConfig(const std::vector<uint8_t>& payload, ToolConfig& config, std::string& error);
+// 校验请求里的每个选项都落在 negotiatedMinor 的覆盖范围内。
+//
+// 两端都要查，因为任何一端都可能是较旧的实现：CLI 在**发送 Configure 之前**查，
+// 避免把对端无法理解的选项送上线路；Server 解码后再查一遍，因为它不能假设对端守规矩。
+bool ValidateConfigureMinor(const ConfigureRequest& request, uint16_t negotiatedMinor, std::string& error);
+
+std::vector<uint8_t> EncodeConfigure(const ConfigureRequest& request);
+bool DecodeConfigure(const std::vector<uint8_t>& payload, ConfigureRequest& request, std::string& error);
+
+std::vector<uint8_t> EncodeError(const ErrorPayload& payload);
+bool DecodeError(const std::vector<uint8_t>& payload, ErrorPayload& decoded, std::string& error);
 
 std::vector<uint8_t> EncodeText(const std::string& text);
 bool DecodeText(const std::vector<uint8_t>& payload, std::string& text, std::string& error);

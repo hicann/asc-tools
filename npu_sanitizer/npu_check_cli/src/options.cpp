@@ -15,10 +15,12 @@
 #include <cerrno>
 #include <climits>
 #include <cstdlib>
+#include <cstring>
 #include <filesystem>
 #include <map>
 #include <optional>
 #include <set>
+#include <sys/stat.h>
 #include <unistd.h>
 
 namespace npu::sanitizer::cli {
@@ -61,6 +63,36 @@ bool IsRegularFile(const std::filesystem::path& path)
 {
     std::error_code error;
     return std::filesystem::is_regular_file(path, error);
+}
+
+// 注入库文件名。CLI 只负责定位它并把规范化绝对路径写进 ACL_API_INJECTION，
+// 真正的加载由 ACL Runtime 在目标进程里完成。
+constexpr const char* kInjectionLibraryName = "libnpu_check.so";
+
+// CANN 安装根目录。
+//
+// 必须是 ASCEND_TOOLKIT_HOME —— CANN 的 set_env.sh 导出的是这个名字，并不存在
+// ASCEND_TOOLKIT_PATH。用错名字的后果不是"找不到"而是更糟：取到空串后拼接出的
+// "/lib64/libnpu_check.so" 是一个宿主机上的绝对路径，查找会静默落到系统目录里去。
+constexpr const char* kAscendToolkitHomeEnv = "ASCEND_TOOLKIT_HOME";
+
+// 定位覆盖入口，仅供测试与问题定位使用，不对外承诺兼容。
+constexpr const char* kLibraryPathOverrideEnv = "NPU_CHECK_LIBRARY_PATH";
+
+// 注入库会被加载进目标进程并以目标进程的权限运行。组可写或其他人可写意味着本用户
+// 之外的人能替换它的内容，等于把任意代码执行的入口交出去，因此一律拒绝而不是警告。
+bool IsSafelyOwned(const std::filesystem::path& path, std::string& reason)
+{
+    struct stat info {};
+    if (stat(path.c_str(), &info) != 0) {
+        reason = "cannot stat '" + path.string() + "': " + std::strerror(errno);
+        return false;
+    }
+    if ((info.st_mode & (S_IWGRP | S_IWOTH)) != 0) {
+        reason = "'" + path.string() + "' is group- or world-writable and cannot be injected";
+        return false;
+    }
+    return true;
 }
 
 } // namespace
@@ -112,6 +144,15 @@ bool ParseOptions(int argc, char** argv, Options& options, std::string& error)
                 return false;
             }
             options.logFile = AbsolutePath(value);
+            continue;
+        }
+        if (argument == "--work-dir") {
+            if (!NeedValue(argc, argv, i, value, error)) {
+                return false;
+            }
+            // 转绝对路径：这个值要跨 fork 传给注入库，而子进程的当前目录不保证与 CLI
+            // 相同，相对路径会在两侧解析到不同位置。
+            options.workDir = AbsolutePath(value);
             continue;
         }
         if (argument == "--handshake-timeout-ms") {
@@ -200,30 +241,62 @@ bool ResolveLibraryPath(const std::string& requested, std::string& resolved, std
     std::vector<std::filesystem::path> candidates;
     if (!requested.empty()) {
         candidates.emplace_back(requested);
-    } else if (const char* environment = std::getenv("NPU_CHECK_LIBRARY_PATH");
+    } else if (const char* environment = std::getenv(kLibraryPathOverrideEnv);
                environment != nullptr && environment[0] != '\0') {
         candidates.emplace_back(environment);
     } else {
+        // 顺序即优先级，两组候选各自解决不同的部署形态。
+        //
+        // 一、CANN 安装树。打包落地后这是正常路径。
+        if (const char* toolkitHome = std::getenv(kAscendToolkitHomeEnv);
+            toolkitHome != nullptr && toolkitHome[0] != '\0') {
+            const std::filesystem::path root(toolkitHome);
+            candidates.push_back(root / "lib64" / kInjectionLibraryName);
+            candidates.push_back(root / "lib" / kInjectionLibraryName);
+        }
+        // 二、相对可执行文件自身。覆盖两种布局：构建产物同目录（demo 与开发树），
+        //     以及安装树的 bin/ + lib{,64}/。
+        //
+        //     这一组不是临时兜底。/proc/self/exe 已经解开符号链接，因此从 PATH 调用、
+        //     或经软链调用都能定位到真实安装位置；相比读环境变量，它不会因为用户忘了
+        //     source set_env.sh、或环境里残留着另一个版本的路径而指错地方。
+        //     在 libnpu_check.so 尚未进入 CANN 包之前，实际生效的也是这一组。
         std::array<char, PATH_MAX + 1> executable{};
         const ssize_t length = readlink("/proc/self/exe", executable.data(), PATH_MAX);
         if (length > 0 && length < PATH_MAX) {
             executable[static_cast<size_t>(length)] = '\0';
             const auto directory = std::filesystem::path(executable.data()).parent_path();
-            candidates.push_back(directory / "libnpu_check.so");
-            candidates.push_back(directory / ".." / "lib" / "libnpu_check.so");
-            candidates.push_back(directory / ".." / "lib64" / "libnpu_check.so");
+            candidates.push_back(directory / kInjectionLibraryName);
+            candidates.push_back(directory / ".." / "lib64" / kInjectionLibraryName);
+            candidates.push_back(directory / ".." / "lib" / kInjectionLibraryName);
         }
     }
 
+    // 找到了文件但权限不合格，与"压根没找到"是两种完全不同的故障，诊断必须分开报，
+    // 否则用户会一直去检查路径而想不到是文件模式的问题。
+    std::string rejection;
     for (const auto& candidate : candidates) {
         std::error_code filesystemError;
         const auto canonical = std::filesystem::canonical(candidate, filesystemError);
-        if (!filesystemError && IsRegularFile(canonical)) {
-            resolved = canonical.string();
-            return true;
+        if (filesystemError || !IsRegularFile(canonical)) {
+            continue;
         }
+        std::string reason;
+        if (!IsSafelyOwned(canonical, reason)) {
+            if (rejection.empty()) {
+                rejection = reason;
+            }
+            continue;
+        }
+        resolved = canonical.string();
+        return true;
     }
-    error = "cannot locate libnpu_check.so; set NPU_CHECK_LIBRARY_PATH";
+    if (!rejection.empty()) {
+        error = "refusing to inject " + std::string(kInjectionLibraryName) + ": " + rejection;
+        return false;
+    }
+    error = "cannot locate " + std::string(kInjectionLibraryName) + "; searched " + std::string(kAscendToolkitHomeEnv) +
+            "/lib64, " + kAscendToolkitHomeEnv + "/lib and the directory of npu_check";
     return false;
 }
 
@@ -232,12 +305,16 @@ std::string Usage()
     // 只列对外命令行契约：--tool、--log-file、--help/-h 以及 -- 边界规则。
     // 内部验证选项（--handshake-timeout-ms、--error-exitcode）不对外承诺兼容性，
     // 不得出现在这里。
-    return "Usage: npu_check [--tool <name>]... [--log-file <path>] [--] <application> [args...]\n"
+    return "Usage: npu_check [--tool <name>]... [--log-file <path>] [--work-dir <path>]\n"
+           "                 [--] <application> [args...]\n"
            "Options:\n"
            "  --tool <memcheck|synccheck>  enable a checker; repeatable and idempotent.\n"
            "                               Defaults to memcheck when no --tool is given.\n"
            "  --log-file <path>            directory or file receiving the report and\n"
            "                               the application output\n"
+           "  --work-dir <path>            directory for npu_check.log and the probe cache.\n"
+           "                               Created when missing and never removed.\n"
+           "                               Defaults to a temporary directory.\n"
            "  -h, --help                   show this help and exit\n"
            "\n"
            "Pass -- before <application> when the application path or its arguments start\n"

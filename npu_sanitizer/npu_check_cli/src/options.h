@@ -22,8 +22,12 @@ namespace npu::sanitizer::cli {
 struct Options {
     std::vector<ipc::ToolRequest> tools; // 本次启用的工具及各自子选项，已按注册表规则规范化排序
     std::string logFile;                 // 用户指定的日志目录或文件；空表示写 stdout
-    int handshakeTimeoutMs = 10000;      // [内部] 建连 + 握手 + Configure + Ready 的总超时
-    int errorExitCode = 0;               // [内部] 0 表示不覆盖应用退出码
+    // 工作目录：注入库的 npu_check.log 与 DBI 运行期产物落在这里。空表示用 CLI 自建的
+    // 临时会话目录。两者的差别不只是路径 —— 临时目录由 CLI 创建也由 CLI 删除，用户
+    // 指定的目录只创建。
+    std::string workDir;
+    int handshakeTimeoutMs = 10000; // [内部] 建连 + 握手 + Configure + Ready 的总超时
+    int errorExitCode = 0;          // [内部] 0 表示不覆盖应用退出码
     bool showHelp = false;
     std::vector<std::string> application; // application[0] 为程序，其余为原样 argv
 };

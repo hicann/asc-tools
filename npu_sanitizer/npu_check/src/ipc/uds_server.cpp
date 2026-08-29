@@ -10,7 +10,9 @@
 
 #include "uds_transport.h"
 
+#include <algorithm>
 #include <cerrno>
+#include <cstddef>
 #include <cstdlib>
 #include <cstring>
 #include <limits>
@@ -41,7 +43,7 @@ std::string ErrnoMessage(const char* operation) { return std::string(operation) 
 
 } // namespace
 
-UdsServer::~UdsServer() { Shutdown({}, {}); }
+UdsServer::~UdsServer() { Shutdown(); }
 
 bool UdsServer::LoadEnvironment(std::string& error)
 {
@@ -195,7 +197,7 @@ bool UdsServer::ReceiveChecked(Frame& frame, MessageType expected, DeadlineMs de
     }
 }
 
-bool UdsServer::ExchangeHandshake(ToolConfig& config, std::string& error)
+bool UdsServer::ExchangeHandshake(ConfigureRequest& configure, std::string& error)
 {
     // 握手的每一步都复用 AcceptClient 算出的同一个绝对 deadline。
     Frame helloFrame{};
@@ -206,6 +208,9 @@ bool UdsServer::ExchangeHandshake(ToolConfig& config, std::string& error)
     if (!DecodeHello(helloFrame.payload, hello, error)) {
         return false;
     }
+    // 对端 minor 取自 Hello 的帧头，与本实现取较小值。收到更高的 minor 不是错误，
+    // 详见 NegotiateMinor 的说明。
+    negotiatedMinor_ = NegotiateMinor(helloFrame.minor);
     // Hello 携带的 pid/uid 与 accept 时读到的 SO_PEERCRED 交叉比对。后者来自内核、
     // 无法伪造，是权威来源；前者只是对端的自我声明，两者必须一致。
     if (hello.pid != expectedCliPid_ || hello.uid != getuid()) {
@@ -216,7 +221,7 @@ bool UdsServer::ExchangeHandshake(ToolConfig& config, std::string& error)
     HelloPayload serverHello{};
     serverHello.pid = static_cast<uint32_t>(getpid());
     serverHello.uid = static_cast<uint32_t>(getuid());
-    if (!SendSynchronous(MessageType::SERVER_HELLO, EncodeHello(serverHello), handshakeDeadline_, error)) {
+    if (!SendSynchronous(MessageType::SERVER_HELLO, EncodeHello(serverHello), 0, handshakeDeadline_, error)) {
         return false;
     }
 
@@ -224,24 +229,30 @@ bool UdsServer::ExchangeHandshake(ToolConfig& config, std::string& error)
     if (!ReceiveChecked(configFrame, MessageType::CONFIGURE, handshakeDeadline_, error)) {
         return false;
     }
-    return DecodeToolConfig(configFrame.payload, config, error);
+    if (!DecodeConfigure(configFrame.payload, configure, error)) {
+        return false;
+    }
+    // 解码只保证结构合法；能不能理解这些选项还取决于协商出的 minor。不能假设对端
+    // 守规矩地只发它该发的东西。
+    return ValidateConfigureMinor(configure, negotiatedMinor_, error);
 }
 
-bool UdsServer::StartAndHandshake(ToolConfig& config, std::string& error)
+bool UdsServer::StartAndHandshake(ConfigureRequest& configure, std::string& error)
 {
     if (!LoadEnvironment(error) || !CreateListener(error) || !AcceptClient(error) ||
-        !ExchangeHandshake(config, error)) {
+        !ExchangeHandshake(configure, error)) {
         return false;
     }
     return true;
 }
 
 bool UdsServer::SendSynchronous(
-    MessageType type, const std::vector<uint8_t>& payload, DeadlineMs deadline, std::string& error)
+    MessageType type, const std::vector<uint8_t>& payload, uint16_t flags, DeadlineMs deadline, std::string& error)
 {
     std::lock_guard<std::mutex> sendLock(sendMutex_);
     Frame frame{};
     frame.type = type;
+    frame.flags = flags;
     frame.sessionId = sessionId_;
     frame.sequence = sendSequence_++;
     frame.payload = payload;
@@ -253,9 +264,10 @@ bool UdsServer::SendSynchronous(
     return true;
 }
 
-bool UdsServer::SendReady(const std::string& message, std::string& error)
+bool UdsServer::SendReady(std::string& error)
 {
-    if (!SendSynchronous(MessageType::READY, EncodeText(message), handshakeDeadline_, error)) {
+    // payload 恒为空：Ready 只表达"会话就绪"。
+    if (!SendSynchronous(MessageType::READY, {}, 0, handshakeDeadline_, error)) {
         return false;
     }
     // Ready 已发出，握手 deadline 到此结束；后续结果发送改用独立的上限。
@@ -309,7 +321,7 @@ void UdsServer::PublisherLoop()
         std::string error;
         // 结果发送用独立上限，不复用握手 deadline，也不能不设上限：CLI 已死或长时间不读时
         // sendmsg 会一直 EAGAIN，无限等待会把目标应用卡在退出路径上。
-        if (!SendSynchronous(message.type, message.payload, DeadlineAfterMs(kResultSendTimeoutMs), error)) {
+        if (!SendSynchronous(message.type, message.payload, 0, DeadlineAfterMs(kResultSendTimeoutMs), error)) {
             std::lock_guard<std::mutex> lock(queueMutex_);
             droppedMessages_ += queue_.size();
             queue_.clear();
@@ -319,56 +331,101 @@ void UdsServer::PublisherLoop()
     }
 }
 
-void UdsServer::SendInitializationError(const std::string& message)
+void UdsServer::SendInitializationError(ErrorDomain domain, uint16_t code, const std::string& message)
 {
     if (clientFd_ < 0) {
         return;
     }
     std::string ignored;
-    (void)SendSynchronous(MessageType::ERROR, EncodeText(message), handshakeDeadline_, ignored);
+    (void)SendSynchronous(MessageType::ERROR, EncodeError({domain, code, message}), 0, handshakeDeadline_, ignored);
 }
 
-void UdsServer::SendFlowError(const std::string& message) noexcept
+void UdsServer::SendError(ErrorDomain domain, uint16_t code, const std::string& message) noexcept
 {
     try {
         if (clientFd_ < 0) {
             return;
         }
+        // Error 与 Result 互斥：走到这里说明报告已经不可能完整交付，所以同样要先把实时
+        // 诊断队列排空，避免 Error 之后还有孤零零的诊断帧继续流出去。
+        StopPublisher();
         std::string ignored;
-        (void)SendSynchronous(MessageType::ERROR, EncodeText(message), DeadlineAfterMs(kResultSendTimeoutMs), ignored);
+        (void)SendSynchronous(
+            MessageType::ERROR, EncodeError({domain, code, message}), 0, DeadlineAfterMs(kResultSendTimeoutMs),
+            ignored);
     } catch (...) {
         return;
     }
 }
 
-void UdsServer::Shutdown(const std::string& summary, const std::string& sessionEnd)
+bool UdsServer::SendResult(const std::string& report, bool hasErrors, bool truncated, std::string& error)
+{
+    // 实时诊断与 Result 共用同一条连接和同一个发送序号。publisher 线程还活着时，两个
+    // 分片之间随时可能被插入一帧 DIAGNOSTIC_STREAM —— 接收端按 MORE 位拼接，插进来的
+    // 帧本身会被跳过，但这会让"报告"和"实时流"在时间上交错，语义上不再是一个整体。
+    // 因此先把 publisher 停干净，Result 序列独占后续线路。
+    StopPublisher();
+    if (clientFd_ < 0) {
+        error = "no client connection for the result";
+        return false;
+    }
+    if (report.size() > kMaxResultBytes) {
+        error = "result exceeds the maximum report size";
+        return false;
+    }
+    // 整个分片序列共用一个绝对 deadline。分片数取决于报告长度，若每片各给一份完整超时，
+    // 最坏会把上限放大到分片数倍，把目标应用长时间钉在退出路径上、NPU 资源不释放。
+    const DeadlineMs deadline = DeadlineAfterMs(kResultSendTimeoutMs);
+    size_t offset = 0;
+    while (true) {
+        const size_t chunk = std::min(kMaxPayloadSize, report.size() - offset);
+        const bool isLast = offset + chunk >= report.size();
+        uint16_t flags = 0;
+        if (!isLast) {
+            flags |= kFlagMore;
+        } else {
+            // 结论位只在末帧上有效：接收端在收到 MORE=0 之前不该对本次检查下任何结论。
+            if (hasErrors) {
+                flags |= kFlagHasErrors;
+            }
+            if (truncated) {
+                flags |= kFlagTruncated;
+            }
+        }
+        const auto begin = report.begin() + static_cast<std::ptrdiff_t>(offset);
+        const std::vector<uint8_t> payload(begin, begin + static_cast<std::ptrdiff_t>(chunk));
+        if (!SendSynchronous(MessageType::RESULT, payload, flags, deadline, error)) {
+            return false;
+        }
+        if (isLast) {
+            // 报告为空时循环也恰好走一趟：chunk 为 0、isLast 为真，发出一个空的末帧。
+            // 接收端据此知道"检查完成且没有任何诊断"，而不是把连接关闭当成报告丢失。
+            return true;
+        }
+        offset += chunk;
+    }
+}
+
+void UdsServer::StopPublisher()
 {
     bool shouldJoin = false;
     {
         std::lock_guard<std::mutex> lock(queueMutex_);
-        if (publisherStarted_ && !closing_) {
-            if (!summary.empty()) {
-                queue_.push_back({MessageType::SUMMARY, EncodeText(summary)});
-            }
-            if (!sessionEnd.empty()) {
-                queue_.push_back({MessageType::SESSION_END, EncodeText(sessionEnd)});
-            }
-            closing_ = true;
-        }
-        shouldJoin = publisher_.joinable();
+        closing_ = true;
+        // publisherStopped_ 在锁内翻转，保证线程句柄只被处置一次：本函数在退出路径上
+        // 会被 SendResult / SendError / Shutdown 依次调用，重复 join 同一个 thread 是 UB。
+        shouldJoin = !publisherStopped_ && publisher_.joinable();
+        publisherStopped_ = true;
     }
     queueReady_.notify_all();
     if (shouldJoin) {
         publisher_.join();
-    } else if (clientFd_ >= 0 && !sessionEnd.empty()) {
-        std::string ignored;
-        if (!summary.empty()) {
-            (void)SendSynchronous(
-                MessageType::SUMMARY, EncodeText(summary), DeadlineAfterMs(kResultSendTimeoutMs), ignored);
-        }
-        (void)SendSynchronous(
-            MessageType::SESSION_END, EncodeText(sessionEnd), DeadlineAfterMs(kResultSendTimeoutMs), ignored);
     }
+}
+
+void UdsServer::Shutdown()
+{
+    StopPublisher();
     CloseDescriptors();
 }
 
@@ -386,6 +443,8 @@ void UdsServer::CloseDescriptors()
 }
 
 uint64_t UdsServer::SessionId() const { return sessionId_; }
+
+uint16_t UdsServer::NegotiatedMinor() const { return negotiatedMinor_; }
 
 uint64_t UdsServer::DroppedMessages() const
 {

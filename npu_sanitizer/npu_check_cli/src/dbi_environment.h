@@ -11,8 +11,6 @@
 #ifndef NPU_CHECK_CLI_DBI_ENVIRONMENT_H
 #define NPU_CHECK_CLI_DBI_ENVIRONMENT_H
 
-#include "wire_protocol.h"
-
 #include <string>
 #include <utility>
 #include <vector>
@@ -21,7 +19,17 @@ namespace npu::sanitizer::cli {
 
 using EnvironmentEntries = std::vector<std::pair<std::string, std::string>>;
 
-EnvironmentEntries BuildDbiEnvironment(const ipc::ToolConfig& config);
+// DBI 运行期需要的部署参数。Configure 改用注册表编码后只承载工具与子选项，路径这类
+// 与协议无关的信息改由环境变量传给目标进程，因此这里不再复用协议结构体。
+struct DbiSettings {
+    std::string workDir;
+    std::string probeCacheDir;
+    bool strict = true;
+    bool keepTemp = false;
+    std::vector<std::string> compileOptions;
+};
+
+EnvironmentEntries BuildDbiEnvironment(const DbiSettings& settings);
 bool ApplyEnvironment(const EnvironmentEntries& entries, std::string& error);
 
 } // namespace npu::sanitizer::cli

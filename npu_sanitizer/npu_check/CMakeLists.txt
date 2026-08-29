@@ -46,6 +46,7 @@ add_library(npu_check_core STATIC
   src/checker/allocation_registry.cpp
   src/checker/memcheck.cpp
   src/checker/synccheck.cpp
+  src/diagnostic/report_buffer.cpp
   src/ipc/uds_server.cpp
   src/logging/logger.cpp
   src/tool_manager/tool_manager.cpp
@@ -151,6 +152,7 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR OR ENABLE_TEST)
     tests/allocation_registry_test.cpp
     tests/logger_test.cpp
     tests/memcheck_test.cpp
+    tests/report_buffer_test.cpp
     tests/uds_server_test.cpp
     tests/wire_protocol_test.cpp
     ${NPU_CHECK_REPORT_RENDERER_SOURCES}

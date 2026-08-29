@@ -12,6 +12,8 @@
 
 #include <filesystem>
 #include <string>
+#include <sys/stat.h>
+#include <sys/types.h>
 #include <unistd.h>
 #include <utility>
 #include <vector>
@@ -161,6 +163,14 @@ TEST(OptionsTest, SuboptionOwnershipIsIndependentOfPosition)
     ASSERT_EQ(before.options.tools.front().options.size(), 1U);
     // 布尔类子选项"出现即为真"，value_size=1 且只取 0x01。
     EXPECT_EQ(before.options.tools.front().options.front().value, (std::vector<uint8_t>{0x01}));
+
+    // 光比对解析结果不够：规范化只做了一半时，解析结果可能相同而编码不同。
+    // 编码字节逐一相等才是"位置无关"的真正断言。
+    ipc::ConfigureRequest beforeRequest;
+    beforeRequest.tools = before.options.tools;
+    ipc::ConfigureRequest afterRequest;
+    afterRequest.tools = after.options.tools;
+    EXPECT_EQ(ipc::EncodeConfigure(beforeRequest), ipc::EncodeConfigure(afterRequest));
 }
 
 // 依赖校验在默认值生效之后进行：默认集合含 memcheck，故该子选项合法。
@@ -264,6 +274,35 @@ TEST(OptionsTest, NormalizesLogFileToAbsolutePath)
     EXPECT_TRUE(Parse({"npu_check", "./sample"}).options.logFile.empty());
 }
 
+// --work-dir 的值要跨 fork 传给注入库，而子进程的当前目录不保证与 CLI 相同，
+// 相对路径会在两侧解析到不同位置，因此必须在解析阶段就转成绝对路径。
+TEST(OptionsTest, NormalizesWorkDirToAbsolutePath)
+{
+    const auto result = Parse({"npu_check", "--work-dir", "probe_runtime", "./sample"});
+
+    ASSERT_TRUE(result.ok) << result.error;
+    EXPECT_TRUE(std::filesystem::path(result.options.workDir).is_absolute());
+    EXPECT_EQ(std::filesystem::path(result.options.workDir).filename().string(), "probe_runtime");
+
+    // 未指定时为空，由 CLI 退回临时会话目录。
+    EXPECT_TRUE(Parse({"npu_check", "./sample"}).options.workDir.empty());
+
+    const auto missingValue = Parse({"npu_check", "--work-dir"});
+    EXPECT_FALSE(missingValue.ok);
+    EXPECT_EQ(missingValue.error, "missing value for --work-dir");
+}
+
+// 这三个选项随选项注册表改造一并移除，语义已由子选项或库侧默认值承担，
+// 不能因为旧脚本还在传就悄悄接受它们。
+TEST(OptionsTest, RejectsRemovedLegacyOptions)
+{
+    for (const char* removed : {"--strict", "--keep-temp", "--probe-cache-dir"}) {
+        const auto result = Parse({"npu_check", removed, "./sample"});
+        EXPECT_FALSE(result.ok) << removed;
+        EXPECT_EQ(result.error, std::string("unknown option: ") + removed);
+    }
+}
+
 TEST(OptionsTest, ResolvesExplicitRegularFile)
 {
     TemporaryFile library;
@@ -282,7 +321,38 @@ TEST(OptionsTest, RejectsMissingLibrary)
     std::string error;
 
     EXPECT_FALSE(ResolveLibraryPath("/tmp/npu_check_missing_library.so", resolved, error));
-    EXPECT_EQ(error, "cannot locate libnpu_check.so; set NPU_CHECK_LIBRARY_PATH");
+    // 诊断必须点出实际搜索过的位置，而不是只说"没找到"。
+    EXPECT_NE(error.find("cannot locate libnpu_check.so"), std::string::npos) << error;
+    EXPECT_NE(error.find("ASCEND_TOOLKIT_HOME"), std::string::npos) << error;
+}
+
+// 注入库会被加载进目标进程并以其权限运行；组可写或其他人可写意味着别人能替换它的
+// 内容，等于交出任意代码执行的入口，因此必须拒绝而不是警告。
+TEST(OptionsTest, RejectsGroupOrWorldWritableLibrary)
+{
+    for (const mode_t mode : {static_cast<mode_t>(0664), static_cast<mode_t>(0646)}) {
+        TemporaryFile library;
+        ASSERT_FALSE(library.Path().empty());
+        ASSERT_EQ(chmod(library.Path().c_str(), mode), 0);
+
+        std::string resolved;
+        std::string error;
+        EXPECT_FALSE(ResolveLibraryPath(library.Path().string(), resolved, error)) << std::oct << mode;
+        // 与"压根没找到"必须是两种不同的诊断，否则用户只会反复去查路径。
+        EXPECT_NE(error.find("group- or world-writable"), std::string::npos) << error;
+    }
+}
+
+TEST(OptionsTest, AcceptsLibraryWithSafePermissions)
+{
+    TemporaryFile library;
+    ASSERT_FALSE(library.Path().empty());
+    ASSERT_EQ(chmod(library.Path().c_str(), 0755), 0);
+
+    std::string resolved;
+    std::string error;
+    ASSERT_TRUE(ResolveLibraryPath(library.Path().string(), resolved, error)) << error;
+    EXPECT_EQ(resolved, std::filesystem::canonical(library.Path()).string());
 }
 
 // --help 输出只含对外选项，内部验证选项不得外泄。
@@ -292,6 +362,7 @@ TEST(OptionsTest, UsageListsOnlyPublicOptions)
 
     EXPECT_NE(usage.find("--tool"), std::string::npos);
     EXPECT_NE(usage.find("--log-file"), std::string::npos);
+    EXPECT_NE(usage.find("--work-dir"), std::string::npos);
     EXPECT_NE(usage.find("--help"), std::string::npos);
     EXPECT_NE(usage.find("-h"), std::string::npos);
 

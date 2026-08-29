@@ -22,6 +22,7 @@
 #include <sys/un.h>
 #include <thread>
 #include <unistd.h>
+#include <vector>
 
 namespace npu::sanitizer::ipc {
 namespace {
@@ -56,6 +57,12 @@ private:
 struct ClientResult {
     Frame ready;
     Frame flowError;
+    std::string error;
+};
+
+// Result 是分片序列，逐帧留下来才能检查 MORE / HAS_ERRORS / TRUNCATED 的落位。
+struct ResultClientResult {
+    std::vector<Frame> frames;
     std::string error;
 };
 
@@ -132,16 +139,159 @@ void RunClient(const std::string& udsName, uint64_t sessionId, ClientResult& res
         return;
     }
 
-    ToolConfig config{};
-    config.toolName = "memcheck";
-    config.workDir = "/tmp";
-    if (!SendClientFrame(fd, MessageType::CONFIGURE, sessionId, sequence++, EncodeToolConfig(config), result.error) ||
+    ConfigureRequest configure;
+    ToolRequest tool;
+    tool.toolId = ToolId::kMemcheck;
+    configure.tools.push_back(std::move(tool));
+    if (!SendClientFrame(fd, MessageType::CONFIGURE, sessionId, sequence++, EncodeConfigure(configure), result.error) ||
         ReceiveFrame(fd, result.ready, deadline, result.error) != IoStatus::OK ||
         ReceiveFrame(fd, result.flowError, deadline, result.error) != IoStatus::OK) {
         (void)close(fd);
         return;
     }
     (void)close(fd);
+}
+
+// 走完握手后持续收帧，直到拿到 MORE=0 的 Result 末帧为止，把整个分片序列原样留下。
+void RunResultClient(const std::string& udsName, uint64_t sessionId, ResultClientResult& result)
+{
+    sockaddr_un address{};
+    socklen_t addrLen = 0;
+    if (!BuildAbstractAddress(udsName, address, addrLen, result.error)) {
+        return;
+    }
+
+    const DeadlineMs deadline = DeadlineAfterMs(5000);
+    int fd = -1;
+    while (true) {
+        fd = CreateSeqpacketSocket(result.error);
+        if (fd < 0) {
+            return;
+        }
+        if (connect(fd, reinterpret_cast<const sockaddr*>(&address), addrLen) == 0) {
+            break;
+        }
+        (void)close(fd);
+        fd = -1;
+        if (MonotonicNowMs() >= deadline) {
+            result.error = "client connect timed out";
+            return;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(2));
+    }
+
+    uint64_t sequence = 1;
+    HelloPayload hello{};
+    hello.pid = static_cast<uint32_t>(getpid());
+    hello.uid = static_cast<uint32_t>(getuid());
+    Frame serverHello{};
+    ConfigureRequest configure;
+    ToolRequest tool;
+    tool.toolId = ToolId::kMemcheck;
+    configure.tools.push_back(std::move(tool));
+    Frame ready{};
+    if (!SendClientFrame(fd, MessageType::CLIENT_HELLO, sessionId, sequence++, EncodeHello(hello), result.error) ||
+        ReceiveFrame(fd, serverHello, deadline, result.error) != IoStatus::OK ||
+        !SendClientFrame(fd, MessageType::CONFIGURE, sessionId, sequence++, EncodeConfigure(configure), result.error) ||
+        ReceiveFrame(fd, ready, deadline, result.error) != IoStatus::OK) {
+        (void)close(fd);
+        return;
+    }
+
+    while (true) {
+        Frame frame{};
+        if (ReceiveFrame(fd, frame, deadline, result.error) != IoStatus::OK) {
+            break;
+        }
+        result.frames.push_back(frame);
+        if (frame.type == MessageType::RESULT && (frame.flags & kFlagMore) == 0) {
+            break;
+        }
+    }
+    (void)close(fd);
+}
+
+// Result 必须按 kMaxPayloadSize 切片，除末帧外都置 MORE，结论位只出现在末帧上。
+TEST(UdsServerTest, FragmentsResultAcrossFramesAndFlagsOnlyTheLastOne)
+{
+    constexpr uint64_t kSessionId = 90212;
+    const std::string udsName = "@npu_check_uds_result_test_" + std::to_string(static_cast<uint64_t>(getpid()));
+    ScopedEnvironmentVariable udsNameEnvironment(kUdsNameEnv, udsName);
+    ScopedEnvironmentVariable sessionEnvironment(kSessionIdEnv, std::to_string(kSessionId));
+    ScopedEnvironmentVariable pidEnvironment(kCliPidEnv, std::to_string(static_cast<uint64_t>(getpid())));
+    ScopedEnvironmentVariable timeoutEnvironment(kHandshakeTimeoutEnv, "5000");
+
+    // 刻意跨过两个整分片，验证边界处既不丢字节也不多发空帧。
+    const std::string report(kMaxPayloadSize * 2 + 17, 'r');
+
+    ResultClientResult clientResult{};
+    std::thread client(RunResultClient, udsName, kSessionId, std::ref(clientResult));
+
+    UdsServer server;
+    ConfigureRequest config{};
+    std::string serverError;
+    const bool handshakeSucceeded = server.StartAndHandshake(config, serverError);
+    const bool readySucceeded = handshakeSucceeded && server.SendReady(serverError);
+    bool resultSucceeded = false;
+    if (readySucceeded) {
+        resultSucceeded = server.SendResult(report, true, false, serverError);
+    }
+    client.join();
+    server.Shutdown();
+
+    ASSERT_TRUE(handshakeSucceeded) << serverError;
+    ASSERT_TRUE(readySucceeded) << serverError;
+    ASSERT_TRUE(resultSucceeded) << serverError;
+    ASSERT_TRUE(clientResult.error.empty()) << clientResult.error;
+    ASSERT_EQ(clientResult.frames.size(), 3U);
+
+    std::string received;
+    for (size_t index = 0; index < clientResult.frames.size(); ++index) {
+        const Frame& frame = clientResult.frames[index];
+        EXPECT_EQ(frame.type, MessageType::RESULT);
+        // Ready 占用了序号 2，Result 从 3 开始严格递增。
+        EXPECT_EQ(frame.sequence, index + 3);
+        const bool isLast = index + 1 == clientResult.frames.size();
+        EXPECT_EQ((frame.flags & kFlagMore) != 0, !isLast);
+        EXPECT_EQ((frame.flags & kFlagHasErrors) != 0, isLast);
+        EXPECT_FALSE((frame.flags & kFlagTruncated) != 0);
+        received.append(frame.payload.begin(), frame.payload.end());
+    }
+    EXPECT_EQ(received, report);
+}
+
+// 没有任何诊断时也必须发出一个空的末帧：接收端据此区分"检查完成、无问题"与"报告丢失"。
+TEST(UdsServerTest, SendsOneEmptyFrameForAnEmptyResult)
+{
+    constexpr uint64_t kSessionId = 90213;
+    const std::string udsName = "@npu_check_uds_empty_result_test_" + std::to_string(static_cast<uint64_t>(getpid()));
+    ScopedEnvironmentVariable udsNameEnvironment(kUdsNameEnv, udsName);
+    ScopedEnvironmentVariable sessionEnvironment(kSessionIdEnv, std::to_string(kSessionId));
+    ScopedEnvironmentVariable pidEnvironment(kCliPidEnv, std::to_string(static_cast<uint64_t>(getpid())));
+    ScopedEnvironmentVariable timeoutEnvironment(kHandshakeTimeoutEnv, "5000");
+
+    ResultClientResult clientResult{};
+    std::thread client(RunResultClient, udsName, kSessionId, std::ref(clientResult));
+
+    UdsServer server;
+    ConfigureRequest config{};
+    std::string serverError;
+    const bool handshakeSucceeded = server.StartAndHandshake(config, serverError);
+    const bool readySucceeded = handshakeSucceeded && server.SendReady(serverError);
+    bool resultSucceeded = false;
+    if (readySucceeded) {
+        resultSucceeded = server.SendResult({}, false, false, serverError);
+    }
+    client.join();
+    server.Shutdown();
+
+    ASSERT_TRUE(handshakeSucceeded) << serverError;
+    ASSERT_TRUE(resultSucceeded) << serverError;
+    ASSERT_TRUE(clientResult.error.empty()) << clientResult.error;
+    ASSERT_EQ(clientResult.frames.size(), 1U);
+    EXPECT_EQ(clientResult.frames[0].type, MessageType::RESULT);
+    EXPECT_EQ(clientResult.frames[0].flags, 0U);
+    EXPECT_TRUE(clientResult.frames[0].payload.empty());
 }
 
 TEST(UdsServerTest, SendsFlowErrorSynchronouslyAfterReady)
@@ -158,27 +308,33 @@ TEST(UdsServerTest, SendsFlowErrorSynchronouslyAfterReady)
     std::thread client(RunClient, udsName, kSessionId, std::ref(clientResult), false);
 
     UdsServer server;
-    ToolConfig config{};
+    ConfigureRequest config{};
     std::string serverError;
     const bool handshakeSucceeded = server.StartAndHandshake(config, serverError);
-    const bool readySucceeded = handshakeSucceeded && server.SendReady("tool=memcheck", serverError);
+    const bool readySucceeded = handshakeSucceeded && server.SendReady(serverError);
     if (readySucceeded) {
-        server.SendFlowError("callback processing failed");
+        server.SendError(ErrorDomain::kInternal, error_code::kReportUnavailable, "callback processing failed");
     }
     client.join();
-    server.Shutdown({}, {});
+    server.Shutdown();
 
     ASSERT_TRUE(handshakeSucceeded) << serverError;
     ASSERT_TRUE(readySucceeded) << serverError;
     ASSERT_TRUE(clientResult.error.empty()) << clientResult.error;
-    EXPECT_EQ(config.toolName, "memcheck");
+    ASSERT_EQ(config.tools.size(), 1U);
+    EXPECT_EQ(config.tools[0].toolId, ToolId::kMemcheck);
     EXPECT_EQ(clientResult.ready.type, MessageType::READY);
     EXPECT_EQ(clientResult.ready.sequence, 2U);
     EXPECT_EQ(clientResult.flowError.type, MessageType::ERROR);
     EXPECT_EQ(clientResult.flowError.sequence, 3U);
-    std::string flowError;
-    ASSERT_TRUE(DecodeText(clientResult.flowError.payload, flowError, clientResult.error));
-    EXPECT_EQ(flowError, "callback processing failed");
+    // Ready 的 payload 必须为空，会话细节只写 Server 本地日志。
+    EXPECT_TRUE(clientResult.ready.payload.empty());
+    // Error 走 8 字节结构化头 + 文本，CLI 据 domain/code 记日志，message 只供人读。
+    ErrorPayload flowError{};
+    ASSERT_TRUE(DecodeError(clientResult.flowError.payload, flowError, clientResult.error));
+    EXPECT_EQ(flowError.domain, ErrorDomain::kInternal);
+    EXPECT_EQ(flowError.code, error_code::kReportUnavailable);
+    EXPECT_EQ(flowError.message, "callback processing failed");
 }
 
 // 回归测试：must-ignore 帧必须被跳过，且不能打乱后续帧的序号校验。
@@ -199,21 +355,22 @@ TEST(UdsServerTest, SkipsMustIgnoreFramesWithoutBreakingSequence)
     std::thread client(RunClient, udsName, kSessionId, std::ref(clientResult), true);
 
     UdsServer server;
-    ToolConfig config{};
+    ConfigureRequest config{};
     std::string serverError;
     const bool handshakeSucceeded = server.StartAndHandshake(config, serverError);
-    const bool readySucceeded = handshakeSucceeded && server.SendReady("tool=memcheck", serverError);
+    const bool readySucceeded = handshakeSucceeded && server.SendReady(serverError);
     if (readySucceeded) {
-        server.SendFlowError("callback processing failed");
+        server.SendError(ErrorDomain::kInternal, error_code::kReportUnavailable, "callback processing failed");
     }
     client.join();
-    server.Shutdown({}, {});
+    server.Shutdown();
 
     // 跳过那一帧之后，CONFIGURE 仍应被正常接收并解出，握手照常完成。
     ASSERT_TRUE(handshakeSucceeded) << serverError;
     ASSERT_TRUE(readySucceeded) << serverError;
     ASSERT_TRUE(clientResult.error.empty()) << clientResult.error;
-    EXPECT_EQ(config.toolName, "memcheck");
+    ASSERT_EQ(config.tools.size(), 1U);
+    EXPECT_EQ(config.tools[0].toolId, ToolId::kMemcheck);
     EXPECT_EQ(clientResult.ready.type, MessageType::READY);
 }
 

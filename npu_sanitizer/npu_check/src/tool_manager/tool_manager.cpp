@@ -213,36 +213,48 @@ int ToolManager::Initialize()
     }
 
     std::string error;
-    if (!server_.StartAndHandshake(config_, error)) {
+    if (!server_.StartAndHandshake(configure_, error)) {
         LogHandshakeFailure(error);
-        server_.Shutdown({}, {});
+        server_.Shutdown();
         return 1;
     }
     if (!InitializeLogger(error)) {
-        server_.SendInitializationError(error);
-        server_.Shutdown({}, "status=initialization_failed");
+        server_.SendInitializationError(ipc::ErrorDomain::kInjection, ipc::error_code::kLoggerOpenFailed, error);
+        server_.Shutdown();
         return 1;
     }
-    logger_.Info("UDS handshake completed");
+    std::ostringstream handshakeMessage;
+    handshakeMessage << "UDS handshake completed session=" << server_.SessionId()
+                     << " negotiated_minor=" << server_.NegotiatedMinor();
+    logger_.Info(handshakeMessage.str());
     std::ostringstream configMessage;
-    configMessage << "tool configuration tool=" << config_.toolName << " strict=" << (config_.strict ? "true" : "false")
-                  << " keep_temp=" << (config_.keepTemp ? "true" : "false") << " work_dir=" << config_.workDir
-                  << " probe_cache_dir=" << config_.probeCacheDir << " report_file=" << config_.logFile;
+    configMessage << "tool configuration work_dir=" << workDir_ << " tool_count=" << configure_.tools.size();
+    for (const auto& tool : configure_.tools) {
+        configMessage << " tool=" << ipc::ToolName(tool.toolId) << " option_count=" << tool.options.size();
+        for (const auto& option : tool.options) {
+            configMessage << " option_id=0x" << std::hex << static_cast<unsigned>(option.optionId) << std::dec;
+        }
+    }
     logger_.Info(configMessage.str());
     if (!ConfigureSanitizer(error)) {
         logger_.Error(error);
-        server_.SendInitializationError(error);
+        server_.SendInitializationError(
+            ipc::ErrorDomain::kConfiguration, ipc::error_code::kToolInitializationFailed, error);
         RollbackSanitizer();
-        server_.Shutdown({}, "status=initialization_failed");
+        server_.Shutdown();
         return 1;
     }
-    if (!server_.SendReady(BuildReadyMessage(), error)) {
+    // Ready 不带 payload，会话细节只写本地日志。
+    logger_.Info(BuildReadyMessage());
+    if (!server_.SendReady(error)) {
         logger_.Error(error);
         RollbackSanitizer();
-        server_.Shutdown({}, "status=transport_failed");
+        server_.Shutdown();
         return 1;
     }
-    logger_.SetErrorSink([this](const std::string& message) { server_.SendFlowError(message); });
+    // 这里曾经把 logger 的错误接到 UDS 的 Error 帧上。新协议里 Error 表示"基础设施失败、
+    // 本次检查结论不可用"，CLI 收到即退 125；一次日志写盘失败显然够不上这个级别，却会
+    // 让整次检查作废。日志错误只留在本地 npu_check.log 里，不再上线路。
     initialized_ = true;
     logger_.Info("npu_check initialization completed");
     return 0;
@@ -265,8 +277,12 @@ void ToolManager::LogHandshakeFailure(const std::string& reason) noexcept
 
 bool ToolManager::InitializeLogger(std::string& error)
 {
+    // 工作目录经环境变量传入。Configure 改用注册表编码后只承载工具与子选项，路径这类
+    // 与协议无关的部署信息不再占线路。未设置时退回当前目录。
+    const char* workDir = std::getenv(ipc::kWorkDirEnv);
+    workDir_ = workDir != nullptr ? workDir : "";
     const std::filesystem::path directory =
-        config_.workDir.empty() ? std::filesystem::current_path() : std::filesystem::path(config_.workDir);
+        workDir_.empty() ? std::filesystem::current_path() : std::filesystem::path(workDir_);
     const std::string path = (directory / "npu_check.log").string();
     if (!logger_.Open(path, logging::Logger::ConfiguredLevel(), error)) {
         return false;
@@ -274,18 +290,38 @@ bool ToolManager::InitializeLogger(std::string& error)
     return true;
 }
 
+bool ToolManager::IsToolEnabled(ipc::ToolId toolId) const
+{
+    for (const auto& tool : configure_.tools) {
+        if (tool.toolId == toolId) {
+            return true;
+        }
+    }
+    return false;
+}
+
 bool ToolManager::ConfigureSanitizer(std::string& error)
 {
-    if (config_.toolName != "memcheck" && config_.toolName != "synccheck") {
-        error = "unsupported tool '" + config_.toolName + "'; current implementation supports memcheck and synccheck";
+    if (configure_.tools.empty()) {
+        error = "configure enabled no tool";
         return false;
     }
-    if (config_.toolName == "memcheck") {
-        memcheck_ = std::make_unique<Memcheck>(config_.strict);
-        logger_.Debug("memcheck instance created");
-    } else {
-        synccheck_ = std::make_unique<Synccheck>(&logger_);
-        logger_.Debug("synccheck instance created");
+    // 按 toolId 升序逐个构造 checker。工具之间没有互斥关系，memcheck 与 synccheck
+    // 可以在同一次运行中同时启用；任一构造失败即整体失败，不发 Ready。
+    for (const auto& tool : configure_.tools) {
+        switch (tool.toolId) {
+            case ipc::ToolId::kMemcheck:
+                memcheck_ = std::make_unique<Memcheck>(true);
+                logger_.Debug("memcheck instance created");
+                break;
+            case ipc::ToolId::kSynccheck:
+                synccheck_ = std::make_unique<Synccheck>(&logger_);
+                logger_.Debug("synccheck instance created");
+                break;
+            default:
+                error = std::string("unsupported tool '") + ipc::ToolName(tool.toolId) + "'";
+                return false;
+        }
     }
     AclsanStatus status = aclsanSubscribe(&subscriber_, &ToolManager::Callback, this);
     if (status != ACLSAN_STATUS_SUCCESS) {
@@ -299,21 +335,40 @@ bool ToolManager::ConfigureSanitizer(std::string& error)
 
 bool ToolManager::EnableCallbacks(std::string& error)
 {
-    const auto enable = [this, &error](const auto& callbacks) {
+    // 需要使能的回调是各 checker 声明集合的并集，去重后一次性使能。
+    //
+    // 去重不是优化：SYNCHRONIZE/STREAM_SYNC_END 被 memcheck 与 synccheck 共用，两个
+    // 工具同时启用时若各使能一次，同一事件会被投递两次，配对与统计逻辑都会出错。
+    std::vector<CallbackSpec> required;
+    const auto collect = [&required](const auto& callbacks) {
         for (const auto& callback : callbacks) {
-            const AclsanStatus status = aclsanEnableCallback(1, subscriber_, callback.domain, callback.cbid);
-            if (status != ACLSAN_STATUS_SUCCESS) {
-                error = StatusMessage("aclsanEnableCallback", status);
-                return false;
+            const bool duplicate = std::any_of(required.begin(), required.end(), [&callback](const CallbackSpec& spec) {
+                return spec.domain == callback.domain && spec.cbid == callback.cbid;
+            });
+            if (!duplicate) {
+                required.push_back(callback);
             }
-            std::ostringstream message;
-            message << "callback enabled domain=" << static_cast<uint32_t>(callback.domain)
-                    << " cbid=" << static_cast<uint32_t>(callback.cbid);
-            logger_.Debug(message.str());
         }
-        return true;
     };
-    return config_.toolName == "memcheck" ? enable(kMemcheckCallbacks) : enable(kSynccheckCallbacks);
+    if (memcheck_ != nullptr) {
+        collect(kMemcheckCallbacks);
+    }
+    if (synccheck_ != nullptr) {
+        collect(kSynccheckCallbacks);
+    }
+
+    for (const auto& callback : required) {
+        const AclsanStatus status = aclsanEnableCallback(1, subscriber_, callback.domain, callback.cbid);
+        if (status != ACLSAN_STATUS_SUCCESS) {
+            error = StatusMessage("aclsanEnableCallback", status);
+            return false;
+        }
+        std::ostringstream message;
+        message << "callback enabled domain=" << static_cast<uint32_t>(callback.domain)
+                << " cbid=" << static_cast<uint32_t>(callback.cbid);
+        logger_.Debug(message.str());
+    }
+    return true;
 }
 
 void ToolManager::RollbackSanitizer()
@@ -356,20 +411,29 @@ void ToolManager::Finalize()
         callbacksDrained_.wait(callbackLock, [this] { return activeCallbacks_ == 0; });
     }
 
+    // 先把实时诊断队列排空并停掉 publisher 线程：一是让 Result 独占后续线路，二是
+    // dropped_messages 只有等队列落定之后才是终值，否则写进报告的是中间数。
+    server_.StopPublisher();
+
     const std::string summary = BuildSummaryMessage();
     logger_.Info(summary);
-    bool analysisComplete = false;
+    // 多工具时取"全部工具都分析完整"，任一工具留有在途或被丢弃的事件，整份报告就
+    // 不能声称完整 —— 这里必须是与，不是二选一。
+    bool analysisComplete = true;
     {
         std::lock_guard<std::mutex> stateLock(stateMutex_);
         if (memcheck_ != nullptr) {
             const MemcheckStats stats = memcheck_->Stats();
-            analysisComplete = stats.pendingDeviceOperations == 0 && stats.droppedDeviceOperations == 0;
-        } else if (synccheck_ != nullptr) {
+            analysisComplete =
+                analysisComplete && stats.pendingDeviceOperations == 0 && stats.droppedDeviceOperations == 0;
+        }
+        if (synccheck_ != nullptr) {
             const SynccheckStats stats = synccheck_->Stats();
-            analysisComplete = stats.pendingOpens == 0 && stats.invalidEvents == 0;
+            analysisComplete = analysisComplete && stats.pendingOpens == 0 && stats.invalidEvents == 0;
         }
         analysisComplete = analysisComplete && malformedCallbacks_ == 0 && frameworkErrors_ == 0;
     }
+    const bool truncated = report_.Truncated();
     std::ostringstream sessionEnd;
     const bool transportComplete = server_.TransportComplete() && server_.DroppedMessages() == 0;
     sessionEnd << "status="
@@ -377,13 +441,50 @@ void ToolManager::Finalize()
                                                                                                          "incomplete")
                << " aclsan_unsubscribe=" << static_cast<int>(unsubscribeStatus)
                << " dropped_messages=" << server_.DroppedMessages()
-               << " analysis_complete=" << (analysisComplete ? "true" : "false");
-    server_.Shutdown(summary, sessionEnd.str());
+               << " analysis_complete=" << (analysisComplete ? "true" : "false")
+               << " report_truncated=" << (truncated ? "true" : "false");
+
+    // 汇总与完整性信息进报告正文，而不是单独的消息类型：CLI 不解析报告内容，能不能
+    // 信任这份结论由 Result 末帧的标志位表达，正文只负责让人读懂发生了什么。
+    std::ostringstream trailer;
+    trailer << "===== npu_check summary =====\n" << summary << '\n' << sessionEnd.str() << '\n';
+    (void)report_.Append(trailer.str());
+
+    const bool hasErrors = HasDetectedErrors();
+    if (report_.Failed()) {
+        // 报告本身没能拼出来，此时宁可什么都不给，也不能把残缺的正文当成结论发出去。
+        server_.SendError(
+            ipc::ErrorDomain::kInternal, ipc::error_code::kReportUnavailable,
+            "npu_check cannot produce the session report");
+    } else {
+        const std::string reportText = report_.Take();
+        std::string sendError;
+        if (!server_.SendResult(reportText, hasErrors, truncated, sendError)) {
+            logger_.Error("failed to deliver the session report: " + sendError);
+        }
+    }
+    server_.Shutdown();
     logger_.Info(sessionEnd.str());
     logger_.Flush();
     memcheck_.reset();
     synccheck_.reset();
     initialized_ = false;
+}
+
+bool ToolManager::HasDetectedErrors() const
+{
+    // 多工具时任一工具检出即为真。
+    std::lock_guard<std::mutex> stateLock(stateMutex_);
+    if (memcheck_ != nullptr && memcheck_->Stats().errors != 0) {
+        return true;
+    }
+    if (synccheck_ != nullptr) {
+        const SynccheckStats stats = synccheck_->Stats();
+        if (stats.duplicateOpens + stats.unmatchedCloses + stats.unconsumedOpens != 0) {
+            return true;
+        }
+    }
+    return false;
 }
 
 bool ToolManager::IsInitialized() const
@@ -559,9 +660,7 @@ void ToolManager::PublishDiagnostics(std::vector<aclsan::cann::NpusanMemcheckRep
             continue;
         }
         logger_.Info("diagnostic report generated report_id=" + std::to_string(report.common.reportId));
-        if (!server_.Publish(ipc::MessageType::DIAGNOSTIC, rendered)) {
-            logger_.Error("failed to queue diagnostic report for UDS delivery");
-        }
+        RecordDiagnostic(rendered, "diagnostic");
     }
 }
 
@@ -584,9 +683,21 @@ void ToolManager::PublishSynccheckReports(std::vector<aclsan::cann::NpusanSyncch
             continue;
         }
         logger_.Info("synccheck diagnostic report generated report_id=" + std::to_string(report.common.reportId));
-        if (!server_.Publish(ipc::MessageType::DIAGNOSTIC, rendered)) {
-            logger_.Error("failed to queue synccheck diagnostic report for UDS delivery");
-        }
+        RecordDiagnostic(rendered, "synccheck diagnostic");
+    }
+}
+
+void ToolManager::RecordDiagnostic(const std::string& rendered, const char* what)
+{
+    // 权威路径：聚合进本次会话的 Result。追加失败只说明报告到顶了，不影响已有内容，
+    // 截断这件事由末帧的 kFlagTruncated 告诉 CLI。
+    if (!report_.Append(rendered) && !report_.Truncated()) {
+        logger_.Error(std::string("failed to record ") + what + " into the session report");
+    }
+    // 辅助路径：实时流。它是 must-ignore 消息，只为长任务下的人工观察服务，投递失败
+    // 不影响结论 —— 同一条诊断已经在 Result 里了。
+    if (!server_.Publish(ipc::MessageType::DIAGNOSTIC_STREAM, rendered)) {
+        logger_.Warning(std::string("failed to queue ") + what + " for live streaming");
     }
 }
 
@@ -610,35 +721,38 @@ void ToolManager::LogCallback(AclsanCallbackDomain domain, AclsanCallbackId cbid
 std::string ToolManager::BuildReadyMessage() const
 {
     std::ostringstream output;
-    const size_t callbackCount =
-        config_.toolName == "memcheck" ? kMemcheckCallbacks.size() : kSynccheckCallbacks.size();
-    output << "tool=" << config_.toolName << " session=" << server_.SessionId() << " api_version=" << ACLSAN_API_VERSION
-           << " callbacks=" << callbackCount << " compile_options=" << config_.compileOptions.size();
+    output << "session=" << server_.SessionId() << " api_version=" << ACLSAN_API_VERSION << " tools=";
+    for (size_t index = 0; index < configure_.tools.size(); ++index) {
+        output << (index == 0 ? "" : ",") << ipc::ToolName(configure_.tools[index].toolId);
+    }
+    output << " work_dir=" << workDir_;
     return output.str();
 }
 
 std::string ToolManager::BuildSummaryMessage() const
 {
     std::lock_guard<std::mutex> stateLock(stateMutex_);
+    // 每个启用的工具一行，按 toolId 升序。多工具时不能再用 if/else 二选一 ——
+    // 那样第二个工具的统计会整段消失，而报告看上去仍然完整。
     std::ostringstream output;
-    output << "tool=" << config_.toolName;
     if (memcheck_ != nullptr) {
         const MemcheckStats stats = memcheck_->Stats();
-        output << " allocations=" << stats.allocations << " frees=" << stats.frees
+        output << "tool=memcheck allocations=" << stats.allocations << " frees=" << stats.frees
                << " device_operations=" << stats.deviceOperations << " synchronizations=" << stats.synchronizationEvents
                << " errors=" << stats.errors << " warnings=" << stats.warnings
                << " pending_device_operations=" << stats.pendingDeviceOperations
-               << " dropped_device_operations=" << stats.droppedDeviceOperations;
-    } else {
-        const SynccheckStats stats = synccheck_ != nullptr ? synccheck_->Stats() : SynccheckStats{};
-        const uint64_t errors = stats.duplicateOpens + stats.unmatchedCloses + stats.unconsumedOpens;
-        output << " sync_events=" << stats.syncEvents << " synchronizations=" << stats.synchronizationEvents
-               << " matched_pairs=" << stats.matchedPairs << " duplicate_opens=" << stats.duplicateOpens
-               << " unmatched_closes=" << stats.unmatchedCloses << " unconsumed_opens=" << stats.unconsumedOpens
-               << " invalid_events=" << stats.invalidEvents << " pending_opens=" << stats.pendingOpens
-               << " errors=" << errors << " warnings=0";
+               << " dropped_device_operations=" << stats.droppedDeviceOperations << '\n';
     }
-    output << " callbacks=" << callbackCount_.load() << " malformed_callbacks=" << malformedCallbacks_
+    if (synccheck_ != nullptr) {
+        const SynccheckStats stats = synccheck_->Stats();
+        const uint64_t errors = stats.duplicateOpens + stats.unmatchedCloses + stats.unconsumedOpens;
+        output << "tool=synccheck sync_events=" << stats.syncEvents
+               << " synchronizations=" << stats.synchronizationEvents << " matched_pairs=" << stats.matchedPairs
+               << " duplicate_opens=" << stats.duplicateOpens << " unmatched_closes=" << stats.unmatchedCloses
+               << " unconsumed_opens=" << stats.unconsumedOpens << " invalid_events=" << stats.invalidEvents
+               << " pending_opens=" << stats.pendingOpens << " errors=" << errors << " warnings=0" << '\n';
+    }
+    output << "callbacks=" << callbackCount_.load() << " malformed_callbacks=" << malformedCallbacks_
            << " framework_errors=" << frameworkErrors_ << " dropped_messages=" << server_.DroppedMessages();
     return output.str();
 }

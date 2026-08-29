@@ -16,18 +16,18 @@
 
 namespace npu::sanitizer::cli {
 
-EnvironmentEntries BuildDbiEnvironment(const ipc::ToolConfig& config)
+EnvironmentEntries BuildDbiEnvironment(const DbiSettings& settings)
 {
     EnvironmentEntries entries{
-        {"NPU_CHECK_DBI_WORK_DIR", config.workDir},
-        {"NPU_CHECK_DBI_CACHE_DIR", config.probeCacheDir},
-        {"NPU_CHECK_DBI_STRICT", config.strict ? "1" : "0"},
-        {"NPU_CHECK_DBI_KEEP_TEMP", config.keepTemp ? "1" : "0"},
-        {"NPU_CHECK_DBI_COMPILER_ARG_COUNT", std::to_string(config.compileOptions.size())},
+        {"NPU_CHECK_DBI_WORK_DIR", settings.workDir},
+        {"NPU_CHECK_DBI_CACHE_DIR", settings.probeCacheDir},
+        {"NPU_CHECK_DBI_STRICT", settings.strict ? "1" : "0"},
+        {"NPU_CHECK_DBI_KEEP_TEMP", settings.keepTemp ? "1" : "0"},
+        {"NPU_CHECK_DBI_COMPILER_ARG_COUNT", std::to_string(settings.compileOptions.size())},
     };
-    entries.reserve(entries.size() + config.compileOptions.size());
-    for (size_t index = 0; index < config.compileOptions.size(); ++index) {
-        entries.emplace_back("NPU_CHECK_DBI_COMPILER_ARG_" + std::to_string(index), config.compileOptions[index]);
+    entries.reserve(entries.size() + settings.compileOptions.size());
+    for (size_t index = 0; index < settings.compileOptions.size(); ++index) {
+        entries.emplace_back("NPU_CHECK_DBI_COMPILER_ARG_" + std::to_string(index), settings.compileOptions[index]);
     }
     return entries;
 }

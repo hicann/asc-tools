@@ -17,6 +17,21 @@
 namespace npu::sanitizer::ipc {
 namespace {
 
+// 构造一个双工具、每个工具带一个子选项的规范化请求。
+ConfigureRequest SampleConfigure()
+{
+    ConfigureRequest request;
+    ToolRequest memcheck;
+    memcheck.toolId = ToolId::kMemcheck;
+    memcheck.options.push_back({OptionId::kMemcheckCheckCacheControl, {0x01}});
+    ToolRequest synccheck;
+    synccheck.toolId = ToolId::kSynccheck;
+    synccheck.options.push_back({OptionId::kSynccheckMissingBarrierInitIsFatal, {0x01}});
+    request.tools.push_back(std::move(memcheck));
+    request.tools.push_back(std::move(synccheck));
+    return request;
+}
+
 TEST(WireProtocolTest, RoundTripsHelloAndToolConfiguration)
 {
     HelloPayload hello{};
@@ -36,33 +51,127 @@ TEST(WireProtocolTest, RoundTripsHelloAndToolConfiguration)
     HelloPayload ignored{};
     EXPECT_FALSE(DecodeHello(trailing, ignored, error));
 
-    ToolConfig config{};
-    config.toolName = "memcheck";
-    config.strict = true;
-    config.keepTemp = false;
-    config.logFile = "/tmp/report.log";
-    config.workDir = "/tmp/work";
-    config.probeCacheDir = "/tmp/cache";
-    config.compileOptions = {"-g", "-O2"};
-    ToolConfig decodedConfig{};
-    ASSERT_TRUE(DecodeToolConfig(EncodeToolConfig(config), decodedConfig, error)) << error;
-    EXPECT_EQ(decodedConfig.toolName, config.toolName);
-    EXPECT_EQ(decodedConfig.strict, config.strict);
-    EXPECT_EQ(decodedConfig.keepTemp, config.keepTemp);
-    EXPECT_EQ(decodedConfig.compileOptions, config.compileOptions);
+    const ConfigureRequest request = SampleConfigure();
+    ConfigureRequest decoded{};
+    ASSERT_TRUE(DecodeConfigure(EncodeConfigure(request), decoded, error)) << error;
+    ASSERT_EQ(decoded.tools.size(), 2U);
+    EXPECT_EQ(decoded.globalFlags, 0U);
+    EXPECT_EQ(decoded.tools[0].toolId, ToolId::kMemcheck);
+    EXPECT_EQ(decoded.tools[1].toolId, ToolId::kSynccheck);
+    ASSERT_EQ(decoded.tools[0].options.size(), 1U);
+    EXPECT_EQ(decoded.tools[0].options[0].optionId, OptionId::kMemcheckCheckCacheControl);
+    EXPECT_EQ(decoded.tools[0].options[0].value, std::vector<uint8_t>{0x01});
+    ASSERT_EQ(decoded.tools[1].options.size(), 1U);
+    EXPECT_EQ(decoded.tools[1].options[0].optionId, OptionId::kSynccheckMissingBarrierInitIsFatal);
+
+    // 线路上不出现任何原始命令行字符串：布局是 4 字节头 + 每工具 4 字节 + 每选项 5 字节。
+    EXPECT_EQ(EncodeConfigure(request).size(), 4U + 2U * (4U + 5U));
+}
+
+// 规范化编码唯一：未排序或重复的 tool_id / option_id 必须被拒绝。接受了非规范编码，
+// "子选项换个位置写、编码结果不变"这条性质就无法断言。
+TEST(WireProtocolTest, RejectsNonCanonicalConfigure)
+{
+    ConfigureRequest decoded{};
+    std::string error;
+
+    ConfigureRequest unsorted;
+    ToolRequest synccheck;
+    synccheck.toolId = ToolId::kSynccheck;
+    ToolRequest memcheck;
+    memcheck.toolId = ToolId::kMemcheck;
+    unsorted.tools.push_back(std::move(synccheck));
+    unsorted.tools.push_back(std::move(memcheck));
+    EXPECT_FALSE(DecodeConfigure(EncodeConfigure(unsorted), decoded, error));
+
+    ConfigureRequest duplicated;
+    ToolRequest first;
+    first.toolId = ToolId::kMemcheck;
+    ToolRequest second;
+    second.toolId = ToolId::kMemcheck;
+    duplicated.tools.push_back(std::move(first));
+    duplicated.tools.push_back(std::move(second));
+    EXPECT_FALSE(DecodeConfigure(EncodeConfigure(duplicated), decoded, error));
+
+    ConfigureRequest duplicatedOption;
+    ToolRequest tool;
+    tool.toolId = ToolId::kMemcheck;
+    tool.options.push_back({OptionId::kMemcheckCheckCacheControl, {0x01}});
+    tool.options.push_back({OptionId::kMemcheckCheckCacheControl, {0x01}});
+    duplicatedOption.tools.push_back(std::move(tool));
+    EXPECT_FALSE(DecodeConfigure(EncodeConfigure(duplicatedOption), decoded, error));
+}
+
+TEST(WireProtocolTest, RejectsInvalidConfigureContent)
+{
+    ConfigureRequest decoded{};
+    std::string error;
+
+    // global_flags 非 0。
+    auto flagged = EncodeConfigure(SampleConfigure());
+    flagged[1] = 1;
+    EXPECT_FALSE(DecodeConfigure(flagged, decoded, error));
+
+    // 未知 tool_id。
+    ConfigureRequest unknownTool;
+    ToolRequest tool;
+    tool.toolId = static_cast<ToolId>(0x0fff);
+    unknownTool.tools.push_back(std::move(tool));
+    EXPECT_FALSE(DecodeConfigure(EncodeConfigure(unknownTool), decoded, error));
+
+    // 选项归属与所在工具不符：option_id 已唯一确定所属工具，静默接受会让选项
+    // 作用到错误的 checker 上。
+    ConfigureRequest wrongOwner;
+    ToolRequest owner;
+    owner.toolId = ToolId::kMemcheck;
+    owner.options.push_back({OptionId::kSynccheckMissingBarrierInitIsFatal, {0x01}});
+    wrongOwner.tools.push_back(std::move(owner));
+    EXPECT_FALSE(DecodeConfigure(EncodeConfigure(wrongOwner), decoded, error));
+
+    // 值域越界：V1 全部是"出现即为真"的开关。
+    ConfigureRequest badValue;
+    ToolRequest valued;
+    valued.toolId = ToolId::kMemcheck;
+    valued.options.push_back({OptionId::kMemcheckCheckCacheControl, {0x07}});
+    badValue.tools.push_back(std::move(valued));
+    EXPECT_FALSE(DecodeConfigure(EncodeConfigure(badValue), decoded, error));
+
+    // 尾随字节。
+    auto trailing = EncodeConfigure(SampleConfigure());
+    trailing.push_back(0);
+    EXPECT_FALSE(DecodeConfigure(trailing, decoded, error));
+}
+
+// introducedMinor 门禁：注册表里记录的引入版本高于协商版本时，该选项不得被接受。
+// 两端都要查 —— 任何一端都可能是较旧的实现。
+TEST(WireProtocolTest, RejectsOptionsAboveNegotiatedMinor)
+{
+    const ConfigureRequest request = SampleConfigure();
+    std::string error;
+
+    // V1 的两个选项 introducedMinor 均为 0，协商到 0 时全部可用。
+    EXPECT_TRUE(ValidateConfigureMinor(request, 0, error)) << error;
+
+    // 注册表里没有 introducedMinor > 0 的选项，因此这里用未知 optionId 覆盖另一条拒绝路径。
+    ConfigureRequest unknown;
+    ToolRequest tool;
+    tool.toolId = ToolId::kMemcheck;
+    tool.options.push_back({static_cast<OptionId>(0x0999), {0x01}});
+    unknown.tools.push_back(std::move(tool));
+    EXPECT_FALSE(ValidateConfigureMinor(unknown, 0, error));
+
+    // 空请求恒通过。
+    EXPECT_TRUE(ValidateConfigureMinor(ConfigureRequest{}, 0, error)) << error;
 }
 
 TEST(WireProtocolTest, RoundTripsFrame)
 {
-    ToolConfig config{};
-    config.toolName = "memcheck";
-    config.compileOptions = {"-g"};
     Frame frame{};
     frame.type = MessageType::CONFIGURE;
     frame.flags = 3;
     frame.sessionId = 0x1020304050607080ULL;
     frame.sequence = 9;
-    frame.payload = EncodeToolConfig(config);
+    frame.payload = EncodeConfigure(SampleConfigure());
 
     const auto bytes = EncodeFrame(frame);
     Frame decoded{};
@@ -89,9 +198,11 @@ TEST(WireProtocolTest, RejectsMalformedFramesAndText)
     auto corrupt = bytes;
     corrupt[0] = 0;
     EXPECT_FALSE(DecodeFrame(corrupt.data(), corrupt.size(), decoded, error));
+    // major 不匹配即拒绝（偏移 4）。注意这里不能拿 minor（偏移 6）做同样的断言 ——
+    // minor 偏高是合法的，见 AcceptsHigherPeerMinorAndNegotiatesDown。
     corrupt = bytes;
-    corrupt[6] = 0;
-    corrupt[7] = 1;
+    corrupt[4] = 0;
+    corrupt[5] = 2;
     EXPECT_FALSE(DecodeFrame(corrupt.data(), corrupt.size(), decoded, error));
     corrupt = bytes;
     corrupt.push_back(0);
@@ -185,6 +296,86 @@ TEST(WireProtocolTest, RejectsReservedMustUnderstandFlags)
     PutU16At(corrupt, kOffsetFlags, static_cast<uint16_t>(kFlagHasErrors | 0x0100u));
     ASSERT_TRUE(DecodeFrame(corrupt.data(), corrupt.size(), decoded, error)) << error;
     EXPECT_NE(decoded.flags & kFlagHasErrors, 0);
+}
+
+// 收到比自己高的 minor 不是错误：同一 major 下帧头格式稳定，拒绝会让新版本永远
+// 连不上旧版本。解码必须成功，并把对端 minor 原样带回给上层协商。
+TEST(WireProtocolTest, AcceptsHigherPeerMinorAndNegotiatesDown)
+{
+    Frame frame{};
+    frame.type = MessageType::READY;
+    frame.sessionId = 7;
+    frame.sequence = 2;
+    auto bytes = EncodeFrame(frame);
+    ASSERT_FALSE(bytes.empty());
+    // 把帧头偏移 6 处的 minor 改成一个远高于本实现的值。
+    bytes[6] = 0x00;
+    bytes[7] = 0x09;
+
+    Frame decoded{};
+    std::string error;
+    ASSERT_TRUE(DecodeFrame(bytes.data(), bytes.size(), decoded, error)) << error;
+    EXPECT_EQ(decoded.minor, 9U);
+    EXPECT_EQ(NegotiateMinor(decoded.minor), kProtocolMinor);
+    // 对端更低时取对端的值。
+    EXPECT_EQ(NegotiateMinor(0U), 0U);
+}
+
+TEST(WireProtocolTest, RoundTripsErrorPayload)
+{
+    ErrorPayload payload{};
+    payload.domain = ErrorDomain::kConfiguration;
+    payload.code = error_code::kConfigureMalformed;
+    payload.message = "unsorted tool_id";
+
+    const auto bytes = EncodeError(payload);
+    ASSERT_EQ(bytes.size(), kErrorHeaderSize + payload.message.size());
+
+    ErrorPayload decoded{};
+    std::string error;
+    ASSERT_TRUE(DecodeError(bytes, decoded, error)) << error;
+    EXPECT_EQ(decoded.domain, ErrorDomain::kConfiguration);
+    EXPECT_EQ(decoded.code, error_code::kConfigureMalformed);
+    EXPECT_EQ(decoded.message, "unsorted tool_id");
+}
+
+TEST(WireProtocolTest, RejectsMalformedErrorPayload)
+{
+    ErrorPayload decoded{};
+    std::string error;
+
+    // 短于 8 字节的固定头。
+    EXPECT_FALSE(DecodeError(std::vector<uint8_t>(4, 0), decoded, error));
+
+    auto valid = EncodeError({ErrorDomain::kProtocol, error_code::kFrameRejected, "bad sequence"});
+    // reserved 非零。
+    auto reservedSet = valid;
+    reservedSet[7] = 1;
+    EXPECT_FALSE(DecodeError(reservedSet, decoded, error));
+
+    // 声明长度与实际尾随字节不符。
+    auto trailing = valid;
+    trailing.push_back('x');
+    EXPECT_FALSE(DecodeError(trailing, decoded, error));
+
+    // 未知 domain。
+    auto unknownDomain = valid;
+    unknownDomain[1] = 9;
+    EXPECT_FALSE(DecodeError(unknownDomain, decoded, error));
+}
+
+// 超长文案截断而不是整体失败：Error 是"出事了"的通道，编不出帧等于把最需要的信息丢掉。
+TEST(WireProtocolTest, TruncatesOverlongErrorMessage)
+{
+    ErrorPayload payload{};
+    payload.domain = ErrorDomain::kInternal;
+    payload.message.assign(kMaxErrorMessageSize + 100, 'x');
+
+    const auto bytes = EncodeError(payload);
+    ErrorPayload decoded{};
+    std::string error;
+    ASSERT_TRUE(DecodeError(bytes, decoded, error)) << error;
+    EXPECT_EQ(decoded.message.size(), kMaxErrorMessageSize);
 }
 
 TEST(WireProtocolTest, AppliesMustIgnoreRuleToUnknownTypes)

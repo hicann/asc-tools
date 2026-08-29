@@ -17,20 +17,33 @@ int main(int argc, char** argv)
 {
     npu::sanitizer::cli::Options options{};
     std::string error;
+    // 结果摘要行在任何路径下都必须输出，包括还没开始跑检查的这些早期失败：
+    // 脚本读到的是同一行格式，不必为不同失败阶段各写一套解析。
+    const auto reportEarlyFailure = [](int exitCode) {
+        npu::sanitizer::cli::ResultSummary summary;
+        summary.outcome = npu::sanitizer::cli::Outcome::kInfraFailed;
+        summary.exit = exitCode;
+        std::cerr << npu::sanitizer::cli::FormatResultSummary(summary) << '\n';
+        return exitCode;
+    };
+
     if (!npu::sanitizer::cli::ParseOptions(argc, argv, options, error)) {
         std::cerr << "npu_check: " << error << "\n\n" << npu::sanitizer::cli::Usage();
-        return 64;
+        return reportEarlyFailure(64);
     }
     if (options.showHelp) {
         std::cout << npu::sanitizer::cli::Usage();
         return 0;
     }
-    // 注入库定位不再有命令行入口；覆盖走 NPU_CHECK_LIBRARY_PATH，
-    // 后续改为基于 ASCEND_TOOLKIT_PATH 推导安装路径。
+    // 注入库定位没有命令行入口：候选顺序是 ASCEND_TOOLKIT_HOME 下的 lib64/lib，
+    // 其次是 npu_check 自身所在目录及其同级 lib{,64}。覆盖走 NPU_CHECK_LIBRARY_PATH。
+    //
+    // 这里退 125 而不是 64：64 是用法错误，而定位失败属于 fork 前的准备错误 ——
+    // 用户的命令行没有任何问题，是环境或安装不完整。两者必须能被脚本区分开。
     std::string libraryPath;
     if (!npu::sanitizer::cli::ResolveLibraryPath(std::string{}, libraryPath, error)) {
         std::cerr << "npu_check: " << error << '\n';
-        return 64;
+        return reportEarlyFailure(125);
     }
     return npu::sanitizer::cli::RunApplication(options, libraryPath);
 }
