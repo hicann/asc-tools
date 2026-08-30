@@ -16,12 +16,12 @@ output=$(mktemp)
 trap 'status=$?; if [[ ${status} -ne 0 ]]; then cat "${output}" >&2; fi; rm -f -- "${output}"' EXIT
 
 set +e
-bash "${demo_dir}/run.sh" datacopy_stride >"${output}" 2>&1
+bash "${demo_dir}/examples/memcheck/datacopy_stride/run.sh" >"${output}" 2>&1
 run_status=$?
 set -e
 
-if [[ ${run_status} -ne 2 ]]; then
-    printf 'expected npu_check exit 2, got %s\n' "${run_status}" >&2
+if [[ ${run_status} -ne 0 ]]; then
+    printf 'expected self-validating datacopy_stride runner exit 0, got %s\n' "${run_status}" >&2
     exit 1
 fi
 
@@ -43,3 +43,4 @@ grep -F 'npu_check: SESSION_END status=complete' "${output}"
 grep -F 'npu_check: child_exit=0 handshake=ready session_end=complete' "${output}"
 grep -F 'DataCopyStrideSingleInput completed' "${output}"
 grep -F 'DataCopyStrideDualInput completed' "${output}"
+grep -F '[PASSED] memcheck/datacopy_stride' "${output}"

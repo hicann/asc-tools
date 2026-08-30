@@ -20,12 +20,13 @@ RunAndCheck()
     local example_name=$1
     local expected_records=$2
 
-    bash "${demo_dir}/run.sh" "${example_name}" >"${output}" 2>&1
+    bash "${demo_dir}/examples/memcheck/${example_name}/run.sh" >"${output}" 2>&1
     grep -F "[probe] readback records=${expected_records}" "${output}"
     grep -F "[probe] records=PASS count=${expected_records}" "${output}"
     grep -E 'npu_check: SUMMARY .*errors=0' "${output}"
     grep -F 'npu_check: child_exit=0 handshake=ready session_end=complete' "${output}"
     grep -F 'test pass!' "${output}"
+    grep -F "[PASSED] memcheck/${example_name}" "${output}"
     if grep -Fq 'unsupported raw trace' "${output}"; then
         printf 'unsupported probe record in %s\n' "${example_name}" >&2
         return 1

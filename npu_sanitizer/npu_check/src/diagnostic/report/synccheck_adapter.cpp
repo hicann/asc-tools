@@ -297,7 +297,8 @@ std::string ActualRelatedPointLine(const NpusanSyncPoint& point, const ReportFie
     os << "=========     related point: " << OrUnknown(point.operation) << " by aicore ("
        << FieldOr(fields, "relatedCoreId", "<unknown>") << ") type (" << FieldOr(fields, "relatedType", "UNKNOWN")
        << ") block (" << FieldOr(fields, "relatedBlock", "0") << ") pipe ("
-       << FieldOr(fields, "relatedPipe", "<unknown>") << ") at "
+       << FieldOr(fields, "relatedPipe", "<unknown>") << ") in launch ("
+       << FieldOr(fields, "relatedLaunchId", "<unknown>") << ") at "
        << FieldOr(fields, "relatedLocation", "pc 0x0 in <unknown>") << '\n';
     return os.str();
 }
@@ -339,7 +340,8 @@ ReportRecord ToReportRecord(const NpusanSynccheckReport& report)
             fields["reasonText"] = rule.reasonText;
             if (rule.relatedIsActual) {
                 fields["relatedPointLine"] = "=========     related point: previous " + report.relatedPoint.operation +
-                                             " at " + fields["relatedLocation"] + " is still pending\n";
+                                             " in launch (" + fields["relatedLaunchId"] + ") at " +
+                                             fields["relatedLocation"] + " is still pending\n";
             } else {
                 fields["relatedPointLine"] = "=========     related point: expected " + report.relatedPoint.operation +
                                              ", " + rule.missingPointText + "\n";

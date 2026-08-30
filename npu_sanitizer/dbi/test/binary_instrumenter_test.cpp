@@ -10,6 +10,8 @@
 #include <gtest/gtest.h>
 
 #include <cstdlib>
+#include <cstring>
+#include <elf.h>
 #include <filesystem>
 #include <fstream>
 #include <optional>
@@ -56,6 +58,7 @@ struct TestState {
     std::vector<std::string> workDirectories;
     int runnerCalls = 0;
     bool patchSucceeds = true;
+    uint32_t traceArgumentOffset = 0;
     BinaryInstrumentationConfig config;
 };
 
@@ -171,16 +174,58 @@ DbiResult FakePatch(const DbiRequest& request, void* userdata)
 {
     auto& state = *static_cast<TestState*>(userdata);
     ++state.runnerCalls;
+    state.traceArgumentOffset = request.traceArgumentOffset;
     state.workDirectories.push_back(request.workDirectory);
     std::ifstream input(request.inputKernel, std::ios::binary);
     state.inputContents.assign(std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>());
     if (!state.patchSucceeds) {
-        return {false, {}, "fake", "failed"};
+        return {false, {}, "fake", "failed", request.traceArgumentOffset};
     }
     std::filesystem::create_directories(std::filesystem::path(request.outputKernel).parent_path());
     std::ofstream output(request.outputKernel, std::ios::binary | std::ios::trunc);
     output << "patched";
-    return {output.good(), request.outputKernel, output.good() ? "complete" : "write", {}};
+    return {output.good(), request.outputKernel, output.good() ? "complete" : "write", {}, request.traceArgumentOffset};
+}
+
+std::vector<uint8_t> MakeKernelArgumentSizeElf(const std::vector<uint32_t>& argumentSizes)
+{
+    constexpr char kSectionNames[] = "\0.shstrtab\0__CCE_KernelArgSize";
+    const std::string sectionNames(kSectionNames, sizeof(kSectionNames));
+    const size_t sectionHeadersOffset = sizeof(Elf64_Ehdr);
+    const size_t sectionNamesOffset = sectionHeadersOffset + 3 * sizeof(Elf64_Shdr);
+    const size_t argumentSizesOffset = sectionNamesOffset + sectionNames.size();
+    std::vector<uint8_t> image(argumentSizesOffset + argumentSizes.size() * sizeof(uint32_t), 0);
+
+    Elf64_Ehdr header{};
+    std::memcpy(header.e_ident, ELFMAG, SELFMAG);
+    header.e_ident[EI_CLASS] = ELFCLASS64;
+    header.e_ident[EI_DATA] = ELFDATA2LSB;
+    header.e_ident[EI_VERSION] = EV_CURRENT;
+    header.e_shoff = sectionHeadersOffset;
+    header.e_shentsize = sizeof(Elf64_Shdr);
+    header.e_shnum = 3;
+    header.e_shstrndx = 1;
+    std::memcpy(image.data(), &header, sizeof(header));
+
+    Elf64_Shdr sectionNamesHeader{};
+    sectionNamesHeader.sh_name = 1;
+    sectionNamesHeader.sh_type = SHT_STRTAB;
+    sectionNamesHeader.sh_offset = sectionNamesOffset;
+    sectionNamesHeader.sh_size = sectionNames.size();
+    std::memcpy(
+        image.data() + sectionHeadersOffset + sizeof(Elf64_Shdr), &sectionNamesHeader, sizeof(sectionNamesHeader));
+
+    Elf64_Shdr argumentSizesHeader{};
+    argumentSizesHeader.sh_name = 11;
+    argumentSizesHeader.sh_type = SHT_NOTE;
+    argumentSizesHeader.sh_offset = argumentSizesOffset;
+    argumentSizesHeader.sh_size = argumentSizes.size() * sizeof(uint32_t);
+    std::memcpy(
+        image.data() + sectionHeadersOffset + 2 * sizeof(Elf64_Shdr), &argumentSizesHeader,
+        sizeof(argumentSizesHeader));
+    std::memcpy(image.data() + sectionNamesOffset, sectionNames.data(), sectionNames.size());
+    std::memcpy(image.data() + argumentSizesOffset, argumentSizes.data(), argumentSizesHeader.sh_size);
+    return image;
 }
 
 DbiResult ThrowingPatch(const DbiRequest& request, void* userdata)
@@ -201,6 +246,7 @@ protected:
         ASSERT_NE(created, nullptr);
         directory_ = created;
         state_.config.arch = "dav-c220-vec";
+        state_.config.traceArgumentOffset = 8;
         state_.config.probeGroups = {ProbeGroup::Mte2};
         state_.config.workDirectory = directory_;
         state_.config.cacheDirectory = directory_ + "/cache";
@@ -241,10 +287,36 @@ TEST_F(BinaryInstrumenterTest, InstrumentsWithoutKernelArgumentSizeMetadata)
     EXPECT_EQ(state_.runnerCalls, 1);
 }
 
+TEST_F(BinaryInstrumenterTest, UsesMaximumKernelArgumentSizeForHeterogeneousBinary)
+{
+    state_.config.traceArgumentOffset = 0;
+    const std::vector<uint8_t> original = MakeKernelArgumentSizeElf({8, 0, 24, 8, 0, 24});
+
+    const BinaryInstrumentationResult result =
+        InstrumentBinary(state_.config, original.data(), original.size(), &FakePatch, &state_);
+
+    EXPECT_EQ(result.status, BinaryInstrumentationStatus::Instrumented);
+    EXPECT_EQ(result.traceArgumentOffset, 24U);
+    EXPECT_EQ(state_.traceArgumentOffset, 24U);
+}
+
+TEST_F(BinaryInstrumenterTest, ReservesNonzeroOffsetForZeroArgumentOnlyBinary)
+{
+    state_.config.traceArgumentOffset = 0;
+    const std::vector<uint8_t> original = MakeKernelArgumentSizeElf({0});
+
+    const BinaryInstrumentationResult result =
+        InstrumentBinary(state_.config, original.data(), original.size(), &FakePatch, &state_);
+
+    EXPECT_EQ(result.status, BinaryInstrumentationStatus::Instrumented);
+    EXPECT_EQ(result.traceArgumentOffset, 8U);
+    EXPECT_EQ(state_.traceArgumentOffset, 8U);
+}
+
 TEST_F(BinaryInstrumenterTest, SkipsIncompleteConfiguration)
 {
     state_.config.arch.clear();
-    const std::string original = "kernel-data";
+    const std::vector<uint8_t> original = MakeKernelArgumentSizeElf({0});
 
     const BinaryInstrumentationResult result =
         InstrumentBinary(state_.config, original.data(), original.size(), &FakePatch, &state_);
@@ -316,7 +388,7 @@ TEST_F(BinaryInstrumenterTest, RuntimeFacadeConsumesPatchedBytesAcrossAnAbiStabl
     EnvironmentRestore environment({"NPU_CHECK_DBI_ARCH", "NPU_CHECK_DBI_PROBE_SET", "NPU_CHECK_DBI_STRICT"});
     ASSERT_EQ(setenv("NPU_CHECK_DBI_ARCH", "dav-c220-vec", 1), 0);
     ASSERT_EQ(setenv("NPU_CHECK_DBI_STRICT", "1", 1), 0);
-    const std::string original = "kernel-data";
+    const std::vector<uint8_t> original = MakeKernelArgumentSizeElf({0});
     std::vector<uint8_t> consumed;
 
     const RuntimeBinaryInstrumentationResult result = InstrumentRuntimeBinary(
@@ -325,6 +397,7 @@ TEST_F(BinaryInstrumenterTest, RuntimeFacadeConsumesPatchedBytesAcrossAnAbiStabl
     EXPECT_EQ(result.status, BinaryInstrumentationStatus::Instrumented);
     EXPECT_EQ(result.strict, 1U);
     EXPECT_EQ(result.consumerStatus, 73);
+    EXPECT_EQ(result.traceArgumentOffset, 8U);
     EXPECT_EQ(std::string(consumed.begin(), consumed.end()), "patched");
 }
 

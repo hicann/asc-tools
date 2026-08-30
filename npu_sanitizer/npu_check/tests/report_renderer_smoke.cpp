@@ -156,6 +156,7 @@ ReportRecord MakeMemcheckInvalidAccessRecord()
             {"blockType", "AIC"},
             {"blockId", "7"},
             {"pipeName", "MTE2"},
+            {"launchId", "41"},
             {"address", "1000"},
             {"distanceBytes", "64"},
             {"before|after", "after"},
@@ -183,6 +184,7 @@ ReportRecord MakeInitcheckRecord()
             {"blockType", "AIV"},
             {"blockId", "2"},
             {"pipeName", "MTE2"},
+            {"launchId", "42"},
             {"address", "3000"},
         }};
 }
@@ -202,12 +204,14 @@ ReportRecord MakeRaceRecord()
             {"firstOffset", "20"},
             {"firstFile", "race.cpp"},
             {"firstLine", "11"},
+            {"firstLaunchId", "41"},
             {"secondCoreId", "1"},
             {"secondPipe", "MTE2"},
             {"secondFunction", "reader"},
             {"secondOffset", "30"},
             {"secondFile", "race.cpp"},
             {"secondLine", "19"},
+            {"secondLaunchId", "42"},
             {"currentValue", "0xab"},
         }};
 }
@@ -224,6 +228,7 @@ ReportRecord MakeSyncRecord()
             {"triggerType", "AIC"},
             {"triggerBlock", "5"},
             {"triggerPipe", "V"},
+            {"triggerLaunchId", "42"},
             {"triggerLocation", "sync_kernel+0x44 in sync.cpp:88"},
             {"relatedPointLine", "=========     related point: expected SET_FLAG\n"},
             {"expectedOperationLine", ""},
@@ -340,6 +345,7 @@ ReportRecord MakeSocRecord()
             {"blockType", "AIC"},
             {"blockId", "1"},
             {"pipeName", "S"},
+            {"launchId", "43"},
             {"registerId", "17"},
             {"expectedValue", "10"},
             {"observedValue", "11"},
@@ -485,6 +491,31 @@ TEST(ReportRendererTest, AppendsStructuredCallStacks)
     EXPECT_EQ(rendered.find("Host Frame:"), std::string::npos);
 }
 
+TEST(ReportRendererTest, PrefersRawCallStackWhenTypedReportHasBothRepresentations)
+{
+    NpusanSynccheckReport report =
+        MakePairingReport(NpusanSyncMismatchReason::UNCONSUMED_OPEN, NpusanSyncPairKind::GET_RLS_BUF);
+    report.triggerPoint.exec.pc = 0x164;
+    report.common.exec = report.triggerPoint.exec;
+    report.triggerPoint.stackRole = ReportStackRole::SYNC_TRIGGER;
+    report.common.stackCount = 1;
+    ReportCallStack& stack = report.common.stacks[0];
+    stack.role = ReportStackRole::SYNC_TRIGGER;
+    stack.format = ReportStackFormat::BOTH;
+    stack.rawText = "[CALL-STACK] pc=0x164 status=available binary_id=1\n"
+                    "  #0 GetBufInternal at kernel_event.h:718:13\n";
+    stack.frames.push_back(ReportFrame{0x164, 0, "GetBufInternal", "kernel_event.h", 718, 13});
+
+    std::string rendered;
+    ASSERT_EQ(
+        aclsan::cann::RenderNpusanReportRecord(NpusanReportRecord::From(report), {}, &rendered),
+        ReportRenderStatus::kSuccess);
+    EXPECT_NE(rendered.find("=========     [CALL-STACK] pc=0x164 status=available binary_id=1"), std::string::npos);
+    EXPECT_NE(rendered.find("=========       #0 GetBufInternal at kernel_event.h:718:13"), std::string::npos);
+    EXPECT_EQ(rendered.find("=========     #0 GetBufInternal"), std::string::npos);
+    EXPECT_NE(rendered.find("GetBufInternal+0x0 in kernel_event.h:718"), std::string::npos);
+}
+
 TEST(ReportRendererTest, UsesOnlyDeviceOrHostCallStackHeadings)
 {
     const std::array<ReportStackRole, 4> hostRoles = {
@@ -613,13 +644,39 @@ TEST(ReportRendererTest, UsesRaceAccessCoreForCrossPipeTemplate)
     report.second.exec.phyCoreId = 7;
     report.first.exec.pipeName = "MTE2";
     report.second.exec.pipeName = "V";
+    report.first.exec.launchId = 41;
+    report.second.exec.launchId = 42;
 
     std::string rendered;
     EXPECT_EQ(
         aclsan::cann::RenderNpusanReportRecord(NpusanReportRecord::From(report), {}, &rendered),
         ReportRenderStatus::kSuccess);
-    EXPECT_NE(rendered.find("First access by aicore (7)"), std::string::npos);
-    EXPECT_NE(rendered.find("Second access by aicore (7)"), std::string::npos);
+    EXPECT_NE(rendered.find("First access by aicore (7) pipe (MTE2) in launch (41)"), std::string::npos);
+    EXPECT_NE(rendered.find("Second access by aicore (7) pipe (V) in launch (42)"), std::string::npos);
+}
+
+TEST(ReportRendererTest, IncludesLaunchIdForCommonDeviceExecutionPoint)
+{
+    NpusanMemcheckReport report{};
+    report.common.tool = ReportTool::MEMCHECK;
+    report.common.pattern = static_cast<std::uint32_t>(NpusanMemcheckPattern::MISALIGNED_ACCESS);
+    report.common.exec.phyCoreId = 18;
+    report.common.exec.blockType = ACLSAN_DEVICE_BLOCK_TYPE_AICORE_VECTOR;
+    report.common.exec.blockId = 0;
+    report.common.exec.pipeName = "MTE2";
+    report.common.exec.launchId = 41;
+
+    std::string rendered;
+    ASSERT_EQ(
+        aclsan::cann::RenderNpusanReportRecord(NpusanReportRecord::From(report), {}, &rendered),
+        ReportRenderStatus::kSuccess);
+    EXPECT_NE(rendered.find("by aicore (18) type (AIV) block (0) pipe (MTE2) in launch (41)"), std::string::npos);
+
+    report.common.exec.launchId = 0;
+    ASSERT_EQ(
+        aclsan::cann::RenderNpusanReportRecord(NpusanReportRecord::From(report), {}, &rendered),
+        ReportRenderStatus::kSuccess);
+    EXPECT_NE(rendered.find("pipe (MTE2) in launch (<unknown>)"), std::string::npos);
 }
 
 TEST(ReportRendererTest, FallsBackToProgramCounterWhenFaultIsNotSymbolized)
@@ -664,19 +721,22 @@ TEST(ReportRendererTest, UsesFirstRaceSiteAsInvalidRemoteAccessLocation)
     report.common.tool = ReportTool::RACECHECK;
     report.common.pattern = static_cast<std::uint32_t>(NpusanRacecheckPattern::INVALID_REMOTE_ACCESS);
     report.common.exec.phyCoreId = 1;
+    report.common.exec.launchId = 99;
     report.first.exec.phyCoreId = 6;
     report.first.exec.blockType = ACLSAN_DEVICE_BLOCK_TYPE_AICORE_CUBE;
     report.first.exec.blockId = 7;
     report.first.exec.pipeName = "MTE2";
     report.first.exec.pc = 0x345;
     report.first.exec.kernelName = "remote_caller";
+    report.first.exec.launchId = 41;
 
     std::string rendered;
     EXPECT_EQ(
         aclsan::cann::RenderNpusanReportRecord(NpusanReportRecord::From(report), {}, &rendered),
         ReportRenderStatus::kSuccess);
     EXPECT_NE(rendered.find("at pc 0x345 in remote_caller"), std::string::npos);
-    EXPECT_NE(rendered.find("by aicore (6) type (AIC) block (7) pipe (MTE2)"), std::string::npos);
+    EXPECT_NE(rendered.find("by aicore (6) type (AIC) block (7) pipe (MTE2) in launch (41)"), std::string::npos);
+    EXPECT_EQ(rendered.find("in launch (99)"), std::string::npos);
 }
 
 TEST(ReportRendererTest, RejectsCrossPipeRaceAcrossDifferentPhysicalCores)
@@ -867,6 +927,7 @@ TEST(ReportRendererTest, RendersBundleSummaries)
             {"triggerType", "AIC"},
             {"triggerBlock", "5"},
             {"triggerPipe", "V"},
+            {"triggerLaunchId", "42"},
             {"triggerLocation", "pc 0x5000 in sync_kernel"},
             {"relatedPointLine", ""},
             {"waitingMask", "f"},
@@ -942,7 +1003,8 @@ TEST(ReportRendererTest, RendersPairingMismatchReasonForDifferentOperationKinds)
     const Case cases[] = {
         {NpusanSyncPairKind::SET_WAIT_FLAG, NpusanSyncMismatchReason::DUPLICATE_OPEN,
          "Synchronization pairing mismatch: duplicate SET_FLAG.",
-         "related point: previous SET_FLAG at SyncOperation+0x10 in sync.cpp:24 is still pending"},
+         "related point: previous SET_FLAG in launch (<unknown>) at SyncOperation+0x10 in sync.cpp:24 is still "
+         "pending"},
         {NpusanSyncPairKind::SET_WAIT_FLAG, NpusanSyncMismatchReason::UNMATCHED_CLOSE,
          "Synchronization pairing mismatch: unmatched WAIT_FLAG.",
          "related point: expected SET_FLAG, but no matching point exists for this pair key"},
@@ -983,6 +1045,9 @@ TEST(ReportRendererTest, RendersStructuredPairingMismatchEvidence)
 {
     NpusanSynccheckReport report =
         MakePairingReport(NpusanSyncMismatchReason::DUPLICATE_OPEN, NpusanSyncPairKind::SET_WAIT_FLAG);
+    report.triggerPoint.exec.launchId = 42;
+    report.common.exec.launchId = 42;
+    report.relatedPoint.exec.launchId = 41;
     report.common.stackCount = 2;
     report.common.stacks[0].role = ReportStackRole::SYNC_TRIGGER;
     report.common.stacks[0].format = ReportStackFormat::FRAMES;
@@ -999,8 +1064,10 @@ TEST(ReportRendererTest, RendersStructuredPairingMismatchEvidence)
         ReportRenderStatus::kSuccess);
     EXPECT_NE(rendered.find("Synchronization pairing mismatch: duplicate SET_FLAG."), std::string::npos);
     EXPECT_NE(
-        rendered.find("related point: previous SET_FLAG at FirstSet+0x10 in sync.cpp:24 is still pending"),
+        rendered.find(
+            "related point: previous SET_FLAG in launch (41) at FirstSet+0x10 in sync.cpp:24 is still pending"),
         std::string::npos);
+    EXPECT_NE(rendered.find("pipe (MTE2) in launch (42) at SecondSet+0x20 in sync.cpp:30"), std::string::npos);
     EXPECT_NE(rendered.find("expected WAIT_FLAG before another SET_FLAG"), std::string::npos);
     EXPECT_NE(
         rendered.find("pair kind SET_WAIT_FLAG, key (srcPipe=PIPE_V, dstPipe=PIPE_MTE2, id=42)"), std::string::npos);
@@ -1009,6 +1076,48 @@ TEST(ReportRendererTest, RendersStructuredPairingMismatchEvidence)
     EXPECT_EQ(CountOccurrences(rendered, "=========     #1 "), 0U);
     EXPECT_EQ(rendered.find("Trigger Point Device Backtrace:"), std::string::npos);
     EXPECT_EQ(rendered.find("Related Point Device Backtrace:"), std::string::npos);
+}
+
+TEST(ReportRendererTest, IncludesLaunchIdForSoccheckProducerAndConsumer)
+{
+    NpusanSoccheckReport report{};
+    report.common.tool = ReportTool::SOCCHECK;
+    report.common.pattern = static_cast<std::uint32_t>(NpusanSoccheckPattern::CROSS_CORE_STATE_INCONSISTENT);
+    report.producer.phyCoreId = 3;
+    report.producer.launchId = 41;
+    report.consumer.phyCoreId = 4;
+    report.consumer.launchId = 42;
+
+    std::string rendered;
+    ASSERT_EQ(
+        aclsan::cann::RenderNpusanReportRecord(NpusanReportRecord::From(report), {}, &rendered),
+        ReportRenderStatus::kSuccess);
+    EXPECT_NE(rendered.find("consumer aicore (4) in launch (42) observed"), std::string::npos);
+    EXPECT_NE(rendered.find("producer aicore (3) in launch (41) expected"), std::string::npos);
+}
+
+TEST(ReportRendererTest, IncludesLaunchIdForSynccheckActualRelatedPoint)
+{
+    NpusanSynccheckReport report = MakeSynccheckReport(NpusanSynccheckPattern::PARTICIPANT_MISMATCH);
+    report.triggerPoint.exec.launchId = 42;
+    report.common.exec.launchId = 42;
+    report.hasRelatedPoint = true;
+    report.relatedPoint.operation = "BARRIER";
+    report.relatedPoint.hasExecContext = true;
+    report.relatedPoint.exec.phyCoreId = 3;
+    report.relatedPoint.exec.blockType = ACLSAN_DEVICE_BLOCK_TYPE_AICORE_VECTOR;
+    report.relatedPoint.exec.blockId = 1;
+    report.relatedPoint.exec.pipeName = "MTE2";
+    report.relatedPoint.exec.launchId = 41;
+
+    std::string rendered;
+    ASSERT_EQ(
+        aclsan::cann::RenderNpusanReportRecord(NpusanReportRecord::From(report), {}, &rendered),
+        ReportRenderStatus::kSuccess);
+    EXPECT_NE(rendered.find("pipe (S) in launch (42) at pc 0x100 in sync_kernel"), std::string::npos);
+    EXPECT_NE(
+        rendered.find("related point: BARRIER by aicore (3) type (AIV) block (1) pipe (MTE2) in launch (41)"),
+        std::string::npos);
 }
 
 TEST(ReportRendererTest, RendersUnconsumedGetBufferWithExpectedRelatedPoint)

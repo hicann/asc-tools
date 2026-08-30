@@ -254,7 +254,7 @@ aclError aclrtBinaryLoadFromDataHook(
     if (g_binaryLoadInProgress) {
         const aclError result = original(data, length, options, binHandle);
         if (result == ACL_SUCCESS && binHandle != nullptr) {
-            aclsan::RecordTraceBinaryLoadFromData(*binHandle, false, data, length);
+            aclsan::RecordTraceBinaryLoadFromData(*binHandle, false, 0, data, length);
         }
         return result;
     }
@@ -275,7 +275,8 @@ aclError aclrtBinaryLoadFromDataHook(
         result = original(data, length, options, binHandle);
     }
     if (result == ACL_SUCCESS && binHandle != nullptr) {
-        aclsan::RecordTraceBinaryLoadFromData(*binHandle, loadedPatched, data, length);
+        aclsan::RecordTraceBinaryLoadFromData(
+            *binHandle, loadedPatched, instrumentation.traceArgumentOffset, data, length);
     }
     return result;
 }

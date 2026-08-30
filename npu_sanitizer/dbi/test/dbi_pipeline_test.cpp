@@ -50,6 +50,7 @@ TEST(DbiPipelineTest, ValidatesRequestFields)
     request.inputKernel = "/tmp/input.o";
     request.outputKernel = "/tmp/output.o";
     request.arch = "dav-c220";
+    request.traceArgumentOffset = 24;
     request.probeGroups = {ProbeGroup::Mte2};
     EXPECT_TRUE(ValidateRequest(request).empty());
 

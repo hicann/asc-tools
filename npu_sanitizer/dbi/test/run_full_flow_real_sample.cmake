@@ -2,7 +2,9 @@
 # This program is free software, you can redistribute it and/or modify it under the terms and conditions of
 # CANN Open Software License Agreement Version 2.0 (the "License").
 
-foreach(required IN ITEMS SAMPLE KERNEL DEVICE_ID ARCH TOOLCHAIN_ROOT SOURCE_ROOT TEST_ROOT)
+foreach(required IN ITEMS
+    SAMPLE SANITIZER_LIBRARY_DIR INJECTION_LIBRARY_DIR KERNEL MODE EXPECTED_LAUNCHES
+    DEVICE_ID ARCH TOOLCHAIN_ROOT SOURCE_ROOT TEST_ROOT)
   if(NOT DEFINED ${required} OR "${${required}}" STREQUAL "")
     message(FATAL_ERROR "${required} is required")
   endif()
@@ -23,7 +25,8 @@ execute_process(
     "NPU_CHECK_DBI_CACHE_DIR=${TEST_ROOT}/cache"
     "NPU_CHECK_DBI_STRICT=1"
     "NPU_CHECK_TRACE_RECORDS_PER_BLOCK=16"
-    "${SAMPLE}" "${KERNEL}" "FullFlowKernel" "${DEVICE_ID}"
+    "LD_LIBRARY_PATH=${SANITIZER_LIBRARY_DIR}:${INJECTION_LIBRARY_DIR}:$ENV{LD_LIBRARY_PATH}"
+    "${SAMPLE}" "${KERNEL}" "${MODE}" "${DEVICE_ID}"
   RESULT_VARIABLE sample_result
   OUTPUT_VARIABLE sample_stdout
   ERROR_VARIABLE sample_stderr
@@ -39,19 +42,25 @@ set(required_output
   "[hook] function instrumented=yes"
   "[hook] launch trace_buffer_injected=yes"
   "[device] records="
-  "[d2h] copies=1"
   "[verify] kernel_result=pass trace_records=pass resources=balanced"
   "FULL_FLOW_SAMPLE_PASS"
 )
+if(MODE STREQUAL "zero")
+  list(APPEND required_output "[d2h] copies=0")
+else()
+  list(APPEND required_output "[d2h] copies=1")
+endif()
 foreach(fragment IN LISTS required_output)
   string(FIND "${sample_output}" "${fragment}" position)
   if(position EQUAL -1)
     message(FATAL_ERROR "missing real sample output fragment '${fragment}':\n${sample_output}")
   endif()
 endforeach()
-string(REGEX MATCH "\\[callback\\] records=[1-9][0-9]*" callback_count "${sample_output}")
+string(REGEX MATCH
+  "\\[callback\\] records=[1-9][0-9]* launches=${EXPECTED_LAUNCHES}" callback_count "${sample_output}")
 if(callback_count STREQUAL "")
-  message(FATAL_ERROR "real sample did not report a positive callback count:\n${sample_output}")
+  message(FATAL_ERROR
+    "real sample did not report callbacks from ${EXPECTED_LAUNCHES} launch(es):\n${sample_output}")
 endif()
 
 file(GLOB probe_objects "${TEST_ROOT}/cache/*/probe.o")

@@ -41,6 +41,7 @@ struct DbiRequest {
     std::string inputKernel;
     std::string outputKernel;
     std::string arch;
+    uint32_t traceArgumentOffset = 0; // 隐藏的trace buffer指针在Kernel hostArgs参数区中的字节偏移
     std::vector<ProbeGroup> probeGroups;
     std::string toolchainRoot;
     std::string sourceRoot;
@@ -57,6 +58,7 @@ struct DbiResult {
     std::string patchedPath;
     std::string stage;
     std::string diagnostic;
+    uint32_t traceArgumentOffset = 0;
 };
 
 std::vector<ProbeGroup> NormalizeProbeGroups(const std::vector<ProbeGroup>& groups);

@@ -19,7 +19,7 @@
 #include <cstring>
 #include <vector>
 
-extern "C" void aclsanTestMarkInstrumentedFunction(aclrtFuncHandle function);
+extern "C" void aclsanTestMarkInstrumentedFunction(aclrtFuncHandle function, uint32_t traceArgumentOffset);
 
 namespace {
 
@@ -71,7 +71,10 @@ int64_t g_cubeCoreCount = 36;
 int64_t g_vectorCoreCount = 72;
 bool g_writeMultiMemoryRecords = false;
 uint32_t g_expectedHiddenOffset = 16;
+size_t g_expectedLaunchArgumentBytes = 24;
 uint32_t g_expectedPlaceholderDataOffset = 0;
+uint32_t g_expectedPaddingBegin = 0;
+bool g_checkPadding = false;
 
 aclError OriginalMalloc(void** pointer, size_t bytes, aclrtMemMallocPolicy)
 {
@@ -106,7 +109,7 @@ aclError OriginalLaunch(
     if (g_failLaunch) {
         return ACL_ERROR_FAILURE;
     }
-    if (hostArgs == nullptr || argsSize != 24 || blocks != 2) {
+    if (hostArgs == nullptr || argsSize != g_expectedLaunchArgumentBytes || blocks != 2) {
         return ACL_ERROR_INVALID_PARAM;
     }
     if (g_expectedPlaceholderDataOffset != 0 && (placeholderCount != 1 || placeholders == nullptr ||
@@ -115,6 +118,13 @@ aclError OriginalLaunch(
     }
 
     void* deviceBuffer = nullptr;
+    if (g_checkPadding) {
+        for (uint32_t offset = g_expectedPaddingBegin; offset < g_expectedHiddenOffset; ++offset) {
+            if (static_cast<const uint8_t*>(hostArgs)[offset] != 0) {
+                return ACL_ERROR_INVALID_PARAM;
+            }
+        }
+    }
     std::memcpy(&deviceBuffer, static_cast<const uint8_t*>(hostArgs) + g_expectedHiddenOffset, sizeof(deviceBuffer));
     if (deviceBuffer == nullptr) {
         return ACL_ERROR_INVALID_PARAM;
@@ -304,7 +314,7 @@ int main()
     const auto ordinaryFunction = reinterpret_cast<aclrtFuncHandle>(&ordinaryFunctionStorage);
     const auto stream1 = reinterpret_cast<aclrtStream>(&streamStorage1);
     const auto stream2 = reinterpret_cast<aclrtStream>(&streamStorage2);
-    aclsanTestMarkInstrumentedFunction(function);
+    aclsanTestMarkInstrumentedFunction(function, 16);
 
     uint64_t arguments[2] = {1, 2};
     CHECK(
@@ -418,7 +428,7 @@ int main()
     g_vectorCoreCount = 72;
     CHECK(g_mallocCalls == mallocCallsBeforeInvalidTopology);
 
-    aclsanTestMarkInstrumentedFunction(function);
+    aclsanTestMarkInstrumentedFunction(function, 8);
     g_expectedHiddenOffset = 8;
     g_expectedPlaceholderDataOffset = 16;
     aclrtPlaceHolderInfo placeholder{0, 8};
@@ -428,7 +438,38 @@ int main()
     CHECK(placeholder.dataOffset == 8);
     CHECK(aclrtSynchronizeStream(stream1) == ACL_SUCCESS);
 
+    int oneArgumentFunctionStorage = 0;
+    int zeroArgumentFunctionStorage = 0;
+    int threeArgumentFunctionStorage = 0;
+    const auto oneArgumentFunction = reinterpret_cast<aclrtFuncHandle>(&oneArgumentFunctionStorage);
+    const auto zeroArgumentFunction = reinterpret_cast<aclrtFuncHandle>(&zeroArgumentFunctionStorage);
+    const auto threeArgumentFunction = reinterpret_cast<aclrtFuncHandle>(&threeArgumentFunctionStorage);
+    aclsanTestMarkInstrumentedFunction(oneArgumentFunction, 24);
+    aclsanTestMarkInstrumentedFunction(zeroArgumentFunction, 24);
+    aclsanTestMarkInstrumentedFunction(threeArgumentFunction, 24);
     g_writeRecord = false;
+    g_expectedHiddenOffset = 24;
+    g_expectedLaunchArgumentBytes = 32;
+    g_expectedPlaceholderDataOffset = 0;
+    g_checkPadding = true;
+    uint64_t oneArgument = 0x1234;
+    g_expectedPaddingBegin = 8;
+    CHECK(
+        aclrtLaunchKernelWithHostArgs(
+            oneArgumentFunction, 2, stream1, nullptr, &oneArgument, sizeof(oneArgument), nullptr, 0) == ACL_SUCCESS);
+    g_expectedPaddingBegin = 0;
+    CHECK(
+        aclrtLaunchKernelWithHostArgs(zeroArgumentFunction, 2, stream1, nullptr, nullptr, 0, nullptr, 0) ==
+        ACL_SUCCESS);
+    uint64_t threeArguments[3] = {1, 2, 3};
+    g_expectedPaddingBegin = 24;
+    CHECK(
+        aclrtLaunchKernelWithHostArgs(
+            threeArgumentFunction, 2, stream1, nullptr, threeArguments, sizeof(threeArguments), nullptr, 0) ==
+        ACL_SUCCESS);
+    CHECK(aclrtSynchronizeStream(stream1) == ACL_SUCCESS);
+    g_checkPadding = false;
+
     void* ordinaryArgs = arguments;
     CHECK(
         aclrtLaunchKernelWithHostArgs(

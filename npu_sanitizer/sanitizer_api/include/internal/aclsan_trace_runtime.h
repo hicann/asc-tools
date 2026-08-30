@@ -45,11 +45,12 @@ void DispatchTraceRecords(
     const std::vector<ParsedTraceRecord>& records, const DeviceInstructionDecoder& decoder) noexcept;
 
 void RecordTraceBinaryLoadFromData(
-    aclrtBinHandle binary, bool instrumented, const void* image, size_t imageBytes) noexcept;
+    aclrtBinHandle binary, bool instrumented, uint32_t traceArgumentOffset, const void* image,
+    size_t imageBytes) noexcept;
 void RecordTraceBinaryUnload(aclrtBinHandle binary) noexcept;
 void RecordTraceBinaryFunctionLookup(aclrtBinHandle binary, aclrtFuncHandle function) noexcept;
 void RecordTraceFunctionLookup(aclrtFuncHandle function) noexcept;
-void MarkTraceFunctionInstrumented(aclrtFuncHandle function) noexcept;
+void MarkTraceFunctionInstrumented(aclrtFuncHandle function, uint32_t traceArgumentOffset) noexcept;
 
 aclError PrepareTraceLaunch(
     aclrtFuncHandle function, uint32_t blockCount, const void* hostArgs, size_t argsSize,

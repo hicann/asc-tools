@@ -110,11 +110,6 @@ bool QueryPhysicalCoreCount(uint32_t deviceId, uint32_t& physicalCoreCount)
     return aclsan::IsTracePhysicalCoreTopologyValid(physicalCoreCount);
 }
 
-bool IsInstrumented(aclrtFuncHandle function)
-{
-    return DeviceBinaries().IsFunctionInstrumented(reinterpret_cast<uintptr_t>(function));
-}
-
 uint64_t AllocateLaunchId()
 {
     TraceRuntimeState& state = State();
@@ -129,12 +124,13 @@ uint64_t AllocateLaunchId()
 // 为已经DBI插桩的kernel扩展HostArgs，在原始参数中插入隐藏的device trace buffer指针
 aclError ExpandArguments(
     const void* hostArgs, size_t argsSize, const aclrtPlaceHolderInfo* placeholders, size_t placeholderCount,
-    PreparedTraceLaunch& prepared, size_t& insertionOffset)
+    uint32_t traceArgumentOffset, PreparedTraceLaunch& prepared)
 {
     if ((argsSize != 0 && hostArgs == nullptr) || (placeholderCount != 0 && placeholders == nullptr)) {
         return ACL_ERROR_INVALID_PARAM;
     }
 
+    size_t insertionOffset = 0;
     if (placeholderCount != 0) {
         const uint32_t lastAddressOffset = placeholders[placeholderCount - 1].addrOffset;
         if (lastAddressOffset > std::numeric_limits<uint32_t>::max() - sizeof(void*)) {
@@ -151,18 +147,23 @@ aclError ExpandArguments(
         insertionOffset = (argsSize + 7U) & ~static_cast<size_t>(7U);
     }
 
-    if (insertionOffset > std::numeric_limits<size_t>::max() - sizeof(void*)) {
+    if (insertionOffset > traceArgumentOffset ||
+        traceArgumentOffset > std::numeric_limits<size_t>::max() - sizeof(void*)) {
         return ACL_ERROR_INVALID_PARAM;
     }
 
-    const size_t expandedSize = std::max(argsSize, insertionOffset) + sizeof(void*);
+    const size_t paddingBytes = traceArgumentOffset - insertionOffset;
+    if (std::max(argsSize, insertionOffset) > std::numeric_limits<size_t>::max() - paddingBytes - sizeof(void*)) {
+        return ACL_ERROR_INVALID_PARAM;
+    }
+    const size_t expandedSize = std::max(argsSize, insertionOffset) + paddingBytes + sizeof(void*);
     prepared.arguments.assign(expandedSize, 0);
     if (insertionOffset != 0) {
         std::memcpy(prepared.arguments.data(), hostArgs, std::min(argsSize, insertionOffset));
     }
     if (argsSize > insertionOffset) {
         std::memcpy(
-            prepared.arguments.data() + insertionOffset + sizeof(void*),
+            prepared.arguments.data() + traceArgumentOffset + sizeof(void*),
             static_cast<const uint8_t*>(hostArgs) + insertionOffset, argsSize - insertionOffset);
     }
 
@@ -171,18 +172,19 @@ aclError ExpandArguments(
     }
     for (aclrtPlaceHolderInfo& placeholder : prepared.placeholders) {
         if (placeholder.dataOffset >= insertionOffset) {
-            if (placeholder.dataOffset > std::numeric_limits<uint32_t>::max() - sizeof(void*)) {
+            const size_t shiftBytes = paddingBytes + sizeof(void*);
+            if (placeholder.dataOffset > std::numeric_limits<uint32_t>::max() - shiftBytes) {
                 return ACL_ERROR_INVALID_PARAM;
             }
-            placeholder.dataOffset += sizeof(void*);
+            placeholder.dataOffset += static_cast<uint32_t>(shiftBytes);
         }
     }
     return ACL_SUCCESS;
 }
 
-void StoreHiddenPointer(PreparedTraceLaunch& prepared, size_t insertionOffset)
+void StoreHiddenPointer(PreparedTraceLaunch& prepared, size_t traceArgumentOffset)
 {
-    std::memcpy(prepared.arguments.data() + insertionOffset, &prepared.deviceBuffer, sizeof(prepared.deviceBuffer));
+    std::memcpy(prepared.arguments.data() + traceArgumentOffset, &prepared.deviceBuffer, sizeof(prepared.deviceBuffer));
 }
 
 void ReleaseDeviceBuffer(void* buffer) noexcept
@@ -225,9 +227,9 @@ aclError ResolveLaunchContext(PreparedTraceLaunch& prepared) noexcept
 void DispatchTraceRecords(
     const std::vector<ParsedTraceRecord>& records, const aclsan::DeviceInstructionDecoder& decoder) noexcept
 {
-    const auto isMultiInstruction = [](uint64_t instructionId) noexcept {
-        return instructionId >= static_cast<uint64_t>(InstructionId::CopyGmToCbufMultiNd2NzB8) &&
-               instructionId <= static_cast<uint64_t>(InstructionId::CopyGmToCbufMultiDn2NzB32);
+    const auto isMultiInstruction = [](uint32_t instructionId) noexcept {
+        return instructionId >= static_cast<uint32_t>(InstructionId::CopyGmToCbufMultiNd2NzB8) &&
+               instructionId <= static_cast<uint32_t>(InstructionId::CopyGmToCbufMultiDn2NzB32);
     };
     if (records.empty()) {
         return;
@@ -235,11 +237,13 @@ void DispatchTraceRecords(
 
     dav3510::Dav3510RegisterStateManager registerState(records.front().launchId);
     for (const ParsedTraceRecord& parsed : records) {
+        if (!IsDefinedInstructionId(parsed.record.instrId)) {
+            continue;
+        }
         std::optional<aclsan::DecodedInstruction> decoded = decoder.decode(parsed.record);
         if (!decoded.has_value()) {
             ASC_SAN_ERROR(
-                "acl_san trace: unsupported raw trace instrId=%llu pc=0x%llx block=%u",
-                static_cast<unsigned long long>(parsed.record.instrId),
+                "acl_san trace: unsupported raw trace instrId=%u pc=0x%llx block=%u", parsed.record.instrId,
                 static_cast<unsigned long long>(parsed.record.pc), parsed.blockId);
             continue;
         }
@@ -294,17 +298,15 @@ void DispatchTraceRecords(
         }
         if (!stateComplete) {
             ASC_SAN_ERROR(
-                "acl_san trace: memory instruction has incomplete scalar state: instrId=%llu pc=0x%llx block=%u",
-                static_cast<unsigned long long>(parsed.record.instrId),
-                static_cast<unsigned long long>(parsed.record.pc), parsed.blockId);
+                "acl_san trace: memory instruction has incomplete scalar state: instrId=%u pc=0x%llx block=%u",
+                parsed.record.instrId, static_cast<unsigned long long>(parsed.record.pc), parsed.blockId);
             continue;
         }
 
         const auto callbackData = TranslateDecodedTraceToCallbackData(enriched, *decoded);
         if (!callbackData.has_value()) {
             ASC_SAN_ERROR(
-                "acl_san trace: unsupported raw trace instrId=%llu pc=0x%llx block=%u",
-                static_cast<unsigned long long>(parsed.record.instrId),
+                "acl_san trace: unsupported raw trace instrId=%u pc=0x%llx block=%u", parsed.record.instrId,
                 static_cast<unsigned long long>(parsed.record.pc), parsed.blockId);
         } else if (const auto* memory = std::get_if<DeviceMemoryAccessDataList>(&*callbackData)) {
             for (const AclsanDeviceMemoryAccessData& access : *memory) {
@@ -317,14 +319,15 @@ void DispatchTraceRecords(
 }
 
 void RecordTraceBinaryLoadFromData(
-    aclrtBinHandle binary, bool instrumented, const void* image, size_t imageBytes) noexcept
+    aclrtBinHandle binary, bool instrumented, uint32_t traceArgumentOffset, const void* image,
+    size_t imageBytes) noexcept
 {
     if (binary == nullptr) {
         return;
     }
     try {
         if (!DeviceBinaries().RecordBinaryLoadFromData(
-                reinterpret_cast<uintptr_t>(binary), instrumented, image, imageBytes)) {
+                reinterpret_cast<uintptr_t>(binary), instrumented, traceArgumentOffset, image, imageBytes)) {
             ASC_SAN_ERROR("acl_san trace: failed to preserve device source for binary %p", binary);
         }
     } catch (...) {
@@ -362,13 +365,13 @@ void RecordTraceFunctionLookup(aclrtFuncHandle function) noexcept
     }
 }
 
-void MarkTraceFunctionInstrumented(aclrtFuncHandle function) noexcept
+void MarkTraceFunctionInstrumented(aclrtFuncHandle function, uint32_t traceArgumentOffset) noexcept
 {
     if (function == nullptr) {
         return;
     }
     try {
-        DeviceBinaries().MarkFunctionInstrumented(reinterpret_cast<uintptr_t>(function));
+        DeviceBinaries().MarkFunctionInstrumented(reinterpret_cast<uintptr_t>(function), traceArgumentOffset);
     } catch (...) {
         ASC_SAN_ERROR("acl_san trace: failed to mark function %p as instrumented", function);
     }
@@ -380,7 +383,9 @@ aclError PrepareTraceLaunch(
 {
     try {
         prepared = {};
-        if (!IsInstrumented(function)) {
+        uint32_t traceArgumentOffset = 0;
+        if (!DeviceBinaries().GetFunctionTraceArgumentOffset(
+                reinterpret_cast<uintptr_t>(function), traceArgumentOffset)) {
             return ACL_SUCCESS;
         }
         prepared.instrumented = true;
@@ -391,9 +396,8 @@ aclError PrepareTraceLaunch(
             return contextStatus;
         }
 
-        size_t insertionOffset = 0;
         const aclError expandStatus =
-            ExpandArguments(hostArgs, argsSize, placeholders, placeholderCount, prepared, insertionOffset);
+            ExpandArguments(hostArgs, argsSize, placeholders, placeholderCount, traceArgumentOffset, prepared);
         if (expandStatus != ACL_SUCCESS) {
             return expandStatus;
         }
@@ -409,7 +413,7 @@ aclError PrepareTraceLaunch(
             ASC_SAN_ERROR(
                 "acl_san trace: cannot initialize launch buffer: %s",
                 capacityValid ? error.c_str() : "invalid NPU_CHECK_TRACE_RECORDS_PER_BLOCK");
-            StoreHiddenPointer(prepared, insertionOffset);
+            StoreHiddenPointer(prepared, traceArgumentOffset);
             return StrictModeEnabled() ? ACL_ERROR_FAILURE : ACL_SUCCESS;
         }
         prepared.recordsPerCore = capacity;
@@ -431,11 +435,11 @@ aclError PrepareTraceLaunch(
             ASC_SAN_ERROR("acl_san trace: cannot allocate or initialize launch GM buffer, status=%d", status);
             ReleaseDeviceBuffer(prepared.deviceBuffer);
             prepared.deviceBuffer = nullptr;
-            StoreHiddenPointer(prepared, insertionOffset);
+            StoreHiddenPointer(prepared, traceArgumentOffset);
             return StrictModeEnabled() ? status : ACL_SUCCESS;
         }
 
-        StoreHiddenPointer(prepared, insertionOffset);
+        StoreHiddenPointer(prepared, traceArgumentOffset);
         return ACL_SUCCESS;
     } catch (const std::bad_alloc&) {
         ReleaseDeviceBuffer(prepared.deviceBuffer);
@@ -562,16 +566,16 @@ device_runtime::CallStackResult ResolveTraceDeviceCallStack(uint64_t pc) noexcep
 } // namespace aclsan
 
 #if defined(ACLSAN_ENABLE_TEST_API)
-extern "C" ACLSAN_EXPORT void aclsanTestMarkInstrumentedFunction(aclrtFuncHandle function)
+extern "C" ACLSAN_EXPORT void aclsanTestMarkInstrumentedFunction(aclrtFuncHandle function, uint32_t traceArgumentOffset)
 {
-    aclsan::MarkTraceFunctionInstrumented(function);
+    aclsan::MarkTraceFunctionInstrumented(function, traceArgumentOffset);
 }
 
 extern "C" ACLSAN_EXPORT void aclsanTestRecordDeviceBinarySource(
     const void* binary, const void* image, size_t imageBytes)
 {
     aclsan::RecordTraceBinaryLoadFromData(
-        reinterpret_cast<aclrtBinHandle>(const_cast<void*>(binary)), true, image, imageBytes);
+        reinterpret_cast<aclrtBinHandle>(const_cast<void*>(binary)), true, 8, image, imageBytes);
 }
 
 extern "C" ACLSAN_EXPORT void aclsanTestResetTraceRuntimeState() { aclsan::ResetTraceRuntimeState(); }

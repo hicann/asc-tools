@@ -24,30 +24,30 @@
 
 namespace {
 
-constexpr uint64_t COPY_GM_TO_CBUF_ALIGN_V2_B16_ID = 75;
-constexpr uint64_t COPY_GM_TO_CBUF_MULTI_ND2NZ_B16_ID = 78;
-constexpr uint64_t COPY_GM_TO_CBUF_V2_ID = 73;
-constexpr uint64_t COPY_UBUF_TO_GM_ALIGN_V2_ID = 83;
-constexpr uint64_t LOAD_GM_TO_CBUF_2D_V2_ID = 72;
-constexpr uint64_t ND_DMA_OUT_TO_UBUF_B16_ID = 88;
-constexpr uint64_t FIX_L0C_TO_OUT_F32_ID = 91;
+constexpr uint32_t COPY_GM_TO_CBUF_ALIGN_V2_B16_ID = 75;
+constexpr uint32_t COPY_GM_TO_CBUF_MULTI_ND2NZ_B16_ID = 78;
+constexpr uint32_t COPY_GM_TO_CBUF_V2_ID = 73;
+constexpr uint32_t COPY_UBUF_TO_GM_ALIGN_V2_ID = 83;
+constexpr uint32_t LOAD_GM_TO_CBUF_2D_V2_ID = 72;
+constexpr uint32_t ND_DMA_OUT_TO_UBUF_B16_ID = 88;
+constexpr uint32_t FIX_L0C_TO_OUT_F32_ID = 91;
 constexpr uint64_t C0_SIZE = 32;
-constexpr uint64_t SET_FLAG_ID = 440;
-constexpr uint64_t SET_FLAG_I_ID = 441;
-constexpr uint64_t WAIT_FLAG_ID = 442;
-constexpr uint64_t WAIT_FLAG_I_ID = 443;
-constexpr uint64_t GET_BUF_ID = 448;
-constexpr uint64_t GET_BUF_I_ID = 449;
-constexpr uint64_t RLS_BUF_ID = 450;
-constexpr uint64_t RLS_BUF_I_ID = 451;
-constexpr uint64_t SET_FLAG_V_ID = 456;
-constexpr uint64_t SET_FLAG_IV_ID = 457;
-constexpr uint64_t WAIT_FLAG_V_ID = 458;
-constexpr uint64_t WAIT_FLAG_IV_ID = 459;
-constexpr uint64_t GET_BUF_V_ID = 460;
-constexpr uint64_t GET_BUF_IV_ID = 461;
-constexpr uint64_t RLS_BUF_V_ID = 462;
-constexpr uint64_t RLS_BUF_IV_ID = 463;
+constexpr uint32_t SET_FLAG_ID = 440;
+constexpr uint32_t SET_FLAG_I_ID = 441;
+constexpr uint32_t WAIT_FLAG_ID = 442;
+constexpr uint32_t WAIT_FLAG_I_ID = 443;
+constexpr uint32_t GET_BUF_ID = 448;
+constexpr uint32_t GET_BUF_I_ID = 449;
+constexpr uint32_t RLS_BUF_ID = 450;
+constexpr uint32_t RLS_BUF_I_ID = 451;
+constexpr uint32_t SET_FLAG_V_ID = 456;
+constexpr uint32_t SET_FLAG_IV_ID = 457;
+constexpr uint32_t WAIT_FLAG_V_ID = 458;
+constexpr uint32_t WAIT_FLAG_IV_ID = 459;
+constexpr uint32_t GET_BUF_V_ID = 460;
+constexpr uint32_t GET_BUF_IV_ID = 461;
+constexpr uint32_t RLS_BUF_V_ID = 462;
+constexpr uint32_t RLS_BUF_IV_ID = 463;
 
 static_assert(std::is_same_v<aclsan::DeviceMemoryAccessDataList, std::vector<AclsanDeviceMemoryAccessData>>);
 
@@ -153,7 +153,7 @@ void TestTranslateAllFlagVariantsToCorrectActions()
     record.args[2] = 5;
     const aclsan::ParsedTraceRecord parsed = MakeParsedTraceRecord(1, 0, ACLSAN_DEVICE_BLOCK_TYPE_AICORE_VECTOR, 2, 3);
 
-    for (uint64_t instructionId : {SET_FLAG_ID, SET_FLAG_I_ID, SET_FLAG_V_ID, SET_FLAG_IV_ID}) {
+    for (uint32_t instructionId : {SET_FLAG_ID, SET_FLAG_I_ID, SET_FLAG_V_ID, SET_FLAG_IV_ID}) {
         record.instrId = instructionId;
         const auto callback = TranslateRecordToCallbackData(record, parsed);
         assert(callback.has_value());
@@ -165,7 +165,7 @@ void TestTranslateAllFlagVariantsToCorrectActions()
         assert(sync->objectId == 5);
     }
 
-    for (uint64_t instructionId : {WAIT_FLAG_ID, WAIT_FLAG_I_ID, WAIT_FLAG_V_ID, WAIT_FLAG_IV_ID}) {
+    for (uint32_t instructionId : {WAIT_FLAG_ID, WAIT_FLAG_I_ID, WAIT_FLAG_V_ID, WAIT_FLAG_IV_ID}) {
         record.instrId = instructionId;
         const auto callback = TranslateRecordToCallbackData(record, parsed);
         assert(callback.has_value());
@@ -185,8 +185,8 @@ void TestTranslateAllBufferVariantsToCorrectActions()
     record.args[2] = 3;
     const aclsan::ParsedTraceRecord parsed = MakeParsedTraceRecord(6, 2, ACLSAN_DEVICE_BLOCK_TYPE_AICORE_VECTOR, 4, 3);
 
-    const uint64_t getInstructionIds[] = {GET_BUF_ID, GET_BUF_I_ID, GET_BUF_V_ID, GET_BUF_IV_ID};
-    for (uint64_t instructionId : getInstructionIds) {
+    const uint32_t getInstructionIds[] = {GET_BUF_ID, GET_BUF_I_ID, GET_BUF_V_ID, GET_BUF_IV_ID};
+    for (uint32_t instructionId : getInstructionIds) {
         record.instrId = instructionId;
         const auto callback = TranslateRecordToCallbackData(record, parsed);
         assert(callback.has_value());
@@ -206,8 +206,8 @@ void TestTranslateAllBufferVariantsToCorrectActions()
         assert(sync->objectId == 0x12345678);
     }
 
-    const uint64_t releaseInstructionIds[] = {RLS_BUF_ID, RLS_BUF_I_ID, RLS_BUF_V_ID, RLS_BUF_IV_ID};
-    for (uint64_t instructionId : releaseInstructionIds) {
+    const uint32_t releaseInstructionIds[] = {RLS_BUF_ID, RLS_BUF_I_ID, RLS_BUF_V_ID, RLS_BUF_IV_ID};
+    for (uint32_t instructionId : releaseInstructionIds) {
         record.instrId = instructionId;
         const auto callback = TranslateRecordToCallbackData(record, parsed);
         assert(callback.has_value());
@@ -533,9 +533,19 @@ void TestLogsEveryMemoryAccessInVariableLengthList()
         accesses[index].accessIndex = static_cast<uint32_t>(index);
         accesses[index].accessCount = static_cast<uint32_t>(accesses.size());
     }
+    accesses[0].header.deviceId = 2;
+    accesses[0].header.phyCoreId = 1;
+    accesses[0].header.blockId = 3;
+    accesses[0].header.blockType = ACLSAN_DEVICE_BLOCK_TYPE_AICORE;
+    accesses[0].header.instrExecId = 4;
+    accesses[0].header.launchId = 5;
 
     const std::string logs = CaptureCallbackDataDebugLogs(aclsan::DeviceCallbackData{accesses});
 
+    if (logs.find("[cbdata] deviceId=2 phyCoreId=1 blockId=3 blockType=AICORE  instrExecId=4 launchId=5  "
+                  "type=AclsanDeviceMemoryAccessData index=0") == std::string::npos) {
+        std::abort();
+    }
     assert(logs.find("index=0 address=0x1000") != std::string::npos);
     assert(logs.find("index=1 address=0x1001") != std::string::npos);
     assert(logs.find("index=2 address=0x1002") != std::string::npos);
@@ -552,12 +562,15 @@ void TestTranslateDebugLogsShowSyncConversion()
     record.args[0] = 2;
     record.args[1] = 3;
     record.args[2] = 7;
-    const aclsan::ParsedTraceRecord parsed = MakeParsedTraceRecord(9, 4, ACLSAN_DEVICE_BLOCK_TYPE_AICORE_CUBE, 6, 3);
+    const aclsan::ParsedTraceRecord parsed =
+        MakeParsedTraceRecord(9, 4, ACLSAN_DEVICE_BLOCK_TYPE_AICORE_CUBE, 6, 3, 12);
 
     const std::string logs = CaptureTranslateDebugLogs(record, parsed);
     assert(logs.find("[raw]") != std::string::npos);
-    assert(logs.find("type=AclsanRawTraceRecord") != std::string::npos);
-    assert(logs.find("blockId=4 blockType=2 phyCoreId=6 pc=0x1234") != std::string::npos);
+    if (logs.find("[raw] deviceId=3 phyCoreId=6 blockId=4 blockType=AIC  instrExecId=9 launchId=12  "
+                  "type=AclsanRawTraceRecord pc=0x1234") == std::string::npos) {
+        std::abort();
+    }
     assert(logs.find("instrId=440") != std::string::npos);
     assert(logs.find("siteId=5 category=2 pipeline=" + std::to_string(ACLSAN_DEVICE_PIPE_SCALAR)) != std::string::npos);
     assert(logs.find("args=[0x2,0x3,0x7,0x0,0x0]") != std::string::npos);
@@ -567,9 +580,10 @@ void TestTranslateDebugLogsShowSyncConversion()
     assert(logs.find("srcPipe=2 dstPipe=3 eventId=7") != std::string::npos);
     assert(logs.find("[cbdata]") != std::string::npos);
     assert(logs.find("type=AclsanDeviceSyncData") != std::string::npos);
-    assert(
-        logs.find("pc=0x1234 instrExecId=9 serialNo=0 launchId=0 blockId=4 blockType=2 phyCoreId=6") !=
-        std::string::npos);
+    if (logs.find("[cbdata] deviceId=3 phyCoreId=6 blockId=4 blockType=AIC  instrExecId=9 launchId=12  "
+                  "type=AclsanDeviceSyncData pc=0x1234") == std::string::npos) {
+        std::abort();
+    }
     assert(logs.find("action=1") != std::string::npos);
     assert(logs.find("objectId=7") != std::string::npos);
 }
@@ -591,7 +605,9 @@ void TestTranslateDebugLogsShowBufferConversion()
     assert(
         logs.find("pipe=" + std::to_string(ACLSAN_DEVICE_PIPE_VECTOR) + " bufId=0x12345678 mode=3") !=
         std::string::npos);
-    assert(logs.find("[cbdata] type=AclsanDeviceSyncData") != std::string::npos);
+    assert(
+        logs.find("[cbdata] deviceId=3 phyCoreId=7 blockId=5 blockType=AIV  instrExecId=10 launchId=0  "
+                  "type=AclsanDeviceSyncData") != std::string::npos);
     assert(
         logs.find(
             "syncKind=2 action=3 scope=1 srcPipe=0 dstPipe=" + std::to_string(ACLSAN_DEVICE_PIPE_VECTOR) + " mode=3") !=
@@ -611,19 +627,23 @@ void TestTranslateDebugLogsShowUbufToGmConversion()
     record.args[1] = 0x4000;
     record.args[2] = (2ULL << 4) | (64ULL << 25);
     record.args[3] = 0x1234;
-    const aclsan::ParsedTraceRecord parsed = MakeParsedTraceRecord(11, 3, ACLSAN_DEVICE_BLOCK_TYPE_AICORE_VECTOR, 5, 3);
+    const aclsan::ParsedTraceRecord parsed =
+        MakeParsedTraceRecord(11, 3, ACLSAN_DEVICE_BLOCK_TYPE_AICORE_VECTOR, 5, 3, 13);
 
     const std::string logs = CaptureTranslateDebugLogs(record, parsed);
-    assert(logs.find("[raw] type=AclsanRawTraceRecord") != std::string::npos);
+    assert(
+        logs.find("[raw] deviceId=3 phyCoreId=5 blockId=3 blockType=AIV  instrExecId=11 launchId=13  "
+                  "type=AclsanRawTraceRecord") != std::string::npos);
     assert(
         logs.find("instrId=83 siteId=4 category=1 pipeline=" + std::to_string(ACLSAN_DEVICE_PIPE_MTE3)) !=
         std::string::npos);
     assert(logs.find("[param] type=CopyUbufToGmAlignV2ParamField") != std::string::npos);
     assert(logs.find("burstNum=2 burstLen=64") != std::string::npos);
-    assert(
-        logs.find("[cbdata] type=AclsanDeviceMemoryAccessData index=0 address=0x3000 memorySpace=1 accessMode=2") !=
-        std::string::npos);
-    assert(logs.find("instrExecId=11 serialNo=0 phyCoreId=5 blockId=3 blockType=1") != std::string::npos);
+    if (logs.find("[cbdata] deviceId=3 phyCoreId=5 blockId=3 blockType=AIV  instrExecId=11 launchId=13  "
+                  "type=AclsanDeviceMemoryAccessData index=0 address=0x3000 memorySpace=1 accessMode=2") ==
+        std::string::npos) {
+        std::abort();
+    }
 }
 
 void TestTranslateCopyGmToCbufV2ToCallbackData()
@@ -724,7 +744,7 @@ void TestRejectsUnsupportedCallbackParamField()
 void TestRejectsUnknownInstruction()
 {
     aclsan::AclsanRawTraceRecord record{};
-    record.instrId = UINT64_C(0x100000000);
+    record.instrId = UINT32_MAX;
     assert(!TranslateRecord(record).has_value());
 }
 

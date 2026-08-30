@@ -315,7 +315,7 @@ bool ToolManager::ConfigureSanitizer(std::string& error)
                 logger_.Debug("memcheck instance created");
                 break;
             case ipc::ToolId::kSynccheck:
-                synccheck_ = std::make_unique<Synccheck>(&logger_);
+                synccheck_ = std::make_unique<npucheck::Synccheck>();
                 logger_.Debug("synccheck instance created");
                 break;
             default:
@@ -428,8 +428,8 @@ void ToolManager::Finalize()
                 analysisComplete && stats.pendingDeviceOperations == 0 && stats.droppedDeviceOperations == 0;
         }
         if (synccheck_ != nullptr) {
-            const SynccheckStats stats = synccheck_->Stats();
-            analysisComplete = analysisComplete && stats.pendingOpens == 0 && stats.invalidEvents == 0;
+            const npucheck::SynccheckStats stats = synccheck_->Stats();
+            analysisComplete = analysisComplete && stats.pendingOpens == 0;
         }
         analysisComplete = analysisComplete && malformedCallbacks_ == 0 && frameworkErrors_ == 0;
     }
@@ -479,7 +479,7 @@ bool ToolManager::HasDetectedErrors() const
         return true;
     }
     if (synccheck_ != nullptr) {
-        const SynccheckStats stats = synccheck_->Stats();
+        const npucheck::SynccheckStats stats = synccheck_->Stats();
         if (stats.duplicateOpens + stats.unmatchedCloses + stats.unconsumedOpens != 0) {
             return true;
         }
@@ -539,6 +539,7 @@ void ToolManager::OnCallback(AclsanCallbackDomain domain, AclsanCallbackId cbid,
     LogCallback(domain, cbid, cbdata);
     std::vector<aclsan::cann::NpusanMemcheckReport> reports;
     std::vector<aclsan::cann::NpusanSynccheckReport> syncReports;
+    bool hasSynccheckReports = false;
     bool malformed = false;
     {
         std::lock_guard<std::mutex> stateLock(stateMutex_);
@@ -579,7 +580,7 @@ void ToolManager::OnCallback(AclsanCallbackDomain domain, AclsanCallbackId cbid,
                 } else if (cbid == ACLSAN_CBID_DEVICE_SYNC) {
                     const auto* data = static_cast<const AclsanDeviceSyncData*>(cbdata);
                     if (data != nullptr && synccheck_ != nullptr) {
-                        syncReports = synccheck_->OnDeviceSync(*data);
+                        synccheck_->OnDeviceSync(*data);
                     } else {
                         malformed = true;
                     }
@@ -596,7 +597,8 @@ void ToolManager::OnCallback(AclsanCallbackDomain domain, AclsanCallbackId cbid,
                     logger_.Info(message.str());
                 }
                 if (data != nullptr && synccheck_ != nullptr) {
-                    syncReports = synccheck_->OnSynchronization();
+                    syncReports = synccheck_->OnSynchronization(); // TODO: 换个名字 finalizeCbdataAndReport
+                    hasSynccheckReports = true;
                     std::ostringstream message;
                     message << "synchronization observed reports=" << syncReports.size() << " stream=" << data->stream
                             << " result=" << data->common.result;
@@ -621,7 +623,9 @@ void ToolManager::OnCallback(AclsanCallbackDomain domain, AclsanCallbackId cbid,
         PublishMalformed(domain, cbid, "null, truncated, or incompatible callback data");
     } else {
         PublishDiagnostics(std::move(reports));
-        PublishSynccheckReports(std::move(syncReports));
+        if (hasSynccheckReports) {
+            PublishSynccheckReports(std::move(syncReports));
+        }
     }
 }
 
@@ -744,13 +748,13 @@ std::string ToolManager::BuildSummaryMessage() const
                << " dropped_device_operations=" << stats.droppedDeviceOperations << '\n';
     }
     if (synccheck_ != nullptr) {
-        const SynccheckStats stats = synccheck_->Stats();
+        const npucheck::SynccheckStats stats = synccheck_->Stats();
         const uint64_t errors = stats.duplicateOpens + stats.unmatchedCloses + stats.unconsumedOpens;
         output << "tool=synccheck sync_events=" << stats.syncEvents
                << " synchronizations=" << stats.synchronizationEvents << " matched_pairs=" << stats.matchedPairs
                << " duplicate_opens=" << stats.duplicateOpens << " unmatched_closes=" << stats.unmatchedCloses
-               << " unconsumed_opens=" << stats.unconsumedOpens << " invalid_events=" << stats.invalidEvents
-               << " pending_opens=" << stats.pendingOpens << " errors=" << errors << " warnings=0" << '\n';
+               << " unconsumed_opens=" << stats.unconsumedOpens << " pending_opens=" << stats.pendingOpens
+               << " errors=" << errors << " warnings=0" << '\n';
     }
     output << "callbacks=" << callbackCount_.load() << " malformed_callbacks=" << malformedCallbacks_
            << " framework_errors=" << frameworkErrors_ << " dropped_messages=" << server_.DroppedMessages();

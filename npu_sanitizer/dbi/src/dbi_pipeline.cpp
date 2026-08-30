@@ -359,6 +359,9 @@ std::string ValidateRequest(const DbiRequest& request)
     if (request.arch.empty()) {
         return "architecture is empty";
     }
+    if (request.traceArgumentOffset == 0) {
+        return "trace argument offset is zero";
+    }
     if (NormalizeProbeGroups(request.probeGroups).empty()) {
         return "probe set is empty";
     }
@@ -425,6 +428,7 @@ DbiResult RunDbiPipeline(const DbiRequest& request)
 {
     // 校验调用方传入的参数，并确认所需的探针源码均存在且非空。
     DbiResult result{};
+    result.traceArgumentOffset = request.traceArgumentOffset;
     result.stage = "validate";
     result.diagnostic = ValidateRequest(request);
     if (!result.diagnostic.empty()) {
@@ -470,7 +474,8 @@ DbiResult RunDbiPipeline(const DbiRequest& request)
         return result;
     }
 
-    // 将所有影响编译结果的输入纳入缓存键，并按缓存键加锁，防止并发请求读到未构建完成的文件。
+    // 将所有影响编译结果的输入纳入缓存键，并按缓存键加锁，
+    // 防止并发请求读到未构建完成的文件。
     auto compilerFlags = ProbeCompileFlags(request.arch, ascendcDevkit);
     compilerFlags.insert(compilerFlags.end(), {"-I", request.sourceRoot});
     compilerFlags.insert(compilerFlags.end(), request.extraCompilerArgs.begin(), request.extraCompilerArgs.end());
@@ -628,6 +633,7 @@ DbiResult RunDbiPipeline(const DbiRequest& request)
     std::vector<std::string> tuneArguments{
         tools.bishengTune,
         "--action=instru-probe",
+        "--tune-argsize=" + std::to_string(request.traceArgumentOffset),
         "--instru-memprobe",
         mergedKernel.string(),
         "--dbi-config=" + ctrlBin.string(),

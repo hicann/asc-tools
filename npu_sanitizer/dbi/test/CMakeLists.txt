@@ -56,6 +56,7 @@ if(NPU_CHECK_REAL_DBI_KERNEL STREQUAL "")
       "ASCEND_INSTALL_PATH=${NPU_CHECK_REAL_DBI_TOOLCHAIN_ROOT}"
       "${NPU_CHECK_REAL_bisheng}"
       -xasc --cce-aicore-only "--cce-aicore-arch=${NPU_CHECK_REAL_DBI_ARCH}"
+      --cce-auto-sync
       -I "${NPU_CHECK_REAL_DBI_TOOLCHAIN_ROOT}/${CMAKE_SYSTEM_PROCESSOR}-linux/asc"
       -I "${NPU_CHECK_REAL_DBI_TOOLCHAIN_ROOT}/${CMAKE_SYSTEM_PROCESSOR}-linux/asc/include"
       -c "${CMAKE_CURRENT_SOURCE_DIR}/full_flow_kernel.cpp"
@@ -67,9 +68,32 @@ elseif(NOT EXISTS "${NPU_CHECK_REAL_DBI_KERNEL}")
   message(FATAL_ERROR "NPU_CHECK_REAL_DBI_KERNEL does not exist: ${NPU_CHECK_REAL_DBI_KERNEL}")
 endif()
 
+if(NOT DEFINED NPU_CHECK_REAL_DBI_ZERO_KERNEL OR NPU_CHECK_REAL_DBI_ZERO_KERNEL STREQUAL "")
+  set(NPU_CHECK_REAL_DBI_ZERO_KERNEL "${CMAKE_CURRENT_BINARY_DIR}/full_flow_zero_kernel.o")
+  add_custom_command(
+    OUTPUT "${NPU_CHECK_REAL_DBI_ZERO_KERNEL}"
+    COMMAND "${CMAKE_COMMAND}" -E env
+      "ASCEND_HOME_PATH=${NPU_CHECK_REAL_DBI_TOOLCHAIN_ROOT}"
+      "ASCEND_INSTALL_PATH=${NPU_CHECK_REAL_DBI_TOOLCHAIN_ROOT}"
+      "${NPU_CHECK_REAL_bisheng}"
+      -xasc --cce-aicore-only "--cce-aicore-arch=${NPU_CHECK_REAL_DBI_ARCH}"
+      --cce-auto-sync
+      -DACLSAN_ZERO_ARGUMENT_ONLY=1
+      -I "${NPU_CHECK_REAL_DBI_TOOLCHAIN_ROOT}/${CMAKE_SYSTEM_PROCESSOR}-linux/asc"
+      -I "${NPU_CHECK_REAL_DBI_TOOLCHAIN_ROOT}/${CMAKE_SYSTEM_PROCESSOR}-linux/asc/include"
+      -c "${CMAKE_CURRENT_SOURCE_DIR}/full_flow_kernel.cpp"
+      -o "${NPU_CHECK_REAL_DBI_ZERO_KERNEL}"
+    DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/full_flow_kernel.cpp"
+    VERBATIM)
+  add_custom_target(aclsan_full_flow_real_zero_kernel ALL DEPENDS "${NPU_CHECK_REAL_DBI_ZERO_KERNEL}")
+elseif(NOT EXISTS "${NPU_CHECK_REAL_DBI_ZERO_KERNEL}")
+  message(FATAL_ERROR
+    "NPU_CHECK_REAL_DBI_ZERO_KERNEL does not exist: ${NPU_CHECK_REAL_DBI_ZERO_KERNEL}")
+endif()
+
 set(NPU_CHECK_REAL_DBI_SOURCE_ROOT "${CMAKE_CURRENT_BINARY_DIR}/full-flow-real-sources")
 file(MAKE_DIRECTORY "${NPU_CHECK_REAL_DBI_SOURCE_ROOT}/probes")
-foreach(probe IN ITEMS fixpipe mte1 mte2 mte3 register sync)
+foreach(probe IN ITEMS fixpipe mte1 mte2 mte3 scalar sync)
   configure_file(
     "${CMAKE_CURRENT_SOURCE_DIR}/../src/probes/${probe}.cpp"
     "${NPU_CHECK_REAL_DBI_SOURCE_ROOT}/probes/${probe}.cpp" COPYONLY)
@@ -90,7 +114,10 @@ target_link_libraries(aclsan_full_flow_real_tool_smoke PRIVATE npu_check_dbi_eng
 if(TARGET aclsan_full_flow_real_kernel)
   add_dependencies(aclsan_full_flow_real_tool_smoke aclsan_full_flow_real_kernel)
 endif()
-add_test(NAME aclsan.full_flow_real_toolchain
+if(TARGET aclsan_full_flow_real_zero_kernel)
+  add_dependencies(aclsan_full_flow_real_tool_smoke aclsan_full_flow_real_zero_kernel)
+endif()
+add_test(NAME aclsan.full_flow_real_toolchain_multi
   COMMAND ${CMAKE_COMMAND}
     -DSMOKE_EXECUTABLE=$<TARGET_FILE:aclsan_full_flow_real_tool_smoke>
     -DINPUT_KERNEL=${NPU_CHECK_REAL_DBI_KERNEL}
@@ -100,6 +127,19 @@ add_test(NAME aclsan.full_flow_real_toolchain
     -DSOURCE_ROOT=${NPU_CHECK_REAL_DBI_SOURCE_ROOT}
     -DWORK_DIRECTORY=${CMAKE_CURRENT_BINARY_DIR}/full-flow-real-toolchain/work
     -DCACHE_DIRECTORY=${CMAKE_CURRENT_BINARY_DIR}/full-flow-real-toolchain/cache
+    -DEXPECTED_OFFSET=24
+    -P ${CMAKE_CURRENT_SOURCE_DIR}/real_tool_smoke.cmake)
+add_test(NAME aclsan.full_flow_real_toolchain_zero
+  COMMAND ${CMAKE_COMMAND}
+    -DSMOKE_EXECUTABLE=$<TARGET_FILE:aclsan_full_flow_real_tool_smoke>
+    -DINPUT_KERNEL=${NPU_CHECK_REAL_DBI_ZERO_KERNEL}
+    -DOUTPUT_KERNEL=${CMAKE_CURRENT_BINARY_DIR}/full-flow-zero-toolchain/patched.o
+    -DARCH=${NPU_CHECK_REAL_DBI_ARCH}
+    -DTOOLCHAIN_ROOT=${NPU_CHECK_REAL_DBI_TOOLCHAIN_ROOT}
+    -DSOURCE_ROOT=${NPU_CHECK_REAL_DBI_SOURCE_ROOT}
+    -DWORK_DIRECTORY=${CMAKE_CURRENT_BINARY_DIR}/full-flow-zero-toolchain/work
+    -DCACHE_DIRECTORY=${CMAKE_CURRENT_BINARY_DIR}/full-flow-zero-toolchain/cache
+    -DEXPECTED_OFFSET=8
     -P ${CMAKE_CURRENT_SOURCE_DIR}/real_tool_smoke.cmake)
 
 if(NPU_CHECK_ENABLE_REAL_DBI_FLOW)
@@ -136,18 +176,41 @@ if(NPU_CHECK_ENABLE_REAL_DBI_FLOW)
   if(TARGET aclsan_full_flow_real_kernel)
     add_dependencies(aclsan_full_flow_real_sample aclsan_full_flow_real_kernel)
   endif()
+  if(TARGET aclsan_full_flow_real_zero_kernel)
+    add_dependencies(aclsan_full_flow_real_sample aclsan_full_flow_real_zero_kernel)
+  endif()
   if(NPU_CHECK_RUN_REAL_DBI_HARDWARE)
-    add_test(NAME aclsan.full_flow_real_sample
+    add_test(NAME aclsan.full_flow_real_sample_multi
       COMMAND ${CMAKE_COMMAND}
         -DSAMPLE=$<TARGET_FILE:aclsan_full_flow_real_sample>
+        -DSANITIZER_LIBRARY_DIR=$<TARGET_FILE_DIR:acl_san>
+        -DINJECTION_LIBRARY_DIR=$<TARGET_FILE_DIR:acl_tool_injection>
         -DKERNEL=${NPU_CHECK_REAL_DBI_KERNEL}
+        -DMODE=multi
+        -DEXPECTED_LAUNCHES=3
         -DDEVICE_ID=${NPU_CHECK_REAL_DBI_DEVICE_ID}
         -DARCH=${NPU_CHECK_REAL_DBI_ARCH}
         -DTOOLCHAIN_ROOT=${NPU_CHECK_REAL_DBI_TOOLCHAIN_ROOT}
         -DSOURCE_ROOT=${NPU_CHECK_REAL_DBI_SOURCE_ROOT}
         -DTEST_ROOT=${CMAKE_CURRENT_BINARY_DIR}/full-flow-real
         -P ${CMAKE_CURRENT_SOURCE_DIR}/run_full_flow_real_sample.cmake)
-    set_tests_properties(aclsan.full_flow_real_sample PROPERTIES
+    set_tests_properties(aclsan.full_flow_real_sample_multi PROPERTIES
+      LABELS hardware RESOURCE_LOCK npu_device)
+    add_test(NAME aclsan.full_flow_real_sample_zero
+      COMMAND ${CMAKE_COMMAND}
+        -DSAMPLE=$<TARGET_FILE:aclsan_full_flow_real_sample>
+        -DSANITIZER_LIBRARY_DIR=$<TARGET_FILE_DIR:acl_san>
+        -DINJECTION_LIBRARY_DIR=$<TARGET_FILE_DIR:acl_tool_injection>
+        -DKERNEL=${NPU_CHECK_REAL_DBI_ZERO_KERNEL}
+        -DMODE=zero
+        -DEXPECTED_LAUNCHES=1
+        -DDEVICE_ID=${NPU_CHECK_REAL_DBI_DEVICE_ID}
+        -DARCH=${NPU_CHECK_REAL_DBI_ARCH}
+        -DTOOLCHAIN_ROOT=${NPU_CHECK_REAL_DBI_TOOLCHAIN_ROOT}
+        -DSOURCE_ROOT=${NPU_CHECK_REAL_DBI_SOURCE_ROOT}
+        -DTEST_ROOT=${CMAKE_CURRENT_BINARY_DIR}/full-flow-real-zero
+        -P ${CMAKE_CURRENT_SOURCE_DIR}/run_full_flow_real_sample.cmake)
+    set_tests_properties(aclsan.full_flow_real_sample_zero PROPERTIES
       LABELS hardware RESOURCE_LOCK npu_device)
   endif()
 endif()

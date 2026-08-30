@@ -24,7 +24,7 @@ constexpr uint64_t Pack(uint64_t value, uint32_t begin) noexcept { return value 
 
 template <typename ParamField>
 aclsan::DecodedInstruction DecodeAndAssertDataBits(
-    const aclsan::DeviceInstructionDecoder& decoder, uint64_t instructionId, uint32_t expectedDataBits)
+    const aclsan::DeviceInstructionDecoder& decoder, uint32_t instructionId, uint32_t expectedDataBits)
 {
     aclsan::AclsanRawTraceRecord record{};
     record.instrId = instructionId;
@@ -187,7 +187,7 @@ void TestDecodesDav3510CopyUbufToGmAlignV2Instruction()
 
 template <typename ParamField>
 void AssertCopyGmToCbufMultiParams(
-    const aclsan::DecodedInstruction& decoded, uint64_t instructionId, uint32_t expectedDataBits)
+    const aclsan::DecodedInstruction& decoded, uint32_t instructionId, uint32_t expectedDataBits)
 {
     assert(decoded.kind == aclsan::DeviceInstructionKind::CopyGmToCbufMulti);
     const auto* params = std::get_if<ParamField>(&decoded.params);
@@ -471,7 +471,7 @@ void TestRejectsUnknownDav3510Instruction()
     assert(decoder != nullptr);
 
     aclsan::AclsanRawTraceRecord record{};
-    record.instrId = UINT64_C(0x100000000);
+    record.instrId = UINT32_MAX;
     assert(!decoder->decode(record).has_value());
 }
 
@@ -505,7 +505,7 @@ void TestDecodesDav3510DataBits()
 void TestClassifiesCurrentDav3510InstructionSet()
 {
     struct ExpectedInstruction {
-        uint64_t instructionId;
+        uint32_t instructionId;
         aclsan::DeviceInstructionKind kind;
     };
     const ExpectedInstruction expectedInstructions[] = {

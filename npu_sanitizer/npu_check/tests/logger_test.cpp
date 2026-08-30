@@ -6,7 +6,6 @@
 // INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 // See LICENSE in the root of the software repository for the full text of the License.
 
-#include "checker/synccheck.h"
 #include "logging/logger.h"
 
 #include <gtest/gtest.h>
@@ -90,51 +89,6 @@ TEST(LoggerTest, AppliesMinimumLogLevel)
     EXPECT_EQ(content.find("hidden info"), std::string::npos);
     EXPECT_NE(content.find("visible warning"), std::string::npos);
     std::filesystem::remove(path, ignored);
-}
-
-TEST(LoggerTest, SynccheckLogsInvalidDeviceSyncData)
-{
-    const auto path = TemporaryLogPath("invalid_sync_data");
-    std::error_code ignored;
-    std::filesystem::remove(path, ignored);
-
-    {
-        Logger logger;
-        std::string error;
-        ASSERT_TRUE(logger.Open(path.string(), LogLevel::DEBUG, error)) << error;
-        Synccheck synccheck(&logger);
-        AclsanDeviceSyncData data{};
-        data.header.launchId = 7;
-        data.header.instrExecId = 11;
-        data.header.pc = 0x1234;
-        data.header.phyCoreId = 3;
-        data.header.blockId = 5;
-        data.syncKind = 99;
-        data.action = 88;
-
-        EXPECT_TRUE(synccheck.OnDeviceSync(data).empty());
-        EXPECT_EQ(synccheck.Stats().invalidEvents, 1U);
-    }
-
-    const std::string content = ReadFile(path);
-    EXPECT_NE(content.find("invalid device sync data"), std::string::npos);
-    EXPECT_NE(content.find("sync_kind=99 action=88"), std::string::npos);
-    EXPECT_NE(content.find("launch=7 instr_exec=11 pc=0x1234 core=3 block=5"), std::string::npos);
-    std::filesystem::remove(path, ignored);
-}
-
-TEST(SynccheckTest, PreservesDeviceBlockTypeInReport)
-{
-    Synccheck synccheck;
-    AclsanDeviceSyncData data{};
-    data.header.blockType = ACLSAN_DEVICE_BLOCK_TYPE_AICORE_VECTOR;
-    data.syncKind = ACLSAN_DEVICE_SYNC_KIND_SET_WAIT_FLAG;
-    data.action = ACLSAN_DEVICE_SYNC_ACTION_WAIT;
-
-    const auto reports = synccheck.OnDeviceSync(data);
-
-    ASSERT_EQ(reports.size(), 1U);
-    EXPECT_EQ(reports.front().triggerPoint.exec.blockType, ACLSAN_DEVICE_BLOCK_TYPE_AICORE_VECTOR);
 }
 
 } // namespace

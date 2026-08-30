@@ -19,6 +19,7 @@ namespace aclsan {
 
 struct BinaryInstrumentationConfig {
     std::string arch;
+    uint32_t traceArgumentOffset = 0;
     std::vector<ProbeGroup> probeGroups;
     std::string toolchainRoot;
     std::string sourceRoot;
@@ -37,6 +38,7 @@ struct BinaryInstrumentationResult {
     std::vector<uint8_t> binary;
     std::string stage;
     std::string diagnostic;
+    uint32_t traceArgumentOffset = 0;
 };
 
 using DbiPipelineRunner = DbiResult (*)(const DbiRequest&, void*);
@@ -47,10 +49,11 @@ struct RuntimeBinaryInstrumentationResult {
     BinaryInstrumentationStatus status = BinaryInstrumentationStatus::Skipped;
     uint32_t strict = 0;
     int32_t consumerStatus = 0;
+    uint32_t traceArgumentOffset = 0;
 };
 
 static_assert(std::is_trivially_copyable_v<RuntimeBinaryInstrumentationResult>);
-static_assert(sizeof(RuntimeBinaryInstrumentationResult) == 12);
+static_assert(sizeof(RuntimeBinaryInstrumentationResult) == 16);
 
 BinaryInstrumentationConfig DefaultBinaryInstrumentationConfig();
 BinaryInstrumentationConfig DefaultBinaryInstrumentationConfig(uint32_t probeGroupMask);

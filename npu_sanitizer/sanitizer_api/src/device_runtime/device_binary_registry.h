@@ -26,12 +26,14 @@ public:
     DeviceBinaryRegistry(const DeviceBinaryRegistry&) = delete;
     DeviceBinaryRegistry& operator=(const DeviceBinaryRegistry&) = delete;
 
-    bool RecordBinaryLoadFromData(uintptr_t binary, bool instrumented, const void* image, size_t imageBytes) noexcept;
+    bool RecordBinaryLoadFromData(
+        uintptr_t binary, bool instrumented, uint32_t traceArgumentOffset, const void* image,
+        size_t imageBytes) noexcept;
     void RecordBinaryUnload(uintptr_t binary) noexcept;
     void RecordBinaryFunctionLookup(uintptr_t binary, uintptr_t function) noexcept;
     void RecordLatestBinaryFunctionLookup(uintptr_t function) noexcept;
-    void MarkFunctionInstrumented(uintptr_t function) noexcept;
-    bool IsFunctionInstrumented(uintptr_t function) const noexcept;
+    void MarkFunctionInstrumented(uintptr_t function, uint32_t traceArgumentOffset) noexcept;
+    bool GetFunctionTraceArgumentOffset(uintptr_t function, uint32_t& traceArgumentOffset) const noexcept;
     void Reset() noexcept;
 
     CallStackResult ResolveCallStack(uint64_t pc) const noexcept;

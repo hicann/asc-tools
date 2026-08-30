@@ -10,14 +10,17 @@
 #include <dlfcn.h>
 #include <unistd.h>
 
+#include <algorithm>
 #include <atomic>
 #include <cstdlib>
 #include <cstring>
 #include <exception>
+#include <elf.h>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <iterator>
+#include <limits>
 #include <sstream>
 
 namespace aclsan {
@@ -59,12 +62,13 @@ std::string RequestDirectory(const BinaryInstrumentationConfig& config)
 
 DbiRequest MakeRequest(
     const BinaryInstrumentationConfig& config, const std::string& input, const std::string& output,
-    const std::string& work)
+    const std::string& work, uint32_t traceArgumentOffset)
 {
     DbiRequest request{};
     request.inputKernel = input;
     request.outputKernel = output;
     request.arch = config.arch;
+    request.traceArgumentOffset = traceArgumentOffset;
     request.probeGroups = config.probeGroups;
     request.toolchainRoot = config.toolchainRoot;
     request.sourceRoot = config.sourceRoot.empty() ? DefaultSourceRoot() : config.sourceRoot;
@@ -75,6 +79,77 @@ DbiRequest MakeRequest(
     request.extraCompilerArgs = config.compilerArgs;
     request.extraTuneArgs = config.tuneArgs;
     return request;
+}
+
+bool IsFileRangeValid(size_t offset, size_t bytes, size_t fileBytes)
+{
+    return offset <= fileBytes && bytes <= fileBytes - offset;
+}
+
+bool ResolveTraceArgumentOffset(const void* data, size_t length, uint32_t& traceArgumentOffset, std::string& diagnostic)
+{
+    if (data == nullptr || length < sizeof(Elf64_Ehdr)) {
+        diagnostic = "Device ELF header is missing";
+        return false;
+    }
+    const auto* bytes = static_cast<const uint8_t*>(data);
+    Elf64_Ehdr header{};
+    std::memcpy(&header, bytes, sizeof(header));
+    if (std::memcmp(header.e_ident, ELFMAG, SELFMAG) != 0 || header.e_ident[EI_CLASS] != ELFCLASS64 ||
+        header.e_ident[EI_DATA] != ELFDATA2LSB || header.e_shentsize != sizeof(Elf64_Shdr) || header.e_shnum == 0 ||
+        header.e_shstrndx >= header.e_shnum) {
+        diagnostic = "Device ELF section table is unsupported";
+        return false;
+    }
+    const size_t sectionTableBytes = static_cast<size_t>(header.e_shnum) * sizeof(Elf64_Shdr);
+    if (!IsFileRangeValid(header.e_shoff, sectionTableBytes, length)) {
+        diagnostic = "Device ELF section table is out of bounds";
+        return false;
+    }
+    const auto ReadSection = [&](size_t index, Elf64_Shdr& section) {
+        const size_t offset = static_cast<size_t>(header.e_shoff) + index * sizeof(Elf64_Shdr);
+        std::memcpy(&section, bytes + offset, sizeof(section));
+    };
+    Elf64_Shdr sectionNames{};
+    ReadSection(header.e_shstrndx, sectionNames);
+    if (!IsFileRangeValid(sectionNames.sh_offset, sectionNames.sh_size, length)) {
+        diagnostic = "Device ELF section-name table is out of bounds";
+        return false;
+    }
+    const char* names = reinterpret_cast<const char*>(bytes + sectionNames.sh_offset);
+    for (size_t index = 0; index < header.e_shnum; ++index) {
+        Elf64_Shdr section{};
+        ReadSection(index, section);
+        if (section.sh_name >= sectionNames.sh_size) {
+            continue;
+        }
+        const size_t nameBytes = sectionNames.sh_size - section.sh_name;
+        const char* name = names + section.sh_name;
+        if (std::memchr(name, '\0', nameBytes) == nullptr || std::strcmp(name, "__CCE_KernelArgSize") != 0) {
+            continue;
+        }
+        if (section.sh_size == 0 || section.sh_size % sizeof(uint32_t) != 0 ||
+            !IsFileRangeValid(section.sh_offset, section.sh_size, length)) {
+            diagnostic = "__CCE_KernelArgSize is malformed";
+            return false;
+        }
+        uint32_t maximumArgumentSize = 0;
+        for (size_t offset = 0; offset < section.sh_size; offset += sizeof(uint32_t)) {
+            uint32_t argumentSize = 0;
+            std::memcpy(&argumentSize, bytes + section.sh_offset + offset, sizeof(argumentSize));
+            maximumArgumentSize = std::max(maximumArgumentSize, argumentSize);
+        }
+        constexpr uint32_t kMinimumTraceArgumentOffset = sizeof(uint64_t);
+        maximumArgumentSize = std::max(maximumArgumentSize, kMinimumTraceArgumentOffset);
+        if (maximumArgumentSize > std::numeric_limits<uint32_t>::max() - 7U) {
+            diagnostic = "__CCE_KernelArgSize cannot be aligned";
+            return false;
+        }
+        traceArgumentOffset = (maximumArgumentSize + 7U) & ~7U;
+        return true;
+    }
+    diagnostic = "__CCE_KernelArgSize is missing";
+    return false;
 }
 
 DbiResult RunPipeline(const DbiRequest& request, void*) { return RunDbiPipeline(request); }
@@ -173,6 +248,13 @@ BinaryInstrumentationResult InstrumentBinary(
 
     std::string work;
     try {
+        uint32_t traceArgumentOffset = config.traceArgumentOffset;
+        if (traceArgumentOffset == 0) {
+            std::string diagnostic;
+            if (!ResolveTraceArgumentOffset(data, length, traceArgumentOffset, diagnostic)) {
+                return {BinaryInstrumentationStatus::Failed, {}, "kernel-arg-offset", diagnostic, 0};
+            }
+        }
         work = RequestDirectory(config);
         const std::string inputPath = work + "/input.o";
         const std::string outputPath = work + "/patched.o";
@@ -191,25 +273,26 @@ BinaryInstrumentationResult InstrumentBinary(
         }
         input.close();
 
-        const DbiResult pipeline = runner(MakeRequest(config, inputPath, outputPath, work), runnerData);
+        const DbiResult pipeline =
+            runner(MakeRequest(config, inputPath, outputPath, work, traceArgumentOffset), runnerData);
         if (!pipeline.success) {
             Cleanup(config, work);
-            return {BinaryInstrumentationStatus::Failed, {}, pipeline.stage, pipeline.diagnostic};
+            return {BinaryInstrumentationStatus::Failed, {}, pipeline.stage, pipeline.diagnostic, 0};
         }
 
         std::vector<uint8_t> patched;
         if (!ReadAll(pipeline.patchedPath, patched)) {
             Cleanup(config, work);
-            return {BinaryInstrumentationStatus::Failed, {}, "read-output", "cannot read patched binary"};
+            return {BinaryInstrumentationStatus::Failed, {}, "read-output", "cannot read patched binary", 0};
         }
         Cleanup(config, work);
-        return {BinaryInstrumentationStatus::Instrumented, std::move(patched), {}, {}};
+        return {BinaryInstrumentationStatus::Instrumented, std::move(patched), {}, {}, traceArgumentOffset};
     } catch (const std::exception& error) {
         Cleanup(config, work);
-        return {BinaryInstrumentationStatus::Failed, {}, "exception", error.what()};
+        return {BinaryInstrumentationStatus::Failed, {}, "exception", error.what(), 0};
     } catch (...) {
         Cleanup(config, work);
-        return {BinaryInstrumentationStatus::Failed, {}, "exception", "unknown DBI instrumentation failure"};
+        return {BinaryInstrumentationStatus::Failed, {}, "exception", "unknown DBI instrumentation failure", 0};
     }
 }
 
@@ -229,28 +312,29 @@ RuntimeBinaryInstrumentationResult InstrumentRuntimeBinary(
         const BinaryInstrumentationResult result = InstrumentBinary(config, data, length, runner, runnerData);
         if (result.status == BinaryInstrumentationStatus::Failed) {
             ReportInstrumentationFailure(result);
-            return {result.status, config.strict ? 1U : 0U, 0};
+            return {result.status, config.strict ? 1U : 0U, 0, 0};
         }
         if (result.status == BinaryInstrumentationStatus::Skipped) {
-            return {result.status, config.strict ? 1U : 0U, 0};
+            return {result.status, config.strict ? 1U : 0U, 0, 0};
         }
         if (consumer == nullptr) {
             const BinaryInstrumentationResult failure{
-                BinaryInstrumentationStatus::Failed, {}, "consume-output", "instrumented binary consumer is null"};
+                BinaryInstrumentationStatus::Failed, {}, "consume-output", "instrumented binary consumer is null", 0};
             ReportInstrumentationFailure(failure);
-            return {failure.status, config.strict ? 1U : 0U, 0};
+            return {failure.status, config.strict ? 1U : 0U, 0, 0};
         }
         const int32_t consumerStatus = consumer(result.binary.data(), result.binary.size(), consumerData);
-        return {result.status, config.strict ? 1U : 0U, consumerStatus};
+        return {result.status, config.strict ? 1U : 0U, consumerStatus, result.traceArgumentOffset};
     } catch (const std::exception& error) {
-        const BinaryInstrumentationResult failure{BinaryInstrumentationStatus::Failed, {}, "exception", error.what()};
+        const BinaryInstrumentationResult failure{
+            BinaryInstrumentationStatus::Failed, {}, "exception", error.what(), 0};
         ReportInstrumentationFailure(failure);
-        return {failure.status, strict, 0};
+        return {failure.status, strict, 0, 0};
     } catch (...) {
         const BinaryInstrumentationResult failure{
-            BinaryInstrumentationStatus::Failed, {}, "exception", "unknown DBI instrumentation failure"};
+            BinaryInstrumentationStatus::Failed, {}, "exception", "unknown DBI instrumentation failure", 0};
         ReportInstrumentationFailure(failure);
-        return {failure.status, strict, 0};
+        return {failure.status, strict, 0, 0};
     }
 }
 

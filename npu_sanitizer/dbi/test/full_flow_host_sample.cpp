@@ -60,7 +60,7 @@ struct RecordFixture {
     uint64_t pc;
     uint32_t pipeline;
     uint32_t siteId;
-    uint64_t instrId;
+    uint32_t instrId;
     uint64_t srcPipe;
     uint64_t dstPipe;
     uint64_t eventId;

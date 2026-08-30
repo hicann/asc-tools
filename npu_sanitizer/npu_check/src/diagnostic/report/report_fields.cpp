@@ -93,6 +93,8 @@ std::string FormatBlockType(std::uint32_t blockType)
     }
 }
 
+std::string FormatLaunchId(std::uint64_t launchId) { return launchId == 0 ? "<unknown>" : std::to_string(launchId); }
+
 std::string FormatLocation(const NpusanReportExecContext& exec, bool includeAt)
 {
     std::ostringstream os;
@@ -131,7 +133,7 @@ void PutExecFields(const NpusanReportExecContext& exec, ReportFields* fields)
     (*fields)["blockType"] = FormatBlockType(exec.blockType);
     (*fields)["blockId"] = std::to_string(exec.blockId);
     (*fields)["pipeName"] = OrUnknown(exec.pipeName);
-    (*fields)["launchId"] = std::to_string(exec.launchId);
+    (*fields)["launchId"] = FormatLaunchId(exec.launchId);
     (*fields)["binaryId"] = std::to_string(exec.binaryId);
     (*fields)["functionId"] = std::to_string(exec.functionId);
     (*fields)["location"] = FormatLocation(exec, true);
@@ -150,6 +152,7 @@ void PutPrefixedExecFields(const NpusanReportExecContext& exec, const std::strin
     (*fields)[prefix + "File"] = OrUnknown(exec.file);
     (*fields)[prefix + "Line"] = std::to_string(exec.line);
     (*fields)[prefix + "Location"] = FormatLocation(exec, false);
+    (*fields)[prefix + "LaunchId"] = FormatLaunchId(exec.launchId);
 }
 
 void PutAccessFields(const NpusanReportMemoryAccess& access, ReportFields* fields)
@@ -183,7 +186,13 @@ void PutDefaultHostFields(ReportFields* fields)
 
 std::vector<ReportCallStack> ActiveCallStacks(const NpusanReportCommon& common)
 {
-    return std::vector<ReportCallStack>(common.stacks.begin(), common.stacks.begin() + common.stackCount);
+    std::vector<ReportCallStack> stacks(common.stacks.begin(), common.stacks.begin() + common.stackCount);
+    for (ReportCallStack& stack : stacks) {
+        if (stack.format == ReportStackFormat::BOTH && !stack.rawText.empty()) {
+            stack.format = ReportStackFormat::RAW_TEXT;
+        }
+    }
+    return stacks;
 }
 
 const ReportCallStack* FindStackByRole(const NpusanReportCommon& common, ReportStackRole role)

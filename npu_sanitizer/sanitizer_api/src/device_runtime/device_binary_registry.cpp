@@ -16,7 +16,6 @@
 #include <mutex>
 #include <string>
 #include <unordered_map>
-#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -79,6 +78,7 @@ struct DeviceBinaryRegistry::Impl {
     struct BinaryEntry {
         uint64_t binaryId = 0;
         bool instrumented = false;
+        uint32_t traceArgumentOffset = 0;
         std::string sessionDirectory;
         std::unique_ptr<DeviceSymbolizer> symbolizer;
         std::string symbolizerError = "invalid_state";
@@ -88,8 +88,8 @@ struct DeviceBinaryRegistry::Impl {
     uint64_t nextBinaryId = 1;
     uintptr_t latestBinary = 0;
     std::unordered_map<uintptr_t, BinaryEntry> binaries;
-    std::unordered_set<uintptr_t> binaryInstrumentedFunctions;
-    std::unordered_set<uintptr_t> manuallyInstrumentedFunctions;
+    // key: aclrtFuncHandle value: traceArgumentOffset
+    std::unordered_map<uintptr_t, uint32_t> manuallyInstrumentedFunctions;
     std::unordered_map<uintptr_t, uintptr_t> functionBinaries;
 
     uint64_t AllocateBinaryId() noexcept
@@ -105,7 +105,6 @@ struct DeviceBinaryRegistry::Impl {
     {
         for (auto it = functionBinaries.begin(); it != functionBinaries.end();) {
             if (it->second == binary) {
-                binaryInstrumentedFunctions.erase(it->first);
                 it = functionBinaries.erase(it);
             } else {
                 ++it;
@@ -113,11 +112,7 @@ struct DeviceBinaryRegistry::Impl {
         }
     }
 
-    void RemoveFunctionOwnership(uintptr_t function) noexcept
-    {
-        binaryInstrumentedFunctions.erase(function);
-        functionBinaries.erase(function);
-    }
+    void RemoveFunctionOwnership(uintptr_t function) noexcept { functionBinaries.erase(function); }
 };
 
 DeviceBinaryRegistry::DeviceBinaryRegistry() : impl_(std::make_unique<Impl>()) {}
@@ -125,7 +120,7 @@ DeviceBinaryRegistry::DeviceBinaryRegistry() : impl_(std::make_unique<Impl>()) {
 DeviceBinaryRegistry::~DeviceBinaryRegistry() { Reset(); }
 
 bool DeviceBinaryRegistry::RecordBinaryLoadFromData(
-    uintptr_t binary, bool instrumented, const void* image, size_t imageBytes) noexcept
+    uintptr_t binary, bool instrumented, uint32_t traceArgumentOffset, const void* image, size_t imageBytes) noexcept
 {
     if (binary == 0) {
         return false;
@@ -135,6 +130,7 @@ bool DeviceBinaryRegistry::RecordBinaryLoadFromData(
         Impl::BinaryEntry entry;
         entry.binaryId = impl_->AllocateBinaryId();
         entry.instrumented = instrumented;
+        entry.traceArgumentOffset = traceArgumentOffset;
         if (instrumented) {
             const fs::path session =
                 WorkRoot() / ("aclsan-symbolizer-" + std::to_string(static_cast<unsigned long long>(getpid())) + "-" +
@@ -197,7 +193,6 @@ void DeviceBinaryRegistry::RecordBinaryFunctionLookup(uintptr_t binary, uintptr_
         impl_->RemoveFunctionOwnership(function);
         const auto loaded = impl_->binaries.find(binary);
         if (loaded != impl_->binaries.end() && loaded->second.instrumented) {
-            impl_->binaryInstrumentedFunctions.insert(function);
             impl_->functionBinaries[function] = binary;
         }
     } catch (...) {
@@ -214,34 +209,50 @@ void DeviceBinaryRegistry::RecordLatestBinaryFunctionLookup(uintptr_t function) 
         impl_->RemoveFunctionOwnership(function);
         const auto loaded = impl_->binaries.find(impl_->latestBinary);
         if (loaded != impl_->binaries.end() && loaded->second.instrumented) {
-            impl_->binaryInstrumentedFunctions.insert(function);
             impl_->functionBinaries[function] = impl_->latestBinary;
         }
     } catch (...) {
     }
 }
 
-void DeviceBinaryRegistry::MarkFunctionInstrumented(uintptr_t function) noexcept
+void DeviceBinaryRegistry::MarkFunctionInstrumented(uintptr_t function, uint32_t traceArgumentOffset) noexcept
 {
-    if (function == 0) {
+    if (function == 0 || traceArgumentOffset == 0) {
         return;
     }
     try {
         std::lock_guard<std::mutex> lock(impl_->mutex);
-        impl_->manuallyInstrumentedFunctions.insert(function);
+        impl_->manuallyInstrumentedFunctions[function] = traceArgumentOffset;
     } catch (...) {
     }
 }
 
-bool DeviceBinaryRegistry::IsFunctionInstrumented(uintptr_t function) const noexcept
+bool DeviceBinaryRegistry::GetFunctionTraceArgumentOffset(
+    uintptr_t function, uint32_t& traceArgumentOffset) const noexcept
 {
     if (function == 0) {
         return false;
     }
     try {
         std::lock_guard<std::mutex> lock(impl_->mutex);
-        return impl_->binaryInstrumentedFunctions.find(function) != impl_->binaryInstrumentedFunctions.end() ||
-               impl_->manuallyInstrumentedFunctions.find(function) != impl_->manuallyInstrumentedFunctions.end();
+        const auto manual = impl_->manuallyInstrumentedFunctions.find(function);
+        if (manual != impl_->manuallyInstrumentedFunctions.end()) {
+            traceArgumentOffset = manual->second;
+            return true;
+        }
+        // 根据aclrtFuncHandle查询aclrtBinHandle
+        const auto ownership = impl_->functionBinaries.find(function);
+        if (ownership == impl_->functionBinaries.end()) {
+            return false;
+        }
+        // 根据aclrtBinHandle查询BinaryEntry
+        const auto binary = impl_->binaries.find(ownership->second);
+        if (binary == impl_->binaries.end() || !binary->second.instrumented ||
+            binary->second.traceArgumentOffset == 0) {
+            return false;
+        }
+        traceArgumentOffset = binary->second.traceArgumentOffset;
+        return true;
     } catch (...) {
         return false;
     }
@@ -256,7 +267,6 @@ void DeviceBinaryRegistry::Reset() noexcept
             RemoveDirectory(entry.sessionDirectory);
         }
         impl_->binaries.clear();
-        impl_->binaryInstrumentedFunctions.clear();
         impl_->manuallyInstrumentedFunctions.clear();
         impl_->functionBinaries.clear();
         impl_->latestBinary = 0;

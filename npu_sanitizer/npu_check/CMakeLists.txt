@@ -152,6 +152,7 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR OR ENABLE_TEST)
     tests/allocation_registry_test.cpp
     tests/logger_test.cpp
     tests/memcheck_test.cpp
+    tests/synccheck_test.cpp
     tests/report_buffer_test.cpp
     tests/uds_server_test.cpp
     tests/wire_protocol_test.cpp

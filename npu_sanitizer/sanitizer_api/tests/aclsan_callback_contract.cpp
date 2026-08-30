@@ -25,6 +25,12 @@ struct HasInstrType : std::false_type {};
 template <typename T>
 struct HasInstrType<T, std::void_t<decltype(&T::instrType)>> : std::true_type {};
 
+template <typename T, typename = void>
+struct HasLaunchId : std::false_type {};
+
+template <typename T>
+struct HasLaunchId<T, std::void_t<decltype(&T::launchId)>> : std::true_type {};
+
 static_assert(std::is_same_v<AclsanStatus, std::uint32_t>);
 static_assert(std::is_same_v<AclsanCallbackId, std::uint32_t>);
 static_assert(std::is_enum_v<AclsanCallbackIdResource>);
@@ -45,6 +51,7 @@ static_assert(static_cast<std::uint32_t>(ACLSAN_CBID_DEVICE_INSTRUCTION_INVALID)
 static_assert(std::is_standard_layout_v<AclsanCallbackCommonData>);
 static_assert(std::is_standard_layout_v<AclsanResourceData>);
 static_assert(std::is_standard_layout_v<AclsanSynchronizeData>);
+static_assert(!HasLaunchId<AclsanSynchronizeData>::value);
 static_assert(std::is_standard_layout_v<AclsanDeviceMemoryAccessData>);
 static_assert(std::is_standard_layout_v<AclsanDeviceSyncData>);
 static_assert(ACLSAN_DEVICE_PIPE_INVALID == 100);

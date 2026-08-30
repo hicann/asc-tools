@@ -15,7 +15,7 @@
 
 namespace aclsan {
 
-constexpr uint64_t ASCSAN_TRACE_BUFFER_MAGIC = 0x41534353414E3035ULL;
+constexpr uint64_t ASCSAN_TRACE_BUFFER_MAGIC = 0x41534353414E3036ULL;
 constexpr uint32_t ASCSAN_TRACE_RECORDS_PER_CORE_DEFAULT = 256U;
 constexpr uint32_t ASCSAN_PHYSICAL_CORE_PART_COUNT = 2U;
 constexpr uint32_t ASCSAN_AIC_CORE_RATIO_DENOMINATOR = 3U;
@@ -86,11 +86,11 @@ struct AclsanTraceSliceHeader {
 };
 
 // Device probe 生成的一条原始 trace 记录，固定占用 72 字节：
-//   [pc: 8][args[0..4]: 40][instrId: 8][siteId: 4][category: 2][pipeline: 2][blockId: 4][reserved: 4]
+//   [pc: 8][args[0..4]: 40][instrId: 4][siteId: 4][category: 2][pipeline: 2][blockId: 4][reserved: 4][padding: 4]
 struct AclsanRawTraceRecord {
     uint64_t pc;                        // 被插桩指令的 PC。
     uint64_t args[5];                   // Probe 捕获的指令参数，具体含义由对应指令协议定义。
-    uint64_t instrId;                   // 指令标识；probe 写入 apiId，Host 按 CceInstructionId 解析。
+    uint32_t instrId;                   // 指令标识；probe 写入 apiId，Host 按 CceInstructionId 解析。
     uint32_t siteId;                    // 插桩点标识，用于关联 patch 元数据；当前写入固定填 0。
     DeviceInstructionCategory category; // 指令功能分类。
     uint16_t pipeline;                  // 指令实际执行的 Device PIPE_* 值。

@@ -133,6 +133,7 @@ ReportRecord ToReportRecord(const NpusanRacecheckReport& report)
     fields["firstFile"] = OrUnknown(report.first.exec.file);
     fields["firstLine"] = std::to_string(report.first.exec.line);
     fields["firstLocation"] = FormatLocation(report.first.exec, false);
+    fields["firstLaunchId"] = FormatLaunchId(report.first.exec.launchId);
     fields["secondCoreId"] = FormatCoreId(report.second.exec.phyCoreId);
     fields["secondType"] = FormatBlockType(report.second.exec.blockType);
     fields["secondBlock"] = std::to_string(report.second.exec.blockId);
@@ -142,6 +143,7 @@ ReportRecord ToReportRecord(const NpusanRacecheckReport& report)
     fields["secondFile"] = OrUnknown(report.second.exec.file);
     fields["secondLine"] = std::to_string(report.second.exec.line);
     fields["secondLocation"] = FormatLocation(report.second.exec, false);
+    fields["secondLaunchId"] = FormatLaunchId(report.second.exec.launchId);
     if (const ReportFrame* frame = FirstStructuredFrame(report.common, ReportStackRole::RELATED_ACCESS_A)) {
         PutFrameLocationFields(*frame, "first", &fields);
     }
@@ -156,6 +158,7 @@ ReportRecord ToReportRecord(const NpusanRacecheckReport& report)
         fields["blockType"] = FormatBlockType(report.first.exec.blockType);
         fields["blockId"] = std::to_string(report.first.exec.blockId);
         fields["pipeName"] = OrUnknown(report.first.exec.pipeName);
+        fields["launchId"] = FormatLaunchId(report.first.exec.launchId);
     }
     fields["hazardCount"] = std::to_string(report.hazardCount);
     fields["currentValue"] = HexWithPrefix(report.currentValue);

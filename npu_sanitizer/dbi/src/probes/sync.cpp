@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2025 Huawei Technologies Co., Ltd.
+ * Copyright (c) 2026 Huawei Technologies Co., Ltd.
  * This program is free software, you can redistribute it and/or modify it under the terms and conditions of
  * CANN Open Software License Agreement Version 2.0 (the "License").
  * Please refer to the License for details. You may not use this file except in compliance with the License.
@@ -72,7 +72,7 @@ extern __attribute__((noinline)) __attribute__((weak)) __aicore__ void __sanitiz
 {
     aclsan::WriteTraceRecord(
         memInfo, pc, bid, aclsan::DeviceInstructionCategory::Synchronization, static_cast<uint16_t>(PIPE_S), 456,
-        static_cast<uint64_t>(dstPipe), eventId, 0UL, 0UL, 0UL);
+        static_cast<uint64_t>(PIPE_V), static_cast<uint64_t>(dstPipe), eventId, 0UL, 0UL);
 }
 
 // SET_FLAGI_V, API ID 457.
@@ -81,7 +81,7 @@ extern __attribute__((noinline)) __attribute__((weak)) __aicore__ void __sanitiz
 {
     aclsan::WriteTraceRecord(
         memInfo, pc, bid, aclsan::DeviceInstructionCategory::Synchronization, static_cast<uint16_t>(PIPE_S), 457,
-        static_cast<uint64_t>(dstPipe), eventId, 0UL, 0UL, 0UL);
+        static_cast<uint64_t>(PIPE_V), static_cast<uint64_t>(dstPipe), eventId, 0UL, 0UL);
 }
 
 // WAIT_FLAG_V, API ID 458.
@@ -90,7 +90,7 @@ extern __attribute__((noinline)) __attribute__((weak)) __aicore__ void __sanitiz
 {
     aclsan::WriteTraceRecord(
         memInfo, pc, bid, aclsan::DeviceInstructionCategory::Synchronization, static_cast<uint16_t>(PIPE_S), 458,
-        static_cast<uint64_t>(srcPipe), eventId, 0UL, 0UL, 0UL);
+        static_cast<uint64_t>(srcPipe), static_cast<uint64_t>(PIPE_V), eventId, 0UL, 0UL);
 }
 
 // WAIT_FLAGI_V, API ID 459.
@@ -99,7 +99,7 @@ extern __attribute__((noinline)) __attribute__((weak)) __aicore__ void __sanitiz
 {
     aclsan::WriteTraceRecord(
         memInfo, pc, bid, aclsan::DeviceInstructionCategory::Synchronization, static_cast<uint16_t>(PIPE_S), 459,
-        static_cast<uint64_t>(srcPipe), eventId, 0UL, 0UL, 0UL);
+        static_cast<uint64_t>(srcPipe), static_cast<uint64_t>(PIPE_V), eventId, 0UL, 0UL);
 }
 
 // WAIT_FLAG_DEV_V, API ID 469.
@@ -208,7 +208,7 @@ extern __attribute__((noinline)) __attribute__((weak)) __aicore__ void __sanitiz
 {
     aclsan::WriteTraceRecord(
         memInfo, pc, bid, aclsan::DeviceInstructionCategory::Synchronization, static_cast<uint16_t>(PIPE_S), 460,
-        static_cast<uint64_t>(bufId), static_cast<uint64_t>(mode), 0UL, 0UL, 0UL);
+        static_cast<uint64_t>(PIPE_V), static_cast<uint64_t>(bufId), static_cast<uint64_t>(mode), 0UL, 0UL);
 }
 
 // GET_BUFI_V, API ID 461.
@@ -216,8 +216,8 @@ extern __attribute__((noinline)) __attribute__((weak)) __aicore__ void __sanitiz
     __gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, uint64_t bufId, bool mode)
 {
     aclsan::WriteTraceRecord(
-        memInfo, pc, bid, aclsan::DeviceInstructionCategory::Synchronization, static_cast<uint16_t>(PIPE_S), 461, bufId,
-        static_cast<uint64_t>(mode), 0UL, 0UL, 0UL);
+        memInfo, pc, bid, aclsan::DeviceInstructionCategory::Synchronization, static_cast<uint16_t>(PIPE_S), 461,
+        static_cast<uint64_t>(PIPE_V), bufId, static_cast<uint64_t>(mode), 0UL, 0UL);
 }
 
 // RLS_BUF_V, API ID 462.
@@ -226,7 +226,7 @@ extern __attribute__((noinline)) __attribute__((weak)) __aicore__ void __sanitiz
 {
     aclsan::WriteTraceRecord(
         memInfo, pc, bid, aclsan::DeviceInstructionCategory::Synchronization, static_cast<uint16_t>(PIPE_S), 462,
-        static_cast<uint64_t>(bufId), static_cast<uint64_t>(mode), 0UL, 0UL, 0UL);
+        static_cast<uint64_t>(PIPE_V), static_cast<uint64_t>(bufId), static_cast<uint64_t>(mode), 0UL, 0UL);
 }
 
 // RLS_BUFI_V, API ID 463.
@@ -234,6 +234,6 @@ extern __attribute__((noinline)) __attribute__((weak)) __aicore__ void __sanitiz
     __gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, uint64_t bufId, bool mode)
 {
     aclsan::WriteTraceRecord(
-        memInfo, pc, bid, aclsan::DeviceInstructionCategory::Synchronization, static_cast<uint16_t>(PIPE_S), 463, bufId,
-        static_cast<uint64_t>(mode), 0UL, 0UL, 0UL);
+        memInfo, pc, bid, aclsan::DeviceInstructionCategory::Synchronization, static_cast<uint16_t>(PIPE_S), 463,
+        static_cast<uint64_t>(PIPE_V), bufId, static_cast<uint64_t>(mode), 0UL, 0UL);
 }

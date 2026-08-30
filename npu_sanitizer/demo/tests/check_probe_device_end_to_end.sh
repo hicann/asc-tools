@@ -16,11 +16,11 @@ output=$(mktemp)
 trap 'status=$?; if [[ ${status} -ne 0 ]]; then cat "${output}" >&2; fi; rm -f -- "${output}"' EXIT
 
 set +e
-bash "${demo_dir}/run.sh" add >"${output}" 2>&1
+bash "${demo_dir}/examples/memcheck/add/run.sh" >"${output}" 2>&1
 run_status=$?
 set -e
-if [[ ${run_status} -ne 2 ]]; then
-    printf 'expected npu_check exit status 2 for the intentional add OOB, got %d\n' "${run_status}" >&2
+if [[ ${run_status} -ne 0 ]]; then
+    printf 'expected self-validating add runner exit status 0, got %d\n' "${run_status}" >&2
     exit 1
 fi
 
@@ -33,14 +33,15 @@ grep -F 'npu_check: DIAGNOSTIC' "${output}"
 grep -E 'Invalid GM read of size 8256 bytes' "${output}"
 grep -E 'npu_check: SUMMARY .*[[:space:]]errors=[1-9][0-9]*([[:space:]]|$)' "${output}"
 grep -F 'npu_check: child_exit=0 handshake=ready session_end=complete' "${output}"
+grep -F '[PASSED] memcheck/add' "${output}"
 
 mapfile -t probe_objects < <(find "${demo_dir}/build/probe_cache" -mindepth 2 -maxdepth 2 -type f -name probe.o)
 if [[ ${#probe_objects[@]} -ne 1 ]]; then
     printf 'expected exactly one cached probe.o, got %d\n' "${#probe_objects[@]}" >&2
     exit 1
 fi
-cann_root=$(sed -n 's/^NPUCOMPUTE_CANN_ROOT:PATH=//p' "${demo_dir}/build/CMakeCache.txt")
-llvm_objdump=$(cd "${cann_root}/.." && pwd)/tools/bisheng_compiler/bin/llvm-objdump
+cann_home=$(sed -n 's/^ASCEND_HOME_PATH:PATH=//p' "${demo_dir}/build/CMakeCache.txt")
+llvm_objdump="${cann_home}/tools/bisheng_compiler/bin/llvm-objdump"
 probe_symbols=$("${llvm_objdump}" --syms "${probe_objects[0]}")
 for expected_symbol in \
     __sanitizer_report_copy_cbuf_to_ubuf \

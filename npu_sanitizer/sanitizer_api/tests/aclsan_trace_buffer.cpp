@@ -18,6 +18,7 @@
 #include <cstring>
 #include <limits>
 #include <string>
+#include <type_traits>
 #include <vector>
 
 namespace {
@@ -35,7 +36,7 @@ using aclsan::AclsanTraceBufferHeader;
 using aclsan::AclsanTraceSliceHeader;
 using aclsan::DeviceInstructionCategory;
 
-static_assert(aclsan::ASCSAN_TRACE_BUFFER_MAGIC == 0x41534353414E3035ULL);
+static_assert(aclsan::ASCSAN_TRACE_BUFFER_MAGIC == 0x41534353414E3036ULL);
 static_assert(sizeof(AclsanTraceBufferHeader) == 32);
 static_assert(sizeof(AclsanTraceSliceHeader) == 16);
 static_assert(sizeof(AclsanRawTraceRecord) == 72);
@@ -44,12 +45,13 @@ static_assert(offsetof(AclsanRawTraceRecord, pc) == 0);
 static_assert(offsetof(AclsanRawTraceRecord, args) == 8);
 static_assert(sizeof(((AclsanRawTraceRecord*)nullptr)->args) == 5 * sizeof(uint64_t));
 static_assert(offsetof(AclsanRawTraceRecord, instrId) == 48);
-static_assert(offsetof(AclsanRawTraceRecord, siteId) == 56);
+static_assert(std::is_same_v<decltype(AclsanRawTraceRecord{}.instrId), uint32_t>);
+static_assert(offsetof(AclsanRawTraceRecord, siteId) == 52);
 static_assert(sizeof(DeviceInstructionCategory) == sizeof(uint16_t));
-static_assert(offsetof(AclsanRawTraceRecord, category) == 60);
-static_assert(offsetof(AclsanRawTraceRecord, pipeline) == 62);
-static_assert(offsetof(AclsanRawTraceRecord, blockId) == 64);
-static_assert(offsetof(AclsanRawTraceRecord, reserved) == 68);
+static_assert(offsetof(AclsanRawTraceRecord, category) == 56);
+static_assert(offsetof(AclsanRawTraceRecord, pipeline) == 58);
+static_assert(offsetof(AclsanRawTraceRecord, blockId) == 60);
+static_assert(offsetof(AclsanRawTraceRecord, reserved) == 64);
 
 AclsanTraceSliceHeader* SliceAt(std::vector<uint8_t>& buffer, uint32_t sliceIndex)
 {
@@ -132,7 +134,7 @@ bool ParsesMultipleLogicalBlocksInOnePhysicalSlice()
     const auto parsed = aclsan::ParseTraceBuffer(buffer.data(), buffer.size(), 12, 20, 5, 19, deviceId);
     CHECK(parsed.ok);
     CHECK(parsed.records.size() == 5);
-    constexpr uint64_t instructionIds[] = {1, 2, 1, 2, 3};
+    constexpr uint32_t instructionIds[] = {1, 2, 1, 2, 3};
     for (uint32_t index = 0; index < 5; ++index) {
         CHECK(parsed.records[index].blockId == blockIds[index]);
         CHECK(parsed.records[index].blockType == ACLSAN_DEVICE_BLOCK_TYPE_AICORE_CUBE);

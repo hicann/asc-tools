@@ -20,7 +20,7 @@ constexpr uint32_t DATA_BITS_B8 = 8;
 constexpr uint32_t DATA_BITS_B16 = 16;
 constexpr uint32_t DATA_BITS_B32 = 32;
 
-constexpr uint64_t RawId(InstructionId instructionId) noexcept { return static_cast<uint64_t>(instructionId); }
+constexpr uint32_t RawId(InstructionId instructionId) noexcept { return static_cast<uint32_t>(instructionId); }
 
 // TODO: 待确认这个文件中的比特位场景，bool与uint8_t的映射是否符合预期
 
@@ -28,7 +28,7 @@ template <typename ParamField>
 ParamField DecodeMovAlignV2Params(const aclsan::AclsanRawTraceRecord& record, uint32_t dataBits) noexcept
 {
     ParamField params{};
-    params.instrId = static_cast<uint32_t>(record.instrId);
+    params.instrId = record.instrId;
     params.dataBits = dataBits;
     params.dstAddr = record.args[0];
     params.srcAddr = record.args[1];
@@ -58,7 +58,7 @@ std::optional<DecodedInstruction> DecodeMovAlignV2(
 std::optional<DecodedInstruction> DecodeCopyUbufToGmAlignV2(const aclsan::AclsanRawTraceRecord& record) noexcept
 {
     CopyUbufToGmAlignV2ParamField params{};
-    params.instrId = static_cast<uint32_t>(record.instrId);
+    params.instrId = record.instrId;
     params.dstAddr = record.args[0];
     params.srcAddr = record.args[1];
     params.sid = static_cast<uint8_t>(ExtractBitRange(record.args[2], MovAlignV2Layout::SID));
@@ -75,7 +75,7 @@ template <typename ParamField>
 DecodedInstruction DecodeCopyGmToCbufMulti(const aclsan::AclsanRawTraceRecord& record, uint32_t dataBits) noexcept
 {
     ParamField params{};
-    params.instrId = static_cast<uint32_t>(record.instrId);
+    params.instrId = record.instrId;
     params.dataBits = dataBits;
     params.dstAddr = record.args[0];
     params.srcAddr = record.args[1];
@@ -94,7 +94,7 @@ DecodedInstruction DecodeCopyGmToCbufMulti(const aclsan::AclsanRawTraceRecord& r
 std::optional<DecodedInstruction> DecodeCopyGmToCbufV2(const aclsan::AclsanRawTraceRecord& record) noexcept
 {
     CopyGmToCbufV2ParamField params{};
-    params.instrId = static_cast<uint32_t>(record.instrId);
+    params.instrId = record.instrId;
     params.dstAddr = record.args[0];
     params.srcAddr = record.args[1];
     params.sid = static_cast<uint8_t>(ExtractBitRange(record.args[2], CopyGmToCbufV2Layout::SID));
@@ -113,7 +113,7 @@ std::optional<DecodedInstruction> DecodeCopyGmToCbufV2(const aclsan::AclsanRawTr
 DecodedInstruction DecodeLoadGmToCbuf2DV2(const aclsan::AclsanRawTraceRecord& record) noexcept
 {
     LoadGmToCbuf2DV2ParamField params{};
-    params.instrId = static_cast<uint32_t>(record.instrId);
+    params.instrId = record.instrId;
     params.dstAddr = record.args[0];
     params.srcAddr = record.args[1];
     params.mStartPosition =
@@ -134,7 +134,7 @@ DecodedInstruction DecodeLoadGmToCbuf2DV2(const aclsan::AclsanRawTraceRecord& re
 DecodedInstruction DecodeNdDmaOutToUbuf(const aclsan::AclsanRawTraceRecord& record, uint32_t dataBits) noexcept
 {
     NdDmaOutToUbufParamField params{};
-    params.instrId = static_cast<uint32_t>(record.instrId);
+    params.instrId = record.instrId;
     params.dataBits = dataBits;
     params.dstAddr = record.args[0];
     params.srcAddr = record.args[1];
@@ -157,7 +157,7 @@ DecodedInstruction DecodeNdDmaOutToUbuf(const aclsan::AclsanRawTraceRecord& reco
 DecodedInstruction DecodeSetL12D(const aclsan::AclsanRawTraceRecord& record, uint32_t dataBits) noexcept
 {
     SetL12DParamField params{};
-    params.instrId = static_cast<uint32_t>(record.instrId);
+    params.instrId = record.instrId;
     params.dataBits = dataBits;
     params.dstAddr = record.args[0];
     params.repeatTimes = static_cast<uint16_t>(ExtractBitRange(record.args[1], SetL12DLayout::REPEAT_TIMES));
@@ -183,7 +183,7 @@ DecodedInstruction DecodeMte2SourceParam(const aclsan::AclsanRawTraceRecord& rec
 DecodedInstruction DecodeNdDmaLoopStride(const aclsan::AclsanRawTraceRecord& record) noexcept
 {
     const uint32_t first = static_cast<uint32_t>(InstructionId::NdDmaLoop0Stride);
-    const auto loopIndex = static_cast<uint32_t>(record.instrId) - first;
+    const auto loopIndex = record.instrId - first;
     const uint64_t stride = (record.args[0] >> 20U) & ((1ULL << 40U) - 1U);
     return DecodedInstruction{DeviceInstructionKind::NdDmaLoopStride, NdDmaLoopStrideParamField{loopIndex, stride}};
 }
@@ -197,7 +197,7 @@ DecodedInstruction DecodeMte2NzParam(const aclsan::AclsanRawTraceRecord& record)
 DecodedInstruction DecodeFixL0cToOut(const aclsan::AclsanRawTraceRecord& record, uint32_t dataBits) noexcept
 {
     FixL0cToOutParamField params{};
-    params.instrId = static_cast<uint32_t>(record.instrId);
+    params.instrId = record.instrId;
     params.dataBits = dataBits;
     params.dstAddr = record.args[0];
     params.srcAddr = record.args[1];
@@ -235,8 +235,7 @@ std::optional<DecodedInstruction> DecodeFlag(
     const aclsan::AclsanRawTraceRecord& record, DeviceInstructionKind kind) noexcept
 {
     const FlagParamField params{
-        static_cast<uint32_t>(record.instrId), static_cast<uint32_t>(record.args[0]),
-        static_cast<uint32_t>(record.args[1]), record.args[2]};
+        record.instrId, static_cast<uint32_t>(record.args[0]), static_cast<uint32_t>(record.args[1]), record.args[2]};
     return DecodedInstruction{kind, params};
 }
 
@@ -247,8 +246,7 @@ std::optional<DecodedInstruction> DecodeBuffer(
         return std::nullopt;
     }
     const SyncBufParamField params{
-        static_cast<uint32_t>(record.instrId), static_cast<uint32_t>(record.args[0]), record.args[1],
-        static_cast<uint8_t>(record.args[2])};
+        record.instrId, static_cast<uint32_t>(record.args[0]), record.args[1], static_cast<uint8_t>(record.args[2])};
     return DecodedInstruction{kind, params};
 }
 

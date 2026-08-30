@@ -76,6 +76,62 @@ enum class InstructionId : uint32_t {
     RlsBufIV = 463,   // 已完成：SyncBufParamField
 };
 
+constexpr bool IsDefinedInstructionId(uint32_t instructionId) noexcept
+{
+    switch (static_cast<InstructionId>(instructionId)) {
+        case InstructionId::LoadGmToCbuf2DV2:
+        case InstructionId::CopyGmToCbufV2:
+        case InstructionId::CopyGmToCbufAlignV2B8:
+        case InstructionId::CopyGmToCbufAlignV2B16:
+        case InstructionId::CopyGmToCbufAlignV2B32:
+        case InstructionId::CopyGmToCbufMultiNd2NzB8:
+        case InstructionId::CopyGmToCbufMultiNd2NzB16:
+        case InstructionId::CopyGmToCbufMultiNd2NzB32:
+        case InstructionId::CopyGmToCbufMultiDn2NzB8:
+        case InstructionId::CopyGmToCbufMultiDn2NzB16:
+        case InstructionId::CopyGmToCbufMultiDn2NzB32:
+        case InstructionId::CopyGmToUbufAlignV2B8:
+        case InstructionId::CopyGmToUbufAlignV2B16:
+        case InstructionId::CopyGmToUbufAlignV2B32:
+        case InstructionId::Mte2SrcPara:
+        case InstructionId::NdDmaLoop0Stride:
+        case InstructionId::NdDmaLoop1Stride:
+        case InstructionId::NdDmaLoop2Stride:
+        case InstructionId::NdDmaLoop3Stride:
+        case InstructionId::NdDmaLoop4Stride:
+        case InstructionId::NdDmaOutToUbufB8:
+        case InstructionId::NdDmaOutToUbufB16:
+        case InstructionId::NdDmaOutToUbufB32:
+        case InstructionId::SetL12DB16:
+        case InstructionId::SetL12DB32:
+        case InstructionId::SetMte2NzPara:
+        case InstructionId::CopyUbufToGmAlignV2:
+        case InstructionId::CopyUbufToCbuf:
+        case InstructionId::FixL0cToOutF32:
+        case InstructionId::FixL0cToOutS32:
+        case InstructionId::SetPadding:
+        case InstructionId::SetFlag:
+        case InstructionId::SetFlagI:
+        case InstructionId::WaitFlag:
+        case InstructionId::WaitFlagI:
+        case InstructionId::GetBuf:
+        case InstructionId::GetBufI:
+        case InstructionId::RlsBuf:
+        case InstructionId::RlsBufI:
+        case InstructionId::SetFlagV:
+        case InstructionId::SetFlagIV:
+        case InstructionId::WaitFlagV:
+        case InstructionId::WaitFlagIV:
+        case InstructionId::GetBufV:
+        case InstructionId::GetBufIV:
+        case InstructionId::RlsBufV:
+        case InstructionId::RlsBufIV:
+            return true;
+        default:
+            return false;
+    }
+}
+
 } // namespace aclsan
 
 #endif // NPU_SANITIZER_SANITIZER_API_DEVICE_INSTR_COMMON_INSTRUCTION_ID_H_

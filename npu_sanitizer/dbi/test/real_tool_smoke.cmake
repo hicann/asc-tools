@@ -1,6 +1,9 @@
 if(NOT EXISTS "${INPUT_KERNEL}")
   message(FATAL_ERROR "real DBI smoke input does not exist: ${INPUT_KERNEL}")
 endif()
+if(NOT DEFINED EXPECTED_OFFSET OR "${EXPECTED_OFFSET}" STREQUAL "")
+  message(FATAL_ERROR "EXPECTED_OFFSET is required")
+endif()
 
 file(REMOVE_RECURSE "${WORK_DIRECTORY}" "${CACHE_DIRECTORY}")
 file(MAKE_DIRECTORY "${WORK_DIRECTORY}" "${CACHE_DIRECTORY}")
@@ -19,6 +22,10 @@ execute_process(
 )
 if(NOT smoke_status EQUAL 0)
   message(FATAL_ERROR "real DBI smoke failed (${smoke_status}):\n${smoke_output}${smoke_error}")
+endif()
+string(FIND "${smoke_output}" "trace_argument_offset=${EXPECTED_OFFSET}" offset_position)
+if(offset_position EQUAL -1)
+  message(FATAL_ERROR "real DBI smoke reported an unexpected trace argument offset:\n${smoke_output}")
 endif()
 
 if(NOT EXISTS "${OUTPUT_KERNEL}")

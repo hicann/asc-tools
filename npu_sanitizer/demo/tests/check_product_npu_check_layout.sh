@@ -20,6 +20,10 @@ grep -Fq 'add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../npu_check_cli" npu_ch
     "${demo_dir}/CMakeLists.txt"
 grep -Fq 'add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../npu_check" npu_check)' \
     "${demo_dir}/CMakeLists.txt"
+if grep -Fq 'NPU_COMPUTE_USE_ASCEND_HOME_PATH' "${demo_dir}/CMakeLists.txt"; then
+    printf 'demo CMake still uses the unnecessary NPU Compute compatibility switch\n' >&2
+    exit 1
+fi
 grep -Fq 'foreach(probe_source mte1 mte2 mte3 fixpipe scalar sync)' "${demo_dir}/CMakeLists.txt"
 grep -Fq '"${ACLSAN_DBI_SOURCE_DIRECTORY}/src/probes/${probe_source}.cpp"' \
     "${demo_dir}/CMakeLists.txt"
@@ -36,26 +40,36 @@ if grep -Eq 'CMAKE_CURRENT_SOURCE_DIR}/npu_check(_exec)?"' "${demo_dir}/CMakeLis
     exit 1
 fi
 
-grep -Fq 'cmake --build "${build_dir}" --target npu_check_cli "${example_target}" --parallel' \
-    "${demo_dir}/run.sh"
-grep -Fq 'default_cann_root="/usr/local/Ascend/cann/x86_64-linux"' "${demo_dir}/run.sh"
-if grep -Fq '/home/cty' "${demo_dir}/run.sh" "${demo_dir}/README.md"; then
-    printf 'demo runner or README still references /home/cty\n' >&2
+test -x "${demo_dir}/build.sh"
+test ! -e "${demo_dir}/examples/common.sh"
+grep -Fq 'cmake --build "${build_dir}" --target npu_check_cli --parallel' "${demo_dir}/build.sh"
+grep -Fq 'set(ASCEND_HOME_PATH "$ENV{ASCEND_HOME_PATH}" CACHE PATH' "${demo_dir}/CMakeLists.txt"
+grep -Fq 'default_cann_home="/home/cty/cann_0829/cann"' "${demo_dir}/build.sh"
+grep -Fq 'ASCEND_HOME_PATH="${ASCEND_HOME_PATH:-${default_cann_home}}"' "${demo_dir}/build.sh"
+grep -Fq 'source "${ASCEND_HOME_PATH}/set_env.sh"' "${demo_dir}/build.sh"
+grep -Fq -- '-DASCEND_HOME_PATH="${ASCEND_HOME_PATH}"' "${demo_dir}/build.sh"
+while IFS= read -r runner; do
+    grep -Fq 'if [[ -z "${ASCEND_HOME_PATH:-}" ]]' "${runner}"
+    grep -Fq 'export NPU_CHECK_DBI_TOOLCHAIN_ROOT=' "${runner}"
+    grep -Fq 'export NPU_CHECK_DBI_SOURCE_ROOT=' "${runner}"
+    grep -Fq '/npu_compute/bin/npu_check' "${runner}"
+done < <(find "${demo_dir}/examples" -mindepth 3 -maxdepth 3 -name run.sh -type f | sort)
+legacy_cann_root='NPUCOMPUTE_CANN_''ROOT'
+if rg -q "${legacy_cann_root}" "${demo_dir}" -g '!build/**'; then
+    printf 'demo still references the private CANN root variable\n' >&2
     exit 1
 fi
-grep -Fq 'case "${asc_architecture}" in
-    dav-3510)
-        dbi_architecture="dav-c310"' "${demo_dir}/run.sh"
-grep -Fq 'export NPU_CHECK_DBI_ARCH="${dbi_architecture}"' "${demo_dir}/run.sh"
-if grep -Fq 'export NPU_CHECK_DBI_ARCH="${asc_architecture}"' "${demo_dir}/run.sh"; then
-    printf 'demo runner passes the ASC architecture directly to the DBI compiler\n' >&2
+if rg -q -g 'run.sh' -- '--strict|--keep-temp|--work-dir|--probe-cache-dir' \
+    "${demo_dir}/examples"; then
+    printf 'demo runner still passes removed CLI options\n' >&2
     exit 1
 fi
-grep -Fq 'export NPU_CHECK_DBI_TOOLCHAIN_ROOT="${cann_install_dir}"' "${demo_dir}/run.sh"
-grep -Fq 'export NPU_CHECK_DBI_SOURCE_ROOT="${build_dir}/dbi_runtime_sources"' "${demo_dir}/run.sh"
-rg -U -Fq '"${bin_dir}/npu_check" --tool "${example_tool}" --strict --keep-temp \
-    --work-dir "${build_dir}/probe_runtime" \
-    --probe-cache-dir "${build_dir}/probe_cache" -- "${example_executable}"' "${demo_dir}/run.sh"
+
+forbidden_arg_size='NPU_CHECK_DBI_''ARG_SIZE'
+if rg -q "${forbidden_arg_size}" "${demo_dir}" -g '*.sh' -g '!build/**'; then
+    printf 'demo scripts still configure the removed DBI argument size override\n' >&2
+    exit 1
+fi
 
 legacy_probe_prefix='ACLSAN_PROBE'
 legacy_probe_resource_dir='probe_resources'
@@ -66,7 +80,8 @@ if rg -n "${legacy_probe_prefix}_[A-Z_]+|${legacy_probe_resource_dir}/probe\\.o|
     exit 1
 fi
 
-if grep -Eq -- '--target npucheck|/npucheck" --tool' "${demo_dir}/run.sh"; then
+if rg -q -g 'run.sh' -- '--target npucheck|/npucheck" --tool' \
+    "${demo_dir}/examples"; then
     printf 'demo runner still references the legacy launcher or unsupported tool\n' >&2
     exit 1
 fi

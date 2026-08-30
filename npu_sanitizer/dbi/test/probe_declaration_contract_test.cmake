@@ -1,3 +1,7 @@
+# Copyright (c) 2026 Huawei Technologies Co., Ltd.
+# This program is free software, you can redistribute it and/or modify it under the terms and conditions of
+# CANN Open Software License Agreement Version 2.0 (the "License").
+
 if(NOT DEFINED DBI_ROOT)
   message(FATAL_ERROR "DBI_ROOT is required")
 endif()
@@ -21,6 +25,7 @@ foreach(probe_source IN LISTS probe_sources)
 endforeach()
 file(READ "${DBI_ROOT}/include/trace_record.h" trace_record_content)
 file(READ "${DBI_ROOT}/include/trace_buffer_abi.h" trace_buffer_abi_content)
+file(READ "${DBI_ROOT}/src/probes/sync.cpp" sync_probe_content)
 
 foreach(trace_type IN ITEMS AclsanTraceBufferHeader AclsanTraceSliceHeader AclsanRawTraceRecord)
   string(FIND "${trace_buffer_abi_content}" "struct ${trace_type}" type_offset)
@@ -111,4 +116,15 @@ string(REGEX MATCHALL "${explicit_declaration}" explicit_probes "${probe_content
 list(LENGTH explicit_probes explicit_probe_count)
 if(NOT explicit_probe_count EQUAL 83)
   message(FATAL_ERROR "expected 83 explicit probe declarations, found ${explicit_probe_count}")
+endif()
+
+# Vector sync instructions omit PIPE_V from their explicit operands. The probe
+# must restore it so host-side FLAG and BUFFER parsing sees the common layout.
+string(REGEX MATCHALL
+  "static_cast<uint64_t>\\(PIPE_V\\)"
+  vector_sync_pipe_arguments "${sync_probe_content}")
+list(LENGTH vector_sync_pipe_arguments vector_sync_pipe_argument_count)
+if(NOT vector_sync_pipe_argument_count EQUAL 8)
+  message(FATAL_ERROR
+    "expected 8 implicit PIPE_V arguments in sync probes, found ${vector_sync_pipe_argument_count}")
 endif()

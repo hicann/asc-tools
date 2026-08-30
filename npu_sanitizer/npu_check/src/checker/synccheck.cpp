@@ -8,20 +8,13 @@
 
 #include "checker/synccheck.h"
 
-#include "logging/logger.h"
-
 #include <functional>
-#include <sstream>
+#include <utility>
 
-namespace npu::sanitizer {
+namespace npucheck {
 namespace {
 
 using namespace aclsan::cann;
-
-void HashCombine(size_t& seed, uint64_t value) noexcept
-{
-    seed ^= std::hash<uint64_t>{}(value) + static_cast<size_t>(0x9e3779b9U) + (seed << 6U) + (seed >> 2U);
-}
 
 const char* OperationName(uint32_t syncKind, uint32_t action)
 {
@@ -69,163 +62,123 @@ NpusanReportExecContext ExecContext(const AclsanDeviceSyncData& data)
 
 } // namespace
 
-size_t Synccheck::SyncPairKeyHash::operator()(const SyncPairKey& key) const noexcept
+void Synccheck::HashCombine(size_t& seed, uint64_t value) noexcept
 {
-    size_t seed = 0;
-    HashCombine(seed, key.launchId);
-    HashCombine(seed, key.objectId);
-    HashCombine(seed, key.phyCoreId);
-    HashCombine(seed, key.blockId);
-    HashCombine(seed, key.syncKind);
-    HashCombine(seed, key.scope);
-    HashCombine(seed, key.srcPipe);
-    HashCombine(seed, key.dstPipe);
-    HashCombine(seed, key.mode);
-    return seed;
+    seed ^= std::hash<uint64_t>{}(value) + static_cast<size_t>(0x9e3779b9U) + (seed << 6U) + (seed >> 2U);
 }
 
-bool Synccheck::BufferOccupancyKey::operator==(const BufferOccupancyKey& other) const noexcept
-{
-    return objectId == other.objectId && phyCoreId == other.phyCoreId;
-}
-
-size_t Synccheck::BufferOccupancyKeyHash::operator()(const BufferOccupancyKey& key) const noexcept
-{
-    size_t seed = 0;
-    HashCombine(seed, key.objectId);
-    HashCombine(seed, key.phyCoreId);
-    return seed;
-}
-
-Synccheck::SyncPairKey Synccheck::BuildExactKey(const AclsanDeviceSyncData& data)
-{
-    SyncPairKey key{};
-    key.launchId = data.header.launchId;
-    key.objectId = data.objectId;
-    key.phyCoreId = data.header.phyCoreId;
-    key.blockId = data.header.blockId;
-    key.syncKind = data.syncKind;
-    key.scope = data.scope;
-    key.dstPipe = data.dstPipe;
-    if (data.syncKind == ACLSAN_DEVICE_SYNC_KIND_SET_WAIT_FLAG) {
-        key.srcPipe = data.srcPipe;
-    } else {
-        key.mode = data.mode;
-    }
-    return key;
-}
-
-Synccheck::BufferOccupancyKey Synccheck::BuildBufferOccupancyKey(const AclsanDeviceSyncData& data)
+Synccheck::SyncBufOccupancyKey Synccheck::BuildSyncBufOccupancyKey(const AclsanDeviceSyncData& data)
 {
     return {data.objectId, data.header.phyCoreId};
 }
 
-bool Synccheck::IsClose(uint32_t action)
+void Synccheck::HandleFlagEvent(
+    FlagState& state, const AclsanDeviceSyncData& data, const FlagPairKey& key, Reports& reports)
 {
-    return action == ACLSAN_DEVICE_SYNC_ACTION_WAIT || action == ACLSAN_DEVICE_SYNC_ACTION_RELEASE;
-}
-
-bool Synccheck::IsValidEvent(const AclsanDeviceSyncData& data)
-{
-    if (data.syncKind == ACLSAN_DEVICE_SYNC_KIND_SET_WAIT_FLAG) {
-        return data.action == ACLSAN_DEVICE_SYNC_ACTION_SET || data.action == ACLSAN_DEVICE_SYNC_ACTION_WAIT;
-    }
-    if (data.syncKind == ACLSAN_DEVICE_SYNC_KIND_GET_RLS_BUF) {
-        return data.action == ACLSAN_DEVICE_SYNC_ACTION_GET || data.action == ACLSAN_DEVICE_SYNC_ACTION_RELEASE;
-    }
-    return false;
-}
-
-std::vector<Synccheck::Report> Synccheck::OnDeviceSync(const AclsanDeviceSyncData& data)
-{
-    ++stats_.syncEvents;
-
-    if (!IsValidEvent(data)) {
-        ++stats_.invalidEvents;
-        if (logger_ != nullptr) {
-            std::ostringstream message;
-            message << "invalid device sync data"
-                    << " sync_kind=" << data.syncKind << " action=" << data.action << " launch=" << data.header.launchId
-                    << " instr_exec=" << data.header.instrExecId << " pc=0x" << std::hex << data.header.pc << std::dec
-                    << " core=" << data.header.phyCoreId << " block=" << data.header.blockId;
-            logger_->Error(message.str());
-        }
-        return {};
-    }
-
-    auto& state = launchStates_[data.header.launchId];
-    const SyncPairKey key = BuildExactKey(data);
-    Reports reports;
     if (data.action == ACLSAN_DEVICE_SYNC_ACTION_SET) {
         const auto [open, inserted] = state.pending.emplace(key, data);
         if (!inserted) {
             // Duplicate flag open, for example:
             // set_flag(V, MTE2, 3) -> set_flag(V, MTE2, 3).
             ++stats_.duplicateOpens;
-            reports.push_back(
-                BuildMismatch(data, &open->second, static_cast<uint32_t>(NpusanSyncMismatchReason::DUPLICATE_OPEN)));
+            reports.push_back(BuildMismatch(
+                data, &open->second, static_cast<uint32_t>(NpusanSyncMismatchReason::DUPLICATE_OPEN), key));
+        } else {
+            ++stats_.pendingOpens;
         }
-    } else if (data.action == ACLSAN_DEVICE_SYNC_ACTION_GET) {
-        const BufferOccupancyKey occupancyKey = BuildBufferOccupancyKey(data);
-        const auto active = state.activeBuffers.find(occupancyKey);
-        if (active != state.activeBuffers.end()) {
-            // Within one execution domain, duplicate buffer open is keyed by bufId, for example:
+        return;
+    }
+
+    const auto open = state.pending.find(key);
+    if (open == state.pending.end()) {
+        // Close without an exact open, for example:
+        // wait_flag(V, MTE2, 3), or
+        // set_flag(V, MTE3, 3) -> wait_flag(V, MTE2, 3).
+        ++stats_.unmatchedCloses;
+        reports.push_back(
+            BuildMismatch(data, nullptr, static_cast<uint32_t>(NpusanSyncMismatchReason::UNMATCHED_CLOSE), key));
+    } else {
+        state.pending.erase(open);
+        ++stats_.matchedPairs;
+        --stats_.pendingOpens;
+    } // TODO: set/wait open/close对
+}
+
+void Synccheck::HandleSyncBufEvent(
+    SyncBufState& state, const AclsanDeviceSyncData& data, const SyncBufPairKey& key, Reports& reports)
+{
+    if (data.action == ACLSAN_DEVICE_SYNC_ACTION_GET) {
+        const SyncBufOccupancyKey occupancyKey = BuildSyncBufOccupancyKey(data);
+        const auto active = state.activeSyncBufs.find(occupancyKey);
+        if (active != state.activeSyncBufs.end()) {
+            // Within one execution domain, duplicate sync buffer open is keyed by bufId, for example:
             // get_buf(MTE2, 2, 0) -> get_buf(MTE2, 2, 1), or
             // get_buf(MTE2, 2, 1) -> get_buf(MTE3, 2, 1).
             ++stats_.duplicateOpens;
             const auto& open = state.pending.at(active->second);
             reports.push_back(
-                BuildMismatch(data, &open, static_cast<uint32_t>(NpusanSyncMismatchReason::DUPLICATE_OPEN)));
+                BuildMismatch(data, &open, static_cast<uint32_t>(NpusanSyncMismatchReason::DUPLICATE_OPEN), key));
         } else {
             state.pending.emplace(key, data);
-            state.activeBuffers.emplace(occupancyKey, key);
+            state.activeSyncBufs.emplace(occupancyKey, key);
+            ++stats_.pendingOpens;
         }
-    } else if (IsClose(data.action)) {
-        const auto open = state.pending.find(key);
-        if (open == state.pending.end()) {
-            // Close without an exact open, for example:
-            // wait_flag(V, MTE2, 3), or
-            // set_flag(V, MTE3, 3) -> wait_flag(V, MTE2, 3), or
-            // get_buf(MTE2, 2, 0) -> rls_buf(MTE2, 2, 1).
-            ++stats_.unmatchedCloses;
-            reports.push_back(
-                BuildMismatch(data, nullptr, static_cast<uint32_t>(NpusanSyncMismatchReason::UNMATCHED_CLOSE)));
-        } else {
-            if (data.action == ACLSAN_DEVICE_SYNC_ACTION_RELEASE) {
-                state.activeBuffers.erase(BuildBufferOccupancyKey(data));
-            }
-            state.pending.erase(open);
-            ++stats_.matchedPairs;
-        }
+        return;
     }
-    stats_.pendingOpens = 0;
-    for (const auto& launch : launchStates_) {
-        stats_.pendingOpens += launch.second.pending.size();
+
+    const auto open = state.pending.find(key);
+    if (open == state.pending.end()) {
+        // Close without an exact open, for example:
+        // get_buf(MTE2, 2, 0) -> rls_buf(MTE2, 2, 1).
+        ++stats_.unmatchedCloses;
+        reports.push_back(
+            BuildMismatch(data, nullptr, static_cast<uint32_t>(NpusanSyncMismatchReason::UNMATCHED_CLOSE), key));
+    } else {
+        state.activeSyncBufs.erase(BuildSyncBufOccupancyKey(data));
+        state.pending.erase(open);
+        ++stats_.matchedPairs;
+        --stats_.pendingOpens;
     }
-    return reports;
+}
+
+void Synccheck::OnDeviceSync(const AclsanDeviceSyncData& data)
+{
+    ++stats_.syncEvents;
+
+    const auto state = launchStates_.emplace(LaunchSyncState{data.header.launchId}).first;
+    auto& launchState = *state;
+    if (data.syncKind == ACLSAN_DEVICE_SYNC_KIND_SET_WAIT_FLAG) {
+        const FlagPairKey key = FlagPairKey::FromCbdata(data);
+        HandleFlagEvent(launchState.flags, data, key, launchState.reports);
+    } else {
+        const SyncBufPairKey key = SyncBufPairKey::FromCbdata(data);
+        HandleSyncBufEvent(launchState.syncBufs, data, key, launchState.reports);
+    }
 }
 
 std::vector<Synccheck::Report> Synccheck::OnSynchronization()
 {
     ++stats_.synchronizationEvents;
     Reports reports;
-    const auto state = launchStates_.find(0);
-    if (state == launchStates_.end()) {
-        return reports;
+    const auto reportPending = [this, &reports](const auto& pending) {
+        for (const auto& entry : pending) {
+            ++stats_.unconsumedOpens;
+            reports.push_back(BuildMismatch(
+                entry.second, nullptr, static_cast<uint32_t>(NpusanSyncMismatchReason::UNCONSUMED_OPEN), entry.first));
+        }
+    };
+    // Open left at synchronization, for example:
+    // set_flag(V, MTE2, 3) -> synchronize, or
+    // get_buf(MTE2, 2, 1) -> synchronize.
+    for (const LaunchSyncState& state : launchStates_) {
+        for (Report& report : state.reports) {
+            reports.push_back(std::move(report));
+        }
+        reportPending(state.flags.pending);
+        reportPending(state.syncBufs.pending);
+        stats_.pendingOpens -= state.flags.pending.size() + state.syncBufs.pending.size();
     }
-    for (const auto& entry : state->second.pending) {
-        // Open left at synchronization, for example:
-        // set_flag(V, MTE2, 3) -> synchronize, or
-        // get_buf(MTE2, 2, 1) -> synchronize.
-        ++stats_.unconsumedOpens;
-        reports.push_back(
-            BuildMismatch(entry.second, nullptr, static_cast<uint32_t>(NpusanSyncMismatchReason::UNCONSUMED_OPEN)));
-    }
-    launchStates_.erase(state);
-    stats_.pendingOpens = 0;
-    for (const auto& launch : launchStates_) {
-        stats_.pendingOpens += launch.second.pending.size();
-    }
+    launchStates_.clear();
     return reports;
 }
 
@@ -247,7 +200,7 @@ NpusanSyncPoint Synccheck::ExpectedPoint(const AclsanDeviceSyncData& data, uint3
     return point;
 }
 
-Synccheck::Report Synccheck::BuildMismatch(
+Synccheck::Report Synccheck::BuildMismatchBase(
     const AclsanDeviceSyncData& trigger, const AclsanDeviceSyncData* related, uint32_t reason)
 {
     Report report{};
@@ -264,18 +217,36 @@ Synccheck::Report Synccheck::BuildMismatch(
     report.common.exec = report.triggerPoint.exec;
     report.relatedPoint = related == nullptr ? ExpectedPoint(trigger, reason) : ActualPoint(*related);
 
+    return report;
+}
+
+Synccheck::Report Synccheck::BuildMismatch(
+    const AclsanDeviceSyncData& trigger, const AclsanDeviceSyncData* related, uint32_t reason, const FlagPairKey& key)
+{
+    Report report = BuildMismatchBase(trigger, related, reason);
     NpusanSyncPairingError detail{};
     detail.reason = static_cast<NpusanSyncMismatchReason>(reason);
-    const SyncPairKey key = BuildExactKey(trigger);
-    detail.key.pairKind = trigger.syncKind == ACLSAN_DEVICE_SYNC_KIND_SET_WAIT_FLAG ?
-                              NpusanSyncPairKind::SET_WAIT_FLAG :
-                              NpusanSyncPairKind::GET_RLS_BUF;
+    detail.key.pairKind = NpusanSyncPairKind::SET_WAIT_FLAG;
     detail.key.srcPipe = key.srcPipe;
     detail.key.dstPipe = key.dstPipe;
+    detail.key.id = key.objectId;
+    report.detail = detail;
+    return report;
+}
+
+Synccheck::Report Synccheck::BuildMismatch(
+    const AclsanDeviceSyncData& trigger, const AclsanDeviceSyncData* related, uint32_t reason,
+    const SyncBufPairKey& key)
+{
+    Report report = BuildMismatchBase(trigger, related, reason);
+    NpusanSyncPairingError detail{};
+    detail.reason = static_cast<NpusanSyncMismatchReason>(reason);
+    detail.key.pairKind = NpusanSyncPairKind::GET_RLS_BUF;
+    detail.key.dstPipe = key.pipe;
     detail.key.mode = key.mode;
     detail.key.id = key.objectId;
     report.detail = detail;
     return report;
 }
 
-} // namespace npu::sanitizer
+} // namespace npucheck

@@ -13,6 +13,7 @@
 #include <csignal>
 #include <cstdint>
 #include <cstring>
+#include <optional>
 #include <string>
 #include <sys/wait.h>
 #include <type_traits>
@@ -21,6 +22,7 @@
 
 #include "aclsan/aclsan_api.h"
 #include "aclsan/aclsan_cbdata.h"
+#include "device_instr/common/instruction_id.h"
 #include "device_instr/decoder_registry.h"
 #include "internal/aclsan_trace_buffer.h"
 #include "internal/aclsan_trace_runtime.h"
@@ -51,6 +53,7 @@ CallbackCapture g_callbackCapture{};
 bool g_callbackEnabled = true;
 uint32_t g_deviceMemoryCallbackCount = 0;
 uint32_t g_deviceSyncCallbackCount = 0;
+uint32_t g_decoderCallCount = 0;
 std::array<AclsanDeviceMemoryAccessData, 4> g_deviceMemoryCallbacks{};
 std::array<AclsanDeviceSyncData, 3> g_deviceSyncCallbacks{};
 void* g_lastFreedAddress = nullptr;
@@ -79,6 +82,12 @@ void ResetCapture()
 }
 
 void* Address(uintptr_t value) { return reinterpret_cast<void*>(value); }
+
+std::optional<aclsan::DecodedInstruction> CountDecoderCalls(const aclsan::AclsanRawTraceRecord&) noexcept
+{
+    ++g_decoderCallCount;
+    return std::nullopt;
+}
 
 template <typename Action>
 std::string CaptureDebugLogs(Action action)
@@ -368,13 +377,13 @@ void TestSetPaddingRecordsUpdateLaunchStateWithoutCallback()
     assert(g_deviceMemoryCallbackCount == 0);
     assert(g_deviceSyncCallbackCount == 0);
     assert(
-        logs.find("[raw] type=AclsanRawTraceRecord blockId=3 blockType=2 phyCoreId=5 "
-                  "pc=0x0 instrId=392 siteId=0 category=3 pipeline=0 "
-                  "args=[0x1111222233334444,0x0,0x0,0x0,0x0] instrExecId=1") != std::string::npos);
+        logs.find("[raw] deviceId=3 phyCoreId=5 blockId=3 blockType=AIC  instrExecId=1 launchId=27  "
+                  "type=AclsanRawTraceRecord pc=0x0 instrId=392 siteId=0 category=3 pipeline=0 "
+                  "args=[0x1111222233334444,0x0,0x0,0x0,0x0]") != std::string::npos);
     assert(
-        logs.find("[raw] type=AclsanRawTraceRecord blockId=3 blockType=2 phyCoreId=5 "
-                  "pc=0x0 instrId=392 siteId=0 category=3 pipeline=0 "
-                  "args=[0xfedcba9876543210,0x0,0x0,0x0,0x0] instrExecId=2") != std::string::npos);
+        logs.find("[raw] deviceId=3 phyCoreId=5 blockId=3 blockType=AIC  instrExecId=2 launchId=27  "
+                  "type=AclsanRawTraceRecord pc=0x0 instrId=392 siteId=0 category=3 pipeline=0 "
+                  "args=[0xfedcba9876543210,0x0,0x0,0x0,0x0]") != std::string::npos);
     assert(logs.find("[param] type=SetPaddingParamField value=0x1111222233334444") != std::string::npos);
     assert(logs.find("[param] type=SetPaddingParamField value=0xfedcba9876543210") != std::string::npos);
     assert(
@@ -383,6 +392,32 @@ void TestSetPaddingRecordsUpdateLaunchStateWithoutCallback()
     assert(
         logs.find("[register] action=update register=set_padding launchId=27 blockType=2 blockId=3 "
                   "value=0xfedcba9876543210") != std::string::npos);
+}
+
+void TestUndefinedInstructionIdsSkipDecoder()
+{
+    g_decoderCallCount = 0;
+    const aclsan::DeviceInstructionDecoder decoder{"test", CountDecoderCalls};
+    aclsan::ParsedTraceRecord loadCbufToCa{};
+    loadCbufToCa.record.instrId = 142;
+    aclsan::ParsedTraceRecord loadCbufToCb{};
+    loadCbufToCb.record.instrId = 145;
+
+    aclsan::DispatchTraceRecords({loadCbufToCa, loadCbufToCb}, decoder);
+
+    assert(g_decoderCallCount == 0);
+}
+
+void TestDefinedInstructionIdUsesDecoder()
+{
+    g_decoderCallCount = 0;
+    const aclsan::DeviceInstructionDecoder decoder{"test", CountDecoderCalls};
+    aclsan::ParsedTraceRecord record{};
+    record.record.instrId = static_cast<uint32_t>(aclsan::InstructionId::CopyUbufToCbuf);
+
+    aclsan::DispatchTraceRecords({record}, decoder);
+
+    assert(g_decoderCallCount == 1);
 }
 
 void TestDisabledCallbackIsNotInvoked()
@@ -494,6 +529,8 @@ int main()
     TestSynchronizeStreamCallbackData();
     TestSynchronizeStreamWithTimeoutCallbackData();
     TestSetPaddingRecordsUpdateLaunchStateWithoutCallback();
+    TestUndefinedInstructionIdsSkipDecoder();
+    TestDefinedInstructionIdUsesDecoder();
     TestDisabledCallbackIsNotInvoked();
     return 0;
 }

@@ -118,7 +118,7 @@ private:
     diagnostic::ReportBuffer report_{};
     AclsanSubscriberHandle subscriber_ = nullptr;
     std::unique_ptr<Memcheck> memcheck_;
-    std::unique_ptr<Synccheck> synccheck_;
+    std::unique_ptr<npucheck::Synccheck> synccheck_;
     logging::Logger logger_{};
     std::atomic<uint64_t> callbackCount_{0};
     uint64_t malformedCallbacks_ = 0;

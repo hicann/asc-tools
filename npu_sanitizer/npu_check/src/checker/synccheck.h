@@ -14,13 +14,10 @@
 
 #include <cstdint>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
-namespace npu::sanitizer {
-
-namespace logging {
-class Logger;
-}
+namespace npucheck {
 
 struct SynccheckStats {
     uint64_t syncEvents = 0;
@@ -29,75 +26,150 @@ struct SynccheckStats {
     uint64_t duplicateOpens = 0;
     uint64_t unmatchedCloses = 0;
     uint64_t unconsumedOpens = 0;
-    uint64_t invalidEvents = 0;
     uint64_t pendingOpens = 0;
 };
+// TODO: 放进log中
 
 class Synccheck {
 public:
-    explicit Synccheck(logging::Logger* logger = nullptr) noexcept : logger_(logger) {}
-
-    std::vector<aclsan::cann::NpusanSynccheckReport> OnDeviceSync(const AclsanDeviceSyncData& data);
+    void OnDeviceSync(const AclsanDeviceSyncData& data);
     std::vector<aclsan::cann::NpusanSynccheckReport> OnSynchronization();
     SynccheckStats Stats() const;
 
 private:
-    struct SyncPairKey {
-        uint64_t launchId = 0;
+    static void HashCombine(size_t& seed, uint64_t value) noexcept;
+
+    struct FlagPairKey {
         uint64_t objectId = 0;
         uint32_t phyCoreId = 0;
         uint32_t blockId = 0;
-        uint32_t syncKind = 0;
-        uint32_t scope = 0;
         uint32_t srcPipe = 0;
         uint32_t dstPipe = 0;
-        uint32_t mode = 0;
 
-        bool operator==(const SyncPairKey& other) const noexcept
+        static FlagPairKey FromCbdata(const AclsanDeviceSyncData& data) noexcept
         {
-            return launchId == other.launchId && objectId == other.objectId && phyCoreId == other.phyCoreId &&
-                   blockId == other.blockId && syncKind == other.syncKind && scope == other.scope &&
-                   srcPipe == other.srcPipe && dstPipe == other.dstPipe && mode == other.mode;
+            return {data.objectId, data.header.phyCoreId, data.header.blockId, data.srcPipe, data.dstPipe};
+        }
+
+        bool operator==(const FlagPairKey& other) const noexcept
+        {
+            return objectId == other.objectId && phyCoreId == other.phyCoreId && blockId == other.blockId &&
+                   srcPipe == other.srcPipe && dstPipe == other.dstPipe;
         }
     };
 
-    struct SyncPairKeyHash {
-        size_t operator()(const SyncPairKey& key) const noexcept;
+    struct FlagPairKeyHash {
+        size_t operator()(const FlagPairKey& key) const noexcept
+        {
+            size_t seed = 0;
+            HashCombine(seed, key.objectId);
+            HashCombine(seed, key.phyCoreId);
+            HashCombine(seed, key.blockId);
+            HashCombine(seed, key.srcPipe);
+            HashCombine(seed, key.dstPipe);
+            return seed;
+        }
     };
 
-    struct BufferOccupancyKey {
+    struct SyncBufPairKey {
+        uint64_t objectId = 0;
+        uint32_t phyCoreId = 0;
+        uint32_t blockId = 0;
+        uint32_t pipe = 0;
+        uint32_t mode = 0;
+
+        static SyncBufPairKey FromCbdata(const AclsanDeviceSyncData& data) noexcept
+        {
+            return {data.objectId, data.header.phyCoreId, data.header.blockId, data.dstPipe, data.mode};
+        }
+
+        bool operator==(const SyncBufPairKey& other) const noexcept
+        {
+            return objectId == other.objectId && phyCoreId == other.phyCoreId && blockId == other.blockId &&
+                   pipe == other.pipe && mode == other.mode;
+        }
+    };
+
+    struct SyncBufPairKeyHash {
+        size_t operator()(const SyncBufPairKey& key) const noexcept
+        {
+            size_t seed = 0;
+            HashCombine(seed, key.objectId);
+            HashCombine(seed, key.phyCoreId);
+            HashCombine(seed, key.blockId);
+            HashCombine(seed, key.pipe);
+            HashCombine(seed, key.mode);
+            return seed;
+        }
+    };
+
+    struct SyncBufOccupancyKey {
         uint64_t objectId = 0;
         uint32_t phyCoreId = 0;
 
-        bool operator==(const BufferOccupancyKey& other) const noexcept;
+        bool operator==(const SyncBufOccupancyKey& other) const noexcept
+        {
+            return objectId == other.objectId && phyCoreId == other.phyCoreId;
+        }
     };
 
-    struct BufferOccupancyKeyHash {
-        size_t operator()(const BufferOccupancyKey& key) const noexcept;
+    struct SyncBufOccupancyKeyHash {
+        size_t operator()(const SyncBufOccupancyKey& key) const noexcept
+        {
+            size_t seed = 0;
+            HashCombine(seed, key.objectId);
+            HashCombine(seed, key.phyCoreId);
+            return seed;
+        }
     };
 
-    struct LaunchSyncState {
-        std::unordered_map<SyncPairKey, AclsanDeviceSyncData, SyncPairKeyHash> pending;
-        std::unordered_map<BufferOccupancyKey, SyncPairKey, BufferOccupancyKeyHash> activeBuffers;
-    };
-
+    using FlagPendingMap = std::unordered_map<FlagPairKey, AclsanDeviceSyncData, FlagPairKeyHash>;
+    using SyncBufPendingMap = std::unordered_map<SyncBufPairKey, AclsanDeviceSyncData, SyncBufPairKeyHash>;
+    using ActiveSyncBufMap = std::unordered_map<SyncBufOccupancyKey, SyncBufPairKey, SyncBufOccupancyKeyHash>;
     using Report = aclsan::cann::NpusanSynccheckReport;
     using Reports = std::vector<Report>;
 
-    static SyncPairKey BuildExactKey(const AclsanDeviceSyncData& data);
-    static BufferOccupancyKey BuildBufferOccupancyKey(const AclsanDeviceSyncData& data);
-    static bool IsClose(uint32_t action);
-    static bool IsValidEvent(const AclsanDeviceSyncData& data);
-    static Report BuildMismatch(
+    struct FlagState {
+        FlagPendingMap pending;
+    };
+
+    struct SyncBufState {
+        SyncBufPendingMap pending;
+        ActiveSyncBufMap activeSyncBufs;
+    };
+
+    struct LaunchSyncState {
+        uint64_t launchId = 0;
+        mutable FlagState flags;
+        mutable SyncBufState syncBufs;
+        mutable Reports reports;
+
+        bool operator==(const LaunchSyncState& other) const noexcept { return launchId == other.launchId; }
+    };
+
+    struct LaunchSyncStateHash {
+        size_t operator()(const LaunchSyncState& state) const noexcept { return std::hash<uint64_t>{}(state.launchId); }
+    };
+
+    static SyncBufOccupancyKey BuildSyncBufOccupancyKey(const AclsanDeviceSyncData& data);
+    static Report BuildMismatchBase(
         const AclsanDeviceSyncData& trigger, const AclsanDeviceSyncData* related, uint32_t reason);
+    static Report BuildMismatch(
+        const AclsanDeviceSyncData& trigger, const AclsanDeviceSyncData* related, uint32_t reason,
+        const FlagPairKey& key);
+    static Report BuildMismatch(
+        const AclsanDeviceSyncData& trigger, const AclsanDeviceSyncData* related, uint32_t reason,
+        const SyncBufPairKey& key);
     static aclsan::cann::NpusanSyncPoint ActualPoint(const AclsanDeviceSyncData& data);
     static aclsan::cann::NpusanSyncPoint ExpectedPoint(const AclsanDeviceSyncData& data, uint32_t reason);
+    void HandleFlagEvent(FlagState& state, const AclsanDeviceSyncData& data, const FlagPairKey& key, Reports& reports);
+    void HandleSyncBufEvent(
+        SyncBufState& state, const AclsanDeviceSyncData& data, const SyncBufPairKey& key, Reports& reports);
 
-    std::unordered_map<uint64_t, LaunchSyncState> launchStates_;
+    std::unordered_set<LaunchSyncState, LaunchSyncStateHash> launchStates_;
     SynccheckStats stats_{};
-    logging::Logger* logger_ = nullptr;
 };
 
-} // namespace npu::sanitizer
+} // namespace npucheck
 
 #endif

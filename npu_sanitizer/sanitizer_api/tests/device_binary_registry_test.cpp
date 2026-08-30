@@ -69,7 +69,7 @@ void TestResolvesActiveBinaryAndClearsItOnUnload()
     aclsan::device_runtime::DeviceBinaryRegistry registry;
     const auto& image = DeviceImage();
     const uintptr_t binary = 0x51;
-    assert(registry.RecordBinaryLoadFromData(binary, true, image.data(), image.size()));
+    assert(registry.RecordBinaryLoadFromData(binary, true, 24, image.data(), image.size()));
 
     std::vector<std::string> command;
     const auto runner = [&command](
@@ -110,14 +110,16 @@ void TestExplicitFunctionOwnershipEndsAtBinaryUnload()
     const auto& image = DeviceImage();
     constexpr uintptr_t binary = 0x61;
     constexpr uintptr_t function = 0x610;
-    assert(registry.RecordBinaryLoadFromData(binary, true, image.data(), image.size()));
-    assert(!registry.IsFunctionInstrumented(function));
+    assert(registry.RecordBinaryLoadFromData(binary, true, 24, image.data(), image.size()));
+    uint32_t traceArgumentOffset = 0;
+    assert(!registry.GetFunctionTraceArgumentOffset(function, traceArgumentOffset));
 
     registry.RecordBinaryFunctionLookup(binary, function);
-    assert(registry.IsFunctionInstrumented(function));
+    assert(registry.GetFunctionTraceArgumentOffset(function, traceArgumentOffset));
+    assert(traceArgumentOffset == 24);
 
     registry.RecordBinaryUnload(binary);
-    assert(!registry.IsFunctionInstrumented(function));
+    assert(!registry.GetFunctionTraceArgumentOffset(function, traceArgumentOffset));
     assert(fs::is_empty(root));
     fs::remove_all(root);
 }
@@ -135,20 +137,23 @@ void TestLatestLookupRequiresAnInstrumentedLatestBinary()
     constexpr uintptr_t instrumentedFunction = 0x710;
     constexpr uintptr_t plainFunction = 0x720;
     constexpr uintptr_t explicitFunction = 0x711;
+    uint32_t traceArgumentOffset = 0;
 
-    assert(registry.RecordBinaryLoadFromData(instrumentedBinary, true, image.data(), image.size()));
+    assert(registry.RecordBinaryLoadFromData(instrumentedBinary, true, 24, image.data(), image.size()));
     registry.RecordLatestBinaryFunctionLookup(instrumentedFunction);
-    assert(registry.IsFunctionInstrumented(instrumentedFunction));
+    assert(registry.GetFunctionTraceArgumentOffset(instrumentedFunction, traceArgumentOffset));
+    assert(traceArgumentOffset == 24);
 
-    assert(registry.RecordBinaryLoadFromData(plainBinary, false, nullptr, 0));
+    assert(registry.RecordBinaryLoadFromData(plainBinary, false, 0, nullptr, 0));
     registry.RecordLatestBinaryFunctionLookup(plainFunction);
-    assert(!registry.IsFunctionInstrumented(plainFunction));
+    assert(!registry.GetFunctionTraceArgumentOffset(plainFunction, traceArgumentOffset));
 
     registry.RecordBinaryFunctionLookup(instrumentedBinary, explicitFunction);
-    assert(registry.IsFunctionInstrumented(explicitFunction));
+    assert(registry.GetFunctionTraceArgumentOffset(explicitFunction, traceArgumentOffset));
+    assert(traceArgumentOffset == 24);
     registry.Reset();
-    assert(!registry.IsFunctionInstrumented(instrumentedFunction));
-    assert(!registry.IsFunctionInstrumented(explicitFunction));
+    assert(!registry.GetFunctionTraceArgumentOffset(instrumentedFunction, traceArgumentOffset));
+    assert(!registry.GetFunctionTraceArgumentOffset(explicitFunction, traceArgumentOffset));
     assert(fs::is_empty(root));
     fs::remove_all(root);
 }
@@ -160,18 +165,22 @@ void TestFunctionLookupReplacesPreviousBinaryOwnership()
     constexpr uintptr_t plainBinary = 0x7a;
     constexpr uintptr_t explicitFunction = 0x790;
     constexpr uintptr_t latestFunction = 0x791;
+    const auto& image = DeviceImage();
+    uint32_t traceArgumentOffset = 0;
 
-    assert(!registry.RecordBinaryLoadFromData(instrumentedBinary, true, nullptr, 0));
+    assert(registry.RecordBinaryLoadFromData(instrumentedBinary, true, 24, image.data(), image.size()));
     registry.RecordBinaryFunctionLookup(instrumentedBinary, explicitFunction);
     registry.RecordBinaryFunctionLookup(instrumentedBinary, latestFunction);
-    assert(registry.IsFunctionInstrumented(explicitFunction));
-    assert(registry.IsFunctionInstrumented(latestFunction));
+    assert(registry.GetFunctionTraceArgumentOffset(explicitFunction, traceArgumentOffset));
+    assert(traceArgumentOffset == 24);
+    assert(registry.GetFunctionTraceArgumentOffset(latestFunction, traceArgumentOffset));
+    assert(traceArgumentOffset == 24);
 
-    assert(registry.RecordBinaryLoadFromData(plainBinary, false, nullptr, 0));
+    assert(registry.RecordBinaryLoadFromData(plainBinary, false, 0, nullptr, 0));
     registry.RecordBinaryFunctionLookup(plainBinary, explicitFunction);
     registry.RecordLatestBinaryFunctionLookup(latestFunction);
-    assert(!registry.IsFunctionInstrumented(explicitFunction));
-    assert(!registry.IsFunctionInstrumented(latestFunction));
+    assert(!registry.GetFunctionTraceArgumentOffset(explicitFunction, traceArgumentOffset));
+    assert(!registry.GetFunctionTraceArgumentOffset(latestFunction, traceArgumentOffset));
 }
 
 void TestManualInstrumentationIsIndependentOfBinaryOwnership()
@@ -179,14 +188,17 @@ void TestManualInstrumentationIsIndependentOfBinaryOwnership()
     aclsan::device_runtime::DeviceBinaryRegistry registry;
     constexpr uintptr_t binary = 0x81;
     constexpr uintptr_t function = 0x810;
-    registry.MarkFunctionInstrumented(function);
-    assert(registry.IsFunctionInstrumented(function));
-    assert(!registry.RecordBinaryLoadFromData(binary, true, nullptr, 0));
+    registry.MarkFunctionInstrumented(function, 8);
+    uint32_t traceArgumentOffset = 0;
+    assert(registry.GetFunctionTraceArgumentOffset(function, traceArgumentOffset));
+    assert(traceArgumentOffset == 8);
+    assert(!registry.RecordBinaryLoadFromData(binary, true, 0, nullptr, 0));
     registry.RecordBinaryFunctionLookup(binary, function);
     registry.RecordBinaryUnload(binary);
-    assert(registry.IsFunctionInstrumented(function));
+    assert(registry.GetFunctionTraceArgumentOffset(function, traceArgumentOffset));
+    assert(traceArgumentOffset == 8);
     registry.Reset();
-    assert(!registry.IsFunctionInstrumented(function));
+    assert(!registry.GetFunctionTraceArgumentOffset(function, traceArgumentOffset));
 }
 
 } // namespace

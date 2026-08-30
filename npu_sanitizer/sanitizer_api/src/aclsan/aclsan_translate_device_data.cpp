@@ -309,9 +309,7 @@ std::optional<DeviceCallbackData> TranslateDecodedTraceToCallbackData(
     LogRawRecord(parsed);
     // 判断是否找到对应的paramfield  raw data -> param field
     if (std::holds_alternative<std::monostate>(decoded.params)) {
-        ASC_SAN_DEBUG(
-            "[param] rawData -> paramField translation failed instrId=%llu",
-            static_cast<unsigned long long>(parsed.record.instrId));
+        ASC_SAN_DEBUG("[param] rawData -> paramField translation failed instrId=%u", parsed.record.instrId);
         return std::nullopt;
     }
     LogParamField(decoded.params);
@@ -319,9 +317,7 @@ std::optional<DeviceCallbackData> TranslateDecodedTraceToCallbackData(
     std::optional<DeviceCallbackData> cbdata = Translator::TranslateToCallbackData(parsed, decoded);
     // 判断 param field -> cbdata 的转换是否成功
     if (cbdata == std::nullopt) {
-        ASC_SAN_DEBUG(
-            "[cbdata] paramField -> cbdata translation failed instrId=%llu",
-            static_cast<unsigned long long>(parsed.record.instrId));
+        ASC_SAN_DEBUG("[cbdata] paramField -> cbdata translation failed instrId=%u", parsed.record.instrId);
         return std::nullopt;
     }
     LogCallbackData(*cbdata);

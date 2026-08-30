@@ -3,22 +3,26 @@
 This directory directly reuses the production `npu_sanitizer/npu_check_cli` and
 `npu_sanitizer/npu_check` components. `npu_check` launches an example program,
 loads `libnpu_check.so` through CANN API Injection, and then subscribes to and
-enables the memcheck callbacks provided by `libacl_san.so`.
+enables the callbacks for the selected tool through `libacl_san.so`.
 
 ## Example Directories
 
 | Directory | Source File | Executable | Description |
 | --- | --- | --- | --- |
-| `examples/add` | `add.asc` | `aclsan_demo_add` | AscendC vector addition example with result verification. |
-| `examples/padding_register_state` | `padding_register_state.asc` | `aclsan_demo_padding_register_state` | Executes two `SET_PADDING` instructions and verifies that their values reach the register manager. |
-| `examples/synccheck` | One standalone directory per scenario | `aclsan_demo_synccheck_<scenario>` | Normal and abnormal synchronization pairing examples. |
-| `examples/matmul_basic_api` | `matmul_basic_api.asc` | `aclsan_demo_matmul_basic_api` | Basic matrix multiplication example. |
-| `examples/matmul_leakyrelu_basic_api` | `matmul_leakyrelu_basic_api.asc` | `aclsan_demo_matmul_leakyrelu_basic_api` | Fused Matmul and LeakyReLU example. |
+| `examples/memcheck/add` | `add.asc` | `demo` | AscendC vector addition and basic GM access example. |
+| `examples/memcheck/datacopy_stride` | `datacopy_stride.asc` | `demo` | DataCopy stride out-of-bounds example. |
+| `examples/memcheck/matmul_basic_api` | `matmul_basic_api.asc` | `demo` | Basic matrix multiplication example. |
+| `examples/memcheck/matmul_leakyrelu_basic_api` | `matmul_leakyrelu_basic_api.asc` | `demo` | Fused Matmul and LeakyReLU example. |
+| `examples/basic_func/multi_kernel` | `multi_kernel.asc` | `demo` | Basic multi-kernel loading and instrumentation example. |
+| `examples/basic_func/padding_register_state` | `padding_register_state.asc` | `demo` | Basic `SET_PADDING` register-manager example. |
+| `examples/synccheck` | One standalone directory per scenario | `demo` | Normal and abnormal synchronization pairing examples. |
 
 Each example directory under `examples/synccheck` contains its own `.asc` file,
-CMake configuration, runner, and result verifier. The `.asc` file contains the
-complete AscendC kernel, ACL initialization, memory management, kernel launch,
-and cleanup logic. `wait_without_set` intentionally executes a WAIT_FLAG without
+CMake configuration, runner, and result verifier. `verify_common.py` provides common
+result checks. Each case's `run.sh` builds and runs its `.asc` from the shared
+`demo/build` tree. The
+`.asc` file contains the complete AscendC kernel, ACL initialization, kernel
+launch, and cleanup logic. `wait_without_set` intentionally executes a WAIT_FLAG without
 a corresponding SET_FLAG. The examples also use `AscendC::Mutex::Lock/Unlock`
 to cover normal and abnormal GET_BUF/RLS_BUF pairing and multi-block isolation
 for both SET/WAIT and GET/RLS. The `wait_without_set` and duplicate Lock scenarios
@@ -27,32 +31,45 @@ must use `aclrtSynchronizeStreamWithTimeout` to bound the wait and
 
 ## Build and Artifacts
 
-Before each run, `run.sh` deletes the fixed `npu_sanitizer/demo/build` directory.
-The top-level `CMakeLists.txt` then adds `npu_compute`, `sanitizer_api`,
-`npu_sanitizer/common`, `npu_sanitizer/npu_check_cli`, `npu_sanitizer/npu_check`,
-and `examples/add` to one CMake build tree. Tools and add artifacts from this tree
-are placed in:
+The top-level `build.sh` recreates the fixed `npu_sanitizer/demo/build` directory.
+The top-level `CMakeLists.txt` builds the product tools, shared libraries, and online
+DBI sources without registering example targets. Shared tools are placed in:
 
 ```text
 npu_sanitizer/demo/build/npu_compute/bin
 ```
 
-The two matmul examples use independent CMake build trees in their own directories.
-Their executables are placed in `examples/matmul_basic_api/build/bin` and
-`examples/matmul_leakyrelu_basic_api/build/bin`, respectively.
+Every example directory is a complete standalone CMake project. Its `run.sh`
+configures and builds it under:
+
+```text
+npu_sanitizer/demo/examples/<category>/<case-name>/build
+```
+
+The example executable is written directly to that build directory, for example:
+
+```text
+npu_sanitizer/demo/examples/memcheck/add/build/demo
+```
+
+`build.sh` also stages the probe sources required by online DBI. The first kernel
+binary load creates and caches `probe.o` and `ctrl.bin` at runtime. Each case stores
+its log and other run files in its own `build/` directory. Synccheck logs are written
+to `demo/examples/synccheck/<case-name>/build/npu_check.log`, while Matmul inputs and
+outputs are stored in the case-local `build/run/` directory.
 
 ### Shared Libraries in the Runtime Chain
 
 | Artifact | CMake Target or Source | Source Code | How It Enters the Demo | Purpose |
 | --- | --- | --- | --- | --- |
-| `libnpu_check.so` | `npu_check` | `npu_sanitizer/npu_check/src/` | `npu_check` writes its absolute path to `ACL_API_INJECTION`; CANN loads it during `aclInit()` and calls `acltoolInitialize()` | Establishes the UDS session, subscribes to and enables memcheck callbacks, and produces diagnostics and the summary. |
+| `libnpu_check.so` | `npu_check` | `npu_sanitizer/npu_check/src/` | `npu_check` writes its absolute path to `ACL_API_INJECTION`; CANN loads it during `aclInit()` and calls `acltoolInitialize()` | Establishes the UDS session, subscribes to and enables callbacks for the selected tool, and produces diagnostics and the summary. |
 | `libacl_san.so` | `acl_san` | `npu_sanitizer/sanitizer_api/`, with sources explicitly listed by its `CMakeLists.txt` | A `DT_NEEDED` dependency of `libnpu_check.so` | Provides the public ACLSan API, callback routing, callback data construction, and Runtime hook replacements. |
 | `libacl_tool_injection.so` | `acl_tool_injection` | `npu_compute/src/injection_hook/injection_hook.cpp` | A `DT_NEEDED` dependency of `libacl_san.so` | Installs fixed trampolines and stores and switches the `orig/hook/custom` Runtime entry points. |
-| `libacl_rt.so` | `CANN::acl_rt` | CANN 9.2.0 installation | A `DT_NEEDED` dependency of the examples and `libacl_tool_injection.so` | Exports `aclrt*` and `aclrtApiInjectionGetFunc/SetFunc`, then invokes the underlying RTS implementation. |
+| `libacl_rt.so` | CANN installation library | CANN 9.2.0 installation | A `DT_NEEDED` dependency of the examples and `libacl_tool_injection.so` | Exports `aclrt*` and `aclrtApiInjectionGetFunc/SetFunc`, then invokes the underlying RTS implementation. |
 | `libruntime.so` | CANN Runtime | CANN 9.2.0 installation | A `DT_NEEDED` dependency of `libacl_rt.so` | Provides the underlying `rt*` and RTS implementation; it does not directly export `aclrtMalloc`. |
 | `libprofapi.so` | `CANN::profapi` | CANN 9.2.0 installation | A `DT_NEEDED` dependency of `libacl_tool_injection.so` and `libruntime.so` | Provides CANN profiling and tool injection support. |
 
-`run.sh` builds only `npu_check_cli`, the selected example, and their dependencies.
+`build.sh` builds only `npu_check_cli` and its dependencies.
 It does not build the test-only Runtime/Profiling stub. Explicitly building other
 regular `npu_compute` targets can also produce `libacl_pti.so` (target `acl_pti`)
 and `libnpu-compute.so` (target `npu_compute`), but these libraries are not part of
@@ -60,54 +77,74 @@ the demo runtime chain. System libraries such as `libstdc++.so`, `libc.so`, and
 `libdl.so` are not generated by this repository.
 
 In addition to the shared libraries, the top-level build tree generates `npu_check`
-from the `npu_check_cli` target and `aclsan_demo_add`. `libnpu_check.so` in the same
-build tree links directly against `acl_san`, while the CLI specifies
+from the `npu_check_cli` target. Case runners build their example targets on demand
+in standalone build directories. `libnpu_check.so` in the shared build tree links
+directly against `acl_san`, while the CLI specifies
 `libnpu_check.so` through `ACL_API_INJECTION`. The demo directory no longer contains
 source copies of `npu_check` or `npu_check_exec`, and it no longer generates the
 legacy `npucheck` executable.
 
 ## Running Examples
 
-Run the following command from the repository root:
+Load the CANN environment, then build the shared tools from the repository root:
 
 ```bash
-bash ./npu_sanitizer/demo/run.sh
+source /home/cty/cann_0829/cann/set_env.sh
+bash ./npu_sanitizer/demo/build.sh
 ```
 
-With no argument, the runner executes `examples/add`. Select an example explicitly
-with one of the following commands:
+Then run the script in any case directory:
 
 ```bash
-bash ./npu_sanitizer/demo/run.sh add
-bash ./npu_sanitizer/demo/run.sh padding_register_state
-bash ./npu_sanitizer/demo/run.sh synccheck/single_pair
-bash ./npu_sanitizer/demo/run.sh synccheck/single_unconsumed
-bash ./npu_sanitizer/demo/run.sh matmul_basic_api
-bash ./npu_sanitizer/demo/run.sh matmul_leakyrelu_basic_api
+bash ./npu_sanitizer/demo/examples/memcheck/add/run.sh
+bash ./npu_sanitizer/demo/examples/memcheck/matmul_basic_api/run.sh
+bash ./npu_sanitizer/demo/examples/basic_func/padding_register_state/run.sh
+bash ./npu_sanitizer/demo/examples/synccheck/single_pair/run.sh
 ```
 
-On each run, `run.sh` deletes and rebuilds the fixed `npu_sanitizer/demo/build`
-directory and automatically sources `${NPUCOMPUTE_CANN_ROOT}/../set_env.sh`.
-The default `NPUCOMPUTE_CANN_ROOT` is
-`/usr/local/Ascend/cann/x86_64-linux`. Override it before running if CANN
-is installed elsewhere:
+Run all 21 basic-capability and Synccheck cases with:
 
 ```bash
-NPUCOMPUTE_CANN_ROOT=/path/to/cann/x86_64-linux \
-    bash ./npu_sanitizer/demo/run.sh add
+bash ./npu_sanitizer/demo/run_smoke.sh
 ```
 
-After the build completes, `npu_check` launches the selected example with memcheck.
-The `run.sh` scripts in the two matmul directories clean and rebuild their local
-`build` directories and generate input and golden data. The top-level `run.sh`
-then launches the executable from the corresponding `build/run` directory and
-runs `verify_result.py`. On success, the verifier prints `test pass!`. The final
-result is determined by result verification, application exit status, UDS
-handshake, sanitizer summary, and session end state.
+`run_smoke.sh` is the self-contained entry point for the full smoke suite; no
+separate `build.sh` invocation is required. It removes `demo/build`, uses
+`build.sh` to rebuild the shared tools and load the CANN environment, then runs
+every case in a fixed order. Each console log is saved under
+`demo/build/smoke/<category>/<case-name>.log`. A shared-tool build failure stops
+the script immediately. A case failure does not stop the remaining cases, and
+the script returns 1 after the complete run when any case failed.
+
+Run the complete Synccheck suite with:
+
+```bash
+bash ./npu_sanitizer/demo/examples/synccheck/run_all.sh
+```
+
+The top-level `build.sh` loads `${ASCEND_HOME_PATH}/set_env.sh` and defaults to
+`/home/cty/cann_0829/cann` when the variable is unset. Each case `run.sh` requires
+the current shell to have loaded `set_env.sh`, which provides `ASCEND_HOME_PATH` and
+the CANN toolchain environment. If CANN is installed elsewhere, load that environment
+before running:
+
+```bash
+source /path/to/cann/set_env.sh
+bash ./npu_sanitizer/demo/build.sh
+```
+
+Each case runner configures and builds its target under
+`demo/examples/<category>/<case-name>/build`, then launches it with memcheck or
+synccheck. Matmul runners also generate input and golden data and
+run `verify_result.py`. On success, the verifier prints `test pass!`. Every runner
+checks result validation, application status, UDS handshake, sanitizer summary, and
+session completion. A case with fully verified expected diagnostics returns 0 and
+prints `example verification passed: <category>/<case-name>`; a log mismatch returns
+nonzero.
 
 `padding_register_state` uses a single cube block to execute
 `asc_set_l13d_padding(0x12)` followed by `asc_set_l13d_padding(0x34)`. Device logs prove
-that the `0x1212` and `0x3434` `SET_PADDING` raw values are decoded and delivered to the
+that the `0x12` and `0x34` `SET_PADDING` raw values are decoded and delivered to the
 same register-state key. `register_state_manager_test` independently calls `Get()` to
 verify that the same key retains only the latest value.
 
@@ -119,10 +156,11 @@ npu_check
   -> launches the selected example
   -> the example calls aclInit() from libacl_rt.so
   -> the CANN profiling/injection mechanism loads libnpu_check.so and calls acltoolInitialize()
-  -> libnpu_check.so receives the memcheck configuration over UDS and calls libacl_san.so to Subscribe/Enable
+  -> libnpu_check.so receives the tool configuration over UDS and calls libacl_san.so to Subscribe/Enable
   -> libacl_san.so calls aclrtApiInjectionGetFunc/SetFunc through libacl_tool_injection.so
+  -> the binary-load hook compiles the callback-selected probe online, then links and instruments the kernel binary
   -> subsequent aclrt* calls enter the hook; replacements call the original aclrt* functions and reach the RTS implementation in libruntime.so
-  -> callback data is passed to production memcheck; diagnostics, the summary, and session end are returned through UDS to the CLI
+  -> callback data is passed to the selected checker; diagnostics, the summary, and session end are returned through UDS to the CLI
 ```
 
 The only source definition of `acltoolInitialize` is in
@@ -133,9 +171,10 @@ The only source definition of `acltoolInitialize` is in
 - `tests/check_product_npu_check_layout.sh` checks production targets, entry-point
   symbol spelling, and that the demo does not reference the legacy launcher or
   unsupported tools.
-- `tests/check_examples_layout.sh` checks the directory and runner contracts of
-  the three examples and confirms that the removed `examples/test` directory has
-  not re-entered the build or runtime chain.
+- `tests/check_examples_layout.sh` checks all example categories, runner
+  self-validation contracts, and `run_smoke.sh` aggregation behavior, and confirms
+  that the removed `examples/test` directory has not re-entered the build or runtime
+  chain.
 - `tests/check_end_to_end.sh` runs add on a real Device and checks the UDS lifecycle,
   application exit status, the `acltoolInitialize@@NPU_CHECK_1.0` export, and key
   ELF `DT_NEEDED` relationships.

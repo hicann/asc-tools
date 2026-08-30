@@ -68,7 +68,7 @@ __aicore__ inline void WriteTraceRecord(
     record->args[2] = arg2;
     record->args[3] = arg3;
     record->args[4] = arg4;
-    record->instrId = static_cast<uint64_t>(apiId);
+    record->instrId = apiId;
     record->siteId = 0U;
     record->category = category;
     record->pipeline = pipeline;

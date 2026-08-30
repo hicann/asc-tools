@@ -34,6 +34,20 @@ constexpr bool HasParamFieldLogger() noexcept
            std::is_same_v<ParamField, aclsan::FlagParamField> || std::is_same_v<ParamField, aclsan::SyncBufParamField>;
 }
 
+const char* BlockTypeName(uint32_t blockType) noexcept
+{
+    switch (blockType) {
+        case ACLSAN_DEVICE_BLOCK_TYPE_AICORE:
+            return "AICORE";
+        case ACLSAN_DEVICE_BLOCK_TYPE_AICORE_VECTOR:
+            return "AIV";
+        case ACLSAN_DEVICE_BLOCK_TYPE_AICORE_CUBE:
+            return "AIC";
+        default:
+            return "UNKNOWN";
+    }
+}
+
 void LogParamField(const aclsan::SetPaddingParamField& value) noexcept
 {
     ASC_SAN_DEBUG("[param] type=SetPaddingParamField value=0x%llx", static_cast<unsigned long long>(value.value));
@@ -134,15 +148,15 @@ void LogMemoryAccessData(const AclsanDeviceMemoryAccessData& value, uint32_t ind
 {
     const uint64_t rangeBytes = value.layoutKind == ACLSAN_MEM_LAYOUT_RANGE ? value.layout.range.bytes : 0;
     ASC_SAN_DEBUG(
-        "[cbdata] type=AclsanDeviceMemoryAccessData index=%u address=0x%llx memorySpace=%u accessMode=%u "
-        "accessIndex=%u accessCount=%u bytes=%llu layoutKind=%u pc=0x%llx siteId=%u instrExecId=%llu serialNo=%llu "
-        "phyCoreId=%u blockId=%u blockType=%u pipeline=%u",
-        index, static_cast<unsigned long long>(value.address), value.memorySpace, value.accessMode, value.accessIndex,
-        value.accessCount, static_cast<unsigned long long>(rangeBytes), value.layoutKind,
-        static_cast<unsigned long long>(value.header.pc), value.header.siteId,
+        "[cbdata] deviceId=%u phyCoreId=%u blockId=%u blockType=%s  instrExecId=%llu launchId=%llu  "
+        "type=AclsanDeviceMemoryAccessData index=%u address=0x%llx memorySpace=%u accessMode=%u "
+        "accessIndex=%u accessCount=%u bytes=%llu layoutKind=%u pc=0x%llx siteId=%u serialNo=%llu pipeline=%u",
+        value.header.deviceId, value.header.phyCoreId, value.header.blockId, BlockTypeName(value.header.blockType),
         static_cast<unsigned long long>(value.header.instrExecId),
-        static_cast<unsigned long long>(value.header.serialNo), value.header.phyCoreId, value.header.blockId,
-        value.header.blockType, value.header.pipeline);
+        static_cast<unsigned long long>(value.header.launchId), index, static_cast<unsigned long long>(value.address),
+        value.memorySpace, value.accessMode, value.accessIndex, value.accessCount,
+        static_cast<unsigned long long>(rangeBytes), value.layoutKind, static_cast<unsigned long long>(value.header.pc),
+        value.header.siteId, static_cast<unsigned long long>(value.header.serialNo), value.header.pipeline);
 
     if (value.layoutKind == ACLSAN_MEM_LAYOUT_RANGE) {
         ASC_SAN_DEBUG("[cbdata] layout=range bytes=%llu", static_cast<unsigned long long>(value.layout.range.bytes));
@@ -166,13 +180,14 @@ void LogCallbackData(const DeviceMemoryAccessDataList& memory) noexcept
 void LogCallbackData(const AclsanDeviceSyncData& sync) noexcept
 {
     ASC_SAN_DEBUG(
-        "[cbdata] type=AclsanDeviceSyncData pc=0x%llx instrExecId=%llu serialNo=%llu launchId=%llu "
-        "blockId=%u blockType=%u phyCoreId=%u syncKind=%u action=%u scope=%u srcPipe=%u dstPipe=%u "
-        "mode=%u objectId=%llu",
-        static_cast<unsigned long long>(sync.header.pc), static_cast<unsigned long long>(sync.header.instrExecId),
-        static_cast<unsigned long long>(sync.header.serialNo), static_cast<unsigned long long>(sync.header.launchId),
-        sync.header.blockId, sync.header.blockType, sync.header.phyCoreId, sync.syncKind, sync.action, sync.scope,
-        sync.srcPipe, sync.dstPipe, sync.mode, static_cast<unsigned long long>(sync.objectId));
+        "[cbdata] deviceId=%u phyCoreId=%u blockId=%u blockType=%s  instrExecId=%llu launchId=%llu  "
+        "type=AclsanDeviceSyncData pc=0x%llx serialNo=%llu syncKind=%u action=%u scope=%u srcPipe=%u "
+        "dstPipe=%u mode=%u objectId=%llu",
+        sync.header.deviceId, sync.header.phyCoreId, sync.header.blockId, BlockTypeName(sync.header.blockType),
+        static_cast<unsigned long long>(sync.header.instrExecId), static_cast<unsigned long long>(sync.header.launchId),
+        static_cast<unsigned long long>(sync.header.pc), static_cast<unsigned long long>(sync.header.serialNo),
+        sync.syncKind, sync.action, sync.scope, sync.srcPipe, sync.dstPipe, sync.mode,
+        static_cast<unsigned long long>(sync.objectId));
 }
 
 } // namespace
@@ -181,14 +196,15 @@ void LogRawRecord(const ParsedTraceRecord& parsed) noexcept
 {
     const AclsanRawTraceRecord& record = parsed.record;
     ASC_SAN_DEBUG(
-        "[raw] type=AclsanRawTraceRecord blockId=%u blockType=%u phyCoreId=%u pc=0x%llx instrId=%llu "
-        "siteId=%u category=%u pipeline=%u args=[0x%llx,0x%llx,0x%llx,0x%llx,0x%llx] instrExecId=%llu",
-        parsed.blockId, parsed.blockType, parsed.phyCoreId, static_cast<unsigned long long>(record.pc),
-        static_cast<unsigned long long>(record.instrId), record.siteId, static_cast<uint32_t>(record.category),
-        record.pipeline, static_cast<unsigned long long>(record.args[0]),
+        "[raw] deviceId=%u phyCoreId=%u blockId=%u blockType=%s  instrExecId=%llu launchId=%llu  "
+        "type=AclsanRawTraceRecord pc=0x%llx instrId=%u siteId=%u category=%u pipeline=%u "
+        "args=[0x%llx,0x%llx,0x%llx,0x%llx,0x%llx]",
+        parsed.deviceId, parsed.phyCoreId, parsed.blockId, BlockTypeName(parsed.blockType),
+        static_cast<unsigned long long>(parsed.instrExecId), static_cast<unsigned long long>(parsed.launchId),
+        static_cast<unsigned long long>(record.pc), record.instrId, record.siteId,
+        static_cast<uint32_t>(record.category), record.pipeline, static_cast<unsigned long long>(record.args[0]),
         static_cast<unsigned long long>(record.args[1]), static_cast<unsigned long long>(record.args[2]),
-        static_cast<unsigned long long>(record.args[3]), static_cast<unsigned long long>(record.args[4]),
-        static_cast<unsigned long long>(parsed.instrExecId));
+        static_cast<unsigned long long>(record.args[3]), static_cast<unsigned long long>(record.args[4]));
 }
 
 void LogParamField(const aclsan::DeviceInstructionParamField& params) noexcept

@@ -6,10 +6,13 @@
 // INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 // See LICENSE in the root of the software repository for the full text of the License.
 
-#include "dbi_pipeline.h"
+#include "binary_instrumenter.h"
 
 #include <filesystem>
+#include <fstream>
 #include <iostream>
+#include <iterator>
+#include <vector>
 
 int main(int argc, char** argv)
 {
@@ -19,28 +22,33 @@ int main(int argc, char** argv)
         return 2;
     }
 
-    aclsan::DbiRequest request{};
-    request.inputKernel = argv[1];
-    request.outputKernel = argv[2];
-    request.arch = argv[3];
-    request.probeGroups = {aclsan::ProbeGroup::Mte2};
-    request.toolchainRoot = argv[4];
-    request.sourceRoot = argv[5];
-    request.workDirectory = argv[6];
-    request.cacheDirectory = argv[7];
-    request.keepTemp = true;
+    std::ifstream input(argv[1], std::ios::binary);
+    const std::vector<uint8_t> image{std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>()};
+    if (image.empty()) {
+        std::cerr << "input kernel is empty\n";
+        return 1;
+    }
+    aclsan::BinaryInstrumentationConfig config{};
+    config.arch = argv[3];
+    config.probeGroups = {aclsan::ProbeGroup::Mte2};
+    config.toolchainRoot = argv[4];
+    config.sourceRoot = argv[5];
+    config.workDirectory = argv[6];
+    config.cacheDirectory = argv[7];
+    config.keepTemp = true;
 
-    const auto result = aclsan::RunDbiPipeline(request);
-    if (!result.success) {
+    const auto result = aclsan::InstrumentBinary(config, image.data(), image.size());
+    if (result.status != aclsan::BinaryInstrumentationStatus::Instrumented) {
         std::cerr << result.stage << ": " << result.diagnostic << '\n';
         return 1;
     }
-    std::error_code error;
-    if (!std::filesystem::is_regular_file(result.patchedPath, error) ||
-        std::filesystem::file_size(result.patchedPath, error) == 0) {
-        std::cerr << "pipeline returned an empty patched output: " << result.patchedPath << '\n';
+    std::ofstream output(argv[2], std::ios::binary | std::ios::trunc);
+    output.write(reinterpret_cast<const char*>(result.binary.data()), result.binary.size());
+    if (!output.good()) {
+        std::cerr << "cannot write patched output: " << argv[2] << '\n';
         return 1;
     }
-    std::cout << result.patchedPath << '\n';
+    std::cout << "trace_argument_offset=" << result.traceArgumentOffset << '\n';
+    std::cout << argv[2] << '\n';
     return 0;
 }

@@ -16,7 +16,7 @@ output=$(mktemp)
 trap 'status=$?; if [[ ${status} -ne 0 ]]; then cat "${output}" >&2; fi; rm -f -- "${output}"' EXIT
 
 set +e
-bash "${demo_dir}/run.sh" padding_register_state >"${output}" 2>&1
+bash "${demo_dir}/examples/basic_func/padding_register_state/run.sh" >"${output}" 2>&1
 run_status=$?
 set -e
 if [[ ${run_status} -ne 0 ]]; then
@@ -25,15 +25,15 @@ if [[ ${run_status} -ne 0 ]]; then
 fi
 
 grep -F 'npu_check: handshake=ready tool=memcheck' "${output}"
-grep -E '\[raw\] type=AclsanRawTraceRecord .*instrId=392 .*args=\[0x1212,' "${output}"
-grep -E '\[raw\] type=AclsanRawTraceRecord .*instrId=392 .*args=\[0x3434,' "${output}"
-grep -F '[param] type=SetPaddingParamField value=0x1212' "${output}"
-grep -F '[param] type=SetPaddingParamField value=0x3434' "${output}"
+grep -E '\[raw\] type=AclsanRawTraceRecord .*instrId=392 .*args=\[0x12,' "${output}"
+grep -E '\[raw\] type=AclsanRawTraceRecord .*instrId=392 .*args=\[0x34,' "${output}"
+grep -F '[param] type=SetPaddingParamField value=0x12' "${output}"
+grep -F '[param] type=SetPaddingParamField value=0x34' "${output}"
 
 first_update=$(grep -m 1 -E \
-    '\[register\] action=update register=set_padding .*value=0x1212' "${output}")
+    '\[register\] action=update register=set_padding .*value=0x12' "${output}")
 second_update=$(grep -m 1 -E \
-    '\[register\] action=update register=set_padding .*value=0x3434' "${output}")
+    '\[register\] action=update register=set_padding .*value=0x34' "${output}")
 first_key=$(sed -E 's/.*launchId=([0-9]+) blockType=([0-9]+) blockId=([0-9]+).*/\1 \2 \3/' <<<"${first_update}")
 second_key=$(sed -E 's/.*launchId=([0-9]+) blockType=([0-9]+) blockId=([0-9]+).*/\1 \2 \3/' <<<"${second_update}")
 if [[ "${first_key}" != "${second_key}" ]]; then
@@ -49,12 +49,13 @@ if grep -E 'unsupported raw trace instrId=392' "${output}"; then
     printf 'SET_PADDING was treated as an unsupported callback record\n' >&2
     exit 1
 fi
+grep -F '[PASSED] basic_func/padding_register_state' "${output}"
 
 mapfile -t probe_objects < <(find "${demo_dir}/build/probe_cache" -mindepth 2 -maxdepth 2 -type f -name probe.o)
 if [[ ${#probe_objects[@]} -ne 1 ]]; then
     printf 'expected exactly one cached probe.o, got %d\n' "${#probe_objects[@]}" >&2
     exit 1
 fi
-cann_root=$(sed -n 's/^NPUCOMPUTE_CANN_ROOT:PATH=//p' "${demo_dir}/build/CMakeCache.txt")
-llvm_objdump=$(cd "${cann_root}/.." && pwd)/tools/bisheng_compiler/bin/llvm-objdump
+cann_home=$(sed -n 's/^ASCEND_HOME_PATH:PATH=//p' "${demo_dir}/build/CMakeCache.txt")
+llvm_objdump="${cann_home}/tools/bisheng_compiler/bin/llvm-objdump"
 "${llvm_objdump}" --syms "${probe_objects[0]}" | grep -F '__sanitizer_report_set_padding'
