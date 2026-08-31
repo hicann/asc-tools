@@ -28,6 +28,7 @@ typedef aclError (*aclrtResetDeviceFunc)(int32_t deviceId);
 typedef aclError (*aclrtCreateStreamFunc)(aclrtStream* stream);
 typedef aclError (*aclrtDestroyStreamFunc)(aclrtStream stream);
 typedef aclError (*aclrtMallocFunc)(void** devPtr, size_t size, aclrtMemMallocPolicy policy);
+typedef aclError (*aclrtMallocAlign32Func)(void** devPtr, size_t size, aclrtMemMallocPolicy policy);
 typedef aclError (*aclrtFreeFunc)(void* devPtr);
 typedef aclError (*aclrtMemcpyFunc)(void* dst, size_t destMax, const void* src, size_t count, aclrtMemcpyKind kind);
 typedef aclError (*aclrtMemsetFunc)(void* devPtr, size_t maxCount, int32_t value, size_t count);
@@ -86,6 +87,7 @@ typedef enum {
     ACL_RT_API_aclrtLaunchSIMTKernelWithHostArgs = 22,
     ACL_RT_API_aclrtLaunchKernelWithArgsArray = 23,
     ACL_RT_API_aclrtLaunchSIMTKernelWithArgsArray = 24,
+    ACL_RT_API_aclrtMallocAlign32 = 25,
     ACL_RT_API_MAX
 } aclrtApiId;
 
@@ -103,6 +105,7 @@ NPU_COMPUTE_DECLARE_REGISTRATION(AclrtResetDevice, aclrtResetDevice);
 NPU_COMPUTE_DECLARE_REGISTRATION(AclrtCreateStream, aclrtCreateStream);
 NPU_COMPUTE_DECLARE_REGISTRATION(AclrtDestroyStream, aclrtDestroyStream);
 NPU_COMPUTE_DECLARE_REGISTRATION(AclrtMalloc, aclrtMalloc);
+NPU_COMPUTE_DECLARE_REGISTRATION(AclrtMallocAlign32, aclrtMallocAlign32);
 NPU_COMPUTE_DECLARE_REGISTRATION(AclrtFree, aclrtFree);
 NPU_COMPUTE_DECLARE_REGISTRATION(AclrtMemcpy, aclrtMemcpy);
 NPU_COMPUTE_DECLARE_REGISTRATION(AclrtMemset, aclrtMemset);

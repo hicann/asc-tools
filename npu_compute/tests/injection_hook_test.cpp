@@ -26,6 +26,8 @@ namespace {
 
 int gOriginalMallocCalls = 0;
 int gReplacementMallocCalls = 0;
+int gOriginalMallocAlign32Calls = 0;
+int gReplacementMallocAlign32Calls = 0;
 int gReplacementFreeCalls = 0;
 int gReplacementMemcpyCalls = 0;
 int gReplacementMemsetCalls = 0;
@@ -46,6 +48,12 @@ int OriginalMalloc(void**, std::size_t, aclrtMemMallocPolicy)
 {
     ++gOriginalMallocCalls;
     return 17;
+}
+
+int OriginalMallocAlign32(void**, std::size_t, aclrtMemMallocPolicy)
+{
+    ++gOriginalMallocAlign32Calls;
+    return 18;
 }
 
 int OriginalFree(void*) { return 0; }
@@ -85,6 +93,14 @@ int ReplacementMalloc(void** pointer, std::size_t size, aclrtMemMallocPolicy pol
 {
     ++gReplacementMallocCalls;
     const auto original = reinterpret_cast<aclrtMallocFunc>(acltoolGetOriginalRuntimeApi(ACL_RT_API_aclrtMalloc));
+    return original == nullptr ? -1 : original(pointer, size, policy);
+}
+
+int ReplacementMallocAlign32(void** pointer, std::size_t size, aclrtMemMallocPolicy policy)
+{
+    ++gReplacementMallocAlign32Calls;
+    const auto original =
+        reinterpret_cast<aclrtMallocAlign32Func>(acltoolGetOriginalRuntimeApi(ACL_RT_API_aclrtMallocAlign32));
     return original == nullptr ? -1 : original(pointer, size, policy);
 }
 
@@ -185,9 +201,11 @@ int main()
     static_assert(ACL_RT_API_aclrtLaunchSIMTKernelWithHostArgs == 22);
     static_assert(ACL_RT_API_aclrtLaunchKernelWithArgsArray == 23);
     static_assert(ACL_RT_API_aclrtLaunchSIMTKernelWithArgsArray == 24);
-    static_assert(ACL_RT_API_MAX == 25);
+    static_assert(ACL_RT_API_aclrtMallocAlign32 == 25);
+    static_assert(ACL_RT_API_MAX == 26);
 
     CHECK(RuntimeStubSetOriginFunction("aclrtMalloc", &OriginalMalloc) == 0);
+    CHECK(RuntimeStubSetOriginFunction("aclrtMallocAlign32", &OriginalMallocAlign32) == 0);
     CHECK(RuntimeStubSetOriginFunction("aclrtFree", &OriginalFree) == 0);
     CHECK(RuntimeStubSetOriginFunction("aclrtMemcpy", &OriginalMemcpy) == 0);
     CHECK(RuntimeStubSetOriginFunction("aclrtMemset", &OriginalMemset) == 0);
@@ -199,6 +217,9 @@ int main()
     CHECK(RuntimeStubSetOriginFunction("aclrtGetDeviceInfo", &OriginalGetDeviceInfo) == 0);
 
     CHECK(reinterpret_cast<aclrtMallocFunc>(acltoolGetOriginalRuntimeApi(ACL_RT_API_aclrtMalloc)) == &OriginalMalloc);
+    CHECK(
+        reinterpret_cast<aclrtMallocAlign32Func>(acltoolGetOriginalRuntimeApi(ACL_RT_API_aclrtMallocAlign32)) ==
+        &OriginalMallocAlign32);
     CHECK(
         reinterpret_cast<aclrtGetDeviceFunc>(acltoolGetOriginalRuntimeApi(ACL_RT_API_aclrtGetDevice)) ==
         &OriginalGetDevice);
@@ -221,8 +242,11 @@ int main()
 
     void* pointer = nullptr;
     CHECK(aclrtMalloc(&pointer, 1, ACL_MEM_MALLOC_HUGE_FIRST) == 17);
+    CHECK(aclrtMallocAlign32(&pointer, 1, ACL_MEM_MALLOC_HUGE_FIRST) == 18);
     CHECK(gOriginalMallocCalls == 1);
+    CHECK(gOriginalMallocAlign32Calls == 1);
     CHECK(gReplacementMallocCalls == 0);
+    CHECK(gReplacementMallocAlign32Calls == 0);
     CHECK(aclrtSetDevice(0) == 0);
     CHECK(aclrtSynchronizeStream(nullptr) == 0);
     int32_t deviceId = -1;
@@ -231,6 +255,7 @@ int main()
     CHECK(gOriginalGetDeviceCalls == 1);
 
     CHECK(acltoolRegisterAclrtMallocCallbacks(nullptr) == 0);
+    CHECK(acltoolRegisterAclrtMallocAlign32Callbacks(nullptr) == 0);
     CHECK(acltoolRegisterAclrtFreeCallbacks(nullptr) == 0);
     CHECK(acltoolRegisterAclrtMemcpyCallbacks(nullptr) == 0);
     CHECK(acltoolRegisterAclrtMemsetCallbacks(nullptr) == 0);
@@ -245,6 +270,7 @@ int main()
     CHECK(acltoolRegisterAclrtGetDeviceInfoCallbacks(nullptr) == 0);
 
     CHECK(acltoolRegisterAclrtMallocCallbacks(&ReplacementMalloc) == 0);
+    CHECK(acltoolRegisterAclrtMallocAlign32Callbacks(&ReplacementMallocAlign32) == 0);
     CHECK(acltoolRegisterAclrtFreeCallbacks(&ReplacementFree) == 0);
     CHECK(acltoolRegisterAclrtMemcpyCallbacks(&ReplacementMemcpy) == 0);
     CHECK(acltoolRegisterAclrtMemsetCallbacks(&ReplacementMemset) == 0);
@@ -258,6 +284,7 @@ int main()
     CHECK(acltoolRegisterAclrtGetSocNameCallbacks(&ReplacementGetSocName) == 0);
     CHECK(acltoolRegisterAclrtGetDeviceInfoCallbacks(&ReplacementGetDeviceInfo) == 0);
     CHECK(aclrtMalloc(&pointer, 1, ACL_MEM_MALLOC_HUGE_FIRST) == 17);
+    CHECK(aclrtMallocAlign32(&pointer, 1, ACL_MEM_MALLOC_HUGE_FIRST) == 18);
     CHECK(aclrtFree(pointer) == 21);
     CHECK(aclrtMemcpy(nullptr, 0, nullptr, 0, ACL_MEMCPY_HOST_TO_HOST) == 22);
     CHECK(aclrtMemset(nullptr, 0, 0, 0) == 23);
@@ -284,7 +311,9 @@ int main()
     CHECK(aclrtGetDeviceInfo(0, ACL_DEV_ATTR_CUBE_CORE_NUM, &coreCount) == ACL_SUCCESS);
     CHECK(coreCount == 18);
     CHECK(gReplacementMallocCalls == 1);
+    CHECK(gReplacementMallocAlign32Calls == 1);
     CHECK(gOriginalMallocCalls == 2);
+    CHECK(gOriginalMallocAlign32Calls == 2);
     CHECK(gReplacementFreeCalls == 1);
     CHECK(gReplacementMemcpyCalls == 1);
     CHECK(gReplacementMemsetCalls == 1);
@@ -301,9 +330,13 @@ int main()
 
     CHECK(acltoolClearCallback(ACL_RT_API_aclrtMalloc) == 0);
     CHECK(acltoolClearCallback(ACL_RT_API_aclrtMalloc) == 0);
+    CHECK(acltoolClearCallback(ACL_RT_API_aclrtMallocAlign32) == 0);
     CHECK(aclrtMalloc(&pointer, 1, ACL_MEM_MALLOC_HUGE_FIRST) == 17);
+    CHECK(aclrtMallocAlign32(&pointer, 1, ACL_MEM_MALLOC_HUGE_FIRST) == 18);
     CHECK(gOriginalMallocCalls == 3);
+    CHECK(gOriginalMallocAlign32Calls == 3);
     CHECK(gReplacementMallocCalls == 1);
+    CHECK(gReplacementMallocAlign32Calls == 1);
     CHECK(acltoolClearCallback(ACL_RT_API_aclrtGetFuncBySymbol) == 0);
     CHECK(acltoolClearCallback(ACL_RT_API_aclrtBinaryUnLoad) == 0);
     CHECK(acltoolClearCallback(ACL_RT_API_aclrtSynchronizeStreamWithTimeout) == 0);

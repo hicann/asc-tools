@@ -127,7 +127,8 @@ static_assert(ACLPTI_RUNTIME_CBID_aclrtBinaryUnLoad == 15);
 static_assert(ACLPTI_RUNTIME_CBID_aclrtLaunchSIMTKernelWithHostArgs == 16);
 static_assert(ACLPTI_RUNTIME_CBID_aclrtLaunchKernelWithArgsArray == 17);
 static_assert(ACLPTI_RUNTIME_CBID_aclrtLaunchSIMTKernelWithArgsArray == 18);
-static_assert(ACLPTI_RUNTIME_CBID_SIZE == 19);
+static_assert(ACLPTI_RUNTIME_CBID_aclrtMallocAlign32 == 19);
+static_assert(ACLPTI_RUNTIME_CBID_SIZE == 20);
 
 int main()
 {

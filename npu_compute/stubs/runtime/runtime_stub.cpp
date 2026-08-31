@@ -24,7 +24,7 @@
 
 namespace {
 
-constexpr std::size_t kRuntimeApiCount = 25;
+constexpr std::size_t kRuntimeApiCount = 26;
 
 struct KernelArgs {
     uint8_t* value;
@@ -273,6 +273,7 @@ std::array<RuntimeEntry, kRuntimeApiCount> g_runtimeEntries = {{
      ToGenericFunction(&RealAclrtLaunchKernelWithArgsArray)},
     {"aclrtLaunchSIMTKernelWithArgsArray", ToGenericFunction(&RealAclrtLaunchSIMTKernelWithArgsArray),
      ToGenericFunction(&RealAclrtLaunchSIMTKernelWithArgsArray)},
+    {"aclrtMallocAlign32", ToGenericFunction(&RealAclrtMalloc), ToGenericFunction(&RealAclrtMalloc)},
 }};
 
 std::mutex g_runtimeMutex;
@@ -427,6 +428,12 @@ extern "C" aclError aclrtMalloc(void** devPtr, std::size_t size, aclrtMemMallocP
         CallCurrent<aclError (*)(void**, std::size_t, aclrtMemMallocPolicy)>("aclrtMalloc", devPtr, size, policy);
     EmitTestCallbackEvent(ACLPTI_RUNTIME_CBID_aclrtMalloc, ACLPTI_API_EXIT, result);
     return result;
+}
+
+extern "C" aclError aclrtMallocAlign32(void** devPtr, std::size_t size, aclrtMemMallocPolicy policy)
+{
+    return CallCurrent<aclError (*)(void**, std::size_t, aclrtMemMallocPolicy)>(
+        "aclrtMallocAlign32", devPtr, size, policy);
 }
 
 extern "C" aclError aclrtFree(void* devPtr) { return CallCurrent<aclError (*)(void*)>("aclrtFree", devPtr); }

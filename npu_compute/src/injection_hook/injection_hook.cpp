@@ -53,6 +53,7 @@ constexpr const char* kRuntimeApiNames[ACL_RT_API_MAX] = {
     "aclrtLaunchSIMTKernelWithHostArgs",
     "aclrtLaunchKernelWithArgsArray",
     "aclrtLaunchSIMTKernelWithArgsArray",
+    "aclrtMallocAlign32",
 };
 
 std::mutex g_initMutex;
@@ -240,6 +241,19 @@ extern "C" aclError aclrtMallocHook(void** devPtr, size_t size, aclrtMemMallocPo
     }
     const aclError result = callback(devPtr, size, policy);
     LogHookResult("aclrtMalloc", id, result);
+    return result;
+}
+
+extern "C" aclError aclrtMallocAlign32Hook(void** devPtr, size_t size, aclrtMemMallocPolicy policy)
+{
+    constexpr aclrtApiId id = ACL_RT_API_aclrtMallocAlign32;
+    const auto callback = GetDispatchTarget<aclrtMallocAlign32Func>(id);
+    if (callback == nullptr) {
+        LogMissingCallback("aclrtMallocAlign32", id);
+        return ACL_ERROR_UNINITIALIZE;
+    }
+    const aclError result = callback(devPtr, size, policy);
+    LogHookResult("aclrtMallocAlign32", id, result);
     return result;
 }
 
@@ -533,6 +547,7 @@ aclApiTable g_aclApiTable = {
         FunctionToAddress(&aclrtLaunchSIMTKernelWithHostArgsHook),
         FunctionToAddress(&aclrtLaunchKernelWithArgsArrayHook),
         FunctionToAddress(&aclrtLaunchSIMTKernelWithArgsArrayHook),
+        FunctionToAddress(&aclrtMallocAlign32Hook),
     },
     {},
     {},
@@ -670,6 +685,11 @@ extern "C" NPU_COMPUTE_EXPORT int32_t acltoolRegisterAclrtDestroyStreamCallbacks
 extern "C" NPU_COMPUTE_EXPORT int32_t acltoolRegisterAclrtMallocCallbacks(aclrtMallocFunc callback)
 {
     return RegisterCallback(ACL_RT_API_aclrtMalloc, FunctionToAddress(callback));
+}
+
+extern "C" NPU_COMPUTE_EXPORT int32_t acltoolRegisterAclrtMallocAlign32Callbacks(aclrtMallocAlign32Func callback)
+{
+    return RegisterCallback(ACL_RT_API_aclrtMallocAlign32, FunctionToAddress(callback));
 }
 
 extern "C" NPU_COMPUTE_EXPORT int32_t acltoolRegisterAclrtFreeCallbacks(aclrtFreeFunc callback)

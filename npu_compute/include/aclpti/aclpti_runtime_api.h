@@ -41,7 +41,8 @@ typedef enum aclptiRuntimeCallbackId {
     ACLPTI_RUNTIME_CBID_aclrtLaunchSIMTKernelWithHostArgs = 16,
     ACLPTI_RUNTIME_CBID_aclrtLaunchKernelWithArgsArray = 17,
     ACLPTI_RUNTIME_CBID_aclrtLaunchSIMTKernelWithArgsArray = 18,
-    ACLPTI_RUNTIME_CBID_SIZE = 19,
+    ACLPTI_RUNTIME_CBID_aclrtMallocAlign32 = 19,
+    ACLPTI_RUNTIME_CBID_SIZE = 20,
 } aclptiRuntimeCallbackId;
 
 typedef struct aclptiAclrtLaunchKernelWithHostArgsParams {
@@ -112,6 +113,12 @@ typedef struct aclptiAclrtMallocParams {
     size_t size;
     aclrtMemMallocPolicy policy;
 } aclptiAclrtMallocParams;
+
+typedef struct aclptiAclrtMallocAlign32Params {
+    void** devPtr;
+    size_t size;
+    aclrtMemMallocPolicy policy;
+} aclptiAclrtMallocAlign32Params;
 
 typedef struct aclptiAclrtMemsetParams {
     void* devPtr;

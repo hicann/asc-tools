@@ -272,6 +272,26 @@ aclError AclrtMallocReplacement(void** devPtr, std::size_t size, aclrtMemMallocP
     });
 }
 
+aclError AclrtMallocAlign32Replacement(void** devPtr, std::size_t size, aclrtMemMallocPolicy policy)
+{
+    aclptiAclrtMallocAlign32Params params{devPtr, size, policy};
+    return InvokeRuntimeCallback(ACLPTI_RUNTIME_CBID_aclrtMallocAlign32, params, [&params]() -> aclError {
+        const auto mallocFunction =
+            reinterpret_cast<aclrtMallocAlign32Func>(acltoolGetOriginalRuntimeApi(ACL_RT_API_aclrtMallocAlign32));
+        if (mallocFunction == nullptr) {
+            return MissingOriginalFunction("aclrtMallocAlign32");
+        }
+        const aclError result = mallocFunction(params.devPtr, params.size, params.policy);
+        if (result != ACL_SUCCESS) {
+            LogOriginalFailure("aclrtMallocAlign32", result);
+            return result;
+        }
+        const aclptiResult mirrorStatus =
+            profiling::GetReplayRuntime().MirrorMalloc(params.devPtr, params.size, params.policy);
+        return MapProfilingResult(mirrorStatus);
+    });
+}
+
 aclError AclrtMemsetReplacement(void* devPtr, std::size_t maxCount, std::int32_t value, std::size_t count)
 {
     aclptiAclrtMemsetParams params{devPtr, maxCount, value, count};
@@ -432,6 +452,9 @@ bool RegisterRuntimeApiReplacements()
             &AclrtBinaryGetFunctionReplacement) &&
         RegisterRuntimeReplacement(
             ACL_RT_API_aclrtMalloc, acltoolRegisterAclrtMallocCallbacks, &AclrtMallocReplacement) &&
+        RegisterRuntimeReplacement(
+            ACL_RT_API_aclrtMallocAlign32, acltoolRegisterAclrtMallocAlign32Callbacks,
+            &AclrtMallocAlign32Replacement) &&
         RegisterRuntimeReplacement(
             ACL_RT_API_aclrtMemset, acltoolRegisterAclrtMemsetCallbacks, &AclrtMemsetReplacement) &&
         RegisterRuntimeReplacement(ACL_RT_API_aclrtFree, acltoolRegisterAclrtFreeCallbacks, &AclrtFreeReplacement) &&

@@ -226,6 +226,7 @@ extern "C" aclError aclrtGetDevice(std::int32_t* deviceId)
 int main()
 {
     CHECK(RuntimeStubSetOriginFunction("aclrtMalloc", &RealMalloc) == 0);
+    CHECK(RuntimeStubSetOriginFunction("aclrtMallocAlign32", &RealMalloc) == 0);
     CHECK(RuntimeStubSetOriginFunction("aclrtFree", &RealFree) == 0);
     CHECK(RuntimeStubSetOriginFunction("aclrtMemcpy", &RealMemcpy) == 0);
     CHECK(RuntimeStubSetOriginFunction("aclrtMemset", &RealMemset) == 0);
@@ -241,6 +242,9 @@ int main()
     CHECK(g_registered_callback != nullptr);
     CHECK(g_callback_type == 0);
     CHECK(reinterpret_cast<aclrtMallocFunc>(acltoolGetOriginalRuntimeApi(ACL_RT_API_aclrtMalloc)) == &RealMalloc);
+    CHECK(
+        reinterpret_cast<aclrtMallocAlign32Func>(acltoolGetOriginalRuntimeApi(ACL_RT_API_aclrtMallocAlign32)) ==
+        &RealMalloc);
     CHECK(reinterpret_cast<aclrtFreeFunc>(acltoolGetOriginalRuntimeApi(ACL_RT_API_aclrtFree)) == &RealFree);
     CHECK(reinterpret_cast<aclrtMemcpyFunc>(acltoolGetOriginalRuntimeApi(ACL_RT_API_aclrtMemcpy)) == &RealMemcpy);
     CHECK(reinterpret_cast<aclrtMemsetFunc>(acltoolGetOriginalRuntimeApi(ACL_RT_API_aclrtMemset)) == &RealMemset);
@@ -272,6 +276,12 @@ int main()
     const char* sections[] = {"PipeUtilization", "ResourceConflictRatio"};
     aclptiRangeProfilerSetConfigParams config{sections, std::size(sections)};
     CHECK(aclptiRangeProfilerSetConfig(&config) == ACLPTI_SUCCESS);
+
+    void* alignedAllocation = nullptr;
+    CHECK(aclrtMallocAlign32(&alignedAllocation, 1, ACL_MEM_MALLOC_HUGE_FIRST) == 0);
+    uint8_t alignedValue = 3;
+    CHECK(aclrtMemcpy(alignedAllocation, 1, &alignedValue, 1, ACL_MEMCPY_HOST_TO_DEVICE) == 0);
+    CHECK(aclrtFree(alignedAllocation) == 0);
 
     void* allocation = nullptr;
     CHECK(aclrtMalloc(&allocation, 1, ACL_MEM_MALLOC_HUGE_FIRST) == 0);
@@ -338,7 +348,7 @@ int main()
     CHECK(g_start_calls == starts_before_host_args);
     CHECK(g_sync_calls == syncs_before_host_args);
     CHECK(aclrtFree(allocation) == 0);
-    CHECK(g_malloc_calls == 2);
-    CHECK(g_free_calls == 2);
+    CHECK(g_malloc_calls == 4);
+    CHECK(g_free_calls == 4);
     return 0;
 }
