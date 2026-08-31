@@ -17,13 +17,35 @@ if [[ "${task_name}" =~ x86_compile_ubuntu24 ]] && [ "${TARGET_BRANCH}" == maste
 else
     echo "api-check=continue" >> "${ATOMGIT_OUTPUT}"
 fi
-if [[ "${task_name}" == *ubuntu24* || "${task_name}" == *24* ]]; then
-    sudo update-alternatives --set gcc /usr/bin/gcc-14
+if [[ "${task_name}" == *ubuntu24* ]]; then
+    if [ "${TARGET_BRANCH}" == "master" ]; then
+        sudo update-alternatives --set gcc /usr/bin/gcc-15
+    else
+        sudo update-alternatives --set gcc /usr/bin/gcc-14
+    fi
 else
     if [[ -f "/opt/rh/devtoolset-7/enable" ]]; then
         echo "source devtoolset"
         source /opt/rh/devtoolset-7/enable
     fi
+fi
+if gcc --version | head -n1 | grep -q "15\."; then
+    rm -rf /home/jenkins/opensource/lib_cache
+    if [ -d /home/jenkins/opensource/gcc15 ]; then
+        rm -rf /home/jenkins/opensource/gcc15/lib_cache/abseil-cpp
+        rm -rf /home/jenkins/opensource/gcc15/lib_cache/device/abseil-cpp
+        ln -s /home/jenkins/opensource/gcc15/lib_cache/ /home/jenkins/opensource/lib_cache
+    elif [ -d /home/jenkins/opensource/gcc15x86 ]; then
+        rm -rf /home/jenkins/opensource/gcc15x86/lib_cache/abseil-cpp
+        rm -rf /home/jenkins/opensource/gcc15x86/lib_cache/device/abseil-cpp
+        ln -s /home/jenkins/opensource/gcc15x86/lib_cache/ /home/jenkins/opensource/lib_cache
+    fi
+elif gcc --version | head -n1 | grep -q "14\."; then
+    gcc --version
+else
+    gcc --version
+    rm -rf /home/jenkins/opensource/lib_cache
+    ln -s /home/jenkins/opensource/ubuntu20/lib_cache /home/jenkins/opensource/lib_cache
 fi
 gcc --version
 source /home/jenkins/Ascend/cann/bin/setenv.bash
