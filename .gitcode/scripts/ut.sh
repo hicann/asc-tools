@@ -11,7 +11,7 @@
 set -x
 cd ${WORKSPACE}
 echo $(grep -E "^VERSION_ID=" /etc/os-release | cut -d'"' -f2)
-if [ "${target_branch}" == "master" ]; then
+if [ "${target_branch}" == "master" ] || [ "${target_branch}" == "experimental"]; then
     sudo update-alternatives --set gcc /usr/bin/gcc-15
 else
     sudo update-alternatives --set gcc /usr/bin/gcc-14

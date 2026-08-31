@@ -18,7 +18,7 @@ else
     echo "api-check=continue" >> "${ATOMGIT_OUTPUT}"
 fi
 if [[ "${task_name}" == *ubuntu24* ]]; then
-    if [ "${TARGET_BRANCH}" == "master" ]; then
+    if [ "${TARGET_BRANCH}" == "master" ] || [ "${TARGET_BRANCH}" == "experimental"]; then
         sudo update-alternatives --set gcc /usr/bin/gcc-15
     else
         sudo update-alternatives --set gcc /usr/bin/gcc-14
