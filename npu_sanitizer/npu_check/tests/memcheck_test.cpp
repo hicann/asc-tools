@@ -18,9 +18,9 @@
 namespace npu::sanitizer {
 namespace {
 
-using aclsan::cann::NpusanMemcheckPattern;
 using aclsan::cann::NpusanReportAccessMode;
 using aclsan::cann::NpusanReportDistanceKind;
+using aclsan::cann::NpusanReportPattern;
 using aclsan::cann::ReportRenderStatus;
 
 template <typename T>
@@ -86,7 +86,7 @@ TEST(MemcheckTest, ReportsOutOfBoundsReadAtSynchronization)
 
     ASSERT_EQ(reports.size(), 1U);
     const auto& report = reports.front();
-    EXPECT_EQ(report.common.pattern, static_cast<std::uint32_t>(NpusanMemcheckPattern::INVALID_ACCESS));
+    EXPECT_EQ(report.common.pattern, NpusanReportPattern::MEMCHECK_INVALID_ACCESS);
     EXPECT_EQ(report.access.accessMode, NpusanReportAccessMode::READ);
     EXPECT_EQ(report.common.exec.pc, invalidRead.header.pc);
     EXPECT_TRUE(report.common.exec.file.empty());
@@ -154,7 +154,7 @@ TEST(MemcheckTest, ExpandsBlockRepeatAndAffineLayouts)
     checker.QueueDeviceMemoryAccess(blockRepeat);
     auto reports = checker.OnSynchronization();
     ASSERT_EQ(reports.size(), 1U);
-    EXPECT_EQ(reports.front().common.pattern, static_cast<std::uint32_t>(NpusanMemcheckPattern::INVALID_ACCESS));
+    EXPECT_EQ(reports.front().common.pattern, NpusanReportPattern::MEMCHECK_INVALID_ACCESS);
 
     auto ndAffine = Access(DeviceSourceKind::MTE3, 0x2001f8, 1);
     ndAffine.layoutKind = ACLSAN_MEM_LAYOUT_ND_AFFINE;
@@ -165,7 +165,7 @@ TEST(MemcheckTest, ExpandsBlockRepeatAndAffineLayouts)
     checker.QueueDeviceMemoryAccess(ndAffine);
     reports = checker.OnSynchronization();
     ASSERT_EQ(reports.size(), 1U);
-    EXPECT_EQ(reports.front().common.pattern, static_cast<std::uint32_t>(NpusanMemcheckPattern::INVALID_ACCESS));
+    EXPECT_EQ(reports.front().common.pattern, NpusanReportPattern::MEMCHECK_INVALID_ACCESS);
 }
 
 TEST(MemcheckTest, UsesByteStrideForSparseGmAccesses)
@@ -222,7 +222,7 @@ TEST(MemcheckTest, ProcessesMoreThanFourRangesFromOneInstruction)
     const auto reports = checker.OnSynchronization();
 
     ASSERT_EQ(reports.size(), 1U);
-    EXPECT_EQ(reports.front().common.pattern, static_cast<std::uint32_t>(NpusanMemcheckPattern::INVALID_ACCESS));
+    EXPECT_EQ(reports.front().common.pattern, NpusanReportPattern::MEMCHECK_INVALID_ACCESS);
     EXPECT_EQ(reports.front().access.address, kBase + (kAccessCount - 1) * kStride);
     EXPECT_EQ(reports.front().access.accessBytes, kAccessBytes);
     EXPECT_EQ(reports.front().common.exec.instrExecId, kInstrExecId);
@@ -491,7 +491,7 @@ TEST(MemcheckTest, HonorsStrictModeAndFreedRanges)
     const auto diagnostics = checker.OnSynchronization();
 
     ASSERT_EQ(diagnostics.size(), 1U);
-    EXPECT_EQ(diagnostics.front().common.pattern, static_cast<std::uint32_t>(NpusanMemcheckPattern::USE_AFTER_FREE));
+    EXPECT_EQ(diagnostics.front().common.pattern, NpusanReportPattern::MEMCHECK_USE_AFTER_FREE);
     EXPECT_EQ(diagnostics.front().allocation.state, 2U);
 }
 
@@ -505,7 +505,7 @@ TEST(MemcheckTest, UsesDeviceSpecificAllocationRanges)
     const auto reports = checker.OnSynchronization();
 
     ASSERT_EQ(reports.size(), 1U);
-    EXPECT_EQ(reports.front().common.pattern, static_cast<std::uint32_t>(NpusanMemcheckPattern::INVALID_ACCESS));
+    EXPECT_EQ(reports.front().common.pattern, NpusanReportPattern::MEMCHECK_INVALID_ACCESS);
     EXPECT_EQ(reports.front().common.exec.deviceId, 0U);
 }
 

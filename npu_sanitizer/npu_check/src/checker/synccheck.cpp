@@ -206,7 +206,7 @@ Synccheck::Report Synccheck::BuildMismatchBase(
     Report report{};
     report.common.tool = ReportTool::SYNCCHECK;
     report.common.severity = ReportSeverity::ERROR;
-    report.common.pattern = static_cast<std::uint32_t>(NpusanSynccheckPattern::PAIRING_MISMATCH);
+    report.common.pattern = NpusanReportPattern::SYNCCHECK_PAIRING_MISMATCH;
     report.common.flags = kNpusanReportCommonHasExecContext;
     report.primitiveKind = trigger.syncKind == ACLSAN_DEVICE_SYNC_KIND_SET_WAIT_FLAG ?
                                NpusanSyncPrimitiveKind::SET_WAIT_FLAG :

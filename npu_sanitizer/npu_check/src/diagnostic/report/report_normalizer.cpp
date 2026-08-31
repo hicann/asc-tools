@@ -32,17 +32,19 @@ const char* DistanceDirectionName(NpusanReportDistanceKind kind)
     return "from";
 }
 
-const char* MemcheckPatternName(std::uint32_t pattern) { return PatternName(ReportTool::MEMCHECK, pattern); }
+const char* MemcheckPatternName(NpusanReportPattern pattern) { return PatternName(ReportTool::MEMCHECK, pattern); }
 
-const char* InitcheckPatternName(std::uint32_t pattern) { return PatternName(ReportTool::INITCHECK, pattern); }
+const char* InitcheckPatternName(NpusanReportPattern pattern) { return PatternName(ReportTool::INITCHECK, pattern); }
 
-const char* RacecheckPatternName(std::uint32_t pattern) { return PatternName(ReportTool::RACECHECK, pattern); }
+const char* RacecheckPatternName(NpusanReportPattern pattern) { return PatternName(ReportTool::RACECHECK, pattern); }
 
-const char* SoccheckPatternName(std::uint32_t pattern) { return PatternName(ReportTool::SOCCHECK, pattern); }
+const char* SoccheckPatternName(NpusanReportPattern pattern) { return PatternName(ReportTool::SOCCHECK, pattern); }
 
-bool ValidateReportCommon(const NpusanReportCommon& common, ReportTool expectedTool, std::uint32_t envelopePattern)
+bool ValidateReportCommon(
+    const NpusanReportCommon& common, ReportTool expectedTool, NpusanReportPattern envelopePattern)
 {
-    if (common.tool != expectedTool || common.pattern != envelopePattern || common.stackCount > kNpusanReportStackMax) {
+    if (common.tool != expectedTool || common.pattern != envelopePattern ||
+        FindPatternDescriptor(expectedTool, common.pattern) == nullptr || common.stackCount > kNpusanReportStackMax) {
         return false;
     }
 
@@ -78,10 +80,10 @@ ReportRecord ToReportRecord(const NpusanMemcheckReport& report)
     fields["apiErrorName"] = report.apiErrorName;
     fields["apiErrorCode"] = std::to_string(report.apiErrorCode);
     fields["apiErrorMessage"] = report.apiErrorMessage;
-    if (report.common.pattern == static_cast<std::uint32_t>(NpusanMemcheckPattern::INVALID_ACCESS)) {
+    if (report.common.pattern == NpusanReportPattern::MEMCHECK_INVALID_ACCESS) {
         fields["base"] = Hex(report.nearestAllocation.base);
         fields["bytes"] = std::to_string(report.nearestAllocation.bytes);
-    } else if (report.common.pattern == static_cast<std::uint32_t>(NpusanMemcheckPattern::LEAK)) {
+    } else if (report.common.pattern == NpusanReportPattern::MEMCHECK_LEAK) {
         fields["space"] = MemorySpaceName(report.allocation.memorySpace);
     }
     return ReportRecord{
@@ -105,7 +107,7 @@ ReportRecord ToReportRecord(const NpusanInitcheckReport& report)
     fields["initializedBytes"] = std::to_string(report.initializedBytes);
     fields["unusedBytes"] = std::to_string(report.unusedBytes);
     fields["unusedPercent"] = std::to_string(report.unusedPercent);
-    if (report.common.pattern == static_cast<std::uint32_t>(NpusanInitcheckPattern::UNUSED_MEMORY)) {
+    if (report.common.pattern == NpusanReportPattern::INITCHECK_UNUSED_MEMORY) {
         fields["space"] = MemorySpaceName(report.allocation.memorySpace);
     }
     return ReportRecord{
@@ -150,9 +152,9 @@ ReportRecord ToReportRecord(const NpusanRacecheckReport& report)
     if (const ReportFrame* frame = FirstStructuredFrame(report.common, ReportStackRole::RELATED_ACCESS_B)) {
         PutFrameLocationFields(*frame, "second", &fields);
     }
-    if (report.common.pattern == static_cast<std::uint32_t>(NpusanRacecheckPattern::CROSS_PIPE_RACE)) {
+    if (report.common.pattern == NpusanReportPattern::RACECHECK_CROSS_PIPE_RACE) {
         fields["coreId"] = FormatCoreId(report.first.exec.phyCoreId);
-    } else if (report.common.pattern == static_cast<std::uint32_t>(NpusanRacecheckPattern::INVALID_REMOTE_ACCESS)) {
+    } else if (report.common.pattern == NpusanReportPattern::RACECHECK_INVALID_REMOTE_ACCESS) {
         fields["location"] = "at " + fields["firstLocation"];
         fields["coreId"] = FormatCoreId(report.first.exec.phyCoreId);
         fields["blockType"] = FormatBlockType(report.first.exec.blockType);
@@ -218,7 +220,7 @@ bool ValidateToolSpecific(const Report&)
 
 bool ValidateToolSpecific(const NpusanRacecheckReport& report)
 {
-    return report.common.pattern != static_cast<std::uint32_t>(NpusanRacecheckPattern::CROSS_PIPE_RACE) ||
+    return report.common.pattern != NpusanReportPattern::RACECHECK_CROSS_PIPE_RACE ||
            report.first.exec.phyCoreId == report.second.exec.phyCoreId;
 }
 

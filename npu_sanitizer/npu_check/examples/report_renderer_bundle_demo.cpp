@@ -39,7 +39,7 @@ NpusanMemcheckReport MakeInvalidAccessReport()
     report.common.timestampNs = 1786759200123456789ULL;
     report.common.tool = ReportTool::MEMCHECK;
     report.common.severity = ReportSeverity::ERROR;
-    report.common.pattern = static_cast<std::uint32_t>(NpusanMemcheckPattern::INVALID_ACCESS);
+    report.common.pattern = NpusanReportPattern::MEMCHECK_INVALID_ACCESS;
     report.common.exec.launchId = 41;
     report.common.exec.binaryId = 7;
     report.common.exec.functionId = 3;
@@ -78,7 +78,7 @@ NpusanMemcheckReport MakeApiErrorReport()
     report.common.timestampNs = 1786759200123456890ULL;
     report.common.tool = ReportTool::MEMCHECK;
     report.common.severity = ReportSeverity::ERROR;
-    report.common.pattern = static_cast<std::uint32_t>(NpusanMemcheckPattern::API_ERROR);
+    report.common.pattern = NpusanReportPattern::MEMCHECK_API_ERROR;
     report.apiName = "aclrtMemcpyAsync";
     report.apiErrorName = "ACL_ERROR_RT_PARAM_INVALID";
     report.apiErrorCode = 107002;
@@ -97,7 +97,7 @@ NpusanInitcheckReport MakeInitcheckReport()
     report.common.timestampNs = 1786759200123457000ULL;
     report.common.tool = ReportTool::INITCHECK;
     report.common.severity = ReportSeverity::WARNING;
-    report.common.pattern = static_cast<std::uint32_t>(NpusanInitcheckPattern::PARTIAL_UNINITIALIZED_READ);
+    report.common.pattern = NpusanReportPattern::INITCHECK_PARTIAL_UNINITIALIZED_READ;
     report.common.exec.pc = 0x5128;
     report.common.exec.deviceId = 0;
     report.common.exec.phyCoreId = 3;
@@ -127,7 +127,7 @@ NpusanRacecheckReport MakeRacecheckReport()
     report.common.timestampNs = 1786759200123457100ULL;
     report.common.tool = ReportTool::RACECHECK;
     report.common.severity = ReportSeverity::WARNING;
-    report.common.pattern = static_cast<std::uint32_t>(NpusanRacecheckPattern::HAZARD_RAW);
+    report.common.pattern = NpusanReportPattern::RACECHECK_HAZARD_RAW;
     report.hazardCount = 1;
 
     report.first.exec.phyCoreId = 2;
@@ -180,8 +180,8 @@ NpusanReportExecContext MakeSyncExec(
 }
 
 NpusanSynccheckReport MakeSynccheckBase(
-    std::uint64_t reportId, ReportSeverity severity, NpusanSynccheckPattern pattern,
-    NpusanSyncPrimitiveKind primitiveKind, const char* triggerOperation, const NpusanReportExecContext& triggerExec)
+    std::uint64_t reportId, ReportSeverity severity, NpusanReportPattern pattern, NpusanSyncPrimitiveKind primitiveKind,
+    const char* triggerOperation, const NpusanReportExecContext& triggerExec)
 {
     NpusanSynccheckReport report{};
     report.common.reportId = reportId;
@@ -189,7 +189,7 @@ NpusanSynccheckReport MakeSynccheckBase(
     report.common.timestampNs = 1786759200123457200ULL + reportId;
     report.common.tool = ReportTool::SYNCCHECK;
     report.common.severity = severity;
-    report.common.pattern = static_cast<std::uint32_t>(pattern);
+    report.common.pattern = pattern;
     report.common.flags = kNpusanReportCommonHasExecContext;
     report.common.exec = triggerExec;
     report.primitiveKind = primitiveKind;
@@ -210,8 +210,8 @@ NpusanSynccheckReport MakeBarrierDivergenceReport()
     const NpusanReportExecContext trigger =
         MakeSyncExec(2, 17, 0, "SIMT", 0x4010, "BlockReduce", 0x40, "/workspace/reduce.cpp", 91);
     NpusanSynccheckReport report = MakeSynccheckBase(
-        4001, ReportSeverity::ERROR, NpusanSynccheckPattern::INTRA_CORE_DIVERGENT, NpusanSyncPrimitiveKind::BARRIER,
-        "SYNC_THREADS", trigger);
+        4001, ReportSeverity::ERROR, NpusanReportPattern::SYNCCHECK_INTRA_CORE_DIVERGENT,
+        NpusanSyncPrimitiveKind::BARRIER, "SYNC_THREADS", trigger);
     report.detailKind = NpusanSyncDetailKind::BARRIER;
     report.detail = NpusanSyncBarrierError{"Divergent execution entities in block", "block", 0x0000ffff, 0xffffffff, 0};
     report.common.stacks[0].frames.push_back(MakeFrame(0x3f20, 0x120, "ReduceKernel", "/workspace/reduce.cpp", 137));
@@ -225,8 +225,8 @@ NpusanSynccheckReport MakeDuplicateSetReport()
     const NpusanReportExecContext related =
         MakeSyncExec(1, 4, 1, "PIPE_S", 0x5010, "SignalMte", 0x10, "/workspace/pipeline.cpp", 48);
     NpusanSynccheckReport report = MakeSynccheckBase(
-        4002, ReportSeverity::ERROR, NpusanSynccheckPattern::PAIRING_MISMATCH, NpusanSyncPrimitiveKind::SET_WAIT_FLAG,
-        "SET_FLAG", trigger);
+        4002, ReportSeverity::ERROR, NpusanReportPattern::SYNCCHECK_PAIRING_MISMATCH,
+        NpusanSyncPrimitiveKind::SET_WAIT_FLAG, "SET_FLAG", trigger);
     report.detailKind = NpusanSyncDetailKind::PAIRING;
     report.hasRelatedPoint = true;
     report.relatedPoint.operation = "SET_FLAG";
@@ -250,8 +250,8 @@ NpusanSynccheckReport MakeUnmatchedRlsReport()
     const NpusanReportExecContext trigger =
         MakeSyncExec(3, 8, 3, "PIPE_MTE3", 0x6080, "ReleaseBuffer", 0x80, "/workspace/buffer.cpp", 80);
     NpusanSynccheckReport report = MakeSynccheckBase(
-        4003, ReportSeverity::ERROR, NpusanSynccheckPattern::PAIRING_MISMATCH, NpusanSyncPrimitiveKind::GET_RLS_BUF,
-        "RLS_BUF", trigger);
+        4003, ReportSeverity::ERROR, NpusanReportPattern::SYNCCHECK_PAIRING_MISMATCH,
+        NpusanSyncPrimitiveKind::GET_RLS_BUF, "RLS_BUF", trigger);
     report.detailKind = NpusanSyncDetailKind::PAIRING;
     report.hasRelatedPoint = true;
     report.relatedPoint.operation = "GET_BUF";
@@ -268,8 +268,8 @@ NpusanSynccheckReport MakeUnconsumedGetReport()
     const NpusanReportExecContext trigger =
         MakeSyncExec(3, 8, 3, "PIPE_MTE3", 0x6040, "AcquireBuffer", 0x20, "/workspace/buffer.cpp", 70);
     NpusanSynccheckReport report = MakeSynccheckBase(
-        4004, ReportSeverity::WARNING, NpusanSynccheckPattern::PAIRING_MISMATCH, NpusanSyncPrimitiveKind::GET_RLS_BUF,
-        "GET_BUF", trigger);
+        4004, ReportSeverity::WARNING, NpusanReportPattern::SYNCCHECK_PAIRING_MISMATCH,
+        NpusanSyncPrimitiveKind::GET_RLS_BUF, "GET_BUF", trigger);
     report.detailKind = NpusanSyncDetailKind::PAIRING;
     report.hasRelatedPoint = true;
     report.relatedPoint.operation = "RLS_BUF";
@@ -285,7 +285,7 @@ NpusanSynccheckReport MakeSequenceMismatchReport()
     const NpusanReportExecContext trigger =
         MakeSyncExec(5, 2, 5, "MMA", 0x7080, "MmaStage", 0x80, "/workspace/gemm.cpp", 122);
     NpusanSynccheckReport report = MakeSynccheckBase(
-        4005, ReportSeverity::ERROR, NpusanSynccheckPattern::INSTRUCTION_SEQUENCE_MISMATCH,
+        4005, ReportSeverity::ERROR, NpusanReportPattern::SYNCCHECK_INSTRUCTION_SEQUENCE_MISMATCH,
         NpusanSyncPrimitiveKind::INSTRUCTION_SEQUENCE, "wgmma.mma_async.m64n64k16", trigger);
     report.detailKind = NpusanSyncDetailKind::SEQUENCE;
     report.hasRelatedPoint = true;
@@ -300,7 +300,7 @@ NpusanSynccheckReport MakeDeadlockReport()
     const NpusanReportExecContext trigger =
         MakeSyncExec(6, 1, 0, "SIMT", 0x8040, "BarrierWait", 0x40, "/workspace/barrier.cpp", 64);
     NpusanSynccheckReport report = MakeSynccheckBase(
-        4006, ReportSeverity::ERROR, NpusanSynccheckPattern::DEADLOCK, NpusanSyncPrimitiveKind::SYNC_OBJECT,
+        4006, ReportSeverity::ERROR, NpusanReportPattern::SYNCCHECK_DEADLOCK, NpusanSyncPrimitiveKind::SYNC_OBJECT,
         "BARRIER_WAIT", trigger);
     report.detailKind = NpusanSyncDetailKind::OBJECT;
     report.hasRelatedPoint = true;
@@ -318,7 +318,7 @@ NpusanSoccheckReport MakeSoccheckReport()
     report.common.timestampNs = 1786759200123457300ULL;
     report.common.tool = ReportTool::SOCCHECK;
     report.common.severity = ReportSeverity::FATAL;
-    report.common.pattern = static_cast<std::uint32_t>(NpusanSoccheckPattern::REGISTER_MISMATCH);
+    report.common.pattern = NpusanReportPattern::SOCCHECK_REGISTER_MISMATCH;
     report.common.exec.function = "RestoreControlState";
     report.common.exec.offset = 0x18;
     report.common.exec.file = "/workspace/control_state.cpp";

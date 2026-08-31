@@ -107,44 +107,47 @@ enum class NpusanReportDistanceKind {
     AFTER = 3,
 };
 
-enum class NpusanMemcheckPattern {
-    INVALID_ACCESS = 1,
-    MISALIGNED_ACCESS = 2,
-    USE_AFTER_FREE = 3,
-    USE_BEFORE_ALLOC = 4,
-    INVALID_FREE = 5,
-    DOUBLE_FREE = 6,
-    LEAK = 7,
-    API_ERROR = 8,
-};
+enum class NpusanReportPattern : std::uint32_t {
+    UNKNOWN = 0,
 
-enum class NpusanInitcheckPattern {
-    UNINITIALIZED_READ = 1,
-    PARTIAL_UNINITIALIZED_READ = 2,
-    UNUSED_MEMORY = 3,
-    API_READ_UNINITIALIZED = 4,
-};
+    MEMCHECK_INVALID_ACCESS = 0x0101,
+    MEMCHECK_MISALIGNED_ACCESS = 0x0102,
+    MEMCHECK_USE_AFTER_FREE = 0x0103,
+    MEMCHECK_USE_BEFORE_ALLOC = 0x0104,
+    MEMCHECK_INVALID_FREE = 0x0105,
+    MEMCHECK_DOUBLE_FREE = 0x0106,
+    MEMCHECK_LEAK = 0x0107,
+    MEMCHECK_API_ERROR = 0x0108,
 
-enum class NpusanRacecheckPattern {
-    ANALYSIS = 1,
-    HAZARD_RAW = 2,
-    HAZARD_WAR = 3,
-    HAZARD_WAW = 4,
-    ATOMIC_RACE = 5,
-    CROSS_PIPE_RACE = 6,
-    INTER_CORE_RACE = 7,
-    INVALID_REMOTE_ACCESS = 8,
-};
+    INITCHECK_UNINITIALIZED_READ = 0x0201,
+    INITCHECK_PARTIAL_UNINITIALIZED_READ = 0x0202,
+    INITCHECK_UNUSED_MEMORY = 0x0203,
+    INITCHECK_API_READ_UNINITIALIZED = 0x0204,
 
-enum class NpusanSynccheckPattern {
-    INTRA_CORE_DIVERGENT = 1,
-    INTER_CORE_DIVERGENT = 2,
-    INVALID_ARGUMENT = 3,
-    PAIRING_MISMATCH = 4,
-    PARTICIPANT_MISMATCH = 5,
-    DEADLOCK = 6,
-    OBJECT_NOT_INITIALIZED = 7,
-    INSTRUCTION_SEQUENCE_MISMATCH = 8,
+    RACECHECK_ANALYSIS = 0x0301,
+    RACECHECK_HAZARD_RAW = 0x0302,
+    RACECHECK_HAZARD_WAR = 0x0303,
+    RACECHECK_HAZARD_WAW = 0x0304,
+    RACECHECK_ATOMIC_RACE = 0x0305,
+    RACECHECK_CROSS_PIPE_RACE = 0x0306,
+    RACECHECK_INTER_CORE_RACE = 0x0307,
+    RACECHECK_INVALID_REMOTE_ACCESS = 0x0308,
+
+    SYNCCHECK_INTRA_CORE_DIVERGENT = 0x0401,
+    SYNCCHECK_INTER_CORE_DIVERGENT = 0x0402,
+    SYNCCHECK_INVALID_ARGUMENT = 0x0403,
+    SYNCCHECK_PAIRING_MISMATCH = 0x0404,
+    SYNCCHECK_PARTICIPANT_MISMATCH = 0x0405,
+    SYNCCHECK_DEADLOCK = 0x0406,
+    SYNCCHECK_OBJECT_NOT_INITIALIZED = 0x0407,
+    SYNCCHECK_INSTRUCTION_SEQUENCE_MISMATCH = 0x0408,
+
+    SOCCHECK_UNINITIALIZED_STATE_READ = 0x0501,
+    SOCCHECK_REGISTER_MISMATCH = 0x0502,
+    SOCCHECK_ILLEGAL_STATE_TRANSITION = 0x0503,
+    SOCCHECK_STATE_NOT_RESTORED = 0x0504,
+    SOCCHECK_CROSS_CORE_STATE_INCONSISTENT = 0x0505,
+    SOCCHECK_SCOPE_VIOLATION = 0x0506,
 };
 
 enum class NpusanSyncMismatchReason {
@@ -174,15 +177,6 @@ enum class NpusanSyncPrimitiveKind {
     GET_RLS_BUF = 3,
     INSTRUCTION_SEQUENCE = 4,
     SYNC_OBJECT = 5,
-};
-
-enum class NpusanSoccheckPattern {
-    UNINITIALIZED_STATE_READ = 1,
-    REGISTER_MISMATCH = 2,
-    ILLEGAL_STATE_TRANSITION = 3,
-    STATE_NOT_RESTORED = 4,
-    CROSS_CORE_STATE_INCONSISTENT = 5,
-    SCOPE_VIOLATION = 6,
 };
 
 struct NpusanReportExecContext {
@@ -219,8 +213,8 @@ struct NpusanReportCommon {
 
     ReportTool tool = ReportTool::MEMCHECK;
     ReportSeverity severity = ReportSeverity::ERROR;
-    std::uint32_t pattern = 0; // Underlying value of the tool-specific pattern enum selected by tool.
-    std::uint32_t flags = 0;   // NpusanReportCommon flags bit mask.
+    NpusanReportPattern pattern = NpusanReportPattern::UNKNOWN;
+    std::uint32_t flags = 0; // NpusanReportCommon flags bit mask.
 
     NpusanReportExecContext exec;
     std::uint32_t stackCount = 0; // Number of active entries in the compact stacks prefix.
@@ -390,7 +384,7 @@ struct NpusanSoccheckReport {
 class NpusanReportRecord {
 public:
     ReportTool tool = ReportTool::MEMCHECK;
-    std::uint32_t pattern = 0; // Underlying value of the tool-specific pattern enum selected by tool.
+    NpusanReportPattern pattern = NpusanReportPattern::UNKNOWN;
 
     using Payload = std::variant<
         std::monostate, const NpusanMemcheckReport*, const NpusanInitcheckReport*, const NpusanRacecheckReport*,

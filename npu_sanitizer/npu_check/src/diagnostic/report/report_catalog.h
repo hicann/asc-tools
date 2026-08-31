@@ -17,17 +17,16 @@
 namespace aclsan::cann::detail {
 
 struct PatternDescriptor {
-    // Underlying value of the tool-specific pattern enum selected by ReportTemplateKey::tool.
-    std::uint32_t value;
+    NpusanReportPattern value;
     ReportTemplate reportTemplate;
 };
 
 using PatternCatalog = std::map<ReportTemplateKey, PatternDescriptor>;
 
 const PatternCatalog& GetPatternCatalog();
-const PatternDescriptor* FindPatternDescriptor(ReportTool tool, std::uint32_t pattern);
+const PatternDescriptor* FindPatternDescriptor(ReportTool tool, NpusanReportPattern pattern);
 const PatternDescriptor* FindPatternDescriptor(const ReportTemplateKey& key);
-const char* PatternName(ReportTool tool, std::uint32_t pattern);
+const char* PatternName(ReportTool tool, NpusanReportPattern pattern);
 
 const char* ToolName(ReportTool tool);
 bool ParseToolName(const std::string& text, ReportTool* tool);

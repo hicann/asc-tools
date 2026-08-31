@@ -222,43 +222,44 @@ bool ValidateSynccheckReport(const NpusanSynccheckReport& report)
         }
     }
 
-    const auto pattern = static_cast<NpusanSynccheckPattern>(report.common.pattern);
+    const NpusanReportPattern pattern = report.common.pattern;
     switch (pattern) {
-        case NpusanSynccheckPattern::INTRA_CORE_DIVERGENT:
+        case NpusanReportPattern::SYNCCHECK_INTRA_CORE_DIVERGENT:
             return report.detailKind == NpusanSyncDetailKind::BARRIER && !report.hasRelatedPoint &&
                    report.primitiveKind == NpusanSyncPrimitiveKind::BARRIER &&
                    std::holds_alternative<NpusanSyncBarrierError>(report.detail);
-        case NpusanSynccheckPattern::INTER_CORE_DIVERGENT:
-        case NpusanSynccheckPattern::PARTICIPANT_MISMATCH:
+        case NpusanReportPattern::SYNCCHECK_INTER_CORE_DIVERGENT:
+        case NpusanReportPattern::SYNCCHECK_PARTICIPANT_MISMATCH:
             return report.detailKind == NpusanSyncDetailKind::BARRIER &&
                    report.primitiveKind == NpusanSyncPrimitiveKind::BARRIER &&
                    std::holds_alternative<NpusanSyncBarrierError>(report.detail) &&
                    (!report.hasRelatedPoint || IsActualPoint(report.relatedPoint) ||
                     IsExpectedPoint(report.relatedPoint));
-        case NpusanSynccheckPattern::INVALID_ARGUMENT:
-        case NpusanSynccheckPattern::OBJECT_NOT_INITIALIZED:
+        case NpusanReportPattern::SYNCCHECK_INVALID_ARGUMENT:
+        case NpusanReportPattern::SYNCCHECK_OBJECT_NOT_INITIALIZED:
             return report.detailKind == NpusanSyncDetailKind::OBJECT && !report.hasRelatedPoint &&
                    IsValidPrimitiveKind(report.primitiveKind) &&
                    std::holds_alternative<NpusanSyncObjectError>(report.detail);
-        case NpusanSynccheckPattern::PAIRING_MISMATCH: {
+        case NpusanReportPattern::SYNCCHECK_PAIRING_MISMATCH: {
             if (report.detailKind != NpusanSyncDetailKind::PAIRING ||
                 !std::holds_alternative<NpusanSyncPairingError>(report.detail)) {
                 return false;
             }
             return ValidatePairingReport(report, std::get<NpusanSyncPairingError>(report.detail));
         }
-        case NpusanSynccheckPattern::DEADLOCK:
+        case NpusanReportPattern::SYNCCHECK_DEADLOCK:
             return report.detailKind == NpusanSyncDetailKind::OBJECT && IsValidPrimitiveKind(report.primitiveKind) &&
                    std::holds_alternative<NpusanSyncObjectError>(report.detail) &&
                    (!report.hasRelatedPoint || IsActualPoint(report.relatedPoint) ||
                     IsExpectedPoint(report.relatedPoint));
-        case NpusanSynccheckPattern::INSTRUCTION_SEQUENCE_MISMATCH:
+        case NpusanReportPattern::SYNCCHECK_INSTRUCTION_SEQUENCE_MISMATCH:
             return report.detailKind == NpusanSyncDetailKind::SEQUENCE && report.hasRelatedPoint &&
                    report.primitiveKind == NpusanSyncPrimitiveKind::INSTRUCTION_SEQUENCE &&
                    std::holds_alternative<NpusanSyncSequenceError>(report.detail) &&
                    (IsActualPoint(report.relatedPoint) || IsExpectedPoint(report.relatedPoint));
+        default:
+            return false;
     }
-    return false;
 }
 
 std::string FormatPairKey(const NpusanSyncPairKey& key)

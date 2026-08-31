@@ -21,13 +21,13 @@
 namespace npu::sanitizer {
 namespace {
 
-using aclsan::cann::NpusanMemcheckPattern;
 using aclsan::cann::NpusanMemcheckReport;
 using aclsan::cann::NpusanReportAccessMode;
 using aclsan::cann::NpusanReportAllocation;
 using aclsan::cann::NpusanReportDistanceKind;
 using aclsan::cann::NpusanReportExecContext;
 using aclsan::cann::NpusanReportMemorySpace;
+using aclsan::cann::NpusanReportPattern;
 using aclsan::cann::ReportSeverity;
 using aclsan::cann::ReportTool;
 
@@ -332,9 +332,8 @@ std::vector<NpusanMemcheckReport> Memcheck::CheckAccess(
     report.common.severity = ReportSeverity::ERROR;
     report.common.flags = aclsan::cann::kNpusanReportCommonHasExecContext;
     report.common.exec = ToExecContext(data);
-    report.common.pattern = static_cast<std::uint32_t>(
-        range.status == RangeStatus::USE_AFTER_FREE ? NpusanMemcheckPattern::USE_AFTER_FREE :
-                                                      NpusanMemcheckPattern::INVALID_ACCESS);
+    report.common.pattern = range.status == RangeStatus::USE_AFTER_FREE ? NpusanReportPattern::MEMCHECK_USE_AFTER_FREE :
+                                                                          NpusanReportPattern::MEMCHECK_INVALID_ACCESS;
 
     report.access.memorySpace = NpusanReportMemorySpace::GM;
     report.access.accessMode = accessMode;
