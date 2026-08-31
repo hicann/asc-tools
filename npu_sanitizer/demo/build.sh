@@ -34,10 +34,7 @@ for artifact in \
     "${bin_dir}/libacl_san.so" \
     "${bin_dir}/libacl_tool_injection.so" \
     "${bin_dir}/libnpu_check.so" \
-    "${bin_dir}/npu_check" \
-    "${build_dir}/dbi_runtime_sources/probes/sync.cpp" \
-    "${build_dir}/dbi_runtime_sources/trace_record.h" \
-    "${build_dir}/dbi_runtime_sources/trace_buffer_abi.h"; do
+    "${bin_dir}/npu_check"; do
     if [[ ! -f "${artifact}" ]]; then
         printf 'missing demo artifact: %s\n' "${artifact}" >&2
         exit 1

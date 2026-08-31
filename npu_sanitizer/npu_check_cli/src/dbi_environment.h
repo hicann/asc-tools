@@ -26,7 +26,6 @@ struct DbiSettings {
     std::string probeCacheDir;
     bool strict = true;
     bool keepTemp = false;
-    std::vector<std::string> compileOptions;
 };
 
 EnvironmentEntries BuildDbiEnvironment(const DbiSettings& settings);

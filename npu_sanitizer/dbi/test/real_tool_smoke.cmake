@@ -13,7 +13,6 @@ execute_process(
     "${OUTPUT_KERNEL}"
     "${ARCH}"
     "${TOOLCHAIN_ROOT}"
-    "${SOURCE_ROOT}"
     "${WORK_DIRECTORY}"
     "${CACHE_DIRECTORY}"
   RESULT_VARIABLE smoke_status

@@ -28,9 +28,9 @@ bash npu_sanitizer/demo/examples/synccheck/run_all.sh
 诊断信息；只要对应 `verify.py`、summary 和会话校验通过，runner 就返回 0 并输出
 `example verification passed: synccheck/<用例名>`。
 
-公共 runner 根据 `ASCEND_HOME_PATH` 加载 CANN 环境，并通过 `NPU_CHECK_DBI_ARCH`、
-`NPU_CHECK_DBI_TOOLCHAIN_ROOT` 和 `NPU_CHECK_DBI_SOURCE_ROOT` 控制在线 DBI 的架构、工具链和
-probe 源码路径。单独或批量执行用例时，都可在命令前覆盖这些环境变量。
+公共 runner 根据 `ASCEND_HOME_PATH` 加载 CANN 环境，并通过 `NPU_CHECK_DBI_ARCH` 和
+`NPU_CHECK_DBI_TOOLCHAIN_ROOT` 控制在线 DBI 的公共架构和工具链。单独或批量执行用例时，
+都可在命令前覆盖这些环境变量。
 
 单独运行目标冒烟用例目录下的 `run.sh`：
 

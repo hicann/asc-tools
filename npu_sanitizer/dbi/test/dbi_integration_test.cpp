@@ -41,6 +41,13 @@ for arg in "$@"; do printf ' <%s>' "$arg" >> "$DBI_FAKE_LOG"; done
 printf '\n' >> "$DBI_FAKE_LOG"
 if [ "$name" = llvm-objdump ]; then
   case "$2" in
+    *group.o)
+      for symbol in $(sed -n 's/.*void \(__sanitizer_report_[A-Za-z0-9_]*\)(.*/\1/p' "$(dirname "$2")"/src/*.cpp); do
+        if [ "$symbol" != "$DBI_FAKE_DROP_SYMBOL" ]; then
+          printf '00000000 w F .text.probe 00000010 %s\n' "$symbol"
+        fi
+      done
+      ;;
     *probe.o) printf '00000000 w F .text.probe 00000010 __sanitizer_report_probe\n' ;;
     *) printf '00000000 g F .text.kernel 00000010 kernel_main\n' ;;
   esac
@@ -77,11 +84,6 @@ TEST(DbiIntegrationTest, CompilesLinksAndPatchesSelectedProbeSet)
     for (const char* name : {"bisheng", "bisheng-tune", "ld.lld", "llvm-objdump"}) {
         InstallFakeTool(toolBin / name);
     }
-    WriteFile(root / "toolchain/x86_64-linux/asc/include/kernel_operator.h", "// marker\n");
-    WriteFile(
-        root / "toolchain/x86_64-linux/ascendc/include/highlevel_api/kernel_tiling/kernel_tiling.h", "// marker\n");
-    WriteFile(root / "sources/probes/mte2.cpp", "// mte2 source\n");
-    WriteFile(root / "sources/probes/scalar.cpp", "// scalar source\n");
     WriteFile(root / "input.o", "kernel\n");
     WriteFile(root / "commands.log", "");
     ASSERT_EQ(setenv("DBI_FAKE_LOG", (root / "commands.log").c_str(), 1), 0);
@@ -89,15 +91,12 @@ TEST(DbiIntegrationTest, CompilesLinksAndPatchesSelectedProbeSet)
     DbiRequest request{};
     request.inputKernel = (root / "input.o").string();
     request.outputKernel = (root / "patched.o").string();
-    request.arch = "dav-c220";
-    request.traceArgumentOffset = 24;
+    request.arch = "dav-3510";
     request.probeGroups = {ProbeGroup::Mte2};
     request.toolchainRoot = (root / "toolchain").string();
-    request.sourceRoot = (root / "sources").string();
     request.workDirectory = (root / "work").string();
     request.cacheDirectory = (root / "cache").string();
     request.keepTemp = true;
-    request.extraCompilerArgs = {"-g"};
 
     const DbiResult result = RunDbiPipeline(request);
     EXPECT_TRUE(result.success) << result.stage << ": " << result.diagnostic;
@@ -113,27 +112,13 @@ TEST(DbiIntegrationTest, CompilesLinksAndPatchesSelectedProbeSet)
 
     const std::string commands = ReadFile(root / "commands.log");
     EXPECT_NE(commands.find("bisheng <-xcce>"), std::string::npos) << commands;
-    EXPECT_NE(commands.find("<--cce-aicore-arch=dav-c220>"), std::string::npos) << commands;
-    EXPECT_NE(commands.find("<-DTILING_KEY_VAR=0>"), std::string::npos) << commands;
-    EXPECT_NE(commands.find("<-g>"), std::string::npos) << commands;
-    EXPECT_NE(commands.find("<-I> <" + (root / "toolchain/x86_64-linux/asc").string() + ">"), std::string::npos)
-        << commands;
-    EXPECT_NE(commands.find("<-I> <" + (root / "toolchain/x86_64-linux/asc/include").string() + ">"), std::string::npos)
-        << commands;
-    EXPECT_NE(
-        commands.find("<-I> <" + (root / "toolchain/x86_64-linux/asc/include/basic_api").string() + ">"),
-        std::string::npos)
-        << commands;
-    EXPECT_NE(
-        commands.find("<-I> <" + (root / "toolchain/x86_64-linux/ascendc/include/highlevel_api").string() + ">"),
-        std::string::npos)
-        << commands;
-    EXPECT_NE(commands.find("<-I> <" + (root / "sources").string() + ">"), std::string::npos) << commands;
     EXPECT_NE(commands.find("ld.lld <-r>"), std::string::npos) << commands;
+    EXPECT_NE(commands.find("generated-mte2.cpp"), std::string::npos) << commands;
+    EXPECT_NE(commands.find("generated-scalar.cpp"), std::string::npos) << commands;
     EXPECT_NE(commands.find("llvm-objdump <--syms>"), std::string::npos) << commands;
     EXPECT_NE(commands.find("<-execute-probe>"), std::string::npos) << commands;
     EXPECT_NE(commands.find("bisheng-tune <--action=instru-probe>"), std::string::npos) << commands;
-    EXPECT_NE(commands.find("<--tune-argsize=24>"), std::string::npos) << commands;
+    EXPECT_EQ(commands.find("--tune-argsize="), std::string::npos) << commands;
     EXPECT_NE(commands.find("<--dbi-config="), std::string::npos) << commands;
     EXPECT_EQ(CountOccurrences(commands, "bisheng <-xcce>"), 2U) << commands;
     EXPECT_EQ(CountOccurrences(commands, "ld.lld <-r>"), 1U) << commands;
@@ -150,11 +135,6 @@ TEST(DbiIntegrationTest, FailedProbeLinkDoesNotPublishPartialCacheArtifact)
     for (const char* name : {"bisheng", "bisheng-tune", "ld.lld", "llvm-objdump"}) {
         InstallFakeTool(toolBin / name);
     }
-    WriteFile(root / "toolchain/x86_64-linux/asc/include/kernel_operator.h", "// marker\n");
-    WriteFile(
-        root / "toolchain/x86_64-linux/ascendc/include/highlevel_api/kernel_tiling/kernel_tiling.h", "// marker\n");
-    WriteFile(root / "sources/probes/mte2.cpp", "// mte2 source\n");
-    WriteFile(root / "sources/probes/scalar.cpp", "// scalar source\n");
     WriteFile(root / "input.o", "kernel\n");
     WriteFile(root / "commands.log", "");
     ASSERT_EQ(setenv("DBI_FAKE_LOG", (root / "commands.log").c_str(), 1), 0);
@@ -163,11 +143,9 @@ TEST(DbiIntegrationTest, FailedProbeLinkDoesNotPublishPartialCacheArtifact)
     DbiRequest request{};
     request.inputKernel = (root / "input.o").string();
     request.outputKernel = (root / "first-patched.o").string();
-    request.arch = "dav-c220";
-    request.traceArgumentOffset = 24;
+    request.arch = "dav-3510";
     request.probeGroups = {ProbeGroup::Mte2};
     request.toolchainRoot = (root / "toolchain").string();
-    request.sourceRoot = (root / "sources").string();
     request.workDirectory = (root / "first-work").string();
     request.cacheDirectory = (root / "cache").string();
 
@@ -195,11 +173,6 @@ TEST(DbiIntegrationTest, DoesNotAcceptStalePatchedOutputWhenTuneCreatesNothing)
     for (const char* name : {"bisheng", "bisheng-tune", "ld.lld", "llvm-objdump"}) {
         InstallFakeTool(toolBin / name);
     }
-    WriteFile(root / "toolchain/x86_64-linux/asc/include/kernel_operator.h", "// marker\n");
-    WriteFile(
-        root / "toolchain/x86_64-linux/ascendc/include/highlevel_api/kernel_tiling/kernel_tiling.h", "// marker\n");
-    WriteFile(root / "sources/probes/mte2.cpp", "// mte2 source\n");
-    WriteFile(root / "sources/probes/scalar.cpp", "// scalar source\n");
     WriteFile(root / "input.o", "kernel\n");
     WriteFile(root / "patched.o", "stale\n");
     WriteFile(root / "commands.log", "");
@@ -209,11 +182,9 @@ TEST(DbiIntegrationTest, DoesNotAcceptStalePatchedOutputWhenTuneCreatesNothing)
     DbiRequest request{};
     request.inputKernel = (root / "input.o").string();
     request.outputKernel = (root / "patched.o").string();
-    request.arch = "dav-c220";
-    request.traceArgumentOffset = 24;
+    request.arch = "dav-3510";
     request.probeGroups = {ProbeGroup::Mte2};
     request.toolchainRoot = (root / "toolchain").string();
-    request.sourceRoot = (root / "sources").string();
     request.workDirectory = (root / "work").string();
     request.cacheDirectory = (root / "cache").string();
 
@@ -223,6 +194,148 @@ TEST(DbiIntegrationTest, DoesNotAcceptStalePatchedOutputWhenTuneCreatesNothing)
     EXPECT_EQ(ReadFile(request.outputKernel), "stale\n");
 
     unsetenv("DBI_FAKE_SKIP_OUTPUT");
+    unsetenv("DBI_FAKE_LOG");
+    std::filesystem::remove_all(root);
+}
+
+TEST(DbiIntegrationTest, RebuildsNonemptyCorruptAggregateCacheAsOneUnit)
+{
+    const auto root = std::filesystem::temp_directory_path() / "dbi_pipeline_corrupt_aggregate";
+    std::filesystem::remove_all(root);
+    const auto toolBin = root / "toolchain/tools/bisheng_compiler/bin";
+    for (const char* name : {"bisheng", "bisheng-tune", "ld.lld", "llvm-objdump"}) {
+        InstallFakeTool(toolBin / name);
+    }
+    WriteFile(root / "input.o", "kernel\n");
+    WriteFile(root / "commands.log", "");
+    ASSERT_EQ(setenv("DBI_FAKE_LOG", (root / "commands.log").c_str(), 1), 0);
+
+    DbiRequest request{};
+    request.inputKernel = (root / "input.o").string();
+    request.outputKernel = (root / "first-patched.o").string();
+    request.arch = "dav-3510";
+    request.probeGroups = {ProbeGroup::Mte2};
+    request.toolchainRoot = (root / "toolchain").string();
+    request.workDirectory = (root / "first-work").string();
+    request.cacheDirectory = (root / "cache").string();
+
+    const DbiResult first = RunDbiPipeline(request);
+    ASSERT_TRUE(first.success) << first.stage << ": " << first.diagnostic;
+    struct stat cacheStatus {};
+    ASSERT_EQ(stat((root / "cache").c_str(), &cacheStatus), 0);
+    EXPECT_EQ(cacheStatus.st_mode & 0777, 0700);
+    std::filesystem::path artifactDirectory;
+    for (const auto& entry : std::filesystem::directory_iterator(root / "cache/aggregates")) {
+        if (entry.is_directory()) {
+            artifactDirectory = entry.path();
+            break;
+        }
+    }
+    ASSERT_FALSE(artifactDirectory.empty());
+    struct stat artifactStatus {};
+    ASSERT_EQ(stat(artifactDirectory.c_str(), &artifactStatus), 0);
+    EXPECT_EQ(artifactStatus.st_mode & 0777, 0700);
+    ASSERT_TRUE(std::filesystem::is_regular_file(artifactDirectory / "manifest"));
+    WriteFile(artifactDirectory / "ctrl.bin", "nonempty-corruption\n");
+
+    request.outputKernel = (root / "second-patched.o").string();
+    request.workDirectory = (root / "second-work").string();
+    const DbiResult second = RunDbiPipeline(request);
+    EXPECT_TRUE(second.success) << second.stage << ": " << second.diagnostic;
+    EXPECT_EQ(CountOccurrences(ReadFile(root / "commands.log"), "ld.lld <-r>"), 2U);
+    EXPECT_EQ(CountOccurrences(ReadFile(root / "commands.log"), "bisheng <-xcce>"), 2U);
+
+    unsetenv("DBI_FAKE_LOG");
+    std::filesystem::remove_all(root);
+}
+
+TEST(DbiIntegrationTest, RejectsSymlinkCacheRoot)
+{
+    const auto root = std::filesystem::temp_directory_path() / "dbi_pipeline_symlink_cache";
+    std::filesystem::remove_all(root);
+    const auto toolBin = root / "toolchain/tools/bisheng_compiler/bin";
+    for (const char* name : {"bisheng", "bisheng-tune", "ld.lld", "llvm-objdump"}) {
+        InstallFakeTool(toolBin / name);
+    }
+    WriteFile(root / "input.o", "kernel\n");
+    std::filesystem::create_directories(root / "redirected-cache");
+    std::filesystem::create_directory_symlink(root / "redirected-cache", root / "cache-link");
+
+    DbiRequest request{};
+    request.inputKernel = (root / "input.o").string();
+    request.outputKernel = (root / "patched.o").string();
+    request.arch = "dav-3510";
+    request.probeGroups = {ProbeGroup::Mte2};
+    request.toolchainRoot = (root / "toolchain").string();
+    request.workDirectory = (root / "work").string();
+    request.cacheDirectory = (root / "cache-link").string();
+
+    const DbiResult result = RunDbiPipeline(request);
+    EXPECT_FALSE(result.success);
+    EXPECT_EQ(result.stage, "cache-directory");
+    EXPECT_TRUE(std::filesystem::is_empty(root / "redirected-cache"));
+    std::filesystem::remove_all(root);
+}
+
+TEST(DbiIntegrationTest, RejectsUnsupportedGeneratedProbeArchitecture)
+{
+    const auto root = std::filesystem::temp_directory_path() / "dbi_pipeline_unsupported_arch";
+    std::filesystem::remove_all(root);
+    const auto toolBin = root / "toolchain/tools/bisheng_compiler/bin";
+    for (const char* name : {"bisheng", "bisheng-tune", "ld.lld", "llvm-objdump"}) {
+        InstallFakeTool(toolBin / name);
+    }
+    WriteFile(root / "input.o", "kernel\n");
+
+    DbiRequest request{};
+    request.inputKernel = (root / "input.o").string();
+    request.outputKernel = (root / "patched.o").string();
+    request.arch = "dav-unknown";
+    request.probeGroups = {ProbeGroup::Sync};
+    request.toolchainRoot = (root / "toolchain").string();
+    request.workDirectory = (root / "work").string();
+    request.cacheDirectory = (root / "cache").string();
+
+    const DbiResult result = RunDbiPipeline(request);
+    EXPECT_FALSE(result.success);
+    EXPECT_EQ(result.stage, "architecture");
+    EXPECT_NE(result.diagnostic.find("dav-unknown"), std::string::npos);
+    std::filesystem::remove_all(root);
+}
+
+TEST(DbiIntegrationTest, RejectsGeneratedGroupWithMissingWeakSymbol)
+{
+    const auto root = std::filesystem::temp_directory_path() / "dbi_pipeline_missing_generated_symbol";
+    std::filesystem::remove_all(root);
+    const auto toolBin = root / "toolchain/tools/bisheng_compiler/bin";
+    for (const char* name : {"bisheng", "bisheng-tune", "ld.lld", "llvm-objdump"}) {
+        InstallFakeTool(toolBin / name);
+    }
+    WriteFile(root / "input.o", "kernel\n");
+    WriteFile(root / "commands.log", "");
+    ASSERT_EQ(setenv("DBI_FAKE_LOG", (root / "commands.log").c_str(), 1), 0);
+    ASSERT_EQ(setenv("DBI_FAKE_DROP_SYMBOL", "__sanitizer_report_copy_ubuf_to_cbuf", 1), 0);
+
+    DbiRequest request{};
+    request.inputKernel = (root / "input.o").string();
+    request.outputKernel = (root / "patched.o").string();
+    request.arch = "dav-3510";
+    request.probeGroups = {ProbeGroup::Mte3};
+    request.toolchainRoot = (root / "toolchain").string();
+    request.workDirectory = (root / "work").string();
+    request.cacheDirectory = (root / "cache").string();
+    request.keepTemp = true;
+
+    const DbiResult result = RunDbiPipeline(request);
+    EXPECT_FALSE(result.success);
+    EXPECT_EQ(result.stage, "validate-probe");
+    bool retainedStaging = false;
+    for (const auto& entry : std::filesystem::directory_iterator(root / "cache/groups")) {
+        retainedStaging = retainedStaging || entry.path().filename().string().compare(0, 7, ".build-") == 0;
+    }
+    EXPECT_TRUE(retainedStaging);
+
+    unsetenv("DBI_FAKE_DROP_SYMBOL");
     unsetenv("DBI_FAKE_LOG");
     std::filesystem::remove_all(root);
 }

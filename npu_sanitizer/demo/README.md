@@ -47,8 +47,8 @@ npu_sanitizer/demo/examples/<分类>/<用例名>/build
 npu_sanitizer/demo/examples/memcheck/add/build/demo
 ```
 
-`build.sh` 同时准备在线 DBI 所需的 `dbi_runtime_sources`。运行时首次加载 kernel binary 时生成并
-缓存 `probe.o` 和 `ctrl.bin`。每个用例将日志和其他运行文件保存在自身的 `build/` 中；例如
+`build.sh` 准备 `npu_check` 及其共享库。运行时首次加载 kernel binary 时生成并缓存
+`probe.o` 和 `ctrl.bin`。每个用例将日志和其他运行文件保存在自身的 `build/` 中；例如
 Synccheck 日志位于 `demo/examples/synccheck/<用例名>/build/npu_check.log`，Matmul 输入与输出位于
 对应用例的 `build/run/`。
 
@@ -79,7 +79,7 @@ Runtime/Profiling stub。若显式构建 `npu_compute` 的其他常规 target，
 在仓库根目录加载 CANN 环境，再统一构建工具：
 
 ```bash
-source /home/cty/cann_0829/cann/set_env.sh
+source /usr/local/Ascend/cann/set_env.sh
 bash ./npu_sanitizer/demo/build.sh
 ```
 
@@ -110,7 +110,7 @@ bash ./npu_sanitizer/demo/examples/synccheck/run_all.sh
 ```
 
 顶层 `build.sh` 会加载 `${ASCEND_HOME_PATH}/set_env.sh`，未设置时默认使用
-`/home/cty/cann_0829/cann`。各用例 `run.sh` 要求当前 shell 已通过 `set_env.sh` 设置
+`/usr/local/Ascend/cann`。各用例 `run.sh` 要求当前 shell 已通过 `set_env.sh` 设置
 `ASCEND_HOME_PATH` 和 CANN 工具链环境。若 CANN 安装位置不同，可在运行前加载对应环境：
 
 ```bash

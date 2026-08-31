@@ -7,7 +7,6 @@
 // See LICENSE in the root of the software repository for the full text of the License.
 #include "binary_instrumenter.h"
 
-#include <dlfcn.h>
 #include <unistd.h>
 
 #include <algorithm>
@@ -26,30 +25,12 @@
 namespace aclsan {
 namespace {
 
-constexpr unsigned long kMaxCompilerArgs = 128;
 std::atomic<uint64_t> g_requestId{0};
 
 std::string Env(const char* name)
 {
     const char* value = std::getenv(name);
     return value == nullptr ? std::string{} : std::string(value);
-}
-
-std::string DefaultSourceRoot()
-{
-    const std::string configured = Env("NPU_CHECK_DBI_SOURCE_ROOT");
-    if (!configured.empty()) {
-        return configured;
-    }
-    Dl_info info{};
-    const auto instrument =
-        static_cast<BinaryInstrumentationResult (*)(const BinaryInstrumentationConfig&, const void*, size_t)>(
-            &InstrumentBinary);
-    if (dladdr(reinterpret_cast<void*>(instrument), &info) != 0 && info.dli_fname != nullptr) {
-        const auto library = std::filesystem::path(info.dli_fname);
-        return (library.parent_path().parent_path() / "share/aclsan/dbi").string();
-    }
-    return {};
 }
 
 std::string RequestDirectory(const BinaryInstrumentationConfig& config)
@@ -71,12 +52,10 @@ DbiRequest MakeRequest(
     request.traceArgumentOffset = traceArgumentOffset;
     request.probeGroups = config.probeGroups;
     request.toolchainRoot = config.toolchainRoot;
-    request.sourceRoot = config.sourceRoot.empty() ? DefaultSourceRoot() : config.sourceRoot;
     request.workDirectory = work;
     request.cacheDirectory = config.cacheDirectory.empty() ? work + "/probe-cache" : config.cacheDirectory;
     request.strict = config.strict;
     request.keepTemp = config.keepTemp;
-    request.extraCompilerArgs = config.compilerArgs;
     request.extraTuneArgs = config.tuneArgs;
     return request;
 }
@@ -188,7 +167,6 @@ BinaryInstrumentationConfig DefaultBinaryInstrumentationConfig()
     BinaryInstrumentationConfig config{};
     config.arch = Env("NPU_CHECK_DBI_ARCH");
     config.toolchainRoot = Env("NPU_CHECK_DBI_TOOLCHAIN_ROOT");
-    config.sourceRoot = Env("NPU_CHECK_DBI_SOURCE_ROOT");
     config.workDirectory = Env("NPU_CHECK_DBI_WORK_DIR");
     config.cacheDirectory = Env("NPU_CHECK_DBI_CACHE_DIR");
     config.strict = Env("NPU_CHECK_DBI_STRICT") == "1";
@@ -209,22 +187,6 @@ BinaryInstrumentationConfig DefaultBinaryInstrumentationConfig()
                 config.probeGroups.push_back(ProbeGroup::Scalar);
             else if (group == "sync")
                 config.probeGroups.push_back(ProbeGroup::Sync);
-        }
-    }
-    const std::string compilerArgCount = Env("NPU_CHECK_DBI_COMPILER_ARG_COUNT");
-    if (!compilerArgCount.empty()) {
-        char* end = nullptr;
-        const unsigned long count = std::strtoul(compilerArgCount.c_str(), &end, 10);
-        if (end != compilerArgCount.c_str() && *end == '\0' && count <= kMaxCompilerArgs) {
-            for (unsigned long index = 0; index < count; ++index) {
-                const std::string name = "NPU_CHECK_DBI_COMPILER_ARG_" + std::to_string(index);
-                const char* value = std::getenv(name.c_str());
-                if (value == nullptr) {
-                    config.compilerArgs.clear();
-                    break;
-                }
-                config.compilerArgs.emplace_back(value);
-            }
         }
     }
     config.probeGroups = NormalizeProbeGroups(config.probeGroups);

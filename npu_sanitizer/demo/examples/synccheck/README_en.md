@@ -35,6 +35,11 @@ prints its diagnostic; when its `verify.py`, summary, and session checks succeed
 its runner returns 0 and prints
 `example verification passed: synccheck/<case-name>`.
 
+Each runner loads the CANN environment from `ASCEND_HOME_PATH`. Use
+`NPU_CHECK_DBI_ARCH` and `NPU_CHECK_DBI_TOOLCHAIN_ROOT` to select the public
+architecture and toolchain for online DBI. Either variable can be overridden when
+running one case or the complete suite.
+
 Run one target smoke test directly with its local `run.sh`:
 
 ```bash

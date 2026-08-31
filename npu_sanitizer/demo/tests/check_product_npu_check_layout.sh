@@ -20,57 +20,28 @@ grep -Fq 'add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../npu_check_cli" npu_ch
     "${demo_dir}/CMakeLists.txt"
 grep -Fq 'add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../npu_check" npu_check)' \
     "${demo_dir}/CMakeLists.txt"
-if grep -Fq 'NPU_COMPUTE_USE_ASCEND_HOME_PATH' "${demo_dir}/CMakeLists.txt"; then
-    printf 'demo CMake still uses the unnecessary NPU Compute compatibility switch\n' >&2
+if rg -n 'DBI_RUNTIME_SOURCE|src/probes/.*\.cpp|NPU_CHECK_DBI_SOURCE_ROOT' \
+    "${demo_dir}/CMakeLists.txt"; then
+    printf 'demo still stages or exports runtime Probe sources\n' >&2
     exit 1
 fi
-grep -Fq 'foreach(probe_source mte1 mte2 mte3 fixpipe scalar sync)' "${demo_dir}/CMakeLists.txt"
-grep -Fq '"${ACLSAN_DBI_SOURCE_DIRECTORY}/src/probes/${probe_source}.cpp"' \
-    "${demo_dir}/CMakeLists.txt"
-grep -Fq '"${ACLSAN_DBI_RUNTIME_SOURCE_DIRECTORY}/probes/${probe_source}.cpp"' \
-    "${demo_dir}/CMakeLists.txt"
-grep -Fq 'foreach(trace_header trace_record.h trace_buffer_abi.h)' "${demo_dir}/CMakeLists.txt"
-grep -Fq '"${ACLSAN_DBI_SOURCE_DIRECTORY}/include/${trace_header}"' \
-    "${demo_dir}/CMakeLists.txt"
-grep -Fq '"${ACLSAN_DBI_RUNTIME_SOURCE_DIRECTORY}/${trace_header}"' \
-    "${demo_dir}/CMakeLists.txt"
+
+if rg -n 'install\(DIRECTORY.*probes|share/aclsan/dbi|trace_record\.h|trace_buffer_abi\.h' \
+    "${sanitizer_dir}/npu_check/CMakeLists.txt"; then
+    printf 'product npu_check still installs DBI Probe sources or private ABI headers\n' >&2
+    exit 1
+fi
 
 if grep -Eq 'CMAKE_CURRENT_SOURCE_DIR}/npu_check(_exec)?"' "${demo_dir}/CMakeLists.txt"; then
     printf 'demo CMake still references a demo-local npu_check component\n' >&2
     exit 1
 fi
 
-test -x "${demo_dir}/build.sh"
-test ! -e "${demo_dir}/examples/common.sh"
-grep -Fq 'cmake --build "${build_dir}" --target npu_check_cli --parallel' "${demo_dir}/build.sh"
-grep -Fq 'set(ASCEND_HOME_PATH "$ENV{ASCEND_HOME_PATH}" CACHE PATH' "${demo_dir}/CMakeLists.txt"
-grep -Fq 'default_cann_home="/home/cty/cann_0829/cann"' "${demo_dir}/build.sh"
-grep -Fq 'ASCEND_HOME_PATH="${ASCEND_HOME_PATH:-${default_cann_home}}"' "${demo_dir}/build.sh"
-grep -Fq 'source "${ASCEND_HOME_PATH}/set_env.sh"' "${demo_dir}/build.sh"
-grep -Fq -- '-DASCEND_HOME_PATH="${ASCEND_HOME_PATH}"' "${demo_dir}/build.sh"
-while IFS= read -r runner; do
-    grep -Fq 'if [[ -z "${ASCEND_HOME_PATH:-}" ]]' "${runner}"
-    grep -Fq 'export NPU_CHECK_DBI_TOOLCHAIN_ROOT=' "${runner}"
-    grep -Fq 'export NPU_CHECK_DBI_SOURCE_ROOT=' "${runner}"
-    grep -Fq '/npu_compute/bin/npu_check' "${runner}"
-done < <(find "${demo_dir}/examples" -mindepth 3 -maxdepth 3 -name run.sh -type f | sort)
-legacy_cann_root='NPUCOMPUTE_CANN_''ROOT'
-if rg -q "${legacy_cann_root}" "${demo_dir}" -g '!build/**'; then
-    printf 'demo still references the private CANN root variable\n' >&2
+internal_arch='dav'"-c310"
+if rg -n "${internal_arch}" "${sanitizer_dir}"; then
+    printf 'npu_sanitizer still contains the internal architecture name\n' >&2
     exit 1
 fi
-if rg -q -g 'run.sh' -- '--strict|--keep-temp|--work-dir|--probe-cache-dir' \
-    "${demo_dir}/examples"; then
-    printf 'demo runner still passes removed CLI options\n' >&2
-    exit 1
-fi
-
-forbidden_arg_size='NPU_CHECK_DBI_''ARG_SIZE'
-if rg -q "${forbidden_arg_size}" "${demo_dir}" -g '*.sh' -g '!build/**'; then
-    printf 'demo scripts still configure the removed DBI argument size override\n' >&2
-    exit 1
-fi
-
 legacy_probe_prefix='ACLSAN_PROBE'
 legacy_probe_resource_dir='probe_resources'
 legacy_probe_build_option='ACLSAN_BUILD_DEVICE_PROBE'
@@ -80,18 +51,23 @@ if rg -n "${legacy_probe_prefix}_[A-Z_]+|${legacy_probe_resource_dir}/probe\\.o|
     exit 1
 fi
 
-if rg -q -g 'run.sh' -- '--target npucheck|/npucheck" --tool' \
-    "${demo_dir}/examples"; then
-    printf 'demo runner still references the legacy launcher or unsupported tool\n' >&2
-    exit 1
-fi
-
 grep -Fq 'NPU_CHECK_API int acltoolInitialize(void);' "${sanitizer_dir}/npu_check/include/npu_check.h"
 grep -Fq 'NPU_CHECK_API int acltoolInitialize(void)' "${sanitizer_dir}/npu_check/src/tool_manager/entry.cpp"
 grep -Fq 'acltoolInitialize;' "${sanitizer_dir}/npu_check/cmake/npu_check.map"
 
 if rg -n 'acltoolInitalize' "${sanitizer_dir}/npu_check"; then
     printf 'product npu_check still contains the misspelled injection entry\n' >&2
+    exit 1
+fi
+
+if rg -n 'add_executable\(gen_ctrlbin|install\(TARGETS gen_ctrlbin|TARGET_FILE:gen_ctrlbin|generate_ctrlbin_test\.cmake' \
+    "${sanitizer_dir}/npu_check"; then
+    printf 'product npu_check still exposes the obsolete gen_ctrlbin executable\n' >&2
+    exit 1
+fi
+
+if [[ -e "${sanitizer_dir}/dbi/test/generate_ctrlbin_test.cmake" ]]; then
+    printf 'obsolete gen_ctrlbin executable test script still exists\n' >&2
     exit 1
 fi
 

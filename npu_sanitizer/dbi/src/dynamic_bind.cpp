@@ -11,7 +11,8 @@
 #include <cstdint>
 #include <algorithm>
 #include <fstream>
-#include <iostream>
+#include <iomanip>
+#include <sstream>
 #include <set>
 #include <string>
 #include <vector>
@@ -34,15 +35,7 @@ thread_local const std::vector<aclsan::ProbeGroup>* g_selectedGroups = nullptr;
 
 std::vector<aclsan::ProbeGroup> NormalizeBindingGroups(const std::vector<aclsan::ProbeGroup>& groups)
 {
-    std::vector<aclsan::ProbeGroup> selected(groups);
-    std::sort(selected.begin(), selected.end());
-    selected.erase(std::unique(selected.begin(), selected.end()), selected.end());
-    if (std::find(selected.begin(), selected.end(), aclsan::ProbeGroup::Mte2) != selected.end()) {
-        selected.push_back(aclsan::ProbeGroup::Scalar);
-        std::sort(selected.begin(), selected.end());
-        selected.erase(std::unique(selected.begin(), selected.end()), selected.end());
-    }
-    return selected;
+    return aclsan::NormalizeProbeGroups(groups);
 }
 
 aclsan::ProbeGroup BindingGroup(const BindingSpec& binding)
@@ -251,21 +244,6 @@ bool ValidateBindings(const std::vector<aclsan::ProbeGroup>& groups, std::string
     return true;
 }
 
-#ifndef ASCSAN_CTRLBIN_NO_MAIN
-std::string MaskToString(const std::vector<uint16_t>& mask)
-{
-    std::string out = "{";
-    for (size_t i = 0; i < mask.size(); ++i) {
-        if (i != 0) {
-            out += ",";
-        }
-        out += std::to_string(mask[i]);
-    }
-    out += "}";
-    return out;
-}
-#endif
-
 bool IsNonEmptyFile(const std::string& path)
 {
     std::ifstream input(path, std::ios::binary | std::ios::ate);
@@ -282,31 +260,6 @@ extern "C" void MSBitAtInit()
         }
     }
 }
-
-#ifndef ASCSAN_CTRLBIN_NO_MAIN
-int main(int argc, char** argv)
-{
-    if (argc != 2) {
-        std::cerr << "Usage: " << argv[0] << " <output.ctrl.bin>\n";
-        return 1;
-    }
-    const std::string outputPath = argv[1];
-    std::string diagnostic;
-    const auto groups = aclsan::AllProbeGroups();
-    if (!aclsan::GenerateCtrlBin(outputPath, groups, diagnostic)) {
-        std::cerr << "[gen-ctrlbin] " << diagnostic << '\n';
-        return 2;
-    }
-
-    for (const auto& binding : AllBindings()) {
-        std::cout << "[gen-ctrlbin] id=" << binding.apiId << " mask=" << MaskToString(binding.paraMask)
-                  << " symbol=" << binding.stubName << '\n';
-    }
-    std::cout << "[gen-ctrlbin] wrote " << aclsan::BindingSymbols(groups).size() << " bindings to " << outputPath
-              << '\n';
-    return 0;
-}
-#endif
 
 namespace aclsan {
 
@@ -326,6 +279,32 @@ std::vector<std::string> BindingSymbols(const std::vector<ProbeGroup>& groups)
         }
     }
     return symbols;
+}
+
+std::string CtrlBinGeneratorIdentity()
+{
+    uint64_t hash = 1469598103934665603ULL;
+    constexpr uint64_t prime = 1099511628211ULL;
+    const auto append = [&](const std::string& value) {
+        for (const unsigned char byte : value) {
+            hash ^= byte;
+            hash *= prime;
+        }
+        hash ^= 0xffU;
+        hash *= prime;
+    };
+    for (const auto& binding : AllBindings()) {
+        append(std::to_string(static_cast<uint16_t>(binding.instrType)));
+        append(std::to_string(binding.apiId));
+        append(binding.stubName);
+        append(std::to_string(static_cast<unsigned int>(BindingGroup(binding))));
+        for (const uint16_t mask : binding.paraMask) {
+            append(std::to_string(mask));
+        }
+    }
+    std::ostringstream output;
+    output << std::hex << std::setfill('0') << std::setw(16) << hash;
+    return output.str();
 }
 
 bool GenerateCtrlBin(const std::string& outputPath, const std::vector<ProbeGroup>& groups, std::string& diagnostic)

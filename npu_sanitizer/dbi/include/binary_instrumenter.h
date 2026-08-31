@@ -22,12 +22,10 @@ struct BinaryInstrumentationConfig {
     uint32_t traceArgumentOffset = 0;
     std::vector<ProbeGroup> probeGroups;
     std::string toolchainRoot;
-    std::string sourceRoot;
     std::string workDirectory;
     std::string cacheDirectory;
     bool strict = false;
     bool keepTemp = false;
-    std::vector<std::string> compilerArgs;
     std::vector<std::string> tuneArgs;
 };
 

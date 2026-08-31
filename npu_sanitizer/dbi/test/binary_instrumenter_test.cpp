@@ -58,7 +58,6 @@ struct TestState {
     std::vector<std::string> workDirectories;
     int runnerCalls = 0;
     bool patchSucceeds = true;
-    uint32_t traceArgumentOffset = 0;
     BinaryInstrumentationConfig config;
 };
 
@@ -70,20 +69,16 @@ int32_t CaptureInstrumentedBinary(const void* data, size_t length, void* userdat
     return 73;
 }
 
-TEST(DefaultBinaryInstrumentationConfigTest, ReadsRuntimeCompilationEnvironment)
+TEST(DefaultBinaryInstrumentationConfigTest, ReadsRuntimeInstrumentationEnvironment)
 {
     EnvironmentRestore environment(
         {"NPU_CHECK_DBI_ARCH", "NPU_CHECK_DBI_WORK_DIR", "NPU_CHECK_DBI_CACHE_DIR", "NPU_CHECK_DBI_STRICT",
-         "NPU_CHECK_DBI_KEEP_TEMP", "NPU_CHECK_DBI_COMPILER_ARG_COUNT", "NPU_CHECK_DBI_COMPILER_ARG_0",
-         "NPU_CHECK_DBI_COMPILER_ARG_1"});
+         "NPU_CHECK_DBI_KEEP_TEMP"});
     ASSERT_EQ(setenv("NPU_CHECK_DBI_ARCH", "dav-3510", 1), 0);
     ASSERT_EQ(setenv("NPU_CHECK_DBI_WORK_DIR", "/tmp/npu-check-work", 1), 0);
     ASSERT_EQ(setenv("NPU_CHECK_DBI_CACHE_DIR", "/tmp/npu-check-cache", 1), 0);
     ASSERT_EQ(setenv("NPU_CHECK_DBI_STRICT", "1", 1), 0);
     ASSERT_EQ(setenv("NPU_CHECK_DBI_KEEP_TEMP", "1", 1), 0);
-    ASSERT_EQ(setenv("NPU_CHECK_DBI_COMPILER_ARG_COUNT", "2", 1), 0);
-    ASSERT_EQ(setenv("NPU_CHECK_DBI_COMPILER_ARG_0", "-g", 1), 0);
-    ASSERT_EQ(setenv("NPU_CHECK_DBI_COMPILER_ARG_1", "-DVALUE=a b", 1), 0);
 
     const BinaryInstrumentationConfig config = DefaultBinaryInstrumentationConfig();
 
@@ -92,7 +87,6 @@ TEST(DefaultBinaryInstrumentationConfigTest, ReadsRuntimeCompilationEnvironment)
     EXPECT_EQ(config.cacheDirectory, "/tmp/npu-check-cache");
     EXPECT_TRUE(config.strict);
     EXPECT_TRUE(config.keepTemp);
-    EXPECT_EQ(config.compilerArgs, (std::vector<std::string>{"-g", "-DVALUE=a b"}));
 }
 
 TEST(DefaultBinaryInstrumentationConfigTest, SelectsProbeGroupsFromEnvironmentOrActiveMask)
@@ -128,73 +122,30 @@ TEST(DefaultBinaryInstrumentationConfigTest, TreatsOnlyExactOneAsTrue)
     EXPECT_FALSE(config.keepTemp);
 }
 
-TEST(DefaultBinaryInstrumentationConfigTest, RejectsAllCompilerArgumentsWhenOneIsMissing)
-{
-    EnvironmentRestore environment(
-        {"NPU_CHECK_DBI_COMPILER_ARG_COUNT", "NPU_CHECK_DBI_COMPILER_ARG_0", "NPU_CHECK_DBI_COMPILER_ARG_1"});
-    ASSERT_EQ(setenv("NPU_CHECK_DBI_COMPILER_ARG_COUNT", "2", 1), 0);
-    ASSERT_EQ(setenv("NPU_CHECK_DBI_COMPILER_ARG_0", "", 1), 0);
-    ASSERT_EQ(unsetenv("NPU_CHECK_DBI_COMPILER_ARG_1"), 0);
-
-    EXPECT_TRUE(DefaultBinaryInstrumentationConfig().compilerArgs.empty());
-}
-
-TEST(DefaultBinaryInstrumentationConfigTest, IgnoresMalformedOrOversizedCompilerArgumentCount)
-{
-    EnvironmentRestore environment({"NPU_CHECK_DBI_COMPILER_ARG_COUNT", "NPU_CHECK_DBI_COMPILER_ARG_0"});
-    ASSERT_EQ(setenv("NPU_CHECK_DBI_COMPILER_ARG_0", "-g", 1), 0);
-    ASSERT_EQ(setenv("NPU_CHECK_DBI_COMPILER_ARG_COUNT", "not-a-count", 1), 0);
-    EXPECT_TRUE(DefaultBinaryInstrumentationConfig().compilerArgs.empty());
-
-    ASSERT_EQ(setenv("NPU_CHECK_DBI_COMPILER_ARG_COUNT", "129", 1), 0);
-    EXPECT_TRUE(DefaultBinaryInstrumentationConfig().compilerArgs.empty());
-}
-
-TEST(DefaultBinaryInstrumentationConfigTest, AcceptsExactlyMaximumCompilerArgumentCount)
-{
-    constexpr std::size_t kCompilerArgCount = 128;
-    std::vector<std::string> names{"NPU_CHECK_DBI_COMPILER_ARG_COUNT"};
-    std::vector<std::string> expected;
-    names.reserve(kCompilerArgCount + 1);
-    expected.reserve(kCompilerArgCount);
-    for (std::size_t index = 0; index < kCompilerArgCount; ++index) {
-        names.push_back("NPU_CHECK_DBI_COMPILER_ARG_" + std::to_string(index));
-        expected.push_back(index == 0 ? "" : "-DVALUE=" + std::to_string(index));
-    }
-    EnvironmentRestore environment(names);
-    ASSERT_EQ(setenv("NPU_CHECK_DBI_COMPILER_ARG_COUNT", "128", 1), 0);
-    for (std::size_t index = 0; index < kCompilerArgCount; ++index) {
-        ASSERT_EQ(setenv(names[index + 1].c_str(), expected[index].c_str(), 1), 0);
-    }
-
-    EXPECT_EQ(DefaultBinaryInstrumentationConfig().compilerArgs, expected);
-}
-
 DbiResult FakePatch(const DbiRequest& request, void* userdata)
 {
     auto& state = *static_cast<TestState*>(userdata);
     ++state.runnerCalls;
-    state.traceArgumentOffset = request.traceArgumentOffset;
     state.workDirectories.push_back(request.workDirectory);
     std::ifstream input(request.inputKernel, std::ios::binary);
     state.inputContents.assign(std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>());
     if (!state.patchSucceeds) {
-        return {false, {}, "fake", "failed", request.traceArgumentOffset};
+        return {false, {}, "fake", "failed"};
     }
     std::filesystem::create_directories(std::filesystem::path(request.outputKernel).parent_path());
     std::ofstream output(request.outputKernel, std::ios::binary | std::ios::trunc);
     output << "patched";
-    return {output.good(), request.outputKernel, output.good() ? "complete" : "write", {}, request.traceArgumentOffset};
+    return {output.good(), request.outputKernel, output.good() ? "complete" : "write", {}};
 }
 
-std::vector<uint8_t> MakeKernelArgumentSizeElf(const std::vector<uint32_t>& argumentSizes)
+std::vector<uint8_t> MakeKernelArgumentSizeElf(uint32_t argumentSize)
 {
     constexpr char kSectionNames[] = "\0.shstrtab\0__CCE_KernelArgSize";
     const std::string sectionNames(kSectionNames, sizeof(kSectionNames));
     const size_t sectionHeadersOffset = sizeof(Elf64_Ehdr);
     const size_t sectionNamesOffset = sectionHeadersOffset + 3 * sizeof(Elf64_Shdr);
-    const size_t argumentSizesOffset = sectionNamesOffset + sectionNames.size();
-    std::vector<uint8_t> image(argumentSizesOffset + argumentSizes.size() * sizeof(uint32_t), 0);
+    const size_t argumentSizeOffset = sectionNamesOffset + sectionNames.size();
+    std::vector<uint8_t> image(argumentSizeOffset + sizeof(argumentSize), 0);
 
     Elf64_Ehdr header{};
     std::memcpy(header.e_ident, ELFMAG, SELFMAG);
@@ -215,16 +166,15 @@ std::vector<uint8_t> MakeKernelArgumentSizeElf(const std::vector<uint32_t>& argu
     std::memcpy(
         image.data() + sectionHeadersOffset + sizeof(Elf64_Shdr), &sectionNamesHeader, sizeof(sectionNamesHeader));
 
-    Elf64_Shdr argumentSizesHeader{};
-    argumentSizesHeader.sh_name = 11;
-    argumentSizesHeader.sh_type = SHT_NOTE;
-    argumentSizesHeader.sh_offset = argumentSizesOffset;
-    argumentSizesHeader.sh_size = argumentSizes.size() * sizeof(uint32_t);
+    Elf64_Shdr argumentSizeHeader{};
+    argumentSizeHeader.sh_name = 11;
+    argumentSizeHeader.sh_type = SHT_NOTE;
+    argumentSizeHeader.sh_offset = argumentSizeOffset;
+    argumentSizeHeader.sh_size = sizeof(argumentSize);
     std::memcpy(
-        image.data() + sectionHeadersOffset + 2 * sizeof(Elf64_Shdr), &argumentSizesHeader,
-        sizeof(argumentSizesHeader));
+        image.data() + sectionHeadersOffset + 2 * sizeof(Elf64_Shdr), &argumentSizeHeader, sizeof(argumentSizeHeader));
     std::memcpy(image.data() + sectionNamesOffset, sectionNames.data(), sectionNames.size());
-    std::memcpy(image.data() + argumentSizesOffset, argumentSizes.data(), argumentSizesHeader.sh_size);
+    std::memcpy(image.data() + argumentSizeOffset, &argumentSize, sizeof(argumentSize));
     return image;
 }
 
@@ -245,7 +195,7 @@ protected:
         char* created = mkdtemp(pattern);
         ASSERT_NE(created, nullptr);
         directory_ = created;
-        state_.config.arch = "dav-c220-vec";
+        state_.config.arch = "dav-3510";
         state_.config.traceArgumentOffset = 8;
         state_.config.probeGroups = {ProbeGroup::Mte2};
         state_.config.workDirectory = directory_;
@@ -287,36 +237,10 @@ TEST_F(BinaryInstrumenterTest, InstrumentsWithoutKernelArgumentSizeMetadata)
     EXPECT_EQ(state_.runnerCalls, 1);
 }
 
-TEST_F(BinaryInstrumenterTest, UsesMaximumKernelArgumentSizeForHeterogeneousBinary)
-{
-    state_.config.traceArgumentOffset = 0;
-    const std::vector<uint8_t> original = MakeKernelArgumentSizeElf({8, 0, 24, 8, 0, 24});
-
-    const BinaryInstrumentationResult result =
-        InstrumentBinary(state_.config, original.data(), original.size(), &FakePatch, &state_);
-
-    EXPECT_EQ(result.status, BinaryInstrumentationStatus::Instrumented);
-    EXPECT_EQ(result.traceArgumentOffset, 24U);
-    EXPECT_EQ(state_.traceArgumentOffset, 24U);
-}
-
-TEST_F(BinaryInstrumenterTest, ReservesNonzeroOffsetForZeroArgumentOnlyBinary)
-{
-    state_.config.traceArgumentOffset = 0;
-    const std::vector<uint8_t> original = MakeKernelArgumentSizeElf({0});
-
-    const BinaryInstrumentationResult result =
-        InstrumentBinary(state_.config, original.data(), original.size(), &FakePatch, &state_);
-
-    EXPECT_EQ(result.status, BinaryInstrumentationStatus::Instrumented);
-    EXPECT_EQ(result.traceArgumentOffset, 8U);
-    EXPECT_EQ(state_.traceArgumentOffset, 8U);
-}
-
 TEST_F(BinaryInstrumenterTest, SkipsIncompleteConfiguration)
 {
     state_.config.arch.clear();
-    const std::vector<uint8_t> original = MakeKernelArgumentSizeElf({0});
+    const std::string original = "kernel-data";
 
     const BinaryInstrumentationResult result =
         InstrumentBinary(state_.config, original.data(), original.size(), &FakePatch, &state_);
@@ -386,9 +310,9 @@ TEST_F(BinaryInstrumenterTest, ExceptionReturnsFailureAndCleansTemporaryDirector
 TEST_F(BinaryInstrumenterTest, RuntimeFacadeConsumesPatchedBytesAcrossAnAbiStableBoundary)
 {
     EnvironmentRestore environment({"NPU_CHECK_DBI_ARCH", "NPU_CHECK_DBI_PROBE_SET", "NPU_CHECK_DBI_STRICT"});
-    ASSERT_EQ(setenv("NPU_CHECK_DBI_ARCH", "dav-c220-vec", 1), 0);
+    ASSERT_EQ(setenv("NPU_CHECK_DBI_ARCH", "dav-3510", 1), 0);
     ASSERT_EQ(setenv("NPU_CHECK_DBI_STRICT", "1", 1), 0);
-    const std::vector<uint8_t> original = MakeKernelArgumentSizeElf({0});
+    const std::vector<uint8_t> original = MakeKernelArgumentSizeElf(0);
     std::vector<uint8_t> consumed;
 
     const RuntimeBinaryInstrumentationResult result = InstrumentRuntimeBinary(

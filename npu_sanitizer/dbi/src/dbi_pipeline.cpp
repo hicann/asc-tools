@@ -9,6 +9,8 @@
 #include "dbi_pipeline.h"
 
 #include "ctrlbin_generator.h"
+#include "embedded_probe_resources.h"
+#include "probe_source_generator.h"
 #include "tool_runner.h"
 
 #include <algorithm>
@@ -20,11 +22,11 @@
 #include <fstream>
 #include <iomanip>
 #include <iterator>
-#include <set>
 #include <sstream>
 #include <system_error>
 #include <fcntl.h>
 #include <sys/file.h>
+#include <sys/stat.h>
 #include <unistd.h>
 
 namespace aclsan {
@@ -71,17 +73,23 @@ private:
 
 class TemporaryDirectory {
 public:
-    explicit TemporaryDirectory(std::filesystem::path path) : path_(std::move(path)) {}
+    explicit TemporaryDirectory(std::filesystem::path path, bool keep = false) : path_(std::move(path)), released_(keep)
+    {}
     ~TemporaryDirectory()
     {
+        if (released_) {
+            return;
+        }
         std::error_code error;
         std::filesystem::remove_all(path_, error);
     }
     TemporaryDirectory(const TemporaryDirectory&) = delete;
     TemporaryDirectory& operator=(const TemporaryDirectory&) = delete;
+    void Release() { released_ = true; }
 
 private:
     std::filesystem::path path_;
+    bool released_ = false;
 };
 
 class TemporaryFile {
@@ -120,26 +128,6 @@ std::string FindInDirectory(const std::filesystem::path& directory, const char* 
     return std::filesystem::is_regular_file(candidate, error) ? candidate.string() : std::string{};
 }
 
-std::string FindInPath(const std::string& path, const char* name)
-{
-    std::size_t begin = 0;
-    while (begin <= path.size()) {
-        const std::size_t end = path.find(':', begin);
-        const std::string item = path.substr(begin, end == std::string::npos ? end : end - begin);
-        if (!item.empty()) {
-            const std::string resolved = FindInDirectory(item, name);
-            if (!resolved.empty()) {
-                return resolved;
-            }
-        }
-        if (end == std::string::npos) {
-            break;
-        }
-        begin = end + 1;
-    }
-    return {};
-}
-
 uint64_t HashText(uint64_t hash, const std::string& text)
 {
     constexpr uint64_t kPrime = 1099511628211ULL;
@@ -154,52 +142,250 @@ uint64_t HashText(uint64_t hash, const std::string& text)
 bool IsNonEmptyFile(const std::filesystem::path& path)
 {
     std::error_code error;
-    return std::filesystem::is_regular_file(path, error) && std::filesystem::file_size(path, error) != 0;
+    const auto status = std::filesystem::symlink_status(path, error);
+    return !error && std::filesystem::is_regular_file(status) && std::filesystem::file_size(path, error) != 0;
 }
 
-bool IsExecutableFile(const std::string& path) { return !path.empty() && access(path.c_str(), X_OK) == 0; }
+bool IsExecutableFile(const std::string& path)
+{
+    if (path.empty()) {
+        return false;
+    }
+    struct stat metadata {};
+    if (lstat(path.c_str(), &metadata) != 0 || !S_ISREG(metadata.st_mode) ||
+        (metadata.st_uid != 0 && metadata.st_uid != geteuid()) || (metadata.st_mode & 0022) != 0) {
+        return false;
+    }
+    return access(path.c_str(), X_OK) == 0;
+}
 
-bool IsAscendcDevkit(const std::filesystem::path& path)
+std::string FileIdentity(const std::filesystem::path& path)
 {
     std::error_code error;
-    return std::filesystem::is_regular_file(path / "asc/include/kernel_operator.h", error) &&
-           std::filesystem::is_regular_file(
-               path / "ascendc/include/highlevel_api/kernel_tiling/kernel_tiling.h", error);
+    const auto canonical = std::filesystem::weakly_canonical(path, error);
+    if (error) {
+        return path.string();
+    }
+    const auto size = std::filesystem::file_size(canonical, error);
+    if (error) {
+        return canonical.string();
+    }
+    const auto modified = std::filesystem::last_write_time(canonical, error);
+    if (error) {
+        return canonical.string() + ":" + std::to_string(size);
+    }
+    return canonical.string() + ":" + std::to_string(size) + ":" + std::to_string(modified.time_since_epoch().count());
 }
 
-std::filesystem::path FindAscendcDevkit(const std::string& bisheng)
+std::filesystem::path ToolchainRoot(const std::string& bisheng)
 {
-    std::filesystem::path candidate = std::filesystem::path(bisheng).parent_path();
-    for (int depth = 0; depth < 6 && !candidate.empty(); ++depth) {
-        if (IsAscendcDevkit(candidate)) {
+    std::filesystem::path root = std::filesystem::path(bisheng).parent_path();
+    for (int depth = 0; depth < 3 && !root.empty(); ++depth) {
+        root = root.parent_path();
+    }
+    return root;
+}
+
+std::filesystem::path AscendcDevkitRoot(const std::string& bisheng)
+{
+    const auto root = ToolchainRoot(bisheng);
+    for (const char* platform : {"x86_64-linux", "aarch64-linux"}) {
+        const auto candidate = root / platform;
+        std::error_code error;
+        if (std::filesystem::is_regular_file(candidate / "asc/include/kernel_operator.h", error)) {
             return candidate;
         }
-        std::error_code error;
-        for (std::filesystem::directory_iterator it(candidate, error), end; !error && it != end; it.increment(error)) {
-            if (it->is_directory(error) && IsAscendcDevkit(it->path())) {
-                return it->path();
-            }
-        }
-        const auto parent = candidate.parent_path();
-        if (parent == candidate) {
-            break;
-        }
-        candidate = parent;
     }
-    return {};
+#if defined(__aarch64__)
+    return root / "aarch64-linux";
+#else
+    return root / "x86_64-linux";
+#endif
+}
+
+std::vector<std::string> ProbeCompileFlags(const std::string& arch, const std::filesystem::path& devkit)
+{
+    std::vector<std::string> flags{
+        "-xcce",
+        "-std=c++17",
+        "-O2",
+        "--cce-aicore-only",
+        "--npu-arch=" + arch,
+        "-mllvm",
+        "-cce-aicore-record-overflow=false",
+        "-mllvm",
+        "-cce-aicore-record-stack-size=false",
+        "-fno-jump-tables",
+        "-mllvm",
+        "-cce-aicore-merge-function=false",
+        "-mllvm",
+        "-cce-aicore-addr-transform",
+        "-fPIC",
+        "-pthread",
+        "-DBUILD_DYNAMIC_PROBE",
+        "-DTILING_KEY_VAR=0",
+        "-I",
+        (devkit / "asc").string(),
+        "-I",
+        (devkit / "asc/include").string(),
+        "-I",
+        (devkit / "asc/include/basic_api").string(),
+        "-I",
+        (devkit / "ascendc/include/highlevel_api").string(),
+    };
+    return flags;
+}
+
+std::string TextIdentity(const std::vector<std::string>& values)
+{
+    uint64_t hash = 1469598103934665603ULL;
+    for (const std::string& value : values) {
+        hash = HashText(hash, value);
+    }
+    std::ostringstream output;
+    output << std::hex << std::setfill('0') << std::setw(16) << hash;
+    return output.str();
+}
+
+bool EnsurePrivateDirectory(const std::filesystem::path& path, std::string& diagnostic)
+{
+    std::error_code error;
+    std::filesystem::create_directories(path, error);
+    if (error) {
+        diagnostic = "cannot create private directory " + path.string() + ": " + error.message();
+        return false;
+    }
+    const auto status = std::filesystem::symlink_status(path, error);
+    if (error || std::filesystem::is_symlink(status) || !std::filesystem::is_directory(status)) {
+        diagnostic = "private directory is not a real directory: " + path.string();
+        return false;
+    }
+    struct stat metadata {};
+    if (lstat(path.c_str(), &metadata) != 0 || metadata.st_uid != geteuid()) {
+        diagnostic = "private directory is not owned by the current user: " + path.string();
+        return false;
+    }
+    if (chmod(path.c_str(), 0700) != 0) {
+        diagnostic = "cannot restrict private directory " + path.string() + ": " + std::strerror(errno);
+        return false;
+    }
+    return true;
+}
+
+bool WriteExclusiveFile(const std::filesystem::path& path, const void* data, std::size_t size)
+{
+    const int descriptor = open(path.c_str(), O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC | O_NOFOLLOW, 0600);
+    if (descriptor < 0) {
+        return false;
+    }
+    const auto* bytes = static_cast<const unsigned char*>(data);
+    std::size_t written = 0;
+    while (written < size) {
+        const ssize_t count = write(descriptor, bytes + written, size - written);
+        if (count < 0 && errno == EINTR) {
+            continue;
+        }
+        if (count <= 0) {
+            (void)close(descriptor);
+            return false;
+        }
+        written += static_cast<std::size_t>(count);
+    }
+    return close(descriptor) == 0;
+}
+
+bool WriteExclusiveFile(const std::filesystem::path& path, const std::string& content)
+{
+    return WriteExclusiveFile(path, content.data(), content.size());
+}
+
+bool WriteReplaceFile(const std::filesystem::path& path, const std::string& content)
+{
+    const auto temporary =
+        path.parent_path() / (".dbi-write-" + std::to_string(static_cast<unsigned long long>(getpid())) + "-" +
+                              std::to_string(g_cacheBuildId.fetch_add(1)));
+    TemporaryFile cleanup(temporary);
+    if (!WriteExclusiveFile(temporary, content)) {
+        return false;
+    }
+    std::error_code error;
+    std::filesystem::rename(temporary, path, error);
+    if (error) {
+        return false;
+    }
+    cleanup.Release();
+    return true;
 }
 
 std::string ReadFile(const std::filesystem::path& path)
 {
+    if (!IsNonEmptyFile(path)) {
+        return {};
+    }
     std::ifstream input(path, std::ios::binary);
     return input ? std::string(std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>()) : std::string{};
 }
 
-bool WriteFile(const std::filesystem::path& path, const std::string& content)
+std::string FileDigest(const std::filesystem::path& path)
 {
-    std::ofstream output(path, std::ios::binary | std::ios::trunc);
-    output.write(content.data(), static_cast<std::streamsize>(content.size()));
-    return output.good();
+    const std::string content = ReadFile(path);
+    if (content.empty()) {
+        return {};
+    }
+    uint64_t hash = 1469598103934665603ULL;
+    constexpr uint64_t kPrime = 1099511628211ULL;
+    for (const unsigned char value : content) {
+        hash ^= value;
+        hash *= kPrime;
+    }
+    std::ostringstream output;
+    output << std::hex << std::setfill('0') << std::setw(16) << hash;
+    return output.str();
+}
+
+std::string GroupIdentity(const std::vector<ProbeGroup>& groups)
+{
+    std::ostringstream output;
+    bool first = true;
+    for (const ProbeGroup group : groups) {
+        if (!first) {
+            output << ',';
+        }
+        first = false;
+        output << ProbeGroupName(group);
+    }
+    return output.str();
+}
+
+std::string ArtifactManifest(
+    const std::filesystem::path& probeObject, const std::filesystem::path& ctrlBin, const std::string& arch,
+    const std::vector<ProbeGroup>& groups, const std::string& objectIdentity)
+{
+    const std::string probeDigest = FileDigest(probeObject);
+    const std::string ctrlDigest = FileDigest(ctrlBin);
+    if (probeDigest.empty() || ctrlDigest.empty()) {
+        return {};
+    }
+    std::ostringstream output;
+    output << "format=1\narch=" << arch << "\ngroups=" << GroupIdentity(groups) << "\nobjects=" << objectIdentity
+           << "\nprobe=" << probeDigest << "\nctrl=" << ctrlDigest << '\n';
+    return output.str();
+}
+
+bool IsValidCachedArtifact(
+    const std::filesystem::path& directory, const std::string& arch, const std::vector<ProbeGroup>& groups,
+    const std::string& objectIdentity)
+{
+    std::error_code error;
+    const auto status = std::filesystem::symlink_status(directory, error);
+    if (error || std::filesystem::is_symlink(status) || !std::filesystem::is_directory(status)) {
+        return false;
+    }
+    const auto probeObject = directory / "probe.o";
+    const auto ctrlBin = directory / "ctrl.bin";
+    const auto manifest = directory / "manifest";
+    const std::string expected = ArtifactManifest(probeObject, ctrlBin, arch, groups, objectIdentity);
+    return !expected.empty() && ReadFile(manifest) == expected;
 }
 
 std::string ToolFailure(const std::vector<std::string>& arguments, const ToolResult& result)
@@ -246,51 +432,180 @@ std::string ParseFirstTextSymbol(const std::string& text, const std::string& pro
     return {};
 }
 
-std::vector<std::string> ProbeCompileFlags(const std::string& arch, const std::filesystem::path& ascendcDevkit)
+bool HasTextSymbol(const std::string& text, const std::string& property, const std::string& symbol)
 {
-    std::vector<std::string> flags{
-        "-xcce",
-        "-std=c++17",
-        "-O2",
-        "--cce-aicore-only",
-        "--cce-aicore-arch=" + arch,
-        "-mllvm",
-        "-cce-aicore-record-overflow=false",
-        "-mllvm",
-        "-cce-aicore-record-stack-size=false"};
-    if (arch.find("c220") != std::string::npos) {
-        flags.insert(
-            flags.end(),
-            {"-mllvm", "-cce-aicore-addr-transform", "-mllvm", "-cce-aicore-long-call", "-mllvm", "-cce-aicore-relax"});
-    } else {
-        flags.insert(
-            flags.end(),
-            {"-fno-jump-tables", "-mllvm", "-cce-aicore-merge-function=false", "-mllvm", "-cce-aicore-addr-transform"});
+    const std::string mangledPrefix = "_Z" + std::to_string(symbol.size()) + symbol;
+    std::istringstream lines(text);
+    std::string line;
+    while (std::getline(lines, line)) {
+        std::istringstream fields(line);
+        const std::vector<std::string> items{
+            std::istream_iterator<std::string>(fields), std::istream_iterator<std::string>()};
+        const bool textSection = items.size() > 3 && (items[3] == ".text" || items[3].compare(0, 6, ".text.") == 0);
+        if (items.size() > 5 && items[1] == property && items[2] == "F" && textSection &&
+            (items[5] == symbol || items[5].find(mangledPrefix) != std::string::npos)) {
+            return true;
+        }
     }
-    flags.insert(
-        flags.end(),
-        {"-fPIC", "-pthread", "-DBUILD_DYNAMIC_PROBE", "-DTILING_KEY_VAR=0", "-I", (ascendcDevkit / "asc").string(),
-         "-I", (ascendcDevkit / "asc/include").string(), "-I", (ascendcDevkit / "asc/include/basic_api").string(), "-I",
-         (ascendcDevkit / "ascendc/include/highlevel_api").string()});
-    return flags;
+    return false;
 }
 
-std::string SourceDigest(const DbiRequest& request, const std::vector<ProbeGroup>& groups)
+struct GroupArtifact {
+    std::filesystem::path object;
+    std::string identity;
+};
+
+std::string GroupManifest(
+    const std::filesystem::path& object, const std::string& arch, ProbeGroup group,
+    const GeneratedProbeSource& generated, const std::string& compilerIdentity)
 {
-    uint64_t hash = 1469598103934665603ULL;
-    for (const auto group : groups) {
-        const auto path = std::filesystem::path(request.sourceRoot) / "probes" / ProbeSourceName(group);
-        hash = HashText(hash, path.string());
-        hash = HashText(hash, ReadFile(path));
-    }
-    for (const char* header : {"trace_record.h", "trace_buffer_abi.h"}) {
-        const auto path = std::filesystem::path(request.sourceRoot) / header;
-        hash = HashText(hash, path.string());
-        hash = HashText(hash, ReadFile(path));
+    const std::string digest = FileDigest(object);
+    if (digest.empty()) {
+        return {};
     }
     std::ostringstream output;
-    output << std::hex << std::setfill('0') << std::setw(16) << hash;
+    output << "format=1\narch=" << arch << "\ngroup=" << ProbeGroupName(group) << "\nsource=" << generated.identity
+           << "\ngenerator=" << ProbeGeneratorIdentity() << "\nresources=" << EmbeddedProbeResourceIdentity()
+           << "\ncompiler=" << compilerIdentity << "\nobject=" << digest << '\n';
     return output.str();
+}
+
+bool IsValidGroupArtifact(
+    const std::filesystem::path& directory, const std::string& arch, ProbeGroup group,
+    const GeneratedProbeSource& generated, const std::string& compilerIdentity)
+{
+    std::error_code error;
+    const auto status = std::filesystem::symlink_status(directory, error);
+    if (error || std::filesystem::is_symlink(status) || !std::filesystem::is_directory(status)) {
+        return false;
+    }
+    const auto object = directory / "group.o";
+    const std::string expected = GroupManifest(object, arch, group, generated, compilerIdentity);
+    return !expected.empty() && ReadFile(directory / "manifest") == expected;
+}
+
+bool ReplaceDirectory(
+    const std::filesystem::path& staging, const std::filesystem::path& destination, DbiResult& result,
+    const std::string& stage)
+{
+    std::error_code error;
+    const auto oldStatus = std::filesystem::symlink_status(destination, error);
+    if (!error && std::filesystem::exists(oldStatus)) {
+        std::filesystem::remove_all(destination, error);
+        if (error) {
+            result.stage = stage;
+            result.diagnostic = "cannot replace invalid artifact: " + error.message();
+            return false;
+        }
+    }
+    error.clear();
+    std::filesystem::rename(staging, destination, error);
+    if (error) {
+        result.stage = stage;
+        result.diagnostic = "cannot publish artifact: " + error.message();
+        return false;
+    }
+    return true;
+}
+
+bool GetOrBuildGroupArtifact(
+    const DbiRequest& request, const ToolchainPaths& tools, const std::filesystem::path& groupsRoot, ProbeGroup group,
+    DbiResult& result, GroupArtifact& artifact)
+{
+    const GeneratedProbeSource generated = GenerateProbeSource(request.arch, group);
+    if (!generated.success) {
+        result.stage = "render-probe";
+        result.diagnostic = generated.diagnostic;
+        return false;
+    }
+    const auto devkit = AscendcDevkitRoot(tools.bisheng);
+    const auto compilerFlags = ProbeCompileFlags(request.arch, devkit);
+    const std::string compilerIdentity = FileIdentity(tools.bisheng) + ":" + TextIdentity(compilerFlags) + ":" +
+                                         std::string(EmbeddedProbeResourceIdentity());
+    const std::string cacheKey = MakeCacheKey(
+        request.arch, {group}, generated.identity + ":" + ProbeGeneratorIdentity() + ":" + compilerIdentity);
+    const auto directory = groupsRoot / cacheKey;
+    CacheLock lock;
+    if (!lock.Acquire(groupsRoot / (cacheKey + ".lock"), result.diagnostic)) {
+        result.stage = "group-cache-lock";
+        return false;
+    }
+    if (!IsValidGroupArtifact(directory, request.arch, group, generated, compilerIdentity)) {
+        const std::string buildId = std::to_string(static_cast<unsigned long long>(getpid())) + "-" +
+                                    std::to_string(g_cacheBuildId.fetch_add(1));
+        const auto staging = groupsRoot / (".build-" + cacheKey + "-" + buildId);
+        std::error_code error;
+        if (!std::filesystem::create_directory(staging, error) || error ||
+            !EnsurePrivateDirectory(staging, result.diagnostic)) {
+            result.stage = "group-cache-directory";
+            if (result.diagnostic.empty()) {
+                result.diagnostic = "cannot create group staging directory: " + error.message();
+            }
+            return false;
+        }
+        TemporaryDirectory stagingCleanup(staging, request.keepTemp);
+        const auto includeDirectory = staging / "include";
+        const auto sourceDirectory = staging / "src";
+        if (!EnsurePrivateDirectory(includeDirectory, result.diagnostic) ||
+            !EnsurePrivateDirectory(sourceDirectory, result.diagnostic)) {
+            result.stage = "materialize-source";
+            return false;
+        }
+        const auto source = sourceDirectory / ("generated-" + ProbeGroupName(group) + ".cpp");
+        if (!WriteExclusiveFile(includeDirectory / "trace_record.h", std::string(EmbeddedTraceRecordHeader())) ||
+            !WriteExclusiveFile(includeDirectory / "trace_buffer_abi.h", std::string(EmbeddedTraceBufferAbiHeader())) ||
+            !WriteExclusiveFile(source, generated.source) ||
+            !WriteExclusiveFile(sourceDirectory / (ProbeGroupName(group) + ".map"), generated.sourceMap)) {
+            result.stage = "materialize-source";
+            result.diagnostic = "cannot materialize generated Probe source for " + ProbeGroupName(group);
+            return false;
+        }
+
+        const auto stagedObject = staging / "group.o";
+        std::vector<std::string> arguments{tools.bisheng};
+        arguments.insert(arguments.end(), compilerFlags.begin(), compilerFlags.end());
+        arguments.insert(
+            arguments.end(), {"-I", includeDirectory.string(), "-c", source.string(), "-o", stagedObject.string()});
+        if (!RunChecked("compile-probe", arguments, result) || !IsNonEmptyFile(stagedObject)) {
+            if (result.diagnostic.empty()) {
+                result.stage = "compile-probe";
+                result.diagnostic = "Bisheng did not create " + stagedObject.string();
+            }
+            return false;
+        }
+        std::string symbols;
+        if (!RunChecked("validate-probe", {tools.llvmObjdump, "--syms", stagedObject.string()}, result, &symbols)) {
+            return false;
+        }
+        const auto missing = std::find_if(generated.symbols.begin(), generated.symbols.end(), [&](const auto& symbol) {
+            return !HasTextSymbol(symbols, "w", symbol);
+        });
+        if (missing != generated.symbols.end()) {
+            if (result.diagnostic.empty()) {
+                result.stage = "validate-probe";
+                result.diagnostic = "generated Probe group is missing weak text symbol " + *missing;
+            }
+            return false;
+        }
+        const std::string manifest = GroupManifest(stagedObject, request.arch, group, generated, compilerIdentity);
+        if (manifest.empty() || !WriteExclusiveFile(staging / "manifest", manifest)) {
+            result.stage = "publish-group-cache";
+            result.diagnostic = "cannot create group manifest";
+            return false;
+        }
+        if (!ReplaceDirectory(staging, directory, result, "publish-group-cache")) {
+            return false;
+        }
+        stagingCleanup.Release();
+        if (!IsValidGroupArtifact(directory, request.arch, group, generated, compilerIdentity)) {
+            result.stage = "publish-group-cache";
+            result.diagnostic = "published group artifact failed validation";
+            return false;
+        }
+    }
+    artifact.object = directory / "group.o";
+    artifact.identity = cacheKey + ":" + FileDigest(artifact.object);
+    return true;
 }
 
 } // namespace
@@ -300,53 +615,6 @@ bool ToolchainPaths::Complete() const
     return IsExecutableFile(bisheng) && IsExecutableFile(bishengTune) && IsExecutableFile(ldLld) &&
            IsExecutableFile(llvmObjdump);
 }
-
-std::vector<ProbeGroup> NormalizeProbeGroups(const std::vector<ProbeGroup>& groups)
-{
-    std::set<ProbeGroup> unique(groups.begin(), groups.end());
-    // MTE2 memory operations consume configuration written by scalar SET_* instructions.
-    if (unique.find(ProbeGroup::Mte2) != unique.end()) {
-        unique.insert(ProbeGroup::Scalar);
-    }
-    return {unique.begin(), unique.end()};
-}
-
-std::vector<ProbeGroup> ProbeGroupsFromMask(uint32_t mask)
-{
-    const std::pair<uint32_t, ProbeGroup> groups[] = {
-        {PROBE_GROUP_MTE1, ProbeGroup::Mte1},     {PROBE_GROUP_MTE2, ProbeGroup::Mte2},
-        {PROBE_GROUP_MTE3, ProbeGroup::Mte3},     {PROBE_GROUP_FIXPIPE, ProbeGroup::Fixpipe},
-        {PROBE_GROUP_SCALAR, ProbeGroup::Scalar}, {PROBE_GROUP_SYNC, ProbeGroup::Sync},
-    };
-    std::vector<ProbeGroup> selected;
-    for (const auto& group : groups) {
-        if ((mask & group.first) != 0) {
-            selected.push_back(group.second);
-        }
-    }
-    return NormalizeProbeGroups(selected);
-}
-
-std::string ProbeGroupName(ProbeGroup group)
-{
-    switch (group) {
-        case ProbeGroup::Mte1:
-            return "mte1";
-        case ProbeGroup::Mte2:
-            return "mte2";
-        case ProbeGroup::Mte3:
-            return "mte3";
-        case ProbeGroup::Fixpipe:
-            return "fixpipe";
-        case ProbeGroup::Scalar:
-            return "scalar";
-        case ProbeGroup::Sync:
-            return "sync";
-    }
-    return {};
-}
-
-std::string ProbeSourceName(ProbeGroup group) { return ProbeGroupName(group) + ".cpp"; }
 
 std::string ValidateRequest(const DbiRequest& request)
 {
@@ -358,9 +626,6 @@ std::string ValidateRequest(const DbiRequest& request)
     }
     if (request.arch.empty()) {
         return "architecture is empty";
-    }
-    if (request.traceArgumentOffset == 0) {
-        return "trace argument offset is zero";
     }
     if (NormalizeProbeGroups(request.probeGroups).empty()) {
         return "probe set is empty";
@@ -383,50 +648,53 @@ ToolchainPaths ResolveToolchain(const std::string& explicitRoot, const std::map<
             directories.push_back(std::filesystem::path(root) / "tools/bisheng_compiler/bin");
         }
     }
-
-    std::string resolved[4];
-    for (const auto& directory : directories) {
-        for (std::size_t index = 0; index < 4; ++index) {
-            if (resolved[index].empty()) {
-                resolved[index] = FindInDirectory(directory, kToolNames[index]);
-            }
-        }
-    }
     const std::string path = EnvironmentValue(environment, "PATH");
-    for (std::size_t index = 0; index < 4; ++index) {
-        if (resolved[index].empty()) {
-            resolved[index] = FindInPath(path, kToolNames[index]);
+    std::size_t begin = 0;
+    while (begin <= path.size()) {
+        const std::size_t end = path.find(':', begin);
+        const std::string item = path.substr(begin, end == std::string::npos ? end : end - begin);
+        if (!item.empty()) {
+            directories.emplace_back(item);
+        }
+        if (end == std::string::npos) {
+            break;
+        }
+        begin = end + 1;
+    }
+
+    ToolchainPaths fallback;
+    for (const auto& directory : directories) {
+        ToolchainPaths candidate{
+            FindInDirectory(directory, kToolNames[0]), FindInDirectory(directory, kToolNames[1]),
+            FindInDirectory(directory, kToolNames[2]), FindInDirectory(directory, kToolNames[3])};
+        if (candidate.Complete()) {
+            return candidate;
+        }
+        if (fallback.bisheng.empty() && fallback.bishengTune.empty() && fallback.ldLld.empty() &&
+            fallback.llvmObjdump.empty()) {
+            fallback = std::move(candidate);
         }
     }
-    return {resolved[0], resolved[1], resolved[2], resolved[3]};
+    return fallback;
 }
 
 std::string MakeCacheKey(
-    const std::string& arch, const std::vector<ProbeGroup>& groups, const std::vector<std::string>& compilerArgs,
-    const std::string& sourceDigest)
+    const std::string& arch, const std::vector<ProbeGroup>& groups, const std::string& objectIdentity)
 {
     uint64_t hash = 1469598103934665603ULL;
     hash = HashText(hash, arch);
     for (const auto group : NormalizeProbeGroups(groups)) {
         hash = HashText(hash, ProbeGroupName(group));
     }
-    for (const auto& argument : compilerArgs) {
-        hash = HashText(hash, argument);
-    }
-    hash = HashText(hash, sourceDigest);
+    hash = HashText(hash, objectIdentity);
     std::ostringstream output;
     output << std::hex << std::setfill('0') << std::setw(16) << hash;
     return output.str();
 }
 
-std::string ComputeProbeSourceDigest(const DbiRequest& request, const std::vector<ProbeGroup>& groups)
-{
-    return SourceDigest(request, groups);
-}
-
 DbiResult RunDbiPipeline(const DbiRequest& request)
 {
-    // 校验调用方传入的参数，并确认所需的探针源码均存在且非空。
+    // 校验调用方传入的参数，并快照本次请求对应的 ProbeGroup 集合。
     DbiResult result{};
     result.traceArgumentOffset = request.traceArgumentOffset;
     result.stage = "validate";
@@ -435,28 +703,19 @@ DbiResult RunDbiPipeline(const DbiRequest& request)
         return result;
     }
     const auto groups = NormalizeProbeGroups(request.probeGroups);
-    for (const auto group : groups) {
-        const auto source = std::filesystem::path(request.sourceRoot) / "probes" / ProbeSourceName(group);
-        if (!IsNonEmptyFile(source)) {
-            result.stage = "source";
-            result.diagnostic = "missing Probe source: " + source.string();
-            return result;
-        }
+    if (!GenerateProbeSource(request.arch, groups.front()).success) {
+        result.stage = "architecture";
+        result.diagnostic = "unsupported Probe architecture " + request.arch;
+        return result;
     }
 
-    // 定位完整的毕昇工具链，以及编译探针源码所需的 AscendC 开发头文件。
+    // Probe 源码在 load hook 中生成，因此运行时需要同一 CANN root 下的完整 Bisheng 工具链。
     const ToolchainPaths tools = ResolveToolchain(request.toolchainRoot, {});
     if (!tools.Complete()) {
         result.stage = "toolchain";
-        result.diagnostic = "bisheng toolchain is incomplete: bisheng=" + tools.bisheng +
+        result.diagnostic = "DBI runtime toolchain is incomplete: bisheng=" + tools.bisheng +
                             " bisheng-tune=" + tools.bishengTune + " ld.lld=" + tools.ldLld +
                             " llvm-objdump=" + tools.llvmObjdump;
-        return result;
-    }
-    const auto ascendcDevkit = FindAscendcDevkit(tools.bisheng);
-    if (ascendcDevkit.empty()) {
-        result.stage = "toolchain";
-        result.diagnostic = "AscendC development headers are unavailable";
         return result;
     }
     // 准备本次流水线使用的工作目录和跨请求复用的缓存目录。
@@ -467,67 +726,59 @@ DbiResult RunDbiPipeline(const DbiRequest& request)
         result.diagnostic = error.message();
         return result;
     }
-    std::filesystem::create_directories(request.cacheDirectory, error);
-    if (error) {
+    if (!EnsurePrivateDirectory(request.cacheDirectory, result.diagnostic)) {
         result.stage = "cache-directory";
-        result.diagnostic = error.message();
+        return result;
+    }
+    const auto groupsRoot = std::filesystem::path(request.cacheDirectory) / "groups";
+    const auto aggregatesRoot = std::filesystem::path(request.cacheDirectory) / "aggregates";
+    if (!EnsurePrivateDirectory(groupsRoot, result.diagnostic) ||
+        !EnsurePrivateDirectory(aggregatesRoot, result.diagnostic)) {
+        result.stage = "cache-directory";
         return result;
     }
 
-    // 将所有影响编译结果的输入纳入缓存键，并按缓存键加锁，
-    // 防止并发请求读到未构建完成的文件。
-    auto compilerFlags = ProbeCompileFlags(request.arch, ascendcDevkit);
-    compilerFlags.insert(compilerFlags.end(), {"-I", request.sourceRoot});
-    compilerFlags.insert(compilerFlags.end(), request.extraCompilerArgs.begin(), request.extraCompilerArgs.end());
-    const std::string cacheKey =
-        MakeCacheKey(request.arch, groups, compilerFlags, ComputeProbeSourceDigest(request, groups));
-    const auto artifactDirectory = std::filesystem::path(request.cacheDirectory) / cacheKey;
-    CacheLock cacheLock;
-    if (!cacheLock.Acquire(std::filesystem::path(request.cacheDirectory) / (cacheKey + ".lock"), result.diagnostic)) {
-        result.stage = "cache-lock";
-        return result;
+    // 每组源码和对象独立缓存，Domain ID 的不同组合可以复用相同 group.o。
+    std::vector<std::string> objectPaths;
+    std::string groupIdentity;
+    for (const ProbeGroup group : groups) {
+        GroupArtifact artifact;
+        if (!GetOrBuildGroupArtifact(request, tools, groupsRoot, group, result, artifact)) {
+            return result;
+        }
+        groupIdentity.append(ProbeGroupName(group)).append(":").append(artifact.identity).append("\n");
+        objectPaths.push_back(artifact.object.string());
     }
-    std::filesystem::create_directories(artifactDirectory, error);
-    if (error) {
-        result.stage = "cache-directory";
-        result.diagnostic = error.message();
+
+    // 聚合缓存把同一 normalized groups 的 probe.o 与 ctrl.bin 作为一个不可分割的产物发布。
+    const std::string artifactIdentity = groupIdentity + ":" + CtrlBinGeneratorIdentity() + ":" +
+                                         std::string(EmbeddedCtrlBinImplementationIdentity()) + ":" +
+                                         FileIdentity(tools.ldLld);
+    const std::string cacheKey = MakeCacheKey(request.arch, groups, artifactIdentity);
+    const auto artifactDirectory = aggregatesRoot / cacheKey;
+    CacheLock cacheLock;
+    if (!cacheLock.Acquire(aggregatesRoot / (cacheKey + ".lock"), result.diagnostic)) {
+        result.stage = "cache-lock";
         return result;
     }
     const auto probeObject = artifactDirectory / "probe.o";
     const auto ctrlBin = artifactDirectory / "ctrl.bin";
-    const auto stagingDirectory =
-        artifactDirectory / (".build-" + std::to_string(static_cast<unsigned long long>(getpid())) + "-" +
-                             std::to_string(g_cacheBuildId.fetch_add(1)));
-    std::filesystem::create_directories(stagingDirectory, error);
-    if (error) {
-        result.stage = "cache-directory";
-        result.diagnostic = error.message();
-        return result;
-    }
-    TemporaryDirectory stagingCleanup(stagingDirectory);
-
-    // 缓存未命中时，分别编译各探针组，再将它们链接成一个可重定位的 probe.o。
-    // 所有构建均在临时目录中完成，成功后再通过重命名发布到共享缓存。
-
-    // TODO: CLI得到的目录怎么透传下来，san.so里？默认放tmp，内部可使用？
-    if (!IsNonEmptyFile(probeObject)) {
-        std::vector<std::string> objectPaths;
-        for (const auto group : groups) {
-            const auto source = std::filesystem::path(request.sourceRoot) / "probes" / ProbeSourceName(group);
-            const auto object = stagingDirectory / (ProbeGroupName(group) + ".o");
-            std::vector<std::string> arguments{tools.bisheng};
-            arguments.insert(arguments.end(), compilerFlags.begin(), compilerFlags.end());
-            arguments.insert(arguments.end(), {"-c", source.string(), "-o", object.string()});
-            if (!RunChecked("compile-probe", arguments, result) || !IsNonEmptyFile(object)) {
-                if (result.diagnostic.empty()) {
-                    result.stage = "compile-probe";
-                    result.diagnostic = "bisheng did not create " + object.string();
-                }
-                return result;
+    if (!IsValidCachedArtifact(artifactDirectory, request.arch, groups, artifactIdentity)) {
+        const std::string buildId = std::to_string(static_cast<unsigned long long>(getpid())) + "-" +
+                                    std::to_string(g_cacheBuildId.fetch_add(1));
+        const auto stagingDirectory = aggregatesRoot / (".build-" + cacheKey + "-" + buildId);
+        error.clear();
+        if (!std::filesystem::create_directory(stagingDirectory, error) || error ||
+            !EnsurePrivateDirectory(stagingDirectory, result.diagnostic)) {
+            result.stage = "cache-directory";
+            if (result.diagnostic.empty()) {
+                result.diagnostic = "cannot create Probe artifact staging directory: " + error.message();
             }
-            objectPaths.push_back(object.string());
+            return result;
         }
-        // 将各探针目标文件合并，保证后续只需向内核链接一个探针对象。
+        TemporaryDirectory stagingCleanup(stagingDirectory, request.keepTemp);
+
+        // 将已校验的 group objects 合并，保证后续只需向内核链接一个 probe.o。
         const auto stagedProbeObject = stagingDirectory / "probe.o";
         std::vector<std::string> linkArguments{tools.ldLld, "-r"};
         linkArguments.insert(linkArguments.end(), objectPaths.begin(), objectPaths.end());
@@ -539,25 +790,28 @@ DbiResult RunDbiPipeline(const DbiRequest& request)
             }
             return result;
         }
-        std::filesystem::rename(stagedProbeObject, probeObject, error);
-        if (error) {
-            result.stage = "publish-cache";
-            result.diagnostic = "cannot publish " + probeObject.string() + ": " + error.message();
-            return result;
-        }
-    }
-    // 生成 bisheng-tune 使用的探针绑定配置 ctrl.bin；它与 probe.o 共用缓存键，
-    // 从而保证探针对象和控制数据始终对应同一组请求参数。
-    if (!IsNonEmptyFile(ctrlBin)) {
+
+        // 使用同一组 groups 生成 ctrl.bin，并与 probe.o 作为一个目录原子发布。
         const auto stagedCtrlBin = stagingDirectory / "ctrl.bin";
         if (!GenerateCtrlBin(stagedCtrlBin.string(), groups, result.diagnostic)) {
             result.stage = "generate-ctrlbin";
             return result;
         }
-        std::filesystem::rename(stagedCtrlBin, ctrlBin, error);
-        if (error) {
+        const std::string manifest =
+            ArtifactManifest(stagedProbeObject, stagedCtrlBin, request.arch, groups, artifactIdentity);
+        if (manifest.empty() || !WriteExclusiveFile(stagingDirectory / "manifest", manifest)) {
             result.stage = "publish-cache";
-            result.diagnostic = "cannot publish " + ctrlBin.string() + ": " + error.message();
+            result.diagnostic = "cannot create Probe artifact manifest";
+            return result;
+        }
+
+        if (!ReplaceDirectory(stagingDirectory, artifactDirectory, result, "publish-cache")) {
+            return result;
+        }
+        stagingCleanup.Release();
+        if (!IsValidCachedArtifact(artifactDirectory, request.arch, groups, artifactIdentity)) {
+            result.stage = "publish-cache";
+            result.diagnostic = "published Probe artifact failed validation";
             return result;
         }
     }
@@ -582,7 +836,7 @@ DbiResult RunDbiPipeline(const DbiRequest& request)
     }
     // 生成符号排序文件，确保链接后原始内核正文位于探针入口之前。
     const auto orderingFile = std::filesystem::path(request.workDirectory) / "symbol_ordering.txt";
-    if (!WriteFile(orderingFile, kernelSymbol + "\n" + probeSymbol)) {
+    if (!WriteReplaceFile(orderingFile, kernelSymbol + "\n" + probeSymbol)) {
         result.stage = "symbol-ordering";
         result.diagnostic = "cannot write " + orderingFile.string();
         return result;

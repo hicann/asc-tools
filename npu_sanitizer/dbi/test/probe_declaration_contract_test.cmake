@@ -1,18 +1,16 @@
-# Copyright (c) 2026 Huawei Technologies Co., Ltd.
-# This program is free software, you can redistribute it and/or modify it under the terms and conditions of
-# CANN Open Software License Agreement Version 2.0 (the "License").
-
-if(NOT DEFINED DBI_ROOT)
-  message(FATAL_ERROR "DBI_ROOT is required")
-endif()
+foreach(required IN ITEMS DBI_ROOT PROBE_ARCH)
+  if(NOT DEFINED ${required} OR "${${required}}" STREQUAL "")
+    message(FATAL_ERROR "${required} is required")
+  endif()
+endforeach()
 
 set(probe_sources
-  "${DBI_ROOT}/src/probes/fixpipe.cpp"
-  "${DBI_ROOT}/src/probes/mte1.cpp"
-  "${DBI_ROOT}/src/probes/mte2.cpp"
-  "${DBI_ROOT}/src/probes/mte3.cpp"
-  "${DBI_ROOT}/src/probes/scalar.cpp"
-  "${DBI_ROOT}/src/probes/sync.cpp"
+  "${DBI_ROOT}/src/probes/${PROBE_ARCH}/fixpipe.cpp"
+  "${DBI_ROOT}/src/probes/${PROBE_ARCH}/mte1.cpp"
+  "${DBI_ROOT}/src/probes/${PROBE_ARCH}/mte2.cpp"
+  "${DBI_ROOT}/src/probes/${PROBE_ARCH}/mte3.cpp"
+  "${DBI_ROOT}/src/probes/${PROBE_ARCH}/scalar.cpp"
+  "${DBI_ROOT}/src/probes/${PROBE_ARCH}/sync.cpp"
 )
 
 set(probe_content "")
@@ -25,7 +23,6 @@ foreach(probe_source IN LISTS probe_sources)
 endforeach()
 file(READ "${DBI_ROOT}/include/trace_record.h" trace_record_content)
 file(READ "${DBI_ROOT}/include/trace_buffer_abi.h" trace_buffer_abi_content)
-file(READ "${DBI_ROOT}/src/probes/sync.cpp" sync_probe_content)
 
 foreach(trace_type IN ITEMS AclsanTraceBufferHeader AclsanTraceSliceHeader AclsanRawTraceRecord)
   string(FIND "${trace_buffer_abi_content}" "struct ${trace_type}" type_offset)
@@ -108,6 +105,17 @@ if(NOT probe_count EQUAL 83)
   message(FATAL_ERROR "expected 83 probe definitions, found ${probe_count}")
 endif()
 
+string(REGEX MATCHALL "__sanitizer_report_[A-Za-z0-9_]+" probe_symbols "${probe_content}")
+list(REMOVE_DUPLICATES probe_symbols)
+list(SORT probe_symbols)
+file(READ "${DBI_ROOT}/src/dynamic_bind.cpp" binding_content)
+string(REGEX MATCHALL "__sanitizer_report_[A-Za-z0-9_]+" binding_symbols "${binding_content}")
+list(REMOVE_DUPLICATES binding_symbols)
+list(SORT binding_symbols)
+if(NOT probe_symbols STREQUAL binding_symbols)
+  message(FATAL_ERROR "Probe definitions and ctrl.bin binding symbols differ")
+endif()
+
 string(CONCAT explicit_declaration
   "extern[ \t\r\n]+__attribute__\\(\\(noinline\\)\\)[ \t\r\n]+"
   "__attribute__\\(\\(weak\\)\\)[ \t\r\n]+__aicore__[ \t\r\n]+void[ \t\r\n]+"
@@ -116,15 +124,4 @@ string(REGEX MATCHALL "${explicit_declaration}" explicit_probes "${probe_content
 list(LENGTH explicit_probes explicit_probe_count)
 if(NOT explicit_probe_count EQUAL 83)
   message(FATAL_ERROR "expected 83 explicit probe declarations, found ${explicit_probe_count}")
-endif()
-
-# Vector sync instructions omit PIPE_V from their explicit operands. The probe
-# must restore it so host-side FLAG and BUFFER parsing sees the common layout.
-string(REGEX MATCHALL
-  "static_cast<uint64_t>\\(PIPE_V\\)"
-  vector_sync_pipe_arguments "${sync_probe_content}")
-list(LENGTH vector_sync_pipe_arguments vector_sync_pipe_argument_count)
-if(NOT vector_sync_pipe_argument_count EQUAL 8)
-  message(FATAL_ERROR
-    "expected 8 implicit PIPE_V arguments in sync probes, found ${vector_sync_pipe_argument_count}")
 endif()

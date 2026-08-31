@@ -8,6 +8,7 @@
 
 #include "dbi_pipeline.h"
 #include "ctrlbin_generator.h"
+#include "probe_source_generator.h"
 #include "tool_runner.h"
 
 #include <algorithm>
@@ -34,14 +35,24 @@ TEST(DbiPipelineTest, NormalizesProbeGroupsAndRejectsDuplicates)
     EXPECT_EQ(groups[2], ProbeGroup::Sync);
 }
 
-TEST(DbiPipelineTest, MapsProbeGroupsToTranslationUnits)
+TEST(DbiPipelineTest, ObjectAndCtrlbinPlansAgreeForEveryProbeMask)
 {
-    EXPECT_EQ(ProbeSourceName(ProbeGroup::Mte1), "mte1.cpp");
-    EXPECT_EQ(ProbeSourceName(ProbeGroup::Mte2), "mte2.cpp");
-    EXPECT_EQ(ProbeSourceName(ProbeGroup::Mte3), "mte3.cpp");
-    EXPECT_EQ(ProbeSourceName(ProbeGroup::Fixpipe), "fixpipe.cpp");
-    EXPECT_EQ(ProbeSourceName(ProbeGroup::Sync), "sync.cpp");
-    EXPECT_EQ(ProbeSourceName(ProbeGroup::Scalar), "scalar.cpp");
+    const std::pair<uint32_t, ProbeGroup> groupBits[] = {
+        {PROBE_GROUP_MTE1, ProbeGroup::Mte1}, {PROBE_GROUP_MTE2, ProbeGroup::Mte2},
+        {PROBE_GROUP_MTE3, ProbeGroup::Mte3}, {PROBE_GROUP_FIXPIPE, ProbeGroup::Fixpipe},
+        {PROBE_GROUP_SYNC, ProbeGroup::Sync}, {PROBE_GROUP_SCALAR, ProbeGroup::Scalar},
+    };
+    for (uint32_t mask = 0; mask <= PROBE_GROUP_ALL; ++mask) {
+        std::vector<ProbeGroup> rawGroups;
+        for (const auto& [bit, group] : groupBits) {
+            if ((mask & bit) != 0U) {
+                rawGroups.push_back(group);
+            }
+        }
+        const auto normalized = NormalizeProbeGroups(rawGroups);
+        EXPECT_EQ(ProbeGroupsFromMask(mask), normalized) << "mask=" << mask;
+        EXPECT_EQ(BindingSymbols(rawGroups), BindingSymbols(normalized)) << "mask=" << mask;
+    }
 }
 
 TEST(DbiPipelineTest, ValidatesRequestFields)
@@ -49,8 +60,7 @@ TEST(DbiPipelineTest, ValidatesRequestFields)
     DbiRequest request{};
     request.inputKernel = "/tmp/input.o";
     request.outputKernel = "/tmp/output.o";
-    request.arch = "dav-c220";
-    request.traceArgumentOffset = 24;
+    request.arch = "dav-3510";
     request.probeGroups = {ProbeGroup::Mte2};
     EXPECT_TRUE(ValidateRequest(request).empty());
 
@@ -80,36 +90,51 @@ TEST(DbiPipelineTest, ResolvesToolchainFromExplicitRoot)
     std::filesystem::remove_all(root);
 }
 
-TEST(DbiPipelineTest, CacheKeyChangesWithProbeSetAndSourceDigest)
+TEST(DbiPipelineTest, DoesNotMixToolsFromDifferentRoots)
 {
-    const auto first = MakeCacheKey("dav-c220", {ProbeGroup::Mte2}, {"-O2"}, "source-a");
-    const auto second = MakeCacheKey("dav-c220", {ProbeGroup::Mte3}, {"-O2"}, "source-a");
-    const auto third = MakeCacheKey("dav-c220", {ProbeGroup::Mte2}, {"-O2"}, "source-b");
-    EXPECT_NE(first, second);
-    EXPECT_NE(first, third);
+    const std::filesystem::path root = std::filesystem::temp_directory_path() / "dbi_toolchain_mixed_test";
+    std::filesystem::remove_all(root);
+    const auto first = root / "first/tools/bisheng_compiler/bin";
+    const auto second = root / "second";
+    std::filesystem::create_directories(first);
+    std::filesystem::create_directories(second);
+    for (const char* name : {"bisheng", "bisheng-tune"}) {
+        std::ofstream(first / name).put('\n');
+        ASSERT_EQ(chmod((first / name).c_str(), 0755), 0);
+    }
+    for (const char* name : {"ld.lld", "llvm-objdump"}) {
+        std::ofstream(second / name).put('\n');
+        ASSERT_EQ(chmod((second / name).c_str(), 0755), 0);
+    }
+
+    const auto toolchain = ResolveToolchain((root / "first").string(), {{"PATH", second.string()}});
+    EXPECT_FALSE(toolchain.Complete());
+    std::filesystem::remove_all(root);
 }
 
-TEST(DbiPipelineTest, SourceDigestIncludesSharedTraceProtocolHeaders)
+TEST(DbiPipelineTest, RejectsWorldWritableToolchainExecutable)
 {
-    const std::filesystem::path root = std::filesystem::temp_directory_path() / "dbi_source_digest_test";
+    const std::filesystem::path root = std::filesystem::temp_directory_path() / "dbi_toolchain_permissions_test";
     std::filesystem::remove_all(root);
-    std::filesystem::create_directories(root / "probes");
-    std::ofstream(root / "probes/scalar.cpp") << "scalar";
-    std::ofstream(root / "probes/mte2.cpp") << "probe";
-    std::ofstream(root / "trace_record.h") << "record-v1";
-    std::ofstream(root / "trace_buffer_abi.h") << "abi-v1";
+    const auto bin = root / "tools/bisheng_compiler/bin";
+    std::filesystem::create_directories(bin);
+    for (const char* name : {"bisheng", "bisheng-tune", "ld.lld", "llvm-objdump"}) {
+        std::ofstream(bin / name).put('\n');
+        ASSERT_EQ(chmod((bin / name).c_str(), 0755), 0);
+    }
+    ASSERT_EQ(chmod((bin / "bisheng").c_str(), 0777), 0);
 
-    DbiRequest request{};
-    request.sourceRoot = root.string();
-    const auto first = ComputeProbeSourceDigest(request, {ProbeGroup::Mte2});
-    std::ofstream(root / "trace_record.h", std::ios::trunc) << "record-v2";
-    const auto second = ComputeProbeSourceDigest(request, {ProbeGroup::Mte2});
-    std::ofstream(root / "trace_buffer_abi.h", std::ios::trunc) << "abi-v2";
-    const auto third = ComputeProbeSourceDigest(request, {ProbeGroup::Mte2});
+    EXPECT_FALSE(ResolveToolchain(root.string(), {}).Complete());
+    std::filesystem::remove_all(root);
+}
 
+TEST(DbiPipelineTest, CacheKeyChangesWithProbeSetAndObjectIdentity)
+{
+    const auto first = MakeCacheKey("dav-3510", {ProbeGroup::Mte2}, "objects-a");
+    const auto second = MakeCacheKey("dav-3510", {ProbeGroup::Mte3}, "objects-a");
+    const auto third = MakeCacheKey("dav-3510", {ProbeGroup::Mte2}, "objects-b");
     EXPECT_NE(first, second);
-    EXPECT_NE(second, third);
-    std::filesystem::remove_all(root);
+    EXPECT_NE(first, third);
 }
 
 std::string ReadGeneratedFile(const std::filesystem::path& path)
@@ -146,6 +171,22 @@ TEST(CtrlbinGeneratorTest, FiltersBindingsToSelectedProbeGroups)
 }
 
 TEST(CtrlbinGeneratorTest, AllGroupsPreserveBindingCount) { EXPECT_EQ(BindingSymbols(AllProbeGroups()).size(), 83U); }
+
+TEST(CtrlbinGeneratorTest, ExposesStableBindingIdentity) { EXPECT_EQ(CtrlBinGeneratorIdentity().size(), 16U); }
+
+TEST(CtrlbinGeneratorTest, GeneratedCatalogMatchesEveryBindingSymbol)
+{
+    std::vector<std::string> generatedSymbols;
+    for (const ProbeGroup group : AllProbeGroups()) {
+        const GeneratedProbeSource generated = GenerateProbeSource("dav-3510", group);
+        ASSERT_TRUE(generated.success) << generated.diagnostic;
+        generatedSymbols.insert(generatedSymbols.end(), generated.symbols.begin(), generated.symbols.end());
+    }
+    auto bindingSymbols = BindingSymbols(AllProbeGroups());
+    std::sort(generatedSymbols.begin(), generatedSymbols.end());
+    std::sort(bindingSymbols.begin(), bindingSymbols.end());
+    EXPECT_EQ(generatedSymbols, bindingSymbols);
+}
 
 TEST(CtrlbinGeneratorTest, ConcurrentRequestsRemainIsolated)
 {

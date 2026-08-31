@@ -8,7 +8,6 @@
 
 #include "binary_instrumenter.h"
 
-#include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <iterator>
@@ -16,9 +15,8 @@
 
 int main(int argc, char** argv)
 {
-    if (argc != 8) {
-        std::cerr << "usage: real_tool_smoke <input> <output> <arch> <toolchain-root> <source-root> <work-dir> "
-                     "<cache-dir>\n";
+    if (argc != 7) {
+        std::cerr << "usage: real_tool_smoke <input> <output> <arch> <toolchain-root> <work-dir> <cache-dir>\n";
         return 2;
     }
 
@@ -32,9 +30,8 @@ int main(int argc, char** argv)
     config.arch = argv[3];
     config.probeGroups = {aclsan::ProbeGroup::Mte2};
     config.toolchainRoot = argv[4];
-    config.sourceRoot = argv[5];
-    config.workDirectory = argv[6];
-    config.cacheDirectory = argv[7];
+    config.workDirectory = argv[5];
+    config.cacheDirectory = argv[6];
     config.keepTemp = true;
 
     const auto result = aclsan::InstrumentBinary(config, image.data(), image.size());
@@ -43,7 +40,8 @@ int main(int argc, char** argv)
         return 1;
     }
     std::ofstream output(argv[2], std::ios::binary | std::ios::trunc);
-    output.write(reinterpret_cast<const char*>(result.binary.data()), result.binary.size());
+    output.write(
+        reinterpret_cast<const char*>(result.binary.data()), static_cast<std::streamsize>(result.binary.size()));
     if (!output.good()) {
         std::cerr << "cannot write patched output: " << argv[2] << '\n';
         return 1;

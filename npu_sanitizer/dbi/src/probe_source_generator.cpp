@@ -1,0 +1,460 @@
+// Copyright (c) 2026 Huawei Technologies Co., Ltd.
+// This program is free software, you can redistribute it and/or modify it under the terms and conditions of
+// CANN Open Software License Agreement Version 2.0 (the "License").
+// Please refer to the License for details. You may not use this file except in compliance with the License.
+// THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
+// INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
+// See LICENSE in the root of the software repository for the full text of the License.
+
+#include "probe_source_generator.h"
+
+#include <algorithm>
+#include <array>
+#include <cstdint>
+#include <iomanip>
+#include <set>
+#include <sstream>
+
+namespace aclsan {
+namespace {
+
+constexpr std::string_view kSupportedArch = "dav-3510";
+constexpr std::string_view kGeneratorSchema = "probe-generator-v1";
+
+struct ProbeDefinition {
+    uint16_t apiId;
+    ProbeGroup group;
+    std::string_view symbol;
+    std::string_view parameters;
+    std::string_view category;
+    std::string_view pipeline;
+    std::string_view recordArguments;
+};
+
+const std::array<ProbeDefinition, 83> kDefinitions{{
+    {167, ProbeGroup::Fixpipe, "__sanitizer_report_copy_cbuf_to_fbuf",
+     R"PARAM(__gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, __fbuf__ void* dst, __cbuf__ void* src, uint64_t config)PARAM",
+     "MemoryAccess", "PIPE_FIX",
+     R"ARGS(reinterpret_cast<uint64_t>(dst), reinterpret_cast<uint64_t>(src), config, 0UL, 0UL)ARGS"},
+    {168, ProbeGroup::Fixpipe, "__sanitizer_report_copy_matrix_cc_to_cbuf_f32",
+     R"PARAM(__gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, __cbuf__ void* dst, __cc__ float* src, uint64_t config0, uint64_t config1)PARAM",
+     "MemoryAccess", "PIPE_FIX",
+     R"ARGS(reinterpret_cast<uint64_t>(dst), reinterpret_cast<uint64_t>(src), config0, config1, 0UL)ARGS"},
+    {169, ProbeGroup::Fixpipe, "__sanitizer_report_copy_matrix_cc_to_cbuf_s32",
+     R"PARAM(__gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, __cbuf__ void* dst, __cc__ int32_t* src, uint64_t config0, uint64_t config1)PARAM",
+     "MemoryAccess", "PIPE_FIX",
+     R"ARGS(reinterpret_cast<uint64_t>(dst), reinterpret_cast<uint64_t>(src), config0, config1, 0UL)ARGS"},
+    {91, ProbeGroup::Fixpipe, "__sanitizer_report_copy_matrix_cc_to_gm_f32_a5",
+     R"PARAM(__gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, __gm__ void* dst, __cc__ float* src, uint64_t config0, uint64_t config1)PARAM",
+     "MemoryAccess", "PIPE_FIX",
+     R"ARGS(reinterpret_cast<uint64_t>(dst), reinterpret_cast<uint64_t>(src), config0, config1, 0UL)ARGS"},
+    {92, ProbeGroup::Fixpipe, "__sanitizer_report_copy_matrix_cc_to_gm_s32_a5",
+     R"PARAM(__gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, __gm__ void* dst, __cc__ int32_t* src, uint64_t config0, uint64_t config1)PARAM",
+     "MemoryAccess", "PIPE_FIX",
+     R"ARGS(reinterpret_cast<uint64_t>(dst), reinterpret_cast<uint64_t>(src), config0, config1, 0UL)ARGS"},
+    {170, ProbeGroup::Fixpipe, "__sanitizer_report_copy_matrix_cc_to_ubuf_f32",
+     R"PARAM(__gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, __ubuf__ void* dst, __cc__ float* src, uint64_t config0, uint64_t config1)PARAM",
+     "MemoryAccess", "PIPE_FIX",
+     R"ARGS(reinterpret_cast<uint64_t>(dst), reinterpret_cast<uint64_t>(src), config0, config1, 0UL)ARGS"},
+    {171, ProbeGroup::Fixpipe, "__sanitizer_report_copy_matrix_cc_to_ubuf_s32",
+     R"PARAM(__gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, __ubuf__ void* dst, __cc__ int32_t* src, uint64_t config0, uint64_t config1)PARAM",
+     "MemoryAccess", "PIPE_FIX",
+     R"ARGS(reinterpret_cast<uint64_t>(dst), reinterpret_cast<uint64_t>(src), config0, config1, 0UL)ARGS"},
+    {426, ProbeGroup::Mte1, "__sanitizer_report_copy_cbuf_to_bt_b16",
+     R"PARAM(__gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, uint64_t dst, __cbuf__ void* src, uint64_t config)PARAM",
+     "MemoryAccess", "PIPE_MTE1", R"ARGS(dst, reinterpret_cast<uint64_t>(src), config, 0UL, 0UL)ARGS"},
+    {425, ProbeGroup::Mte1, "__sanitizer_report_copy_cbuf_to_bt_f16",
+     R"PARAM(__gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, uint64_t dst, __cbuf__ void* src, uint64_t config)PARAM",
+     "MemoryAccess", "PIPE_MTE1", R"ARGS(dst, reinterpret_cast<uint64_t>(src), config, 0UL, 0UL)ARGS"},
+    {424, ProbeGroup::Mte1, "__sanitizer_report_copy_cbuf_to_bt_s32",
+     R"PARAM(__gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, uint64_t dst, __cbuf__ void* src, uint64_t config)PARAM",
+     "MemoryAccess", "PIPE_MTE1", R"ARGS(dst, reinterpret_cast<uint64_t>(src), config, 0UL, 0UL)ARGS"},
+    {423, ProbeGroup::Mte1, "__sanitizer_report_copy_cbuf_to_bt_f32",
+     R"PARAM(__gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, uint64_t dst, __cbuf__ void* src, uint64_t config)PARAM",
+     "MemoryAccess", "PIPE_MTE1", R"ARGS(dst, reinterpret_cast<uint64_t>(src), config, 0UL, 0UL)ARGS"},
+    {158, ProbeGroup::Mte1, "__sanitizer_report_copy_cbuf_to_ubuf",
+     R"PARAM(__gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, __ubuf__ void* dst, __cbuf__ void* src, uint64_t config)PARAM",
+     "MemoryAccess", "PIPE_MTE1",
+     R"ARGS(reinterpret_cast<uint64_t>(dst), reinterpret_cast<uint64_t>(src), config, 0UL, 0UL)ARGS"},
+    {154, ProbeGroup::Mte1, "__sanitizer_report_img2colv2_cbuf_to_ca_b8",
+     R"PARAM(__gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, __ca__ void* dst, __cbuf__ void* src, uint64_t config0, uint64_t config1)PARAM",
+     "MemoryAccess", "PIPE_MTE1",
+     R"ARGS(reinterpret_cast<uint64_t>(dst), reinterpret_cast<uint64_t>(src), config0, config1, 0UL)ARGS"},
+    {153, ProbeGroup::Mte1, "__sanitizer_report_img2colv2_cbuf_to_ca_b16",
+     R"PARAM(__gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, __ca__ void* dst, __cbuf__ void* src, uint64_t config0, uint64_t config1)PARAM",
+     "MemoryAccess", "PIPE_MTE1",
+     R"ARGS(reinterpret_cast<uint64_t>(dst), reinterpret_cast<uint64_t>(src), config0, config1, 0UL)ARGS"},
+    {422, ProbeGroup::Mte1, "__sanitizer_report_img2colv2_cbuf_to_ca_b32",
+     R"PARAM(__gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, __ca__ void* dst, __cbuf__ void* src, uint64_t config0, uint64_t config1)PARAM",
+     "MemoryAccess", "PIPE_MTE1",
+     R"ARGS(reinterpret_cast<uint64_t>(dst), reinterpret_cast<uint64_t>(src), config0, config1, 0UL)ARGS"},
+    {156, ProbeGroup::Mte1, "__sanitizer_report_img2colv2_cbuf_to_cb_b8",
+     R"PARAM(__gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, __cb__ void* dst, __cbuf__ void* src, uint64_t config0, uint64_t config1)PARAM",
+     "MemoryAccess", "PIPE_MTE1",
+     R"ARGS(reinterpret_cast<uint64_t>(dst), reinterpret_cast<uint64_t>(src), config0, config1, 0UL)ARGS"},
+    {155, ProbeGroup::Mte1, "__sanitizer_report_img2colv2_cbuf_to_cb_b16",
+     R"PARAM(__gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, __cb__ void* dst, __cbuf__ void* src, uint64_t config0, uint64_t config1)PARAM",
+     "MemoryAccess", "PIPE_MTE1",
+     R"ARGS(reinterpret_cast<uint64_t>(dst), reinterpret_cast<uint64_t>(src), config0, config1, 0UL)ARGS"},
+    {157, ProbeGroup::Mte1, "__sanitizer_report_img2colv2_cbuf_to_cb_b32",
+     R"PARAM(__gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, __cb__ void* dst, __cbuf__ void* src, uint64_t config0, uint64_t config1)PARAM",
+     "MemoryAccess", "PIPE_MTE1",
+     R"ARGS(reinterpret_cast<uint64_t>(dst), reinterpret_cast<uint64_t>(src), config0, config1, 0UL)ARGS"},
+    {143, ProbeGroup::Mte1, "__sanitizer_report_load_cbuf_to_ca_2dv2_b8",
+     R"PARAM(__gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, __ca__ void* dst, __cbuf__ void* src, uint64_t config0, uint64_t config1, uint64_t transpose)PARAM",
+     "MemoryAccess", "PIPE_MTE1",
+     R"ARGS(reinterpret_cast<uint64_t>(dst), reinterpret_cast<uint64_t>(src), config0, config1, transpose)ARGS"},
+    {142, ProbeGroup::Mte1, "__sanitizer_report_load_cbuf_to_ca_2dv2_b16",
+     R"PARAM(__gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, __ca__ void* dst, __cbuf__ void* src, uint64_t config0, uint64_t config1, uint64_t transpose)PARAM",
+     "MemoryAccess", "PIPE_MTE1",
+     R"ARGS(reinterpret_cast<uint64_t>(dst), reinterpret_cast<uint64_t>(src), config0, config1, transpose)ARGS"},
+    {144, ProbeGroup::Mte1, "__sanitizer_report_load_cbuf_to_ca_2dv2_b32",
+     R"PARAM(__gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, __ca__ void* dst, __cbuf__ void* src, uint64_t config0, uint64_t config1, uint64_t transpose)PARAM",
+     "MemoryAccess", "PIPE_MTE1",
+     R"ARGS(reinterpret_cast<uint64_t>(dst), reinterpret_cast<uint64_t>(src), config0, config1, transpose)ARGS"},
+    {141, ProbeGroup::Mte1, "__sanitizer_report_load_cbuf_to_ca_2dv2_b4",
+     R"PARAM(__gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, __ca__ void* dst, __cbuf__ void* src, uint64_t config0, uint64_t config1, uint64_t transpose)PARAM",
+     "MemoryAccess", "PIPE_MTE1",
+     R"ARGS(reinterpret_cast<uint64_t>(dst), reinterpret_cast<uint64_t>(src), config0, config1, transpose)ARGS"},
+    {146, ProbeGroup::Mte1, "__sanitizer_report_load_cbuf_to_cb_2dv2_b4",
+     R"PARAM(__gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, __cb__ void* dst, __cbuf__ void* src, uint64_t config0, uint64_t config1, uint64_t transpose)PARAM",
+     "MemoryAccess", "PIPE_MTE1",
+     R"ARGS(reinterpret_cast<uint64_t>(dst), reinterpret_cast<uint64_t>(src), config0, config1, transpose)ARGS"},
+    {147, ProbeGroup::Mte1, "__sanitizer_report_load_cbuf_to_cb_2dv2_b8",
+     R"PARAM(__gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, __cb__ void* dst, __cbuf__ void* src, uint64_t config0, uint64_t config1, uint64_t transpose)PARAM",
+     "MemoryAccess", "PIPE_MTE1",
+     R"ARGS(reinterpret_cast<uint64_t>(dst), reinterpret_cast<uint64_t>(src), config0, config1, transpose)ARGS"},
+    {145, ProbeGroup::Mte1, "__sanitizer_report_load_cbuf_to_cb_2dv2_b16",
+     R"PARAM(__gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, __cb__ void* dst, __cbuf__ void* src, uint64_t config0, uint64_t config1, uint64_t transpose)PARAM",
+     "MemoryAccess", "PIPE_MTE1",
+     R"ARGS(reinterpret_cast<uint64_t>(dst), reinterpret_cast<uint64_t>(src), config0, config1, transpose)ARGS"},
+    {148, ProbeGroup::Mte1, "__sanitizer_report_load_cbuf_to_cb_2dv2_b32",
+     R"PARAM(__gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, __cb__ void* dst, __cbuf__ void* src, uint64_t config0, uint64_t config1, uint64_t transpose)PARAM",
+     "MemoryAccess", "PIPE_MTE1",
+     R"ARGS(reinterpret_cast<uint64_t>(dst), reinterpret_cast<uint64_t>(src), config0, config1, transpose)ARGS"},
+    {140, ProbeGroup::Mte1, "__sanitizer_report_load_cbuf_to_cb_2d_transpose_b4",
+     R"PARAM(__gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, __cb__ void* dst, __cbuf__ void* src, uint64_t config, uint64_t fracStride)PARAM",
+     "MemoryAccess", "PIPE_MTE1",
+     R"ARGS(reinterpret_cast<uint64_t>(dst), reinterpret_cast<uint64_t>(src), config, fracStride, 0UL)ARGS"},
+    {137, ProbeGroup::Mte1, "__sanitizer_report_load_cbuf_to_cb_2d_transpose_b8",
+     R"PARAM(__gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, __cb__ void* dst, __cbuf__ void* src, uint64_t config, uint64_t fracStride)PARAM",
+     "MemoryAccess", "PIPE_MTE1",
+     R"ARGS(reinterpret_cast<uint64_t>(dst), reinterpret_cast<uint64_t>(src), config, fracStride, 0UL)ARGS"},
+    {138, ProbeGroup::Mte1, "__sanitizer_report_load_cbuf_to_cb_2d_transpose_b16",
+     R"PARAM(__gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, __cb__ void* dst, __cbuf__ void* src, uint64_t config, uint64_t fracStride)PARAM",
+     "MemoryAccess", "PIPE_MTE1",
+     R"ARGS(reinterpret_cast<uint64_t>(dst), reinterpret_cast<uint64_t>(src), config, fracStride, 0UL)ARGS"},
+    {139, ProbeGroup::Mte1, "__sanitizer_report_load_cbuf_to_cb_2d_transpose_b32",
+     R"PARAM(__gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, __cb__ void* dst, __cbuf__ void* src, uint64_t config, uint64_t fracStride)PARAM",
+     "MemoryAccess", "PIPE_MTE1",
+     R"ARGS(reinterpret_cast<uint64_t>(dst), reinterpret_cast<uint64_t>(src), config, fracStride, 0UL)ARGS"},
+    {74, ProbeGroup::Mte2, "__sanitizer_report_copy_gm_to_cbuf_align_v2_b8",
+     R"PARAM(__gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, __cbuf__ void* dst, __gm__ void* src, uint64_t config0, uint64_t config1)PARAM",
+     "MemoryAccess", "PIPE_MTE2",
+     R"ARGS(reinterpret_cast<uint64_t>(dst), reinterpret_cast<uint64_t>(src), config0, config1, 0UL)ARGS"},
+    {75, ProbeGroup::Mte2, "__sanitizer_report_copy_gm_to_cbuf_align_v2_b16",
+     R"PARAM(__gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, __cbuf__ void* dst, __gm__ void* src, uint64_t config0, uint64_t config1)PARAM",
+     "MemoryAccess", "PIPE_MTE2",
+     R"ARGS(reinterpret_cast<uint64_t>(dst), reinterpret_cast<uint64_t>(src), config0, config1, 0UL)ARGS"},
+    {76, ProbeGroup::Mte2, "__sanitizer_report_copy_gm_to_cbuf_align_v2_b32",
+     R"PARAM(__gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, __cbuf__ void* dst, __gm__ void* src, uint64_t config0, uint64_t config1)PARAM",
+     "MemoryAccess", "PIPE_MTE2",
+     R"ARGS(reinterpret_cast<uint64_t>(dst), reinterpret_cast<uint64_t>(src), config0, config1, 0UL)ARGS"},
+    {80, ProbeGroup::Mte2, "__sanitizer_report_copy_gm_to_cbuf_multi_dn2nz_d_b8",
+     R"PARAM(__gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, __cbuf__ void* dst, __gm__ void* src, uint64_t config0, uint64_t config1)PARAM",
+     "MemoryAccess", "PIPE_MTE2",
+     R"ARGS(reinterpret_cast<uint64_t>(dst), reinterpret_cast<uint64_t>(src), config0, config1, 0UL)ARGS"},
+    {81, ProbeGroup::Mte2, "__sanitizer_report_copy_gm_to_cbuf_multi_dn2nz_d_b16",
+     R"PARAM(__gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, __cbuf__ void* dst, __gm__ void* src, uint64_t config0, uint64_t config1)PARAM",
+     "MemoryAccess", "PIPE_MTE2",
+     R"ARGS(reinterpret_cast<uint64_t>(dst), reinterpret_cast<uint64_t>(src), config0, config1, 0UL)ARGS"},
+    {82, ProbeGroup::Mte2, "__sanitizer_report_copy_gm_to_cbuf_multi_dn2nz_d_b32",
+     R"PARAM(__gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, __cbuf__ void* dst, __gm__ void* src, uint64_t config0, uint64_t config1)PARAM",
+     "MemoryAccess", "PIPE_MTE2",
+     R"ARGS(reinterpret_cast<uint64_t>(dst), reinterpret_cast<uint64_t>(src), config0, config1, 0UL)ARGS"},
+    {77, ProbeGroup::Mte2, "__sanitizer_report_copy_gm_to_cbuf_multi_nd2nz_d_b8",
+     R"PARAM(__gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, __cbuf__ void* dst, __gm__ void* src, uint64_t config0, uint64_t config1)PARAM",
+     "MemoryAccess", "PIPE_MTE2",
+     R"ARGS(reinterpret_cast<uint64_t>(dst), reinterpret_cast<uint64_t>(src), config0, config1, 0UL)ARGS"},
+    {78, ProbeGroup::Mte2, "__sanitizer_report_copy_gm_to_cbuf_multi_nd2nz_d_b16",
+     R"PARAM(__gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, __cbuf__ void* dst, __gm__ void* src, uint64_t config0, uint64_t config1)PARAM",
+     "MemoryAccess", "PIPE_MTE2",
+     R"ARGS(reinterpret_cast<uint64_t>(dst), reinterpret_cast<uint64_t>(src), config0, config1, 0UL)ARGS"},
+    {79, ProbeGroup::Mte2, "__sanitizer_report_copy_gm_to_cbuf_multi_nd2nz_d_b32",
+     R"PARAM(__gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, __cbuf__ void* dst, __gm__ void* src, uint64_t config0, uint64_t config1)PARAM",
+     "MemoryAccess", "PIPE_MTE2",
+     R"ARGS(reinterpret_cast<uint64_t>(dst), reinterpret_cast<uint64_t>(src), config0, config1, 0UL)ARGS"},
+    {73, ProbeGroup::Mte2, "__sanitizer_report_copy_gm_to_cbuf_v2",
+     R"PARAM(__gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, __cbuf__ void* dst, __gm__ void* src, uint64_t config0, uint64_t config1)PARAM",
+     "MemoryAccess", "PIPE_MTE2",
+     R"ARGS(reinterpret_cast<uint64_t>(dst), reinterpret_cast<uint64_t>(src), config0, config1, 0UL)ARGS"},
+    {84, ProbeGroup::Mte2, "__sanitizer_report_copy_gm_to_ubuf_align_v2_b8",
+     R"PARAM(__gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, __ubuf__ void* dst, __gm__ void* src, uint64_t config0, uint64_t config1)PARAM",
+     "MemoryAccess", "PIPE_MTE2",
+     R"ARGS(reinterpret_cast<uint64_t>(dst), reinterpret_cast<uint64_t>(src), config0, config1, 0UL)ARGS"},
+    {85, ProbeGroup::Mte2, "__sanitizer_report_copy_gm_to_ubuf_align_v2_b16",
+     R"PARAM(__gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, __ubuf__ void* dst, __gm__ void* src, uint64_t config0, uint64_t config1)PARAM",
+     "MemoryAccess", "PIPE_MTE2",
+     R"ARGS(reinterpret_cast<uint64_t>(dst), reinterpret_cast<uint64_t>(src), config0, config1, 0UL)ARGS"},
+    {86, ProbeGroup::Mte2, "__sanitizer_report_copy_gm_to_ubuf_align_v2_b32",
+     R"PARAM(__gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, __ubuf__ void* dst, __gm__ void* src, uint64_t config0, uint64_t config1)PARAM",
+     "MemoryAccess", "PIPE_MTE2",
+     R"ARGS(reinterpret_cast<uint64_t>(dst), reinterpret_cast<uint64_t>(src), config0, config1, 0UL)ARGS"},
+    {72, ProbeGroup::Mte2, "__sanitizer_report_load_gm_to_cbuf_2dv2",
+     R"PARAM(__gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, __cbuf__ void* dst, __gm__ void* src, uint64_t config0, uint64_t config1)PARAM",
+     "MemoryAccess", "PIPE_MTE2",
+     R"ARGS(reinterpret_cast<uint64_t>(dst), reinterpret_cast<uint64_t>(src), config0, config1, 0UL)ARGS"},
+    {87, ProbeGroup::Mte2, "__sanitizer_report_nd_copy_gm_to_ubuf_b8",
+     R"PARAM(__gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, __ubuf__ void* dst, __gm__ void* src, uint64_t config, uint64_t secConfig)PARAM",
+     "MemoryAccess", "PIPE_MTE2",
+     R"ARGS(reinterpret_cast<uint64_t>(dst), reinterpret_cast<uint64_t>(src), config, secConfig, 0UL)ARGS"},
+    {88, ProbeGroup::Mte2, "__sanitizer_report_nd_copy_gm_to_ubuf_b16",
+     R"PARAM(__gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, __ubuf__ void* dst, __gm__ void* src, uint64_t config, uint64_t secConfig)PARAM",
+     "MemoryAccess", "PIPE_MTE2",
+     R"ARGS(reinterpret_cast<uint64_t>(dst), reinterpret_cast<uint64_t>(src), config, secConfig, 0UL)ARGS"},
+    {89, ProbeGroup::Mte2, "__sanitizer_report_nd_copy_gm_to_ubuf_b32",
+     R"PARAM(__gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, __ubuf__ void* dst, __gm__ void* src, uint64_t config, uint64_t secConfig)PARAM",
+     "MemoryAccess", "PIPE_MTE2",
+     R"ARGS(reinterpret_cast<uint64_t>(dst), reinterpret_cast<uint64_t>(src), config, secConfig, 0UL)ARGS"},
+    {149, ProbeGroup::Mte2, "__sanitizer_report_set_l1_2d_b16",
+     R"PARAM(__gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, __cbuf__ void* dst, uint64_t config)PARAM",
+     "RegisterState", "PIPE_MTE2", R"ARGS(reinterpret_cast<uint64_t>(dst), config, 0UL, 0UL, 0UL)ARGS"},
+    {150, ProbeGroup::Mte2, "__sanitizer_report_set_l1_2d_b32",
+     R"PARAM(__gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, __cbuf__ void* dst, uint64_t config)PARAM",
+     "RegisterState", "PIPE_MTE2", R"ARGS(reinterpret_cast<uint64_t>(dst), config, 0UL, 0UL, 0UL)ARGS"},
+    {173, ProbeGroup::Mte3, "__sanitizer_report_copy_ubuf_to_cbuf",
+     R"PARAM(__gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, __cbuf__ void* dst, __ubuf__ void* src, uint64_t config)PARAM",
+     "MemoryAccess", "PIPE_MTE3",
+     R"ARGS(reinterpret_cast<uint64_t>(dst), reinterpret_cast<uint64_t>(src), config, 0UL, 0UL)ARGS"},
+    {83, ProbeGroup::Mte3, "__sanitizer_report_copy_ubuf_to_gm_align_v2",
+     R"PARAM(__gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, __gm__ void* dst, __ubuf__ void* src, uint64_t config0, uint64_t config1)PARAM",
+     "MemoryAccess", "PIPE_MTE3",
+     R"ARGS(reinterpret_cast<uint64_t>(dst), reinterpret_cast<uint64_t>(src), config0, config1, 0UL)ARGS"},
+    {392, ProbeGroup::Scalar, "__sanitizer_report_set_padding",
+     R"PARAM(__gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, uint64_t value)PARAM", "RegisterState", "PIPE_S",
+     R"ARGS(value, 0UL, 0UL, 0UL, 0UL)ARGS"},
+    {399, ProbeGroup::Scalar, "__sanitizer_report_set_mte2_nz_para",
+     R"PARAM(__gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, uint64_t config)PARAM", "RegisterState", "PIPE_S",
+     R"ARGS(config & 0xFFFFUL, 0UL, 0UL, 0UL, 0UL)ARGS"},
+    {124, ProbeGroup::Scalar, "__sanitizer_report_set_mte2_src_para",
+     R"PARAM(__gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, uint64_t config)PARAM", "RegisterState", "PIPE_S",
+     R"ARGS(config, 0UL, 0UL, 0UL, 0UL)ARGS"},
+    {132, ProbeGroup::Scalar, "__sanitizer_report_set_loop0_stride_nddma",
+     R"PARAM(__gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, uint64_t config)PARAM", "RegisterState", "PIPE_S",
+     R"ARGS(config, 0UL, 0UL, 0UL, 0UL)ARGS"},
+    {133, ProbeGroup::Scalar, "__sanitizer_report_set_loop1_stride_nddma",
+     R"PARAM(__gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, uint64_t config)PARAM", "RegisterState", "PIPE_S",
+     R"ARGS(config, 0UL, 0UL, 0UL, 0UL)ARGS"},
+    {134, ProbeGroup::Scalar, "__sanitizer_report_set_loop2_stride_nddma",
+     R"PARAM(__gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, uint64_t config)PARAM", "RegisterState", "PIPE_S",
+     R"ARGS(config, 0UL, 0UL, 0UL, 0UL)ARGS"},
+    {135, ProbeGroup::Scalar, "__sanitizer_report_set_loop3_stride_nddma",
+     R"PARAM(__gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, uint64_t config)PARAM", "RegisterState", "PIPE_S",
+     R"ARGS(config, 0UL, 0UL, 0UL, 0UL)ARGS"},
+    {136, ProbeGroup::Scalar, "__sanitizer_report_set_loop4_stride_nddma",
+     R"PARAM(__gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, uint64_t config)PARAM", "RegisterState", "PIPE_S",
+     R"ARGS(config, 0UL, 0UL, 0UL, 0UL)ARGS"},
+    {440, ProbeGroup::Sync, "__sanitizer_report_set_flag",
+     R"PARAM(__gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, pipe_t srcPipe, pipe_t dstPipe, uint64_t eventId)PARAM",
+     "Synchronization", "PIPE_S",
+     R"ARGS(static_cast<uint64_t>(srcPipe), static_cast<uint64_t>(dstPipe), eventId, 0UL, 0UL)ARGS"},
+    {441, ProbeGroup::Sync, "__sanitizer_report_set_flagi",
+     R"PARAM(__gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, pipe_t srcPipe, pipe_t dstPipe, uint64_t eventId)PARAM",
+     "Synchronization", "PIPE_S",
+     R"ARGS(static_cast<uint64_t>(srcPipe), static_cast<uint64_t>(dstPipe), eventId, 0UL, 0UL)ARGS"},
+    {442, ProbeGroup::Sync, "__sanitizer_report_wait_flag",
+     R"PARAM(__gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, pipe_t srcPipe, pipe_t dstPipe, uint64_t eventId)PARAM",
+     "Synchronization", "PIPE_S",
+     R"ARGS(static_cast<uint64_t>(srcPipe), static_cast<uint64_t>(dstPipe), eventId, 0UL, 0UL)ARGS"},
+    {443, ProbeGroup::Sync, "__sanitizer_report_wait_flagi",
+     R"PARAM(__gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, pipe_t srcPipe, pipe_t dstPipe, uint64_t eventId)PARAM",
+     "Synchronization", "PIPE_S",
+     R"ARGS(static_cast<uint64_t>(srcPipe), static_cast<uint64_t>(dstPipe), eventId, 0UL, 0UL)ARGS"},
+    {445, ProbeGroup::Sync, "__sanitizer_report_wait_flag_dev_pipe",
+     R"PARAM(__gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, pipe_t pipe, int64_t flagId)PARAM", "Synchronization",
+     "PIPE_S", R"ARGS(static_cast<uint64_t>(pipe), static_cast<uint64_t>(flagId), 0UL, 0UL, 0UL)ARGS"},
+    {446, ProbeGroup::Sync, "__sanitizer_report_wait_flag_devi_pipe",
+     R"PARAM(__gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, pipe_t pipe, uint8_t flagId)PARAM", "Synchronization",
+     "PIPE_S", R"ARGS(static_cast<uint64_t>(pipe), static_cast<uint64_t>(flagId), 0UL, 0UL, 0UL)ARGS"},
+    {456, ProbeGroup::Sync, "__sanitizer_report_set_flag_v",
+     R"PARAM(__gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, pipe_t dstPipe, uint64_t eventId)PARAM",
+     "Synchronization", "PIPE_S", R"ARGS(static_cast<uint64_t>(dstPipe), eventId, 0UL, 0UL, 0UL)ARGS"},
+    {457, ProbeGroup::Sync, "__sanitizer_report_set_flagi_v",
+     R"PARAM(__gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, pipe_t dstPipe, uint64_t eventId)PARAM",
+     "Synchronization", "PIPE_S", R"ARGS(static_cast<uint64_t>(dstPipe), eventId, 0UL, 0UL, 0UL)ARGS"},
+    {458, ProbeGroup::Sync, "__sanitizer_report_wait_flag_v",
+     R"PARAM(__gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, pipe_t srcPipe, uint64_t eventId)PARAM",
+     "Synchronization", "PIPE_S", R"ARGS(static_cast<uint64_t>(srcPipe), eventId, 0UL, 0UL, 0UL)ARGS"},
+    {459, ProbeGroup::Sync, "__sanitizer_report_wait_flagi_v",
+     R"PARAM(__gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, pipe_t srcPipe, uint64_t eventId)PARAM",
+     "Synchronization", "PIPE_S", R"ARGS(static_cast<uint64_t>(srcPipe), eventId, 0UL, 0UL, 0UL)ARGS"},
+    {469, ProbeGroup::Sync, "__sanitizer_report_wait_flag_dev_pipe_v",
+     R"PARAM(__gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, int64_t flagId)PARAM", "Synchronization", "PIPE_S",
+     R"ARGS(static_cast<uint64_t>(flagId), 0UL, 0UL, 0UL, 0UL)ARGS"},
+    {470, ProbeGroup::Sync, "__sanitizer_report_wait_flag_devi_pipe_v",
+     R"PARAM(__gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, uint8_t flagId)PARAM", "Synchronization", "PIPE_S",
+     R"ARGS(static_cast<uint64_t>(flagId), 0UL, 0UL, 0UL, 0UL)ARGS"},
+    {471, ProbeGroup::Sync, "__sanitizer_report_hset_flag",
+     R"PARAM(__gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, pipe_t srcPipe, pipe_t dstPipe, uint64_t eventId, mem_t memory, bool isVirtual)PARAM",
+     "Synchronization", "PIPE_S",
+     R"ARGS(static_cast<uint64_t>(srcPipe), static_cast<uint64_t>(dstPipe), eventId, static_cast<uint64_t>(memory), static_cast<uint64_t>(isVirtual))ARGS"},
+    {472, ProbeGroup::Sync, "__sanitizer_report_hset_flagi",
+     R"PARAM(__gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, pipe_t srcPipe, pipe_t dstPipe, uint64_t eventId, mem_t memory, bool isVirtual)PARAM",
+     "Synchronization", "PIPE_S",
+     R"ARGS(static_cast<uint64_t>(srcPipe), static_cast<uint64_t>(dstPipe), eventId, static_cast<uint64_t>(memory), static_cast<uint64_t>(isVirtual))ARGS"},
+    {473, ProbeGroup::Sync, "__sanitizer_report_hwait_flag",
+     R"PARAM(__gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, pipe_t srcPipe, pipe_t dstPipe, uint64_t eventId, mem_t memory, bool isVirtual)PARAM",
+     "Synchronization", "PIPE_S",
+     R"ARGS(static_cast<uint64_t>(srcPipe), static_cast<uint64_t>(dstPipe), eventId, static_cast<uint64_t>(memory), static_cast<uint64_t>(isVirtual))ARGS"},
+    {474, ProbeGroup::Sync, "__sanitizer_report_hwait_flagi",
+     R"PARAM(__gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, pipe_t srcPipe, pipe_t dstPipe, uint64_t eventId, mem_t memory, bool isVirtual)PARAM",
+     "Synchronization", "PIPE_S",
+     R"ARGS(static_cast<uint64_t>(srcPipe), static_cast<uint64_t>(dstPipe), eventId, static_cast<uint64_t>(memory), static_cast<uint64_t>(isVirtual))ARGS"},
+    {448, ProbeGroup::Sync, "__sanitizer_report_get_buf",
+     R"PARAM(__gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, pipe_t pipe, uint8_t bufId, bool mode)PARAM",
+     "Synchronization", "PIPE_S",
+     R"ARGS(static_cast<uint64_t>(pipe), static_cast<uint64_t>(bufId), static_cast<uint64_t>(mode), 0UL, 0UL)ARGS"},
+    {449, ProbeGroup::Sync, "__sanitizer_report_get_bufi",
+     R"PARAM(__gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, pipe_t pipe, uint64_t bufId, bool mode)PARAM",
+     "Synchronization", "PIPE_S",
+     R"ARGS(static_cast<uint64_t>(pipe), bufId, static_cast<uint64_t>(mode), 0UL, 0UL)ARGS"},
+    {450, ProbeGroup::Sync, "__sanitizer_report_rls_buf",
+     R"PARAM(__gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, pipe_t pipe, uint8_t bufId, bool mode)PARAM",
+     "Synchronization", "PIPE_S",
+     R"ARGS(static_cast<uint64_t>(pipe), static_cast<uint64_t>(bufId), static_cast<uint64_t>(mode), 0UL, 0UL)ARGS"},
+    {451, ProbeGroup::Sync, "__sanitizer_report_rls_bufi",
+     R"PARAM(__gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, pipe_t pipe, uint64_t bufId, bool mode)PARAM",
+     "Synchronization", "PIPE_S",
+     R"ARGS(static_cast<uint64_t>(pipe), bufId, static_cast<uint64_t>(mode), 0UL, 0UL)ARGS"},
+    {460, ProbeGroup::Sync, "__sanitizer_report_get_buf_v",
+     R"PARAM(__gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, uint8_t bufId, bool mode)PARAM", "Synchronization",
+     "PIPE_S", R"ARGS(static_cast<uint64_t>(bufId), static_cast<uint64_t>(mode), 0UL, 0UL, 0UL)ARGS"},
+    {461, ProbeGroup::Sync, "__sanitizer_report_get_bufi_v",
+     R"PARAM(__gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, uint64_t bufId, bool mode)PARAM", "Synchronization",
+     "PIPE_S", R"ARGS(bufId, static_cast<uint64_t>(mode), 0UL, 0UL, 0UL)ARGS"},
+    {462, ProbeGroup::Sync, "__sanitizer_report_rls_buf_v",
+     R"PARAM(__gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, uint8_t bufId, bool mode)PARAM", "Synchronization",
+     "PIPE_S", R"ARGS(static_cast<uint64_t>(bufId), static_cast<uint64_t>(mode), 0UL, 0UL, 0UL)ARGS"},
+    {463, ProbeGroup::Sync, "__sanitizer_report_rls_bufi_v",
+     R"PARAM(__gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, uint64_t bufId, bool mode)PARAM", "Synchronization",
+     "PIPE_S", R"ARGS(bufId, static_cast<uint64_t>(mode), 0UL, 0UL, 0UL)ARGS"},
+}};
+
+uint64_t HashText(uint64_t hash, std::string_view text)
+{
+    constexpr uint64_t kPrime = 1099511628211ULL;
+    for (const unsigned char value : text) {
+        hash ^= value;
+        hash *= kPrime;
+    }
+    hash ^= 0xffU;
+    return hash * kPrime;
+}
+
+std::string HexIdentity(std::string_view text)
+{
+    std::ostringstream output;
+    output << std::hex << std::setfill('0') << std::setw(16) << HashText(1469598103934665603ULL, text);
+    return output.str();
+}
+
+std::string ValidateCatalog()
+{
+    std::set<uint16_t> apiIds;
+    std::set<std::string_view> symbols;
+    for (const ProbeDefinition& definition : kDefinitions) {
+        if (definition.symbol.empty() || definition.parameters.empty() || definition.category.empty() ||
+            definition.pipeline.empty() || definition.recordArguments.empty()) {
+            return "Probe catalog contains an incomplete definition";
+        }
+        if (!apiIds.insert(definition.apiId).second) {
+            return "Probe catalog contains duplicate API ID " + std::to_string(definition.apiId);
+        }
+        if (!symbols.insert(definition.symbol).second) {
+            return "Probe catalog contains duplicate symbol " + std::string(definition.symbol);
+        }
+    }
+    return {};
+}
+
+bool IsKnownGroup(ProbeGroup group)
+{
+    return group == ProbeGroup::Mte1 || group == ProbeGroup::Mte2 || group == ProbeGroup::Mte3 ||
+           group == ProbeGroup::Fixpipe || group == ProbeGroup::Scalar || group == ProbeGroup::Sync;
+}
+
+std::vector<const ProbeDefinition*> DefinitionsForGroup(ProbeGroup group)
+{
+    std::vector<const ProbeDefinition*> selected;
+    for (const ProbeDefinition& definition : kDefinitions) {
+        if (definition.group == group) {
+            selected.push_back(&definition);
+        }
+    }
+    std::sort(selected.begin(), selected.end(), [](const ProbeDefinition* left, const ProbeDefinition* right) {
+        return left->apiId < right->apiId;
+    });
+    return selected;
+}
+
+} // namespace
+
+GeneratedProbeSource GenerateProbeSource(std::string_view arch, ProbeGroup group)
+{
+    GeneratedProbeSource generated;
+    if (arch != kSupportedArch) {
+        generated.diagnostic = "unsupported Probe architecture " + std::string(arch);
+        return generated;
+    }
+    if (!IsKnownGroup(group)) {
+        generated.diagnostic = "unsupported Probe group";
+        return generated;
+    }
+    generated.diagnostic = ValidateCatalog();
+    if (!generated.diagnostic.empty()) {
+        return generated;
+    }
+    const auto definitions = DefinitionsForGroup(group);
+    if (definitions.empty()) {
+        generated.diagnostic = "Probe group has no definitions";
+        return generated;
+    }
+
+    std::ostringstream source;
+    std::ostringstream sourceMap;
+    source << "// Generated by " << kGeneratorSchema << ". Do not edit.\n"
+           << "#include \"trace_record.h\"\n\n";
+    sourceMap << "arch=" << arch << " group=" << ProbeGroupName(group) << '\n';
+    for (const ProbeDefinition* definition : definitions) {
+        source << "// probe-definition: " << std::setfill('0') << std::setw(4) << definition->apiId << ' '
+               << definition->symbol << "\n"
+               << "extern __attribute__((noinline)) __attribute__((weak)) __aicore__ void " << definition->symbol
+               << "(\n    " << definition->parameters << ")\n"
+               << "{\n"
+               << "    aclsan::WriteTraceRecord(\n"
+               << "        memInfo, pc, bid, aclsan::DeviceInstructionCategory::" << definition->category
+               << ", static_cast<uint16_t>(" << definition->pipeline << "), " << definition->apiId << ",\n"
+               << "        " << definition->recordArguments << ");\n"
+               << "}\n\n";
+        sourceMap << "apiId=" << definition->apiId << " symbol=" << definition->symbol << '\n';
+        generated.symbols.emplace_back(definition->symbol);
+    }
+    generated.source = source.str();
+    generated.sourceMap = sourceMap.str();
+    generated.identity = HexIdentity(std::string(kGeneratorSchema) + "\n" + generated.source);
+    generated.success = true;
+    return generated;
+}
+
+std::string ProbeGeneratorIdentity()
+{
+    std::string identity(kGeneratorSchema);
+    for (const ProbeDefinition& definition : kDefinitions) {
+        identity.append("\n").append(std::to_string(definition.apiId)).append(":").append(definition.symbol);
+        identity.append(":").append(definition.parameters).append(":").append(definition.category);
+        identity.append(":").append(definition.pipeline).append(":").append(definition.recordArguments);
+    }
+    return HexIdentity(identity);
+}
+
+} // namespace aclsan

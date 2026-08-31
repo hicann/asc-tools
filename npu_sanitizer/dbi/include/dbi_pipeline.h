@@ -41,15 +41,13 @@ struct DbiRequest {
     std::string inputKernel;
     std::string outputKernel;
     std::string arch;
-    uint32_t traceArgumentOffset = 0; // 隐藏的trace buffer指针在Kernel hostArgs参数区中的字节偏移
+    uint32_t traceArgumentOffset = 0;
     std::vector<ProbeGroup> probeGroups;
     std::string toolchainRoot;
-    std::string sourceRoot;
     std::string workDirectory;
     std::string cacheDirectory;
     bool strict = false;
     bool keepTemp = false;
-    std::vector<std::string> extraCompilerArgs;
     std::vector<std::string> extraTuneArgs;
 };
 
@@ -64,13 +62,10 @@ struct DbiResult {
 std::vector<ProbeGroup> NormalizeProbeGroups(const std::vector<ProbeGroup>& groups);
 std::vector<ProbeGroup> ProbeGroupsFromMask(uint32_t mask);
 std::string ProbeGroupName(ProbeGroup group);
-std::string ProbeSourceName(ProbeGroup group);
 std::string ValidateRequest(const DbiRequest& request);
 ToolchainPaths ResolveToolchain(const std::string& explicitRoot, const std::map<std::string, std::string>& environment);
 std::string MakeCacheKey(
-    const std::string& arch, const std::vector<ProbeGroup>& groups, const std::vector<std::string>& compilerArgs,
-    const std::string& sourceDigest);
-std::string ComputeProbeSourceDigest(const DbiRequest& request, const std::vector<ProbeGroup>& groups);
+    const std::string& arch, const std::vector<ProbeGroup>& groups, const std::string& objectIdentity);
 DbiResult RunDbiPipeline(const DbiRequest& request);
 
 } // namespace aclsan

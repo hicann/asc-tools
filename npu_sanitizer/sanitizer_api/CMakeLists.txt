@@ -310,7 +310,6 @@ if(ENABLE_TEST)
       COMMAND ${CMAKE_COMMAND}
         -DSAMPLE=$<TARGET_FILE:aclsan_full_flow_host_sample>
         -DFAKE_TOOL=$<TARGET_FILE:aclsan_full_flow_fake_dbi_tool>
-        -DSOURCE_ROOT=${CMAKE_CURRENT_LIST_DIR}/../dbi
         -DTEST_ROOT=${CMAKE_CURRENT_BINARY_DIR}/full-flow-host
         -P ${CMAKE_CURRENT_LIST_DIR}/../dbi/test/run_full_flow_host_sample.cmake)
   endif()

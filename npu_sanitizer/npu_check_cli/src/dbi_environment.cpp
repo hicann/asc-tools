@@ -23,12 +23,7 @@ EnvironmentEntries BuildDbiEnvironment(const DbiSettings& settings)
         {"NPU_CHECK_DBI_CACHE_DIR", settings.probeCacheDir},
         {"NPU_CHECK_DBI_STRICT", settings.strict ? "1" : "0"},
         {"NPU_CHECK_DBI_KEEP_TEMP", settings.keepTemp ? "1" : "0"},
-        {"NPU_CHECK_DBI_COMPILER_ARG_COUNT", std::to_string(settings.compileOptions.size())},
     };
-    entries.reserve(entries.size() + settings.compileOptions.size());
-    for (size_t index = 0; index < settings.compileOptions.size(); ++index) {
-        entries.emplace_back("NPU_CHECK_DBI_COMPILER_ARG_" + std::to_string(index), settings.compileOptions[index]);
-    }
     return entries;
 }
 

@@ -1,4 +1,4 @@
-// Copyright (c) 2025 Huawei Technologies Co., Ltd.
+// Copyright (c) 2026 Huawei Technologies Co., Ltd.
 // This program is free software, you can redistribute it and/or modify it under the terms and conditions of
 // CANN Open Software License Agreement Version 2.0 (the "License").
 // Please refer to the License for details. You may not use this file except in compliance with the License.
@@ -8,16 +8,13 @@
 
 #pragma once
 
-#include "dbi_pipeline.h"
-
-#include <string>
-#include <vector>
+#include <string_view>
 
 namespace aclsan {
 
-std::vector<ProbeGroup> AllProbeGroups();
-std::vector<std::string> BindingSymbols(const std::vector<ProbeGroup>& groups);
-std::string CtrlBinGeneratorIdentity();
-bool GenerateCtrlBin(const std::string& outputPath, const std::vector<ProbeGroup>& groups, std::string& diagnostic);
+std::string_view EmbeddedTraceRecordHeader();
+std::string_view EmbeddedTraceBufferAbiHeader();
+std::string_view EmbeddedProbeResourceIdentity();
+std::string_view EmbeddedCtrlBinImplementationIdentity();
 
 } // namespace aclsan

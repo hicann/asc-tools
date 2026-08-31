@@ -220,9 +220,8 @@ struct Cleanup {
             (void)aclsanUnsubscribe(subscriber);
         }
         for (const char* name :
-             {"NPU_CHECK_DBI_ARCH", "NPU_CHECK_DBI_PROBE_SET", "NPU_CHECK_DBI_TOOLCHAIN_ROOT",
-              "NPU_CHECK_DBI_SOURCE_ROOT", "NPU_CHECK_DBI_WORK_DIR", "NPU_CHECK_DBI_CACHE_DIR", "NPU_CHECK_DBI_STRICT",
-              "NPU_CHECK_TRACE_RECORDS_PER_BLOCK"}) {
+             {"NPU_CHECK_DBI_ARCH", "NPU_CHECK_DBI_PROBE_SET", "NPU_CHECK_DBI_TOOLCHAIN_ROOT", "NPU_CHECK_DBI_WORK_DIR",
+              "NPU_CHECK_DBI_CACHE_DIR", "NPU_CHECK_DBI_STRICT", "NPU_CHECK_TRACE_RECORDS_PER_BLOCK"}) {
             unsetenv(name);
         }
     }

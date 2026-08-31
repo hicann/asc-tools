@@ -45,14 +45,13 @@ private:
     bool wasSet_ = false;
 };
 
-TEST(DbiEnvironmentTest, PreservesResolvedSessionConfigurationAndCompilerArguments)
+TEST(DbiEnvironmentTest, PreservesResolvedSessionConfigurationWithoutRuntimeCompilerArguments)
 {
     DbiSettings config{};
     config.workDir = "/tmp/session";
     config.probeCacheDir = "/var/tmp/probe-cache";
     config.strict = false;
     config.keepTemp = true;
-    config.compileOptions = {"-g", "-DVALUE=a b", ""};
 
     const auto entries = BuildDbiEnvironment(config);
     const std::map<std::string, std::string> environment(entries.begin(), entries.end());
@@ -61,10 +60,7 @@ TEST(DbiEnvironmentTest, PreservesResolvedSessionConfigurationAndCompilerArgumen
     EXPECT_EQ(environment.at("NPU_CHECK_DBI_CACHE_DIR"), "/var/tmp/probe-cache");
     EXPECT_EQ(environment.at("NPU_CHECK_DBI_STRICT"), "0");
     EXPECT_EQ(environment.at("NPU_CHECK_DBI_KEEP_TEMP"), "1");
-    EXPECT_EQ(environment.at("NPU_CHECK_DBI_COMPILER_ARG_COUNT"), "3");
-    EXPECT_EQ(environment.at("NPU_CHECK_DBI_COMPILER_ARG_0"), "-g");
-    EXPECT_EQ(environment.at("NPU_CHECK_DBI_COMPILER_ARG_1"), "-DVALUE=a b");
-    EXPECT_EQ(environment.at("NPU_CHECK_DBI_COMPILER_ARG_2"), "");
+    EXPECT_EQ(environment.count("NPU_CHECK_DBI_COMPILER_ARG_COUNT"), 0U);
 }
 
 TEST(DbiEnvironmentTest, AppliesEntriesWithOverwriteAndPreservesEmptyValues)

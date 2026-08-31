@@ -52,8 +52,8 @@ The example executable is written directly to that build directory, for example:
 npu_sanitizer/demo/examples/memcheck/add/build/demo
 ```
 
-`build.sh` also stages the probe sources required by online DBI. The first kernel
-binary load creates and caches `probe.o` and `ctrl.bin` at runtime. Each case stores
+`build.sh` prepares `npu_check` and its shared libraries. The first kernel binary
+load creates and caches `probe.o` and `ctrl.bin` at runtime. Each case stores
 its log and other run files in its own `build/` directory. Synccheck logs are written
 to `demo/examples/synccheck/<case-name>/build/npu_check.log`, while Matmul inputs and
 outputs are stored in the case-local `build/run/` directory.

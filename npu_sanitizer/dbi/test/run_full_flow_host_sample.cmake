@@ -2,7 +2,7 @@
 # This program is free software, you can redistribute it and/or modify it under the terms and conditions of
 # CANN Open Software License Agreement Version 2.0 (the "License").
 
-foreach(required IN ITEMS SAMPLE FAKE_TOOL SOURCE_ROOT TEST_ROOT)
+foreach(required IN ITEMS SAMPLE FAKE_TOOL TEST_ROOT)
   if(NOT DEFINED ${required} OR "${${required}}" STREQUAL "")
     message(FATAL_ERROR "${required} is required")
   endif()
@@ -10,41 +10,26 @@ endforeach()
 
 file(REMOVE_RECURSE "${TEST_ROOT}")
 set(tool_bin "${TEST_ROOT}/toolchain/tools/bisheng_compiler/bin")
-set(staged_sources "${TEST_ROOT}/sources")
 file(MAKE_DIRECTORY
   "${tool_bin}"
-  "${TEST_ROOT}/toolchain/x86_64-linux/asc/include"
-  "${TEST_ROOT}/toolchain/x86_64-linux/ascendc/include/highlevel_api/kernel_tiling"
-  "${staged_sources}/probes"
 )
 
 get_filename_component(fake_tool_name "${FAKE_TOOL}" NAME)
-foreach(tool IN ITEMS bisheng bisheng-tune ld.lld llvm-objdump)
+foreach(tool IN ITEMS bisheng-tune ld.lld llvm-objdump)
   file(COPY "${FAKE_TOOL}" DESTINATION "${tool_bin}"
     FILE_PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE)
   file(RENAME "${tool_bin}/${fake_tool_name}" "${tool_bin}/${tool}")
 endforeach()
 
-file(WRITE "${TEST_ROOT}/toolchain/x86_64-linux/asc/include/kernel_operator.h" "// marker\n")
-file(WRITE
-  "${TEST_ROOT}/toolchain/x86_64-linux/ascendc/include/highlevel_api/kernel_tiling/kernel_tiling.h"
-  "// marker\n")
-foreach(probe IN ITEMS fixpipe mte1 mte2 mte3 register sync)
-  file(COPY "${SOURCE_ROOT}/src/probes/${probe}.cpp" DESTINATION "${staged_sources}/probes")
-endforeach()
-foreach(header IN ITEMS trace_record trace_buffer_abi)
-  file(COPY "${SOURCE_ROOT}/include/${header}.h" DESTINATION "${staged_sources}")
-endforeach()
 file(WRITE "${TEST_ROOT}/input.o" "host-full-flow-kernel\n")
 file(WRITE "${TEST_ROOT}/commands.log" "")
 
 execute_process(
   COMMAND "${CMAKE_COMMAND}" -E env
     "DBI_FAKE_LOG=${TEST_ROOT}/commands.log"
-    "NPU_CHECK_DBI_ARCH=dav-c220"
+    "NPU_CHECK_DBI_ARCH=dav-3510"
     "NPU_CHECK_DBI_PROBE_SET=mte2,sync"
     "NPU_CHECK_DBI_TOOLCHAIN_ROOT=${TEST_ROOT}/toolchain"
-    "NPU_CHECK_DBI_SOURCE_ROOT=${staged_sources}"
     "NPU_CHECK_DBI_WORK_DIR=${TEST_ROOT}/work"
     "NPU_CHECK_DBI_CACHE_DIR=${TEST_ROOT}/cache"
     "NPU_CHECK_DBI_STRICT=1"
@@ -80,7 +65,6 @@ endforeach()
 
 file(READ "${TEST_ROOT}/commands.log" tool_log)
 set(required_tools
-  "bisheng <-xcce>"
   "ld.lld <-r>"
   "llvm-objdump <--syms>"
   "<-execute-probe>"
@@ -92,6 +76,11 @@ foreach(fragment IN LISTS required_tools)
     message(FATAL_ERROR "missing DBI tool invocation '${fragment}':\n${tool_log}")
   endif()
 endforeach()
+
+string(FIND "${tool_log}" "bisheng <-xcce>" bisheng_compile_position)
+if(NOT bisheng_compile_position EQUAL -1)
+  message(FATAL_ERROR "DBI runtime unexpectedly compiles Probe sources:\n${tool_log}")
+endif()
 
 string(FIND "${tool_log}" "--tune-argsize=" tune_argsize_position)
 if(NOT tune_argsize_position EQUAL -1)

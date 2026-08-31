@@ -36,7 +36,10 @@ for example in matmul_basic_api matmul_leakyrelu_basic_api; do
     grep -Fq 'add_executable(demo' "${example_dir}/CMakeLists.txt"
     grep -Fq 'target_link_libraries' "${example_dir}/CMakeLists.txt"
     grep -Fq -- '-- ./demo' "${example_dir}/run.sh"
-    grep -Fq '../../../../build/dbi_runtime_sources' "${example_dir}/run.sh"
+    if rg -q 'NPU_CHECK_DBI_SOURCE_ROOT|dbi_runtime_sources' "${example_dir}/run.sh"; then
+        printf '%s runner still depends on an external Probe source directory\n' "${example}" >&2
+        exit 1
+    fi
     if grep -Fq 'build/run' "${example_dir}/run.sh"; then
         printf '%s runner must use build directly\n' "${example}"
         exit 1

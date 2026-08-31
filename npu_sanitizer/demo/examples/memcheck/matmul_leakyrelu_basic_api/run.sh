@@ -30,9 +30,8 @@ exec > >(tee -a "${output}") 2>&1
 # 设置 DBI 运行环境。
 export ASCEND_GLOBAL_LOG_LEVEL=0
 export NPU_SAN_DEBUG=1
-export NPU_CHECK_DBI_ARCH="${NPU_CHECK_DBI_ARCH:-dav-c310}"
+export NPU_CHECK_DBI_ARCH="${NPU_CHECK_DBI_ARCH:-dav-3510}"
 export NPU_CHECK_DBI_TOOLCHAIN_ROOT="${NPU_CHECK_DBI_TOOLCHAIN_ROOT:-${ASCEND_HOME_PATH}}"
-export NPU_CHECK_DBI_SOURCE_ROOT="${NPU_CHECK_DBI_SOURCE_ROOT:-../../../../build/dbi_runtime_sources}"
 
 # 配置并构建示例。
 cmake -B build -DCMAKE_ASC_ARCHITECTURES=dav-3510
