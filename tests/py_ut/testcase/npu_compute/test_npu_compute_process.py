@@ -21,9 +21,7 @@ import pytest
 BUILD_DIR = Path(
     os.environ.get("NPU_COMPUTE_BUILD_DIR", "/tmp/asc_tools_npu_compute_integration")
 )
-BIN_DIR = Path(
-    os.environ.get("NPU_COMPUTE_TEST_BIN_DIR", str(BUILD_DIR / "npu_compute/bin"))
-)
+BIN_DIR = Path(os.environ.get("NPU_COMPUTE_TEST_BIN_DIR", str(BUILD_DIR / "bin")))
 CLI = BIN_DIR / "npu-compute"
 BASE_COMMAND = [str(CLI), "--section", "Memory"]
 NESTED_COLLECTION_ERROR = "nested npu-compute collection is not supported"

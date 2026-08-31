@@ -25,7 +25,7 @@ BUILD_DIR = Path(
 BIN_DIR = Path(
     os.environ.get(
         "NPU_COMPUTE_TEST_BIN_DIR",
-        str(BUILD_DIR / "npu_compute/bin"),
+        str(BUILD_DIR / "bin"),
     )
 )
 INSTALL_ARCH = os.environ.get("NPU_COMPUTE_TEST_ARCH", platform.machine())

@@ -19,7 +19,7 @@ import pytest
 BIN_DIR = Path(
     os.environ.get(
         "NPU_COMPUTE_TEST_BIN_DIR",
-        "/tmp/asc_tools_npu_compute_integration/npu_compute/bin",
+        "/tmp/asc_tools_npu_compute_integration/bin",
     )
 )
 CLI = BIN_DIR / "npu-compute"
@@ -66,6 +66,7 @@ def run_collection(
         value for value in (str(BIN_DIR), existing_library_path) if value
     )
     environment["NPU_COMPUTE_DEBUG"] = "1"
+    environment["ACL_TOOL_INJECTION_DEBUG"] = "1"
     if extra_environment:
         environment.update(extra_environment)
     started = time.monotonic()
@@ -216,7 +217,6 @@ def test_collection_runs_the_connected_replay_chain():
     assert_markers_in_order(
         result.stderr,
         [
-            "[aclpti] initialize dependencies",
             "[aclpti] runtime replacement registration complete",
             "[aclpti] subscribe result=0",
             "[libnpu-compute] subscriber initialized",

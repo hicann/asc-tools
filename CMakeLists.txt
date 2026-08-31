@@ -68,13 +68,6 @@ set(NPU_CHECK_REAL_DBI_KERNEL "" CACHE FILEPATH "Optional precompiled CCE kernel
 set(NPU_CHECK_REAL_DBI_TOOLCHAIN_ROOT "" CACHE PATH "CANN root for real DBI tests")
 set(NPU_CHECK_REAL_DBI_DEVICE_ID "0" CACHE STRING "NPU device ID for the real DBI full-flow test")
 
-if(BUILD_NPU_SANITIZER)
-  set(ASC_TOOLS_BUILD_NPU_COMPUTE ON CACHE BOOL
-    "Build NPU Compute profiling support" FORCE)
-  set(NPU_COMPUTE_BUILD_INTEGRATION_STUBS ON CACHE BOOL
-    "Build NPU Compute integration stubs" FORCE)
-endif()
-
 add_subdirectory(cpudebug)
 add_subdirectory(npuchk)
 add_subdirectory(utils/msobjdump)
@@ -88,16 +81,8 @@ if(ENABLE_TEST OR NPU_COMPUTE_BUILD_TESTS OR NPU_CHECK_ENABLE_REAL_DBI_FLOW OR
     NPU_CHECK_ENABLE_REAL_DBI_TOOLCHAIN)
   enable_testing()
 endif()
-if(ASC_TOOLS_BUILD_NPU_COMPUTE)
-  add_subdirectory(npu_compute)
-endif()
-if(BUILD_NPU_SANITIZER)
-  add_subdirectory(npu_sanitizer/common)
-  add_subdirectory(npu_sanitizer/dbi)
-  add_subdirectory(npu_sanitizer/sanitizer_api)
-  add_subdirectory(npu_sanitizer/npu_check_cli)
-  add_subdirectory(npu_sanitizer/npu_check)
-  add_subdirectory(npu_sanitizer/dbi/test)
+if(ASC_TOOLS_BUILD_NPU_COMPUTE OR BUILD_NPU_SANITIZER)
+  add_subdirectory(npu_tools)
 endif()
 if(ENABLE_TEST)
   add_subdirectory(tests)

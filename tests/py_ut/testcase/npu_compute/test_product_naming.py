@@ -32,7 +32,7 @@ TARGET_DECLARATION = re.compile(r"add_(?:library|executable)\(\s*([^\s)]+)")
 
 
 def test_npu_compute_product_naming_is_consistent():
-    product_root = REPO_ROOT / "npu_compute"
+    product_root = REPO_ROOT / "npu_tools/npu_compute"
     assert product_root.is_dir()
     assert not (REPO_ROOT / ("cann" + "_compute")).exists()
 
@@ -57,20 +57,24 @@ def test_npu_compute_product_naming_is_consistent():
 
 def test_npu_compute_build_and_log_names_are_consistent():
     top_level_cmake = (REPO_ROOT / "CMakeLists.txt").read_text(encoding="utf-8")
-    product_cmake = (REPO_ROOT / "npu_compute" / "CMakeLists.txt").read_text(
+    product_cmake = (REPO_ROOT / "npu_tools/npu_compute" / "CMakeLists.txt").read_text(
         encoding="utf-8"
     )
     library_cmake = (
-        REPO_ROOT / "npu_compute" / "src" / "npu_compute" / "CMakeLists.txt"
+        REPO_ROOT / "npu_tools/npu_compute" / "src" / "npu_compute" / "CMakeLists.txt"
     ).read_text(encoding="utf-8")
     cli_cmake = (
-        REPO_ROOT / "npu_compute" / "src" / "compute_launcher" / "CMakeLists.txt"
+        REPO_ROOT
+        / "npu_tools/npu_compute"
+        / "src"
+        / "compute_launcher"
+        / "CMakeLists.txt"
     ).read_text(encoding="utf-8")
     cli_main = (
-        REPO_ROOT / "npu_compute" / "src" / "compute_launcher" / "main.cpp"
+        REPO_ROOT / "npu_tools/npu_compute" / "src" / "compute_launcher" / "main.cpp"
     ).read_text(encoding="utf-8")
     library_source = (
-        REPO_ROOT / "npu_compute" / "src" / "npu_compute" / "npu_compute.cpp"
+        REPO_ROOT / "npu_tools/npu_compute" / "src" / "npu_compute" / "npu_compute.cpp"
     ).read_text(encoding="utf-8")
 
     assert "option(ASC_TOOLS_BUILD_NPU_COMPUTE " in top_level_cmake
@@ -96,7 +100,7 @@ def test_default_package_build_enables_npu_compute():
 
 
 def test_cmake_targets_use_component_prefixes_and_merge_data_module():
-    product_root = REPO_ROOT / "npu_compute"
+    product_root = REPO_ROOT / "npu_tools/npu_compute"
     product_cmake = (product_root / "CMakeLists.txt").read_text(encoding="utf-8")
     assert "NPU_COMPUTE_BUILD_DEMO" not in product_cmake
     assert "add_subdirectory(demo)" not in product_cmake
@@ -114,12 +118,6 @@ def test_cmake_targets_use_component_prefixes_and_merge_data_module():
     )
     assert "asc_cc_" not in cmake_content
 
-    demo_cmake = (product_root / "demo" / "CMakeLists.txt").read_text(encoding="utf-8")
-    assert "project(npu_compute_demo LANGUAGES CXX)" in demo_cmake
-    assert "ascendc_kernel_cmake" in demo_cmake
-    assert "add_executable(npu_compute_demo" in demo_cmake
-    assert "OUTPUT_NAME demo" in demo_cmake
-
     acl_pti_cmake = (product_root / "src" / "acl_pti" / "CMakeLists.txt").read_text(
         encoding="utf-8"
     )
@@ -132,7 +130,7 @@ def test_cmake_targets_use_component_prefixes_and_merge_data_module():
 
 
 def test_runtime_replacements_use_specific_flat_names():
-    acl_pti_source = REPO_ROOT / "npu_compute" / "src" / "acl_pti"
+    acl_pti_source = REPO_ROOT / "npu_tools/npu_compute" / "src" / "acl_pti"
     replacement_source = acl_pti_source / "replacement"
     header = replacement_source / "runtime_api_replacements.h"
     source = replacement_source / "runtime_api_replacements.cpp"

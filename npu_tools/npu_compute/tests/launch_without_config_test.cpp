@@ -1,0 +1,123 @@
+/**
+ * Copyright (c) 2026 Huawei Technologies Co., Ltd.
+ * This program is free software, you can redistribute it and/or modify it under the terms and conditions of
+ * CANN Open Software License Agreement Version 2.0 (the "License").
+ * Please refer to the License for details. You may not use this file except in compliance with the License.
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
+ * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
+ * See LICENSE in the root of the software repository for the full text of the License.
+ */
+#include "aclpti/aclpti.h"
+#include "injection/runtime_stub_api.h"
+#include "profiling/prof_api.h"
+
+#include <cstdint>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+
+namespace {
+
+#define CHECK(expression)                                                                 \
+    do {                                                                                  \
+        if (!(expression)) {                                                              \
+            std::fprintf(stderr, "check failed at line %d: %s\n", __LINE__, #expression); \
+            return 1;                                                                     \
+        }                                                                                 \
+    } while (false)
+
+std::size_t g_launch_calls = 0;
+std::size_t g_start_calls = 0;
+std::size_t g_stop_calls = 0;
+
+int RealMalloc(void** pointer, std::size_t size, aclrtMemMallocPolicy)
+{
+    *pointer = std::malloc(size);
+    return *pointer == nullptr ? -1 : 0;
+}
+
+int RealFree(void* pointer)
+{
+    std::free(pointer);
+    return 0;
+}
+
+int RealMemcpy(void* destination, std::size_t destination_size, const void* source, std::size_t count, aclrtMemcpyKind)
+{
+    if (destination == nullptr || source == nullptr || count > destination_size) {
+        return -1;
+    }
+    std::memmove(destination, source, count);
+    return 0;
+}
+
+int RealMemset(void* destination, std::size_t destination_size, int value, std::size_t count)
+{
+    if (destination == nullptr || count > destination_size) {
+        return -1;
+    }
+    std::memset(destination, value, count);
+    return 0;
+}
+
+int RealLaunch(void*, uint32_t, const void*, std::size_t, void*)
+{
+    ++g_launch_calls;
+    return 0;
+}
+
+int RealSynchronize(void*) { return 0; }
+
+int ProfilerStart(uint32_t, const void* config, uint32_t length)
+{
+    ++g_start_calls;
+    if (config == nullptr || length != sizeof(MsprofConfig)) {
+        return -1;
+    }
+    return 0;
+}
+
+int ProfilerStop(uint32_t, const void* config, uint32_t length)
+{
+    ++g_stop_calls;
+    return config != nullptr && length == sizeof(MsprofConfig) ? 0 : -1;
+}
+int RegisterRawData(uint32_t, MsprofRawDataCallback callback) { return callback == nullptr ? -1 : 0; }
+
+} // namespace
+
+std::int32_t MsprofStart(uint32_t data_type, const void* config, uint32_t length)
+{
+    return ProfilerStart(data_type, config, length);
+}
+
+std::int32_t MsprofStop(uint32_t data_type, const void* config, uint32_t length)
+{
+    return ProfilerStop(data_type, config, length);
+}
+
+std::int32_t MsprofRegisterDataCallback(uint32_t type, void* function)
+{
+    return RegisterRawData(type, reinterpret_cast<MsprofRawDataCallback>(function));
+}
+
+int main()
+{
+    CHECK(RuntimeStubSetOriginFunction("aclrtMalloc", &RealMalloc) == 0);
+    CHECK(RuntimeStubSetOriginFunction("aclrtFree", &RealFree) == 0);
+    CHECK(RuntimeStubSetOriginFunction("aclrtMemcpy", &RealMemcpy) == 0);
+    CHECK(RuntimeStubSetOriginFunction("aclrtMemset", &RealMemset) == 0);
+    CHECK(RuntimeStubSetOriginFunction("aclrtLaunchKernel", &RealLaunch) == 0);
+    CHECK(RuntimeStubSetOriginFunction("aclrtSynchronizeStream", &RealSynchronize) == 0);
+
+    aclptiSubscribeHandle subscriber = nullptr;
+    CHECK(aclptiSubscribe(&subscriber, nullptr, nullptr, nullptr) == ACLPTI_SUCCESS);
+    CHECK(subscriber != nullptr);
+    CHECK(aclrtSetDevice(0) == ACL_SUCCESS);
+
+    CHECK(aclrtLaunchKernel(nullptr, 1, nullptr, 0, nullptr) == 0);
+    CHECK(g_launch_calls == 2);
+    CHECK(g_start_calls == 1);
+    CHECK(g_stop_calls == 1);
+    return 0;
+}

@@ -11,15 +11,20 @@ from pathlib import Path
 
 
 REPO_ROOT = Path(__file__).resolve().parents[4]
-PUBLIC_HEADER = REPO_ROOT / "npu_compute/include/npu_compute/npu_compute.h"
-INJECTION_HOOK_HEADER = REPO_ROOT / "npu_compute/include/npu_compute/injection_hook.h"
-ACLPTI_RUNTIME_API_HEADER = REPO_ROOT / "npu_compute/src/acl_pti/runtime_api.h"
-ACLPTI_RUNTIME_API_USERS = (
-    REPO_ROOT / "npu_compute/src/acl_pti/profiling/replay_memory.cpp",
-    REPO_ROOT / "npu_compute/src/acl_pti/profiling/range_profiler.cpp",
-    REPO_ROOT / "npu_compute/src/acl_pti/replacement/runtime_api_replacements.cpp",
+PUBLIC_HEADER = REPO_ROOT / "npu_tools/npu_compute/include/npu_compute/npu_compute.h"
+INJECTION_HOOK_HEADER = (
+    REPO_ROOT / "npu_tools/injection/include/injection/injection_hook.h"
 )
-ACLPTI_SOURCE = REPO_ROOT / "npu_compute/src/acl_pti"
+ACLPTI_RUNTIME_API_HEADER = (
+    REPO_ROOT / "npu_tools/npu_compute/src/acl_pti/runtime_api.h"
+)
+ACLPTI_RUNTIME_API_USERS = (
+    REPO_ROOT / "npu_tools/npu_compute/src/acl_pti/profiling/replay_memory.cpp",
+    REPO_ROOT / "npu_tools/npu_compute/src/acl_pti/profiling/range_profiler.cpp",
+    REPO_ROOT
+    / "npu_tools/npu_compute/src/acl_pti/replacement/runtime_api_replacements.cpp",
+)
+ACLPTI_SOURCE = REPO_ROOT / "npu_tools/npu_compute/src/acl_pti"
 ACLPTI_MANAGER_HEADER = ACLPTI_SOURCE / "manager.h"
 ACLPTI_MANAGER_SOURCE = ACLPTI_SOURCE / "manager.cpp"
 ACLPTI_INITIALIZATION_HEADER = ACLPTI_SOURCE / "initialization.h"
@@ -28,26 +33,38 @@ ACLPTI_CALLBACK_API_SOURCE = ACLPTI_SOURCE / "callback/api.cpp"
 ACLPTI_CMAKE = ACLPTI_SOURCE / "CMakeLists.txt"
 ACLPTI_PROFILING_API_SOURCE = ACLPTI_SOURCE / "profiling/api.cpp"
 REPLAY_RUNTIME_HEADER = ACLPTI_SOURCE / "profiling/replay_runtime.h"
-PRODUCT_CMAKE = REPO_ROOT / "npu_compute/CMakeLists.txt"
-COMPILE_SCRIPT = REPO_ROOT / "npu_compute/compile.sh"
-LIBRARY_SOURCE = REPO_ROOT / "npu_compute/src/npu_compute/npu_compute.cpp"
-LIBRARY_CMAKE = REPO_ROOT / "npu_compute/src/npu_compute/CMakeLists.txt"
+PRODUCT_CMAKE = REPO_ROOT / "npu_tools/npu_compute/CMakeLists.txt"
+COMPILE_SCRIPT = REPO_ROOT / "npu_tools/npu_compute/compile.sh"
+LIBRARY_SOURCE = REPO_ROOT / "npu_tools/npu_compute/src/npu_compute/npu_compute.cpp"
+LIBRARY_CMAKE = REPO_ROOT / "npu_tools/npu_compute/src/npu_compute/CMakeLists.txt"
+INJECTION_CMAKE = REPO_ROOT / "npu_tools/injection/CMakeLists.txt"
 RANGE_PROFILER_SOURCE = (
-    REPO_ROOT / "npu_compute/src/acl_pti/profiling/range_profiler.cpp"
+    REPO_ROOT / "npu_tools/npu_compute/src/acl_pti/profiling/range_profiler.cpp"
 )
-REPLAY_MEMORY_HEADER = REPO_ROOT / "npu_compute/src/acl_pti/profiling/replay_memory.h"
-REPLAY_MEMORY_SOURCE = REPO_ROOT / "npu_compute/src/acl_pti/profiling/replay_memory.cpp"
+REPLAY_MEMORY_HEADER = (
+    REPO_ROOT / "npu_tools/npu_compute/src/acl_pti/profiling/replay_memory.h"
+)
+REPLAY_MEMORY_SOURCE = (
+    REPO_ROOT / "npu_tools/npu_compute/src/acl_pti/profiling/replay_memory.cpp"
+)
 RUNTIME_REPLACEMENTS_SOURCE = (
-    REPO_ROOT / "npu_compute/src/acl_pti/replacement/runtime_api_replacements.cpp"
+    REPO_ROOT
+    / "npu_tools/npu_compute/src/acl_pti/replacement/runtime_api_replacements.cpp"
 )
-SECTION_CONFIG_HEADER = REPO_ROOT / "npu_compute/src/npu_compute/section_config.h"
-SECTION_CONFIG_SOURCE = REPO_ROOT / "npu_compute/src/npu_compute/section_config.cpp"
-VERSION_SCRIPT = REPO_ROOT / "npu_compute/src/npu_compute/libnpu_compute.map"
-CLI_CMAKE = REPO_ROOT / "npu_compute/src/compute_launcher/CMakeLists.txt"
-CLI_LAUNCHER = REPO_ROOT / "npu_compute/src/compute_launcher/launcher.cpp"
-INJECTION_PATH_HEADER = REPO_ROOT / "npu_compute/src/compute_launcher/injection_path.h"
+SECTION_CONFIG_HEADER = (
+    REPO_ROOT / "npu_tools/npu_compute/src/npu_compute/section_config.h"
+)
+SECTION_CONFIG_SOURCE = (
+    REPO_ROOT / "npu_tools/npu_compute/src/npu_compute/section_config.cpp"
+)
+VERSION_SCRIPT = REPO_ROOT / "npu_tools/npu_compute/src/npu_compute/libnpu_compute.map"
+CLI_CMAKE = REPO_ROOT / "npu_tools/npu_compute/src/compute_launcher/CMakeLists.txt"
+CLI_LAUNCHER = REPO_ROOT / "npu_tools/npu_compute/src/compute_launcher/launcher.cpp"
+INJECTION_PATH_HEADER = (
+    REPO_ROOT / "npu_tools/npu_compute/src/compute_launcher/injection_path.h"
+)
 INJECTION_PATH_SOURCE = (
-    REPO_ROOT / "npu_compute/src/compute_launcher/injection_path.cpp"
+    REPO_ROOT / "npu_tools/npu_compute/src/compute_launcher/injection_path.cpp"
 )
 
 
@@ -175,24 +192,20 @@ def test_unavailable_replay_runtime_reports_profiling_failure():
         assert "return ACLPTI_ERROR_PROFILING_FAILED;" in unavailable_branch
 
     assert (
-        "status == ACLPTI_ERROR_RESULT_UNRELIABLE ? ACL_ERROR_RT_PROFILING_ERROR : ACL_SUCCESS"
+        "status == ACLPTI_ERROR_RESULT_UNRELIABLE ? ACL_ERROR_INTERNAL_ERROR : ACL_ERROR_PROFILING_FAILURE"
         in replacements
     )
 
 
 def test_injection_library_uses_an_export_allowlist():
-    cmake = LIBRARY_CMAKE.read_text(encoding="utf-8")
-    assert VERSION_SCRIPT.is_file()
-    version_script = VERSION_SCRIPT.read_text(encoding="utf-8")
+    cmake = INJECTION_CMAKE.read_text(encoding="utf-8")
+    header = INJECTION_HOOK_HEADER.read_text(encoding="utf-8")
 
-    assert "${CMAKE_CURRENT_SOURCE_DIR}/.." in cmake
-    assert "libnpu_compute.map" in cmake
-    assert "--version-script" in cmake
-    assert "LINK_DEPENDS" in cmake
-    assert "acltoolInitialize;" in version_script
-    assert "acltoolShutdown;" in version_script
-    assert "local:" in version_script
-    assert "*;" in version_script
+    assert "add_library(acl_tool_injection SHARED" in cmake
+    assert "ACL_TOOL_INJECTION_BUILD=1" in cmake
+    assert "CXX_VISIBILITY_PRESET hidden" in cmake
+    assert "install(TARGETS acl_tool_injection" in cmake
+    assert "ACL_TOOL_INJECTION_EXPORT" in header
 
 
 def test_cli_resolves_injection_path_without_linking_injection_library():
@@ -209,28 +222,27 @@ def test_cli_resolves_injection_path_without_linking_injection_library():
 
 
 def test_default_cmake_uses_cann_runtime_and_profapi_for_non_test_builds():
-    cmake = PRODUCT_CMAKE.read_text(encoding="utf-8")
+    cmake = INJECTION_CMAKE.read_text(encoding="utf-8")
 
-    assert "option(NPU_COMPUTE_BUILD_TESTS" in cmake
-    assert "set(NPU_COMPUTE_USE_STUB_BACKEND ${NPU_COMPUTE_BUILD_TESTS})" in cmake
-    backend_block = cmake.split("add_library(acl_runtime_backend INTERFACE)", 1)[
+    assert "option(INJECTION_BUILD_TESTS" in cmake
+    backend_block = cmake.split("add_library(injection_runtime_backend INTERFACE)", 1)[
         1
-    ].split("add_subdirectory(src/injection_hook)", 1)[0]
-    assert "if(NPU_COMPUTE_USE_STUB_BACKEND)" in backend_block
-    stub_block = backend_block.split("if(NPU_COMPUTE_USE_STUB_BACKEND)", 1)[1].split(
+    ].split("find_package(Threads REQUIRED)", 1)[0]
+    assert "if(INJECTION_BUILD_TESTS)" in backend_block
+    stub_block = backend_block.split("if(INJECTION_BUILD_TESTS)", 1)[1].split(
         "else()", 1
     )[0]
     cann_block = backend_block.split("else()", 1)[1]
 
-    assert "add_subdirectory(stubs/runtime)" in stub_block
-    assert "add_subdirectory(stubs/prof_api)" in stub_block
+    assert "add_subdirectory(tests/stubs/runtime)" in stub_block
+    assert "add_subdirectory(tests/stubs/prof_api)" in stub_block
     assert "acl_runtime_stub" in stub_block
     assert "acl_prof_api_stub" in stub_block
 
-    assert "find_library(NPUCOMPUTE_ACL_RT_LIBRARY" in cann_block
-    assert "find_library(NPUCOMPUTE_PROFAPI_LIBRARY" in cann_block
-    assert "CANN::acl_rt" in cann_block
-    assert "CANN::profapi" in cann_block
+    assert "find_library(INJECTION_ACL_RT_LIBRARY" in cann_block
+    assert "find_library(INJECTION_PROFAPI_LIBRARY" in cann_block
+    assert "Injection::acl_rt" in cann_block
+    assert "Injection::profapi" in cann_block
     assert "acl_runtime_stub" not in cann_block
     assert "acl_prof_api_stub" not in cann_block
 
@@ -239,13 +251,16 @@ def test_compile_script_uses_current_cann_build_options():
     script = COMPILE_SCRIPT.read_text(encoding="utf-8")
 
     assert 'BUILD_DIR="${SCRIPT_DIR}/build"' in script
-    assert (
-        'CANN_ROOT="${NPUCOMPUTE_CANN_ROOT:-/usr/local/Ascend/ascend-toolkit/latest}"'
-        in script
-    )
+    assert 'CANN_ROOT="${NPUCOMPUTE_CANN_ROOT:-${ASCEND_HOME_PATH:-}}"' in script
+    assert "NPU_COMPUTE_CANN_ENV_SCRIPT" not in script
+    assert 'source "${CANN_ENV_SCRIPT}"' not in script
+    assert "NPUCOMPUTE_CANN_ROOT or ASCEND_HOME_PATH must be set" in script
     assert '-DNPUCOMPUTE_CANN_ROOT="${CANN_ROOT}"' in script
+    assert '-DINJECTION_CANN_ROOT="${CANN_ROOT}"' in script
+    assert "-DASC_TOOLS_BUILD_NPU_COMPUTE=ON" in script
+    assert 'cmake -S "${SCRIPT_DIR}/.."' in script
     assert "-U NPU_COMPUTE_BUILD_CANN_BACKEND" in script
-    assert "-U NPU_COMPUTE_BUILD_INTEGRATION_STUBS" in script
+    assert "NPU_COMPUTE_BUILD_INTEGRATION_STUBS" not in script
     assert "-DNPU_COMPUTE_BUILD_TESTS=OFF" in script
     assert "-DNPU_COMPUTE_BUILD_CANN_BACKEND" not in script
     assert "-DNPU_COMPUTE_BUILD_INTEGRATION_STUBS" not in script
@@ -255,15 +270,9 @@ def test_compile_script_uses_current_cann_build_options():
 def test_replay_waits_after_msprof_start_before_launching_kernel():
     source = RANGE_PROFILER_SOURCE.read_text(encoding="utf-8")
 
-    assert "#include <chrono>" in source
-    assert "#include <thread>" in source
-    assert "std::this_thread::sleep_for(std::chrono::seconds(5));" in source
     assert source.index("MsprofStart(") < source.index(
-        "std::this_thread::sleep_for(std::chrono::seconds(5));"
+        "const aclError launchStatus = launchFunction();"
     )
-    assert source.index(
-        "std::this_thread::sleep_for(std::chrono::seconds(5));"
-    ) < source.index("const int launchResult = launchFunction();")
 
 
 def test_section_parameter_storage_uses_stable_pointer_vector():
