@@ -26,21 +26,30 @@ BIN_DIR = Path(
 )
 CLI = BIN_DIR / "npu-compute"
 BASE_COMMAND = [str(CLI), "--section", "Memory"]
+NESTED_COLLECTION_ERROR = "nested npu-compute collection is not supported"
+NESTED_COLLECTION_DETECTION_ERROR = "nested collection detection failed"
+COLLECTION_ACTIVE_ENVIRONMENT = "NPU_COMPUTE_COLLECTION_ACTIVE"
+NESTED_COLLECTION_MARKER = ".npu-compute-nested-collection"
 HARDWARE_INFO_STATEMENT = (
     "pathlib.Path(os.environ['NPU_COMPUTE_OUTPUT'], 'HardwareInfo.jsonl')"
-    ".write_text('{}\\n', encoding='utf-8'); "
+    ".write_text('{}\\n' * 5, encoding='utf-8'); "
 )
 
 
-def run_cli(*program_and_arguments, env=None):
+def run_tool(*arguments, cwd=None, env=None):
     assert CLI.is_file(), f"npu-compute was not built: {CLI}"
     return subprocess.run(
-        [*BASE_COMMAND, *program_and_arguments],
+        [str(CLI), *arguments],
+        cwd=cwd,
         env=env,
         text=True,
         capture_output=True,
         check=False,
     )
+
+
+def run_cli(*program_and_arguments, cwd=None, env=None):
+    return run_tool(*BASE_COMMAND[1:], *program_and_arguments, cwd=cwd, env=env)
 
 
 def wait_for_file(path, process, timeout=5.0):
@@ -63,6 +72,33 @@ def process_identity_program(identity_path, sleep_seconds):
         "time.sleep(float(sys.argv[2]))"
     )
     return [sys.executable, "-c", code, str(identity_path), str(sleep_seconds)]
+
+
+def nested_collection_command():
+    code = "import os, pathlib; " + HARDWARE_INFO_STATEMENT
+    return [str(CLI), "--section", "Memory", sys.executable, "-c", code]
+
+
+def nested_collection_script(tmp_path, swallow_failure):
+    script = tmp_path / "nested_collection.py"
+    exit_code = "0" if swallow_failure else "result.returncode"
+    script.write_text(
+        "import subprocess, sys\n"
+        f"result = subprocess.run({json.dumps(nested_collection_command())}, check=False)\n"
+        f"sys.exit({exit_code})\n",
+        encoding="utf-8",
+    )
+    return [sys.executable, str(script)]
+
+
+def assert_nested_collection_rejected(result, tmp_path):
+    assert result.returncode == 3
+    assert NESTED_COLLECTION_ERROR in result.stderr
+    assert "HardwareInfo.jsonl is missing" not in result.stderr
+    assert list(tmp_path.glob("*.npu-rep")) == []
+
+    assert "npu-compute: data-directory=" not in result.stderr
+    assert list(tmp_path.glob("npu-compute-*")) == []
 
 
 def test_cli_remains_parent_until_app_exits(tmp_path):
@@ -138,7 +174,7 @@ def test_child_environment_is_overridden_without_changing_parent(monkeypatch):
 def test_program_is_found_through_path(tmp_path):
     program = tmp_path / "npu-compute-path-probe"
     program.write_text(
-        "#!/bin/sh\nprintf '{}\\n' > \"$NPU_COMPUTE_OUTPUT/HardwareInfo.jsonl\"\n",
+        "#!/bin/sh\nprintf '{}\\n{}\\n{}\\n{}\\n{}\\n' > \"$NPU_COMPUTE_OUTPUT/HardwareInfo.jsonl\"\n",
         encoding="utf-8",
     )
     program.chmod(0o755)
@@ -148,6 +184,82 @@ def test_program_is_found_through_path(tmp_path):
     result = run_cli(program.name, env=environment)
 
     assert result.returncode == 0
+
+
+def test_direct_nested_collection_is_rejected(tmp_path):
+    result = run_cli(*nested_collection_command(), cwd=tmp_path)
+
+    assert_nested_collection_rejected(result, tmp_path)
+
+
+@pytest.mark.parametrize("swallow_failure", (False, True))
+def test_nested_collection_started_by_script_is_rejected(swallow_failure, tmp_path):
+    result = run_cli(*nested_collection_script(tmp_path, swallow_failure), cwd=tmp_path)
+
+    assert_nested_collection_rejected(result, tmp_path)
+
+
+def test_nested_collection_preserves_nonempty_data_directory(tmp_path):
+    script = tmp_path / "nested_collection_with_partial_data.py"
+    script.write_text(
+        "import os, pathlib, subprocess\n"
+        f"subprocess.run({json.dumps(nested_collection_command())}, check=False)\n"
+        "pathlib.Path(os.environ['NPU_COMPUTE_OUTPUT'], 'partial.csv').write_text("
+        "'name,value\\npartial,1\\n', encoding='utf-8')\n",
+        encoding="utf-8",
+    )
+
+    result = run_cli(sys.executable, str(script), cwd=tmp_path)
+
+    assert result.returncode == 3
+    assert NESTED_COLLECTION_ERROR in result.stderr
+    data_directories = [
+        Path(line.split("=", 1)[1])
+        for line in result.stderr.splitlines()
+        if line.startswith("npu-compute: data-directory=")
+    ]
+    assert len(data_directories) == 1
+    assert (data_directories[0] / "partial.csv").is_file()
+
+
+@pytest.mark.parametrize("arguments", (("--help",), ("--list-sections",)))
+def test_non_collection_commands_ignore_active_collection_marker(arguments, tmp_path):
+    environment = os.environ.copy()
+    environment[COLLECTION_ACTIVE_ENVIRONMENT] = "1"
+    environment["NPU_COMPUTE_OUTPUT"] = str(tmp_path)
+
+    result = run_tool(*arguments, cwd=tmp_path, env=environment)
+
+    assert result.returncode == 0
+    assert NESTED_COLLECTION_ERROR not in result.stderr
+
+
+def test_nested_marker_creation_failure_prevents_app_launch(tmp_path):
+    app_marker = tmp_path / "app-ran"
+    environment = os.environ.copy()
+    environment[COLLECTION_ACTIVE_ENVIRONMENT] = "1"
+    environment["NPU_COMPUTE_OUTPUT"] = str(tmp_path / "missing")
+
+    result = run_cli("/usr/bin/touch", str(app_marker), cwd=tmp_path, env=environment)
+
+    assert result.returncode == 5
+    assert NESTED_COLLECTION_DETECTION_ERROR in result.stderr
+    assert not app_marker.exists()
+    assert list(tmp_path.glob("*.npu-rep")) == []
+
+
+def test_nested_marker_removal_failure_prevents_report_packaging(tmp_path):
+    code = (
+        "import os, pathlib; "
+        + HARDWARE_INFO_STATEMENT
+        + f"pathlib.Path(os.environ['NPU_COMPUTE_OUTPUT'], '{NESTED_COLLECTION_MARKER}').mkdir()"
+    )
+
+    result = run_cli(sys.executable, "-c", code, cwd=tmp_path)
+
+    assert result.returncode == 5
+    assert NESTED_COLLECTION_DETECTION_ERROR in result.stderr
+    assert list(tmp_path.glob("*.npu-rep")) == []
 
 
 def test_sigterm_is_forwarded_and_child_is_reaped(tmp_path):

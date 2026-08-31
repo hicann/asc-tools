@@ -81,14 +81,31 @@ Public options:
 -o, --export <repo>
 ```
 
+When an exact `-h` or `--help` appears in the `[options]` region, the CLI prints
+help and exits with status 0. Help takes precedence over other tool options and
+their validation in that region. Arguments after the target program belong to
+the application, so `-h` or `--help` there is passed to the application unchanged.
+
 Collection requires at least one `--section` and a target program. Arguments
 after the target program are passed to the application unchanged. The CLI stays
 as the parent process, forwards `SIGINT`, `SIGTERM`, and `SIGHUP` to the target
 process group, reaps the child, and preserves normal or signal-derived exit
 status. Each collection command receives a unique collection data directory in
 the command's current working directory. If the application exits successfully
-but `HardwareInfo.jsonl` is missing or is not a regular file, the CLI reports
-the collection data directory path and returns collection error 3.
+but `HardwareInfo.jsonl` is missing or is not a regular file, the CLI returns
+collection error 3. At the end of collection, an empty collection data directory
+is removed without reporting its path. A directory containing partial collection
+files is retained and reported.
+
+A target program must not start another `npu-compute` collection. When nested
+collection is detected, neither the inner nor the outer command publishes a REP.
+The outer command returns collection error 3 and prints:
+
+```text
+npu-compute: nested npu-compute collection is not supported
+```
+
+Help, Section listing, and REP import commands are not collection commands.
 
 For a collection command, `--export` selects the report destination. A path
 ending in `.npu-rep` is the exact report file. An existing directory receives
@@ -198,7 +215,8 @@ An individual device-field query failure is written to `stderr` with the
 `[libnpu-compute] HardwareInfo:` prefix and leaves that field at its default
 value. Initialization, host collection, serialization, or publication failure
 also produces a diagnostic; when no final regular file is published, the CLI
-returns collection error 3 and prints the retained collection data directory.
+returns collection error 3. A collection data directory containing partial files
+is retained and reported.
 
 ## Build
 

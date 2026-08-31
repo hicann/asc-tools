@@ -22,7 +22,7 @@ int main(int argc, char** argv)
     std::string error;
     if (!npu_compute::compute_launcher::ParseCli(argc, argv, &config, &error)) {
         std::fprintf(stderr, "npu-compute: %s\n", error.c_str());
-        return 2;
+        return npu_compute::compute_launcher::kUsageErrorExitCode;
     }
 
     if (config.show_help) {
@@ -39,7 +39,7 @@ int main(int argc, char** argv)
         std::vector<npu_compute::compute_launcher::ImportedProfileEntry> results;
         if (!npu_compute::compute_launcher::ReadImportedProfileResults(*config.import_path, &results, &error)) {
             std::fprintf(stderr, "npu-compute: %s\n", error.c_str());
-            return 4;
+            return npu_compute::compute_launcher::kReportErrorExitCode;
         }
         npu_compute::compute_launcher::ImportOutputDirectory outputDirectory;
         if (!npu_compute::compute_launcher::ImportOutputDirectory::Create(
@@ -48,7 +48,7 @@ int main(int argc, char** argv)
                 results, outputDirectory.TemporaryPath(), &error) ||
             !outputDirectory.Publish(&error)) {
             std::fprintf(stderr, "npu-compute: %s\n", error.c_str());
-            return 4;
+            return npu_compute::compute_launcher::kReportErrorExitCode;
         }
         std::fprintf(stderr, "npu-compute: unpacked=%s\n", outputDirectory.FinalPath().c_str());
         return 0;

@@ -81,6 +81,32 @@ bool StagingDirectory::Create(const std::filesystem::path& root, StagingDirector
     return true;
 }
 
+bool StagingDirectory::RemoveIfEmpty(std::string* error)
+{
+    if (error != nullptr) {
+        error->clear();
+    }
+    if (path_.empty()) {
+        return true;
+    }
+
+    if (::rmdir(path_.c_str()) == 0) {
+        path_.clear();
+        return true;
+    }
+    const int remove_error = errno;
+    if (remove_error == ENOENT) {
+        path_.clear();
+        return true;
+    }
+    if (remove_error == ENOTEMPTY || remove_error == EEXIST) {
+        return true;
+    }
+
+    SetError("remove empty collection data directory failed: " + std::string(std::strerror(remove_error)), error);
+    return false;
+}
+
 const std::string& StagingDirectory::Path() const noexcept { return path_; }
 
 } // namespace npu_compute::compute_launcher

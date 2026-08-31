@@ -75,6 +75,41 @@ bool IsExactLongOption(const char* argument)
     return false;
 }
 
+bool IsHelpOption(const char* argument)
+{
+    return argument != nullptr && (std::strcmp(argument, "-h") == 0 || std::strcmp(argument, "--help") == 0);
+}
+
+bool RequiresSeparateValue(const char* argument)
+{
+    if (argument == nullptr) {
+        return false;
+    }
+    return std::strcmp(argument, "--section") == 0 || std::strcmp(argument, "--replay-mode") == 0 ||
+           std::strcmp(argument, "--import") == 0 || std::strcmp(argument, "--export") == 0 ||
+           std::strcmp(argument, "-i") == 0 || std::strcmp(argument, "-o") == 0;
+}
+
+bool HasHelpBeforeProgram(int argc, char** argv)
+{
+    for (int index = 1; index < argc; ++index) {
+        const char* argument = argv[index];
+        if (IsHelpOption(argument)) {
+            return true;
+        }
+        if (argument == nullptr || argument[0] != '-' || argument[1] == '\0' || std::strcmp(argument, "--") == 0) {
+            return false;
+        }
+        if (RequiresSeparateValue(argument) && index + 1 < argc) {
+            if (IsHelpOption(argv[index + 1])) {
+                return true;
+            }
+            ++index;
+        }
+    }
+    return false;
+}
+
 bool AddSection(const char* value, CliConfig* config, std::string* error)
 {
     const std::string section = value == nullptr ? "" : value;
@@ -138,6 +173,11 @@ bool ParseCli(int argc, char** argv, CliConfig* config, std::string* error)
         return Fail("internal error: config is null", error);
     }
     *config = CliConfig{};
+
+    if (HasHelpBeforeProgram(argc, argv)) {
+        config->show_help = true;
+        return true;
+    }
 
     bool help_specified = false;
     bool list_sections_specified = false;

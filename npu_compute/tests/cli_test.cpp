@@ -8,6 +8,7 @@
  * See LICENSE in the root of the software repository for the full text of the License.
  */
 #include "config.h"
+#include "launcher.h"
 
 #include <cstdio>
 #include <string>
@@ -73,6 +74,15 @@ int TestCollectionExport()
     return 0;
 }
 
+int TestBusinessExitCodes()
+{
+    CHECK(npu_compute::compute_launcher::kUsageErrorExitCode == 2);
+    CHECK(npu_compute::compute_launcher::kCollectionErrorExitCode == 3);
+    CHECK(npu_compute::compute_launcher::kReportErrorExitCode == 4);
+    CHECK(npu_compute::compute_launcher::kInternalErrorExitCode == 5);
+    return 0;
+}
+
 int TestImportExportParsing()
 {
     CliConfig config;
@@ -119,6 +129,50 @@ int TestExistingCliBehavior()
     return 0;
 }
 
+int TestHelpTakesPriority()
+{
+    const std::vector<std::vector<std::string>> help_arguments = {
+        {"npu-compute", "-h"},
+        {"npu-compute", "--help"},
+        {"npu-compute", "-h", "--help"},
+        {"npu-compute", "--section", "A", "--help", "--export", "result.npu-rep"},
+        {"npu-compute", "--bad-option", "--help"},
+        {"npu-compute", "--section", "--help"},
+    };
+    for (const auto& arguments : help_arguments) {
+        CliConfig config;
+        std::string error;
+        CHECK(Parse(arguments, &config, &error));
+        CHECK(error.empty());
+        CHECK(config.show_help);
+        CHECK(config.sections.empty());
+        CHECK(!config.export_path.has_value());
+        CHECK(config.program.empty());
+        CHECK(config.program_arguments.empty());
+    }
+    return 0;
+}
+
+int TestHelpMatchingAndProgramBoundary()
+{
+    CliConfig config;
+    std::string error;
+    CHECK(!Parse({"npu-compute", "--help=value"}, &config, &error));
+    CHECK(!error.empty());
+
+    error.clear();
+    CHECK(!Parse({"npu-compute", "-hh"}, &config, &error));
+    CHECK(!error.empty());
+
+    error.clear();
+    CHECK(Parse({"npu-compute", "--section", "Memory", "./app", "--help", "-h"}, &config, &error));
+    CHECK(error.empty());
+    CHECK(!config.show_help);
+    CHECK(config.program == "./app");
+    CHECK(config.program_arguments == std::vector<std::string>({"--help", "-h"}));
+    return 0;
+}
+
 int TestHelpText()
 {
     FILE* stream = std::tmpfile();
@@ -137,8 +191,9 @@ int TestHelpText()
 
 int main()
 {
-    if (TestCollectionExport() != 0 || TestImportExportParsing() != 0 || TestForceOptionsAreRejected() != 0 ||
-        TestExistingCliBehavior() != 0 || TestHelpText() != 0) {
+    if (TestBusinessExitCodes() != 0 || TestCollectionExport() != 0 || TestImportExportParsing() != 0 ||
+        TestForceOptionsAreRejected() != 0 || TestExistingCliBehavior() != 0 || TestHelpTakesPriority() != 0 ||
+        TestHelpMatchingAndProgramBoundary() != 0 || TestHelpText() != 0) {
         return 1;
     }
     return 0;

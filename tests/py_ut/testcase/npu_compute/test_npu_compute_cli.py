@@ -65,6 +65,26 @@ def test_help_lists_only_the_public_command_line_options():
         assert obsolete_option not in result.stdout
 
 
+@pytest.mark.parametrize(
+    "arguments",
+    [
+        ("-h",),
+        ("--help",),
+        ("-h", "--help"),
+        ("--section", "A", "--help", "--export", "result.npu-rep"),
+        ("--bad-option", "--help"),
+        ("--section", "--help"),
+    ],
+)
+def test_help_takes_priority_over_other_tool_options(arguments, tmp_path):
+    result = run_cli(*arguments, cwd=tmp_path)
+
+    assert result.returncode == 0
+    assert result.stdout.count("Usage:") == 1
+    assert result.stderr == ""
+    assert list(tmp_path.iterdir()) == []
+
+
 def test_list_sections_outputs_only_ids_in_fixed_order():
     result = run_cli("--list-sections")
 
@@ -149,6 +169,23 @@ def test_arguments_after_program_are_passed_to_the_app_verbatim(tmp_path):
     assert result.stdout.splitlines() == ["--section", "app-owned-value"]
 
 
+@pytest.mark.parametrize("app_argument", ("-h", "--help"))
+def test_help_after_program_is_passed_to_the_app(app_argument, tmp_path):
+    code = HARDWARE_INFO_PROLOGUE + "import sys; print(sys.argv[1])"
+    result = run_cli(
+        "--section",
+        "Memory",
+        sys.executable,
+        "-c",
+        code,
+        app_argument,
+        cwd=tmp_path,
+    )
+
+    assert result.returncode == 0
+    assert result.stdout.strip() == app_argument
+
+
 @pytest.mark.parametrize(
     "arguments",
     [
@@ -168,7 +205,8 @@ def test_arguments_after_program_are_passed_to_the_app_verbatim(tmp_path):
             "/bin/true",
         ),
         ("--section", "Memory", "--", "/bin/true"),
-        ("--help", "--section", "Memory"),
+        ("--help=value",),
+        ("-hh",),
         ("--list-sections", "--section", "Memory"),
         ("--export", "result.repo"),
         ("--import", "one.repo", "--import", "two.repo"),

@@ -12,6 +12,7 @@
 #endif
 
 #include "process_launcher.h"
+#include "launcher.h"
 
 #include <fcntl.h>
 #include <signal.h>
@@ -28,7 +29,6 @@
 namespace npu_compute::compute_launcher {
 namespace {
 
-constexpr int kInternalErrorExitCode = 5;
 constexpr int kProgramNotExecutableExitCode = 126;
 constexpr int kProgramNotFoundExitCode = 127;
 constexpr std::array<int, 3> kForwardedSignals = {SIGINT, SIGTERM, SIGHUP};

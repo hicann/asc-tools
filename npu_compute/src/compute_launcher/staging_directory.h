@@ -19,6 +19,7 @@ class StagingDirectory {
 public:
     static bool Create(const std::filesystem::path& root, StagingDirectory* result, std::string* error);
 
+    bool RemoveIfEmpty(std::string* error);
     const std::string& Path() const noexcept;
 
 private:

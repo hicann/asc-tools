@@ -170,12 +170,53 @@ int TestRejectsNullResult()
     return 0;
 }
 
+int TestRemovesEmptyDirectory()
+{
+    TestDirectory root;
+    CHECK(!root.Path().empty());
+    StagingDirectory result;
+    std::string error;
+
+    CHECK(StagingDirectory::Create(root.Path(), &result, &error));
+    const std::filesystem::path created = result.Path();
+    CHECK(std::filesystem::is_directory(created));
+
+    CHECK(result.RemoveIfEmpty(&error));
+    CHECK(error.empty());
+    CHECK(result.Path().empty());
+    CHECK(!std::filesystem::exists(created));
+    return 0;
+}
+
+int TestPreservesNonEmptyDirectory()
+{
+    TestDirectory root;
+    CHECK(!root.Path().empty());
+    StagingDirectory result;
+    std::string error;
+
+    CHECK(StagingDirectory::Create(root.Path(), &result, &error));
+    const std::filesystem::path created = result.Path();
+    const std::filesystem::path data = created / "partial.csv";
+    std::FILE* file = std::fopen(data.c_str(), "w");
+    CHECK(file != nullptr);
+    CHECK(std::fputs("name,value\npartial,1\n", file) >= 0);
+    CHECK(std::fclose(file) == 0);
+
+    CHECK(result.RemoveIfEmpty(&error));
+    CHECK(error.empty());
+    CHECK(result.Path() == created.string());
+    CHECK(std::filesystem::is_regular_file(data));
+    return 0;
+}
+
 } // namespace
 
 int main()
 {
     if (TestCreatesUniqueDirectoriesUnderExplicitRoot() != 0 || TestIgnoresTmpdirForExplicitRoot() != 0 ||
-        TestRejectsInvalidRootAndClearsResult() != 0 || TestRejectsNullResult() != 0) {
+        TestRejectsInvalidRootAndClearsResult() != 0 || TestRejectsNullResult() != 0 ||
+        TestRemovesEmptyDirectory() != 0 || TestPreservesNonEmptyDirectory() != 0) {
         return 1;
     }
     return 0;

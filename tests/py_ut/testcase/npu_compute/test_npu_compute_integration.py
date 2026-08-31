@@ -148,9 +148,8 @@ def test_cli_rejects_missing_hardware_info_file(tmp_path):
     result = run_hardware_info_result_app("missing", tmp_path)
 
     assert result.returncode == 3
-    data_directory = extract_data_directory(result.stderr)
-    assert data_directory.parent == tmp_path
-    assert data_directory.is_dir()
+    assert "npu-compute: data-directory=" not in result.stderr
+    assert list(tmp_path.iterdir()) == []
     assert "HardwareInfo.jsonl is missing" in result.stderr
 
 
@@ -169,9 +168,8 @@ def test_app_failure_takes_priority_over_missing_hardware_info(tmp_path):
     result = run_hardware_info_result_app("missing", tmp_path, exit_code=7)
 
     assert result.returncode == 7
-    data_directory = extract_data_directory(result.stderr)
-    assert data_directory.parent == tmp_path
-    assert data_directory.is_dir()
+    assert "npu-compute: data-directory=" not in result.stderr
+    assert list(tmp_path.iterdir()) == []
     assert "APP exited with status 7" in result.stderr
     assert "HardwareInfo.jsonl is missing" not in result.stderr
 

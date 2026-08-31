@@ -262,7 +262,7 @@ int TestInvalidExportIsRejectedBeforeAppLaunch()
     return 0;
 }
 
-int TestFailedAppKeepsDataAndDoesNotPublishReport()
+int TestFailedAppRemovesEmptyDataAndDoesNotPublishReport()
 {
     TestDirectory workDirectory;
     CHECK(!workDirectory.Path().empty());
@@ -276,9 +276,31 @@ int TestFailedAppKeepsDataAndDoesNotPublishReport()
 
     CHECK(LaunchTarget(config, &collectionDataDirectory, &report, &error) == 23);
     CHECK(report.empty());
-    CHECK(IsCollectionDirectoryIn(collectionDataDirectory, workDirectory.Path()));
+    CHECK(collectionDataDirectory.empty());
+    CHECK(std::filesystem::is_empty(workDirectory.Path()));
     CHECK(!std::filesystem::exists(output));
     CHECK(error.find("status 23") != std::string::npos);
+    return 0;
+}
+
+int TestMissingHardwareInfoRemovesEmptyDataAndDoesNotPublishReport()
+{
+    TestDirectory workDirectory;
+    CHECK(!workDirectory.Path().empty());
+    const ScopedCurrentDirectory currentDirectory(workDirectory.Path());
+    CHECK(currentDirectory.IsActive());
+    const std::filesystem::path output = workDirectory.Path() / "result.npu-rep";
+    const CliConfig config = ShellConfig("true", output);
+    std::string collectionDataDirectory;
+    std::string report;
+    std::string error;
+
+    CHECK(LaunchTarget(config, &collectionDataDirectory, &report, &error) == 3);
+    CHECK(report.empty());
+    CHECK(collectionDataDirectory.empty());
+    CHECK(std::filesystem::is_empty(workDirectory.Path()));
+    CHECK(!std::filesystem::exists(output));
+    CHECK(error.find("HardwareInfo.jsonl is missing") != std::string::npos);
     return 0;
 }
 
@@ -354,7 +376,8 @@ int main()
     if (TestWithoutExportPublishesReportInCurrentDirectory() != 0 ||
         TestExplicitReportKeepsDataInCurrentDirectory() != 0 || TestExportDirectoryDoesNotMoveCollectionData() != 0 ||
         TestInvalidTmpdirDoesNotAffectCollection() != 0 || TestInvalidExportIsRejectedBeforeAppLaunch() != 0 ||
-        TestFailedAppKeepsDataAndDoesNotPublishReport() != 0 ||
+        TestFailedAppRemovesEmptyDataAndDoesNotPublishReport() != 0 ||
+        TestMissingHardwareInfoRemovesEmptyDataAndDoesNotPublishReport() != 0 ||
         TestMissingHardwareInfoKeepsDataAndDoesNotPublishReport() != 0 ||
         TestPackingFailureKeepsDataAndDoesNotPublishReport() != 0 ||
         TestPublishingFailureKeepsCollectionDataDirectory() != 0) {
