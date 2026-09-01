@@ -320,6 +320,7 @@ if(ENABLE_TEST)
     npu_check_dbi_engine
     ${CMAKE_DL_LIBS}
     Threads::Threads)
+  add_test(NAME aclsan_hook_cbdata_test COMMAND aclsan_hook_cbdata_test)
 
   add_executable(aclsan_device_symbolizer_test
     tests/device_symbolizer_test.cpp
@@ -376,6 +377,7 @@ if(ENABLE_TEST)
     ${CMAKE_CURRENT_SOURCE_DIR}/include
     ${CMAKE_CURRENT_SOURCE_DIR}/include)
   target_link_libraries(aclsan_translate_device_data_test PRIVATE injection_headers)
+  add_test(NAME aclsan_translate_device_data_test COMMAND aclsan_translate_device_data_test)
 
   add_executable(cce_instr_header_contract_test tests/cce_instr_header_contract_test.cpp)
   target_compile_features(cce_instr_header_contract_test PRIVATE cxx_std_17)

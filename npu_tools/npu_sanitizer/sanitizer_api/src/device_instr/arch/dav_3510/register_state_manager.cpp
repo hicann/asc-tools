@@ -32,17 +32,6 @@ void Dav3510RegisterStateManager::Update(const Dav3510CoreKey& key, const Vector
         static_cast<unsigned long long>(params.vectorMask0), static_cast<unsigned long long>(params.vectorMask1));
 }
 
-void Dav3510RegisterStateManager::Update(const Dav3510CoreKey& key, const SetL12DParamField& params) noexcept
-{
-    states_[key].setL12D = params;
-    ASC_SAN_DEBUG(
-        "[register] action=update register=set_l1_2d launchId=%llu blockType=%u blockId=%u "
-        "instrId=%u dataBits=%u dstAddr=0x%llx repeatTimes=%u blockNum=%u repeatGap=%u",
-        static_cast<unsigned long long>(launchId_), key.blockType, key.blockId, params.instrId, params.dataBits,
-        static_cast<unsigned long long>(params.dstAddr), static_cast<unsigned int>(params.repeatTimes),
-        static_cast<unsigned int>(params.blockNum), static_cast<unsigned int>(params.repeatGap));
-}
-
 void Dav3510RegisterStateManager::Update(const Dav3510CoreKey& key, const SetPaddingParamField& params) noexcept
 {
     states_[key].setPadding = params;
@@ -56,9 +45,21 @@ void Dav3510RegisterStateManager::Update(const Dav3510CoreKey& key, const Mte2So
 {
     states_[key].mte2Source = params;
     ASC_SAN_DEBUG(
-        "[register] action=update register=mte2_source launchId=%llu blockType=%u blockId=%u srcStride=%llu",
+        "[register] action=update register=mte2_source launchId=%llu blockType=%u blockId=%u srcStride=%lld",
         static_cast<unsigned long long>(launchId_), key.blockType, key.blockId,
-        static_cast<unsigned long long>(params.srcStride));
+        static_cast<long long>(params.srcStride));
+}
+
+void Dav3510RegisterStateManager::Update(const Dav3510CoreKey& key, const NdDmaPadCountParamField& params) noexcept
+{
+    states_[key].ndDmaPadCount = params;
+    ASC_SAN_DEBUG(
+        "[register] action=update register=nddma_pad_count launchId=%llu blockType=%u blockId=%u "
+        "left=[%u,%u,%u,%u] right=[%u,%u,%u,%u]",
+        static_cast<unsigned long long>(launchId_), key.blockType, key.blockId, params.leftPaddingCounts[0],
+        params.leftPaddingCounts[1], params.leftPaddingCounts[2], params.leftPaddingCounts[3],
+        params.rightPaddingCounts[0], params.rightPaddingCounts[1], params.rightPaddingCounts[2],
+        params.rightPaddingCounts[3]);
 }
 
 void Dav3510RegisterStateManager::Update(const Dav3510CoreKey& key, const NdDmaLoopStrideParamField& params) noexcept
@@ -81,6 +82,45 @@ void Dav3510RegisterStateManager::Update(const Dav3510CoreKey& key, const Mte2Nz
         "[register] action=update register=mte2_nz launchId=%llu blockType=%u blockId=%u matrixNum=%u",
         static_cast<unsigned long long>(launchId_), key.blockType, key.blockId,
         static_cast<unsigned int>(params.matrixNum));
+}
+
+void Dav3510RegisterStateManager::Update(const Dav3510CoreKey& key, const Loop3ParamField& params) noexcept
+{
+    states_[key].loop3 = params;
+    ASC_SAN_DEBUG(
+        "[register] action=update register=loop3 launchId=%llu blockType=%u blockId=%u "
+        "loopCount=%u srcStride=%u dstStride=%u",
+        static_cast<unsigned long long>(launchId_), key.blockType, key.blockId,
+        static_cast<unsigned int>(params.loopCount), static_cast<unsigned int>(params.srcStride), params.dstStride);
+}
+
+void Dav3510RegisterStateManager::Update(const Dav3510CoreKey& key, const DmaLoopSizeParamField& params) noexcept
+{
+    const auto direction = static_cast<std::size_t>(params.direction);
+    if (direction >= states_[key].dmaLoopSizes.size()) {
+        return;
+    }
+    states_[key].dmaLoopSizes[direction] = params;
+    ASC_SAN_DEBUG(
+        "[register] action=update register=dma_loop_size launchId=%llu blockType=%u blockId=%u "
+        "direction=%u loop1Size=%u loop2Size=%u",
+        static_cast<unsigned long long>(launchId_), key.blockType, key.blockId,
+        static_cast<unsigned int>(params.direction), params.loop1Size, params.loop2Size);
+}
+
+void Dav3510RegisterStateManager::Update(const Dav3510CoreKey& key, const DmaLoopStrideParamField& params) noexcept
+{
+    const auto direction = static_cast<std::size_t>(params.direction);
+    if (direction >= states_[key].dmaLoopStrides.size() || params.loopIndex >= 2) {
+        return;
+    }
+    states_[key].dmaLoopStrides[direction][params.loopIndex] = params;
+    ASC_SAN_DEBUG(
+        "[register] action=update register=dma_loop_stride launchId=%llu blockType=%u blockId=%u "
+        "direction=%u loopIndex=%u srcStride=%llu dstStride=%llu",
+        static_cast<unsigned long long>(launchId_), key.blockType, key.blockId,
+        static_cast<unsigned int>(params.direction), params.loopIndex,
+        static_cast<unsigned long long>(params.srcStride), static_cast<unsigned long long>(params.dstStride));
 }
 
 std::optional<Dav3510CoreRegisterState> Dav3510RegisterStateManager::Get(const Dav3510CoreKey& key) const noexcept

@@ -28,7 +28,7 @@ bash npu_tools/npu_sanitizer/demo/run_smoke.sh
 
 No separate `build.sh` invocation is required. The script removes `demo/build`,
 uses `build.sh` to rebuild the shared tools and load the CANN environment, then
-runs all 17 cases in a fixed order. A shared-tool build failure stops the script
+runs all 18 cases in a fixed order. A shared-tool build failure stops the script
 immediately. Case failures do not stop the remaining cases. Each case output is
 saved to `demo/build/smoke/<category>/<case-name>.log`; the final summary prints
 `total/passed/failed`, and the script returns 1 when any case failed.
@@ -51,6 +51,23 @@ bash npu_tools/npu_sanitizer/demo/examples/memcheck/datacopy_stride/run.sh
 
 This example intentionally triggers four 32-byte GM out-of-bounds reads. Its runner
 checks the stride parameter field, `errors=4`, and session completion.
+
+## GM Memory Access
+
+```bash
+bash npu_tools/npu_sanitizer/demo/examples/memcheck/memory_access/run.sh
+```
+
+This runner executes 18 representative dav-3510 GM transfer cases covering Vector/Cube DMA,
+Multi ND/DN2NZ, Fixpipe, NDDMA, LoadData 2DV2, and public API lowering. It validates CCE instructions,
+SET state, cbdata layouts, out-of-bounds diagnostics, and session completion. Run the complete supported
+230-case matrix with:
+
+```bash
+bash npu_tools/npu_sanitizer/demo/tests/check_memory_access_end_to_end.sh all
+```
+
+Every matrix example uses ACL APIs directly on the host and AscendC APIs in the kernel, without a demo runtime helper.
 
 ## Basic Capability Cases
 

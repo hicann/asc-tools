@@ -24,7 +24,7 @@ if [[ ${run_status} -ne 0 ]]; then
     exit 1
 fi
 
-grep -m 1 -E '\[raw\] type=AscsanRawTraceRecord .*instrId=86 .*args=' "${output}"
+grep -m 1 -E '\[raw\] type=AclsanRawTraceRecord .*instrId=86 .*args=' "${output}"
 grep -m 1 -E '\[param\] type=CopyGmToUbufAlignV2ParamField .*burstLen=8256 ' "${output}"
 grep -m 1 -E '\[cbdata\] type=AclsanDeviceMemoryAccessData .*bytes=8256 ' "${output}"
 grep -E 'npu_check: SUMMARY .*[[:space:]]device_operations=[1-9][0-9]*([[:space:]]|$)' "${output}"

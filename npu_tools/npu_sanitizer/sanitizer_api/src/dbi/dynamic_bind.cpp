@@ -42,7 +42,7 @@ aclsan::ProbeGroup BindingGroup(const BindingSpec& binding)
 {
     using aclsan::ProbeGroup;
     const uint16_t id = binding.apiId;
-    if (id == 124 || (id >= 132 && id <= 136) || id == 392 || id == 399) {
+    if (id == 90 || (id >= 124 && id <= 136) || id == 392 || (id >= 394 && id <= 399)) {
         return ProbeGroup::Scalar;
     }
     if ((id >= 72 && id <= 82) || (id >= 84 && id <= 89) || id == 149 || id == 150) {
@@ -120,11 +120,22 @@ const std::vector<BindingSpec>& AllBindings()
         {InstrType::SET_MTE2_NZ_PARA, 399, "__sanitizer_report_set_mte2_nz_para", {0}},
         // Scalar SET_* configuration required to reconstruct subsequent MTE2 GM layouts.
         {InstrType::MTE2_SRC_PARA, 124, "__sanitizer_report_set_mte2_src_para", {0}},
+        {InstrType::LOOP_SIZE_UBTOOUT, 125, "__sanitizer_report_set_loop_size_ubtoout", {0}},
+        {InstrType::LOOP1_STRIDE_UBTOOUT, 126, "__sanitizer_report_set_loop1_stride_ubtoout", {0}},
+        {InstrType::LOOP2_STRIDE_UBTOOUT, 127, "__sanitizer_report_set_loop2_stride_ubtoout", {0}},
+        {InstrType::LOOP_SIZE_OUTTOUB, 128, "__sanitizer_report_set_loop_size_outtoub", {0}},
+        {InstrType::LOOP1_STRIDE_OUTTOUB, 129, "__sanitizer_report_set_loop1_stride_outtoub", {0}},
+        {InstrType::LOOP2_STRIDE_OUTTOUB, 130, "__sanitizer_report_set_loop2_stride_outtoub", {0}},
+        {InstrType::PAD_CNT_NDDMA, 131, "__sanitizer_report_set_pad_cnt_nddma", {0}},
         {InstrType::LOOP0_STRIDE_NDDMA, 132, "__sanitizer_report_set_loop0_stride_nddma", {0}},
         {InstrType::LOOP1_STRIDE_NDDMA, 133, "__sanitizer_report_set_loop1_stride_nddma", {0}},
         {InstrType::LOOP2_STRIDE_NDDMA, 134, "__sanitizer_report_set_loop2_stride_nddma", {0}},
         {InstrType::LOOP3_STRIDE_NDDMA, 135, "__sanitizer_report_set_loop3_stride_nddma", {0}},
         {InstrType::LOOP4_STRIDE_NDDMA, 136, "__sanitizer_report_set_loop4_stride_nddma", {0}},
+        {InstrType::LOOP3_PARA, 90, "__sanitizer_report_set_loop3_para", {0}},
+        {InstrType::SET_LOOP_SIZE_OUTTOL1, 394, "__sanitizer_report_set_loop_size_outtol1", {0}},
+        {InstrType::SET_LOOP1_STRIDE_OUTTOL1, 395, "__sanitizer_report_set_loop1_stride_outtol1", {0}},
+        {InstrType::SET_LOOP2_STRIDE_OUTTOL1, 396, "__sanitizer_report_set_loop2_stride_outtol1", {0}},
 
         // MTE3: MOV_UB_TO_OUT_ALIGN_V2.
         {InstrType::COPY_UBUF_TO_GM_ALIGN_V2, 83, "__sanitizer_report_copy_ubuf_to_gm_align_v2", {0, 1, 2, 3}},
@@ -176,18 +187,16 @@ const std::vector<BindingSpec>& AllBindings()
         {InstrType::COPY_CBUF_TO_BT_F16, 425, "__sanitizer_report_copy_cbuf_to_bt_f16", {0, 1, 2}},
         {InstrType::COPY_CBUF_TO_BT_B16, 426, "__sanitizer_report_copy_cbuf_to_bt_b16", {0, 1, 2}},
 
-        // FIX: FIX_L0C_TO_OUT.f32/s32.
+        // FIX: FIX_L0C_TO_OUT.f32/s32. S4 output modes use the same DBI instruction classes
+        // and are distinguished by quant_pre in the raw instruction configuration.
         {InstrType::COPY_MATRIX_CC_TO_GM_F32_A5, 91, "__sanitizer_report_copy_matrix_cc_to_gm_f32_a5", {0, 1, 2, 3}},
         {InstrType::COPY_MATRIX_CC_TO_GM_S32_A5, 92, "__sanitizer_report_copy_matrix_cc_to_gm_s32_a5", {0, 1, 2, 3}},
-        // MOV_L1_TO_FB.
+        // Local-only FIX transfers remain independently instrumented at CCE intrinsic granularity.
         {InstrType::COPY_CBUF_TO_FBUF, 167, "__sanitizer_report_copy_cbuf_to_fbuf", {0, 1, 2}},
-        // FIX_L0C_TO_L1.f32/s32.
         {InstrType::COPY_MATRIX_CC_TO_CBUF_F32, 168, "__sanitizer_report_copy_matrix_cc_to_cbuf_f32", {0, 1, 2, 3}},
         {InstrType::COPY_MATRIX_CC_TO_CBUF_S32, 169, "__sanitizer_report_copy_matrix_cc_to_cbuf_s32", {0, 1, 2, 3}},
-        // FIX_L0C_TO_UB.f32/s32.
         {InstrType::COPY_MATRIX_CC_TO_UB_F32, 170, "__sanitizer_report_copy_matrix_cc_to_ubuf_f32", {0, 1, 2, 3}},
         {InstrType::COPY_MATRIX_CC_TO_UB_S32, 171, "__sanitizer_report_copy_matrix_cc_to_ubuf_s32", {0, 1, 2, 3}},
-
         // SYNCCHECK: SET/WAIT FLAG, API IDs 440-443, 445-446, 456-459, and 469-474.
         {InstrType::SET_FLAG, 440, "__sanitizer_report_set_flag", {0, 1, 2}},
         {InstrType::SET_FLAGI, 441, "__sanitizer_report_set_flagi", {0, 1, 2}},

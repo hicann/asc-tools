@@ -14,6 +14,7 @@
 #include "device_instr/common/device_instr_struct_dma.h"
 #include "device_instr/common/device_instr_struct_register.h"
 #include "device_instr/common/device_instr_struct_sync.h"
+#include "device_instr/common/device_instr_next_iter.h"
 #include "dbi/trace_buffer_abi.h"
 
 #include <optional>
@@ -33,10 +34,15 @@ enum class DeviceInstructionKind : uint32_t {
     LoadGmToCbuf2DV2,    // InstructionId::LoadGmToCbuf2DV2              -> LoadGmToCbuf2DV2ParamField
     NdDmaOutToUbuf,      // InstructionId::NdDmaOutToUbufB8/B16/B32      -> NdDmaOutToUbufParamField
     Mte2SourceParam,     // InstructionId::Mte2SrcPara                 -> Mte2SourceParamField
+    NdDmaPadCount,       // InstructionId::NdDmaPadCount               -> NdDmaPadCountParamField
     NdDmaLoopStride,     // InstructionId::NdDmaLoop*Stride            -> NdDmaLoopStrideParamField
     Mte2NzParam,         // InstructionId::SetMte2NzPara               -> Mte2NzParamField
+    Loop3Param,          // InstructionId::Loop3Param                   -> Loop3ParamField
+    DmaLoopSize,         // InstructionId::LoopSize*                    -> DmaLoopSizeParamField
+    DmaLoopStride,       // InstructionId::Loop*Stride*                 -> DmaLoopStrideParamField
     SetL12D,             // InstructionId::SetL12DB16/B32                -> SetL12DParamField
     FixL0cToOut,         // InstructionId::FixL0cToOutF32/S32            -> FixL0cToOutParamField
+    LocalMemoryTransfer, // InstructionId::CopyCbufToFbuf/FixL0cTo*/CopyUbufToCbuf -> LocalMemoryTransferParamField
     SetPadding,          // InstructionId::SetPadding                    -> SetPaddingParamField
 
     SetFlag,  // InstructionId::SetFlag/SetFlagI/SetFlagV/SetFlagIV     -> FlagParamField
@@ -49,8 +55,9 @@ using DeviceInstructionParamField = std::variant<
     std::monostate, // 默认构造为空
     CopyGmToUbufAlignV2ParamField, CopyGmToCbufAlignV2ParamField, CopyUbufToGmAlignV2ParamField,
     CopyGmToCbufMultiDn2NzParamField, CopyGmToCbufMultiNd2NzParamField, CopyGmToCbufV2ParamField, Mte2SourceParamField,
-    NdDmaLoopStrideParamField, Mte2NzParamField, LoadGmToCbuf2DV2ParamField, NdDmaOutToUbufParamField,
-    SetL12DParamField, FixL0cToOutParamField, SetPaddingParamField, FlagParamField, SyncBufParamField>;
+    NdDmaPadCountParamField, NdDmaLoopStrideParamField, Mte2NzParamField, Loop3ParamField, DmaLoopSizeParamField,
+    DmaLoopStrideParamField, LoadGmToCbuf2DV2ParamField, NdDmaOutToUbufParamField, SetL12DParamField,
+    FixL0cToOutParamField, LocalMemoryTransferParamField, SetPaddingParamField, FlagParamField, SyncBufParamField>;
 
 struct DecodedInstruction {
     DeviceInstructionKind kind = DeviceInstructionKind::InvalidInstruction;

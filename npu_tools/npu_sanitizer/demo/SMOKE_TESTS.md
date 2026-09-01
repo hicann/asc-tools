@@ -25,7 +25,7 @@ bash npu_tools/npu_sanitizer/demo/run_smoke.sh
 ```
 
 该脚本无需预先执行 `build.sh`。它先删除 `demo/build`，再调用 `build.sh` 重新构建公共工具并
-加载 CANN 环境，随后按固定顺序运行全部 17 个用例。公共工具构建失败时立即退出；用例中途
+加载 CANN 环境，随后按固定顺序运行全部 18 个用例。公共工具构建失败时立即退出；用例中途
 失败不会中断其余用例。每个用例输出保存到 `demo/build/smoke/<分类>/<用例名>.log`，最终以
 `total/passed/failed` 汇总并在任一用例失败时返回 1。
 
@@ -45,6 +45,22 @@ bash npu_tools/npu_sanitizer/demo/examples/memcheck/datacopy_stride/run.sh
 ```
 
 该用例故意触发 4 条 32 字节 GM 越界读，并校验 stride 参数字段、summary 的 `errors=4` 和完整会话。
+
+## GM Memory Access
+
+```bash
+bash npu_tools/npu_sanitizer/demo/examples/memcheck/memory_access/run.sh
+```
+
+该 runner 执行 18 个代表性 dav-3510 GM 搬运场景，覆盖 Vector/Cube DMA、Multi ND/DN2NZ、
+Fixpipe、NDDMA、LoadData 2DV2 和公共 API lowering，并同时检查 CCE instruction、SET 状态、
+cbdata layout、越界诊断与会话完整性。完整的 230-case 受支持矩阵使用：
+
+```bash
+bash npu_tools/npu_sanitizer/demo/tests/check_memory_access_end_to_end.sh all
+```
+
+矩阵样例的 host 侧均直接使用 ACL API，kernel 侧使用 AscendC API，不依赖 demo runtime helper。
 
 ## 基础能力用例
 

@@ -30,6 +30,14 @@ constexpr bool HasParamFieldLogger() noexcept
            std::is_same_v<ParamField, aclsan::LoadGmToCbuf2DV2ParamField> ||
            std::is_same_v<ParamField, aclsan::NdDmaParamField> ||
            std::is_same_v<ParamField, aclsan::FixL0cToOutParamField> ||
+           std::is_same_v<ParamField, aclsan::LocalMemoryTransferParamField> ||
+           std::is_same_v<ParamField, aclsan::NdDmaPadCountParamField> ||
+           std::is_same_v<ParamField, aclsan::Mte2SourceParamField> ||
+           std::is_same_v<ParamField, aclsan::NdDmaLoopStrideParamField> ||
+           std::is_same_v<ParamField, aclsan::Mte2NzParamField> ||
+           std::is_same_v<ParamField, aclsan::Loop3ParamField> ||
+           std::is_same_v<ParamField, aclsan::DmaLoopSizeParamField> ||
+           std::is_same_v<ParamField, aclsan::DmaLoopStrideParamField> ||
            std::is_same_v<ParamField, aclsan::SetPaddingParamField> ||
            std::is_same_v<ParamField, aclsan::FlagParamField> || std::is_same_v<ParamField, aclsan::SyncBufParamField>;
 }
@@ -51,6 +59,55 @@ const char* BlockTypeName(uint32_t blockType) noexcept
 void LogParamField(const aclsan::SetPaddingParamField& value) noexcept
 {
     ASC_SAN_DEBUG("[param] type=SetPaddingParamField value=0x%llx", static_cast<unsigned long long>(value.value));
+}
+
+void LogParamField(const aclsan::NdDmaPadCountParamField& value) noexcept
+{
+    ASC_SAN_DEBUG(
+        "[param] type=NdDmaPadCountParamField left=[%u,%u,%u,%u] right=[%u,%u,%u,%u]", value.leftPaddingCounts[0],
+        value.leftPaddingCounts[1], value.leftPaddingCounts[2], value.leftPaddingCounts[3], value.rightPaddingCounts[0],
+        value.rightPaddingCounts[1], value.rightPaddingCounts[2], value.rightPaddingCounts[3]);
+}
+
+void LogParamField(const aclsan::Mte2SourceParamField& value) noexcept
+{
+    ASC_SAN_DEBUG("[param] type=Mte2SourceParamField srcStride=%lld", static_cast<long long>(value.srcStride));
+}
+
+void LogParamField(const aclsan::NdDmaLoopStrideParamField& value) noexcept
+{
+    ASC_SAN_DEBUG(
+        "[param] type=NdDmaLoopStrideParamField loopIndex=%u srcStride=%llu", value.loopIndex,
+        static_cast<unsigned long long>(value.srcStride));
+}
+
+void LogParamField(const aclsan::Mte2NzParamField& value) noexcept
+{
+    ASC_SAN_DEBUG(
+        "[param] type=Mte2NzParamField matrixNum=%u loop2DstStride=%u loop3DstStride=%u loop4DstStride=%u",
+        value.matrixNum, value.loop2DstStride, value.loop3DstStride, value.loop4DstStride);
+}
+
+void LogParamField(const aclsan::Loop3ParamField& value) noexcept
+{
+    ASC_SAN_DEBUG(
+        "[param] type=Loop3ParamField loopCount=%u srcStride=%u dstStride=%u", value.loopCount, value.srcStride,
+        value.dstStride);
+}
+
+void LogParamField(const aclsan::DmaLoopSizeParamField& value) noexcept
+{
+    ASC_SAN_DEBUG(
+        "[param] type=DmaLoopSizeParamField direction=%u loop1Size=%u loop2Size=%llu",
+        static_cast<unsigned int>(value.direction), value.loop1Size, static_cast<unsigned long long>(value.loop2Size));
+}
+
+void LogParamField(const aclsan::DmaLoopStrideParamField& value) noexcept
+{
+    ASC_SAN_DEBUG(
+        "[param] type=DmaLoopStrideParamField direction=%u loopIndex=%u srcStride=%llu dstStride=%llu",
+        static_cast<unsigned int>(value.direction), value.loopIndex, static_cast<unsigned long long>(value.srcStride),
+        static_cast<unsigned long long>(value.dstStride));
 }
 
 void LogParamField(const aclsan::CopyGmToUbufAlignV2ParamField& value) noexcept
@@ -112,8 +169,8 @@ void LogParamField(const aclsan::NdDmaParamField& value) noexcept
 {
     ASC_SAN_DEBUG(
         "[param] type=NdDmaParamField instrId=%u dataBits=%u dstAddr=0x%llx srcAddr=0x%llx sid=%u "
-        "loopSizes=[%u,%u,%u,%u,%u] loop0LeftPaddingCount=%u loop0RightPaddingCount=%u paddingMode=%u "
-        "l2CacheControl=%u",
+        "loopSizes=[%u,%u,%u,%u,%u] loop0LeftPaddingCount=%u loop0RightPaddingCount=%u "
+        "paddingMode=%u l2CacheControl=%u",
         value.instrId, value.dataBits, static_cast<unsigned long long>(value.dstAddr),
         static_cast<unsigned long long>(value.srcAddr), value.sid, value.loop0Size, value.loop1Size, value.loop2Size,
         value.loop3Size, value.loop4Size, value.loop0LeftPaddingCount, value.loop0RightPaddingCount,
@@ -124,10 +181,26 @@ void LogParamField(const aclsan::FixL0cToOutParamField& value) noexcept
 {
     ASC_SAN_DEBUG(
         "[param] type=FixL0cToOutParamField instrId=%u dataBits=%u dstAddr=0x%llx srcAddr=0x%llx sid=%u "
-        "nSize=%u mSize=%u loopDstStride=%u loopSrtStride=%u",
+        "nSize=%u mSize=%u loopDstStride=%u loopSrtStride=%u l2CacheControl=%u clipReluPre=%u unitFlag=%u "
+        "quantPre=%u reluPre=%u splitEnable=%u nz2ndEnable=%u quantPost=%u reluPost=%u clipReluPost=%u "
+        "loopEnhanceEnable=%u eltwiseOp=%u eltwiseAntqEnable=%u loopEnhanceMergeEnable=%u c0PadEnable=%u "
+        "winoPostEnable=%u brcbEnable=%u nz2dnEnable=%u",
         value.instrId, value.dataBits, static_cast<unsigned long long>(value.dstAddr),
         static_cast<unsigned long long>(value.srcAddr), value.sid, value.nSize, value.mSize, value.loopDstStride,
-        value.loopSrtStride);
+        value.loopSrtStride, value.l2CacheControl, value.clipReluPre, value.unitFlag, value.quantPre, value.reluPre,
+        value.splitEnable, value.nz2ndEnable, value.quantPost, value.reluPost, value.clipReluPost,
+        value.loopEnhanceEnable, value.eltwiseOp, value.eltwiseAntqEnable, value.loopEnhanceMergeEnable,
+        value.c0PadEnable, value.winoPostEnable, value.brcbEnable, value.nz2dnEnable);
+}
+
+void LogParamField(const aclsan::LocalMemoryTransferParamField& value) noexcept
+{
+    ASC_SAN_DEBUG(
+        "[param] type=LocalMemoryTransferParamField instrId=%u dstAddr=0x%llx srcAddr=0x%llx "
+        "config0=0x%llx config1=0x%llx kind=%u localOnly=1",
+        value.instrId, static_cast<unsigned long long>(value.dstAddr), static_cast<unsigned long long>(value.srcAddr),
+        static_cast<unsigned long long>(value.config0), static_cast<unsigned long long>(value.config1),
+        static_cast<unsigned int>(value.kind));
 }
 
 void LogParamField(const aclsan::FlagParamField& value) noexcept
@@ -148,15 +221,16 @@ void LogMemoryAccessData(const AclsanDeviceMemoryAccessData& value, uint32_t ind
 {
     const uint64_t rangeBytes = value.layoutKind == ACLSAN_MEM_LAYOUT_RANGE ? value.layout.range.bytes : 0;
     ASC_SAN_DEBUG(
-        "[cbdata] deviceId=%u phyCoreId=%u blockId=%u blockType=%s  instrExecId=%llu launchId=%llu  "
-        "type=AclsanDeviceMemoryAccessData index=%u address=0x%llx memorySpace=%u accessMode=%u "
-        "accessIndex=%u accessCount=%u bytes=%llu layoutKind=%u pc=0x%llx siteId=%u serialNo=%llu pipeline=%u",
-        value.header.deviceId, value.header.phyCoreId, value.header.blockId, BlockTypeName(value.header.blockType),
+        "[cbdata] type=AclsanDeviceMemoryAccessData index=%u address=0x%llx memorySpace=%u accessMode=%u "
+        "accessIndex=%u accessCount=%u dataBits=%u bytes=%llu layoutKind=%u pc=0x%llx siteId=%u "
+        "deviceId=%u phyCoreId=%u blockId=%u blockType=%s instrExecId=%llu launchId=%llu serialNo=%llu pipeline=%u",
+        index, static_cast<unsigned long long>(value.address), value.memorySpace, value.accessMode, value.accessIndex,
+        value.accessCount, value.dataBits, static_cast<unsigned long long>(rangeBytes), value.layoutKind,
+        static_cast<unsigned long long>(value.header.pc), value.header.siteId, value.header.deviceId,
+        value.header.phyCoreId, value.header.blockId, BlockTypeName(value.header.blockType),
         static_cast<unsigned long long>(value.header.instrExecId),
-        static_cast<unsigned long long>(value.header.launchId), index, static_cast<unsigned long long>(value.address),
-        value.memorySpace, value.accessMode, value.accessIndex, value.accessCount,
-        static_cast<unsigned long long>(rangeBytes), value.layoutKind, static_cast<unsigned long long>(value.header.pc),
-        value.header.siteId, static_cast<unsigned long long>(value.header.serialNo), value.header.pipeline);
+        static_cast<unsigned long long>(value.header.launchId), static_cast<unsigned long long>(value.header.serialNo),
+        value.header.pipeline);
 
     if (value.layoutKind == ACLSAN_MEM_LAYOUT_RANGE) {
         ASC_SAN_DEBUG("[cbdata] layout=range bytes=%llu", static_cast<unsigned long long>(value.layout.range.bytes));

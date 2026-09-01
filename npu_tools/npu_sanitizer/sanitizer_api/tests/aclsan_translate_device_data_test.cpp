@@ -82,14 +82,15 @@ aclsan::ParsedTraceRecord MakeParsedTraceRecord(
 }
 
 std::optional<aclsan::DeviceCallbackData> TranslateRecordToCallbackData(
-    const aclsan::AclsanRawTraceRecord& record, aclsan::ParsedTraceRecord parsed)
+    const aclsan::AclsanRawTraceRecord& record, aclsan::ParsedTraceRecord parsed,
+    const aclsan::MemoryRegisterState& registerState = {})
 {
     const std::optional<aclsan::DecodedInstruction> decoded = DecodeRecord(record);
     if (!decoded.has_value()) {
         return std::nullopt;
     }
     parsed.record = record;
-    return aclsan::TranslateDecodedTraceToCallbackData(parsed, *decoded);
+    return aclsan::TranslateDecodedTraceToCallbackData(parsed, *decoded, registerState);
 }
 
 void TestTranslateMovOutToL1AlignV2()
@@ -252,15 +253,15 @@ void AssertRangeLayout(const AclsanDeviceMemoryAccessData& access, uint64_t byte
     assert(access.layout.range.bytes == bytes);
 }
 
-void AssertBlockRepeatLayout(
-    const AclsanDeviceMemoryAccessData& access, uint32_t blockNum, uint32_t blockSize, int64_t blockStride)
+void AssertLinearBlockRepeatLayout(
+    const AclsanDeviceMemoryAccessData& access, uint32_t repeatTimes, uint32_t blockSize, int64_t repeatStride)
 {
     assert(access.layoutKind == ACLSAN_MEM_LAYOUT_BLOCK_REPEAT);
-    assert(access.layout.blockRepeat.blockNum == blockNum);
+    assert(access.layout.blockRepeat.blockNum == 1);
     assert(access.layout.blockRepeat.blockSize == blockSize);
-    assert(access.layout.blockRepeat.blockStride == blockStride);
-    assert(access.layout.blockRepeat.repeatTimes == 1);
-    assert(access.layout.blockRepeat.repeatStride == 0);
+    assert(access.layout.blockRepeat.blockStride == 0);
+    assert(access.layout.blockRepeat.repeatTimes == repeatTimes);
+    assert(access.layout.blockRepeat.repeatStride == repeatStride);
 }
 
 aclsan::AclsanRawTraceRecord MakePaddedCopyGmToCbufAlignV2Record(
@@ -279,16 +280,18 @@ void TestMakesRangeLayoutForAtMostOneBurst()
 {
     const aclsan::ParsedTraceRecord parsed = MakeParsedTraceRecord(1, 1, ACLSAN_DEVICE_BLOCK_TYPE_AICORE_CUBE, 0, 3);
 
-    for (uint32_t burstNum : {0U, 1U}) {
-        const aclsan::AclsanRawTraceRecord record = MakePaddedCopyGmToCbufAlignV2Record(96, 96, burstNum);
-        const auto callback = TranslateRecordToCallbackData(record, parsed);
+    const auto emptyCallback = TranslateRecordToCallbackData(MakePaddedCopyGmToCbufAlignV2Record(96, 96, 0), parsed);
+    assert(emptyCallback.has_value());
+    const auto* emptyAccesses = std::get_if<aclsan::DeviceMemoryAccessDataList>(&*emptyCallback);
+    assert(emptyAccesses != nullptr);
+    assert(emptyAccesses->empty());
 
-        assert(callback.has_value());
-        const auto* accesses = std::get_if<aclsan::DeviceMemoryAccessDataList>(&*callback);
-        assert(accesses != nullptr);
-        AssertRangeLayout((*accesses)[0], static_cast<uint64_t>(burstNum) * 64);
-        AssertRangeLayout((*accesses)[1], static_cast<uint64_t>(burstNum) * 70);
-    }
+    const auto callback = TranslateRecordToCallbackData(MakePaddedCopyGmToCbufAlignV2Record(96, 96, 1), parsed);
+    assert(callback.has_value());
+    const auto* accesses = std::get_if<aclsan::DeviceMemoryAccessDataList>(&*callback);
+    assert(accesses != nullptr);
+    assert(accesses->size() == 1);
+    AssertRangeLayout(accesses->front(), 64);
 }
 
 void TestMakesRangeLayoutsFromContinuousParamFieldData()
@@ -301,8 +304,8 @@ void TestMakesRangeLayoutsFromContinuousParamFieldData()
     assert(callback.has_value());
     const auto* accesses = std::get_if<aclsan::DeviceMemoryAccessDataList>(&*callback);
     assert(accesses != nullptr);
-    AssertRangeLayout((*accesses)[0], 192);
-    AssertRangeLayout((*accesses)[1], 210);
+    assert(accesses->size() == 1);
+    AssertRangeLayout(accesses->front(), 192);
 }
 
 void TestMakesBlockRepeatOnlyForNonContinuousSource()
@@ -315,11 +318,11 @@ void TestMakesBlockRepeatOnlyForNonContinuousSource()
     assert(callback.has_value());
     const auto* accesses = std::get_if<aclsan::DeviceMemoryAccessDataList>(&*callback);
     assert(accesses != nullptr);
-    AssertBlockRepeatLayout((*accesses)[0], 3, 64, 96);
-    AssertRangeLayout((*accesses)[1], 210);
+    assert(accesses->size() == 1);
+    AssertLinearBlockRepeatLayout(accesses->front(), 3, 64, 96);
 }
 
-void TestMakesBlockRepeatOnlyForNonContinuousDestination()
+void TestIgnoresNonGmDestinationStride()
 {
     const aclsan::AclsanRawTraceRecord record = MakePaddedCopyGmToCbufAlignV2Record(64, 96);
     const aclsan::ParsedTraceRecord parsed = MakeParsedTraceRecord(1, 1, ACLSAN_DEVICE_BLOCK_TYPE_AICORE_CUBE, 0, 3);
@@ -329,8 +332,8 @@ void TestMakesBlockRepeatOnlyForNonContinuousDestination()
     assert(callback.has_value());
     const auto* accesses = std::get_if<aclsan::DeviceMemoryAccessDataList>(&*callback);
     assert(accesses != nullptr);
-    AssertRangeLayout((*accesses)[0], 192);
-    AssertBlockRepeatLayout((*accesses)[1], 3, 70, 96);
+    assert(accesses->size() == 1);
+    AssertRangeLayout(accesses->front(), 192);
 }
 
 void TestTranslateRawTraceToCallbackData()
@@ -426,11 +429,12 @@ void TestTranslateMultiAndFixpipeToGmCbdata()
     multi.args[1] = 0x5000;
     multi.args[2] = (64ULL << 4U) | (4ULL << 48U);
     multi.args[3] = 8ULL | (512ULL << 21U);
-    multi.args[4] = 2;
     const aclsan::ParsedTraceRecord parsed =
         MakeParsedTraceRecord(20, 3, ACLSAN_DEVICE_BLOCK_TYPE_AICORE_CUBE, 19, 2, 9);
+    aclsan::MemoryRegisterState multiState{};
+    multiState.mte2Nz = aclsan::Mte2NzParamField{2, 0, 0, 0};
 
-    const auto multiCallback = TranslateRecordToCallbackData(multi, parsed);
+    const auto multiCallback = TranslateRecordToCallbackData(multi, parsed, multiState);
     assert(multiCallback.has_value());
     const auto* multiAccesses = std::get_if<aclsan::DeviceMemoryAccessDataList>(&*multiCallback);
     assert(multiAccesses != nullptr);
@@ -450,7 +454,8 @@ void TestTranslateMultiAndFixpipeToGmCbdata()
     fixpipe.instrId = FIX_L0C_TO_OUT_F32_ID;
     fixpipe.pipeline = ACLSAN_DEVICE_PIPE_FIXPIPE;
     fixpipe.args[0] = 0x8000;
-    fixpipe.args[2] = (18ULL << 4U) | (4ULL << 16U) | (64ULL << 32U);
+    fixpipe.args[2] = (48ULL << 4U) | (4ULL << 16U) | (64ULL << 32U);
+    fixpipe.args[3] = 24ULL << 34U;
 
     const auto fixpipeCallback = TranslateRecordToCallbackData(fixpipe, parsed);
     assert(fixpipeCallback.has_value());
@@ -458,9 +463,9 @@ void TestTranslateMultiAndFixpipeToGmCbdata()
     assert(fixpipeAccesses != nullptr);
     assert(fixpipeAccesses->size() == 2);
     assert((*fixpipeAccesses)[0].address == 0x8000);
-    assert((*fixpipeAccesses)[0].layout.range.bytes == 256);
-    assert((*fixpipeAccesses)[1].address == 0x8100);
-    assert((*fixpipeAccesses)[1].layout.range.bytes == 32);
+    assert((*fixpipeAccesses)[0].layout.range.bytes == 128);
+    assert((*fixpipeAccesses)[1].address == 0x8040);
+    assert((*fixpipeAccesses)[1].layout.range.bytes == 64);
 }
 
 std::string CaptureTranslateDebugLogs(
@@ -652,6 +657,7 @@ void TestTranslateCopyGmToCbufV2ToCallbackData()
     record.instrId = COPY_GM_TO_CBUF_V2_ID;
     record.pc = 0x6000;
     record.siteId = 8;
+    record.pipeline = ACLSAN_DEVICE_PIPE_MTE2;
     record.args[0] = 0x3000;
     record.args[1] = 0x2000;
     record.args[2] = (7ULL << 4) | (11ULL << 25);
@@ -663,38 +669,39 @@ void TestTranslateCopyGmToCbufV2ToCallbackData()
     assert(callback.has_value());
     const auto* accesses = std::get_if<aclsan::DeviceMemoryAccessDataList>(&*callback);
     assert(accesses != nullptr);
-    const AclsanDeviceMemoryAccessData& source = (*accesses)[0];
+    assert(accesses->size() == 1);
+    const AclsanDeviceMemoryAccessData& source = accesses->front();
+    assert(source.header.version == ACLSAN_API_VERSION);
+    assert(source.header.size == sizeof(AclsanDeviceMemoryAccessData));
+    assert(source.header.pc == record.pc);
+    assert(source.header.siteId == record.siteId);
+    assert(source.header.sourceKind == ACLSAN_DEVICE_SOURCE_MTE2);
+    assert(source.header.pipeline == ACLSAN_DEVICE_PIPE_MTE2);
+    assert(source.header.flags == ACLSAN_DEVICE_EVENT_FLAG_EXACT);
     assert(source.address == record.args[1]);
     assert(source.memorySpace == ACLSAN_DEVICE_MEMORY_SPACE_GM);
     assert(source.accessMode == ACLSAN_DEVICE_MEMORY_ACCESS_READ);
     assert(source.accessIndex == 0);
+    assert(source.accessCount == 1);
+    assert(source.dataBits == 0);
     assert(source.header.serialNo == 0);
-    AssertRangeLayout(source, 77 * C0_SIZE);
-
-    const AclsanDeviceMemoryAccessData& destination = (*accesses)[1];
-    assert(destination.address == record.args[0]);
-    assert(destination.memorySpace == ACLSAN_DEVICE_MEMORY_SPACE_L1);
-    assert(destination.accessMode == ACLSAN_DEVICE_MEMORY_ACCESS_WRITE);
-    assert(destination.accessIndex == 1);
-    assert(destination.header.serialNo == 1);
-    AssertRangeLayout(destination, 77 * C0_SIZE);
+    AssertRangeLayout(source, 7 * 11 * C0_SIZE);
 }
 
-void AssertMemoryAccessEndpoint(
-    const AclsanDeviceMemoryAccessData& access, uint64_t address, AclsanDeviceMemorySpace memorySpace,
-    AclsanDeviceMemoryAccessMode accessMode, uint32_t accessIndex, uint32_t dataBits)
+void AssertSingleGmAccess(
+    const AclsanDeviceMemoryAccessData& access, uint64_t address, AclsanDeviceMemoryAccessMode accessMode,
+    uint32_t dataBits)
 {
     assert(access.address == address);
-    assert(access.memorySpace == memorySpace);
+    assert(access.memorySpace == ACLSAN_DEVICE_MEMORY_SPACE_GM);
     assert(access.accessMode == accessMode);
-    assert(access.accessIndex == accessIndex);
-    assert(access.accessCount == 2);
-    assert(access.header.serialNo == accessIndex);
+    assert(access.accessIndex == 0);
+    assert(access.accessCount == 1);
+    assert(access.header.serialNo == 0);
     assert(access.dataBits == dataBits);
-    AssertRangeLayout(access, 0);
 }
 
-void TestTranslateNewDmaParamFieldsToCallbackData()
+void TestTranslateStateDependentDmaFieldsToCallbackData()
 {
     const aclsan::ParsedTraceRecord parsed = MakeParsedTraceRecord(13, 7, ACLSAN_DEVICE_BLOCK_TYPE_AICORE_CUBE, 5, 3);
     aclsan::AclsanRawTraceRecord record{};
@@ -702,34 +709,109 @@ void TestTranslateNewDmaParamFieldsToCallbackData()
     record.args[1] = 0x6000;
 
     record.instrId = LOAD_GM_TO_CBUF_2D_V2_ID;
-    const auto load2DCallback = TranslateRecordToCallbackData(record, parsed);
+    record.pipeline = ACLSAN_DEVICE_PIPE_MTE2;
+    record.args[2] = 0;
+    record.args[3] = (2ULL << 12U) | (3ULL << 24U);
+    aclsan::MemoryRegisterState load2DState{};
+    load2DState.mte2Source = aclsan::Mte2SourceParamField{4};
+    const auto load2DCallback = TranslateRecordToCallbackData(record, parsed, load2DState);
     assert(load2DCallback.has_value());
     const auto* load2DAccesses = std::get_if<aclsan::DeviceMemoryAccessDataList>(&*load2DCallback);
     assert(load2DAccesses != nullptr);
-    AssertMemoryAccessEndpoint(
-        (*load2DAccesses)[0], record.args[1], ACLSAN_DEVICE_MEMORY_SPACE_GM, ACLSAN_DEVICE_MEMORY_ACCESS_READ, 0, 0);
-    AssertMemoryAccessEndpoint(
-        (*load2DAccesses)[1], record.args[0], ACLSAN_DEVICE_MEMORY_SPACE_L1, ACLSAN_DEVICE_MEMORY_ACCESS_WRITE, 1, 0);
+    assert(load2DAccesses->size() == 1);
+    AssertSingleGmAccess(load2DAccesses->front(), record.args[1], ACLSAN_DEVICE_MEMORY_ACCESS_READ, 0);
+    assert(load2DAccesses->front().layoutKind == ACLSAN_MEM_LAYOUT_BLOCK_REPEAT);
+
+    record.args[2] = 2ULL << 32U;
+    record.args[3] = (1ULL << 12U) | (3ULL << 24U) | (2ULL << 40U);
+    const auto skippedLoad2DCallback = TranslateRecordToCallbackData(record, parsed);
+    assert(skippedLoad2DCallback.has_value());
+    const auto* skippedLoad2DAccesses = std::get_if<aclsan::DeviceMemoryAccessDataList>(&*skippedLoad2DCallback);
+    assert(skippedLoad2DAccesses != nullptr);
+    assert(skippedLoad2DAccesses->empty());
+
+    record.args[3] = (1ULL << 12U) | (3ULL << 24U);
+    load2DState.mte2Source = aclsan::Mte2SourceParamField{-1};
+    const auto negativeStrideLoad2DCallback = TranslateRecordToCallbackData(record, parsed, load2DState);
+    assert(negativeStrideLoad2DCallback.has_value());
+    const auto* negativeStrideLoad2DAccesses =
+        std::get_if<aclsan::DeviceMemoryAccessDataList>(&*negativeStrideLoad2DCallback);
+    assert(negativeStrideLoad2DAccesses != nullptr);
+    assert(negativeStrideLoad2DAccesses->size() == 1);
+    const auto& negativeStrideLoad2DAccess = negativeStrideLoad2DAccesses->front();
+    AssertSingleGmAccess(negativeStrideLoad2DAccess, record.args[1], ACLSAN_DEVICE_MEMORY_ACCESS_READ, 0);
+    assert(negativeStrideLoad2DAccess.layoutKind == ACLSAN_MEM_LAYOUT_RANGE);
+    assert(negativeStrideLoad2DAccess.layout.range.bytes == 3 * 512);
 
     record.instrId = ND_DMA_OUT_TO_UBUF_B16_ID;
-    const auto ndDmaCallback = TranslateRecordToCallbackData(record, parsed);
+    record.args[2] = (3ULL << 4U) | (2ULL << 24U) | (1ULL << 44U);
+    record.args[3] = 1ULL | (1ULL << 20U);
+    aclsan::MemoryRegisterState ndDmaState{};
+    ndDmaState.ndDmaLoopStrides[0] = aclsan::NdDmaLoopStrideParamField{0, 1};
+    ndDmaState.ndDmaLoopStrides[1] = aclsan::NdDmaLoopStrideParamField{1, 8};
+    ndDmaState.ndDmaLoopStrides[2] = aclsan::NdDmaLoopStrideParamField{2, 0};
+    ndDmaState.ndDmaLoopStrides[3] = aclsan::NdDmaLoopStrideParamField{3, 0};
+    ndDmaState.ndDmaLoopStrides[4] = aclsan::NdDmaLoopStrideParamField{4, 0};
+    const auto ndDmaCallback = TranslateRecordToCallbackData(record, parsed, ndDmaState);
     assert(ndDmaCallback.has_value());
     const auto* ndDmaAccesses = std::get_if<aclsan::DeviceMemoryAccessDataList>(&*ndDmaCallback);
     assert(ndDmaAccesses != nullptr);
-    AssertMemoryAccessEndpoint(
-        (*ndDmaAccesses)[0], record.args[1], ACLSAN_DEVICE_MEMORY_SPACE_GM, ACLSAN_DEVICE_MEMORY_ACCESS_READ, 0, 16);
-    AssertMemoryAccessEndpoint(
-        (*ndDmaAccesses)[1], record.args[0], ACLSAN_DEVICE_MEMORY_SPACE_UB, ACLSAN_DEVICE_MEMORY_ACCESS_WRITE, 1, 16);
+    assert(ndDmaAccesses->size() == 1);
+    AssertSingleGmAccess(ndDmaAccesses->front(), record.args[1], ACLSAN_DEVICE_MEMORY_ACCESS_READ, 16);
+    assert(ndDmaAccesses->front().layoutKind == ACLSAN_MEM_LAYOUT_ND_AFFINE);
+    assert(ndDmaAccesses->front().layout.ndAffine.rank == 5);
+    assert(ndDmaAccesses->front().layout.ndAffine.elementBytes == 2);
+    assert(ndDmaAccesses->front().layout.ndAffine.dims[0] == 3);
+    assert(ndDmaAccesses->front().layout.ndAffine.dims[1] == 2);
+    assert(ndDmaAccesses->front().layout.ndAffine.strides[0] == 2);
+    assert(ndDmaAccesses->front().layout.ndAffine.strides[1] == 16);
 
     record.instrId = FIX_L0C_TO_OUT_F32_ID;
+    record.pipeline = ACLSAN_DEVICE_PIPE_FIXPIPE;
+    record.args[2] = (16ULL << 4U) | (4ULL << 16U) | (64ULL << 32U);
+    record.args[3] = 0;
     const auto fixCallback = TranslateRecordToCallbackData(record, parsed);
     assert(fixCallback.has_value());
     const auto* fixAccesses = std::get_if<aclsan::DeviceMemoryAccessDataList>(&*fixCallback);
     assert(fixAccesses != nullptr);
-    AssertMemoryAccessEndpoint(
-        (*fixAccesses)[0], record.args[1], ACLSAN_DEVICE_MEMORY_SPACE_L0C, ACLSAN_DEVICE_MEMORY_ACCESS_READ, 0, 32);
-    AssertMemoryAccessEndpoint(
-        (*fixAccesses)[1], record.args[0], ACLSAN_DEVICE_MEMORY_SPACE_GM, ACLSAN_DEVICE_MEMORY_ACCESS_WRITE, 1, 32);
+    assert(fixAccesses->size() == 1);
+    AssertSingleGmAccess(fixAccesses->front(), record.args[0], ACLSAN_DEVICE_MEMORY_ACCESS_WRITE, 32);
+    AssertRangeLayout(fixAccesses->front(), 256);
+}
+
+void TestTranslatesLocalMemoryTransfersToExplicitEmptyGmAccessList()
+{
+    const aclsan::ParsedTraceRecord parsed = MakeParsedTraceRecord(14, 2, ACLSAN_DEVICE_BLOCK_TYPE_AICORE_CUBE, 5, 3);
+    constexpr uint64_t LOCAL_INSTRUCTION_IDS[] = {167, 168, 169, 170, 171, 173};
+    for (const uint64_t instructionId : LOCAL_INSTRUCTION_IDS) {
+        aclsan::AclsanRawTraceRecord record{};
+        record.instrId = instructionId;
+        record.pipeline = ACLSAN_DEVICE_PIPE_FIXPIPE;
+        record.args[0] = 0x2000;
+        record.args[1] = 0x1000;
+        record.args[2] = UINT64_C(0x123456789abcdef0);
+        record.args[3] = UINT64_C(0xfedcba9876543210);
+
+        const auto callback = TranslateRecordToCallbackData(record, parsed);
+
+        assert(callback.has_value());
+        const auto* accesses = std::get_if<aclsan::DeviceMemoryAccessDataList>(&*callback);
+        assert(accesses != nullptr);
+        assert(accesses->empty());
+    }
+
+    aclsan::AclsanRawTraceRecord logged{};
+    logged.instrId = 167;
+    logged.pipeline = ACLSAN_DEVICE_PIPE_FIXPIPE;
+    logged.args[0] = 0x2000;
+    logged.args[1] = 0x1000;
+    logged.args[2] = UINT64_C(0x1122334455667788);
+    logged.args[3] = UINT64_C(0x99aabbccddeeff00);
+    const std::string logs = CaptureTranslateDebugLogs(logged, parsed);
+    assert(logs.find("type=LocalMemoryTransferParamField instrId=167") != std::string::npos);
+    assert(logs.find("config0=0x1122334455667788 config1=0x99aabbccddeeff00 kind=0 localOnly=1") != std::string::npos);
+    assert(logs.find("no GM access for local-only memory instruction instrId=167 kind=0") != std::string::npos);
+    assert(logs.find("unsupported") == std::string::npos);
 }
 
 void TestRejectsUnsupportedCallbackParamField()
@@ -760,7 +842,7 @@ int main()
     TestMakesRangeLayoutForAtMostOneBurst();
     TestMakesRangeLayoutsFromContinuousParamFieldData();
     TestMakesBlockRepeatOnlyForNonContinuousSource();
-    TestMakesBlockRepeatOnlyForNonContinuousDestination();
+    TestIgnoresNonGmDestinationStride();
     TestTranslateRawTraceToCallbackData();
     TestLogsEveryMemoryAccessInVariableLengthList();
     TestTranslateMultiAndFixpipeToGmCbdata();
@@ -768,7 +850,8 @@ int main()
     TestTranslateDebugLogsShowBufferConversion();
     TestTranslateDebugLogsShowUbufToGmConversion();
     TestTranslateCopyGmToCbufV2ToCallbackData();
-    TestTranslateNewDmaParamFieldsToCallbackData();
+    TestTranslateStateDependentDmaFieldsToCallbackData();
+    TestTranslatesLocalMemoryTransfersToExplicitEmptyGmAccessList();
     TestRejectsUnsupportedCallbackParamField();
     TestRejectsUnknownInstruction();
     return 0;

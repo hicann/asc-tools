@@ -11,6 +11,7 @@
 #pragma once
 
 #include "acl/acl_rt.h"
+#include "aclsan/aclsan_cbdata_synchronize.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -41,6 +42,11 @@ struct PreparedTraceLaunch {
     std::vector<aclrtPlaceHolderInfo> placeholders;
 };
 
+struct TraceCollectionResult {
+    AclsanTraceCollectionStatus status = ACLSAN_TRACE_COLLECTION_NOT_REQUIRED;
+    uint32_t pendingLaunches = 0;
+};
+
 void DispatchTraceRecords(
     const std::vector<ParsedTraceRecord>& records, const DeviceInstructionDecoder& decoder) noexcept;
 
@@ -57,7 +63,7 @@ aclError PrepareTraceLaunch(
     const aclrtPlaceHolderInfo* placeholders, size_t placeholderCount, PreparedTraceLaunch& prepared) noexcept;
 void CompleteTraceLaunch(
     PreparedTraceLaunch&& prepared, aclrtFuncHandle function, aclrtStream stream, aclError launchResult) noexcept;
-void CollectTraceStream(aclrtStream stream) noexcept;
+TraceCollectionResult CollectTraceStream(aclrtStream stream, aclError synchronizeResult) noexcept;
 void ResetTraceRuntimeState() noexcept;
 device_runtime::CallStackResult ResolveTraceDeviceCallStack(uint64_t pc) noexcept;
 

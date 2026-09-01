@@ -44,7 +44,7 @@ struct MovAlignV2ParamField {
     uint8_t rightPaddingCount = 0; // config0 [52:57]
     bool dataSelectBit = false;    // config0 [58]
     uint8_t l2CacheControl = 0;    // config0 [60:63]
-    uint64_t burstSrcStride = 0;   // config1 [0:39]    单位为Byte
+    uint64_t burstSrcStride = 0;   // config1 [0:39]    相邻burst源首地址步长，单位为Byte
     uint32_t burstDstStride = 0;   // config1 [40:60]   单位为Byte
 };
 
@@ -88,7 +88,7 @@ struct CopyGmToCbufV2ParamField {
     uint32_t burstLen = 0;       // config0 [25:41]    单位为C0_SIZE(32B)
     uint8_t padFunctionMode = 0; // config0 [56:59]
     uint8_t l2CacheControl = 0;  // config0 [60:63]
-    uint64_t srcStride = 0;      // config1 [0:35]     单位为C0_SIZE(32B)
+    uint64_t srcStride = 0;      // config1 [0:35]     相邻burst源首地址步长，单位为C0_SIZE(32B)
     uint32_t dstStride = 0;      // config1 [40:56]    单位为C0_SIZE(32B)
 };
 
@@ -105,7 +105,6 @@ struct LoadGmToCbuf2DV2ParamField {
     uint8_t sid = 0;             // config1 [36:39]
     uint8_t decompMode = 0;      // config1 [40:42]
     uint8_t l2CacheControl = 0;  // config1 [60:63]
-    uint64_t srcStride = 0;      // preceding MTE2_SRC_PARA, unit: 512 bytes
 };
 
 // MOV_UB_TO_OUT_ALIGN_V2
@@ -120,7 +119,7 @@ struct CopyUbufToGmAlignV2ParamField {
     uint32_t burstNum = 0;      // config0 [4:24]
     uint32_t burstLen = 0;      // config0 [25:45]   单位为Byte
     uint8_t l2CacheControl = 0; // config0 [60:63]
-    uint64_t dstStride = 0;     // config1 [0:39]    单位为Byte
+    uint64_t dstStride = 0;     // config1 [0:39]    相邻burst目的首地址步长，单位为Byte
     uint32_t srcStride = 0;     // config1 [40:60]   单位为Byte
 };
 
@@ -130,17 +129,16 @@ struct NdDmaParamField {
     uint32_t dataBits = 0; // InstructionId 中的 dtype 位宽，单位为 bit；0 表示未知
     uint64_t dstAddr = 0;
     uint64_t srcAddr = 0;
-    uint8_t sid = 0;                          // config0 [0:3]
-    uint32_t loop0Size = 0;                   // config0 [4:23]
-    uint32_t loop1Size = 0;                   // config0 [24:43]
-    uint32_t loop2Size = 0;                   // config0 [44:63]
-    uint32_t loop3Size = 0;                   // config1 [0:19]
-    uint32_t loop4Size = 0;                   // config1 [20:39]
-    uint8_t loop0LeftPaddingCount = 0;        // config1 [40:47]
-    uint8_t loop0RightPaddingCount = 0;       // config1 [48:55]
-    bool paddingMode = false;                 // config1 [56]
-    uint8_t l2CacheControl = 0;               // config1 [60:63]
-    std::array<uint64_t, 5> loopSrcStrides{}; // preceding LOOP*_STRIDE_NDDMA, unit: elements
+    uint8_t sid = 0;                    // config0 [0:3]
+    uint32_t loop0Size = 0;             // config0 [4:23]
+    uint32_t loop1Size = 0;             // config0 [24:43]
+    uint32_t loop2Size = 0;             // config0 [44:63]
+    uint32_t loop3Size = 0;             // config1 [0:19]
+    uint32_t loop4Size = 0;             // config1 [20:39]
+    uint8_t loop0LeftPaddingCount = 0;  // config1 [40:47]
+    uint8_t loop0RightPaddingCount = 0; // config1 [48:55]
+    bool paddingMode = false;           // config1 [56]
+    uint8_t l2CacheControl = 0;         // config1 [60:63]
 };
 
 using NdDmaOutToUbufParamField = NdDmaParamField;
@@ -170,7 +168,7 @@ struct FixL0cToOutParamField {
     uint8_t l2CacheControl = 0;          // config1 [16:19]
     uint8_t clipReluPre = 0;             // config1 [30:31]
     uint8_t unitFlag = 0;                // config1 [32:33]
-    uint8_t quantPre = 0;                // config1 [29] + [34:38]  29位是most significant  TODO: 待测试
+    uint8_t quantPre = 0;                // config1 [29] is bit 5; config1 [34:38] contains bits [4:0]
     uint8_t reluPre = 0;                 // config1 [39:41]
     bool splitEnable = false;            // config1 [42]
     bool nz2ndEnable = false;            // config1 [43]

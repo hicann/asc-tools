@@ -13,6 +13,7 @@
 
 #include "aclsan/aclsan_api.h"
 #include "device_instr/decoder.h"
+#include "internal/aclsan_memory_cbdata.h"
 #include "internal/aclsan_trace_buffer.h"
 
 #include <optional>
@@ -27,7 +28,8 @@ using DeviceCallbackData = std::variant<DeviceMemoryAccessDataList, AclsanDevice
 
 // 根据 ParsedTraceRecord 和 paramField 提取最终返回的 cbdata，配上对应的日志
 std::optional<DeviceCallbackData> TranslateDecodedTraceToCallbackData(
-    const ParsedTraceRecord& parsed, const aclsan::DecodedInstruction& decoded) noexcept;
+    const ParsedTraceRecord& parsed, const aclsan::DecodedInstruction& decoded,
+    const MemoryRegisterState& registerState = {}) noexcept;
 
 } // namespace aclsan
 

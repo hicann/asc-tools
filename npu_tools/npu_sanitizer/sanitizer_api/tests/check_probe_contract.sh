@@ -99,8 +99,8 @@ fi
 trace_runtime="${api_dir}/src/aclsan_trace_runtime.cpp"
 grep -Fq 'aclsan::FindDeviceInstructionDecoder(getSocName())' "${trace_runtime}" || \
     Fail 'trace runtime does not select the local instruction decoder'
-grep -Fq 'TranslateDecodedTraceToCallbackData(enriched, *decoded)' "${trace_runtime}" || \
-    Fail 'decoded DBI records are not translated to public callback data'
+grep -Fq 'TranslateDecodedTraceToCallbackData(parsed, *decoded, memoryState)' "${trace_runtime}" || \
+    Fail 'decoded DBI records and independent register state are not translated to public callback data'
 trace_translator="${api_dir}/src/aclsan/aclsan_translate_device_data.cpp"
 device_data_header="${api_dir}/include/internal/aclsan_device_data.h"
 grep -Fq 'using DeviceMemoryAccessDataList = std::vector<AclsanDeviceMemoryAccessData>;' "${device_data_header}" || \
@@ -130,6 +130,8 @@ binding_source="${dbi_source_dir}/dynamic_bind.cpp"
 probe_generator="${dbi_source_dir}/probe_source_generator.cpp"
 grep -Fq '{InstrType::SET_PADDING, 392, "__sanitizer_report_set_padding", {0}}' "${binding_source}" || \
     Fail 'DBI does not bind SET_PADDING argument 0 to instruction ID 392'
+grep -Fq '{InstrType::PAD_CNT_NDDMA, 131, "__sanitizer_report_set_pad_cnt_nddma", {0}}' "${binding_source}" || \
+    Fail 'DBI does not bind PAD_CNT_NDDMA argument 0 to instruction ID 131'
 grep -Fq 'return ProbeGroup::Scalar;' "${binding_source}" || \
     Fail 'SET_PADDING is not assigned to the Scalar probe group'
 grep -Fq '{392, ProbeGroup::Scalar, "__sanitizer_report_set_padding"' "${probe_generator}" || \
@@ -142,6 +144,28 @@ grep -Fq '{149, ProbeGroup::Mte2, "__sanitizer_report_set_l1_2d_b16"' "${probe_g
     Fail 'MTE2 SET_L1_2D.b16 ProbeDefinition is missing'
 grep -Fq '{150, ProbeGroup::Mte2, "__sanitizer_report_set_l1_2d_b32"' "${probe_generator}" || \
     Fail 'MTE2 SET_L1_2D.b32 ProbeDefinition is missing'
+required_scalar_probes=(
+    'LOOP3_PARA|90|__sanitizer_report_set_loop3_para'
+    'LOOP_SIZE_UBTOOUT|125|__sanitizer_report_set_loop_size_ubtoout'
+    'LOOP1_STRIDE_UBTOOUT|126|__sanitizer_report_set_loop1_stride_ubtoout'
+    'LOOP2_STRIDE_UBTOOUT|127|__sanitizer_report_set_loop2_stride_ubtoout'
+    'LOOP_SIZE_OUTTOUB|128|__sanitizer_report_set_loop_size_outtoub'
+    'LOOP1_STRIDE_OUTTOUB|129|__sanitizer_report_set_loop1_stride_outtoub'
+    'LOOP2_STRIDE_OUTTOUB|130|__sanitizer_report_set_loop2_stride_outtoub'
+    'PAD_CNT_NDDMA|131|__sanitizer_report_set_pad_cnt_nddma'
+    'SET_LOOP_SIZE_OUTTOL1|394|__sanitizer_report_set_loop_size_outtol1'
+    'SET_LOOP1_STRIDE_OUTTOL1|395|__sanitizer_report_set_loop1_stride_outtol1'
+    'SET_LOOP2_STRIDE_OUTTOL1|396|__sanitizer_report_set_loop2_stride_outtol1'
+)
+for specification in "${required_scalar_probes[@]}"; do
+    IFS='|' read -r instruction_type instruction_id probe_symbol <<< "${specification}"
+    grep -Fq "{InstrType::${instruction_type}, ${instruction_id}, \"${probe_symbol}\", {0}}" "${binding_source}" || \
+        Fail "DBI binding is missing for instruction ID ${instruction_id}"
+    grep -Fq "{${instruction_id}, ProbeGroup::Scalar, \"${probe_symbol}\"" "${probe_generator}" || \
+        Fail "Scalar ProbeDefinition is missing for instruction ID ${instruction_id}"
+done
+grep -Fq 'std::array<ProbeDefinition, 94>' "${probe_generator}" || \
+    Fail 'generated probe definition count is not 94'
 
 hook_source="${api_dir}/src/aclsan/aclsan_hook_aclrt.cpp"
 grep -Fq 'InstrumentRuntimeBinary' "${hook_source}" || \

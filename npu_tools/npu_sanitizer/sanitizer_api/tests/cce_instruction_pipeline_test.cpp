@@ -64,13 +64,22 @@ void TestMemoryCallbackUsesRawRecordPipeline()
     }
 }
 
-void TestKnownUnhandledInstructionReturnsNoDecodedResult()
+void TestLocalOnlyInstructionReturnsEmptyGmAccessList()
 {
     const aclsan::DeviceInstructionDecoder* decoder = aclsan::FindDeviceInstructionDecoder("Ascend950PR_9599");
     assert(decoder != nullptr);
     aclsan::AclsanRawTraceRecord record{};
     record.instrId = static_cast<uint32_t>(aclsan::InstructionId::CopyUbufToCbuf);
-    assert(!decoder->decode(record).has_value());
+    const auto decoded = decoder->decode(record);
+    assert(decoded.has_value());
+    assert(decoded->kind == aclsan::DeviceInstructionKind::LocalMemoryTransfer);
+    aclsan::ParsedTraceRecord parsed{};
+    parsed.record = record;
+    const auto callback = aclsan::TranslateDecodedTraceToCallbackData(parsed, *decoded);
+    assert(callback.has_value());
+    const auto* accesses = std::get_if<aclsan::DeviceMemoryAccessDataList>(&*callback);
+    assert(accesses != nullptr);
+    assert(accesses->empty());
 }
 
 void TestUnknownInstructionReturnsNoDecodedResult()
@@ -88,7 +97,7 @@ int main()
 {
     TestCallbackUsesRawRecordPipeline();
     TestMemoryCallbackUsesRawRecordPipeline();
-    TestKnownUnhandledInstructionReturnsNoDecodedResult();
+    TestLocalOnlyInstructionReturnsEmptyGmAccessList();
     TestUnknownInstructionReturnsNoDecodedResult();
     return 0;
 }

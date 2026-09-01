@@ -98,6 +98,7 @@ main()
     local -a examples=(
         memcheck/add
         memcheck/datacopy_stride
+        memcheck/memory_access
         memcheck/matmul_basic_api
         memcheck/matmul_leakyrelu_basic_api
         basic_func/multi_kernel

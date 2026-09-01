@@ -31,10 +31,13 @@ struct Dav3510CoreKey {
 
 struct Dav3510CoreRegisterState {
     std::optional<VectorMaskParamField> vectorMask;
-    std::optional<SetL12DParamField> setL12D;
     std::optional<Mte2SourceParamField> mte2Source;
+    std::optional<NdDmaPadCountParamField> ndDmaPadCount;
     std::array<std::optional<NdDmaLoopStrideParamField>, 5> ndDmaLoopStrides{};
     std::optional<Mte2NzParamField> mte2Nz;
+    std::optional<Loop3ParamField> loop3;
+    std::array<std::optional<DmaLoopSizeParamField>, 3> dmaLoopSizes{};
+    std::array<std::array<std::optional<DmaLoopStrideParamField>, 2>, 3> dmaLoopStrides{};
     std::optional<SetPaddingParamField> setPadding;
 };
 
@@ -44,9 +47,12 @@ public:
 
     void Update(const Dav3510CoreKey& key, const VectorMaskParamField& params) noexcept;
     void Update(const Dav3510CoreKey& key, const Mte2SourceParamField& params) noexcept;
+    void Update(const Dav3510CoreKey& key, const NdDmaPadCountParamField& params) noexcept;
     void Update(const Dav3510CoreKey& key, const NdDmaLoopStrideParamField& params) noexcept;
     void Update(const Dav3510CoreKey& key, const Mte2NzParamField& params) noexcept;
-    void Update(const Dav3510CoreKey& key, const SetL12DParamField& params) noexcept;
+    void Update(const Dav3510CoreKey& key, const Loop3ParamField& params) noexcept;
+    void Update(const Dav3510CoreKey& key, const DmaLoopSizeParamField& params) noexcept;
+    void Update(const Dav3510CoreKey& key, const DmaLoopStrideParamField& params) noexcept;
     void Update(const Dav3510CoreKey& key, const SetPaddingParamField& params) noexcept;
     std::optional<Dav3510CoreRegisterState> Get(const Dav3510CoreKey& key) const noexcept;
     uint64_t GetLaunchId() const noexcept;

@@ -24,19 +24,16 @@ if rg -n '\bMemoryAccessEndpoint\b|\bDATA_COPY_ACCESS_COUNT\b' "${translator}"; 
     Fail 'producer must build and size the complete access list'
 fi
 
-grep -Fq 'static std::optional<DeviceMemoryAccessDataList> MakeDeviceMemoryAccessData(' "${translator}" || \
-    Fail 'MakeDeviceMemoryAccessData must return the complete access list'
-overload_count=$(grep -Fc 'static std::optional<DeviceMemoryAccessDataList> MakeDeviceMemoryAccessData(' "${translator}")
-if [[ "${overload_count}" -ne 3 ]]; then
-    Fail "expected 3 legacy MakeDeviceMemoryAccessData overloads, found ${overload_count}"
+if rg -n 'MakeDeviceMemoryAccessData|ConfigureMemoryAccessLayout|useExactGmConverter' "${translator}"; then
+    Fail 'legacy device-memory producer paths must not remain beside MemoryFieldToCbdataConverter'
 fi
+grep -Fq 'MemoryFieldToCbdataConverter{context, registerState}.Convert(MemoryInstructionField{params})' "${translator}" || \
+    Fail 'memory instructions do not use the unified converter and independent register state'
 if grep -Fq 'MakeMovAlignV2MemoryAccessData' "${translator}"; then
     Fail 'converter-covered MOV_ALIGN_V2 helper must be removed'
 fi
-grep -Fq 'access.header.serialNo = index;' "${translator}" || Fail 'serialNo is not derived from the list index'
-grep -Fq 'access.accessIndex = static_cast<uint32_t>(index);' "${translator}" || \
-    Fail 'accessIndex is not derived from the list index'
-grep -Fq 'access.accessCount = static_cast<uint32_t>(accesses.size());' "${translator}" || \
-    Fail 'accessCount is not derived from the final list size'
+converter="${api_dir}/src/aclsan_memory_cbdata.cpp"
+grep -Fq 'data.accessIndex = accessIndex;' "${converter}" || Fail 'accessIndex is not derived from the list index'
+grep -Fq 'data.accessCount = accessCount;' "${converter}" || Fail 'accessCount is not derived from the final list size'
 
 printf 'device memory access producer contract passed\n'

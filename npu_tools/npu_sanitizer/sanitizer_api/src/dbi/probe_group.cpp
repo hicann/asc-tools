@@ -15,8 +15,9 @@ namespace aclsan {
 std::vector<ProbeGroup> NormalizeProbeGroups(const std::vector<ProbeGroup>& groups)
 {
     std::set<ProbeGroup> unique(groups.begin(), groups.end());
-    // MTE2 memory operations consume configuration written by scalar SET_* instructions.
-    if (unique.find(ProbeGroup::Mte2) != unique.end()) {
+    // These memory operations consume configuration written by scalar SET_* instructions.
+    if (unique.find(ProbeGroup::Mte2) != unique.end() || unique.find(ProbeGroup::Mte3) != unique.end() ||
+        unique.find(ProbeGroup::Fixpipe) != unique.end()) {
         unique.insert(ProbeGroup::Scalar);
     }
     return {unique.begin(), unique.end()};

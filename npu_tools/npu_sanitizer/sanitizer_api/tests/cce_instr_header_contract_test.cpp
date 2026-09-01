@@ -42,7 +42,7 @@ static_assert(
     std::is_same_v<
         decltype(aclsan::dav3510::Dav3510CoreRegisterState{}.vectorMask), std::optional<aclsan::VectorMaskParamField>>);
 static_assert(std::is_same_v<
-              decltype(aclsan::dav3510::Dav3510CoreRegisterState{}.setL12D), std::optional<aclsan::SetL12DParamField>>);
+              decltype(aclsan::dav3510::Dav3510CoreRegisterState{}.loop3), std::optional<aclsan::Loop3ParamField>>);
 static_assert(std::is_same_v<decltype(aclsan::SetPaddingParamField{}.value), uint64_t>);
 static_assert(
     std::is_same_v<
@@ -71,7 +71,11 @@ static_assert(IsCompleteType<aclsan::SyncBufParamField>());
 static_assert(IsCompleteType<aclsan::HardwareFlagParamField>());
 static_assert(IsCompleteType<aclsan::NdDmaParamField>());
 static_assert(IsCompleteType<aclsan::NdDmaOutToUbufParamField>());
+static_assert(IsCompleteType<aclsan::NdDmaPadCountParamField>());
 static_assert(IsCompleteType<aclsan::SetL12DParamField>());
+static_assert(IsCompleteType<aclsan::Loop3ParamField>());
+static_assert(IsCompleteType<aclsan::DmaLoopSizeParamField>());
+static_assert(IsCompleteType<aclsan::DmaLoopStrideParamField>());
 static_assert(IsCompleteType<aclsan::FixL0cToOutParamField>());
 static_assert(std::is_same_v<decltype(aclsan::CopyGmToUbufAlignV2ParamField{}.dataBits), uint32_t>);
 static_assert(std::is_same_v<decltype(aclsan::CopyGmToCbufMultiDn2NzParamField{}.dataBits), uint32_t>);

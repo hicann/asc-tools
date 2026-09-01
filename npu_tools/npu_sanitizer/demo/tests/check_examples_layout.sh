@@ -23,6 +23,12 @@ test -f "${demo_dir}/examples/memcheck/datacopy_stride/datacopy_stride.asc"
 test -f "${demo_dir}/examples/memcheck/datacopy_stride/CMakeLists.txt"
 test -x "${demo_dir}/examples/memcheck/datacopy_stride/run.sh"
 test -x "${demo_dir}/tests/check_datacopy_stride_end_to_end.sh"
+test -x "${demo_dir}/tests/check_memory_access_end_to_end.sh"
+test -f "${demo_dir}/examples/memcheck/memory_access/CMakeLists.txt"
+test -f "${demo_dir}/examples/memcheck/memory_access/load2dv2_memory_case.asc"
+test -f "${demo_dir}/examples/memcheck/memory_access/nddma_memory_case.asc"
+test -f "${demo_dir}/examples/memcheck/memory_access/fixpipe_memory_case.asc"
+test -x "${demo_dir}/examples/memcheck/memory_access/run.sh"
 test -f "${demo_dir}/examples/basic_func/multi_kernel/multi_kernel.asc"
 test -f "${demo_dir}/examples/basic_func/multi_kernel/CMakeLists.txt"
 test -x "${demo_dir}/examples/basic_func/multi_kernel/run.sh"
@@ -67,6 +73,7 @@ standalone_examples=(
     basic_func/dual_tool_multi_launch_aggregate
     memcheck/add
     memcheck/datacopy_stride
+    memcheck/memory_access
     memcheck/matmul_basic_api
     memcheck/matmul_leakyrelu_basic_api
 )
@@ -83,7 +90,11 @@ for example in "${standalone_examples[@]}"; do
         exit 1
     fi
     grep -Fq 'target_link_libraries' "${cmake_file}"
-    grep -Fq 'target_link_libraries(demo PRIVATE' "${cmake_file}"
+    if [[ "${example}" == memcheck/memory_access ]]; then
+        grep -Fq 'target_link_libraries("${target}" PRIVATE ${ACL_RT_LIBRARY})' "${cmake_file}"
+    else
+        grep -Fq 'target_link_libraries(demo PRIVATE' "${cmake_file}"
+    fi
     grep -Fq '${ACL_RT_LIBRARY}' "${cmake_file}"
     if rg -q 'ACLSAN_DEMO_ACL_RT_DIRECTORY|RUNTIME_OUTPUT_DIRECTORY|BUILD_RPATH' "${cmake_file}"; then
         printf 'standalone example still overrides its output or build RPATH: %s\n' "${example}" >&2
@@ -94,6 +105,25 @@ for example in "${standalone_examples[@]}"; do
         exit 1
     fi
 done
+
+memory_access_dir="${demo_dir}/examples/memcheck/memory_access"
+memory_access_source_count=$(find "${memory_access_dir}" -maxdepth 1 -name '*.asc' -type f | wc -l)
+if [[ ${memory_access_source_count} -ne 17 ]]; then
+    printf 'unexpected memory_access source count: %d\n' "${memory_access_source_count}" >&2
+    exit 1
+fi
+if rg -q 'npu_check::demo|host_runtime' "${memory_access_dir}" -g '*.asc' -g '*.h'; then
+    printf 'memory_access examples still hide ACL Runtime calls behind the retired helper\n' >&2
+    exit 1
+fi
+grep -Fq 'project(memory_access LANGUAGES ASC CXX)' "${memory_access_dir}/CMakeLists.txt"
+grep -Fq 'target_link_libraries("${target}" PRIVATE ${ACL_RT_LIBRARY})' \
+    "${memory_access_dir}/CMakeLists.txt"
+grep -Fq 'check_memory_access_end_to_end.sh smoke' "${memory_access_dir}/run.sh"
+if [[ $(bash "${demo_dir}/tests/check_memory_access_end_to_end.sh" --list | wc -l) -ne 230 ]]; then
+    printf 'memory_access matrix must contain exactly 230 supported cases\n' >&2
+    exit 1
+fi
 grep -Fq 'add_executable(demo' \
     "${demo_dir}/examples/memcheck/datacopy_stride/CMakeLists.txt"
 grep -Fq 'add_executable(demo' \
@@ -143,6 +173,11 @@ for runner in "${demo_dir}"/examples/basic_func/*/run.sh "${demo_dir}"/examples/
     grep -Fq 'cd "$(dirname "$0")"' "${runner}"
     grep -Fq 'output="build/npu_check.log"' "${runner}"
     grep -Fq 'exec > >(tee -a "${output}") 2>&1' "${runner}"
+    if [[ "${runner}" == */memcheck/memory_access/run.sh ]]; then
+        grep -Fq 'check_memory_access_end_to_end.sh smoke' "${runner}"
+        bash -n "${runner}"
+        continue
+    fi
     grep -Fq 'cmake -B build -DCMAKE_ASC_ARCHITECTURES=dav-3510' "${runner}"
     grep -Fq 'cmake --build build --parallel' "${runner}"
     grep -Fq 'set +e' "${runner}"
@@ -191,8 +226,9 @@ grep -Fq 'value=0x34' "${padding_runner}"
 
 dual_tool_runner="${demo_dir}/examples/basic_func/dual_tool_multi_launch_aggregate/run.sh"
 grep -Fq -- '--tool memcheck --tool synccheck -- build/demo' "${dual_tool_runner}"
-grep -Fq '^tool=memcheck .*synchronizations=1.*errors=1' "${dual_tool_runner}"
-grep -Fq '^tool=synccheck .*sync_events=1 synchronizations=1.*unconsumed_opens=1.*errors=1' "${dual_tool_runner}"
+grep -Fq '^tool=memcheck .*synchronizations=1 .*errors=1' "${dual_tool_runner}"
+grep -Fq '^tool=synccheck sync_events=1 synchronizations=1 matched_pairs=0 duplicate_opens=0 unmatched_closes=0 unconsumed_opens=1 .*errors=1' \
+    "${dual_tool_runner}"
 grep -Fq 'Invalid GM read of size 32 bytes' "${dual_tool_runner}"
 grep -Fq 'Synchronization pairing mismatch: redundant SET_FLAG.' "${dual_tool_runner}"
 
@@ -209,6 +245,7 @@ grep -Fq 'run_smoke_examples()' "${smoke_runner}"
 smoke_examples=(
     memcheck/add
     memcheck/datacopy_stride
+    memcheck/memory_access
     memcheck/matmul_basic_api
     memcheck/matmul_leakyrelu_basic_api
     basic_func/multi_kernel
@@ -272,8 +309,8 @@ if [[ ${workflow_status} -ne 0 ]]; then
 fi
 test ! -e "${workflow_fixture_dir}/build/stale"
 test "$(sed -n '1p' "${workflow_fixture_dir}/trace.log")" = "BUILD"
-test "$(grep -c '^RUN ' "${workflow_fixture_dir}/trace.log")" -eq 17
-grep -Fq 'total=17 passed=17 failed=0' "${output}"
+test "$(grep -c '^RUN ' "${workflow_fixture_dir}/trace.log")" -eq 18
+grep -Fq 'total=18 passed=18 failed=0' "${output}"
 
 printf '%s\n' \
     '#!/usr/bin/env bash' \

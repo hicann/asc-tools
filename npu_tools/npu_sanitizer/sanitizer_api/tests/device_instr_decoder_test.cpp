@@ -10,6 +10,7 @@
 
 #include "device_instr/decoder_registry.h"
 
+#include <array>
 #include <cassert>
 #include <cstdio>
 #include <cstring>
@@ -323,6 +324,98 @@ void TestDecodesDav3510NdDmaOutToUbufInstruction()
     assert(params->l2CacheControl == 5);
 }
 
+void TestDecodesDav3510NdDmaPadCountInstruction()
+{
+    const aclsan::DeviceInstructionDecoder* decoder = aclsan::FindDeviceInstructionDecoder("Ascend950PR_9599");
+    assert(decoder != nullptr);
+
+    aclsan::AclsanRawTraceRecord record{};
+    record.instrId = 131;
+    record.args[0] = Pack(0x11, 0) | Pack(0x12, 8) | Pack(0x21, 16) | Pack(0x22, 24) | Pack(0x31, 32) | Pack(0x32, 40) |
+                     Pack(0x41, 48) | Pack(0x42, 56);
+
+    const std::optional<aclsan::DecodedInstruction> decoded = decoder->decode(record);
+
+    assert(decoded.has_value());
+    assert(decoded->kind == aclsan::DeviceInstructionKind::NdDmaPadCount);
+    const auto* params = std::get_if<aclsan::NdDmaPadCountParamField>(&decoded->params);
+    assert(params != nullptr);
+    assert((params->leftPaddingCounts == std::array<uint8_t, 4>{0x11, 0x21, 0x31, 0x41}));
+    assert((params->rightPaddingCounts == std::array<uint8_t, 4>{0x12, 0x22, 0x32, 0x42}));
+}
+
+void TestDecodesDav3510RegisterFieldsWithoutChangingMoverFields()
+{
+    const aclsan::DeviceInstructionDecoder* decoder = aclsan::FindDeviceInstructionDecoder("Ascend950PR_9599");
+    assert(decoder != nullptr);
+
+    aclsan::AclsanRawTraceRecord source{};
+    source.instrId = 124;
+    source.args[0] = UINT32_C(0xfffffff0);
+    const auto sourceDecoded = decoder->decode(source);
+    assert(sourceDecoded.has_value());
+    const auto* sourceParams = std::get_if<aclsan::Mte2SourceParamField>(&sourceDecoded->params);
+    assert(sourceParams != nullptr && sourceParams->srcStride == -16);
+
+    aclsan::AclsanRawTraceRecord nz{};
+    nz.instrId = 399;
+    nz.args[0] = Pack(1, 0) | Pack(2, 16) | Pack(3, 32) | Pack(4, 48);
+    const auto nzDecoded = decoder->decode(nz);
+    assert(nzDecoded.has_value());
+    const auto* nzParams = std::get_if<aclsan::Mte2NzParamField>(&nzDecoded->params);
+    assert(nzParams != nullptr);
+    assert(
+        nzParams->matrixNum == 1 && nzParams->loop2DstStride == 2 && nzParams->loop3DstStride == 3 &&
+        nzParams->loop4DstStride == 4);
+
+    aclsan::AclsanRawTraceRecord loop3{};
+    loop3.instrId = 90;
+    loop3.args[0] = Pack(5, 0) | Pack(6, 16) | Pack(UINT32_C(0x12345678), 32);
+    const auto loop3Decoded = decoder->decode(loop3);
+    assert(loop3Decoded.has_value());
+    const auto* loop3Params = std::get_if<aclsan::Loop3ParamField>(&loop3Decoded->params);
+    assert(loop3Params != nullptr);
+    assert(
+        loop3Params->loopCount == 5 && loop3Params->srcStride == 6 && loop3Params->dstStride == UINT32_C(0x12345678));
+}
+
+void TestDecodesDav3510DmaOuterLoopFields()
+{
+    const aclsan::DeviceInstructionDecoder* decoder = aclsan::FindDeviceInstructionDecoder("Ascend950PR_9599");
+    assert(decoder != nullptr);
+
+    aclsan::AclsanRawTraceRecord size{};
+    size.instrId = 128;
+    constexpr uint64_t kLoop2Size = (UINT64_C(1) << 35U) | 9U;
+    size.args[0] = Pack(7, 0) | Pack(kLoop2Size, 21);
+    const auto sizeDecoded = decoder->decode(size);
+    assert(sizeDecoded.has_value());
+    const auto* sizeParams = std::get_if<aclsan::DmaLoopSizeParamField>(&sizeDecoded->params);
+    assert(sizeParams != nullptr);
+    assert(sizeParams->direction == aclsan::DmaLoopDirection::GM_TO_UBUF);
+    assert(sizeParams->loop1Size == 7 && sizeParams->loop2Size == kLoop2Size);
+
+    aclsan::AclsanRawTraceRecord outToUbufStride{};
+    outToUbufStride.instrId = 129;
+    outToUbufStride.args[0] = Pack(UINT64_C(0x123456789a), 0) | Pack(0x1abcde, 40);
+    const auto outToUbufDecoded = decoder->decode(outToUbufStride);
+    assert(outToUbufDecoded.has_value());
+    const auto* outToUbufParams = std::get_if<aclsan::DmaLoopStrideParamField>(&outToUbufDecoded->params);
+    assert(outToUbufParams != nullptr);
+    assert(outToUbufParams->srcStride == UINT64_C(0x123456789a));
+    assert(outToUbufParams->dstStride == 0x1abcde);
+
+    aclsan::AclsanRawTraceRecord ubToOutStride{};
+    ubToOutStride.instrId = 126;
+    ubToOutStride.args[0] = Pack(UINT64_C(0x23456789ab), 0) | Pack(0x12345, 40);
+    const auto ubToOutDecoded = decoder->decode(ubToOutStride);
+    assert(ubToOutDecoded.has_value());
+    const auto* ubToOutParams = std::get_if<aclsan::DmaLoopStrideParamField>(&ubToOutDecoded->params);
+    assert(ubToOutParams != nullptr);
+    assert(ubToOutParams->srcStride == 0x12345);
+    assert(ubToOutParams->dstStride == UINT64_C(0x23456789ab));
+}
+
 void TestDecodesDav3510SetL12DInstruction()
 {
     const aclsan::DeviceInstructionDecoder* decoder = aclsan::FindDeviceInstructionDecoder("Ascend950PR_9599");
@@ -397,7 +490,7 @@ void TestDecodesDav3510FixL0cToOutInstruction()
     assert(params->l2CacheControl == 5);
     assert(params->clipReluPre == 1);
     assert(params->unitFlag == 1);
-    assert(params->quantPre == 0x1b);
+    assert(params->quantPre == 0x2b);
     assert(params->reluPre == 3);
     assert(params->splitEnable);
     assert(params->nz2ndEnable);
@@ -412,6 +505,94 @@ void TestDecodesDav3510FixL0cToOutInstruction()
     assert(params->winoPostEnable);
     assert(params->brcbEnable);
     assert(params->nz2dnEnable);
+}
+
+void TestDecodesDav3510FixpipeQuantPreHighBit()
+{
+    const aclsan::DeviceInstructionDecoder* decoder = aclsan::FindDeviceInstructionDecoder("Ascend950PR_9599");
+    assert(decoder != nullptr);
+
+    for (uint8_t quantPre = 31; quantPre <= 36; ++quantPre) {
+        aclsan::AclsanRawTraceRecord record{};
+        record.instrId = 91;
+        record.args[3] = Pack(quantPre >> 5U, 29) | Pack(quantPre & 0x1fU, 34);
+
+        const std::optional<aclsan::DecodedInstruction> decoded = decoder->decode(record);
+
+        assert(decoded.has_value());
+        const auto* params = std::get_if<aclsan::FixL0cToOutParamField>(&decoded->params);
+        assert(params != nullptr);
+        assert(params->quantPre == quantPre);
+    }
+}
+
+void TestDecodesDav3510LocalMemoryTransfersWithoutLosingRawConfig()
+{
+    struct ExpectedLocalTransfer {
+        uint64_t instructionId;
+        aclsan::LocalMemoryTransferKind kind;
+    };
+    constexpr ExpectedLocalTransfer EXPECTED[] = {
+        {167, aclsan::LocalMemoryTransferKind::CopyCbufToFbuf},
+        {168, aclsan::LocalMemoryTransferKind::FixL0cToCbufF32},
+        {169, aclsan::LocalMemoryTransferKind::FixL0cToCbufS32},
+        {170, aclsan::LocalMemoryTransferKind::FixL0cToUbufF32},
+        {171, aclsan::LocalMemoryTransferKind::FixL0cToUbufS32},
+        {173, aclsan::LocalMemoryTransferKind::CopyUbufToCbuf},
+    };
+    const aclsan::DeviceInstructionDecoder* decoder = aclsan::FindDeviceInstructionDecoder("Ascend950PR_9599");
+    assert(decoder != nullptr);
+
+    for (const ExpectedLocalTransfer& expected : EXPECTED) {
+        aclsan::AclsanRawTraceRecord record{};
+        record.instrId = expected.instructionId;
+        record.args[0] = UINT64_C(0x123456789abcdef0);
+        record.args[1] = UINT64_C(0x0fedcba987654321);
+        record.args[2] = UINT64_C(0xa5a55a5a11223344);
+        record.args[3] = UINT64_C(0x55aa33cc77889900);
+
+        const std::optional<aclsan::DecodedInstruction> decoded = decoder->decode(record);
+
+        assert(decoded.has_value());
+        assert(decoded->kind == aclsan::DeviceInstructionKind::LocalMemoryTransfer);
+        const auto* params = std::get_if<aclsan::LocalMemoryTransferParamField>(&decoded->params);
+        assert(params != nullptr);
+        assert(params->instrId == expected.instructionId);
+        assert(params->dstAddr == record.args[0]);
+        assert(params->srcAddr == record.args[1]);
+        assert(params->config0 == record.args[2]);
+        assert(params->config1 == record.args[3]);
+        assert(params->kind == expected.kind);
+    }
+}
+
+void TestDecodesDav3510S4FixpipeUsesSourceIntrinsicId()
+{
+    const aclsan::DeviceInstructionDecoder* decoder = aclsan::FindDeviceInstructionDecoder("Ascend950PR_9599");
+    assert(decoder != nullptr);
+
+    for (const uint64_t instructionId : {UINT64_C(91), UINT64_C(92)}) {
+        aclsan::AclsanRawTraceRecord record{};
+        record.instrId = instructionId;
+        record.args[0] = 0x2000;
+        record.args[1] = 0x1000;
+        record.args[2] = Pack(3, 0) | Pack(32, 4) | Pack(16, 16) | Pack(64, 32);
+        const uint8_t quantPre = instructionId == 91 ? 25 : 21;
+        record.args[3] = Pack(48, 0) | Pack(2, 16) | Pack(1, 32) | Pack(quantPre, 34) | Pack(1, 59);
+
+        const std::optional<aclsan::DecodedInstruction> decoded = decoder->decode(record);
+
+        assert(decoded.has_value());
+        const auto* params = std::get_if<aclsan::FixL0cToOutParamField>(&decoded->params);
+        assert(params != nullptr);
+        assert(params->instrId == instructionId);
+        assert(params->dataBits == 32);
+        assert(params->dstAddr == 0x2000 && params->srcAddr == 0x1000);
+        assert(params->sid == 3 && params->nSize == 32 && params->mSize == 16);
+        assert(params->loopDstStride == 64 && params->loopSrtStride == 48);
+        assert(params->l2CacheControl == 2 && params->unitFlag == 1);
+        assert(params->quantPre == quantPre && params->c0PadEnable);
+    }
 }
 
 void TestDecodesDav3510SyncInstruction()
@@ -524,7 +705,15 @@ void TestClassifiesCurrentDav3510InstructionSet()
         {87, aclsan::DeviceInstructionKind::NdDmaOutToUbuf},
         {88, aclsan::DeviceInstructionKind::NdDmaOutToUbuf},
         {89, aclsan::DeviceInstructionKind::NdDmaOutToUbuf},
+        {90, aclsan::DeviceInstructionKind::Loop3Param},
         {124, aclsan::DeviceInstructionKind::Mte2SourceParam},
+        {125, aclsan::DeviceInstructionKind::DmaLoopSize},
+        {126, aclsan::DeviceInstructionKind::DmaLoopStride},
+        {127, aclsan::DeviceInstructionKind::DmaLoopStride},
+        {128, aclsan::DeviceInstructionKind::DmaLoopSize},
+        {129, aclsan::DeviceInstructionKind::DmaLoopStride},
+        {130, aclsan::DeviceInstructionKind::DmaLoopStride},
+        {131, aclsan::DeviceInstructionKind::NdDmaPadCount},
         {132, aclsan::DeviceInstructionKind::NdDmaLoopStride},
         {133, aclsan::DeviceInstructionKind::NdDmaLoopStride},
         {134, aclsan::DeviceInstructionKind::NdDmaLoopStride},
@@ -533,9 +722,18 @@ void TestClassifiesCurrentDav3510InstructionSet()
         {399, aclsan::DeviceInstructionKind::Mte2NzParam},
         {91, aclsan::DeviceInstructionKind::FixL0cToOut},
         {92, aclsan::DeviceInstructionKind::FixL0cToOut},
+        {167, aclsan::DeviceInstructionKind::LocalMemoryTransfer},
+        {168, aclsan::DeviceInstructionKind::LocalMemoryTransfer},
+        {169, aclsan::DeviceInstructionKind::LocalMemoryTransfer},
+        {170, aclsan::DeviceInstructionKind::LocalMemoryTransfer},
+        {171, aclsan::DeviceInstructionKind::LocalMemoryTransfer},
+        {173, aclsan::DeviceInstructionKind::LocalMemoryTransfer},
         {149, aclsan::DeviceInstructionKind::SetL12D},
         {150, aclsan::DeviceInstructionKind::SetL12D},
         {392, aclsan::DeviceInstructionKind::SetPadding},
+        {394, aclsan::DeviceInstructionKind::DmaLoopSize},
+        {395, aclsan::DeviceInstructionKind::DmaLoopStride},
+        {396, aclsan::DeviceInstructionKind::DmaLoopStride},
         {440, aclsan::DeviceInstructionKind::SetFlag},
         {441, aclsan::DeviceInstructionKind::SetFlag},
         {442, aclsan::DeviceInstructionKind::WaitFlag},
@@ -585,9 +783,15 @@ int main()
     TestDecodesDav3510CopyGmToCbufV2Instruction();
     TestDecodesDav3510LoadGmToCbuf2DV2Instruction();
     TestDecodesDav3510NdDmaOutToUbufInstruction();
+    TestDecodesDav3510NdDmaPadCountInstruction();
+    TestDecodesDav3510RegisterFieldsWithoutChangingMoverFields();
+    TestDecodesDav3510DmaOuterLoopFields();
     TestDecodesDav3510SetL12DInstruction();
     TestDecodesDav3510SetPaddingInstruction();
     TestDecodesDav3510FixL0cToOutInstruction();
+    TestDecodesDav3510FixpipeQuantPreHighBit();
+    TestDecodesDav3510LocalMemoryTransfersWithoutLosingRawConfig();
+    TestDecodesDav3510S4FixpipeUsesSourceIntrinsicId();
     TestDecodesDav3510SyncInstruction();
     TestDecodesDav3510BufferInstruction();
     TestRejectsUnknownDav3510Instruction();

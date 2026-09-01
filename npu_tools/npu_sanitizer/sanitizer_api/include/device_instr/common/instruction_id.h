@@ -16,10 +16,11 @@
 namespace aclsan {
 
 // Instruction IDs are stable across chips. Each architecture decoder defines the subset it handles.
-// “已完成”表示该指令已完成 RawData -> ParamField -> CBData 全链路转换。
+// “已完成”表示搬运指令已完成 RawData -> ParamField -> CBData 转换，或 SET 指令已作为独立状态被后续
+// 搬运指令的 CBData 转换消费。
 enum class InstructionId : uint32_t {
     // MTE2
-    LoadGmToCbuf2DV2 = 72,          // 已完成：LoadGmToCbuf2DV2ParamField
+    LoadGmToCbuf2DV2 = 72,          // 已完成：LoadGmToCbuf2DV2ParamField（decompMode 0；非零跳过）
     CopyGmToCbufV2 = 73,            // 已完成：CopyGmToCbufV2ParamField
     CopyGmToCbufAlignV2B8 = 74,     // 已完成：CopyGmToCbufAlignV2ParamField
     CopyGmToCbufAlignV2B16 = 75,    // 已完成：CopyGmToCbufAlignV2ParamField
@@ -33,29 +34,45 @@ enum class InstructionId : uint32_t {
     CopyGmToUbufAlignV2B8 = 84,     // 已完成：CopyGmToUbufAlignV2ParamField
     CopyGmToUbufAlignV2B16 = 85,    // 已完成：CopyGmToUbufAlignV2ParamField
     CopyGmToUbufAlignV2B32 = 86,    // 已完成：CopyGmToUbufAlignV2ParamField
-    Mte2SrcPara = 124,              // MTE2_SRC_PARA
-    NdDmaLoop0Stride = 132,         // LOOP0_STRIDE_NDDMA
-    NdDmaLoop1Stride = 133,         // LOOP1_STRIDE_NDDMA
-    NdDmaLoop2Stride = 134,         // LOOP2_STRIDE_NDDMA
-    NdDmaLoop3Stride = 135,         // LOOP3_STRIDE_NDDMA
-    NdDmaLoop4Stride = 136,         // LOOP4_STRIDE_NDDMA
+    Mte2SrcPara = 124,              // 已完成：Mte2SourceParamField（状态；支持正、零、负 stride）
+    LoopSizeUbufToGm = 125,         // 已完成：DmaLoopSizeParamField（状态）
+    Loop1StrideUbufToGm = 126,      // 已完成：DmaLoopStrideParamField（状态）
+    Loop2StrideUbufToGm = 127,      // 已完成：DmaLoopStrideParamField（状态）
+    LoopSizeGmToUbuf = 128,         // 已完成：DmaLoopSizeParamField（状态）
+    Loop1StrideGmToUbuf = 129,      // 已完成：DmaLoopStrideParamField（状态）
+    Loop2StrideGmToUbuf = 130,      // 已完成：DmaLoopStrideParamField（状态）
+    NdDmaPadCount = 131,            // 已完成：NdDmaPadCountParamField（状态）
+    NdDmaLoop0Stride = 132,         // 已完成：NdDmaLoopStrideParamField（状态）
+    NdDmaLoop1Stride = 133,         // 已完成：NdDmaLoopStrideParamField（状态）
+    NdDmaLoop2Stride = 134,         // 已完成：NdDmaLoopStrideParamField（状态）
+    NdDmaLoop3Stride = 135,         // 已完成：NdDmaLoopStrideParamField（状态）
+    NdDmaLoop4Stride = 136,         // 已完成：NdDmaLoopStrideParamField（状态）
     NdDmaOutToUbufB8 = 87,          // 已完成：NdDmaOutToUbufParamField
     NdDmaOutToUbufB16 = 88,         // 已完成：NdDmaOutToUbufParamField
     NdDmaOutToUbufB32 = 89,         // 已完成：NdDmaOutToUbufParamField
+    Loop3Param = 90,                // 已完成：Loop3ParamField（状态）
     SetL12DB16 = 149,               // SET_L1_2D.b16
     SetL12DB32 = 150,               // SET_L1_2D.b32
-    SetMte2NzPara = 399,            // SET_MTE2_NZ_PARA
+    SetMte2NzPara = 399,            // 已完成：Mte2NzParamField（状态）
 
     // MTE3
     CopyUbufToGmAlignV2 = 83, // 已完成：CopyUbufToGmAlignV2ParamField
-    CopyUbufToCbuf = 173,     // MOV_UB_TO_L1
+    CopyUbufToCbuf = 173, // 已完成：LocalMemoryTransferParamField（仅访问片上存储，不生成 GM CBData）
 
     // FIX
-    FixL0cToOutF32 = 91, // 已完成：FixL0cToOutParamField
-    FixL0cToOutS32 = 92, // 已完成：FixL0cToOutParamField
+    FixL0cToOutF32 = 91,   // 已完成：FixL0cToOutParamField
+    FixL0cToOutS32 = 92,   // 已完成：FixL0cToOutParamField
+    CopyCbufToFbuf = 167,  // 已完成：LocalMemoryTransferParamField（仅访问片上存储，不生成 GM CBData）
+    FixL0cToCbufF32 = 168, // 已完成：LocalMemoryTransferParamField（仅访问片上存储，不生成 GM CBData）
+    FixL0cToCbufS32 = 169, // 已完成：LocalMemoryTransferParamField（仅访问片上存储，不生成 GM CBData）
+    FixL0cToUbufF32 = 170, // 已完成：LocalMemoryTransferParamField（仅访问片上存储，不生成 GM CBData）
+    FixL0cToUbufS32 = 171, // 已完成：LocalMemoryTransferParamField（仅访问片上存储，不生成 GM CBData）
 
     // REGISTER
-    SetPadding = 392, // SET_PADDING
+    SetPadding = 392,          // SET_PADDING
+    LoopSizeGmToCbuf = 394,    // 已完成：DmaLoopSizeParamField（状态）
+    Loop1StrideGmToCbuf = 395, // 已完成：DmaLoopStrideParamField（状态）
+    Loop2StrideGmToCbuf = 396, // 已完成：DmaLoopStrideParamField（状态）
 
     // SYNCCHECK
     SetFlag = 440,    // 已完成：FlagParamField
@@ -94,6 +111,13 @@ constexpr bool IsDefinedInstructionId(uint32_t instructionId) noexcept
         case InstructionId::CopyGmToUbufAlignV2B16:
         case InstructionId::CopyGmToUbufAlignV2B32:
         case InstructionId::Mte2SrcPara:
+        case InstructionId::LoopSizeUbufToGm:
+        case InstructionId::Loop1StrideUbufToGm:
+        case InstructionId::Loop2StrideUbufToGm:
+        case InstructionId::LoopSizeGmToUbuf:
+        case InstructionId::Loop1StrideGmToUbuf:
+        case InstructionId::Loop2StrideGmToUbuf:
+        case InstructionId::NdDmaPadCount:
         case InstructionId::NdDmaLoop0Stride:
         case InstructionId::NdDmaLoop1Stride:
         case InstructionId::NdDmaLoop2Stride:
@@ -102,6 +126,7 @@ constexpr bool IsDefinedInstructionId(uint32_t instructionId) noexcept
         case InstructionId::NdDmaOutToUbufB8:
         case InstructionId::NdDmaOutToUbufB16:
         case InstructionId::NdDmaOutToUbufB32:
+        case InstructionId::Loop3Param:
         case InstructionId::SetL12DB16:
         case InstructionId::SetL12DB32:
         case InstructionId::SetMte2NzPara:
@@ -109,7 +134,15 @@ constexpr bool IsDefinedInstructionId(uint32_t instructionId) noexcept
         case InstructionId::CopyUbufToCbuf:
         case InstructionId::FixL0cToOutF32:
         case InstructionId::FixL0cToOutS32:
+        case InstructionId::CopyCbufToFbuf:
+        case InstructionId::FixL0cToCbufF32:
+        case InstructionId::FixL0cToCbufS32:
+        case InstructionId::FixL0cToUbufF32:
+        case InstructionId::FixL0cToUbufS32:
         case InstructionId::SetPadding:
+        case InstructionId::LoopSizeGmToCbuf:
+        case InstructionId::Loop1StrideGmToCbuf:
+        case InstructionId::Loop2StrideGmToCbuf:
         case InstructionId::SetFlag:
         case InstructionId::SetFlagI:
         case InstructionId::WaitFlag:

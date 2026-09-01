@@ -223,10 +223,6 @@ aclError ResolveLaunchContext(PreparedTraceLaunch& prepared) noexcept
 void DispatchTraceRecords(
     const std::vector<ParsedTraceRecord>& records, const aclsan::DeviceInstructionDecoder& decoder) noexcept
 {
-    const auto isMultiInstruction = [](uint32_t instructionId) noexcept {
-        return instructionId >= static_cast<uint32_t>(InstructionId::CopyGmToCbufMultiNd2NzB8) &&
-               instructionId <= static_cast<uint32_t>(InstructionId::CopyGmToCbufMultiDn2NzB32);
-    };
     if (records.empty()) {
         return;
     }
@@ -248,14 +244,22 @@ void DispatchTraceRecords(
         bool stateInstruction = true;
         if (const auto* value = std::get_if<Mte2SourceParamField>(&decoded->params)) {
             registerState.Update(key, *value);
+        } else if (const auto* value = std::get_if<NdDmaPadCountParamField>(&decoded->params)) {
+            registerState.Update(key, *value);
         } else if (const auto* value = std::get_if<NdDmaLoopStrideParamField>(&decoded->params)) {
             registerState.Update(key, *value);
         } else if (const auto* value = std::get_if<Mte2NzParamField>(&decoded->params)) {
             registerState.Update(key, *value);
-        } else if (const auto* value = std::get_if<SetL12DParamField>(&decoded->params)) {
+        } else if (const auto* value = std::get_if<Loop3ParamField>(&decoded->params)) {
+            registerState.Update(key, *value);
+        } else if (const auto* value = std::get_if<DmaLoopSizeParamField>(&decoded->params)) {
+            registerState.Update(key, *value);
+        } else if (const auto* value = std::get_if<DmaLoopStrideParamField>(&decoded->params)) {
             registerState.Update(key, *value);
         } else if (const auto* value = std::get_if<SetPaddingParamField>(&decoded->params)) {
             registerState.Update(key, *value);
+        } else if (std::holds_alternative<SetL12DParamField>(decoded->params)) {
+            // SET_L1_2D is a local L1 write instruction, not persistent register state and not a GM access.
         } else {
             stateInstruction = false;
         }
@@ -265,46 +269,23 @@ void DispatchTraceRecords(
             continue;
         }
 
-        ParsedTraceRecord enriched = parsed;
         const std::optional<dav3510::Dav3510CoreRegisterState> state = registerState.Get(key);
-        bool stateComplete = true;
-        if (isMultiInstruction(parsed.record.instrId)) {
-            stateComplete = state.has_value() && state->mte2Nz.has_value();
-            if (stateComplete) {
-                enriched.record.args[4] = state->mte2Nz->matrixNum;
-            }
-        } else if (auto* value = std::get_if<LoadGmToCbuf2DV2ParamField>(&decoded->params)) {
-            stateComplete = state.has_value() && state->mte2Source.has_value();
-            if (stateComplete) {
-                value->srcStride = state->mte2Source->srcStride;
-            }
-        } else if (auto* value = std::get_if<NdDmaOutToUbufParamField>(&decoded->params)) {
-            const uint32_t loopSizes[] = {
-                value->loop0Size, value->loop1Size, value->loop2Size, value->loop3Size, value->loop4Size};
-            for (std::size_t index = 0; index < value->loopSrcStrides.size(); ++index) {
-                if (loopSizes[index] <= 1) {
-                    continue;
-                }
-                if (!state.has_value() || !state->ndDmaLoopStrides[index].has_value()) {
-                    stateComplete = false;
-                    break;
-                }
-                value->loopSrcStrides[index] = state->ndDmaLoopStrides[index]->srcStride;
-            }
-        }
-        if (!stateComplete) {
-            ASC_SAN_ERROR(
-                "acl_san trace: memory instruction has incomplete scalar state: instrId=%u pc=0x%llx block=%u",
-                parsed.record.instrId, static_cast<unsigned long long>(parsed.record.pc), parsed.blockId);
-            continue;
+        MemoryRegisterState memoryState{};
+        if (state.has_value()) {
+            memoryState.mte2Source = state->mte2Source;
+            memoryState.ndDmaPadCount = state->ndDmaPadCount;
+            memoryState.ndDmaLoopStrides = state->ndDmaLoopStrides;
+            memoryState.mte2Nz = state->mte2Nz;
+            memoryState.loop3 = state->loop3;
+            memoryState.dmaLoopSizes = state->dmaLoopSizes;
+            memoryState.dmaLoopStrides = state->dmaLoopStrides;
         }
 
-        const auto callbackData = TranslateDecodedTraceToCallbackData(enriched, *decoded);
+        const auto callbackData = TranslateDecodedTraceToCallbackData(parsed, *decoded, memoryState);
         if (!callbackData.has_value()) {
-            ASC_SAN_ERROR(
-                "acl_san trace: unsupported raw trace instrId=%u pc=0x%llx block=%u", parsed.record.instrId,
-                static_cast<unsigned long long>(parsed.record.pc), parsed.blockId);
-        } else if (const auto* memory = std::get_if<DeviceMemoryAccessDataList>(&*callbackData)) {
+            continue;
+        }
+        if (const auto* memory = std::get_if<DeviceMemoryAccessDataList>(&*callbackData)) {
             for (const AclsanDeviceMemoryAccessData& access : *memory) {
                 AclsanCallbackDispatcher::DispatchDeviceMemoryAccess(access);
             }
@@ -483,13 +464,36 @@ void CompleteTraceLaunch(
     }
 }
 
-void CollectTraceStream(aclrtStream stream) noexcept
+TraceCollectionResult CollectTraceStream(aclrtStream stream, aclError synchronizeResult) noexcept
 {
     std::vector<PendingTrace> completed;
+    uint32_t matchingLaunches = 0;
     try {
         {
             TraceRuntimeState& state = State();
             std::lock_guard<std::mutex> lock(state.mutex);
+            for (const PendingTrace& pending : state.pending) {
+                if (pending.stream == stream) {
+                    ++matchingLaunches;
+                }
+            }
+            if (matchingLaunches == 0) {
+                return {
+                    synchronizeResult == ACL_SUCCESS ? ACLSAN_TRACE_COLLECTION_COMPLETE :
+                                                       ACLSAN_TRACE_COLLECTION_NOT_REQUIRED,
+                    0};
+            }
+            const bool dav3510AicoreException =
+                synchronizeResult == ACL_ERROR_RT_AICORE_EXCEPTION &&
+                std::all_of(state.pending.begin(), state.pending.end(), [stream](const PendingTrace& pending) {
+                    return pending.stream != stream ||
+                           (pending.decoder != nullptr && pending.decoder->architecture != nullptr &&
+                            std::strcmp(pending.decoder->architecture, "dav_3510") == 0);
+                });
+            if (synchronizeResult != ACL_SUCCESS && !dav3510AicoreException) {
+                return {ACLSAN_TRACE_COLLECTION_DEFERRED, matchingLaunches};
+            }
+            completed.reserve(matchingLaunches);
             for (auto it = state.pending.begin(); it != state.pending.end();) {
                 if (it->stream == stream) {
                     completed.push_back(std::move(*it));
@@ -501,9 +505,10 @@ void CollectTraceStream(aclrtStream stream) noexcept
         }
     } catch (...) {
         ASC_SAN_ERROR("acl_san trace: failed to detach completed launches for stream=%p", stream);
-        return;
+        return {ACLSAN_TRACE_COLLECTION_DEFERRED, matchingLaunches};
     }
 
+    bool collectionComplete = true;
     const auto memcpyFunction = Original<aclrtMemcpyFunc>(ACL_RT_API_aclrtMemcpy);
     for (PendingTrace& pending : completed) {
         try {
@@ -514,6 +519,7 @@ void CollectTraceStream(aclrtStream stream) noexcept
                 ASC_SAN_ERROR(
                     "acl_san trace: D2H failed for launch=%llu", static_cast<unsigned long long>(pending.launchId));
                 ReleaseDeviceBuffer(pending.deviceBuffer);
+                collectionComplete = false;
                 continue;
             }
 
@@ -524,6 +530,7 @@ void CollectTraceStream(aclrtStream stream) noexcept
                 ASC_SAN_ERROR(
                     "acl_san trace: malformed buffer for launch=%llu: %s",
                     static_cast<unsigned long long>(pending.launchId), parsed.error.c_str());
+                collectionComplete = false;
             } else {
                 if (!parsed.records.empty() && pending.decoder != nullptr) {
                     DispatchTraceRecords(parsed.records, *pending.decoder);
@@ -533,15 +540,18 @@ void CollectTraceStream(aclrtStream stream) noexcept
                         "acl_san trace: launch=%llu dropped %llu records",
                         static_cast<unsigned long long>(pending.launchId),
                         static_cast<unsigned long long>(parsed.overflowCount));
+                    collectionComplete = false;
                 }
             }
         } catch (...) {
             ASC_SAN_ERROR(
                 "acl_san trace: unexpected D2H processing failure for launch=%llu",
                 static_cast<unsigned long long>(pending.launchId));
+            collectionComplete = false;
         }
         ReleaseDeviceBuffer(pending.deviceBuffer);
     }
+    return {collectionComplete ? ACLSAN_TRACE_COLLECTION_COMPLETE : ACLSAN_TRACE_COLLECTION_FAILED, 0};
 }
 
 void ResetTraceRuntimeState() noexcept

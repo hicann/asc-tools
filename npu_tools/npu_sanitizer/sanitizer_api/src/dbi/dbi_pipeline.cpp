@@ -221,6 +221,8 @@ std::vector<std::string> ProbeCompileFlags(const std::string& arch, const std::f
         "-I",
         (devkit / "asc/include/basic_api").string(),
         "-I",
+        (devkit / "asc/impl/basic_api").string(),
+        "-I",
         (devkit / "ascendc/include/highlevel_api").string(),
     };
     return flags;

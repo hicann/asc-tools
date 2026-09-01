@@ -113,6 +113,9 @@ TEST(DbiIntegrationTest, CompilesLinksAndPatchesSelectedProbeSet)
 
     const std::string commands = ReadFile(root / "commands.log");
     EXPECT_NE(commands.find("bisheng <-xcce>"), std::string::npos) << commands;
+    EXPECT_NE(
+        commands.find("<" + (root / "toolchain/x86_64-linux/asc/impl/basic_api").string() + ">"), std::string::npos)
+        << commands;
     EXPECT_NE(commands.find("ld.lld <-r>"), std::string::npos) << commands;
     EXPECT_NE(commands.find("generated-mte2.cpp"), std::string::npos) << commands;
     EXPECT_NE(commands.find("generated-scalar.cpp"), std::string::npos) << commands;

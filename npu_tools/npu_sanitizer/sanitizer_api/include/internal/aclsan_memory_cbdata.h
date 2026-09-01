@@ -13,8 +13,11 @@
 
 #include "aclsan/aclsan_cbdata_device.h"
 #include "device_instr/common/device_instr_struct_dma.h"
+#include "device_instr/common/device_instr_struct_register.h"
 
+#include <array>
 #include <cstdint>
+#include <optional>
 #include <variant>
 #include <vector>
 
@@ -24,34 +27,25 @@ enum class MemoryCbdataStatus : uint8_t {
     SUCCESS,
     NO_ACCESS,
     INVALID_FIELD,
+    MISSING_REGISTER_STATE,
     ARITHMETIC_OVERFLOW,
     RESOURCE_EXHAUSTED,
 };
 
-template <NdNzConversionMode ConversionMode>
-struct MultiMemoryField {
-    CopyGmToCbufMultiParamField<ConversionMode> field;
-    uint16_t matrixNum = 0;
-};
-
-using MultiNd2NzMemoryField = MultiMemoryField<NdNzConversionMode::ND2NZ>;
-using MultiDn2NzMemoryField = MultiMemoryField<NdNzConversionMode::DN2NZ>;
-
-struct FixpipeMemoryField {
-    FixL0cToOutParamField field;
-    uint16_t nSize = 0;
-    uint16_t mSize = 0;
-    uint32_t dstStride = 0;
-    uint8_t quantPre = 0;
-    bool channelSplit = false;
-    bool nz2nd = false;
-    bool nz2dn = false;
-    uint8_t dstElementBytes = 0;
-};
-
 using MemoryInstructionField = std::variant<
-    CopyGmToUbufAlignV2ParamField, CopyGmToCbufAlignV2ParamField, MultiNd2NzMemoryField, MultiDn2NzMemoryField,
-    CopyUbufToGmAlignV2ParamField, FixpipeMemoryField, LoadGmToCbuf2DV2ParamField, NdDmaOutToUbufParamField>;
+    CopyGmToUbufAlignV2ParamField, CopyGmToCbufAlignV2ParamField, CopyGmToCbufMultiNd2NzParamField,
+    CopyGmToCbufMultiDn2NzParamField, CopyGmToCbufV2ParamField, CopyUbufToGmAlignV2ParamField, FixL0cToOutParamField,
+    LoadGmToCbuf2DV2ParamField, NdDmaOutToUbufParamField>;
+
+struct MemoryRegisterState {
+    std::optional<Mte2SourceParamField> mte2Source;
+    std::optional<NdDmaPadCountParamField> ndDmaPadCount;
+    std::array<std::optional<NdDmaLoopStrideParamField>, 5> ndDmaLoopStrides{};
+    std::optional<Mte2NzParamField> mte2Nz;
+    std::optional<Loop3ParamField> loop3;
+    std::array<std::optional<DmaLoopSizeParamField>, 3> dmaLoopSizes{};
+    std::array<std::array<std::optional<DmaLoopStrideParamField>, 2>, 3> dmaLoopStrides{};
+};
 
 struct MemoryCbdataContext {
     uint64_t pc = 0;
@@ -71,16 +65,18 @@ using MemoryCbdata = std::vector<AclsanDeviceMemoryAccessData>;
 struct MemoryCbdataResult {
     MemoryCbdataStatus status = MemoryCbdataStatus::INVALID_FIELD;
     MemoryCbdata data;
+    uint64_t requiredRegisterInstructionId = 0;
 };
 
 class MemoryFieldToCbdataConverter final {
 public:
-    explicit MemoryFieldToCbdataConverter(MemoryCbdataContext context) noexcept;
+    explicit MemoryFieldToCbdataConverter(MemoryCbdataContext context, MemoryRegisterState registerState = {}) noexcept;
 
     [[nodiscard]] MemoryCbdataResult Convert(const MemoryInstructionField& field) const noexcept;
 
 private:
     MemoryCbdataContext context_;
+    MemoryRegisterState registerState_;
 };
 
 } // namespace aclsan

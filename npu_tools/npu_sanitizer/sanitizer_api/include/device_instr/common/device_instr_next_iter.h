@@ -41,16 +41,24 @@ struct CopyCbufToBtParamField {
     uint16_t dstGap = 0;
 };
 
-// asc_copy_l12fb_impl
-// 对应 CCE 指令：MOV_L1_TO_FB
-struct CopyCbufToFbufParamField {
+enum class LocalMemoryTransferKind : uint32_t {
+    CopyCbufToFbuf,
+    FixL0cToCbufF32,
+    FixL0cToCbufS32,
+    FixL0cToUbufF32,
+    FixL0cToUbufS32,
+    CopyUbufToCbuf,
+};
+
+// These CCE intrinsics transfer data only between on-chip memory spaces:
+// MOV_L1_TO_FB, FIX_L0C_TO_L1/UB.<f32/s32>, and MOV_UB_TO_L1.
+struct LocalMemoryTransferParamField {
     uint32_t instrId = 0;
     uint64_t dstAddr = 0;
     uint64_t srcAddr = 0;
-    uint16_t burstNum = 0;
-    uint16_t burstLen = 0;
-    uint16_t srcGap = 0;
-    uint16_t dstGap = 0;
+    uint64_t config0 = 0;
+    uint64_t config1 = 0;
+    LocalMemoryTransferKind kind = LocalMemoryTransferKind::CopyCbufToFbuf;
 };
 
 // 对应 CCE 指令：MOV_L1_TO_FB_V2

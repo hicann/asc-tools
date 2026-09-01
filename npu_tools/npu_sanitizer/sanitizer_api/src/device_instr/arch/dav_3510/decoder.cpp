@@ -175,9 +175,23 @@ DecodedInstruction DecodeSetPadding(const aclsan::AclsanRawTraceRecord& record) 
 
 DecodedInstruction DecodeMte2SourceParam(const aclsan::AclsanRawTraceRecord& record) noexcept
 {
-    const uint32_t bits = static_cast<uint32_t>(record.args[0]);
-    const uint64_t stride = (bits & (1U << 31U)) == 0 ? bits : static_cast<uint64_t>(~bits) + 1U;
+    const int64_t stride = static_cast<int32_t>(static_cast<uint32_t>(record.args[0]));
     return DecodedInstruction{DeviceInstructionKind::Mte2SourceParam, Mte2SourceParamField{stride}};
+}
+
+DecodedInstruction DecodeNdDmaPadCount(const aclsan::AclsanRawTraceRecord& record) noexcept
+{
+    NdDmaPadCountParamField params{};
+    constexpr uint32_t PADDING_BITS_PER_LOOP = 16;
+    constexpr uint32_t RIGHT_PADDING_OFFSET = 8;
+    constexpr uint64_t PADDING_MASK = 0xFF;
+    for (uint32_t loopIndex = 0; loopIndex < params.leftPaddingCounts.size(); ++loopIndex) {
+        const uint32_t offset = loopIndex * PADDING_BITS_PER_LOOP;
+        params.leftPaddingCounts[loopIndex] = static_cast<uint8_t>((record.args[0] >> offset) & PADDING_MASK);
+        params.rightPaddingCounts[loopIndex] =
+            static_cast<uint8_t>((record.args[0] >> (offset + RIGHT_PADDING_OFFSET)) & PADDING_MASK);
+    }
+    return DecodedInstruction{DeviceInstructionKind::NdDmaPadCount, params};
 }
 
 DecodedInstruction DecodeNdDmaLoopStride(const aclsan::AclsanRawTraceRecord& record) noexcept
@@ -190,14 +204,62 @@ DecodedInstruction DecodeNdDmaLoopStride(const aclsan::AclsanRawTraceRecord& rec
 
 DecodedInstruction DecodeMte2NzParam(const aclsan::AclsanRawTraceRecord& record) noexcept
 {
-    return DecodedInstruction{
-        DeviceInstructionKind::Mte2NzParam, Mte2NzParamField{static_cast<uint16_t>(record.args[0])}};
+    const uint64_t config = record.args[0];
+    const Mte2NzParamField params{
+        static_cast<uint16_t>(config), static_cast<uint16_t>(config >> 16U), static_cast<uint16_t>(config >> 32U),
+        static_cast<uint16_t>(config >> 48U)};
+    return DecodedInstruction{DeviceInstructionKind::Mte2NzParam, params};
 }
 
-DecodedInstruction DecodeFixL0cToOut(const aclsan::AclsanRawTraceRecord& record, uint32_t dataBits) noexcept
+DecodedInstruction DecodeLoop3Param(const aclsan::AclsanRawTraceRecord& record) noexcept
 {
-    FixL0cToOutParamField params{};
-    params.instrId = record.instrId;
+    const uint64_t config = record.args[0];
+    const Loop3ParamField params{
+        static_cast<uint16_t>(config), static_cast<uint16_t>(config >> 16U), static_cast<uint32_t>(config >> 32U)};
+    return DecodedInstruction{DeviceInstructionKind::Loop3Param, params};
+}
+
+DecodedInstruction DecodeDmaLoopSize(const aclsan::AclsanRawTraceRecord& record, DmaLoopDirection direction) noexcept
+{
+    constexpr uint64_t kLoop1SizeMask = (1ULL << 21U) - 1U;
+    constexpr uint64_t kLoop2SizeMask = (1ULL << 42U) - 1U;
+    const DmaLoopSizeParamField params{
+        direction, static_cast<uint32_t>(record.args[0] & kLoop1SizeMask), (record.args[0] >> 21U) & kLoop2SizeMask};
+    return DecodedInstruction{DeviceInstructionKind::DmaLoopSize, params};
+}
+
+DecodedInstruction DecodeDmaLoopStride(
+    const aclsan::AclsanRawTraceRecord& record, DmaLoopDirection direction, uint32_t loopIndex) noexcept
+{
+    constexpr uint64_t kGmStrideMask = (1ULL << 40U) - 1U;
+    constexpr uint64_t kLocalStrideMask = (1ULL << 21U) - 1U;
+    const uint64_t lowStride = record.args[0] & kGmStrideMask;
+    const uint64_t highStride = (record.args[0] >> 40U) & kLocalStrideMask;
+    const bool sourceIsGm = direction != DmaLoopDirection::UBUF_TO_GM;
+    const DmaLoopStrideParamField params{
+        direction, loopIndex, sourceIsGm ? lowStride : highStride, sourceIsGm ? highStride : lowStride};
+    return DecodedInstruction{DeviceInstructionKind::DmaLoopStride, params};
+}
+
+DecodedInstruction DecodeLocalMemoryTransfer(
+    const aclsan::AclsanRawTraceRecord& record, LocalMemoryTransferKind kind) noexcept
+{
+    LocalMemoryTransferParamField params{};
+    params.instrId = static_cast<uint32_t>(record.instrId);
+    params.dstAddr = record.args[0];
+    params.srcAddr = record.args[1];
+    params.config0 = record.args[2];
+    params.config1 = record.args[3];
+    params.kind = kind;
+    return DecodedInstruction{DeviceInstructionKind::LocalMemoryTransfer, params};
+}
+
+template <typename ParamField>
+DecodedInstruction DecodeFixL0c(
+    const aclsan::AclsanRawTraceRecord& record, uint32_t dataBits, DeviceInstructionKind kind) noexcept
+{
+    ParamField params{};
+    params.instrId = static_cast<uint32_t>(record.instrId);
     params.dataBits = dataBits;
     params.dstAddr = record.args[0];
     params.srcAddr = record.args[1];
@@ -212,7 +274,7 @@ DecodedInstruction DecodeFixL0cToOut(const aclsan::AclsanRawTraceRecord& record,
     const uint8_t quantPreHigh =
         static_cast<uint8_t>(ExtractBitRange(record.args[3], FixL0cToOutLayout::QUANT_PRE_HIGH));
     const uint8_t quantPreLow = static_cast<uint8_t>(ExtractBitRange(record.args[3], FixL0cToOutLayout::QUANT_PRE_LOW));
-    params.quantPre = static_cast<uint8_t>((quantPreHigh << 4U) | quantPreLow);
+    params.quantPre = static_cast<uint8_t>((quantPreHigh << 5U) | quantPreLow);
     params.reluPre = static_cast<uint8_t>(ExtractBitRange(record.args[3], FixL0cToOutLayout::RELU_PRE));
     params.splitEnable = ExtractBitRange(record.args[3], FixL0cToOutLayout::SPLIT_ENABLE) != 0;
     params.nz2ndEnable = ExtractBitRange(record.args[3], FixL0cToOutLayout::NZ2ND_ENABLE) != 0;
@@ -228,7 +290,7 @@ DecodedInstruction DecodeFixL0cToOut(const aclsan::AclsanRawTraceRecord& record,
     params.brcbEnable = ExtractBitRange(record.args[3], FixL0cToOutLayout::BRCB_ENABLE) != 0;
     params.nz2dnEnable = ExtractBitRange(record.args[3], FixL0cToOutLayout::NZ2DN_ENABLE) != 0;
 
-    return DecodedInstruction{DeviceInstructionKind::FixL0cToOut, params};
+    return DecodedInstruction{kind, params};
 }
 
 std::optional<DecodedInstruction> DecodeFlag(
@@ -301,9 +363,13 @@ std::optional<DecodedInstruction> Decode(const aclsan::AclsanRawTraceRecord& rec
             return DecodeNdDmaOutToUbuf(record, DATA_BITS_B16);
         case RawId(InstructionId::NdDmaOutToUbufB32):
             return DecodeNdDmaOutToUbuf(record, DATA_BITS_B32);
+        case RawId(InstructionId::Loop3Param):
+            return DecodeLoop3Param(record);
 
         case RawId(InstructionId::Mte2SrcPara):
             return DecodeMte2SourceParam(record);
+        case RawId(InstructionId::NdDmaPadCount):
+            return DecodeNdDmaPadCount(record);
         case RawId(InstructionId::NdDmaLoop0Stride):
         case RawId(InstructionId::NdDmaLoop1Stride):
         case RawId(InstructionId::NdDmaLoop2Stride):
@@ -312,11 +378,35 @@ std::optional<DecodedInstruction> Decode(const aclsan::AclsanRawTraceRecord& rec
             return DecodeNdDmaLoopStride(record);
         case RawId(InstructionId::SetMte2NzPara):
             return DecodeMte2NzParam(record);
+        case RawId(InstructionId::LoopSizeUbufToGm):
+            return DecodeDmaLoopSize(record, DmaLoopDirection::UBUF_TO_GM);
+        case RawId(InstructionId::Loop1StrideUbufToGm):
+            return DecodeDmaLoopStride(record, DmaLoopDirection::UBUF_TO_GM, 0);
+        case RawId(InstructionId::Loop2StrideUbufToGm):
+            return DecodeDmaLoopStride(record, DmaLoopDirection::UBUF_TO_GM, 1);
+        case RawId(InstructionId::LoopSizeGmToUbuf):
+            return DecodeDmaLoopSize(record, DmaLoopDirection::GM_TO_UBUF);
+        case RawId(InstructionId::Loop1StrideGmToUbuf):
+            return DecodeDmaLoopStride(record, DmaLoopDirection::GM_TO_UBUF, 0);
+        case RawId(InstructionId::Loop2StrideGmToUbuf):
+            return DecodeDmaLoopStride(record, DmaLoopDirection::GM_TO_UBUF, 1);
 
         case RawId(InstructionId::FixL0cToOutF32):
-            return DecodeFixL0cToOut(record, DATA_BITS_B32);
+            return DecodeFixL0c<FixL0cToOutParamField>(record, DATA_BITS_B32, DeviceInstructionKind::FixL0cToOut);
         case RawId(InstructionId::FixL0cToOutS32):
-            return DecodeFixL0cToOut(record, DATA_BITS_B32);
+            return DecodeFixL0c<FixL0cToOutParamField>(record, DATA_BITS_B32, DeviceInstructionKind::FixL0cToOut);
+        case RawId(InstructionId::CopyCbufToFbuf):
+            return DecodeLocalMemoryTransfer(record, LocalMemoryTransferKind::CopyCbufToFbuf);
+        case RawId(InstructionId::FixL0cToCbufF32):
+            return DecodeLocalMemoryTransfer(record, LocalMemoryTransferKind::FixL0cToCbufF32);
+        case RawId(InstructionId::FixL0cToCbufS32):
+            return DecodeLocalMemoryTransfer(record, LocalMemoryTransferKind::FixL0cToCbufS32);
+        case RawId(InstructionId::FixL0cToUbufF32):
+            return DecodeLocalMemoryTransfer(record, LocalMemoryTransferKind::FixL0cToUbufF32);
+        case RawId(InstructionId::FixL0cToUbufS32):
+            return DecodeLocalMemoryTransfer(record, LocalMemoryTransferKind::FixL0cToUbufS32);
+        case RawId(InstructionId::CopyUbufToCbuf):
+            return DecodeLocalMemoryTransfer(record, LocalMemoryTransferKind::CopyUbufToCbuf);
 
         case RawId(InstructionId::SetL12DB16):
             return DecodeSetL12D(record, DATA_BITS_B16);
@@ -325,6 +415,12 @@ std::optional<DecodedInstruction> Decode(const aclsan::AclsanRawTraceRecord& rec
 
         case RawId(InstructionId::SetPadding):
             return DecodeSetPadding(record);
+        case RawId(InstructionId::LoopSizeGmToCbuf):
+            return DecodeDmaLoopSize(record, DmaLoopDirection::GM_TO_CBUF);
+        case RawId(InstructionId::Loop1StrideGmToCbuf):
+            return DecodeDmaLoopStride(record, DmaLoopDirection::GM_TO_CBUF, 0);
+        case RawId(InstructionId::Loop2StrideGmToCbuf):
+            return DecodeDmaLoopStride(record, DmaLoopDirection::GM_TO_CBUF, 1);
 
         case RawId(InstructionId::SetFlag):
         case RawId(InstructionId::SetFlagI):

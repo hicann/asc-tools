@@ -333,6 +333,8 @@ void TestSynchronizeStreamCallbackData()
     assert(g_callbackCapture.callbackId == ACLSAN_CBID_SYNCHRONIZE_STREAM_SYNC_END);
     CheckCommonData(g_callbackCapture.synchronize.common, sizeof(AclsanSynchronizeData), "aclrtSynchronizeStream");
     assert(g_callbackCapture.synchronize.stream == stream);
+    assert(g_callbackCapture.synchronize.traceCollectionStatus == ACLSAN_TRACE_COLLECTION_COMPLETE);
+    assert(g_callbackCapture.synchronize.pendingTraceLaunches == 0);
 }
 
 void TestSynchronizeStreamWithTimeoutCallbackData()
@@ -350,6 +352,8 @@ void TestSynchronizeStreamWithTimeoutCallbackData()
     CheckCommonData(
         g_callbackCapture.synchronize.common, sizeof(AclsanSynchronizeData), "aclrtSynchronizeStreamWithTimeout");
     assert(g_callbackCapture.synchronize.stream == stream);
+    assert(g_callbackCapture.synchronize.traceCollectionStatus == ACLSAN_TRACE_COLLECTION_COMPLETE);
+    assert(g_callbackCapture.synchronize.pendingTraceLaunches == 0);
 }
 
 void TestSetPaddingRecordsUpdateLaunchStateWithoutCallback()
@@ -412,12 +416,293 @@ void TestDefinedInstructionIdUsesDecoder()
 {
     g_decoderCallCount = 0;
     const aclsan::DeviceInstructionDecoder decoder{"test", CountDecoderCalls};
-    aclsan::ParsedTraceRecord record{};
-    record.record.instrId = static_cast<uint32_t>(aclsan::InstructionId::CopyUbufToCbuf);
+    const std::array newlyDefinedIds{
+        aclsan::InstructionId::LoopSizeUbufToGm,    aclsan::InstructionId::Loop1StrideUbufToGm,
+        aclsan::InstructionId::Loop2StrideUbufToGm, aclsan::InstructionId::LoopSizeGmToUbuf,
+        aclsan::InstructionId::Loop1StrideGmToUbuf, aclsan::InstructionId::Loop2StrideGmToUbuf,
+        aclsan::InstructionId::NdDmaPadCount,       aclsan::InstructionId::Loop3Param,
+        aclsan::InstructionId::CopyCbufToFbuf,      aclsan::InstructionId::FixL0cToCbufF32,
+        aclsan::InstructionId::FixL0cToCbufS32,     aclsan::InstructionId::FixL0cToUbufF32,
+        aclsan::InstructionId::FixL0cToUbufS32,     aclsan::InstructionId::CopyUbufToCbuf,
+        aclsan::InstructionId::LoopSizeGmToCbuf,    aclsan::InstructionId::Loop1StrideGmToCbuf,
+        aclsan::InstructionId::Loop2StrideGmToCbuf,
+    };
+    for (const auto id : newlyDefinedIds) {
+        aclsan::ParsedTraceRecord record{};
+        record.record.instrId = static_cast<uint32_t>(id);
+        aclsan::DispatchTraceRecords({record}, decoder);
+    }
 
-    aclsan::DispatchTraceRecords({record}, decoder);
+    assert(g_decoderCallCount == newlyDefinedIds.size());
+}
 
-    assert(g_decoderCallCount == 1);
+void TestNdDmaPadCountStatePreservesExactGmFootprint()
+{
+    ResetCapture();
+    const aclsan::DeviceInstructionDecoder* decoder = aclsan::FindDeviceInstructionDecoder("Ascend950PR_9599");
+    assert(decoder != nullptr);
+
+    aclsan::ParsedTraceRecord base{};
+    base.blockType = ACLSAN_DEVICE_BLOCK_TYPE_AICORE_VECTOR;
+    base.blockId = 4;
+    base.phyCoreId = 6;
+    base.launchId = 28;
+    base.deviceId = 3;
+
+    aclsan::ParsedTraceRecord padding = base;
+    padding.record.instrId = 131;
+    padding.record.category = aclsan::DeviceInstructionCategory::RegisterState;
+    padding.record.args[0] = UINT64_C(0x0807060504030201);
+    padding.instrExecId = 1;
+
+    aclsan::ParsedTraceRecord loop0Stride = base;
+    loop0Stride.record.instrId = 132;
+    loop0Stride.record.category = aclsan::DeviceInstructionCategory::RegisterState;
+    loop0Stride.record.args[0] = UINT64_C(1) << 20U;
+    loop0Stride.instrExecId = 2;
+
+    aclsan::ParsedTraceRecord loop1Stride = base;
+    loop1Stride.record.instrId = 133;
+    loop1Stride.record.category = aclsan::DeviceInstructionCategory::RegisterState;
+    loop1Stride.record.args[0] = UINT64_C(8) << 20U;
+    loop1Stride.instrExecId = 3;
+
+    aclsan::ParsedTraceRecord loop2Stride = base;
+    loop2Stride.record.instrId = 134;
+    loop2Stride.record.category = aclsan::DeviceInstructionCategory::RegisterState;
+    loop2Stride.instrExecId = 4;
+
+    aclsan::ParsedTraceRecord loop3Stride = base;
+    loop3Stride.record.instrId = 135;
+    loop3Stride.record.category = aclsan::DeviceInstructionCategory::RegisterState;
+    loop3Stride.instrExecId = 5;
+
+    aclsan::ParsedTraceRecord loop4Stride = base;
+    loop4Stride.record.instrId = 136;
+    loop4Stride.record.category = aclsan::DeviceInstructionCategory::RegisterState;
+    loop4Stride.instrExecId = 6;
+
+    aclsan::ParsedTraceRecord memory = base;
+    memory.record.instrId = 87;
+    memory.record.pipeline = ACLSAN_DEVICE_PIPE_MTE2;
+    memory.record.args[0] = 0x2000;
+    memory.record.args[1] = 0x4000;
+    memory.record.args[2] = (UINT64_C(3) << 4U) | (UINT64_C(2) << 24U) | (UINT64_C(1) << 44U);
+    memory.record.args[3] =
+        UINT64_C(1) | (UINT64_C(1) << 20U) | (UINT64_C(2) << 40U) | (UINT64_C(3) << 48U) | (UINT64_C(1) << 56U);
+    memory.instrExecId = 7;
+
+    const std::string logs = CaptureDebugLogs([&] {
+        aclsan::DispatchTraceRecords(
+            {padding, loop0Stride, loop1Stride, loop2Stride, loop3Stride, loop4Stride, memory}, *decoder);
+    });
+
+    assert(g_deviceMemoryCallbackCount == 1);
+    const auto& access = g_deviceMemoryCallbacks[0];
+    assert(access.address == 0x4000);
+    assert(access.accessMode == ACLSAN_DEVICE_MEMORY_ACCESS_READ);
+    assert(access.layoutKind == ACLSAN_MEM_LAYOUT_ND_AFFINE);
+    assert(access.layout.ndAffine.elementBytes == 1);
+    assert(access.layout.ndAffine.dims[0] == 3);
+    assert(access.layout.ndAffine.dims[1] == 2);
+    assert(access.layout.ndAffine.strides[0] == 1);
+    assert(access.layout.ndAffine.strides[1] == 8);
+    assert(logs.find("type=NdDmaPadCountParamField left=[1,3,5,7] right=[2,4,6,8]") != std::string::npos);
+}
+
+void TestDmaOuterLoopStateReachesMemoryCallback()
+{
+    ResetCapture();
+    const aclsan::DeviceInstructionDecoder* decoder = aclsan::FindDeviceInstructionDecoder("Ascend950PR_9599");
+    assert(decoder != nullptr);
+
+    aclsan::ParsedTraceRecord base{};
+    base.blockType = ACLSAN_DEVICE_BLOCK_TYPE_AICORE_VECTOR;
+    base.blockId = 5;
+    base.phyCoreId = 7;
+    base.launchId = 29;
+    base.deviceId = 3;
+
+    aclsan::ParsedTraceRecord loopSize = base;
+    loopSize.record.instrId = 128;
+    loopSize.record.category = aclsan::DeviceInstructionCategory::RegisterState;
+    loopSize.record.args[0] = UINT64_C(2) | (UINT64_C(3) << 21U);
+    loopSize.instrExecId = 1;
+
+    aclsan::ParsedTraceRecord loop1Stride = base;
+    loop1Stride.record.instrId = 129;
+    loop1Stride.record.category = aclsan::DeviceInstructionCategory::RegisterState;
+    loop1Stride.record.args[0] = UINT64_C(0x200) | (UINT64_C(0x20) << 40U);
+    loop1Stride.instrExecId = 2;
+
+    aclsan::ParsedTraceRecord loop2Stride = base;
+    loop2Stride.record.instrId = 130;
+    loop2Stride.record.category = aclsan::DeviceInstructionCategory::RegisterState;
+    loop2Stride.record.args[0] = UINT64_C(0x1000) | (UINT64_C(0x40) << 40U);
+    loop2Stride.instrExecId = 3;
+
+    aclsan::ParsedTraceRecord memory = base;
+    memory.record.instrId = 85;
+    memory.record.pipeline = ACLSAN_DEVICE_PIPE_MTE2;
+    memory.record.args[0] = 0x2000;
+    memory.record.args[1] = 0x6000;
+    memory.record.args[2] = (UINT64_C(2) << 4U) | (UINT64_C(32) << 25U);
+    memory.record.args[3] = 64;
+    memory.instrExecId = 4;
+
+    aclsan::DispatchTraceRecords({loopSize, loop1Stride, loop2Stride, memory}, *decoder);
+
+    assert(g_deviceMemoryCallbackCount == 1);
+    const auto& access = g_deviceMemoryCallbacks[0];
+    assert(access.address == 0x6000);
+    assert(access.accessMode == ACLSAN_DEVICE_MEMORY_ACCESS_READ);
+    assert(access.layoutKind == ACLSAN_MEM_LAYOUT_ND_AFFINE);
+    assert(access.layout.ndAffine.rank == 3);
+    assert(access.layout.ndAffine.elementBytes == 32);
+    assert(access.layout.ndAffine.dims[0] == 2 && access.layout.ndAffine.strides[0] == 64);
+    assert(access.layout.ndAffine.dims[1] == 2 && access.layout.ndAffine.strides[1] == 0x200);
+    assert(access.layout.ndAffine.dims[2] == 3 && access.layout.ndAffine.strides[2] == 0x1000);
+}
+
+void TestUbufToGmOuterLoopStateReachesMemoryCallback()
+{
+    ResetCapture();
+    const aclsan::DeviceInstructionDecoder* decoder = aclsan::FindDeviceInstructionDecoder("Ascend950PR_9599");
+    assert(decoder != nullptr);
+
+    aclsan::ParsedTraceRecord base{};
+    base.blockType = ACLSAN_DEVICE_BLOCK_TYPE_AICORE_VECTOR;
+    base.blockId = 6;
+    base.phyCoreId = 8;
+    base.launchId = 30;
+    base.deviceId = 3;
+
+    aclsan::ParsedTraceRecord loopSize = base;
+    loopSize.record.instrId = 125;
+    loopSize.record.category = aclsan::DeviceInstructionCategory::RegisterState;
+    loopSize.record.args[0] = UINT64_C(2) | (UINT64_C(3) << 21U);
+
+    aclsan::ParsedTraceRecord loop1Stride = base;
+    loop1Stride.record.instrId = 126;
+    loop1Stride.record.category = aclsan::DeviceInstructionCategory::RegisterState;
+    loop1Stride.record.args[0] = UINT64_C(0x400) | (UINT64_C(0x20) << 40U);
+
+    aclsan::ParsedTraceRecord loop2Stride = base;
+    loop2Stride.record.instrId = 127;
+    loop2Stride.record.category = aclsan::DeviceInstructionCategory::RegisterState;
+    loop2Stride.record.args[0] = UINT64_C(0x2000) | (UINT64_C(0x40) << 40U);
+
+    aclsan::ParsedTraceRecord memory = base;
+    memory.record.instrId = 83;
+    memory.record.pipeline = ACLSAN_DEVICE_PIPE_MTE3;
+    memory.record.args[0] = 0x7000;
+    memory.record.args[1] = 0x2000;
+    memory.record.args[2] = (UINT64_C(2) << 4U) | (UINT64_C(32) << 25U);
+    memory.record.args[3] = 64;
+
+    aclsan::DispatchTraceRecords({loopSize, loop1Stride, loop2Stride, memory}, *decoder);
+
+    assert(g_deviceMemoryCallbackCount == 1);
+    const auto& access = g_deviceMemoryCallbacks[0];
+    assert(access.address == 0x7000);
+    assert(access.accessMode == ACLSAN_DEVICE_MEMORY_ACCESS_WRITE);
+    assert(access.layoutKind == ACLSAN_MEM_LAYOUT_ND_AFFINE);
+    assert(access.layout.ndAffine.rank == 3);
+    assert(access.layout.ndAffine.elementBytes == 32);
+    assert(access.layout.ndAffine.dims[0] == 2 && access.layout.ndAffine.strides[0] == 64);
+    assert(access.layout.ndAffine.dims[1] == 2 && access.layout.ndAffine.strides[1] == 0x400);
+    assert(access.layout.ndAffine.dims[2] == 3 && access.layout.ndAffine.strides[2] == 0x2000);
+}
+
+void TestGmToL1OuterLoopStateReachesMemoryCallback()
+{
+    ResetCapture();
+    const aclsan::DeviceInstructionDecoder* decoder = aclsan::FindDeviceInstructionDecoder("Ascend950PR_9599");
+    assert(decoder != nullptr);
+
+    aclsan::ParsedTraceRecord base{};
+    base.blockType = ACLSAN_DEVICE_BLOCK_TYPE_AICORE_CUBE;
+    base.blockId = 7;
+    base.phyCoreId = 9;
+    base.launchId = 31;
+    base.deviceId = 3;
+
+    aclsan::ParsedTraceRecord loopSize = base;
+    loopSize.record.instrId = 394;
+    loopSize.record.category = aclsan::DeviceInstructionCategory::RegisterState;
+    loopSize.record.args[0] = UINT64_C(2) | (UINT64_C(3) << 21U);
+
+    aclsan::ParsedTraceRecord loop1Stride = base;
+    loop1Stride.record.instrId = 395;
+    loop1Stride.record.category = aclsan::DeviceInstructionCategory::RegisterState;
+    loop1Stride.record.args[0] = UINT64_C(0x400) | (UINT64_C(0x20) << 40U);
+
+    aclsan::ParsedTraceRecord loop2Stride = base;
+    loop2Stride.record.instrId = 396;
+    loop2Stride.record.category = aclsan::DeviceInstructionCategory::RegisterState;
+    loop2Stride.record.args[0] = UINT64_C(0x2000) | (UINT64_C(0x40) << 40U);
+
+    aclsan::ParsedTraceRecord memory = base;
+    memory.record.instrId = 73;
+    memory.record.pipeline = ACLSAN_DEVICE_PIPE_MTE2;
+    memory.record.args[0] = 0x3000;
+    memory.record.args[1] = 0x8000;
+    memory.record.args[2] = (UINT64_C(2) << 4U) | (UINT64_C(2) << 25U);
+    memory.record.args[3] = 3;
+
+    aclsan::DispatchTraceRecords({loopSize, loop1Stride, loop2Stride, memory}, *decoder);
+
+    assert(g_deviceMemoryCallbackCount == 1);
+    const auto& access = g_deviceMemoryCallbacks[0];
+    assert(access.address == 0x8000);
+    assert(access.accessMode == ACLSAN_DEVICE_MEMORY_ACCESS_READ);
+    assert(access.header.sourceKind == ACLSAN_DEVICE_SOURCE_MTE2);
+    assert(access.layoutKind == ACLSAN_MEM_LAYOUT_ND_AFFINE);
+    assert(access.layout.ndAffine.rank == 3);
+    assert(access.layout.ndAffine.elementBytes == 64);
+    assert(access.layout.ndAffine.dims[0] == 2 && access.layout.ndAffine.strides[0] == 96);
+    assert(access.layout.ndAffine.dims[1] == 2 && access.layout.ndAffine.strides[1] == 0x400);
+    assert(access.layout.ndAffine.dims[2] == 3 && access.layout.ndAffine.strides[2] == 0x2000);
+}
+
+void TestFixpipeLoop3StateReachesMemoryCallback()
+{
+    ResetCapture();
+    const aclsan::DeviceInstructionDecoder* decoder = aclsan::FindDeviceInstructionDecoder("Ascend950PR_9599");
+    assert(decoder != nullptr);
+
+    aclsan::ParsedTraceRecord base{};
+    base.blockType = ACLSAN_DEVICE_BLOCK_TYPE_AICORE_CUBE;
+    base.blockId = 8;
+    base.phyCoreId = 10;
+    base.launchId = 32;
+    base.deviceId = 3;
+
+    aclsan::ParsedTraceRecord loop3 = base;
+    loop3.record.instrId = 90;
+    loop3.record.category = aclsan::DeviceInstructionCategory::RegisterState;
+    loop3.record.args[0] = UINT64_C(2) | (UINT64_C(7) << 16U) | (UINT64_C(100) << 32U);
+
+    aclsan::ParsedTraceRecord memory = base;
+    memory.record.instrId = 91;
+    memory.record.pipeline = ACLSAN_DEVICE_PIPE_FIXPIPE;
+    memory.record.args[0] = 0xa000;
+    memory.record.args[1] = 0x4000;
+    memory.record.args[2] = (UINT64_C(32) << 4U) | (UINT64_C(3) << 16U) | (UINT64_C(40) << 32U);
+    memory.record.args[3] = UINT64_C(1) << 43U;
+
+    aclsan::DispatchTraceRecords({loop3, memory}, *decoder);
+
+    assert(g_deviceMemoryCallbackCount == 1);
+    const auto& access = g_deviceMemoryCallbacks[0];
+    assert(access.address == 0xa000);
+    assert(access.accessMode == ACLSAN_DEVICE_MEMORY_ACCESS_WRITE);
+    assert(access.header.sourceKind == ACLSAN_DEVICE_SOURCE_FIXPIPE);
+    assert(access.layoutKind == ACLSAN_MEM_LAYOUT_ND_AFFINE);
+    assert(access.layout.ndAffine.rank == 2);
+    assert(access.layout.ndAffine.elementBytes == 128);
+    assert(access.layout.ndAffine.dims[0] == 3 && access.layout.ndAffine.strides[0] == 160);
+    assert(access.layout.ndAffine.dims[1] == 2 && access.layout.ndAffine.strides[1] == 400);
 }
 
 void TestDisabledCallbackIsNotInvoked()
@@ -531,6 +816,11 @@ int main()
     TestSetPaddingRecordsUpdateLaunchStateWithoutCallback();
     TestUndefinedInstructionIdsSkipDecoder();
     TestDefinedInstructionIdUsesDecoder();
+    TestNdDmaPadCountStatePreservesExactGmFootprint();
+    TestDmaOuterLoopStateReachesMemoryCallback();
+    TestUbufToGmOuterLoopStateReachesMemoryCallback();
+    TestGmToL1OuterLoopStateReachesMemoryCallback();
+    TestFixpipeLoop3StateReachesMemoryCallback();
     TestDisabledCallbackIsNotInvoked();
     return 0;
 }
