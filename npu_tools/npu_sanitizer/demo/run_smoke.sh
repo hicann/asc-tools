@@ -102,20 +102,16 @@ main()
         memcheck/matmul_leakyrelu_basic_api
         basic_func/multi_kernel
         basic_func/padding_register_state
+        basic_func/dual_tool_multi_launch_aggregate
         synccheck/no_sync
-        synccheck/single_pair
-        synccheck/single_unconsumed
-        synccheck/duplicate_set
-        synccheck/multi_block_isolation
-        synccheck/wait_without_set
-        synccheck/aic_wait_without_set
+        synccheck/multi_launch_unconsumed
+        synccheck/multi_launch_pairs
+        synccheck/flag_set_set_wait_wait
+        synccheck/flag_mutex_error_bundle
         synccheck/mix_wait_without_set
         synccheck/mutex_pair
-        synccheck/mutex_unreleased
-        synccheck/aic_mutex_unreleased
         synccheck/mix_mutex_unreleased
-        synccheck/mutex_unlock_without_lock
-        synccheck/mutex_duplicate_lock
+        synccheck/split_wrong_side_mutex_noop
         synccheck/mutex_multi_block_isolation
     )
     run_smoke_examples "${examples[@]}"

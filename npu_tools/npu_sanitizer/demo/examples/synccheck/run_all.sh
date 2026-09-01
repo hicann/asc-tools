@@ -24,19 +24,14 @@ fi
 
 examples=(
     no_sync
-    single_pair
-    single_unconsumed
-    duplicate_set
-    multi_block_isolation
-    wait_without_set
-    aic_wait_without_set
+    multi_launch_unconsumed
+    multi_launch_pairs
+    flag_set_set_wait_wait
+    flag_mutex_error_bundle
     mix_wait_without_set
     mutex_pair
-    mutex_unreleased
-    aic_mutex_unreleased
     mix_mutex_unreleased
-    mutex_unlock_without_lock
-    mutex_duplicate_lock
+    split_wrong_side_mutex_noop
     mutex_multi_block_isolation
 )
 temporary_dir=$(mktemp -d)

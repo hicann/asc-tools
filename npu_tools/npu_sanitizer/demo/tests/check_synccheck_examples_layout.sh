@@ -17,19 +17,14 @@ readme="${synccheck_dir}/README.md"
 readme_en="${synccheck_dir}/README_en.md"
 synccheck_examples=(
     no_sync
-    single_pair
-    single_unconsumed
-    duplicate_set
-    multi_block_isolation
-    wait_without_set
-    aic_wait_without_set
+    multi_launch_unconsumed
+    multi_launch_pairs
+    flag_set_set_wait_wait
+    flag_mutex_error_bundle
     mix_wait_without_set
     mutex_pair
-    mutex_unreleased
-    aic_mutex_unreleased
     mix_mutex_unreleased
-    mutex_unlock_without_lock
-    mutex_duplicate_lock
+    split_wrong_side_mutex_noop
     mutex_multi_block_isolation
 )
 
@@ -68,11 +63,11 @@ for example in "${synccheck_examples[@]}"; do
     grep -Fq 'cmake --build build --parallel' "${example_dir}/run.sh"
     grep -Fq '"${npu_check}" --tool synccheck -- build/demo' \
         "${example_dir}/run.sh"
-    grep -Fq 'python3 verify.py "${output}"' \
+    grep -Fq 'npu_check_status=$?' "${example_dir}/run.sh"
+    grep -Fq 'python3 verify.py "${output}" "${npu_check_status}"' \
         "${example_dir}/run.sh"
-    if rg -q 'npu_check_status|EXPECTED_STATUS|expected npu_check status|--error-exitcode' \
-        "${example_dir}/run.sh" "${example_dir}/verify.py"; then
-        printf 'synccheck example still validates npu_check status: %s\n' "${example}" >&2
+    if rg -q -- '--error-exitcode' "${example_dir}/run.sh"; then
+        printf 'synccheck example overrides the application exit status: %s\n' "${example}" >&2
         exit 1
     fi
     if rg -q 'example_dir=|build_dir=|npu_check_build_dir=' "${example_dir}/run.sh"; then
@@ -119,10 +114,9 @@ if rg -q 'examples/synccheck' "${demo_dir}/CMakeLists.txt"; then
 fi
 test ! -e "${demo_dir}/examples/common.sh"
 test -f "${synccheck_dir}/verify_common.py"
-if rg -q 'npu-check-status|expected_status|actual_status' "${synccheck_dir}/verify_common.py"; then
-    printf 'synccheck common verifier still validates npu_check status\n' >&2
-    exit 1
-fi
+grep -Fq '<npu-check-status>' "${synccheck_dir}/verify_common.py"
+grep -Fq 'expected npu_check status 0' "${synccheck_dir}/verify_common.py"
+grep -Fq '"exit": str(actual_status)' "${synccheck_dir}/verify_common.py"
 test ! -e "${synccheck_dir}/symbol_ordering.txt"
 test ! -e "${synccheck_dir}/build_example.sh"
 grep -Fq 'if [[ ! -x "${demo_dir}/build.sh" ]]; then' "${synccheck_dir}/run_all.sh"
@@ -139,30 +133,93 @@ for example in "${synccheck_examples[@]}"; do
     grep -Fq "    ${example}" "${synccheck_dir}/run_all.sh"
 done
 
-grep -Fq 'aclrtDestroyStreamForce' "${synccheck_dir}/wait_without_set/wait_without_set.asc"
-grep -Fq 'aclrtDestroyStreamForce' "${synccheck_dir}/aic_wait_without_set/aic_wait_without_set.asc"
 grep -Fq 'aclrtDestroyStreamForce' "${synccheck_dir}/mix_wait_without_set/mix_wait_without_set.asc"
-grep -Fq 'aclrtDestroyStreamForce' "${synccheck_dir}/mutex_duplicate_lock/mutex_duplicate_lock.asc"
+grep -Fq 'aclrtDestroyStreamForce' \
+    "${synccheck_dir}/flag_set_set_wait_wait/flag_set_set_wait_wait.asc"
 
-for example in single_pair single_unconsumed mutex_pair mutex_unreleased aic_mutex_unreleased mix_mutex_unreleased; do
+for example in mutex_pair mix_mutex_unreleased; do
     grep -Fq '#include "c_api/asc_simd.h"' "${synccheck_dir}/${example}/${example}.asc"
 done
-grep -Fq '__global__ __cube__' "${synccheck_dir}/single_pair/single_pair.asc"
-grep -Fq 'asc_sync_notify(PIPE_MTE1, PIPE_M, EVENT_ID0)' "${synccheck_dir}/single_pair/single_pair.asc"
-grep -Fq 'asc_sync_wait(PIPE_MTE1, PIPE_M, EVENT_ID0)' "${synccheck_dir}/single_pair/single_pair.asc"
-grep -Fq 'asc_sync_notify(PIPE_V, PIPE_MTE2, EVENT_ID0)' \
-    "${synccheck_dir}/single_unconsumed/single_unconsumed.asc"
+for example in multi_launch_unconsumed multi_launch_pairs; do
+    source_file="${synccheck_dir}/${example}/${example}.asc"
+    grep -Fq '__vector__ __global__ __aicore__ void synccheck_demo_kernel(int32_t eventId)' "${source_file}"
+    grep -Fq 'int RunSample(uint32_t blockCount = 1)' "${source_file}"
+    grep -Fq 'asc_sync_notify(PIPE_V, PIPE_MTE2, eventId)' "${source_file}"
+    grep -Fq 'synccheck_demo_kernel<<<blockCount, 0, stream>>>(EVENT_ID0);' "${source_file}"
+    grep -Fq 'synccheck_demo_kernel<<<blockCount, 0, stream>>>(EVENT_ID1);' "${source_file}"
+    test "$(grep -Fc 'synccheck_demo_kernel<<<blockCount, 0, stream>>>' "${source_file}")" -eq 2
+    test "$(grep -Fc 'aclrtSynchronizeStreamWithTimeout(stream, kStreamTimeoutMs)' "${source_file}")" -eq 1
+    first_launch_line=$(grep -Fn 'synccheck_demo_kernel<<<blockCount, 0, stream>>>(EVENT_ID0);' "${source_file}" | cut -d: -f1)
+    second_launch_line=$(grep -Fn 'synccheck_demo_kernel<<<blockCount, 0, stream>>>(EVENT_ID1);' "${source_file}" | cut -d: -f1)
+    synchronize_line=$(grep -Fn 'aclrtSynchronizeStreamWithTimeout(stream, kStreamTimeoutMs)' "${source_file}" | cut -d: -f1)
+    test "${first_launch_line}" -lt "${second_launch_line}"
+    test "${second_launch_line}" -lt "${synchronize_line}"
+    grep -Fq 'aclrtDestroyStream(stream)' "${source_file}"
+    grep -Fq '"synchronizations": 1' "${synccheck_dir}/${example}/verify.py"
+    grep -Fq '"duplicate_opens": 0' "${synccheck_dir}/${example}/verify.py"
+    grep -Fq '"unmatched_closes": 0' "${synccheck_dir}/${example}/verify.py"
+done
+grep -Fq '"sync_events": 2' "${synccheck_dir}/multi_launch_unconsumed/verify.py"
+grep -Fq '"matched_pairs": 0' "${synccheck_dir}/multi_launch_unconsumed/verify.py"
+grep -Fq '"unconsumed_opens": 2' "${synccheck_dir}/multi_launch_unconsumed/verify.py"
+grep -Fq '"errors": 2' "${synccheck_dir}/multi_launch_unconsumed/verify.py"
+grep -Fq 'Synchronization pairing mismatch: redundant SET_FLAG.' \
+    "${synccheck_dir}/multi_launch_unconsumed/verify.py"
+grep -Fq 'asc_sync_wait(PIPE_V, PIPE_MTE2, eventId)' \
+    "${synccheck_dir}/multi_launch_pairs/multi_launch_pairs.asc"
+grep -Fq '"sync_events": 4' "${synccheck_dir}/multi_launch_pairs/verify.py"
+grep -Fq '"matched_pairs": 2' "${synccheck_dir}/multi_launch_pairs/verify.py"
+grep -Fq '"unconsumed_opens": 0' "${synccheck_dir}/multi_launch_pairs/verify.py"
+grep -Fq '"errors": 0' "${synccheck_dir}/multi_launch_pairs/verify.py"
+grep -Fq 'EXPECTED_DIAGNOSTICS = []' "${synccheck_dir}/multi_launch_pairs/verify.py"
 grep -Fq 'asc_lock(PIPE_MTE2, mutexId)' "${synccheck_dir}/mutex_pair/mutex_pair.asc"
 grep -Fq 'asc_unlock(PIPE_MTE2, mutexId)' "${synccheck_dir}/mutex_pair/mutex_pair.asc"
 grep -Fq 'asc_lock(PIPE_V, mutexId)' "${synccheck_dir}/mutex_pair/mutex_pair.asc"
 grep -Fq 'asc_unlock(PIPE_V, mutexId)' "${synccheck_dir}/mutex_pair/mutex_pair.asc"
-grep -Fq 'asc_lock(PIPE_MTE2, mutexId)' "${synccheck_dir}/mutex_unreleased/mutex_unreleased.asc"
-grep -Fq '__global__ __cube__' "${synccheck_dir}/aic_wait_without_set/aic_wait_without_set.asc"
-grep -Fq 'HardEvent::MTE1_M' "${synccheck_dir}/aic_wait_without_set/aic_wait_without_set.asc"
-grep -Fq '__global__ __cube__' "${synccheck_dir}/duplicate_set/duplicate_set.asc"
-grep -Fq 'HardEvent::MTE1_M' "${synccheck_dir}/duplicate_set/duplicate_set.asc"
-grep -Fq '__global__ __cube__' "${synccheck_dir}/mutex_unlock_without_lock/mutex_unlock_without_lock.asc"
-grep -Fq 'Mutex::Unlock<PIPE_M>' "${synccheck_dir}/mutex_unlock_without_lock/mutex_unlock_without_lock.asc"
+grep -Fq '__global__ __cube__' \
+    "${synccheck_dir}/flag_set_set_wait_wait/flag_set_set_wait_wait.asc"
+grep -Fq 'HardEvent::MTE1_M' \
+    "${synccheck_dir}/flag_set_set_wait_wait/flag_set_set_wait_wait.asc"
+flag_coupled_source="${synccheck_dir}/flag_set_set_wait_wait/flag_set_set_wait_wait.asc"
+test "$(grep -Fc 'AscendC::SetFlag<AscendC::HardEvent::MTE1_M>(EVENT_ID0)' "${flag_coupled_source}")" -eq 2
+test "$(grep -Fc 'AscendC::WaitFlag<AscendC::HardEvent::MTE1_M>(EVENT_ID0)' "${flag_coupled_source}")" -eq 2
+grep -Fq '"sync_events": 4' "${synccheck_dir}/flag_set_set_wait_wait/verify.py"
+grep -Fq '"synchronizations": 1' "${synccheck_dir}/flag_set_set_wait_wait/verify.py"
+grep -Fq '"matched_pairs": 1' "${synccheck_dir}/flag_set_set_wait_wait/verify.py"
+grep -Fq '"duplicate_opens": 1' "${synccheck_dir}/flag_set_set_wait_wait/verify.py"
+grep -Fq '"unmatched_closes": 1' "${synccheck_dir}/flag_set_set_wait_wait/verify.py"
+grep -Fq '"unconsumed_opens": 0' "${synccheck_dir}/flag_set_set_wait_wait/verify.py"
+grep -Fq '"errors": 2' "${synccheck_dir}/flag_set_set_wait_wait/verify.py"
+grep -Fq 'Synchronization pairing mismatch: duplicate SET_FLAG.' \
+    "${synccheck_dir}/flag_set_set_wait_wait/verify.py"
+grep -Fq 'Synchronization pairing mismatch: unmatched WAIT_FLAG.' \
+    "${synccheck_dir}/flag_set_set_wait_wait/verify.py"
+flag_mutex_bundle_source="${synccheck_dir}/flag_mutex_error_bundle/flag_mutex_error_bundle.asc"
+grep -Fq '__global__ __cube__' "${flag_mutex_bundle_source}"
+grep -Fq 'AscendC::InitSocState()' "${flag_mutex_bundle_source}"
+test "$(grep -Fc 'AscendC::SetFlag<AscendC::HardEvent::MTE1_M>(EVENT_ID0)' "${flag_mutex_bundle_source}")" -eq 2
+test "$(grep -Fc 'AscendC::WaitFlag<AscendC::HardEvent::MTE1_M>(EVENT_ID0)' "${flag_mutex_bundle_source}")" -eq 1
+grep -Fq 'AscendC::Mutex::Unlock<PIPE_M>(0)' "${flag_mutex_bundle_source}"
+if rg -q 'AscendC::Mutex::Lock<PIPE_M>' "${flag_mutex_bundle_source}"; then
+    printf 'flag/mutex error bundle unexpectedly locks the mutex\n' >&2
+    exit 1
+fi
+grep -Fq 'kStreamTimeoutMs = 5000' "${flag_mutex_bundle_source}"
+test "$(grep -Fc 'aclrtSynchronizeStreamWithTimeout(stream, kStreamTimeoutMs)' "${flag_mutex_bundle_source}")" -eq 1
+grep -Fq 'aclrtDestroyStream(stream)' "${flag_mutex_bundle_source}"
+grep -Fq '"sync_events": 4' "${synccheck_dir}/flag_mutex_error_bundle/verify.py"
+grep -Fq '"synchronizations": 1' "${synccheck_dir}/flag_mutex_error_bundle/verify.py"
+grep -Fq '"matched_pairs": 1' "${synccheck_dir}/flag_mutex_error_bundle/verify.py"
+grep -Fq '"duplicate_opens": 1' "${synccheck_dir}/flag_mutex_error_bundle/verify.py"
+grep -Fq '"unmatched_closes": 1' "${synccheck_dir}/flag_mutex_error_bundle/verify.py"
+grep -Fq '"unconsumed_opens": 0' "${synccheck_dir}/flag_mutex_error_bundle/verify.py"
+grep -Fq '"errors": 2' "${synccheck_dir}/flag_mutex_error_bundle/verify.py"
+grep -Fq 'Synchronization pairing mismatch: duplicate SET_FLAG.' \
+    "${synccheck_dir}/flag_mutex_error_bundle/verify.py"
+grep -Fq 'Synchronization pairing mismatch: unmatched RLS_BUF.' \
+    "${synccheck_dir}/flag_mutex_error_bundle/verify.py"
+grep -Fq '只 synchronize 一次，聚合上报 flag 重复' "${readme}"
+grep -Fq 'synchronizes once and aggregates two primitive error reports' "${readme_en}"
 grep -Fq '__global__ __cube__' "${synccheck_dir}/mutex_multi_block_isolation/mutex_multi_block_isolation.asc"
 grep -Fq 'Mutex::Lock<PIPE_M>' "${synccheck_dir}/mutex_multi_block_isolation/mutex_multi_block_isolation.asc"
 grep -Fq 'Mutex::Unlock<PIPE_M>' "${synccheck_dir}/mutex_multi_block_isolation/mutex_multi_block_isolation.asc"
@@ -174,8 +231,6 @@ grep -Fq 'HardEvent::MTE2_V' "${synccheck_dir}/mix_wait_without_set/mix_wait_wit
 grep -Fq '"sync_events": 2' "${synccheck_dir}/mix_wait_without_set/verify.py"
 grep -Fq '"unmatched_closes": 2' "${synccheck_dir}/mix_wait_without_set/verify.py"
 grep -Fq '"errors": 2' "${synccheck_dir}/mix_wait_without_set/verify.py"
-grep -Fq '__global__ __cube__' "${synccheck_dir}/aic_mutex_unreleased/aic_mutex_unreleased.asc"
-grep -Fq 'asc_lock(PIPE_M, mutexId)' "${synccheck_dir}/aic_mutex_unreleased/aic_mutex_unreleased.asc"
 grep -Fq '__global__ __mix__(1, 2)' "${synccheck_dir}/mix_mutex_unreleased/mix_mutex_unreleased.asc"
 grep -Fq 'if ASCEND_IS_AIC' "${synccheck_dir}/mix_mutex_unreleased/mix_mutex_unreleased.asc"
 grep -Fq 'if ASCEND_IS_AIV' "${synccheck_dir}/mix_mutex_unreleased/mix_mutex_unreleased.asc"
@@ -184,6 +239,31 @@ grep -Fq 'asc_lock(PIPE_V, mutexId)' "${synccheck_dir}/mix_mutex_unreleased/mix_
 grep -Fq '"sync_events": 3' "${synccheck_dir}/mix_mutex_unreleased/verify.py"
 grep -Fq '"unconsumed_opens": 3' "${synccheck_dir}/mix_mutex_unreleased/verify.py"
 grep -Fq '"errors": 3' "${synccheck_dir}/mix_mutex_unreleased/verify.py"
+split_mutex_source="${synccheck_dir}/split_wrong_side_mutex_noop/split_wrong_side_mutex_noop.asc"
+grep -Fq '__global__ __mix__(1, 1)' "${split_mutex_source}"
+grep -Fq 'if ASCEND_IS_AIC' "${split_mutex_source}"
+grep -Fq 'if ASCEND_IS_AIV' "${split_mutex_source}"
+grep -Fq 'AscendC::Mutex::Lock<PIPE_V>(mutexId)' "${split_mutex_source}"
+grep -Fq 'AscendC::Mutex::Unlock<PIPE_V>(mutexId)' "${split_mutex_source}"
+grep -Fq 'AscendC::Mutex::Lock<PIPE_M>(mutexId)' "${split_mutex_source}"
+grep -Fq 'AscendC::Mutex::Unlock<PIPE_M>(mutexId)' "${split_mutex_source}"
+if rg -q 'asc_(lock|unlock)' "${split_mutex_source}"; then
+    printf 'split wrong-side mutex no-op uses the direct C API\n' >&2
+    exit 1
+fi
+grep -Fq 'kStreamTimeoutMs = 5000' "${split_mutex_source}"
+grep -Fq 'synccheck_demo_kernel<<<1, 0, stream>>>()' "${split_mutex_source}"
+grep -Fq 'aclrtDestroyStream(stream)' "${split_mutex_source}"
+for counter in sync_events matched_pairs duplicate_opens unmatched_closes unconsumed_opens errors; do
+    grep -Fq "\"${counter}\": 0" \
+        "${synccheck_dir}/split_wrong_side_mutex_noop/verify.py"
+done
+grep -Fq '"synchronizations": 1' \
+    "${synccheck_dir}/split_wrong_side_mutex_noop/verify.py"
+grep -Fq 'EXPECTED_DIAGNOSTICS = []' \
+    "${synccheck_dir}/split_wrong_side_mutex_noop/verify.py"
+grep -Fq 'dav-3510 split kernel' "${readme}"
+grep -Fq 'wrong-side mutex API calls' "${readme_en}"
 bash -n "${demo_dir}/build.sh"
 bash -n "${synccheck_dir}/run_all.sh"
 
@@ -196,11 +276,16 @@ fi
 current_result_fixture=$(mktemp /tmp/aclsan-synccheck-result.XXXXXX)
 trap 'rm -f "${current_result_fixture}"' EXIT
 printf '%s\n' \
-    'npu_check: DIAGNOSTIC ========= ERROR: Synchronization pairing mismatch: redundant GET_BUF.' \
+    'npu_check: DIAGNOSTIC ========= ERROR: Synchronization pairing mismatch: redundant SET_FLAG.' \
     '===== npu_check summary =====' \
-    'tool=synccheck sync_events=1 synchronizations=1 matched_pairs=0 duplicate_opens=0 unmatched_closes=0 unconsumed_opens=1 pending_opens=0 errors=1 warnings=0' \
-    'callbacks=2 malformed_callbacks=0 framework_errors=0 dropped_messages=0' \
+    'tool=synccheck sync_events=2 synchronizations=1 matched_pairs=0 duplicate_opens=0 unmatched_closes=0 unconsumed_opens=2 pending_opens=0 errors=2 warnings=0' \
+    'callbacks=3 malformed_callbacks=0 framework_errors=0 dropped_messages=0' \
     'status=complete aclsan_unsubscribe=0 dropped_messages=0 analysis_complete=true report_truncated=false' \
     '[CLI] outcome=forwarded has_errors=1 truncated=0 child_exit=0 exit=0' \
     >"${current_result_fixture}"
-python3 "${synccheck_dir}/aic_mutex_unreleased/verify.py" "${current_result_fixture}"
+python3 "${synccheck_dir}/multi_launch_unconsumed/verify.py" "${current_result_fixture}" 0
+if python3 "${synccheck_dir}/multi_launch_unconsumed/verify.py" \
+    "${current_result_fixture}" 1 >/dev/null 2>&1; then
+    printf 'synccheck verifier accepted a nonzero npu_check status\n' >&2
+    exit 1
+fi

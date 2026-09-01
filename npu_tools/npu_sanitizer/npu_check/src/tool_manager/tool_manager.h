@@ -12,6 +12,7 @@
 #include "aclsan/aclsan_api.h"
 #include "checker/memcheck.h"
 #include "checker/synccheck.h"
+#include "diagnostic/report_renderer.h"
 #include "diagnostic/report_buffer.h"
 #include "ipc/uds_server.h"
 #include "logging/logger.h"
@@ -64,6 +65,8 @@ private:
     void LogHandshakeFailure(const std::string& reason) noexcept;
     void PublishDiagnostics(std::vector<aclsan::cann::NpusanMemcheckReport> reports);
     void PublishSynccheckReports(std::vector<aclsan::cann::NpusanSynccheckReport> reports);
+    bool NormalizeAndStoreReportRecord(
+        const aclsan::cann::NpusanReportRecord& report, uint64_t reportId, const char* what);
     void PublishMalformed(AclsanCallbackDomain domain, AclsanCallbackId cbid, const char* reason);
     bool InitializeLogger(std::string& error);
     void LogCallback(AclsanCallbackDomain domain, AclsanCallbackId cbid, const void* cbdata);
@@ -116,6 +119,8 @@ private:
     ipc::UdsServer server_{};
     // 权威报告的聚合缓冲。callback 线程只往里追加，退出路径上一次性取走发出。
     diagnostic::ReportBuffer report_{};
+    // 已成功渲染的报告模板记录，用于在会话结束时追加工具级汇总。
+    std::vector<aclsan::cann::ReportRecord> reportRecords_;
     AclsanSubscriberHandle subscriber_ = nullptr;
     std::unique_ptr<Memcheck> memcheck_;
     std::unique_ptr<npucheck::Synccheck> synccheck_;

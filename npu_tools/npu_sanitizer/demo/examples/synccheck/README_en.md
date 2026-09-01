@@ -43,8 +43,8 @@ running one case or the complete suite.
 Run one target smoke test directly with its local `run.sh`:
 
 ```bash
-bash npu_tools/npu_sanitizer/demo/examples/synccheck/single_pair/run.sh
-bash npu_tools/npu_sanitizer/demo/examples/synccheck/single_unconsumed/run.sh
+bash npu_tools/npu_sanitizer/demo/examples/synccheck/multi_launch_pairs/run.sh
+bash npu_tools/npu_sanitizer/demo/examples/synccheck/flag_set_set_wait_wait/run.sh
 ```
 
 ## Pass Criteria
@@ -58,26 +58,23 @@ bash npu_tools/npu_sanitizer/demo/examples/synccheck/single_unconsumed/run.sh
 
 ## Smoke Matrix
 
-Excluding the synchronization-free `no_sync` control, the suite contains six
-pure-AIC and six pure-AIV synchronization scenarios. It also retains 1:1, 1:2,
-and 2:1 mix ratios for future capability regression.
+Excluding the synchronization-free `no_sync` control, the suite covers pure-AIC,
+pure-AIV, and 1:1 and 1:2 mix synchronization scenarios.
+The multi-launch cases enqueue two kernels consecutively on one stream without an
+intermediate synchronization; one `aclrtSynchronizeStreamWithTimeout` settles the
+synchronization events from both launches.
 
 | Smoke Test | Expected Result | Guarded Scenario |
 | --- | --- | --- |
 | `no_sync/` | Normal | No false synccheck report when the kernel has no synchronization instructions. |
-| `single_pair/` | Normal | A matching `SET_FLAG -> WAIT_FLAG` pair on the AIC M pipeline is consumed correctly. |
-| `single_unconsumed/` | Error | An unconsumed `SET_FLAG` is reported at session completion. |
-| `duplicate_set/` | Error | A repeated `SET_FLAG` with the same key on the AIC M pipeline is reported. |
-| `multi_block_isolation/` | Error | SET/WAIT state is isolated by block and only the unwaited block is reported. |
-| `wait_without_set/` | Error | A `WAIT_FLAG` without a corresponding `SET_FLAG` is reported. |
-| `aic_wait_without_set/` | Error | A `WAIT_FLAG` without a corresponding `SET_FLAG` is reported on the AIC M pipeline. |
-| `mix_wait_without_set/` | Expected FAIL | Both the AIC M and AIV V branches of `__mix__(1, 1)` issue a WAIT without SET. |
+| `multi_launch_unconsumed/` | Error | Two AIV kernels are launched consecutively on one stream and synchronized once; the unconsumed `SET_FLAG` values for `EVENT_ID0` and `EVENT_ID1` are both reported. |
+| `multi_launch_pairs/` | Normal | Two AIV kernels are launched consecutively on one stream and synchronized once; both event-specific `SET_FLAG -> WAIT_FLAG` pairs are consumed correctly. |
+| `flag_set_set_wait_wait/` | Error | An AIC M `SET -> SET -> WAIT -> WAIT` sequence reports both a duplicate `SET_FLAG` and an unmatched `WAIT_FLAG`. |
+| `flag_mutex_error_bundle/` | Error | A single AIC block synchronizes once and aggregates two primitive error reports: a duplicate flag `SET_FLAG` and an unmatched mutex `RLS_BUF`. |
+| `mix_wait_without_set/` | Error | Both the AIC M and AIV V branches of `__mix__(1, 1)` issue a WAIT without SET; the case passes only when both unmatched closes are captured. |
 | `mutex_pair/` | Normal | `GET_BUF -> RLS_BUF` pairs on the MTE2 and V pipelines are consumed correctly. |
-| `mutex_unreleased/` | Error | An unreleased `GET_BUF` is reported at session completion. |
-| `aic_mutex_unreleased/` | Error | An unreleased `GET_BUF` on the AIC M pipeline is reported at session completion. |
-| `mix_mutex_unreleased/` | Expected FAIL | Both the AIC M and AIV V branches of `__mix__(1, 2)` issue an unreleased `GET_BUF`. |
-| `mutex_unlock_without_lock/` | Error | An `RLS_BUF` without a corresponding `GET_BUF` is reported on the AIC M pipeline. |
-| `mutex_duplicate_lock/` | Error | A repeated blocking `GET_BUF` with the same mutex ID is reported. |
+| `mix_mutex_unreleased/` | Error | Both the AIC M and AIV V branches of `__mix__(1, 2)` issue an unreleased `GET_BUF`; the case passes only when all three unconsumed opens are captured. |
+| `split_wrong_side_mutex_noop/` | Normal | On dav-3510, wrong-side mutex API calls in the AIC/AIV branches of a split kernel are filtered and produce no callback or false positive. |
 | `mutex_multi_block_isolation/` | Error | AIC M GET/RLS state is isolated by block and only the unreleased block is reported. |
 
 ## Guardrails
@@ -90,11 +87,10 @@ and 2:1 mix ratios for future capability regression.
   comment immediately before the trigger and include complete host-side context.
 - Each `verify.py` must declare the expected summary and diagnostic types;
   checking only for an arbitrary log substring is not sufficient.
-- `wait_without_set`, `aic_wait_without_set`, `mix_wait_without_set`, and
-  `mutex_duplicate_lock` block device instructions and must use bounded stream
+- `mix_wait_without_set` and `flag_set_set_wait_wait` block device instructions and must use bounded stream
   synchronization and `aclrtDestroyStreamForce` so the smoke process can terminate.
 - `demo/tests/check_synccheck_examples_layout.sh` guards the package contract,
   shell syntax, and documentation matrix for every smoke test. After changes to
   synchronization-event translation, the checker, renderer, or runtime path, run
-  at least the affected smoke tests and use `single_pair` as the basic normal-path
+  at least the affected smoke tests and use `multi_launch_pairs` as the basic normal-path
   smoke test.

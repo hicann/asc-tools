@@ -44,11 +44,12 @@ cmake --build build --parallel
 # 共产生 2 个未匹配关闭事件。
 set +e
 "${npu_check}" --tool synccheck -- build/demo
+npu_check_status=$?
 set -e
 
 # 关注 summary：sync_events=2、synchronizations=1、matched_pairs=0、duplicate_opens=0，
 # unmatched_closes=2、unconsumed_opens=0、errors=2。
 # 同时必须报告 unmatched WAIT_FLAG，并确认 child/session 生命周期完整。
-python3 verify.py "${output}"
+python3 verify.py "${output}" "${npu_check_status}"
 
-printf '[PASSED] synccheck/%s\n' "${example}"
+printf 'example verification passed: synccheck/%s\n' "${example}"

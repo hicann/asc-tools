@@ -40,17 +40,14 @@ export NPU_CHECK_DBI_TOOLCHAIN_ROOT="${NPU_CHECK_DBI_TOOLCHAIN_ROOT:-${ASCEND_HO
 cmake -B build -DCMAKE_ASC_ARCHITECTURES=dav-3510
 cmake --build build --parallel
 
-# block 0 的 GET/RLS 配对成功，block 1 只执行 GET。
-# 共记录 3 个事件并留下 1 个未释放锁。
+# 单个 AIC block 在一次同步中同时产生 flag duplicate 和 mutex unmatched 错误。
 set +e
 "${npu_check}" --tool synccheck -- build/demo
 npu_check_status=$?
 set -e
 
-# 关注 summary：sync_events=3、synchronizations=1、matched_pairs=1、duplicate_opens=0，
-# unmatched_closes=0、unconsumed_opens=1、errors=1。
-# 同时必须报告 redundant GET_BUF，证明相同 mutex ID 按 block 隔离。
-# child/session 生命周期也必须完整。
+# 关注 summary：sync_events=4、synchronizations=1、matched_pairs=1、duplicate_opens=1、
+# unmatched_closes=1、unconsumed_opens=0、errors=2，并校验两类 primitive 诊断。
 python3 verify.py "${output}" "${npu_check_status}"
 
 printf 'example verification passed: synccheck/%s\n' "${example}"

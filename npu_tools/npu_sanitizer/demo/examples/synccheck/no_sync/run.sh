@@ -43,11 +43,12 @@ cmake --build build --parallel
 # 控制用例不执行任何同步指令。
 set +e
 "${npu_check}" --tool synccheck -- build/demo
+npu_check_status=$?
 set -e
 
 # 关注 summary：sync_events=0、synchronizations=1、matched_pairs=0、duplicate_opens=0，
 # unmatched_closes=0、unconsumed_opens=0、errors=0。
 # 输出中不应有任何 npu_check DIAGNOSTIC，并且 child/session 生命周期必须完整。
-python3 verify.py "${output}"
+python3 verify.py "${output}" "${npu_check_status}"
 
-printf '[PASSED] synccheck/%s\n' "${example}"
+printf 'example verification passed: synccheck/%s\n' "${example}"

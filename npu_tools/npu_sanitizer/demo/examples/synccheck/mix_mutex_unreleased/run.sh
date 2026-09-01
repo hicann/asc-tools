@@ -43,11 +43,12 @@ cmake --build build --parallel
 # AIC 执行 1 次、两个 AIV 各执行 1 次未释放的 GET_BUF，共留下 3 个未消费事件。
 set +e
 "${npu_check}" --tool synccheck -- build/demo
+npu_check_status=$?
 set -e
 
 # 关注 summary：sync_events=3、synchronizations=1、matched_pairs=0、duplicate_opens=0，
 # unmatched_closes=0、unconsumed_opens=3、errors=3。
 # 同时必须报告 redundant GET_BUF，并确认 child/session 生命周期完整。
-python3 verify.py "${output}"
+python3 verify.py "${output}" "${npu_check_status}"
 
-printf '[PASSED] synccheck/%s\n' "${example}"
+printf 'example verification passed: synccheck/%s\n' "${example}"

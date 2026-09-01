@@ -40,17 +40,13 @@ export NPU_CHECK_DBI_TOOLCHAIN_ROOT="${NPU_CHECK_DBI_TOOLCHAIN_ROOT:-${ASCEND_HO
 cmake -B build -DCMAKE_ASC_ARCHITECTURES=dav-3510
 cmake --build build --parallel
 
-# block 0 的 GET/RLS 配对成功，block 1 只执行 GET。
-# 共记录 3 个事件并留下 1 个未释放锁。
+# dav-3510 split kernel 两侧调用对方专属的 mutex API；两侧调用都应被过滤且不产生 callback。
 set +e
 "${npu_check}" --tool synccheck -- build/demo
 npu_check_status=$?
 set -e
 
-# 关注 summary：sync_events=3、synchronizations=1、matched_pairs=1、duplicate_opens=0，
-# unmatched_closes=0、unconsumed_opens=1、errors=1。
-# 同时必须报告 redundant GET_BUF，证明相同 mutex ID 按 block 隔离。
-# child/session 生命周期也必须完整。
+# 关注 summary：仅有一次同步，sync event 和所有配对错误计数均为 0，且没有诊断。
 python3 verify.py "${output}" "${npu_check_status}"
 
 printf 'example verification passed: synccheck/%s\n' "${example}"

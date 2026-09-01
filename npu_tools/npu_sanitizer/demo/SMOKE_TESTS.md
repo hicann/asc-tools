@@ -25,7 +25,7 @@ bash npu_tools/npu_sanitizer/demo/run_smoke.sh
 ```
 
 该脚本无需预先执行 `build.sh`。它先删除 `demo/build`，再调用 `build.sh` 重新构建公共工具并
-加载 CANN 环境，随后按固定顺序运行全部 21 个用例。公共工具构建失败时立即退出；用例中途
+加载 CANN 环境，随后按固定顺序运行全部 17 个用例。公共工具构建失败时立即退出；用例中途
 失败不会中断其余用例。每个用例输出保存到 `demo/build/smoke/<分类>/<用例名>.log`，最终以
 `total/passed/failed` 汇总并在任一用例失败时返回 1。
 
@@ -51,11 +51,14 @@ bash npu_tools/npu_sanitizer/demo/examples/memcheck/datacopy_stride/run.sh
 ```bash
 bash npu_tools/npu_sanitizer/demo/examples/basic_func/multi_kernel/run.sh
 bash npu_tools/npu_sanitizer/demo/examples/basic_func/padding_register_state/run.sh
+bash npu_tools/npu_sanitizer/demo/examples/basic_func/dual_tool_multi_launch_aggregate/run.sh
 ```
 
 `multi_kernel` 校验两个 kernel 各一条 32 字节越界读以及不同的 launchId；
 `padding_register_state` 校验无错误 summary、同一 register-state key 和 `0x12`/`0x34` 的
 `SET_PADDING` 状态传递。
+`dual_tool_multi_launch_aggregate` 在两次 launch 中分别触发 Memcheck GM 越界和 Synccheck
+未消费 `SET_FLAG`，随后只同步一次并校验两套 summary 均完成结算。
 
 ## Matmul Basic API
 
@@ -86,11 +89,15 @@ bash npu_tools/npu_sanitizer/demo/examples/synccheck/run_all.sh
 单独运行某个用例时，直接运行用例目录中的 `run.sh`：
 
 ```bash
-bash npu_tools/npu_sanitizer/demo/examples/synccheck/single_pair/run.sh
+bash npu_tools/npu_sanitizer/demo/examples/synccheck/multi_launch_pairs/run.sh
 ```
 
-正常用例的原始 `npu_check` 状态为 0；异常用例用非零原始状态验证指定同步错误被检出。两类
-runner 都在 `verify.py`、summary 和完整会话通过后返回 0，并输出
+保留套件平衡覆盖 SET_FLAG/WAIT_FLAG 与 GET_BUF/RLS_BUF 的正常和异常配对、多 launch 聚合及
+多 block 隔离；其中 `mix_wait_without_set` 和 `flag_set_set_wait_wait` 覆盖阻塞场景。
+
+所有 Synccheck 用例的 `RunSample` 都返回 0，`npu_check` 透传该状态；runner 捕获真实状态并交给
+`verify.py` 校验。同步错误由 `has_errors`、summary 和诊断判定。两类 runner 都在验证和完整会话
+通过后返回 0，并输出
 `example verification passed: synccheck/<用例名>`；`run_all.sh` 和 `run_smoke.sh` 据此统计
 `PASS/FAIL`。
 
@@ -101,6 +108,7 @@ runner 都在 `verify.py`、summary 和完整会话通过后返回 0，并输出
 
 - runner 构建失败、应用异常退出、工具握手失败、原始状态与预期不符或会话未完整结束，均视为失败。
 - `add`、`datacopy_stride` 和 `multi_kernel` 是预期 memcheck 异常；每个 runner 校验其固定错误数量。
+  `dual_tool_multi_launch_aggregate` 是预期双工具异常，并分别校验 Memcheck 和 Synccheck 的错误计数。
   两个 matmul 和 `padding_register_state` 的 checker summary 必须为 `errors=0`；matmul 还必须通过
   golden 数据校验。
 - synccheck 的预期异常不是冒烟失败；只有诊断或 summary 与该用例的 `verify.py` 预期不符时才失败。

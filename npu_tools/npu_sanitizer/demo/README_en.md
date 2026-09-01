@@ -15,6 +15,7 @@ enables the callbacks for the selected tool through `libacl_san.so`.
 | `examples/memcheck/matmul_leakyrelu_basic_api` | `matmul_leakyrelu_basic_api.asc` | `demo` | Fused Matmul and LeakyReLU example. |
 | `examples/basic_func/multi_kernel` | `multi_kernel.asc` | `demo` | Basic multi-kernel loading and instrumentation example. |
 | `examples/basic_func/padding_register_state` | `padding_register_state.asc` | `demo` | Basic `SET_PADDING` register-manager example. |
+| `examples/basic_func/dual_tool_multi_launch_aggregate` | `dual_tool_multi_launch_aggregate.asc` | `demo` | Dual-tool, multi-launch aggregation example. |
 | `examples/synccheck` | One standalone directory per scenario | `demo` | Normal and abnormal synchronization pairing examples. |
 
 Each example directory under `examples/synccheck` contains its own `.asc` file,
@@ -22,11 +23,11 @@ CMake configuration, runner, and result verifier. `verify_common.py` provides co
 result checks. Each case's `run.sh` builds and runs its `.asc` from the shared
 `demo/build` tree. The
 `.asc` file contains the complete AscendC kernel, ACL initialization, kernel
-launch, and cleanup logic. `wait_without_set` intentionally executes a WAIT_FLAG without
-a corresponding SET_FLAG. The examples also use `AscendC::Mutex::Lock/Unlock`
-to cover normal and abnormal GET_BUF/RLS_BUF pairing and multi-block isolation
-for both SET/WAIT and GET/RLS. The `wait_without_set` and duplicate Lock scenarios
-must use `aclrtSynchronizeStreamWithTimeout` to bound the wait and
+launch, and cleanup logic. The retained suite balances normal pairing, duplicate
+opens, unmatched closes, unconsumed opens, multi-launch aggregation, and
+multi-block isolation across SET_FLAG/WAIT_FLAG and GET_BUF/RLS_BUF.
+`mix_wait_without_set` and `flag_set_set_wait_wait` cover blocking failure
+scenarios; they use `aclrtSynchronizeStreamWithTimeout` to bound the wait and
 `aclrtDestroyStreamForce` to destroy a stream that still contains a blocked kernel.
 
 ## Build and Artifacts
@@ -99,10 +100,11 @@ Then run the script in any case directory:
 bash ./npu_tools/npu_sanitizer/demo/examples/memcheck/add/run.sh
 bash ./npu_tools/npu_sanitizer/demo/examples/memcheck/matmul_basic_api/run.sh
 bash ./npu_tools/npu_sanitizer/demo/examples/basic_func/padding_register_state/run.sh
-bash ./npu_tools/npu_sanitizer/demo/examples/synccheck/single_pair/run.sh
+bash ./npu_tools/npu_sanitizer/demo/examples/basic_func/dual_tool_multi_launch_aggregate/run.sh
+bash ./npu_tools/npu_sanitizer/demo/examples/synccheck/multi_launch_pairs/run.sh
 ```
 
-Run all 21 basic-capability and Synccheck cases with:
+Run all 17 basic-capability and Synccheck cases with:
 
 ```bash
 bash ./npu_tools/npu_sanitizer/demo/run_smoke.sh
@@ -134,8 +136,8 @@ bash ./npu_tools/npu_sanitizer/demo/build.sh
 ```
 
 Each case runner configures and builds its target under
-`demo/examples/<category>/<case-name>/build`, then launches it with memcheck or
-synccheck. Matmul runners also generate input and golden data and
+`demo/examples/<category>/<case-name>/build`, then launches it with memcheck,
+synccheck, or both tools. Matmul runners also generate input and golden data and
 run `verify_result.py`. On success, the verifier prints `test pass!`. Every runner
 checks result validation, application status, UDS handshake, sanitizer summary, and
 session completion. A case with fully verified expected diagnostics returns 0 and
@@ -147,6 +149,9 @@ nonzero.
 that the `0x12` and `0x34` `SET_PADDING` raw values are decoded and delivered to the
 same register-state key. `register_state_manager_test` independently calls `Get()` to
 verify that the same key retains only the latest value.
+`dual_tool_multi_launch_aggregate` first triggers a GM out-of-bounds read and then
+leaves an unconsumed `SET_FLAG` on the same stream before one synchronization, proving
+that Memcheck and Synccheck aggregate both launches together.
 
 ## Runtime Flow
 

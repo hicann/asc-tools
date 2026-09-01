@@ -28,6 +28,9 @@ test -f "${demo_dir}/examples/basic_func/multi_kernel/CMakeLists.txt"
 test -x "${demo_dir}/examples/basic_func/multi_kernel/run.sh"
 test -f "${demo_dir}/examples/basic_func/padding_register_state/padding_register_state.asc"
 test -x "${demo_dir}/examples/basic_func/padding_register_state/run.sh"
+test -f "${demo_dir}/examples/basic_func/dual_tool_multi_launch_aggregate/dual_tool_multi_launch_aggregate.asc"
+test -f "${demo_dir}/examples/basic_func/dual_tool_multi_launch_aggregate/CMakeLists.txt"
+test -x "${demo_dir}/examples/basic_func/dual_tool_multi_launch_aggregate/run.sh"
 test ! -e "${demo_dir}/examples/test"
 test -x "${demo_dir}/examples/memcheck/matmul_basic_api/run.sh"
 test -x "${demo_dir}/examples/memcheck/matmul_leakyrelu_basic_api/run.sh"
@@ -61,6 +64,7 @@ fi
 standalone_examples=(
     basic_func/multi_kernel
     basic_func/padding_register_state
+    basic_func/dual_tool_multi_launch_aggregate
     memcheck/add
     memcheck/datacopy_stride
     memcheck/matmul_basic_api
@@ -180,6 +184,13 @@ grep -Fq '^tool=memcheck .*errors=0' "${padding_runner}"
 grep -Fq 'value=0x12' "${padding_runner}"
 grep -Fq 'value=0x34' "${padding_runner}"
 
+dual_tool_runner="${demo_dir}/examples/basic_func/dual_tool_multi_launch_aggregate/run.sh"
+grep -Fq -- '--tool memcheck --tool synccheck -- build/demo' "${dual_tool_runner}"
+grep -Fq '^tool=memcheck .*synchronizations=1.*errors=1' "${dual_tool_runner}"
+grep -Fq '^tool=synccheck .*sync_events=1 synchronizations=1.*unconsumed_opens=1.*errors=1' "${dual_tool_runner}"
+grep -Fq 'Invalid GM read of size 32 bytes' "${dual_tool_runner}"
+grep -Fq 'Synchronization pairing mismatch: redundant SET_FLAG.' "${dual_tool_runner}"
+
 for example in matmul_basic_api matmul_leakyrelu_basic_api; do
     matmul_runner="${demo_dir}/examples/memcheck/${example}/run.sh"
     grep -Fq '^tool=memcheck .*errors=0' "${matmul_runner}"
@@ -197,20 +208,16 @@ smoke_examples=(
     memcheck/matmul_leakyrelu_basic_api
     basic_func/multi_kernel
     basic_func/padding_register_state
+    basic_func/dual_tool_multi_launch_aggregate
     synccheck/no_sync
-    synccheck/single_pair
-    synccheck/single_unconsumed
-    synccheck/duplicate_set
-    synccheck/multi_block_isolation
-    synccheck/wait_without_set
-    synccheck/aic_wait_without_set
+    synccheck/multi_launch_unconsumed
+    synccheck/multi_launch_pairs
+    synccheck/flag_set_set_wait_wait
+    synccheck/flag_mutex_error_bundle
     synccheck/mix_wait_without_set
     synccheck/mutex_pair
-    synccheck/mutex_unreleased
-    synccheck/aic_mutex_unreleased
     synccheck/mix_mutex_unreleased
-    synccheck/mutex_unlock_without_lock
-    synccheck/mutex_duplicate_lock
+    synccheck/split_wrong_side_mutex_noop
     synccheck/mutex_multi_block_isolation
 )
 for example in "${smoke_examples[@]}"; do
@@ -260,8 +267,8 @@ if [[ ${workflow_status} -ne 0 ]]; then
 fi
 test ! -e "${workflow_fixture_dir}/build/stale"
 test "$(sed -n '1p' "${workflow_fixture_dir}/trace.log")" = "BUILD"
-test "$(grep -c '^RUN ' "${workflow_fixture_dir}/trace.log")" -eq 21
-grep -Fq 'total=21 passed=21 failed=0' "${output}"
+test "$(grep -c '^RUN ' "${workflow_fixture_dir}/trace.log")" -eq 17
+grep -Fq 'total=17 passed=17 failed=0' "${output}"
 
 printf '%s\n' \
     '#!/usr/bin/env bash' \

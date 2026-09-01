@@ -11,9 +11,8 @@
 
 set -euo pipefail
 
-# 进入用例目录，所有构建和日志均使用相对路径。
+# 进入示例目录，所有构建和日志均使用相对路径。
 cd "$(dirname "$0")"
-example=$(basename "$PWD")
 
 # 校验 CANN 环境。
 if [[ -z "${ASCEND_HOME_PATH:-}" ]]; then
@@ -36,21 +35,42 @@ export NPU_SAN_DEBUG=1
 export NPU_CHECK_DBI_ARCH="${NPU_CHECK_DBI_ARCH:-dav-3510}"
 export NPU_CHECK_DBI_TOOLCHAIN_ROOT="${NPU_CHECK_DBI_TOOLCHAIN_ROOT:-${ASCEND_HOME_PATH}}"
 
-# 配置并构建 Synccheck 用例。
+# 配置并构建示例。
 cmake -B build -DCMAKE_ASC_ARCHITECTURES=dav-3510
 cmake --build build --parallel
 
-# block 0 的 GET/RLS 配对成功，block 1 只执行 GET。
-# 共记录 3 个事件并留下 1 个未释放锁。
+# 第一个 launch 触发 memcheck，第二个 launch 留下未消费 SET_FLAG；二者只在一次 synchronize 后结算。
 set +e
-"${npu_check}" --tool synccheck -- build/demo
-npu_check_status=$?
+"${npu_check}" --tool memcheck --tool synccheck -- build/demo
 set -e
 
-# 关注 summary：sync_events=3、synchronizations=1、matched_pairs=1、duplicate_opens=0，
-# unmatched_closes=0、unconsumed_opens=1、errors=1。
-# 同时必须报告 redundant GET_BUF，证明相同 mutex ID 按 block 隔离。
-# child/session 生命周期也必须完整。
-python3 verify.py "${output}" "${npu_check_status}"
+if [[ $(grep -Ec '^tool=memcheck .*synchronizations=1 .*errors=1([[:space:]]|$)' "${output}" || true) -ne 1 ]]; then
+    printf 'missing memcheck summary with synchronizations=1 and errors=1: %s\n' "${output}" >&2
+    exit 1
+fi
 
-printf 'example verification passed: synccheck/%s\n' "${example}"
+if [[ $(grep -Ec '^tool=synccheck sync_events=1 synchronizations=1 matched_pairs=0 duplicate_opens=0 unmatched_closes=0 unconsumed_opens=1 .*errors=1([[:space:]]|$)' "${output}" || true) -ne 1 ]]; then
+    printf 'missing synccheck aggregate summary: %s\n' "${output}" >&2
+    exit 1
+fi
+
+for diagnostic in \
+    'npu_check: DIAGNOSTIC ========= ERROR: Invalid GM read of size 32 bytes' \
+    'npu_check: DIAGNOSTIC ========= ERROR: Synchronization pairing mismatch: redundant SET_FLAG.'; do
+    if [[ $(grep -Fc "${diagnostic}" "${output}" || true) -ne 1 ]]; then
+        printf 'unexpected diagnostic count for %s: %s\n' "${diagnostic}" "${output}" >&2
+        exit 1
+    fi
+done
+
+for lifecycle in \
+    '[UDS] phase=handshake' \
+    '[UDS] phase=result' \
+    '[CLI] outcome=forwarded has_errors=1 truncated=0 child_exit=0 exit=0'; do
+    if [[ $(grep -Fc "${lifecycle}" "${output}" || true) -ne 1 ]]; then
+        printf 'unexpected lifecycle record count for %s: %s\n' "${lifecycle}" "${output}" >&2
+        exit 1
+    fi
+done
+
+printf '[PASSED] basic_func/dual_tool_multi_launch_aggregate\n'

@@ -28,7 +28,7 @@ bash npu_tools/npu_sanitizer/demo/run_smoke.sh
 
 No separate `build.sh` invocation is required. The script removes `demo/build`,
 uses `build.sh` to rebuild the shared tools and load the CANN environment, then
-runs all 21 cases in a fixed order. A shared-tool build failure stops the script
+runs all 17 cases in a fixed order. A shared-tool build failure stops the script
 immediately. Case failures do not stop the remaining cases. Each case output is
 saved to `demo/build/smoke/<category>/<case-name>.log`; the final summary prints
 `total/passed/failed`, and the script returns 1 when any case failed.
@@ -57,11 +57,14 @@ checks the stride parameter field, `errors=4`, and session completion.
 ```bash
 bash npu_tools/npu_sanitizer/demo/examples/basic_func/multi_kernel/run.sh
 bash npu_tools/npu_sanitizer/demo/examples/basic_func/padding_register_state/run.sh
+bash npu_tools/npu_sanitizer/demo/examples/basic_func/dual_tool_multi_launch_aggregate/run.sh
 ```
 
 `multi_kernel` checks one 32-byte out-of-bounds read per kernel and distinct
 launch IDs. `padding_register_state` checks an error-free summary, a shared
 register-state key, and `SET_PADDING` state propagation for `0x12` and `0x34`.
+`dual_tool_multi_launch_aggregate` triggers a Memcheck GM out-of-bounds error and a
+Synccheck unconsumed `SET_FLAG` across two launches, then verifies both summaries after one synchronization.
 
 ## Matmul Basic API
 
@@ -92,11 +95,17 @@ bash npu_tools/npu_sanitizer/demo/examples/synccheck/run_all.sh
 To run one case, invoke the case-local `run.sh` directly:
 
 ```bash
-bash npu_tools/npu_sanitizer/demo/examples/synccheck/single_pair/run.sh
+bash npu_tools/npu_sanitizer/demo/examples/synccheck/multi_launch_pairs/run.sh
 ```
 
-Both normal and negative cases return 0 after `verify.py`, the summary, and session
-completion pass, and print
+The retained suite balances normal and abnormal pairing, multi-launch aggregation,
+and multi-block isolation across SET_FLAG/WAIT_FLAG and GET_BUF/RLS_BUF.
+`mix_wait_without_set` and `flag_set_set_wait_wait` cover blocking scenarios.
+
+Every Synccheck `RunSample` returns 0, and `npu_check` forwards that status. Each
+runner captures the real status for `verify.py`; `has_errors`, the summary, and
+diagnostics carry the checker result. Both normal and negative cases return 0
+after verification and session completion pass, and print
 `example verification passed: synccheck/<case-name>`; `run_all.sh` and
 `run_smoke.sh` use that result for `PASS/FAIL` summaries.
 
@@ -107,7 +116,8 @@ and pass criteria.
 
 - A runner build failure, abnormal application exit, failed tool handshake, or incomplete session is a failure.
 - `add`, `datacopy_stride`, and `multi_kernel` are expected memcheck-error cases; each runner checks its fixed
-  error count. Both matmul examples and `padding_register_state` require `errors=0`; matmul must also pass
+  error count. `dual_tool_multi_launch_aggregate` is an expected dual-tool error case and checks both error counts.
+  Both matmul examples and `padding_register_state` require `errors=0`; matmul must also pass
   golden-data validation.
 - An expected synccheck diagnostic is not a smoke-test failure. A case fails only when its diagnostics or summary do
   not match the expectations in its `verify.py`.

@@ -14,17 +14,17 @@
 | `examples/memcheck/matmul_leakyrelu_basic_api` | `matmul_leakyrelu_basic_api.asc` | `demo` | Matmul 与 LeakyRelu 融合样例。 |
 | `examples/basic_func/multi_kernel` | `multi_kernel.asc` | `demo` | 多 kernel 加载与插桩基础能力示例。 |
 | `examples/basic_func/padding_register_state` | `padding_register_state.asc` | `demo` | `SET_PADDING` register manager 基础能力示例。 |
+| `examples/basic_func/dual_tool_multi_launch_aggregate` | `dual_tool_multi_launch_aggregate.asc` | `demo` | 同时启用 Memcheck 和 Synccheck 的双 launch 聚合示例。 |
 | `examples/synccheck` | 每个场景一个独立目录 | `demo` | 同步指令配对的正常与异常样例。 |
 
 `examples/synccheck` 中每个用例目录都包含独立的 `.asc`、CMake、runner 和结果验证器，
 `verify_common.py` 提供公共校验能力；每个用例的 `run.sh` 从统一的 `demo/build` 构建并运行
 对应 `.asc`。`.asc` 包含完整的 AscendC kernel、
 ACL 初始化、kernel launch 和清理逻辑。
-`wait_without_set` 会故意执行没有对应
-SET_FLAG 的 WAIT_FLAG。目录同时使用 `AscendC::Mutex::Lock/Unlock` 覆盖 GET_BUF/RLS_BUF 的
-正常与异常配对，以及 SET/WAIT 和 GET/RLS 的多 block 隔离。`wait_without_set` 和重复 Lock
-场景必须用 `aclrtSynchronizeStreamWithTimeout` 限制等待时间，并用 `aclrtDestroyStreamForce`
-销毁仍包含阻塞 kernel 的 stream，才能正常结束进程。
+保留套件平衡覆盖 SET_FLAG/WAIT_FLAG 与 GET_BUF/RLS_BUF 的正常配对、重复打开、未匹配关闭、
+未消费打开、多 launch 聚合和多 block 隔离。`mix_wait_without_set` 与
+`flag_set_set_wait_wait` 覆盖会阻塞的异常场景，使用 `aclrtSynchronizeStreamWithTimeout`
+限制等待时间，并用 `aclrtDestroyStreamForce` 销毁仍包含阻塞 kernel 的 stream。
 
 ## 构建与产物
 
@@ -89,10 +89,11 @@ bash ./npu_tools/npu_sanitizer/demo/build.sh
 bash ./npu_tools/npu_sanitizer/demo/examples/memcheck/add/run.sh
 bash ./npu_tools/npu_sanitizer/demo/examples/memcheck/matmul_basic_api/run.sh
 bash ./npu_tools/npu_sanitizer/demo/examples/basic_func/padding_register_state/run.sh
-bash ./npu_tools/npu_sanitizer/demo/examples/synccheck/single_pair/run.sh
+bash ./npu_tools/npu_sanitizer/demo/examples/basic_func/dual_tool_multi_launch_aggregate/run.sh
+bash ./npu_tools/npu_sanitizer/demo/examples/synccheck/multi_launch_pairs/run.sh
 ```
 
-一次执行全部 21 个基础能力和 Synccheck 用例：
+一次执行全部 17 个基础能力和 Synccheck 用例：
 
 ```bash
 bash ./npu_tools/npu_sanitizer/demo/run_smoke.sh
@@ -119,7 +120,7 @@ bash ./npu_tools/npu_sanitizer/demo/build.sh
 ```
 
 每个 `run.sh` 在 `demo/examples/<分类>/<用例名>/build` 中独立配置并构建自己的 target，
-再按分类选择 `memcheck` 或 `synccheck`。
+再按分类选择 `memcheck`、`synccheck` 或同时启用两者。
 Matmul runner 还会生成输入和 golden 数据，并执行 `verify_result.py`。成功时会输出
 `test pass!`。所有 runner 都会校验结果、应用退出状态、UDS handshake、sanitizer summary 和
 session end。预期诊断已完整校验的用例返回 0，最后打印
@@ -129,6 +130,8 @@ session end。预期诊断已完整校验的用例返回 0，最后打印
 `asc_set_l13d_padding(0x34)`。Device 日志证明值为 `0x12` 和 `0x34` 的两条 `SET_PADDING` raw
 record 被解码并交给同一个 register-state key；`register_state_manager_test` 通过 `Get()` 独立验证
 同一 key 只保存最新值。
+`dual_tool_multi_launch_aggregate` 在同一 stream 上先触发 GM 越界读，再留下未消费的
+`SET_FLAG`，并只同步一次，验证 Memcheck 和 Synccheck 会共同结算两个 launch。
 
 ## 运行链路
 

@@ -8,6 +8,9 @@
 
 #include "tool_manager/tool_manager.h"
 
+#include "diagnostic/report/report_normalizer.h"
+#include "diagnostic/report/report_summary.h"
+
 #include <algorithm>
 #include <array>
 #include <exception>
@@ -415,6 +418,17 @@ void ToolManager::Finalize()
     // dropped_messages 只有等队列落定之后才是终值，否则写进报告的是中间数。
     server_.StopPublisher();
 
+    std::string reportSummaries;
+    {
+        std::lock_guard<std::mutex> stateLock(stateMutex_);
+        if (!reportRecords_.empty()) {
+            aclsan::cann::detail::AppendReportSummaries(reportRecords_, &reportSummaries);
+        }
+    }
+    if (!reportSummaries.empty() && !report_.Append(reportSummaries) && !report_.Truncated()) {
+        logger_.Error("failed to record diagnostic summaries into the session report");
+    }
+
     const std::string summary = BuildSummaryMessage();
     logger_.Info(summary);
     // 多工具时取"全部工具都分析完整"，任一工具留有在途或被丢弃的事件，整份报告就
@@ -649,9 +663,9 @@ void ToolManager::PublishDiagnostics(std::vector<aclsan::cann::NpusanMemcheckRep
 {
     for (auto& report : reports) {
         PopulateDeviceCallStack(report);
+        const aclsan::cann::NpusanReportRecord reportRecord = aclsan::cann::NpusanReportRecord::From(report);
         std::string rendered;
-        const auto status =
-            aclsan::cann::RenderNpusanReportRecord(aclsan::cann::NpusanReportRecord::From(report), {}, &rendered);
+        const auto status = aclsan::cann::RenderNpusanReportRecord(reportRecord, {}, &rendered);
         if (status != aclsan::cann::ReportRenderStatus::kSuccess) {
             std::ostringstream message;
             message << "report rendering failed report_id=" << report.common.reportId
@@ -663,6 +677,9 @@ void ToolManager::PublishDiagnostics(std::vector<aclsan::cann::NpusanMemcheckRep
             logger_.Error(message.str());
             continue;
         }
+        if (!NormalizeAndStoreReportRecord(reportRecord, report.common.reportId, "report")) {
+            continue;
+        }
         logger_.Info("diagnostic report generated report_id=" + std::to_string(report.common.reportId));
         RecordDiagnostic(rendered, "diagnostic");
     }
@@ -672,9 +689,9 @@ void ToolManager::PublishSynccheckReports(std::vector<aclsan::cann::NpusanSyncch
 {
     for (auto& report : reports) {
         PopulateDeviceCallStack(report);
+        const aclsan::cann::NpusanReportRecord reportRecord = aclsan::cann::NpusanReportRecord::From(report);
         std::string rendered;
-        const auto status =
-            aclsan::cann::RenderNpusanReportRecord(aclsan::cann::NpusanReportRecord::From(report), {}, &rendered);
+        const auto status = aclsan::cann::RenderNpusanReportRecord(reportRecord, {}, &rendered);
         if (status != aclsan::cann::ReportRenderStatus::kSuccess) {
             std::ostringstream message;
             message << "synccheck report rendering failed report_id=" << report.common.reportId
@@ -686,9 +703,34 @@ void ToolManager::PublishSynccheckReports(std::vector<aclsan::cann::NpusanSyncch
             logger_.Error(message.str());
             continue;
         }
+        if (!NormalizeAndStoreReportRecord(reportRecord, report.common.reportId, "synccheck report")) {
+            continue;
+        }
         logger_.Info("synccheck diagnostic report generated report_id=" + std::to_string(report.common.reportId));
         RecordDiagnostic(rendered, "synccheck diagnostic");
     }
+}
+
+bool ToolManager::NormalizeAndStoreReportRecord(
+    const aclsan::cann::NpusanReportRecord& report, uint64_t reportId, const char* what)
+{
+    aclsan::cann::ReportRecord normalized;
+    const auto status = aclsan::cann::detail::NormalizeReport(report, &normalized);
+    if (status != aclsan::cann::ReportRenderStatus::kSuccess) {
+        std::ostringstream message;
+        message << what << " normalization failed report_id=" << reportId << " status=" << static_cast<int>(status);
+        {
+            std::lock_guard<std::mutex> stateLock(stateMutex_);
+            ++frameworkErrors_;
+        }
+        logger_.Error(message.str());
+        return false;
+    }
+    {
+        std::lock_guard<std::mutex> stateLock(stateMutex_);
+        reportRecords_.push_back(std::move(normalized));
+    }
+    return true;
 }
 
 void ToolManager::RecordDiagnostic(const std::string& rendered, const char* what)
