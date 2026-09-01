@@ -76,9 +76,6 @@ constexpr const char* kInjectionLibraryName = "libnpu_check.so";
 // "/lib64/libnpu_check.so" 是一个宿主机上的绝对路径，查找会静默落到系统目录里去。
 constexpr const char* kAscendToolkitHomeEnv = "ASCEND_TOOLKIT_HOME";
 
-// 定位覆盖入口，仅供测试与问题定位使用，不对外承诺兼容。
-constexpr const char* kLibraryPathOverrideEnv = "NPU_CHECK_LIBRARY_PATH";
-
 // 注入库会被加载进目标进程并以目标进程的权限运行。组可写或其他人可写意味着本用户
 // 之外的人能替换它的内容，等于把任意代码执行的入口交出去，因此一律拒绝而不是警告。
 bool IsSafelyOwned(const std::filesystem::path& path, std::string& reason)
@@ -241,9 +238,6 @@ bool ResolveLibraryPath(const std::string& requested, std::string& resolved, std
     std::vector<std::filesystem::path> candidates;
     if (!requested.empty()) {
         candidates.emplace_back(requested);
-    } else if (const char* environment = std::getenv(kLibraryPathOverrideEnv);
-               environment != nullptr && environment[0] != '\0') {
-        candidates.emplace_back(environment);
     } else {
         // 顺序即优先级，两组候选各自解决不同的部署形态。
         //

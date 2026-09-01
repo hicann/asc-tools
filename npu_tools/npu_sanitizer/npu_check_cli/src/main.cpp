@@ -35,8 +35,8 @@ int main(int argc, char** argv)
         std::cout << npu::sanitizer::cli::Usage();
         return 0;
     }
-    // 注入库定位没有命令行入口：候选顺序是 ASCEND_TOOLKIT_HOME 下的 lib64/lib，
-    // 其次是 npu_check 自身所在目录及其同级 lib{,64}。覆盖走 NPU_CHECK_LIBRARY_PATH。
+    // 注入库定位没有命令行入口，也没有环境变量覆盖：候选顺序固定为
+    // ASCEND_TOOLKIT_HOME 下的 lib64/lib，其次是 npu_check 自身所在目录及其同级 lib{,64}。
     //
     // 这里退 125 而不是 64：64 是用法错误，而定位失败属于 fork 前的准备错误 ——
     // 用户的命令行没有任何问题，是环境或安装不完整。两者必须能被脚本区分开。

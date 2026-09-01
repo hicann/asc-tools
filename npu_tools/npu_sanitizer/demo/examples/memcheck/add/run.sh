@@ -32,6 +32,9 @@ npu_check="../../../build/npu_tools/bin/npu_check"
 # 设置 DBI 运行环境。
 export ASCEND_GLOBAL_LOG_LEVEL=0
 export NPU_SAN_DEBUG=1
+# 冒烟断言依赖 [CLI] / [UDS] 的过程记录，而它们默认不打屏，必须显式打开。
+# 结果摘要行 [CLI] outcome=... 不受该开关控制，任何路径下都会输出。
+export NPU_CHECK_CLI_DEBUG=1
 
 if [[ ! -x "${npu_check}" ]]; then
     bash ../../../build.sh
@@ -43,7 +46,7 @@ cmake --build build --parallel
 
 # 执行包含受控越界读的 add 示例。
 set +e
-"${npu_check}" --tool memcheck -- build/demo
+"${npu_check}" --tool memcheck --log-file /home/zyx/asc-tools/npu_tools/npu_sanitizer/demo/examples/memcheck/add/tmp -- build/demo
 set -e
 
 # 关注 summary：本例只有 1 个逻辑内存错误，errors 应为 1。

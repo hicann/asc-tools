@@ -52,6 +52,8 @@ private:
     bool CheckServerIdentity(uint32_t childPid, ipc::DeadlineMs deadline, std::string& error);
     bool Send(ipc::MessageType type, const std::vector<uint8_t>& payload, ipc::DeadlineMs deadline, std::string& error);
 
+    // 是否真的输出由 sink 决定（见 process_runner 的 OutputSink::Structured）。
+    // 这里不判环境变量：开关属于 CLI 的输出策略，不该渗进协议客户端。
     void Log(const std::string& line) const
     {
         if (logSink_) {

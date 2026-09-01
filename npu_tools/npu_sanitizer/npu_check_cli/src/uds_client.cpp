@@ -22,6 +22,7 @@
 #include <unistd.h>
 
 namespace npu::sanitizer::cli {
+
 UdsClient::~UdsClient() { Close(); }
 
 namespace {

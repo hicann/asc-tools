@@ -39,6 +39,18 @@ namespace {
 
 volatile sig_atomic_t g_childProcessGroup = -1;
 
+// 结构化维测日志的开关变量。
+constexpr const char* kCliDebugEnv = "NPU_CHECK_CLI_DEBUG";
+
+// 取值必须严格等于 "1"。宽松匹配（例如只看首字符）会让 "0"、"false"、"1x" 这类取值
+// 意外打开日志，用户很难意识到是自己写的值被曲解了。这与注入库侧
+// AclsanIsStdoutLogEnabled() 读 NPU_SAN_DEBUG 的判定保持一致。
+bool IsCliDebugEnabled() noexcept
+{
+    const char* value = std::getenv(kCliDebugEnv);
+    return value != nullptr && value[0] == '1' && value[1] == '\0';
+}
+
 class UniqueFd {
 public:
     explicit UniqueFd(int fd = -1) noexcept : fd_(fd) {}
@@ -207,10 +219,22 @@ public:
         }
     }
 
-    // 结构化维测日志：固定去 stderr，指定了 --log-file 时另存一份。
+    // 结构化维测日志（6.1 的 [CLI] / [UDS] / [INJECTION] 三类）：默认不输出，
+    // 由 NPU_CHECK_CLI_DEBUG=1 打开；开启后去 stderr，指定了 --log-file 时另存一份。
+    //
     // 去 stderr 而不是 stdout，是为了不污染被脚本采集的应用输出与检查报告。
+    //
+    // 默认关闭的理由：这些是逐阶段的过程记录（注入库定位、会话标识、connect 重试次数、
+    // 握手凭据比对、Configure 长度、Result 帧数……），排障时才有价值，平时只会把用户
+    // 真正要看的检查报告淹掉。
+    //
+    // 注意 2.3.5 的结果摘要行 [CLI] outcome=... 不走这里 —— 它是 V1 唯一的对外结果
+    // 信号（5.4），任何路径下都必须输出，绝不能被调试开关吞掉。
     void Structured(const std::string& line)
     {
+        if (!IsCliDebugEnabled()) {
+            return;
+        }
         std::string text = line;
         if (text.empty() || text.back() != '\n') {
             text.push_back('\n');
@@ -409,11 +433,6 @@ ipc::ConfigureRequest BuildConfigureRequest(const Options& options)
 
 std::string FormatResultSummary(const ResultSummary& summary)
 {
-    // 2.3.5 的结果摘要行。字段名与取值属于对外兼容契约：新增字段只能追加在行尾，
-    // 不得改名或改变已有取值的含义。
-    //
-    // 它是 V1 唯一的对外结果信号。因为退出码默认透传应用自身的退出码，应用完全可能
-    // 返回 64/125/127，所以"是否检出问题"必须读这里的 has_errors=，不能看退出码。
     const char* outcome = "infra_failed";
     switch (summary.outcome) {
         case Outcome::kForwarded:
