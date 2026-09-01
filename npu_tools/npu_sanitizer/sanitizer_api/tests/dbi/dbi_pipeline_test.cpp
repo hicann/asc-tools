@@ -6,10 +6,10 @@
 // INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 // See LICENSE in the root of the software repository for the full text of the License.
 
-#include "dbi_pipeline.h"
-#include "ctrlbin_generator.h"
-#include "probe_source_generator.h"
-#include "tool_runner.h"
+#include "dbi/dbi_pipeline.h"
+#include "dbi/ctrlbin_generator.h"
+#include "dbi/probe_source_generator.h"
+#include "dbi/tool_runner.h"
 
 #include <algorithm>
 #include <atomic>
@@ -77,7 +77,7 @@ TEST(DbiPipelineTest, ResolvesToolchainFromExplicitRoot)
         std::ofstream(root / "tools/bisheng_compiler/bin" / name).put('\n');
     }
 
-    const auto toolchain = ResolveToolchain(root.string(), {});
+    const auto toolchain = ResolveToolchain(root.string());
     EXPECT_EQ(toolchain.bisheng, (root / "tools/bisheng_compiler/bin/bisheng").string());
     EXPECT_EQ(toolchain.bishengTune, (root / "tools/bisheng_compiler/bin/bisheng-tune").string());
     EXPECT_EQ(toolchain.ldLld, (root / "tools/bisheng_compiler/bin/ld.lld").string());
@@ -107,7 +107,7 @@ TEST(DbiPipelineTest, DoesNotMixToolsFromDifferentRoots)
         ASSERT_EQ(chmod((second / name).c_str(), 0755), 0);
     }
 
-    const auto toolchain = ResolveToolchain((root / "first").string(), {{"PATH", second.string()}});
+    const auto toolchain = ResolveToolchain((root / "first").string());
     EXPECT_FALSE(toolchain.Complete());
     std::filesystem::remove_all(root);
 }
@@ -124,7 +124,24 @@ TEST(DbiPipelineTest, RejectsWorldWritableToolchainExecutable)
     }
     ASSERT_EQ(chmod((bin / "bisheng").c_str(), 0777), 0);
 
-    EXPECT_FALSE(ResolveToolchain(root.string(), {}).Complete());
+    EXPECT_FALSE(ResolveToolchain(root.string()).Complete());
+    std::filesystem::remove_all(root);
+}
+
+TEST(DbiPipelineTest, ResolvesCannRootFromLoadedRuntimeLibrary)
+{
+    const auto root = std::filesystem::temp_directory_path() / "dbi-runtime-root-test";
+    std::filesystem::remove_all(root);
+    const auto tools = root / "tools/bisheng_compiler/bin";
+    const auto runtime = root / "x86_64-linux/lib64/libacl_rt.so";
+    std::filesystem::create_directories(tools);
+    std::filesystem::create_directories(runtime.parent_path());
+    std::ofstream(runtime).put('\n');
+    for (const char* name : {"bisheng", "bisheng-tune", "ld.lld", "llvm-objdump"}) {
+        std::ofstream(tools / name).put('\n');
+    }
+    EXPECT_EQ(CannRootFromRuntimeLibrary(runtime.string()), root.string());
+    EXPECT_TRUE(CannRootFromRuntimeLibrary("/usr/lib/libacl_rt.so").empty());
     std::filesystem::remove_all(root);
 }
 

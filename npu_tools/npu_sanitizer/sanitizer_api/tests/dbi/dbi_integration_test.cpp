@@ -6,7 +6,7 @@
 // INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 // See LICENSE in the root of the software repository for the full text of the License.
 
-#include "dbi_pipeline.h"
+#include "dbi/dbi_pipeline.h"
 
 #include <cstdlib>
 #include <filesystem>
@@ -92,6 +92,7 @@ TEST(DbiIntegrationTest, CompilesLinksAndPatchesSelectedProbeSet)
     request.inputKernel = (root / "input.o").string();
     request.outputKernel = (root / "patched.o").string();
     request.arch = "dav-3510";
+    request.traceArgumentOffset = 24;
     request.probeGroups = {ProbeGroup::Mte2};
     request.toolchainRoot = (root / "toolchain").string();
     request.workDirectory = (root / "work").string();
@@ -118,7 +119,7 @@ TEST(DbiIntegrationTest, CompilesLinksAndPatchesSelectedProbeSet)
     EXPECT_NE(commands.find("llvm-objdump <--syms>"), std::string::npos) << commands;
     EXPECT_NE(commands.find("<-execute-probe>"), std::string::npos) << commands;
     EXPECT_NE(commands.find("bisheng-tune <--action=instru-probe>"), std::string::npos) << commands;
-    EXPECT_EQ(commands.find("--tune-argsize="), std::string::npos) << commands;
+    EXPECT_NE(commands.find("<--tune-argsize=24>"), std::string::npos) << commands;
     EXPECT_NE(commands.find("<--dbi-config="), std::string::npos) << commands;
     EXPECT_EQ(CountOccurrences(commands, "bisheng <-xcce>"), 2U) << commands;
     EXPECT_EQ(CountOccurrences(commands, "ld.lld <-r>"), 1U) << commands;

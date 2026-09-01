@@ -312,7 +312,7 @@ std::string Usage()
            "                               Defaults to memcheck when no --tool is given.\n"
            "  --log-file <path>            directory or file receiving the report and\n"
            "                               the application output\n"
-           "  --work-dir <path>            directory for npu_check.log and the probe cache.\n"
+           "  --work-dir <path>            directory for npu_check.log and CLI session files.\n"
            "                               Created when missing and never removed.\n"
            "                               Defaults to a temporary directory.\n"
            "  -h, --help                   show this help and exit\n"

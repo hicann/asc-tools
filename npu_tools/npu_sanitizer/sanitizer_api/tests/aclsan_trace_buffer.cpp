@@ -10,7 +10,7 @@
 
 #include "aclsan/aclsan_cbdata_device.h"
 #include "internal/aclsan_trace_buffer.h"
-#include "trace_buffer_abi.h"
+#include "dbi/trace_buffer_abi.h"
 
 #include <cstddef>
 #include <cstdint>

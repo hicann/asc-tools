@@ -5,7 +5,7 @@
 // THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
 // INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 // See LICENSE in the root of the software repository for the full text of the License.
-#include "binary_instrumenter.h"
+#include "dbi/binary_instrumenter.h"
 
 #include <gtest/gtest.h>
 
@@ -19,6 +19,7 @@
 #include <string>
 #include <utility>
 #include <vector>
+#include <unistd.h>
 
 namespace aclsan {
 namespace {
@@ -69,57 +70,40 @@ int32_t CaptureInstrumentedBinary(const void* data, size_t length, void* userdat
     return 73;
 }
 
-TEST(DefaultBinaryInstrumentationConfigTest, ReadsRuntimeInstrumentationEnvironment)
+TEST(DefaultBinaryInstrumentationConfigTest, BuildsRuntimeConfigWithoutDbiEnvironment)
 {
     EnvironmentRestore environment(
-        {"NPU_CHECK_DBI_ARCH", "NPU_CHECK_DBI_WORK_DIR", "NPU_CHECK_DBI_CACHE_DIR", "NPU_CHECK_DBI_STRICT",
-         "NPU_CHECK_DBI_KEEP_TEMP"});
-    ASSERT_EQ(setenv("NPU_CHECK_DBI_ARCH", "dav-3510", 1), 0);
-    ASSERT_EQ(setenv("NPU_CHECK_DBI_WORK_DIR", "/tmp/npu-check-work", 1), 0);
-    ASSERT_EQ(setenv("NPU_CHECK_DBI_CACHE_DIR", "/tmp/npu-check-cache", 1), 0);
-    ASSERT_EQ(setenv("NPU_CHECK_DBI_STRICT", "1", 1), 0);
-    ASSERT_EQ(setenv("NPU_CHECK_DBI_KEEP_TEMP", "1", 1), 0);
+        {"NPU_CHECK_DBI_ARCH", "NPU_CHECK_DBI_TOOLCHAIN_ROOT", "NPU_CHECK_DBI_WORK_DIR", "NPU_CHECK_DBI_CACHE_DIR",
+         "NPU_CHECK_DBI_STRICT", "NPU_CHECK_DBI_KEEP_TEMP", "NPU_CHECK_DBI_PROBE_SET"});
+    ASSERT_EQ(setenv("NPU_CHECK_DBI_ARCH", "forged", 1), 0);
+    ASSERT_EQ(setenv("NPU_CHECK_DBI_TOOLCHAIN_ROOT", "/forged", 1), 0);
+    ASSERT_EQ(setenv("NPU_CHECK_DBI_PROBE_SET", "sync", 1), 0);
 
-    const BinaryInstrumentationConfig config = DefaultBinaryInstrumentationConfig();
+    const auto cannRoot = std::filesystem::temp_directory_path() / "dbi-runtime-config-test";
+    const auto tools = cannRoot / "tools/bisheng_compiler/bin";
+    const auto runtime = cannRoot / "x86_64-linux/lib64/libacl_rt.so";
+    std::filesystem::remove_all(cannRoot);
+    std::filesystem::create_directories(tools);
+    std::filesystem::create_directories(runtime.parent_path());
+    std::ofstream(runtime).put('\n');
+    for (const char* name : {"bisheng", "bisheng-tune", "ld.lld", "llvm-objdump"}) {
+        std::ofstream(tools / name).put('\n');
+    }
 
+    BinaryInstrumentationConfig config;
+    std::string diagnostic;
+    ASSERT_TRUE(
+        BuildRuntimeInstrumentationConfig("Ascend950PR_9599", runtime.c_str(), PROBE_GROUP_MTE2, config, diagnostic))
+        << diagnostic;
     EXPECT_EQ(config.arch, "dav-3510");
-    EXPECT_EQ(config.workDirectory, "/tmp/npu-check-work");
-    EXPECT_EQ(config.cacheDirectory, "/tmp/npu-check-cache");
+    EXPECT_EQ(config.toolchainRoot, cannRoot.string());
+    EXPECT_EQ(config.probeGroups, (std::vector<ProbeGroup>{ProbeGroup::Mte2, ProbeGroup::Scalar}));
     EXPECT_TRUE(config.strict);
-    EXPECT_TRUE(config.keepTemp);
-}
-
-TEST(DefaultBinaryInstrumentationConfigTest, SelectsProbeGroupsFromEnvironmentOrActiveMask)
-{
-    EnvironmentRestore environment({"NPU_CHECK_DBI_PROBE_SET"});
-    ASSERT_EQ(setenv("NPU_CHECK_DBI_PROBE_SET", "mte2,scalar,sync", 1), 0);
-
-    EXPECT_EQ(
-        DefaultBinaryInstrumentationConfig().probeGroups,
-        (std::vector<ProbeGroup>{ProbeGroup::Mte2, ProbeGroup::Scalar, ProbeGroup::Sync}));
-    EXPECT_EQ(
-        DefaultBinaryInstrumentationConfig(PROBE_GROUP_MTE1 | PROBE_GROUP_FIXPIPE | PROBE_GROUP_SCALAR).probeGroups,
-        (std::vector<ProbeGroup>{ProbeGroup::Mte1, ProbeGroup::Fixpipe, ProbeGroup::Scalar}));
-}
-
-TEST(DefaultBinaryInstrumentationConfigTest, DoesNotEnableProbeGroupsWithoutExplicitSelection)
-{
-    EnvironmentRestore environment({"NPU_CHECK_DBI_PROBE_SET"});
-    ASSERT_EQ(unsetenv("NPU_CHECK_DBI_PROBE_SET"), 0);
-
-    EXPECT_TRUE(DefaultBinaryInstrumentationConfig().probeGroups.empty());
-}
-
-TEST(DefaultBinaryInstrumentationConfigTest, TreatsOnlyExactOneAsTrue)
-{
-    EnvironmentRestore environment({"NPU_CHECK_DBI_STRICT", "NPU_CHECK_DBI_KEEP_TEMP"});
-    ASSERT_EQ(setenv("NPU_CHECK_DBI_STRICT", "true", 1), 0);
-    ASSERT_EQ(setenv("NPU_CHECK_DBI_KEEP_TEMP", "01", 1), 0);
-
-    const BinaryInstrumentationConfig config = DefaultBinaryInstrumentationConfig();
-
-    EXPECT_FALSE(config.strict);
     EXPECT_FALSE(config.keepTemp);
+    const std::string root = "/tmp/npu-check-" + std::to_string(static_cast<unsigned long long>(geteuid()));
+    EXPECT_EQ(config.workDirectory, root + "/requests");
+    EXPECT_EQ(config.cacheDirectory, root + "/cache");
+    std::filesystem::remove_all(cannRoot);
 }
 
 DbiResult FakePatch(const DbiRequest& request, void* userdata)
@@ -309,14 +293,21 @@ TEST_F(BinaryInstrumenterTest, ExceptionReturnsFailureAndCleansTemporaryDirector
 
 TEST_F(BinaryInstrumenterTest, RuntimeFacadeConsumesPatchedBytesAcrossAnAbiStableBoundary)
 {
-    EnvironmentRestore environment({"NPU_CHECK_DBI_ARCH", "NPU_CHECK_DBI_PROBE_SET", "NPU_CHECK_DBI_STRICT"});
-    ASSERT_EQ(setenv("NPU_CHECK_DBI_ARCH", "dav-3510", 1), 0);
-    ASSERT_EQ(setenv("NPU_CHECK_DBI_STRICT", "1", 1), 0);
     const std::vector<uint8_t> original = MakeKernelArgumentSizeElf(0);
     std::vector<uint8_t> consumed;
+    const auto cannRoot = std::filesystem::path(directory_) / "fake-cann";
+    const auto tools = cannRoot / "tools/bisheng_compiler/bin";
+    const auto runtime = cannRoot / "x86_64-linux/lib64/libacl_rt.so";
+    std::filesystem::create_directories(tools);
+    std::filesystem::create_directories(runtime.parent_path());
+    std::ofstream(runtime).put('\n');
+    for (const char* name : {"bisheng", "bisheng-tune", "ld.lld", "llvm-objdump"}) {
+        std::ofstream(tools / name).put('\n');
+    }
 
     const RuntimeBinaryInstrumentationResult result = InstrumentRuntimeBinary(
-        original.data(), original.size(), PROBE_GROUP_MTE2, &CaptureInstrumentedBinary, &consumed, &FakePatch, &state_);
+        original.data(), original.size(), PROBE_GROUP_MTE2, "Ascend950PR_9599", runtime.c_str(),
+        &CaptureInstrumentedBinary, &consumed, &FakePatch, &state_);
 
     EXPECT_EQ(result.status, BinaryInstrumentationStatus::Instrumented);
     EXPECT_EQ(result.strict, 1U);

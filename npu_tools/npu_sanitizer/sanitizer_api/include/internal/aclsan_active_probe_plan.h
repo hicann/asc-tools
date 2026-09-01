@@ -12,7 +12,7 @@
 #define ACLSAN_ACTIVE_PROBE_PLAN_H
 
 #include "aclsan/aclsan_api.h"
-#include "dbi_pipeline.h"
+#include "dbi/dbi_pipeline.h"
 
 #include <cstdint>
 #include <shared_mutex>

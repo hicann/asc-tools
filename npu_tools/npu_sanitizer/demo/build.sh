@@ -13,7 +13,7 @@ set -euo pipefail
 
 demo_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 build_dir="${demo_dir}/build"
-bin_dir="${build_dir}/npu_compute/bin"
+bin_dir="${build_dir}/npu_tools/bin"
 default_cann_home="/usr/local/Ascend/cann"
 
 ASCEND_HOME_PATH="${ASCEND_HOME_PATH:-${default_cann_home}}"

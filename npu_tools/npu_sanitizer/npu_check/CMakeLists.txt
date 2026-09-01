@@ -22,15 +22,10 @@ set(NPU_CHECK_REPORT_RENDERER_SOURCES
   src/diagnostic/report/report_text_renderer.cpp
   src/diagnostic/report/synccheck_adapter.cpp
 )
-set(NPU_CHECK_DBI_ROOT "${CMAKE_CURRENT_LIST_DIR}/../dbi")
-set(NPU_CHECK_DBI_SOURCE_DIR "${NPU_CHECK_DBI_ROOT}/src")
+set(NPU_CHECK_DBI_ROOT "${CMAKE_CURRENT_LIST_DIR}/../sanitizer_api")
+set(NPU_CHECK_DBI_SOURCE_DIR "${NPU_CHECK_DBI_ROOT}/src/dbi")
 set(NPU_CHECK_DBI_INCLUDE_DIR "${NPU_CHECK_DBI_ROOT}/include")
-set(NPU_CHECK_DBI_TEST_DIR "${NPU_CHECK_DBI_ROOT}/test")
-
-if(NOT TARGET npu_check_dbi_engine)
-  add_subdirectory(${NPU_CHECK_DBI_ROOT}
-    ${CMAKE_CURRENT_BINARY_DIR}/npu_check_dbi)
-endif()
+set(NPU_CHECK_DBI_TEST_DIR "${NPU_CHECK_DBI_ROOT}/tests/dbi")
 
 if(NOT TARGET npu_check_common)
   add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/../common
@@ -114,6 +109,10 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR OR ENABLE_TEST)
   target_compile_definitions(npu_check_common PRIVATE _GLIBCXX_USE_CXX11_ABI=0)
   target_compile_definitions(npu_check_core PRIVATE _GLIBCXX_USE_CXX11_ABI=0)
   target_compile_definitions(npu_check PRIVATE _GLIBCXX_USE_CXX11_ABI=0)
+  foreach(dbi_target IN ITEMS
+      npu_check_dbi_probe_group npu_check_dbi_probe_runtime npu_check_dbi_ctrlbin npu_check_dbi_engine)
+    target_compile_definitions(${dbi_target} PRIVATE _GLIBCXX_USE_CXX11_ABI=0)
+  endforeach()
 
   add_executable(npu_check_unit_tests
     tests/gtest_main.cpp

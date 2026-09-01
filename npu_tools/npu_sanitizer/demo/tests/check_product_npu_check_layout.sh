@@ -66,7 +66,7 @@ if rg -n 'add_executable\(gen_ctrlbin|install\(TARGETS gen_ctrlbin|TARGET_FILE:g
     exit 1
 fi
 
-if [[ -e "${sanitizer_dir}/dbi/test/generate_ctrlbin_test.cmake" ]]; then
+if [[ -e "${sanitizer_dir}/sanitizer_api/tests/dbi/generate_ctrlbin_test.cmake" ]]; then
     printf 'obsolete gen_ctrlbin executable test script still exists\n' >&2
     exit 1
 fi

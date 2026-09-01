@@ -12,7 +12,8 @@
 set -euo pipefail
 
 api_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
-dbi_dir=$(cd "${api_dir}/../dbi" && pwd)
+dbi_include_dir="${api_dir}/include/dbi"
+dbi_source_dir="${api_dir}/src/dbi"
 
 Fail()
 {
@@ -21,6 +22,7 @@ Fail()
 }
 
 [[ ! -e "${api_dir}/src/probe" ]] || Fail 'sanitizer_api/src/probe must not exist'
+[[ ! -e "${api_dir}/../dbi" ]] || Fail 'top-level npu_sanitizer/dbi must not exist'
 
 required_files=(
     "${api_dir}/src/device_runtime/device_symbolizer.h"
@@ -30,12 +32,11 @@ required_files=(
     "${api_dir}/include/internal/aclsan_active_probe_plan.h"
     "${api_dir}/include/internal/aclsan_trace_buffer.h"
     "${api_dir}/include/internal/aclsan_trace_runtime.h"
-    "${dbi_dir}/include/trace_buffer_abi.h"
-    "${dbi_dir}/include/dbi_pipeline.h"
-    "${dbi_dir}/src/dbi_pipeline.cpp"
-    "${dbi_dir}/src/binary_instrumenter.cpp"
-    "${dbi_dir}/src/probes/mte2.cpp"
-    "${dbi_dir}/src/probes/sync.cpp"
+    "${dbi_include_dir}/trace_buffer_abi.h"
+    "${dbi_include_dir}/dbi_pipeline.h"
+    "${dbi_source_dir}/dbi_pipeline.cpp"
+    "${dbi_source_dir}/binary_instrumenter.cpp"
+    "${dbi_source_dir}/probe_source_generator.cpp"
 )
 for required_file in "${required_files[@]}"; do
     [[ -f "${required_file}" ]] || Fail "required file is missing: ${required_file}"
@@ -55,7 +56,7 @@ if rg -n "\\bnamespace ${legacy_namespace}\\b|\\b${legacy_namespace}::" \
     Fail 'sanitizer_api must use the aclsan namespace'
 fi
 if rg -n "\\b${legacy_trace_prefix}[A-Za-z0-9_]*\\b" \
-    "${api_dir}" "${dbi_dir}"; then
+    "${api_dir}"; then
     Fail 'sanitizer_api and dbi must use Aclsan trace ABI type names'
 fi
 
@@ -66,7 +67,7 @@ grep -Fq 'src/aclsan_trace_runtime.cpp' "${cmake_file}" || Fail 'trace runtime i
 grep -Fq 'src/device_runtime/device_symbolizer.cpp' "${cmake_file}" || Fail 'device symbolizer is not built'
 
 trace_buffer="${api_dir}/src/aclsan_trace_buffer.cpp"
-trace_buffer_abi="${api_dir}/../dbi/include/trace_buffer_abi.h"
+trace_buffer_abi="${dbi_include_dir}/trace_buffer_abi.h"
 for trace_type in AclsanTraceBufferHeader AclsanTraceSliceHeader AclsanRawTraceRecord; do
     grep -Fq "struct ${trace_type}" "${trace_buffer_abi}" || Fail "trace buffer ABI does not define ${trace_type}"
 done
@@ -125,25 +126,22 @@ grep -Fq 'std::get_if<SetPaddingParamField>' "${trace_runtime}" || \
 grep -Fq 'registerState.Update(key, *value);' "${trace_runtime}" || \
     Fail 'trace runtime does not update SET_PADDING state by block type and block ID'
 
-binding_source="${dbi_dir}/src/dynamic_bind.cpp"
-scalar_probe="${dbi_dir}/src/probes/scalar.cpp"
-mte2_probe="${dbi_dir}/src/probes/mte2.cpp"
+binding_source="${dbi_source_dir}/dynamic_bind.cpp"
+probe_generator="${dbi_source_dir}/probe_source_generator.cpp"
 grep -Fq '{InstrType::SET_PADDING, 392, "__sanitizer_report_set_padding", {0}}' "${binding_source}" || \
     Fail 'DBI does not bind SET_PADDING argument 0 to instruction ID 392'
 grep -Fq 'return ProbeGroup::Scalar;' "${binding_source}" || \
     Fail 'SET_PADDING is not assigned to the Scalar probe group'
-grep -Fq '__sanitizer_report_set_padding(' "${scalar_probe}" || Fail 'Scalar SET_PADDING probe is missing'
-grep -Fq 'static_cast<uint16_t>(PIPE_S), 392, value' "${scalar_probe}" || \
-    Fail 'SET_PADDING probe does not record PIPE_S and preserve value in raw argument 0'
-if grep -Fq '__sanitizer_report_set_l1_2d_' "${scalar_probe}"; then
-    Fail 'SET_L1_2D probes must not be assigned to the Scalar probe source'
-fi
-grep -Fq '__sanitizer_report_set_l1_2d_b16(' "${mte2_probe}" || Fail 'MTE2 SET_L1_2D.b16 probe is missing'
-grep -Fq '__sanitizer_report_set_l1_2d_b32(' "${mte2_probe}" || Fail 'MTE2 SET_L1_2D.b32 probe is missing'
-grep -Fq 'static_cast<uint16_t>(PIPE_MTE2), 149' "${mte2_probe}" || \
-    Fail 'SET_L1_2D.b16 probe does not record PIPE_MTE2'
-grep -Fq 'static_cast<uint16_t>(PIPE_MTE2), 150' "${mte2_probe}" || \
-    Fail 'SET_L1_2D.b32 probe does not record PIPE_MTE2'
+grep -Fq '{392, ProbeGroup::Scalar, "__sanitizer_report_set_padding"' "${probe_generator}" || \
+    Fail 'Scalar SET_PADDING ProbeDefinition is missing'
+grep -Fq '"RegisterState", "PIPE_S"' "${probe_generator}" || \
+    Fail 'SET_PADDING ProbeDefinition does not record PIPE_S'
+grep -Fq 'R"ARGS(value, 0UL, 0UL, 0UL, 0UL)ARGS"' "${probe_generator}" || \
+    Fail 'SET_PADDING ProbeDefinition does not preserve value in raw argument 0'
+grep -Fq '{149, ProbeGroup::Mte2, "__sanitizer_report_set_l1_2d_b16"' "${probe_generator}" || \
+    Fail 'MTE2 SET_L1_2D.b16 ProbeDefinition is missing'
+grep -Fq '{150, ProbeGroup::Mte2, "__sanitizer_report_set_l1_2d_b32"' "${probe_generator}" || \
+    Fail 'MTE2 SET_L1_2D.b32 ProbeDefinition is missing'
 
 hook_source="${api_dir}/src/aclsan/aclsan_hook_aclrt.cpp"
 grep -Fq 'InstrumentRuntimeBinary' "${hook_source}" || \
@@ -153,6 +151,11 @@ grep -Fq 'PrepareTraceLaunch(' "${hook_source}" || Fail 'launch hook does not pr
 grep -Fq 'CompleteTraceLaunch(' "${hook_source}" || Fail 'launch hook does not retain DBI trace ownership'
 grep -Fq 'CollectTraceStream(' "${hook_source}" || Fail 'synchronize hook does not collect DBI records'
 
+if rg -n '(getenv|setenv)\("NPU_CHECK_DBI_' \
+    "${api_dir}/src" "${api_dir}/include" "${api_dir}/../npu_check_cli/src"; then
+    Fail 'production code must not read or write NPU_CHECK_DBI_* environment variables'
+fi
+
 if rg -n \
     'ACLSAN_PROBE_|ACLSAN_BUILD_DEVICE_PROBE_RESOURCES|sanitizer_api/src/probe|src/probe/|ProbeRuntime|ProbeParseResult|DispatchProbeRecords' \
     "${api_dir}/CMakeLists.txt" "${api_dir}/include" "${api_dir}/src" "${api_dir}/tests" \
@@ -160,4 +163,4 @@ if rg -n \
     Fail 'legacy sanitizer_api probe implementation is still referenced'
 fi
 
-printf 'probe contract check passed: sanitizer_api uses npu_check/dbi and has no src/probe\n'
+printf 'probe contract check passed: DBI is integrated under sanitizer_api and has no legacy src/probe\n'

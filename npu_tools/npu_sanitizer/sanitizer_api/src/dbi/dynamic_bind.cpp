@@ -18,7 +18,7 @@
 #include <vector>
 
 #include "MSBit.h"
-#include "ctrlbin_generator.h"
+#include "dbi/ctrlbin_generator.h"
 
 extern "C" void MSBitStart(const char* output, uint16_t length);
 

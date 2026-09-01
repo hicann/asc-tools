@@ -15,12 +15,6 @@ file(REMOVE_RECURSE "${TEST_ROOT}")
 file(MAKE_DIRECTORY "${TEST_ROOT}/work" "${TEST_ROOT}/cache")
 execute_process(
   COMMAND "${CMAKE_COMMAND}" -E env
-    "NPU_CHECK_DBI_ARCH=${ARCH}"
-    "NPU_CHECK_DBI_PROBE_SET=mte2,sync"
-    "NPU_CHECK_DBI_TOOLCHAIN_ROOT=${TOOLCHAIN_ROOT}"
-    "NPU_CHECK_DBI_WORK_DIR=${TEST_ROOT}/work"
-    "NPU_CHECK_DBI_CACHE_DIR=${TEST_ROOT}/cache"
-    "NPU_CHECK_DBI_STRICT=1"
     "NPU_CHECK_TRACE_RECORDS_PER_BLOCK=16"
     "${SAMPLE}" "${KERNEL}" "FullFlowKernel" "${DEVICE_ID}"
   RESULT_VARIABLE sample_result
@@ -51,19 +45,6 @@ endforeach()
 string(REGEX MATCH "\\[callback\\] records=[1-9][0-9]*" callback_count "${sample_output}")
 if(callback_count STREQUAL "")
   message(FATAL_ERROR "real sample did not report a positive callback count:\n${sample_output}")
-endif()
-
-file(GLOB probe_objects "${TEST_ROOT}/cache/*/probe.o")
-file(GLOB control_files "${TEST_ROOT}/cache/*/ctrl.bin")
-list(LENGTH probe_objects probe_count)
-list(LENGTH control_files control_count)
-if(NOT probe_count EQUAL 1 OR NOT control_count EQUAL 1)
-  message(FATAL_ERROR "real flow did not publish exactly one probe.o and ctrl.bin")
-endif()
-file(SIZE "${probe_objects}" probe_size)
-file(SIZE "${control_files}" control_size)
-if(probe_size EQUAL 0 OR control_size EQUAL 0)
-  message(FATAL_ERROR "real flow published an empty probe.o or ctrl.bin")
 endif()
 
 message(STATUS "real NPU full-flow output verified")

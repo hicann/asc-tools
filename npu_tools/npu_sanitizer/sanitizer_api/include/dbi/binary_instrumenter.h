@@ -53,19 +53,21 @@ struct RuntimeBinaryInstrumentationResult {
 static_assert(std::is_trivially_copyable_v<RuntimeBinaryInstrumentationResult>);
 static_assert(sizeof(RuntimeBinaryInstrumentationResult) == 16);
 
-BinaryInstrumentationConfig DefaultBinaryInstrumentationConfig();
-BinaryInstrumentationConfig DefaultBinaryInstrumentationConfig(uint32_t probeGroupMask);
+bool BuildRuntimeInstrumentationConfig(
+    const char* socName, const char* runtimeLibrary, uint32_t probeGroupMask, BinaryInstrumentationConfig& config,
+    std::string& diagnostic);
 BinaryInstrumentationResult InstrumentBinary(
     const BinaryInstrumentationConfig& config, const void* data, size_t length, DbiPipelineRunner runner,
     void* runnerData = nullptr);
 BinaryInstrumentationResult InstrumentBinary(
     const BinaryInstrumentationConfig& config, const void* data, size_t length);
 RuntimeBinaryInstrumentationResult InstrumentRuntimeBinary(
-    const void* data, size_t length, uint32_t probeGroupMask, InstrumentedBinaryConsumer consumer, void* consumerData,
-    DbiPipelineRunner runner, void* runnerData = nullptr) noexcept;
+    const void* data, size_t length, uint32_t probeGroupMask, const char* socName, const char* runtimeLibrary,
+    InstrumentedBinaryConsumer consumer, void* consumerData, DbiPipelineRunner runner,
+    void* runnerData = nullptr) noexcept;
 // Cross-target callers use this overload; the runner overload above is a same-ABI test seam.
 RuntimeBinaryInstrumentationResult InstrumentRuntimeBinary(
-    const void* data, size_t length, uint32_t probeGroupMask, InstrumentedBinaryConsumer consumer,
-    void* consumerData) noexcept;
+    const void* data, size_t length, uint32_t probeGroupMask, const char* socName, const char* runtimeLibrary,
+    InstrumentedBinaryConsumer consumer, void* consumerData) noexcept;
 
 } // namespace aclsan

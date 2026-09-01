@@ -46,11 +46,8 @@ std::string SymbolizerPath()
 
 fs::path WorkRoot()
 {
-    if (const char* configured = std::getenv("NPU_CHECK_DBI_WORK_DIR");
-        configured != nullptr && configured[0] != '\0') {
-        return configured;
-    }
-    return fs::temp_directory_path();
+    return fs::temp_directory_path() / ("npu-check-" + std::to_string(static_cast<unsigned long long>(geteuid()))) /
+           "symbolizer";
 }
 
 bool WriteImage(const fs::path& destination, const void* image, size_t imageBytes)
@@ -132,11 +129,21 @@ bool DeviceBinaryRegistry::RecordBinaryLoadFromData(
         entry.instrumented = instrumented;
         entry.traceArgumentOffset = traceArgumentOffset;
         if (instrumented) {
+            const fs::path workRoot = WorkRoot();
             const fs::path session =
-                WorkRoot() / ("aclsan-symbolizer-" + std::to_string(static_cast<unsigned long long>(getpid())) + "-" +
-                              std::to_string(entry.binaryId));
+                workRoot / ("aclsan-symbolizer-" + std::to_string(static_cast<unsigned long long>(getpid())) + "-" +
+                            std::to_string(entry.binaryId));
             std::error_code error;
-            fs::create_directories(session, error);
+            fs::create_directories(workRoot, error);
+            if (!error) {
+                fs::permissions(workRoot, fs::perms::owner_all, fs::perm_options::replace, error);
+            }
+            if (!error) {
+                fs::create_directories(session, error);
+            }
+            if (!error) {
+                fs::permissions(session, fs::perms::owner_all, fs::perm_options::replace, error);
+            }
             const fs::path sourceImage = session / "original_device.elf";
             if (!error && WriteImage(sourceImage, image, imageBytes)) {
                 entry.sessionDirectory = session.string();

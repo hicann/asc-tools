@@ -110,6 +110,11 @@ if [[ -e "${demo_dir}/run.sh" ]]; then
     exit 1
 fi
 bash -n "${demo_dir}/build.sh"
+grep -Fq 'bin_dir="${build_dir}/npu_tools/bin"' "${demo_dir}/build.sh"
+if grep -Fq 'npu_compute/bin' "${demo_dir}/build.sh"; then
+    printf 'demo build script still checks the retired npu_compute output directory\n' >&2
+    exit 1
+fi
 test ! -e "${demo_dir}/examples/common.sh"
 
 while IFS= read -r cmake_file; do

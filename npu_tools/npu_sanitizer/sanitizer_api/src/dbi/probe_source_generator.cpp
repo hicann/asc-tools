@@ -6,7 +6,7 @@
 // INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 // See LICENSE in the root of the software repository for the full text of the License.
 
-#include "probe_source_generator.h"
+#include "dbi/probe_source_generator.h"
 
 #include <algorithm>
 #include <array>
@@ -278,16 +278,20 @@ const std::array<ProbeDefinition, 83> kDefinitions{{
      "PIPE_S", R"ARGS(static_cast<uint64_t>(pipe), static_cast<uint64_t>(flagId), 0UL, 0UL, 0UL)ARGS"},
     {456, ProbeGroup::Sync, "__sanitizer_report_set_flag_v",
      R"PARAM(__gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, pipe_t dstPipe, uint64_t eventId)PARAM",
-     "Synchronization", "PIPE_S", R"ARGS(static_cast<uint64_t>(dstPipe), eventId, 0UL, 0UL, 0UL)ARGS"},
+     "Synchronization", "PIPE_S",
+     R"ARGS(static_cast<uint64_t>(PIPE_V), static_cast<uint64_t>(dstPipe), eventId, 0UL, 0UL)ARGS"},
     {457, ProbeGroup::Sync, "__sanitizer_report_set_flagi_v",
      R"PARAM(__gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, pipe_t dstPipe, uint64_t eventId)PARAM",
-     "Synchronization", "PIPE_S", R"ARGS(static_cast<uint64_t>(dstPipe), eventId, 0UL, 0UL, 0UL)ARGS"},
+     "Synchronization", "PIPE_S",
+     R"ARGS(static_cast<uint64_t>(PIPE_V), static_cast<uint64_t>(dstPipe), eventId, 0UL, 0UL)ARGS"},
     {458, ProbeGroup::Sync, "__sanitizer_report_wait_flag_v",
      R"PARAM(__gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, pipe_t srcPipe, uint64_t eventId)PARAM",
-     "Synchronization", "PIPE_S", R"ARGS(static_cast<uint64_t>(srcPipe), eventId, 0UL, 0UL, 0UL)ARGS"},
+     "Synchronization", "PIPE_S",
+     R"ARGS(static_cast<uint64_t>(srcPipe), static_cast<uint64_t>(PIPE_V), eventId, 0UL, 0UL)ARGS"},
     {459, ProbeGroup::Sync, "__sanitizer_report_wait_flagi_v",
      R"PARAM(__gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, pipe_t srcPipe, uint64_t eventId)PARAM",
-     "Synchronization", "PIPE_S", R"ARGS(static_cast<uint64_t>(srcPipe), eventId, 0UL, 0UL, 0UL)ARGS"},
+     "Synchronization", "PIPE_S",
+     R"ARGS(static_cast<uint64_t>(srcPipe), static_cast<uint64_t>(PIPE_V), eventId, 0UL, 0UL)ARGS"},
     {469, ProbeGroup::Sync, "__sanitizer_report_wait_flag_dev_pipe_v",
      R"PARAM(__gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, int64_t flagId)PARAM", "Synchronization", "PIPE_S",
      R"ARGS(static_cast<uint64_t>(flagId), 0UL, 0UL, 0UL, 0UL)ARGS"},

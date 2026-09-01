@@ -12,13 +12,14 @@
 #include "aclsan/aclsan_cbdata_device.h"
 #include "injection/injection_hook.h"
 #include "injection/runtime_stub_api.h"
-#include "trace_buffer_abi.h"
+#include "dbi/trace_buffer_abi.h"
 
 #include <acl/acl_rt.h>
 
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <elf.h>
 #include <fstream>
 #include <iterator>
 #include <vector>
@@ -117,6 +118,31 @@ aclError OriginalFree(void* pointer)
     return ACL_SUCCESS;
 }
 
+aclError OriginalGetDevice(int32_t* deviceId)
+{
+    if (deviceId == nullptr) {
+        return ACL_ERROR_INVALID_PARAM;
+    }
+    *deviceId = 0;
+    return ACL_SUCCESS;
+}
+
+aclError OriginalGetDeviceInfo(uint32_t deviceId, aclrtDevAttr attr, int64_t* value)
+{
+    if (deviceId != 0 || value == nullptr) {
+        return ACL_ERROR_INVALID_PARAM;
+    }
+    if (attr == ACL_DEV_ATTR_CUBE_CORE_NUM) {
+        *value = 36;
+        return ACL_SUCCESS;
+    }
+    if (attr == ACL_DEV_ATTR_VECTOR_CORE_NUM) {
+        *value = 72;
+        return ACL_SUCCESS;
+    }
+    return ACL_ERROR_INVALID_PARAM;
+}
+
 aclError OriginalMemcpy(void* dst, size_t dstMax, const void* src, size_t bytes, aclrtMemcpyKind kind)
 {
     if (dst == nullptr || src == nullptr || bytes > dstMax) {
@@ -207,6 +233,41 @@ void Callback(void*, AclsanCallbackDomain domain, AclsanCallbackId id, const voi
     }
 }
 
+std::vector<uint8_t> MakeKernelArgumentSizeElf(uint32_t argumentSize)
+{
+    constexpr char kSectionNames[] = "\0.shstrtab\0__CCE_KernelArgSize";
+    const std::string sectionNames(kSectionNames, sizeof(kSectionNames));
+    const size_t sectionHeadersOffset = sizeof(Elf64_Ehdr);
+    const size_t sectionNamesOffset = sectionHeadersOffset + 3 * sizeof(Elf64_Shdr);
+    const size_t argumentSizeOffset = sectionNamesOffset + sectionNames.size();
+    std::vector<uint8_t> image(argumentSizeOffset + sizeof(argumentSize), 0);
+    Elf64_Ehdr header{};
+    std::memcpy(header.e_ident, ELFMAG, SELFMAG);
+    header.e_ident[EI_CLASS] = ELFCLASS64;
+    header.e_ident[EI_DATA] = ELFDATA2LSB;
+    header.e_ident[EI_VERSION] = EV_CURRENT;
+    header.e_shoff = sectionHeadersOffset;
+    header.e_shentsize = sizeof(Elf64_Shdr);
+    header.e_shnum = 3;
+    header.e_shstrndx = 1;
+    std::memcpy(image.data(), &header, sizeof(header));
+    Elf64_Shdr names{};
+    names.sh_name = 1;
+    names.sh_type = SHT_STRTAB;
+    names.sh_offset = sectionNamesOffset;
+    names.sh_size = sectionNames.size();
+    std::memcpy(image.data() + sectionHeadersOffset + sizeof(Elf64_Shdr), &names, sizeof(names));
+    Elf64_Shdr arguments{};
+    arguments.sh_name = 11;
+    arguments.sh_type = SHT_NOTE;
+    arguments.sh_offset = argumentSizeOffset;
+    arguments.sh_size = sizeof(argumentSize);
+    std::memcpy(image.data() + sectionHeadersOffset + 2 * sizeof(Elf64_Shdr), &arguments, sizeof(arguments));
+    std::memcpy(image.data() + sectionNamesOffset, sectionNames.data(), sectionNames.size());
+    std::memcpy(image.data() + argumentSizeOffset, &argumentSize, sizeof(argumentSize));
+    return image;
+}
+
 struct Cleanup {
     AclsanSubscriberHandle subscriber = nullptr;
     aclrtBinHandle binary = nullptr;
@@ -219,9 +280,7 @@ struct Cleanup {
         if (subscriber != nullptr) {
             (void)aclsanUnsubscribe(subscriber);
         }
-        for (const char* name :
-             {"NPU_CHECK_DBI_ARCH", "NPU_CHECK_DBI_PROBE_SET", "NPU_CHECK_DBI_TOOLCHAIN_ROOT", "NPU_CHECK_DBI_WORK_DIR",
-              "NPU_CHECK_DBI_CACHE_DIR", "NPU_CHECK_DBI_STRICT", "NPU_CHECK_TRACE_RECORDS_PER_BLOCK"}) {
+        for (const char* name : {"NPU_CHECK_TRACE_RECORDS_PER_BLOCK"}) {
             unsetenv(name);
         }
     }
@@ -236,6 +295,8 @@ int main(int argc, char** argv)
     CHECK(RuntimeStubSetOriginFunction("aclrtBinaryGetFunction", &OriginalBinaryGetFunction) == ACL_SUCCESS);
     CHECK(RuntimeStubSetOriginFunction("aclrtMalloc", &OriginalMalloc) == ACL_SUCCESS);
     CHECK(RuntimeStubSetOriginFunction("aclrtFree", &OriginalFree) == ACL_SUCCESS);
+    CHECK(RuntimeStubSetOriginFunction("aclrtGetDevice", &OriginalGetDevice) == ACL_SUCCESS);
+    CHECK(RuntimeStubSetOriginFunction("aclrtGetDeviceInfo", &OriginalGetDeviceInfo) == ACL_SUCCESS);
     CHECK(RuntimeStubSetOriginFunction("aclrtMemcpy", &OriginalMemcpy) == ACL_SUCCESS);
     CHECK(RuntimeStubSetOriginFunction("aclrtLaunchKernelWithHostArgs", &OriginalLaunch) == ACL_SUCCESS);
     CHECK(RuntimeStubSetOriginFunction("aclrtSynchronizeStream", &OriginalSynchronize) == ACL_SUCCESS);
@@ -252,9 +313,7 @@ int main(int argc, char** argv)
         aclsanEnableCallback(1, cleanup.subscriber, ACLSAN_CB_DOMAIN_DEVICE_INSTRUCTION, ACLSAN_CBID_DEVICE_SYNC) ==
         ACLSAN_STATUS_SUCCESS);
 
-    std::ifstream input(argv[1], std::ios::binary);
-    const std::vector<uint8_t> image{std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>()};
-    CHECK(!image.empty());
+    const std::vector<uint8_t> image = MakeKernelArgumentSizeElf(16);
     aclrtBinaryLoadOptions options{};
     CHECK(aclrtBinaryLoadFromData(image.data(), image.size(), &options, &cleanup.binary) == ACL_SUCCESS);
     uint64_t arguments[2] = {1, 2};

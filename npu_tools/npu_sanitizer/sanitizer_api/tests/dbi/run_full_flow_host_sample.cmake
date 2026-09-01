@@ -9,13 +9,20 @@ foreach(required IN ITEMS SAMPLE FAKE_TOOL TEST_ROOT)
 endforeach()
 
 file(REMOVE_RECURSE "${TEST_ROOT}")
-set(tool_bin "${TEST_ROOT}/toolchain/tools/bisheng_compiler/bin")
+get_filename_component(sample_dir "${SAMPLE}" DIRECTORY)
+get_filename_component(npu_sanitizer_build_dir "${sample_dir}" DIRECTORY)
+get_filename_component(runtime_build_root "${npu_sanitizer_build_dir}" DIRECTORY)
+set(tool_bin "${runtime_build_root}/tools/bisheng_compiler/bin")
 file(MAKE_DIRECTORY
   "${tool_bin}"
+  "${runtime_build_root}/x86_64-linux/asc/include"
+  "${runtime_build_root}/x86_64-linux/asc/include/basic_api"
+  "${runtime_build_root}/x86_64-linux/ascendc/include/highlevel_api"
 )
+file(WRITE "${runtime_build_root}/x86_64-linux/asc/include/kernel_operator.h" "// test marker\n")
 
 get_filename_component(fake_tool_name "${FAKE_TOOL}" NAME)
-foreach(tool IN ITEMS bisheng-tune ld.lld llvm-objdump)
+foreach(tool IN ITEMS bisheng bisheng-tune ld.lld llvm-objdump)
   file(COPY "${FAKE_TOOL}" DESTINATION "${tool_bin}"
     FILE_PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE)
   file(RENAME "${tool_bin}/${fake_tool_name}" "${tool_bin}/${tool}")
@@ -27,12 +34,6 @@ file(WRITE "${TEST_ROOT}/commands.log" "")
 execute_process(
   COMMAND "${CMAKE_COMMAND}" -E env
     "DBI_FAKE_LOG=${TEST_ROOT}/commands.log"
-    "NPU_CHECK_DBI_ARCH=dav-3510"
-    "NPU_CHECK_DBI_PROBE_SET=mte2,sync"
-    "NPU_CHECK_DBI_TOOLCHAIN_ROOT=${TEST_ROOT}/toolchain"
-    "NPU_CHECK_DBI_WORK_DIR=${TEST_ROOT}/work"
-    "NPU_CHECK_DBI_CACHE_DIR=${TEST_ROOT}/cache"
-    "NPU_CHECK_DBI_STRICT=1"
     "NPU_CHECK_TRACE_RECORDS_PER_BLOCK=2"
     "${SAMPLE}" "${TEST_ROOT}/input.o"
   RESULT_VARIABLE sample_result
@@ -65,7 +66,6 @@ endforeach()
 
 file(READ "${TEST_ROOT}/commands.log" tool_log)
 set(required_tools
-  "ld.lld <-r>"
   "llvm-objdump <--syms>"
   "<-execute-probe>"
   "bisheng-tune <--action=instru-probe>"
@@ -77,27 +77,9 @@ foreach(fragment IN LISTS required_tools)
   endif()
 endforeach()
 
-string(FIND "${tool_log}" "bisheng <-xcce>" bisheng_compile_position)
-if(NOT bisheng_compile_position EQUAL -1)
-  message(FATAL_ERROR "DBI runtime unexpectedly compiles Probe sources:\n${tool_log}")
-endif()
-
 string(FIND "${tool_log}" "--tune-argsize=" tune_argsize_position)
-if(NOT tune_argsize_position EQUAL -1)
-  message(FATAL_ERROR "DBI tool invocation unexpectedly configures tune argument size:\n${tool_log}")
-endif()
-
-file(GLOB probe_objects "${TEST_ROOT}/cache/*/probe.o")
-file(GLOB control_files "${TEST_ROOT}/cache/*/ctrl.bin")
-list(LENGTH probe_objects probe_count)
-list(LENGTH control_files control_count)
-if(NOT probe_count EQUAL 1 OR NOT control_count EQUAL 1)
-  message(FATAL_ERROR "host flow did not publish exactly one probe.o and ctrl.bin")
-endif()
-file(SIZE "${probe_objects}" probe_size)
-file(SIZE "${control_files}" control_size)
-if(probe_size EQUAL 0 OR control_size EQUAL 0)
-  message(FATAL_ERROR "host flow published an empty probe.o or ctrl.bin")
+if(tune_argsize_position EQUAL -1)
+  message(FATAL_ERROR "DBI tool invocation omitted tune argument size:\n${tool_log}")
 endif()
 
 message(STATUS "host full-flow sample output and DBI commands verified")

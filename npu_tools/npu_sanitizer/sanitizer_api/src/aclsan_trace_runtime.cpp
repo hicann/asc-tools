@@ -20,7 +20,7 @@
 #include "internal/aclsan_log.h"
 #include "internal/aclsan_trace_buffer.h"
 #include "injection/injection_hook.h"
-#include "trace_buffer_abi.h"
+#include "dbi/trace_buffer_abi.h"
 
 #include <algorithm>
 #include <cerrno>
@@ -89,11 +89,7 @@ bool ParsePositiveUint32(const char* name, uint32_t& value)
     return true;
 }
 
-bool StrictModeEnabled()
-{
-    const char* strict = std::getenv("NPU_CHECK_DBI_STRICT");
-    return strict != nullptr && std::strcmp(strict, "1") == 0;
-}
+constexpr bool StrictModeEnabled() { return true; }
 
 bool QueryPhysicalCoreCount(uint32_t deviceId, uint32_t& physicalCoreCount)
 {

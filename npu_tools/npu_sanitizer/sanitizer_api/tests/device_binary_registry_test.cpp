@@ -11,48 +11,16 @@
 #include "device_runtime/device_binary_registry.h"
 
 #include <cassert>
-#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <string>
 #include <vector>
 
+#include <unistd.h>
+
 namespace fs = std::filesystem;
 
 namespace {
-
-class ScopedEnvironmentVariable {
-public:
-    explicit ScopedEnvironmentVariable(const char* name) : name_(name)
-    {
-        if (const char* value = std::getenv(name_); value != nullptr) {
-            wasSet_ = true;
-            value_ = value;
-        }
-    }
-
-    ~ScopedEnvironmentVariable()
-    {
-        if (wasSet_) {
-            setenv(name_, value_.c_str(), 1);
-        } else {
-            unsetenv(name_);
-        }
-    }
-
-private:
-    const char* name_;
-    bool wasSet_ = false;
-    std::string value_;
-};
-
-fs::path TestDirectory(const char* name)
-{
-    const fs::path directory = fs::temp_directory_path() / name;
-    fs::remove_all(directory);
-    fs::create_directories(directory);
-    return directory;
-}
 
 const std::vector<uint8_t>& DeviceImage()
 {
@@ -62,9 +30,9 @@ const std::vector<uint8_t>& DeviceImage()
 
 void TestResolvesActiveBinaryAndClearsItOnUnload()
 {
-    const fs::path root = TestDirectory("aclsan-device-binary-registry-symbolizer-test");
-    ScopedEnvironmentVariable workRoot("NPU_CHECK_DBI_WORK_DIR");
-    assert(setenv("NPU_CHECK_DBI_WORK_DIR", root.c_str(), 1) == 0);
+    const fs::path root = fs::temp_directory_path() /
+                          ("npu-check-" + std::to_string(static_cast<unsigned long long>(geteuid()))) / "symbolizer";
+    fs::remove_all(root);
 
     aclsan::device_runtime::DeviceBinaryRegistry registry;
     const auto& image = DeviceImage();
@@ -102,9 +70,9 @@ void TestResolvesActiveBinaryAndClearsItOnUnload()
 
 void TestExplicitFunctionOwnershipEndsAtBinaryUnload()
 {
-    const fs::path root = TestDirectory("aclsan-device-binary-registry-function-test");
-    ScopedEnvironmentVariable workRoot("NPU_CHECK_DBI_WORK_DIR");
-    assert(setenv("NPU_CHECK_DBI_WORK_DIR", root.c_str(), 1) == 0);
+    const fs::path root = fs::temp_directory_path() /
+                          ("npu-check-" + std::to_string(static_cast<unsigned long long>(geteuid()))) / "symbolizer";
+    fs::remove_all(root);
 
     aclsan::device_runtime::DeviceBinaryRegistry registry;
     const auto& image = DeviceImage();
@@ -126,9 +94,9 @@ void TestExplicitFunctionOwnershipEndsAtBinaryUnload()
 
 void TestLatestLookupRequiresAnInstrumentedLatestBinary()
 {
-    const fs::path root = TestDirectory("aclsan-device-binary-registry-latest-test");
-    ScopedEnvironmentVariable workRoot("NPU_CHECK_DBI_WORK_DIR");
-    assert(setenv("NPU_CHECK_DBI_WORK_DIR", root.c_str(), 1) == 0);
+    const fs::path root = fs::temp_directory_path() /
+                          ("npu-check-" + std::to_string(static_cast<unsigned long long>(geteuid()))) / "symbolizer";
+    fs::remove_all(root);
 
     aclsan::device_runtime::DeviceBinaryRegistry registry;
     const auto& image = DeviceImage();

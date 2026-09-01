@@ -6,8 +6,8 @@
 // INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 // See LICENSE in the root of the software repository for the full text of the License.
 
-#include "probe_source_generator.h"
-#include "embedded_probe_resources.h"
+#include "dbi/probe_source_generator.h"
+#include "dbi/embedded_probe_resources.h"
 
 #include <iostream>
 #include <string>
@@ -59,6 +59,19 @@ bool RendersControlledMte2Definition()
     return true;
 }
 
+bool RendersCanonicalVectorFlagArguments()
+{
+    const GeneratedProbeSource generated = GenerateProbeSource("dav-3510", ProbeGroup::Sync);
+    CHECK(generated.success);
+    CHECK(
+        generated.source.find("static_cast<uint64_t>(PIPE_V), static_cast<uint64_t>(dstPipe), eventId, 0UL, 0UL") !=
+        std::string::npos);
+    CHECK(
+        generated.source.find("static_cast<uint64_t>(srcPipe), static_cast<uint64_t>(PIPE_V), eventId, 0UL, 0UL") !=
+        std::string::npos);
+    return true;
+}
+
 bool RejectsUnsupportedRequests()
 {
     CHECK(!GenerateProbeSource("dav-unknown", ProbeGroup::Mte2).success);
@@ -84,7 +97,8 @@ bool EmbedsPrivateProbeHeaders()
 int main()
 {
     return aclsan::GeneratesCompleteDeterministicGroupSources() && aclsan::RendersControlledMte2Definition() &&
-                   aclsan::RejectsUnsupportedRequests() && aclsan::EmbedsPrivateProbeHeaders() ?
+                   aclsan::RendersCanonicalVectorFlagArguments() && aclsan::RejectsUnsupportedRequests() &&
+                   aclsan::EmbedsPrivateProbeHeaders() ?
                0 :
                1;
 }

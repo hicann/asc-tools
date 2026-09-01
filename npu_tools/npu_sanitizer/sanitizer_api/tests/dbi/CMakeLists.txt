@@ -11,14 +11,14 @@
 foreach(probe_arch IN LISTS NPU_CHECK_PROBE_ARCHES)
   add_test(NAME aclsan.probe_declaration_contract.${probe_arch}
     COMMAND ${CMAKE_COMMAND}
-      -DDBI_ROOT=${CMAKE_CURRENT_SOURCE_DIR}/..
+      -DDBI_ROOT=${CMAKE_CURRENT_SOURCE_DIR}/../..
       -DPROBE_ARCH=${probe_arch}
       -P ${CMAKE_CURRENT_SOURCE_DIR}/probe_declaration_contract_test.cmake)
 endforeach()
 
 add_test(NAME aclsan.no_legacy_acl_hook_registration
   COMMAND ${CMAKE_COMMAND}
-    -DDBI_ROOT=${CMAKE_CURRENT_SOURCE_DIR}/..
+    -DDBI_ROOT=${CMAKE_CURRENT_SOURCE_DIR}/../..
     -P ${CMAKE_CURRENT_SOURCE_DIR}/no_legacy_acl_hook_registration_test.cmake)
 
 if(NPU_CHECK_RUN_REAL_DBI_HARDWARE AND NOT NPU_CHECK_ENABLE_REAL_DBI_FLOW)

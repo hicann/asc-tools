@@ -9,7 +9,7 @@
  */
 
 #include "aclsan/aclsan_api.h"
-#include "binary_instrumenter.h"
+#include "dbi/binary_instrumenter.h"
 #include "device_runtime/device_symbolizer.h"
 #include "internal/aclsan_active_probe_plan.h"
 #include "internal/aclsan_dispatch.h"
@@ -22,6 +22,7 @@
 #include <array>
 #include <cstdint>
 #include <cstdlib>
+#include <dlfcn.h>
 #include <set>
 #include <shared_mutex>
 #include <utility>
@@ -259,12 +260,27 @@ aclError aclrtBinaryLoadFromDataHook(
         return result;
     }
 
-    const std::shared_lock<std::shared_mutex> planLock(aclsan::ActiveProbePlanMutex());
+    uint32_t probePlan = 0;
+    {
+        const std::shared_lock<std::shared_mutex> planLock(aclsan::ActiveProbePlanMutex());
+        probePlan = aclsan::SnapshotActiveProbePlan();
+    }
+    if (probePlan == 0) {
+        const aclError result = original(data, length, options, binHandle);
+        if (result == ACL_SUCCESS && binHandle != nullptr) {
+            aclsan::RecordTraceBinaryLoadFromData(*binHandle, false, 0, data, length);
+        }
+        return result;
+    }
     const BinaryLoadGuard guard;
     bool loadedPatched = false;
     InstrumentedBinaryLoadContext loadContext{original, options, binHandle};
+    const auto getSocName = GetOriginalRuntimeFunction<ACL_RT_API_aclrtGetSocName>("aclrtGetSocName");
+    Dl_info runtimeInfo{};
+    const char* runtimeLibrary =
+        dladdr(reinterpret_cast<const void*>(getSocName), &runtimeInfo) != 0 ? runtimeInfo.dli_fname : nullptr;
     const aclsan::RuntimeBinaryInstrumentationResult instrumentation = aclsan::InstrumentRuntimeBinary(
-        data, length, aclsan::SnapshotActiveProbePlan(), &LoadInstrumentedBinary, &loadContext);
+        data, length, probePlan, getSocName(), runtimeLibrary, &LoadInstrumentedBinary, &loadContext);
     aclError result = ACL_ERROR_FAILURE;
     if (instrumentation.status == aclsan::BinaryInstrumentationStatus::Instrumented) {
         result = instrumentation.consumerStatus;

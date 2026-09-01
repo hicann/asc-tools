@@ -10,7 +10,6 @@
 
 #include "process_runner.h"
 
-#include "dbi_environment.h"
 #include "uds_client.h"
 
 #include <array>
@@ -463,12 +462,9 @@ int RunApplication(const Options& options, const std::string& libraryPath)
         return summary.exit = 125;
     }
 
-    // --work-dir 未指定时退回临时会话目录：临时目录由 CLI 创建也由 CLI 删除，用户指定
-    // 的目录只创建、绝不删除。probe 缓存跟随工作目录，指定了 --work-dir 才真的能跨次复用。
-    DbiSettings dbi;
-    dbi.workDir = options.workDir.empty() ? sessionDirectory : options.workDir;
-    dbi.probeCacheDir = dbi.workDir + "/probe-cache";
-    if (!EnsureDirectory(dbi.workDir, error) || !EnsureDirectory(dbi.probeCacheDir, error)) {
+    // --work-dir 只控制 CLI 会话日志。DBI 使用自己管理的私有 runtime/cache 目录。
+    const std::string workDir = options.workDir.empty() ? sessionDirectory : options.workDir;
+    if (!EnsureDirectory(workDir, error)) {
         std::cerr << "npu_check: " << error << '\n';
         return summary.exit = 125;
     }
@@ -551,12 +547,7 @@ int RunApplication(const Options& options, const std::string& libraryPath)
         (void)setenv(ipc::kHandshakeTimeoutEnv, timeoutText.c_str(), 1);
         // 工作目录经环境变量下发：Configure 改用注册表编码后只承载工具与子选项，
         // 路径这类与协议无关的部署信息不再占线路。
-        (void)setenv(ipc::kWorkDirEnv, dbi.workDir.c_str(), 1);
-        std::string environmentError;
-        if (!ApplyEnvironment(BuildDbiEnvironment(dbi), environmentError)) {
-            dprintf(STDERR_FILENO, "npu_check: %s\n", environmentError.c_str());
-            _exit(126);
-        }
+        (void)setenv(ipc::kWorkDirEnv, workDir.c_str(), 1);
         auto argv = BuildArgv(options.application);
         execvp(argv[0], argv.data());
         dprintf(STDERR_FILENO, "npu_check: execvp failed: %s\n", std::strerror(errno));

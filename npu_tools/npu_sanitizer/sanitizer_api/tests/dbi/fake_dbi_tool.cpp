@@ -10,6 +10,9 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <iterator>
+#include <regex>
+#include <set>
 #include <string>
 
 namespace {
@@ -43,7 +46,18 @@ int main(int argc, char** argv)
 
     if (tool == "llvm-objdump") {
         const std::string input = argc > 1 ? argv[argc - 1] : "";
-        if (EndsWith(input, "probe.o")) {
+        if (EndsWith(input, "group.o")) {
+            std::ifstream artifact(input);
+            const std::string content{std::istreambuf_iterator<char>(artifact), std::istreambuf_iterator<char>()};
+            const std::regex symbolPattern("__sanitizer_report_[A-Za-z0-9_]+");
+            std::set<std::string> symbols;
+            for (std::sregex_iterator it(content.begin(), content.end(), symbolPattern), end; it != end; ++it) {
+                symbols.insert(it->str());
+            }
+            for (const std::string& symbol : symbols) {
+                std::cout << "00000000 w F .text.probe 00000010 " << symbol << '\n';
+            }
+        } else if (EndsWith(input, "probe.o")) {
             std::cout << "00000000 w F .text.probe 00000010 __sanitizer_report_probe\n";
         } else {
             std::cout << "00000000 g F .text.kernel 00000010 FullFlowKernel\n";
@@ -52,10 +66,13 @@ int main(int argc, char** argv)
     }
 
     std::string output;
+    std::string source;
     for (int index = 1; index < argc; ++index) {
         const std::string argument = argv[index];
         if (argument == "-o" && index + 1 < argc) {
             output = argv[++index];
+        } else if (argument == "-c" && index + 1 < argc) {
+            source = argv[++index];
         } else if (argument.rfind("-o=", 0) == 0) {
             output = argument.substr(3);
         }
@@ -69,6 +86,11 @@ int main(int argc, char** argv)
         return 2;
     }
     std::ofstream artifact(output, std::ios::binary | std::ios::trunc);
-    artifact << "fake-" << tool << '\n';
+    if (tool == "bisheng" && !source.empty()) {
+        std::ifstream generated(source, std::ios::binary);
+        artifact << generated.rdbuf();
+    } else {
+        artifact << "fake-" << tool << '\n';
+    }
     return artifact.good() ? 0 : 2;
 }

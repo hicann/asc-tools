@@ -12,7 +12,7 @@
 #include "aclsan/aclsan_cbdata_device.h"
 #include "injection/injection_hook.h"
 #include "injection/runtime_stub_api.h"
-#include "trace_buffer_abi.h"
+#include "dbi/trace_buffer_abi.h"
 
 #include <cstdio>
 #include <cstdlib>

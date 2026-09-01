@@ -9,7 +9,6 @@
 #pragma once
 
 #include <cstdint>
-#include <map>
 #include <string>
 #include <vector>
 
@@ -63,7 +62,8 @@ std::vector<ProbeGroup> NormalizeProbeGroups(const std::vector<ProbeGroup>& grou
 std::vector<ProbeGroup> ProbeGroupsFromMask(uint32_t mask);
 std::string ProbeGroupName(ProbeGroup group);
 std::string ValidateRequest(const DbiRequest& request);
-ToolchainPaths ResolveToolchain(const std::string& explicitRoot, const std::map<std::string, std::string>& environment);
+ToolchainPaths ResolveToolchain(const std::string& cannRoot);
+std::string CannRootFromRuntimeLibrary(const std::string& runtimeLibrary);
 std::string MakeCacheKey(
     const std::string& arch, const std::vector<ProbeGroup>& groups, const std::string& objectIdentity);
 DbiResult RunDbiPipeline(const DbiRequest& request);

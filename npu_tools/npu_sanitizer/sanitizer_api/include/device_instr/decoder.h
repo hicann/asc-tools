@@ -14,7 +14,7 @@
 #include "device_instr/common/device_instr_struct_dma.h"
 #include "device_instr/common/device_instr_struct_register.h"
 #include "device_instr/common/device_instr_struct_sync.h"
-#include "trace_buffer_abi.h"
+#include "dbi/trace_buffer_abi.h"
 
 #include <optional>
 #include <variant>

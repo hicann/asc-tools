@@ -6,12 +6,12 @@
 // INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 // See LICENSE in the root of the software repository for the full text of the License.
 
-#include "dbi_pipeline.h"
+#include "dbi/dbi_pipeline.h"
 
-#include "ctrlbin_generator.h"
-#include "embedded_probe_resources.h"
-#include "probe_source_generator.h"
-#include "tool_runner.h"
+#include "dbi/ctrlbin_generator.h"
+#include "dbi/embedded_probe_resources.h"
+#include "dbi/probe_source_generator.h"
+#include "dbi/tool_runner.h"
 
 #include <algorithm>
 #include <atomic>
@@ -110,16 +110,6 @@ private:
     std::filesystem::path path_;
     bool released_ = false;
 };
-
-std::string EnvironmentValue(const std::map<std::string, std::string>& environment, const char* name)
-{
-    const auto it = environment.find(name);
-    if (it != environment.end()) {
-        return it->second;
-    }
-    const char* value = std::getenv(name);
-    return value == nullptr ? std::string{} : std::string(value);
-}
 
 std::string FindInDirectory(const std::filesystem::path& directory, const char* name)
 {
@@ -633,49 +623,47 @@ std::string ValidateRequest(const DbiRequest& request)
     return {};
 }
 
-ToolchainPaths ResolveToolchain(const std::string& explicitRoot, const std::map<std::string, std::string>& environment)
+ToolchainPaths ResolveToolchain(const std::string& cannRoot)
 {
-    std::vector<std::filesystem::path> directories;
-    if (!explicitRoot.empty()) {
-        const std::filesystem::path root(explicitRoot);
-        directories.push_back(root / "tools/bisheng_compiler/bin");
-        directories.push_back(root / "bin");
-        directories.push_back(root);
+    if (cannRoot.empty()) {
+        return {};
     }
-    for (const char* variable : {"ASCEND_HOME_PATH", "ASCEND_CANN_PACKAGE_PATH"}) {
-        const std::string root = EnvironmentValue(environment, variable);
-        if (!root.empty()) {
-            directories.push_back(std::filesystem::path(root) / "tools/bisheng_compiler/bin");
-        }
+    const auto directory = std::filesystem::path(cannRoot) / "tools/bisheng_compiler/bin";
+    return {
+        FindInDirectory(directory, kToolNames[0]), FindInDirectory(directory, kToolNames[1]),
+        FindInDirectory(directory, kToolNames[2]), FindInDirectory(directory, kToolNames[3])};
+}
+
+std::string CannRootFromRuntimeLibrary(const std::string& runtimeLibrary)
+{
+    if (runtimeLibrary.empty()) {
+        return {};
     }
-    const std::string path = EnvironmentValue(environment, "PATH");
-    std::size_t begin = 0;
-    while (begin <= path.size()) {
-        const std::size_t end = path.find(':', begin);
-        const std::string item = path.substr(begin, end == std::string::npos ? end : end - begin);
-        if (!item.empty()) {
-            directories.emplace_back(item);
+    std::error_code error;
+    const auto library = std::filesystem::weakly_canonical(runtimeLibrary, error);
+    if (error || !std::filesystem::is_regular_file(library, error)) {
+        return {};
+    }
+    auto candidate = library.parent_path();
+    for (int depth = 0; depth < 5 && !candidate.empty(); ++depth) {
+        const auto tools = candidate / "tools/bisheng_compiler/bin";
+        bool complete = true;
+        for (const char* name : kToolNames) {
+            if (!std::filesystem::is_regular_file(tools / name, error)) {
+                complete = false;
+                break;
+            }
         }
-        if (end == std::string::npos) {
+        if (complete) {
+            return candidate.string();
+        }
+        const auto parent = candidate.parent_path();
+        if (parent == candidate) {
             break;
         }
-        begin = end + 1;
+        candidate = parent;
     }
-
-    ToolchainPaths fallback;
-    for (const auto& directory : directories) {
-        ToolchainPaths candidate{
-            FindInDirectory(directory, kToolNames[0]), FindInDirectory(directory, kToolNames[1]),
-            FindInDirectory(directory, kToolNames[2]), FindInDirectory(directory, kToolNames[3])};
-        if (candidate.Complete()) {
-            return candidate;
-        }
-        if (fallback.bisheng.empty() && fallback.bishengTune.empty() && fallback.ldLld.empty() &&
-            fallback.llvmObjdump.empty()) {
-            fallback = std::move(candidate);
-        }
-    }
-    return fallback;
+    return {};
 }
 
 std::string MakeCacheKey(
@@ -710,7 +698,7 @@ DbiResult RunDbiPipeline(const DbiRequest& request)
     }
 
     // Probe 源码在 load hook 中生成，因此运行时需要同一 CANN root 下的完整 Bisheng 工具链。
-    const ToolchainPaths tools = ResolveToolchain(request.toolchainRoot, {});
+    const ToolchainPaths tools = ResolveToolchain(request.toolchainRoot);
     if (!tools.Complete()) {
         result.stage = "toolchain";
         result.diagnostic = "DBI runtime toolchain is incomplete: bisheng=" + tools.bisheng +

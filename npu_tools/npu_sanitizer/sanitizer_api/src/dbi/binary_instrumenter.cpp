@@ -5,7 +5,7 @@
 // THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
 // INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 // See LICENSE in the root of the software repository for the full text of the License.
-#include "binary_instrumenter.h"
+#include "dbi/binary_instrumenter.h"
 
 #include <unistd.h>
 
@@ -21,16 +21,29 @@
 #include <iterator>
 #include <limits>
 #include <sstream>
+#include <sys/stat.h>
 
 namespace aclsan {
 namespace {
 
 std::atomic<uint64_t> g_requestId{0};
 
-std::string Env(const char* name)
+bool EnsurePrivateRuntimeDirectory(const std::filesystem::path& path, std::string& diagnostic)
 {
-    const char* value = std::getenv(name);
-    return value == nullptr ? std::string{} : std::string(value);
+    std::error_code error;
+    std::filesystem::create_directories(path, error);
+    const auto status = std::filesystem::symlink_status(path, error);
+    struct stat metadata {};
+    if (error || std::filesystem::is_symlink(status) || !std::filesystem::is_directory(status) ||
+        lstat(path.c_str(), &metadata) != 0 || metadata.st_uid != geteuid()) {
+        diagnostic = "DBI runtime directory is not a private owned directory: " + path.string();
+        return false;
+    }
+    if (chmod(path.c_str(), 0700) != 0) {
+        diagnostic = "cannot restrict DBI runtime directory: " + path.string();
+        return false;
+    }
+    return true;
 }
 
 std::string RequestDirectory(const BinaryInstrumentationConfig& config)
@@ -162,42 +175,37 @@ void ReportInstrumentationFailure(const BinaryInstrumentationResult& result)
 
 } // namespace
 
-BinaryInstrumentationConfig DefaultBinaryInstrumentationConfig()
+bool BuildRuntimeInstrumentationConfig(
+    const char* socName, const char* runtimeLibrary, uint32_t probeGroupMask, BinaryInstrumentationConfig& config,
+    std::string& diagnostic)
 {
-    BinaryInstrumentationConfig config{};
-    config.arch = Env("NPU_CHECK_DBI_ARCH");
-    config.toolchainRoot = Env("NPU_CHECK_DBI_TOOLCHAIN_ROOT");
-    config.workDirectory = Env("NPU_CHECK_DBI_WORK_DIR");
-    config.cacheDirectory = Env("NPU_CHECK_DBI_CACHE_DIR");
-    config.strict = Env("NPU_CHECK_DBI_STRICT") == "1";
-    config.keepTemp = Env("NPU_CHECK_DBI_KEEP_TEMP") == "1";
-    const std::string groups = Env("NPU_CHECK_DBI_PROBE_SET");
-    if (!groups.empty()) {
-        std::istringstream input(groups);
-        for (std::string group; std::getline(input, group, ',');) {
-            if (group == "mte1")
-                config.probeGroups.push_back(ProbeGroup::Mte1);
-            else if (group == "mte2")
-                config.probeGroups.push_back(ProbeGroup::Mte2);
-            else if (group == "mte3")
-                config.probeGroups.push_back(ProbeGroup::Mte3);
-            else if (group == "fixpipe")
-                config.probeGroups.push_back(ProbeGroup::Fixpipe);
-            else if (group == "scalar")
-                config.probeGroups.push_back(ProbeGroup::Scalar);
-            else if (group == "sync")
-                config.probeGroups.push_back(ProbeGroup::Sync);
-        }
+    config = {};
+    if (socName == nullptr || std::strcmp(socName, "Ascend950PR_9599") != 0) {
+        diagnostic = "unsupported Runtime SoC";
+        return false;
     }
-    config.probeGroups = NormalizeProbeGroups(config.probeGroups);
-    return config;
-}
-
-BinaryInstrumentationConfig DefaultBinaryInstrumentationConfig(uint32_t probeGroupMask)
-{
-    BinaryInstrumentationConfig config = DefaultBinaryInstrumentationConfig();
+    config.arch = "dav-3510";
+    config.toolchainRoot = CannRootFromRuntimeLibrary(runtimeLibrary == nullptr ? "" : runtimeLibrary);
+    if (config.toolchainRoot.empty()) {
+        diagnostic = "cannot derive CANN root from loaded Runtime library";
+        return false;
+    }
     config.probeGroups = ProbeGroupsFromMask(probeGroupMask);
-    return config;
+    if (config.probeGroups.empty()) {
+        diagnostic = "callback selection contains no Probe group";
+        return false;
+    }
+    const std::string root = "/tmp/npu-check-" + std::to_string(static_cast<unsigned long long>(geteuid()));
+    config.workDirectory = root + "/requests";
+    config.cacheDirectory = root + "/cache";
+    if (!EnsurePrivateRuntimeDirectory(root, diagnostic) ||
+        !EnsurePrivateRuntimeDirectory(config.workDirectory, diagnostic) ||
+        !EnsurePrivateRuntimeDirectory(config.cacheDirectory, diagnostic)) {
+        return false;
+    }
+    config.strict = true;
+    config.keepTemp = false;
+    return true;
 }
 
 BinaryInstrumentationResult InstrumentBinary(
@@ -264,13 +272,22 @@ BinaryInstrumentationResult InstrumentBinary(const BinaryInstrumentationConfig& 
 }
 
 RuntimeBinaryInstrumentationResult InstrumentRuntimeBinary(
-    const void* data, size_t length, uint32_t probeGroupMask, InstrumentedBinaryConsumer consumer, void* consumerData,
-    DbiPipelineRunner runner, void* runnerData) noexcept
+    const void* data, size_t length, uint32_t probeGroupMask, const char* socName, const char* runtimeLibrary,
+    InstrumentedBinaryConsumer consumer, void* consumerData, DbiPipelineRunner runner, void* runnerData) noexcept
 {
-    const char* strictText = std::getenv("NPU_CHECK_DBI_STRICT");
-    const uint32_t strict = strictText != nullptr && std::strcmp(strictText, "1") == 0 ? 1U : 0U;
+    constexpr uint32_t strict = 1U;
     try {
-        const BinaryInstrumentationConfig config = DefaultBinaryInstrumentationConfig(probeGroupMask);
+        if (probeGroupMask == 0) {
+            return {BinaryInstrumentationStatus::Skipped, strict, 0, 0};
+        }
+        BinaryInstrumentationConfig config;
+        std::string diagnostic;
+        if (!BuildRuntimeInstrumentationConfig(socName, runtimeLibrary, probeGroupMask, config, diagnostic)) {
+            const BinaryInstrumentationResult failure{
+                BinaryInstrumentationStatus::Failed, {}, "runtime-context", diagnostic, 0};
+            ReportInstrumentationFailure(failure);
+            return {failure.status, strict, 0, 0};
+        }
         const BinaryInstrumentationResult result = InstrumentBinary(config, data, length, runner, runnerData);
         if (result.status == BinaryInstrumentationStatus::Failed) {
             ReportInstrumentationFailure(result);
@@ -301,10 +318,11 @@ RuntimeBinaryInstrumentationResult InstrumentRuntimeBinary(
 }
 
 RuntimeBinaryInstrumentationResult InstrumentRuntimeBinary(
-    const void* data, size_t length, uint32_t probeGroupMask, InstrumentedBinaryConsumer consumer,
-    void* consumerData) noexcept
+    const void* data, size_t length, uint32_t probeGroupMask, const char* socName, const char* runtimeLibrary,
+    InstrumentedBinaryConsumer consumer, void* consumerData) noexcept
 {
-    return InstrumentRuntimeBinary(data, length, probeGroupMask, consumer, consumerData, &RunPipeline, nullptr);
+    return InstrumentRuntimeBinary(
+        data, length, probeGroupMask, socName, runtimeLibrary, consumer, consumerData, &RunPipeline, nullptr);
 }
 
 } // namespace aclsan

@@ -13,9 +13,7 @@
 #include "injection/runtime_stub_api.h"
 
 #include <cstdio>
-#include <cstdlib>
 #include <cstring>
-#include <string>
 
 namespace {
 
@@ -29,43 +27,9 @@ namespace {
 
 int g_originalDataCalls = 0;
 int g_sentinelDataCalls = 0;
-bool g_recurseDataLoad = false;
 const void* g_forwardedData = nullptr;
 size_t g_forwardedLength = 0;
 const aclrtBinaryLoadOptions* g_forwardedDataOptions = nullptr;
-
-class ScopedEnvironmentVariable {
-public:
-    explicit ScopedEnvironmentVariable(const char* name) : name_(name)
-    {
-        const char* value = std::getenv(name_);
-        if (value != nullptr) {
-            wasSet_ = true;
-            value_ = value;
-        }
-    }
-
-    ~ScopedEnvironmentVariable()
-    {
-        if (wasSet_) {
-            setenv(name_, value_.c_str(), 1);
-        } else {
-            unsetenv(name_);
-        }
-    }
-
-    ScopedEnvironmentVariable(const ScopedEnvironmentVariable&) = delete;
-    ScopedEnvironmentVariable& operator=(const ScopedEnvironmentVariable&) = delete;
-
-    int Set(const char* value) const { return setenv(name_, value, 1); }
-
-    int Unset() const { return unsetenv(name_); }
-
-private:
-    const char* name_;
-    bool wasSet_ = false;
-    std::string value_;
-};
 
 aclError OriginalDataLoad(
     const void* data, size_t length, const aclrtBinaryLoadOptions* options, aclrtBinHandle* binHandle)
@@ -76,10 +40,6 @@ aclError OriginalDataLoad(
     g_forwardedDataOptions = options;
     if (binHandle != nullptr) {
         *binHandle = reinterpret_cast<aclrtBinHandle>(0x51);
-    }
-    if (g_recurseDataLoad) {
-        g_recurseDataLoad = false;
-        return aclrtBinaryLoadFromData(data, length, options, binHandle);
     }
     return 81;
 }
@@ -96,23 +56,6 @@ void Callback(void*, AclsanCallbackDomain, AclsanCallbackId, const void*) {}
 
 int main()
 {
-    ScopedEnvironmentVariable dbiArch("NPU_CHECK_DBI_ARCH");
-    ScopedEnvironmentVariable dbiStrict("NPU_CHECK_DBI_STRICT");
-    ScopedEnvironmentVariable probeObject("ACLSAN_PROBE_OBJECT");
-    ScopedEnvironmentVariable probeCtrlBinary("ACLSAN_PROBE_CTRL_BINARY");
-    ScopedEnvironmentVariable probeSymbolOrdering("ACLSAN_PROBE_SYMBOL_ORDERING");
-    ScopedEnvironmentVariable probeWorkRoot("ACLSAN_PROBE_WORK_ROOT");
-    ScopedEnvironmentVariable probeArgumentBytes("ACLSAN_PROBE_ARGUMENT_BYTES");
-
-    CHECK(dbiArch.Unset() == 0);
-    CHECK(dbiStrict.Unset() == 0);
-    CHECK(dbiSourceRoot.Set("/missing/dbi-source") == 0);
-    CHECK(probeObject.Set("/missing/probe.o") == 0);
-    CHECK(probeCtrlBinary.Set("/missing/ctrl.bin") == 0);
-    CHECK(probeSymbolOrdering.Set("/missing/symbol_ordering.txt") == 0);
-    CHECK(probeWorkRoot.Set("/missing/work") == 0);
-    CHECK(probeArgumentBytes.Set("invalid") == 0);
-
     CHECK(RuntimeStubSetOriginFunction("aclrtBinaryLoadFromData", &OriginalDataLoad) == ACL_SUCCESS);
 
     AclsanSubscriberHandle subscriber = nullptr;
@@ -125,13 +68,9 @@ int main()
     const unsigned char binary[] = {0x7f, 'E', 'L', 'F'};
     aclrtBinaryLoadOptions dataOptions{};
     aclrtBinHandle dataHandle = nullptr;
-    CHECK(aclrtBinaryLoadFromData(binary, sizeof(binary), &dataOptions, &dataHandle) == 81);
+    CHECK(aclrtBinaryLoadFromData(binary, sizeof(binary), &dataOptions, &dataHandle) == ACL_ERROR_FAILURE);
     CHECK(g_sentinelDataCalls == 0);
-    CHECK(g_originalDataCalls == 1);
-    CHECK(g_forwardedData == binary);
-    CHECK(g_forwardedLength == sizeof(binary));
-    CHECK(g_forwardedDataOptions == &dataOptions);
-    CHECK(dataHandle == reinterpret_cast<aclrtBinHandle>(0x51));
+    CHECK(g_originalDataCalls == 0);
 
     CHECK(
         aclsanEnableCallback(0, subscriber, ACLSAN_CB_DOMAIN_DEVICE_INSTRUCTION, ACLSAN_CBID_DEVICE_MEMORY_ACCESS) ==
@@ -143,23 +82,16 @@ int main()
     CHECK(
         aclsanEnableCallback(1, subscriber, ACLSAN_CB_DOMAIN_DEVICE_INSTRUCTION, ACLSAN_CBID_DEVICE_SYNC) ==
         ACLSAN_STATUS_SUCCESS);
-    CHECK(aclrtBinaryLoadFromData(binary, sizeof(binary), &dataOptions, &dataHandle) == 81);
-
-    CHECK(dbiArch.Set("dav-3510") == 0);
-    const int dataCallsBeforeRecursion = g_originalDataCalls;
-    g_recurseDataLoad = true;
-    CHECK(aclrtBinaryLoadFromData(binary, sizeof(binary), &dataOptions, &dataHandle) == 81);
-    CHECK(g_originalDataCalls == dataCallsBeforeRecursion + 2);
-
-    CHECK(dbiStrict.Set("1") == 0);
-    const int dataCallsBeforeStrictFailure = g_originalDataCalls;
     CHECK(aclrtBinaryLoadFromData(binary, sizeof(binary), &dataOptions, &dataHandle) == ACL_ERROR_FAILURE);
-    CHECK(g_originalDataCalls == dataCallsBeforeStrictFailure);
-    CHECK(dbiStrict.Unset() == 0);
+    CHECK(g_originalDataCalls == 0);
 
     CHECK(aclsanUnsubscribe(subscriber) == ACLSAN_STATUS_SUCCESS);
     CHECK(aclrtBinaryLoadFromData(binary, sizeof(binary), &dataOptions, &dataHandle) == 81);
     CHECK(g_sentinelDataCalls == 1);
-    CHECK(g_originalDataCalls == 5);
+    CHECK(g_originalDataCalls == 1);
+    CHECK(g_forwardedData == binary);
+    CHECK(g_forwardedLength == sizeof(binary));
+    CHECK(g_forwardedDataOptions == &dataOptions);
+    CHECK(dataHandle == reinterpret_cast<aclrtBinHandle>(0x51));
     return 0;
 }

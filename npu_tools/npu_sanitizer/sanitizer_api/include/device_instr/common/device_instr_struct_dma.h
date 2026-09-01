@@ -12,7 +12,7 @@
 #define NPU_SANITIZER_SANITIZER_API_DEVICE_INSTR_COMMON_DEVICE_INSTR_STRUCT_DMA_H_
 
 #include "device_instr/common/device_instr_types.h"
-#include "trace_buffer_abi.h"
+#include "dbi/trace_buffer_abi.h"
 
 #include <array>
 #include <cstdint>
