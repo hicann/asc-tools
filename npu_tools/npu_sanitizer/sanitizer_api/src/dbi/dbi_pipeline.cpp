@@ -142,7 +142,7 @@ bool IsExecutableFile(const std::string& path)
         return false;
     }
     struct stat metadata {};
-    if (lstat(path.c_str(), &metadata) != 0 || !S_ISREG(metadata.st_mode) ||
+    if (stat(path.c_str(), &metadata) != 0 || !S_ISREG(metadata.st_mode) ||
         (metadata.st_uid != 0 && metadata.st_uid != geteuid()) || (metadata.st_mode & 0022) != 0) {
         return false;
     }

@@ -90,6 +90,22 @@ TEST(DbiPipelineTest, ResolvesToolchainFromExplicitRoot)
     std::filesystem::remove_all(root);
 }
 
+TEST(DbiPipelineTest, AcceptsTrustedToolchainSymlink)
+{
+    const std::filesystem::path root = std::filesystem::temp_directory_path() / "dbi_toolchain_symlink_test";
+    std::filesystem::remove_all(root);
+    const auto bin = root / "tools/bisheng_compiler/bin";
+    std::filesystem::create_directories(bin);
+    for (const char* name : {"bisheng", "bisheng-tune", "llvm-objdump", "lld"}) {
+        std::ofstream(bin / name).put('\n');
+        ASSERT_EQ(chmod((bin / name).c_str(), 0755), 0);
+    }
+    std::filesystem::create_symlink("lld", bin / "ld.lld");
+
+    EXPECT_TRUE(ResolveToolchain(root.string()).Complete());
+    std::filesystem::remove_all(root);
+}
+
 TEST(DbiPipelineTest, DoesNotMixToolsFromDifferentRoots)
 {
     const std::filesystem::path root = std::filesystem::temp_directory_path() / "dbi_toolchain_mixed_test";
