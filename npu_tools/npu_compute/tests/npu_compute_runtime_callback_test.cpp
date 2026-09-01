@@ -38,9 +38,10 @@ namespace {
 constexpr char kSections[] = "PipeUtilization,Memory";
 constexpr char kHardwareInfoFile[] = "HardwareInfo.jsonl";
 constexpr char kDeviceCountFile[] = "device_count.calls";
-constexpr std::array<aclptiCallbackId, 2> kHardwareInfoTriggerCbids = {
+constexpr std::array<aclptiCallbackId, 3> kHardwareInfoTriggerCbids = {
     ACLPTI_RUNTIME_CBID_aclrtLaunchKernel,
     ACLPTI_RUNTIME_CBID_aclrtLaunchKernelWithHostArgs,
+    ACLPTI_RUNTIME_CBID_aclrtLaunchSIMTKernelWithHostArgs,
 };
 using namespace std::chrono_literals;
 
@@ -174,6 +175,14 @@ bool RunSuccessChild(const std::string& scenario, const std::filesystem::path& o
         CHECK(CountLines(output / kHardwareInfoFile) == 5);
         return true;
     }
+    if (scenario == "success-simt-host-args") {
+        CHECK(npu_compute::test::InvokeAclPtiCallback(
+            ACLPTI_CB_DOMAIN_RUNTIME_API, ACLPTI_RUNTIME_CBID_aclrtLaunchSIMTKernelWithHostArgs, ACLPTI_API_EXIT,
+            ACL_SUCCESS, nullptr));
+        CHECK(std::filesystem::is_regular_file(output / kHardwareInfoFile));
+        CHECK(CountLines(output / kHardwareInfoFile) == 5);
+        return true;
+    }
     if (scenario == "success-repeated") {
         CHECK(npu_compute::test::InvokeAclPtiCallback(
             ACLPTI_CB_DOMAIN_RUNTIME_API, ACLPTI_RUNTIME_CBID_aclrtLaunchKernel, ACLPTI_API_EXIT, ACL_SUCCESS,
@@ -182,6 +191,9 @@ bool RunSuccessChild(const std::string& scenario, const std::filesystem::path& o
         CHECK(CountLines(output / kHardwareInfoFile) == 5);
         CHECK(npu_compute::test::InvokeAclPtiCallback(
             ACLPTI_CB_DOMAIN_RUNTIME_API, ACLPTI_RUNTIME_CBID_aclrtLaunchKernelWithHostArgs, ACLPTI_API_EXIT,
+            ACL_SUCCESS, nullptr));
+        CHECK(npu_compute::test::InvokeAclPtiCallback(
+            ACLPTI_CB_DOMAIN_RUNTIME_API, ACLPTI_RUNTIME_CBID_aclrtLaunchSIMTKernelWithHostArgs, ACLPTI_API_EXIT,
             ACL_SUCCESS, nullptr));
         CHECK(npu_compute::test::InvokeAclPtiCallback(
             ACLPTI_CB_DOMAIN_RUNTIME_API, ACLPTI_RUNTIME_CBID_aclrtLaunchKernel, ACLPTI_API_EXIT, ACL_SUCCESS,
@@ -312,6 +324,12 @@ bool RunIgnoredEventChild(const std::string& scenario, const std::filesystem::pa
             ACL_ERROR_INVALID_PARAM, nullptr));
         return true;
     }
+    if (scenario == "ignore-simt-failed-exit") {
+        CHECK(npu_compute::test::InvokeAclPtiCallback(
+            ACLPTI_CB_DOMAIN_RUNTIME_API, ACLPTI_RUNTIME_CBID_aclrtLaunchSIMTKernelWithHostArgs, ACLPTI_API_EXIT,
+            ACL_ERROR_INVALID_PARAM, nullptr));
+        return true;
+    }
     if (scenario == "ignore-set-device") {
         InvokeSuccessfulExitDirectly(ACLPTI_RUNTIME_CBID_aclrtSetDevice);
         return true;
@@ -429,6 +447,9 @@ bool RunChildScenario(const std::string& scenario, const std::filesystem::path& 
     if (scenario == "enable-failure-host-args") {
         return RunEnableFailureChild(output, ACLPTI_RUNTIME_CBID_aclrtLaunchKernelWithHostArgs);
     }
+    if (scenario == "enable-failure-simt-host-args") {
+        return RunEnableFailureChild(output, ACLPTI_RUNTIME_CBID_aclrtLaunchSIMTKernelWithHostArgs);
+    }
     if (scenario == "config-failure") {
         return RunConfigFailureChild(output);
     }
@@ -472,9 +493,10 @@ std::size_t CountLines(const std::filesystem::path& path)
 
 bool TestSuccessAndNormalExit(const char* executable)
 {
-    constexpr std::array<const char*, 3> scenarios = {
+    constexpr std::array<const char*, 4> scenarios = {
         "success-launch",
         "success-host-args",
+        "success-simt-host-args",
         "success-repeated",
     };
     for (const char* scenario : scenarios) {
@@ -490,9 +512,9 @@ bool TestSuccessAndNormalExit(const char* executable)
 
 bool TestIgnoredEvents(const char* executable)
 {
-    constexpr std::array<const char*, 7> scenarios = {
-        "ignore-enter",     "ignore-failed-exit", "ignore-set-device",          "ignore-malloc",
-        "ignore-nontarget", "ignore-domain",      "ignore-mismatched-metadata",
+    constexpr std::array<const char*, 8> scenarios = {
+        "ignore-enter",  "ignore-failed-exit", "ignore-simt-failed-exit", "ignore-set-device",
+        "ignore-malloc", "ignore-nontarget",   "ignore-domain",           "ignore-mismatched-metadata",
     };
     for (const char* scenario : scenarios) {
         TempDirectory temporary;
@@ -506,10 +528,8 @@ bool TestIgnoredEvents(const char* executable)
 
 bool TestInitializationFailures(const char* executable)
 {
-    constexpr std::array<const char*, 4> scenarios = {
-        "subscribe-failure",
-        "enable-failure-launch",
-        "enable-failure-host-args",
+    constexpr std::array<const char*, 5> scenarios = {
+        "subscribe-failure", "enable-failure-launch", "enable-failure-host-args", "enable-failure-simt-host-args",
         "config-failure",
     };
     for (const char* scenario : scenarios) {

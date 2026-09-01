@@ -31,9 +31,10 @@
 namespace npu_compute {
 namespace {
 
-constexpr std::array<aclptiCallbackId, 2> kHardwareInfoTriggerCallbackIds = {
+constexpr std::array<aclptiCallbackId, 3> kHardwareInfoTriggerCallbackIds = {
     ACLPTI_RUNTIME_CBID_aclrtLaunchKernel,
     ACLPTI_RUNTIME_CBID_aclrtLaunchKernelWithHostArgs,
+    ACLPTI_RUNTIME_CBID_aclrtLaunchSIMTKernelWithHostArgs,
 };
 constexpr double kMsopprofA5FallbackFrequencyMhz = 1650.0;
 

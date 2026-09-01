@@ -33,7 +33,7 @@ struct CliConfig {
     std::vector<std::string> program_arguments;
 };
 
-bool ParseCli(int argc, char** argv, CliConfig* config, std::string* error);
+bool ParseCli(int argc, char** argv, CliConfig* config, std::vector<std::string>* errors);
 
 const char* ReplayModeName(ReplayMode mode);
 

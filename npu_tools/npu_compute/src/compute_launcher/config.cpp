@@ -9,258 +9,217 @@
  */
 #include "config.h"
 
-#include <getopt.h>
-
 #include <algorithm>
 #include <array>
 #include <cstdio>
-#include <cstring>
 #include <string>
 
 namespace npu_compute::compute_launcher {
 namespace {
 
-constexpr int kOptionSection = 1000;
-constexpr int kOptionListSections = 1001;
-constexpr int kOptionReplayMode = 1002;
-
 constexpr std::array<const char*, 5> kSupportedSections = {
     "PipeUtilization", "Memory", "MemoryL0", "MemoryUB", "L2Cache",
 };
 
-constexpr option kLongOptions[] = {
-    {"help", no_argument, nullptr, 'h'},
-    {"section", required_argument, nullptr, kOptionSection},
-    {"list-sections", no_argument, nullptr, kOptionListSections},
-    {"replay-mode", required_argument, nullptr, kOptionReplayMode},
-    {"import", required_argument, nullptr, 'i'},
-    {"export", required_argument, nullptr, 'o'},
-    {nullptr, 0, nullptr, 0},
-};
-
-bool Fail(const std::string& message, std::string* error)
-{
-    if (error != nullptr) {
-        *error = message;
-    }
-    return false;
-}
+void AddError(const std::string& message, std::vector<std::string>* errors) { errors->push_back(message); }
 
 bool IsSupportedSection(const std::string& section)
 {
     return std::find(kSupportedSections.begin(), kSupportedSections.end(), section) != kSupportedSections.end();
 }
 
-bool IsExactLongOption(const char* argument)
-{
-    if (argument == nullptr || argument[0] != '-' || argument[1] != '-' || argument[2] == '\0') {
-        return true;
-    }
-    if (std::strcmp(argument, "--") == 0) {
-        return true;
-    }
+bool IsHelpOption(const std::string& argument) { return argument == "-h" || argument == "--help"; }
 
-    const char* name = argument + 2;
-    const char* separator = std::strchr(name, '=');
-    const std::size_t name_length =
-        separator == nullptr ? std::strlen(name) : static_cast<std::size_t>(separator - name);
-    for (const option& candidate : kLongOptions) {
-        if (candidate.name == nullptr) {
-            break;
-        }
-        if (std::strlen(candidate.name) == name_length && std::strncmp(candidate.name, name, name_length) == 0) {
+bool MatchValueOption(
+    const std::string& argument, const std::string& long_option, char short_option, bool* inline_value,
+    std::string* value)
+{
+    if (argument == long_option || (short_option != '\0' && argument == std::string("-") + short_option)) {
+        *inline_value = false;
+        value->clear();
+        return true;
+    }
+    const std::string long_prefix = long_option + "=";
+    if (argument.rfind(long_prefix, 0) == 0) {
+        *inline_value = true;
+        *value = argument.substr(long_prefix.size());
+        return true;
+    }
+    if (short_option != '\0') {
+        const std::string short_prefix = std::string("-") + short_option;
+        if (argument.rfind(short_prefix, 0) == 0 && argument.size() > short_prefix.size()) {
+            *inline_value = true;
+            *value = argument.substr(short_prefix.size());
             return true;
         }
     }
     return false;
 }
 
-bool IsHelpOption(const char* argument)
+bool ReadOptionValue(
+    const std::string& option, bool inline_value, std::string* value, int argc, char** argv, int* index,
+    std::vector<std::string>* errors)
 {
-    return argument != nullptr && (std::strcmp(argument, "-h") == 0 || std::strcmp(argument, "--help") == 0);
-}
-
-bool RequiresSeparateValue(const char* argument)
-{
-    if (argument == nullptr) {
+    if (inline_value) {
+        return true;
+    }
+    if (*index + 1 >= argc || IsHelpOption(argv[*index + 1] == nullptr ? "" : argv[*index + 1])) {
+        AddError(option + " requires a value", errors);
         return false;
     }
-    return std::strcmp(argument, "--section") == 0 || std::strcmp(argument, "--replay-mode") == 0 ||
-           std::strcmp(argument, "--import") == 0 || std::strcmp(argument, "--export") == 0 ||
-           std::strcmp(argument, "-i") == 0 || std::strcmp(argument, "-o") == 0;
+    *value = argv[++(*index)] == nullptr ? "" : argv[*index];
+    return true;
 }
 
-bool HasHelpBeforeProgram(int argc, char** argv)
+void AddSection(const std::string& section, CliConfig* config, std::vector<std::string>* errors)
 {
-    for (int index = 1; index < argc; ++index) {
-        const char* argument = argv[index];
-        if (IsHelpOption(argument)) {
-            return true;
-        }
-        if (argument == nullptr || argument[0] != '-' || argument[1] == '\0' || std::strcmp(argument, "--") == 0) {
-            return false;
-        }
-        if (RequiresSeparateValue(argument) && index + 1 < argc) {
-            if (IsHelpOption(argv[index + 1])) {
-                return true;
-            }
-            ++index;
-        }
-    }
-    return false;
-}
-
-bool AddSection(const char* value, CliConfig* config, std::string* error)
-{
-    const std::string section = value == nullptr ? "" : value;
-    if (!IsSupportedSection(section)) {
-        return Fail("unknown section: " + section, error);
-    }
-    if (std::find(config->sections.begin(), config->sections.end(), section) == config->sections.end()) {
+    if (section.empty()) {
+        AddError("--section requires a value", errors);
+    } else if (!IsSupportedSection(section)) {
+        AddError("unknown section: " + section, errors);
+    } else if (std::find(config->sections.begin(), config->sections.end(), section) == config->sections.end()) {
         config->sections.push_back(section);
     }
-    return true;
 }
 
-bool HasProgram(const CliConfig& config) { return !config.program.empty(); }
-
-bool ValidateCombinations(const CliConfig& config, std::string* error)
+void ValidateCombinations(const CliConfig& config, std::vector<std::string>* errors)
 {
-    const bool has_replay = config.replay_mode_specified;
-    const bool has_import = config.import_path.has_value();
-    const bool has_export = config.export_path.has_value();
-    const bool has_sections = !config.sections.empty();
-    const bool has_program = HasProgram(config);
-
-    if (config.show_help) {
-        if (config.list_sections || has_replay || has_import || has_export || has_sections || has_program) {
-            return Fail("--help cannot be combined with other options or a program", error);
-        }
-        return true;
+    if (config.show_help || !errors->empty()) {
+        return;
     }
-
     if (config.list_sections) {
-        if (has_replay || has_import || has_export || has_sections || has_program) {
-            return Fail("--list-sections cannot be combined with other options or a program", error);
+        if (config.replay_mode_specified || config.import_path.has_value() || config.export_path.has_value() ||
+            !config.sections.empty() || !config.program.empty()) {
+            AddError("--list-sections cannot be combined with other options or a program", errors);
         }
-        return true;
+        return;
     }
-
-    if (has_import) {
-        if (has_replay || has_sections || has_program) {
-            return Fail("--import can only be combined with --export", error);
+    if (config.import_path.has_value()) {
+        if (config.replay_mode_specified || !config.sections.empty() || !config.program.empty()) {
+            AddError("--import can only be combined with --export", errors);
         }
-        return true;
+        return;
     }
-
-    if (has_export && !has_sections && !has_program) {
-        return Fail("--export requires --import or a collection command", error);
+    if (config.export_path.has_value() && config.sections.empty() && config.program.empty()) {
+        AddError("--export requires --import or a collection command", errors);
+        return;
     }
-    if (!has_sections) {
-        return Fail("at least one --section is required for collection", error);
+    if (config.sections.empty()) {
+        if (config.program.empty()) {
+            AddError("at least one --section is required for collection", errors);
+        } else {
+            AddError("missing required --section option before program '" + config.program + "'", errors);
+        }
     }
-    if (!has_program) {
-        return Fail("program is required for collection", error);
+    if (config.program.empty()) {
+        AddError("program is required for collection", errors);
     }
-    return true;
 }
 
 } // namespace
 
-bool ParseCli(int argc, char** argv, CliConfig* config, std::string* error)
+bool ParseCli(int argc, char** argv, CliConfig* config, std::vector<std::string>* errors)
 {
+    if (errors == nullptr) {
+        return false;
+    }
+    errors->clear();
     if (config == nullptr) {
-        return Fail("internal error: config is null", error);
+        AddError("internal error: config is null", errors);
+        return false;
     }
     *config = CliConfig{};
 
-    if (HasHelpBeforeProgram(argc, argv)) {
-        config->show_help = true;
-        return true;
-    }
-
-    bool help_specified = false;
     bool list_sections_specified = false;
-    opterr = 0;
-    optind = 1;
-
-    while (true) {
-        if (optind < argc && !IsExactLongOption(argv[optind])) {
-            return Fail("unknown option: " + std::string(argv[optind]), error);
+    bool import_specified = false;
+    bool export_specified = false;
+    int index = 1;
+    for (; index < argc; ++index) {
+        const std::string argument = argv[index] == nullptr ? "" : argv[index];
+        if (IsHelpOption(argument)) {
+            config->show_help = true;
+            continue;
         }
-        const int parsed = getopt_long(argc, argv, "+hi:o:", kLongOptions, nullptr);
-        if (parsed == -1) {
-            break;
-        }
-        switch (parsed) {
-            case 'h':
-                if (help_specified) {
-                    return Fail("--help may only be specified once", error);
-                }
-                help_specified = true;
-                config->show_help = true;
-                break;
-            case 'i':
-                if (config->import_path.has_value()) {
-                    return Fail("--import may only be specified once", error);
-                }
-                if (optarg == nullptr || optarg[0] == '\0') {
-                    return Fail("--import requires a non-empty path", error);
-                }
-                config->import_path = optarg;
-                break;
-            case 'o':
-                if (config->export_path.has_value()) {
-                    return Fail("--export may only be specified once", error);
-                }
-                if (optarg == nullptr || optarg[0] == '\0') {
-                    return Fail("--export requires a non-empty path", error);
-                }
-                config->export_path = optarg;
-                break;
-            case kOptionSection:
-                if (!AddSection(optarg, config, error)) {
-                    return false;
-                }
-                break;
-            case kOptionListSections:
-                if (list_sections_specified) {
-                    return Fail("--list-sections may only be specified once", error);
-                }
+        if (argument == "--list-sections") {
+            if (list_sections_specified) {
+                AddError("--list-sections may only be specified once", errors);
+            } else {
                 list_sections_specified = true;
                 config->list_sections = true;
-                break;
-            case kOptionReplayMode:
-                if (config->replay_mode_specified) {
-                    return Fail("--replay-mode may only be specified once", error);
-                }
-                config->replay_mode_specified = true;
-                if (optarg == nullptr || std::strcmp(optarg, "kernel") != 0) {
-                    return Fail("--replay-mode currently only accepts kernel", error);
-                }
-                config->replay_mode = ReplayMode::Kernel;
-                break;
-            case '?':
-            default: {
-                const char* argument = optind > 0 && optind <= argc ? argv[optind - 1] : nullptr;
-                return Fail(
-                    "unknown option or missing value: " + std::string(argument == nullptr ? "" : argument), error);
             }
+            continue;
         }
-    }
-
-    if (optind > 1 && std::strcmp(argv[optind - 1], "--") == 0) {
-        return Fail("-- is not supported; place the program directly after tool options", error);
-    }
-
-    if (optind < argc) {
-        config->program = argv[optind++];
-        while (optind < argc) {
-            config->program_arguments.emplace_back(argv[optind++]);
+        bool inline_value = false;
+        std::string value;
+        if (MatchValueOption(argument, "--section", '\0', &inline_value, &value)) {
+            if (ReadOptionValue("--section", inline_value, &value, argc, argv, &index, errors)) {
+                AddSection(value, config, errors);
+            }
+            continue;
         }
+        if (MatchValueOption(argument, "--replay-mode", '\0', &inline_value, &value)) {
+            if (!ReadOptionValue("--replay-mode", inline_value, &value, argc, argv, &index, errors)) {
+                continue;
+            }
+            if (config->replay_mode_specified) {
+                AddError("--replay-mode may only be specified once", errors);
+                continue;
+            }
+            config->replay_mode_specified = true;
+            if (value != "kernel") {
+                AddError("--replay-mode currently only accepts kernel", errors);
+            }
+            continue;
+        }
+        if (MatchValueOption(argument, "--import", 'i', &inline_value, &value)) {
+            if (!ReadOptionValue("--import", inline_value, &value, argc, argv, &index, errors)) {
+                import_specified = true;
+                continue;
+            }
+            if (import_specified) {
+                AddError("--import may only be specified once", errors);
+            } else if (value.empty()) {
+                AddError("--import requires a non-empty path", errors);
+            } else {
+                config->import_path = value;
+            }
+            import_specified = true;
+            continue;
+        }
+        if (MatchValueOption(argument, "--export", 'o', &inline_value, &value)) {
+            if (!ReadOptionValue("--export", inline_value, &value, argc, argv, &index, errors)) {
+                export_specified = true;
+                continue;
+            }
+            if (export_specified) {
+                AddError("--export may only be specified once", errors);
+            } else if (value.empty()) {
+                AddError("--export requires a non-empty path", errors);
+            } else {
+                config->export_path = value;
+            }
+            export_specified = true;
+            continue;
+        }
+        if (argument == "--") {
+            AddError("-- is not supported; place the program directly after tool options", errors);
+            continue;
+        }
+        if (argument.size() > 1 && argument[0] == '-') {
+            AddError("unknown option: " + argument, errors);
+            continue;
+        }
+
+        config->program = argument;
+        ++index;
+        for (; index < argc; ++index) {
+            config->program_arguments.emplace_back(argv[index] == nullptr ? "" : argv[index]);
+        }
+        break;
     }
 
-    return ValidateCombinations(*config, error);
+    ValidateCombinations(*config, errors);
+    return errors->empty();
 }
 
 const char* ReplayModeName(ReplayMode mode)

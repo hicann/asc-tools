@@ -129,11 +129,13 @@ def test_app_exit_status_is_preserved():
 
 
 def test_program_not_found_returns_127():
-    result = run_cli("/definitely/not/a/real/npu-compute-program")
+    program = "/definitely/not/a/real/npu-compute-program"
+    result = run_cli(program)
 
     assert result.returncode == 127
-    assert "execvpe" in result.stderr
-    assert "No such file or directory" in result.stderr
+    assert result.stderr == (
+        f"npu-compute: failed to start program '{program}': No such file or directory\n"
+    )
 
 
 def test_program_not_executable_returns_126(tmp_path):
@@ -144,8 +146,9 @@ def test_program_not_executable_returns_126(tmp_path):
     result = run_cli(str(program))
 
     assert result.returncode == 126
-    assert "execvpe" in result.stderr
-    assert "Permission denied" in result.stderr
+    assert result.stderr == (
+        f"npu-compute: failed to start program '{program}': Permission denied\n"
+    )
 
 
 def test_child_environment_is_overridden_without_changing_parent(monkeypatch):

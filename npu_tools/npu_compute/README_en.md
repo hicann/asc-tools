@@ -81,10 +81,16 @@ Public options:
 -o, --export <repo>
 ```
 
-When an exact `-h` or `--help` appears in the `[options]` region, the CLI prints
-help and exits with status 0. Help takes precedence over other tool options and
-their validation in that region. Arguments after the target program belong to
-the application, so `-h` or `--help` there is passed to the application unchanged.
+When an exact `-h` or `--help` appears in the `[options]` region, the CLI does not
+start the target program. If the arguments contain no errors, the CLI prints help
+and exits with status 0. If the arguments contain errors, the CLI prints all errors
+in argument order, then prints help and exits with usage error 2. Arguments after
+the target program belong to the application, so `-h` or `--help` there is passed
+to the application unchanged.
+
+When used by itself, `--list-sections` prints the Section ID list. When combined
+with `-h` or `--help`, the CLI prints only help, exits with status 0, and does not
+print the Section ID list.
 
 Collection requires at least one `--section` and a target program. Arguments
 after the target program are passed to the application unchanged. The CLI stays
@@ -187,11 +193,11 @@ HardwareInfo collection is enabled by default and has no CLI switch. Do not
 pass `HardwareInfo` to `--section`.
 
 During `acltoolInitialize`, `libnpu-compute.so` subscribes an ACLPTI Runtime
-callback and enables `aclrtLaunchKernel` and `aclrtLaunchKernelWithHostArgs` in
-that order. ACLPTI may report both ENTER and EXIT events. The library accepts
-only a successful EXIT for one of those two APIs. The callback thread for the
-first accepted event collects host information and Device information in that
-order, serializes the result, and atomically publishes
+callback and enables `aclrtLaunchKernel`, `aclrtLaunchKernelWithHostArgs`, and
+`aclrtLaunchSIMTKernelWithHostArgs` in that order. ACLPTI may report both ENTER
+and EXIT events. The library accepts only a successful EXIT for one of those
+three APIs. The callback thread for the first accepted event collects host
+information and Device information in that order, serializes the result, and atomically publishes
 `<data-directory>/HardwareInfo.jsonl`. The callback returns after publication
 completes or the collection enters the failed state.
 

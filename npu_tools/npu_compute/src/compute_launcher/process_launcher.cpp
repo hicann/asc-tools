@@ -315,7 +315,8 @@ int LaunchProcessAndWait(const ProcessLaunchRequest& request, std::string* error
             SetError(ErrnoMessage("child setpgid", child_error.error_number), error);
             return kInternalErrorExitCode;
         }
-        SetError(ErrnoMessage("execvpe", child_error.error_number), error);
+        SetError(
+            "failed to start program '" + request.program + "': " + std::strerror(child_error.error_number), error);
         return child_error.error_number == ENOENT ? kProgramNotFoundExitCode : kProgramNotExecutableExitCode;
     }
     return ExitCodeFromStatus(child_status, error);

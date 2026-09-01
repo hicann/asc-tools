@@ -143,8 +143,8 @@ def _assert_callback_flow(stderr, callback_id):
         for line in stderr.splitlines()
         if "[acl_pti_callback_stub] enable=1" in line
     ]
-    assert len(enable_lines) == 2
-    for line, cbid in zip(enable_lines, (13, 0)):
+    assert len(enable_lines) == 3
+    for line, cbid in zip(enable_lines, (13, 0, 16)):
         assert f"cbid={cbid}" in line
         assert "result=0" in line
 
@@ -153,8 +153,8 @@ def _assert_callback_flow(stderr, callback_id):
         for line in stderr.splitlines()
         if "[acl_pti_callback_stub] enable=0" in line
     ]
-    assert len(disable_lines) == 2
-    for line, cbid in zip(disable_lines, (0, 13)):
+    assert len(disable_lines) == 3
+    for line, cbid in zip(disable_lines, (16, 0, 13)):
         assert f"cbid={cbid}" in line
         assert "result=0" in line
 
@@ -222,7 +222,7 @@ def _assert_hardware_info(output_directory):
     assert memory["hbm frequency(MHZ)"] > 0
 
 
-@pytest.mark.parametrize("callback_id", [13, 0])
+@pytest.mark.parametrize("callback_id", [13, 0, 16])
 def test_real_hardware_collection_with_callback_stub(callback_id):
     app = _required_path("NPU_COMPUTE_REAL_HW_APP")
     test_library = _required_path("NPU_COMPUTE_REAL_HW_LIBRARY")

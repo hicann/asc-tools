@@ -45,6 +45,18 @@ def run_cli(*arguments, cwd=None):
     )
 
 
+def run_cli_with_combined_output(*arguments, cwd=None):
+    assert CLI.is_file(), f"npu-compute was not built: {CLI}"
+    return subprocess.run(
+        [str(CLI), *arguments],
+        cwd=cwd,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        check=False,
+    )
+
+
 def test_help_lists_only_the_public_command_line_options():
     result = run_cli("--help")
 
@@ -69,17 +81,96 @@ def test_help_lists_only_the_public_command_line_options():
         ("-h",),
         ("--help",),
         ("-h", "--help"),
-        ("--section", "A", "--help", "--export", "result.npu-rep"),
-        ("--bad-option", "--help"),
-        ("--section", "--help"),
+        ("--section", "Memory", "--help", "--export", "result.npu-rep"),
     ],
 )
-def test_help_takes_priority_over_other_tool_options(arguments, tmp_path):
+def test_help_with_valid_tool_options_exits_zero(arguments, tmp_path):
     result = run_cli(*arguments, cwd=tmp_path)
 
     assert result.returncode == 0
     assert result.stdout.count("Usage:") == 1
     assert result.stderr == ""
+    assert list(tmp_path.iterdir()) == []
+
+
+@pytest.mark.parametrize(
+    ("arguments", "expected_errors"),
+    [
+        (
+            ("--bad-option", "--help"),
+            ["unknown option: --bad-option"],
+        ),
+        (
+            ("--section", "--help"),
+            ["--section requires a value"],
+        ),
+        (
+            ("--bad-one", "--bad-two", "--help"),
+            ["unknown option: --bad-one", "unknown option: --bad-two"],
+        ),
+        (
+            ("--bad-option", "--list-sections", "--help"),
+            ["unknown option: --bad-option"],
+        ),
+        (
+            (
+                "--section",
+                "Invalid",
+                "--replay-mode",
+                "invalid",
+                "--help",
+            ),
+            [
+                "unknown section: Invalid",
+                "--replay-mode currently only accepts kernel",
+            ],
+        ),
+    ],
+)
+def test_help_reports_all_option_errors(arguments, expected_errors, tmp_path):
+    result = run_cli(*arguments, cwd=tmp_path)
+
+    assert result.returncode == 2
+    assert result.stdout.count("Usage:") == 1
+    assert result.stderr.splitlines() == [
+        f"npu-compute: {message}" for message in expected_errors
+    ]
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_help_prints_all_errors_before_usage_and_does_not_run_program(tmp_path):
+    marker = tmp_path / "target-ran"
+    result = run_cli_with_combined_output(
+        "--bad-one",
+        "--bad-two",
+        "--help",
+        "/bin/sh",
+        "-c",
+        f"touch {marker}",
+        cwd=tmp_path,
+    )
+
+    assert result.returncode == 2
+    assert result.stdout.count("Usage:") == 1
+    assert result.stdout.index("unknown option: --bad-one") < result.stdout.index(
+        "unknown option: --bad-two"
+    )
+    assert result.stdout.index("unknown option: --bad-two") < result.stdout.index(
+        "Usage:"
+    )
+    assert not marker.exists()
+    assert list(tmp_path.iterdir()) == []
+
+
+@pytest.mark.parametrize("program", ("hh", "jojhhh"))
+def test_missing_section_identifies_the_parsed_program(program, tmp_path):
+    result = run_cli(program, "-h", "/path/to/run.sh", cwd=tmp_path)
+
+    assert result.returncode == 2
+    assert result.stdout == ""
+    assert result.stderr == (
+        f"npu-compute: missing required --section option before program '{program}'\n"
+    )
     assert list(tmp_path.iterdir()) == []
 
 
@@ -89,6 +180,23 @@ def test_list_sections_outputs_only_ids_in_fixed_order():
     assert result.returncode == 0
     assert result.stdout.splitlines() == SECTIONS
     assert result.stderr == ""
+
+
+@pytest.mark.parametrize(
+    "arguments",
+    [
+        ("--list-sections", "--help"),
+        ("--help", "--list-sections"),
+    ],
+)
+def test_help_takes_precedence_over_list_sections(arguments, tmp_path):
+    result = run_cli(*arguments, cwd=tmp_path)
+
+    assert result.returncode == 0
+    assert result.stdout.count("Usage:") == 1
+    assert result.stderr == ""
+    assert not any(line in SECTIONS for line in result.stdout.splitlines())
+    assert list(tmp_path.iterdir()) == []
 
 
 @pytest.mark.parametrize("section", SECTIONS)

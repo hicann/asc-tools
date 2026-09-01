@@ -19,14 +19,22 @@
 int main(int argc, char** argv)
 {
     npu_compute::compute_launcher::CliConfig config;
-    std::string error;
-    if (!npu_compute::compute_launcher::ParseCli(argc, argv, &config, &error)) {
+    std::vector<std::string> parse_errors;
+    const bool parsed = npu_compute::compute_launcher::ParseCli(argc, argv, &config, &parse_errors);
+    for (const std::string& error : parse_errors) {
         std::fprintf(stderr, "npu-compute: %s\n", error.c_str());
+    }
+    if (!parse_errors.empty()) {
+        std::fflush(stderr);
+    }
+    if (config.show_help) {
+        npu_compute::compute_launcher::PrintUsage(stdout, argv[0]);
+    }
+    if (!parsed) {
         return npu_compute::compute_launcher::kUsageErrorExitCode;
     }
 
     if (config.show_help) {
-        npu_compute::compute_launcher::PrintUsage(stdout, argv[0]);
         return 0;
     }
 
@@ -36,6 +44,7 @@ int main(int argc, char** argv)
     }
 
     if (config.import_path.has_value()) {
+        std::string error;
         std::vector<npu_compute::compute_launcher::ImportedProfileEntry> results;
         if (!npu_compute::compute_launcher::ReadImportedProfileResults(*config.import_path, &results, &error)) {
             std::fprintf(stderr, "npu-compute: %s\n", error.c_str());
@@ -56,6 +65,7 @@ int main(int argc, char** argv)
 
     std::string collection_data_directory;
     std::string report_path;
+    std::string error;
     int result = npu_compute::compute_launcher::LaunchTarget(config, &collection_data_directory, &report_path, &error);
     if (!collection_data_directory.empty()) {
         std::fprintf(stderr, "npu-compute: data-directory=%s\n", collection_data_directory.c_str());

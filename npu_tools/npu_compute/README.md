@@ -77,9 +77,13 @@ npu-compute [options] [program] [program-arguments]
 -o, --export <repo>
 ```
 
-在 `[options]` 区域出现精确的 `-h` 或 `--help` 时，CLI 输出帮助信息并返回 0。
-帮助选项优先于该区域中的其他工具选项及其参数校验。目标程序之后的参数属于应用，
-其中的 `-h` 或 `--help` 会原样传递给应用。
+在 `[options]` 区域出现精确的 `-h` 或 `--help` 时，CLI 不启动目标程序。参数没有
+错误时，CLI 输出帮助信息并返回 0；参数存在错误时，CLI 按参数顺序输出全部错误，
+随后输出帮助信息并返回用法错误码 2。目标程序之后的参数属于应用，其中的 `-h` 或
+`--help` 会原样传递给应用。
+
+`--list-sections` 单独使用时输出 Section ID 列表。与 `-h` 或 `--help` 同时使用时，
+CLI 只输出帮助信息并返回 0，不输出 Section ID 列表。
 
 执行采集时必须至少指定一个 `--section` 和一个目标程序。目标程序之后的参数会
 原样传递给应用。CLI 作为父进程运行，将 `SIGINT`、`SIGTERM` 和 `SIGHUP` 转发
@@ -167,11 +171,11 @@ HardwareInfo 采集默认启用，CLI 不提供对应开关。不要将 `Hardwar
 `--section`。
 
 执行 `acltoolInitialize` 时，`libnpu-compute.so` 会订阅 ACLPTI Runtime 回调，
-并依次启用 `aclrtLaunchKernel` 和 `aclrtLaunchKernelWithHostArgs`。ACLPTI 可能
-同时上报 ENTER 和 EXIT 事件。该库只接受上述两个 API 中任意一个成功的 EXIT
-事件。首个被接受的事件所在回调线程依次采集主机信息和 Device 信息，然后序列化
-并以原子方式发布 `<data-directory>/HardwareInfo.jsonl`。该回调在发布完成或采集
-进入失败状态后返回。
+并依次启用 `aclrtLaunchKernel`、`aclrtLaunchKernelWithHostArgs` 和
+`aclrtLaunchSIMTKernelWithHostArgs`。ACLPTI 可能同时上报 ENTER 和 EXIT 事件。
+该库只接受上述三个 API 中任意一个成功的 EXIT 事件。首个被接受的事件所在回调线程
+依次采集主机信息和 Device 信息，然后序列化并以原子方式发布
+`<data-directory>/HardwareInfo.jsonl`。该回调在发布完成或采集进入失败状态后返回。
 
 同一目标进程中，如果其他线程在采集期间同时进入被接受的回调，它们等待本次采集
 进入完成或失败状态后返回，不会重复采集。关闭时先禁用已启用的回调；如果采集正在
