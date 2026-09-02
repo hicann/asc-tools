@@ -16,7 +16,7 @@
 #include <string>
 #include <vector>
 
-namespace aclsan::cann {
+namespace npucheck {
 
 enum class ReportRenderStatus {
     kSuccess = 0,
@@ -55,10 +55,10 @@ ReportRenderStatus RenderReportRecord(
     const ReportRecord& record, const ReportTemplateOverrides& overrides, std::string* out);
 ReportRenderStatus RenderReportBundle(
     const std::vector<ReportRecord>& records, const ReportTemplateOverrides& overrides, std::string* out);
-ReportRenderStatus RenderNpusanReportRecord(
-    const NpusanReportRecord& record, const ReportTemplateOverrides& overrides, std::string* out);
-ReportRenderStatus RenderNpusanReportBundle(
-    const std::vector<NpusanReportRecord>& records, const ReportTemplateOverrides& overrides, std::string* out);
+ReportRenderStatus RenderNpuCheckReportRecord(
+    const NpuCheckReportRecord& record, const ReportTemplateOverrides& overrides, std::string* out);
+ReportRenderStatus RenderNpuCheckReportBundle(
+    const std::vector<NpuCheckReportRecord>& records, const ReportTemplateOverrides& overrides, std::string* out);
 ReportRenderStatus WriteReportTextToStream(const std::string& text, std::ostream* out);
 ReportRenderStatus WriteReportTextToFile(const std::string& text, const std::string& path);
 ReportRenderStatus LoadReportTemplateOverridesFromFile(const std::string& path, ReportTemplateOverrides* overrides);
@@ -69,6 +69,6 @@ const char* ReportToolName(ReportTool tool);
 const char* ReportSeverityName(ReportSeverity severity);
 const char* ReportStackRoleTitle(ReportStackRole role);
 
-} // namespace aclsan::cann
+} // namespace npucheck
 
 #endif

@@ -11,10 +11,10 @@
 
 #include "diagnostic/report_renderer.h"
 
-namespace aclsan::cann::detail {
+namespace npucheck::detail {
 
 void AppendReportSummaries(const std::vector<ReportRecord>& records, std::string* out);
 
-} // namespace aclsan::cann::detail
+} // namespace npucheck::detail
 
 #endif

@@ -12,7 +12,7 @@
 #include <cctype>
 #include <map>
 
-namespace aclsan::cann::detail {
+namespace npucheck::detail {
 namespace {
 
 struct ToolSummary {
@@ -174,4 +174,4 @@ void AppendReportSummaries(const std::vector<ReportRecord>& records, std::string
     AppendGlobalSummary(summaries, fatalCount, out);
 }
 
-} // namespace aclsan::cann::detail
+} // namespace npucheck::detail

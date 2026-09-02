@@ -14,37 +14,37 @@
 
 #include <type_traits>
 
-namespace aclsan::cann::detail {
+namespace npucheck::detail {
 namespace {
 
-const char* DistanceDirectionName(NpusanReportDistanceKind kind)
+const char* DistanceDirectionName(NpuCheckReportDistanceKind kind)
 {
     switch (kind) {
-        case NpusanReportDistanceKind::BEFORE:
+        case NpuCheckReportDistanceKind::BEFORE:
             return "before";
-        case NpusanReportDistanceKind::AFTER:
+        case NpuCheckReportDistanceKind::AFTER:
             return "after";
-        case NpusanReportDistanceKind::INSIDE:
+        case NpuCheckReportDistanceKind::INSIDE:
             return "inside";
-        case NpusanReportDistanceKind::UNKNOWN:
+        case NpuCheckReportDistanceKind::UNKNOWN:
             return "from";
     }
     return "from";
 }
 
-const char* MemcheckPatternName(NpusanReportPattern pattern) { return PatternName(ReportTool::MEMCHECK, pattern); }
+const char* MemcheckPatternName(NpuCheckReportPattern pattern) { return PatternName(ReportTool::MEMCHECK, pattern); }
 
-const char* InitcheckPatternName(NpusanReportPattern pattern) { return PatternName(ReportTool::INITCHECK, pattern); }
+const char* InitcheckPatternName(NpuCheckReportPattern pattern) { return PatternName(ReportTool::INITCHECK, pattern); }
 
-const char* RacecheckPatternName(NpusanReportPattern pattern) { return PatternName(ReportTool::RACECHECK, pattern); }
+const char* RacecheckPatternName(NpuCheckReportPattern pattern) { return PatternName(ReportTool::RACECHECK, pattern); }
 
-const char* SoccheckPatternName(NpusanReportPattern pattern) { return PatternName(ReportTool::SOCCHECK, pattern); }
+const char* SoccheckPatternName(NpuCheckReportPattern pattern) { return PatternName(ReportTool::SOCCHECK, pattern); }
 
 bool ValidateReportCommon(
-    const NpusanReportCommon& common, ReportTool expectedTool, NpusanReportPattern envelopePattern)
+    const NpuCheckReportCommon& common, ReportTool expectedTool, NpuCheckReportPattern envelopePattern)
 {
     if (common.tool != expectedTool || common.pattern != envelopePattern ||
-        FindPatternDescriptor(expectedTool, common.pattern) == nullptr || common.stackCount > kNpusanReportStackMax) {
+        FindPatternDescriptor(expectedTool, common.pattern) == nullptr || common.stackCount > kNpuCheckReportStackMax) {
         return false;
     }
 
@@ -54,7 +54,7 @@ bool ValidateReportCommon(
         if (role < static_cast<int>(ReportStackRole::FAULT_DEVICE) ||
             role > static_cast<int>(ReportStackRole::HOST_API_CALL) ||
             format < static_cast<int>(ReportStackFormat::NONE) || format > static_cast<int>(ReportStackFormat::BOTH) ||
-            common.stacks[i].frames.size() > kNpusanReportFrameMax) {
+            common.stacks[i].frames.size() > kNpuCheckReportFrameMax) {
             return false;
         }
         for (std::uint32_t j = i + 1; j < common.stackCount; ++j) {
@@ -66,7 +66,7 @@ bool ValidateReportCommon(
     return true;
 }
 
-ReportRecord ToReportRecord(const NpusanMemcheckReport& report)
+ReportRecord ToReportRecord(const NpuCheckMemcheckReport& report)
 {
     ReportFields fields;
     PutExecFields(report.common.exec, &fields);
@@ -80,10 +80,10 @@ ReportRecord ToReportRecord(const NpusanMemcheckReport& report)
     fields["apiErrorName"] = report.apiErrorName;
     fields["apiErrorCode"] = std::to_string(report.apiErrorCode);
     fields["apiErrorMessage"] = report.apiErrorMessage;
-    if (report.common.pattern == NpusanReportPattern::MEMCHECK_INVALID_ACCESS) {
+    if (report.common.pattern == NpuCheckReportPattern::MEMCHECK_INVALID_ACCESS) {
         fields["base"] = Hex(report.nearestAllocation.base);
         fields["bytes"] = std::to_string(report.nearestAllocation.bytes);
-    } else if (report.common.pattern == NpusanReportPattern::MEMCHECK_LEAK) {
+    } else if (report.common.pattern == NpuCheckReportPattern::MEMCHECK_LEAK) {
         fields["space"] = MemorySpaceName(report.allocation.memorySpace);
     }
     return ReportRecord{
@@ -93,7 +93,7 @@ ReportRecord ToReportRecord(const NpusanMemcheckReport& report)
         ActiveCallStacks(report.common)};
 }
 
-ReportRecord ToReportRecord(const NpusanInitcheckReport& report)
+ReportRecord ToReportRecord(const NpuCheckInitcheckReport& report)
 {
     ReportFields fields;
     PutExecFields(report.common.exec, &fields);
@@ -107,7 +107,7 @@ ReportRecord ToReportRecord(const NpusanInitcheckReport& report)
     fields["initializedBytes"] = std::to_string(report.initializedBytes);
     fields["unusedBytes"] = std::to_string(report.unusedBytes);
     fields["unusedPercent"] = std::to_string(report.unusedPercent);
-    if (report.common.pattern == NpusanReportPattern::INITCHECK_UNUSED_MEMORY) {
+    if (report.common.pattern == NpuCheckReportPattern::INITCHECK_UNUSED_MEMORY) {
         fields["space"] = MemorySpaceName(report.allocation.memorySpace);
     }
     return ReportRecord{
@@ -117,7 +117,7 @@ ReportRecord ToReportRecord(const NpusanInitcheckReport& report)
         ActiveCallStacks(report.common)};
 }
 
-ReportRecord ToReportRecord(const NpusanRacecheckReport& report)
+ReportRecord ToReportRecord(const NpuCheckRacecheckReport& report)
 {
     ReportFields fields;
     PutExecFields(report.common.exec, &fields);
@@ -152,9 +152,9 @@ ReportRecord ToReportRecord(const NpusanRacecheckReport& report)
     if (const ReportFrame* frame = FirstStructuredFrame(report.common, ReportStackRole::RELATED_ACCESS_B)) {
         PutFrameLocationFields(*frame, "second", &fields);
     }
-    if (report.common.pattern == NpusanReportPattern::RACECHECK_CROSS_PIPE_RACE) {
+    if (report.common.pattern == NpuCheckReportPattern::RACECHECK_CROSS_PIPE_RACE) {
         fields["coreId"] = FormatCoreId(report.first.exec.phyCoreId);
-    } else if (report.common.pattern == NpusanReportPattern::RACECHECK_INVALID_REMOTE_ACCESS) {
+    } else if (report.common.pattern == NpuCheckReportPattern::RACECHECK_INVALID_REMOTE_ACCESS) {
         fields["location"] = "at " + fields["firstLocation"];
         fields["coreId"] = FormatCoreId(report.first.exec.phyCoreId);
         fields["blockType"] = FormatBlockType(report.first.exec.blockType);
@@ -174,7 +174,7 @@ ReportRecord ToReportRecord(const NpusanRacecheckReport& report)
         ActiveCallStacks(report.common)};
 }
 
-ReportRecord ToReportRecord(const NpusanSoccheckReport& report)
+ReportRecord ToReportRecord(const NpuCheckSoccheckReport& report)
 {
     ReportFields fields;
     PutExecFields(report.common.exec, &fields);
@@ -201,16 +201,16 @@ template <typename Report>
 inline constexpr ReportTool kReportTool = ReportTool::MEMCHECK;
 
 template <>
-inline constexpr ReportTool kReportTool<NpusanInitcheckReport> = ReportTool::INITCHECK;
+inline constexpr ReportTool kReportTool<NpuCheckInitcheckReport> = ReportTool::INITCHECK;
 
 template <>
-inline constexpr ReportTool kReportTool<NpusanRacecheckReport> = ReportTool::RACECHECK;
+inline constexpr ReportTool kReportTool<NpuCheckRacecheckReport> = ReportTool::RACECHECK;
 
 template <>
-inline constexpr ReportTool kReportTool<NpusanSynccheckReport> = ReportTool::SYNCCHECK;
+inline constexpr ReportTool kReportTool<NpuCheckSynccheckReport> = ReportTool::SYNCCHECK;
 
 template <>
-inline constexpr ReportTool kReportTool<NpusanSoccheckReport> = ReportTool::SOCCHECK;
+inline constexpr ReportTool kReportTool<NpuCheckSoccheckReport> = ReportTool::SOCCHECK;
 
 template <typename Report>
 bool ValidateToolSpecific(const Report&)
@@ -218,9 +218,9 @@ bool ValidateToolSpecific(const Report&)
     return true;
 }
 
-bool ValidateToolSpecific(const NpusanRacecheckReport& report)
+bool ValidateToolSpecific(const NpuCheckRacecheckReport& report)
 {
-    return report.common.pattern != NpusanReportPattern::RACECHECK_CROSS_PIPE_RACE ||
+    return report.common.pattern != NpuCheckReportPattern::RACECHECK_CROSS_PIPE_RACE ||
            report.first.exec.phyCoreId == report.second.exec.phyCoreId;
 }
 
@@ -231,14 +231,14 @@ ReportRenderStatus NormalizeTypedReport(const Report& report, ReportRecord* out)
     return ReportRenderStatus::kSuccess;
 }
 
-ReportRenderStatus NormalizeTypedReport(const NpusanSynccheckReport& report, ReportRecord* out)
+ReportRenderStatus NormalizeTypedReport(const NpuCheckSynccheckReport& report, ReportRecord* out)
 {
     return NormalizeSynccheckReport(report, out);
 }
 
 } // namespace
 
-ReportRenderStatus NormalizeReport(const NpusanReportRecord& record, ReportRecord* out)
+ReportRenderStatus NormalizeReport(const NpuCheckReportRecord& record, ReportRecord* out)
 {
     if (out == nullptr) {
         return ReportRenderStatus::kInvalidArgument;
@@ -265,4 +265,4 @@ ReportRenderStatus NormalizeReport(const NpusanReportRecord& record, ReportRecor
         record.GetPayload());
 }
 
-} // namespace aclsan::cann::detail
+} // namespace npucheck::detail

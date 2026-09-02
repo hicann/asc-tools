@@ -13,45 +13,45 @@
 #include <iomanip>
 #include <sstream>
 
-namespace aclsan::cann::detail {
+namespace npucheck::detail {
 
-const char* MemorySpaceName(NpusanReportMemorySpace space)
+const char* MemorySpaceName(NpuCheckReportMemorySpace space)
 {
     switch (space) {
-        case NpusanReportMemorySpace::GM:
+        case NpuCheckReportMemorySpace::GM:
             return "GM";
-        case NpusanReportMemorySpace::UB:
+        case NpuCheckReportMemorySpace::UB:
             return "UB";
-        case NpusanReportMemorySpace::L1:
+        case NpuCheckReportMemorySpace::L1:
             return "L1";
-        case NpusanReportMemorySpace::L0_A:
+        case NpuCheckReportMemorySpace::L0_A:
             return "L0A";
-        case NpusanReportMemorySpace::L0_B:
+        case NpuCheckReportMemorySpace::L0_B:
             return "L0B";
-        case NpusanReportMemorySpace::L0_C:
+        case NpuCheckReportMemorySpace::L0_C:
             return "L0C";
-        case NpusanReportMemorySpace::BT:
+        case NpuCheckReportMemorySpace::BT:
             return "BT";
-        case NpusanReportMemorySpace::PRIVATE:
+        case NpuCheckReportMemorySpace::PRIVATE:
             return "private";
-        case NpusanReportMemorySpace::HOST:
+        case NpuCheckReportMemorySpace::HOST:
             return "host";
-        case NpusanReportMemorySpace::UNKNOWN:
+        case NpuCheckReportMemorySpace::UNKNOWN:
             return "unknown";
     }
     return "unknown";
 }
 
-const char* AccessModeName(NpusanReportAccessMode mode)
+const char* AccessModeName(NpuCheckReportAccessMode mode)
 {
     switch (mode) {
-        case NpusanReportAccessMode::READ:
+        case NpuCheckReportAccessMode::READ:
             return "read";
-        case NpusanReportAccessMode::WRITE:
+        case NpuCheckReportAccessMode::WRITE:
             return "write";
-        case NpusanReportAccessMode::READ_WRITE:
+        case NpuCheckReportAccessMode::READ_WRITE:
             return "read/write";
-        case NpusanReportAccessMode::FREE:
+        case NpuCheckReportAccessMode::FREE:
             return "free";
     }
     return "access";
@@ -95,7 +95,7 @@ std::string FormatBlockType(std::uint32_t blockType)
 
 std::string FormatLaunchId(std::uint64_t launchId) { return launchId == 0 ? "<unknown>" : std::to_string(launchId); }
 
-std::string FormatLocation(const NpusanReportExecContext& exec, bool includeAt)
+std::string FormatLocation(const NpuCheckReportExecContext& exec, bool includeAt)
 {
     std::ostringstream os;
     if (includeAt) {
@@ -121,7 +121,7 @@ std::string FormatLocation(const ReportFrame& frame, bool includeAt)
     return os.str();
 }
 
-void PutExecFields(const NpusanReportExecContext& exec, ReportFields* fields)
+void PutExecFields(const NpuCheckReportExecContext& exec, ReportFields* fields)
 {
     (*fields)["function"] = OrUnknown(exec.function);
     (*fields)["offset"] = Hex(exec.offset);
@@ -139,7 +139,7 @@ void PutExecFields(const NpusanReportExecContext& exec, ReportFields* fields)
     (*fields)["location"] = FormatLocation(exec, true);
 }
 
-void PutPrefixedExecFields(const NpusanReportExecContext& exec, const std::string& prefix, ReportFields* fields)
+void PutPrefixedExecFields(const NpuCheckReportExecContext& exec, const std::string& prefix, ReportFields* fields)
 {
     (*fields)[prefix + "CoreId"] = FormatCoreId(exec.phyCoreId);
     (*fields)[prefix + "Type"] = FormatBlockType(exec.blockType);
@@ -155,7 +155,7 @@ void PutPrefixedExecFields(const NpusanReportExecContext& exec, const std::strin
     (*fields)[prefix + "LaunchId"] = FormatLaunchId(exec.launchId);
 }
 
-void PutAccessFields(const NpusanReportMemoryAccess& access, ReportFields* fields)
+void PutAccessFields(const NpuCheckReportMemoryAccess& access, ReportFields* fields)
 {
     (*fields)["space"] = MemorySpaceName(access.memorySpace);
     (*fields)["access"] = AccessModeName(access.accessMode);
@@ -164,7 +164,7 @@ void PutAccessFields(const NpusanReportMemoryAccess& access, ReportFields* field
     (*fields)["address"] = Hex(access.address);
 }
 
-void PutAllocationFields(const NpusanReportAllocation& allocation, ReportFields* fields)
+void PutAllocationFields(const NpuCheckReportAllocation& allocation, ReportFields* fields)
 {
     (*fields)["allocId"] = std::to_string(allocation.allocId);
     (*fields)["base"] = Hex(allocation.base);
@@ -184,7 +184,7 @@ void PutDefaultHostFields(ReportFields* fields)
     (*fields)["freePc"] = "0";
 }
 
-std::vector<ReportCallStack> ActiveCallStacks(const NpusanReportCommon& common)
+std::vector<ReportCallStack> ActiveCallStacks(const NpuCheckReportCommon& common)
 {
     std::vector<ReportCallStack> stacks(common.stacks.begin(), common.stacks.begin() + common.stackCount);
     for (ReportCallStack& stack : stacks) {
@@ -195,7 +195,7 @@ std::vector<ReportCallStack> ActiveCallStacks(const NpusanReportCommon& common)
     return stacks;
 }
 
-const ReportCallStack* FindStackByRole(const NpusanReportCommon& common, ReportStackRole role)
+const ReportCallStack* FindStackByRole(const NpuCheckReportCommon& common, ReportStackRole role)
 {
     for (std::uint32_t i = 0; i < common.stackCount && i < common.stacks.size(); ++i) {
         if (common.stacks[i].role == role) {
@@ -205,7 +205,7 @@ const ReportCallStack* FindStackByRole(const NpusanReportCommon& common, ReportS
     return nullptr;
 }
 
-const ReportFrame* FirstStructuredFrame(const NpusanReportCommon& common, ReportStackRole role)
+const ReportFrame* FirstStructuredFrame(const NpuCheckReportCommon& common, ReportStackRole role)
 {
     const ReportCallStack* stack = FindStackByRole(common, role);
     if (stack == nullptr || (stack->format != ReportStackFormat::FRAMES && stack->format != ReportStackFormat::BOTH)) {
@@ -228,7 +228,7 @@ void PutFrameLocationFields(const ReportFrame& frame, const std::string& prefix,
     (*fields)[prefix + "Location"] = FormatLocation(frame, false);
 }
 
-void PutFaultLocationFields(const NpusanReportCommon& common, ReportFields* fields)
+void PutFaultLocationFields(const NpuCheckReportCommon& common, ReportFields* fields)
 {
     const ReportFrame* frame = FirstStructuredFrame(common, ReportStackRole::FAULT_DEVICE);
     if (frame == nullptr) {
@@ -241,4 +241,4 @@ void PutFaultLocationFields(const NpusanReportCommon& common, ReportFields* fiel
     (*fields)["location"] = FormatLocation(*frame, true);
 }
 
-} // namespace aclsan::cann::detail
+} // namespace npucheck::detail

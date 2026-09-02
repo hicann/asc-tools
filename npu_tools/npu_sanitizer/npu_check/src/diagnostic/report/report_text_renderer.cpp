@@ -15,7 +15,7 @@
 #include <ostream>
 #include <sstream>
 
-namespace aclsan::cann {
+namespace npucheck {
 namespace {
 
 std::string Trim(const std::string& value)
@@ -344,4 +344,4 @@ const char* ReportStackRoleTitle(ReportStackRole role)
     return "Device Frames:";
 }
 
-} // namespace aclsan::cann
+} // namespace npucheck

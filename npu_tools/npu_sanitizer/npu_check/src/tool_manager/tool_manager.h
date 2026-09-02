@@ -77,17 +77,15 @@ private:
     bool IsToolEnabled(ipc::ToolId toolId) const;
     void RollbackSanitizer();
     void LogHandshakeFailure(const std::string& reason) noexcept;
-    void PublishDiagnostics(std::vector<aclsan::cann::NpusanMemcheckReport> reports);
-    void PublishSynccheckReports(std::vector<aclsan::cann::NpusanSynccheckReport> reports);
+    void StoreDiagnostics(std::vector<npucheck::NpuCheckMemcheckReport> reports);
+    void StoreSynccheckReports(std::vector<npucheck::NpuCheckSynccheckReport> reports);
     bool NormalizeAndStoreReportRecord(
-        const aclsan::cann::NpusanReportRecord& report, uint64_t reportId, const char* what);
+        const npucheck::NpuCheckReportRecord& report, uint64_t reportId, const char* what);
     void PublishMalformed(AclsanCallbackDomain domain, AclsanCallbackId cbid, const char* reason);
     bool InitializeLogger(std::string& error);
     void LogCallback(AclsanCallbackDomain domain, AclsanCallbackId cbid, const void* cbdata);
     std::string BuildReadyMessage() const;
     std::string BuildSummaryMessage() const;
-    // 把一条已渲染的诊断同时送进两条路径：聚合进最终 Result，并作为实时流发出去。
-    void RecordDiagnostic(const std::string& rendered, const char* what);
     // 本次检查是否检出问题，对应 Result 末帧的 kFlagHasErrors。
     bool HasDetectedErrors() const;
 
@@ -131,10 +129,10 @@ private:
     // 工具与子选项，不承载路径）。
     std::string workDir_;
     ipc::UdsServer server_{};
-    // 权威报告的聚合缓冲。callback 线程只往里追加，退出路径上一次性取走发出。
+    // 权威报告的聚合缓冲。Finalize 一次性写入已渲染的完整 bundle 后取走发出。
     diagnostic::ReportBuffer report_{};
-    // 已成功渲染的报告模板记录，用于在会话结束时追加工具级汇总。
-    std::vector<aclsan::cann::ReportRecord> reportRecords_;
+    // callback 线程即时标准化的拥有型记录；Finalize 渲染它们以及工具级汇总。
+    std::vector<npucheck::ReportRecord> reportRecords_;
     AclsanSubscriberHandle subscriber_ = nullptr;
     std::unique_ptr<Memcheck> memcheck_;
     std::unique_ptr<npucheck::Synccheck> synccheck_;

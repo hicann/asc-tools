@@ -15,7 +15,7 @@
 
 namespace {
 
-using namespace aclsan::cann;
+using namespace npucheck;
 
 ReportFrame MakeFrame(
     std::uint64_t pc, std::uint64_t offset, const char* function, const char* file, std::uint32_t line)
@@ -23,7 +23,7 @@ ReportFrame MakeFrame(
     return ReportFrame{pc, offset, function, file, line, 0, 0, 0};
 }
 
-void AddFrameStack(NpusanReportCommon* common, std::uint32_t index, ReportStackRole role, const ReportFrame& frame)
+void AddFrameStack(NpuCheckReportCommon* common, std::uint32_t index, ReportStackRole role, const ReportFrame& frame)
 {
     common->stacks[index].role = role;
     common->stacks[index].format = ReportStackFormat::FRAMES;
@@ -31,15 +31,15 @@ void AddFrameStack(NpusanReportCommon* common, std::uint32_t index, ReportStackR
     common->stackCount = index + 1;
 }
 
-NpusanMemcheckReport MakeInvalidAccessReport()
+NpuCheckMemcheckReport MakeInvalidAccessReport()
 {
-    NpusanMemcheckReport report{};
+    NpuCheckMemcheckReport report{};
     report.common.reportId = 1001;
     report.common.groupId = 9001;
     report.common.timestampNs = 1786759200123456789ULL;
     report.common.tool = ReportTool::MEMCHECK;
     report.common.severity = ReportSeverity::ERROR;
-    report.common.pattern = NpusanReportPattern::MEMCHECK_INVALID_ACCESS;
+    report.common.pattern = NpuCheckReportPattern::MEMCHECK_INVALID_ACCESS;
     report.common.exec.launchId = 41;
     report.common.exec.binaryId = 7;
     report.common.exec.functionId = 3;
@@ -57,28 +57,28 @@ NpusanMemcheckReport MakeInvalidAccessReport()
         &report.common, 1, ReportStackRole::HOST_LAUNCH, MakeFrame(0x7f012345, 0, "aclrtLaunchKernel", "", 0));
     report.common.stacks[1].frames.push_back(MakeFrame(0x4012ab, 0, "RunVectorAdd", "", 0));
 
-    report.access.memorySpace = NpusanReportMemorySpace::GM;
-    report.access.accessMode = NpusanReportAccessMode::READ;
+    report.access.memorySpace = NpuCheckReportMemorySpace::GM;
+    report.access.accessMode = NpuCheckReportAccessMode::READ;
     report.access.accessBytes = 16;
     report.access.address = 0x10090;
     report.nearestAllocation.allocId = 501;
     report.nearestAllocation.base = 0x10000;
     report.nearestAllocation.bytes = 128;
-    report.nearestAllocation.memorySpace = NpusanReportMemorySpace::GM;
+    report.nearestAllocation.memorySpace = NpuCheckReportMemorySpace::GM;
     report.distanceBytes = 16;
-    report.distanceKind = NpusanReportDistanceKind::AFTER;
+    report.distanceKind = NpuCheckReportDistanceKind::AFTER;
     return report;
 }
 
-NpusanMemcheckReport MakeApiErrorReport()
+NpuCheckMemcheckReport MakeApiErrorReport()
 {
-    NpusanMemcheckReport report{};
+    NpuCheckMemcheckReport report{};
     report.common.reportId = 1002;
     report.common.groupId = 9001;
     report.common.timestampNs = 1786759200123456890ULL;
     report.common.tool = ReportTool::MEMCHECK;
     report.common.severity = ReportSeverity::ERROR;
-    report.common.pattern = NpusanReportPattern::MEMCHECK_API_ERROR;
+    report.common.pattern = NpuCheckReportPattern::MEMCHECK_API_ERROR;
     report.apiName = "aclrtMemcpyAsync";
     report.apiErrorName = "ACL_ERROR_RT_PARAM_INVALID";
     report.apiErrorCode = 107002;
@@ -89,15 +89,15 @@ NpusanMemcheckReport MakeApiErrorReport()
     return report;
 }
 
-NpusanInitcheckReport MakeInitcheckReport()
+NpuCheckInitcheckReport MakeInitcheckReport()
 {
-    NpusanInitcheckReport report{};
+    NpuCheckInitcheckReport report{};
     report.common.reportId = 2001;
     report.common.groupId = 9002;
     report.common.timestampNs = 1786759200123457000ULL;
     report.common.tool = ReportTool::INITCHECK;
     report.common.severity = ReportSeverity::WARNING;
-    report.common.pattern = NpusanReportPattern::INITCHECK_PARTIAL_UNINITIALIZED_READ;
+    report.common.pattern = NpuCheckReportPattern::INITCHECK_PARTIAL_UNINITIALIZED_READ;
     report.common.exec.pc = 0x5128;
     report.common.exec.deviceId = 0;
     report.common.exec.phyCoreId = 3;
@@ -108,8 +108,8 @@ NpusanInitcheckReport MakeInitcheckReport()
         &report.common, 0, ReportStackRole::FAULT_DEVICE,
         MakeFrame(0x5128, 0x28, "ReduceKernel", "/workspace/reduce.cpp", 132));
 
-    report.access.memorySpace = NpusanReportMemorySpace::GM;
-    report.access.accessMode = NpusanReportAccessMode::READ;
+    report.access.memorySpace = NpuCheckReportMemorySpace::GM;
+    report.access.accessMode = NpuCheckReportAccessMode::READ;
     report.access.accessBytes = 64;
     report.access.address = 0x22000;
     report.firstUninitAddress = 0x22020;
@@ -119,15 +119,15 @@ NpusanInitcheckReport MakeInitcheckReport()
     return report;
 }
 
-NpusanRacecheckReport MakeRacecheckReport()
+NpuCheckRacecheckReport MakeRacecheckReport()
 {
-    NpusanRacecheckReport report{};
+    NpuCheckRacecheckReport report{};
     report.common.reportId = 3001;
     report.common.groupId = 9003;
     report.common.timestampNs = 1786759200123457100ULL;
     report.common.tool = ReportTool::RACECHECK;
     report.common.severity = ReportSeverity::WARNING;
-    report.common.pattern = NpusanReportPattern::RACECHECK_HAZARD_RAW;
+    report.common.pattern = NpuCheckReportPattern::RACECHECK_HAZARD_RAW;
     report.hazardCount = 1;
 
     report.first.exec.phyCoreId = 2;
@@ -135,8 +135,8 @@ NpusanRacecheckReport MakeRacecheckReport()
     report.first.exec.pipeName = "MTE3";
     report.first.exec.pc = 0x6040;
     report.first.exec.kernelName = "VectorAddKernel";
-    report.first.access.memorySpace = NpusanReportMemorySpace::UB;
-    report.first.access.accessMode = NpusanReportAccessMode::WRITE;
+    report.first.access.memorySpace = NpuCheckReportMemorySpace::UB;
+    report.first.access.accessMode = NpuCheckReportAccessMode::WRITE;
     report.first.access.accessBytes = 4;
     report.first.access.address = 0x2000;
 
@@ -145,8 +145,8 @@ NpusanRacecheckReport MakeRacecheckReport()
     report.second.exec.pipeName = "V";
     report.second.exec.pc = 0x6088;
     report.second.exec.kernelName = "VectorAddKernel";
-    report.second.access.memorySpace = NpusanReportMemorySpace::UB;
-    report.second.access.accessMode = NpusanReportAccessMode::READ;
+    report.second.access.memorySpace = NpuCheckReportMemorySpace::UB;
+    report.second.access.accessMode = NpuCheckReportAccessMode::READ;
     report.second.access.accessBytes = 4;
     report.second.access.address = 0x2000;
     report.currentValue = 0x3f800000;
@@ -160,11 +160,11 @@ NpusanRacecheckReport MakeRacecheckReport()
     return report;
 }
 
-NpusanReportExecContext MakeSyncExec(
+NpuCheckReportExecContext MakeSyncExec(
     std::uint32_t phyCoreId, std::uint32_t blockId, std::uint32_t pipeId, const char* pipeName, std::uint64_t pc,
     const char* function, std::uint64_t offset, const char* file, std::uint32_t line)
 {
-    NpusanReportExecContext exec{};
+    NpuCheckReportExecContext exec{};
     exec.pc = pc;
     exec.offset = offset;
     exec.deviceId = 0;
@@ -179,18 +179,18 @@ NpusanReportExecContext MakeSyncExec(
     return exec;
 }
 
-NpusanSynccheckReport MakeSynccheckBase(
-    std::uint64_t reportId, ReportSeverity severity, NpusanReportPattern pattern, NpusanSyncPrimitiveKind primitiveKind,
-    const char* triggerOperation, const NpusanReportExecContext& triggerExec)
+NpuCheckSynccheckReport MakeSynccheckBase(
+    std::uint64_t reportId, ReportSeverity severity, NpuCheckReportPattern pattern,
+    NpuCheckSyncPrimitiveKind primitiveKind, const char* triggerOperation, const NpuCheckReportExecContext& triggerExec)
 {
-    NpusanSynccheckReport report{};
+    NpuCheckSynccheckReport report{};
     report.common.reportId = reportId;
     report.common.groupId = 9004;
     report.common.timestampNs = 1786759200123457200ULL + reportId;
     report.common.tool = ReportTool::SYNCCHECK;
     report.common.severity = severity;
     report.common.pattern = pattern;
-    report.common.flags = kNpusanReportCommonHasExecContext;
+    report.common.flags = kNpuCheckReportCommonHasExecContext;
     report.common.exec = triggerExec;
     report.primitiveKind = primitiveKind;
     report.triggerPoint.operation = triggerOperation;
@@ -205,37 +205,38 @@ NpusanSynccheckReport MakeSynccheckBase(
     return report;
 }
 
-NpusanSynccheckReport MakeBarrierDivergenceReport()
+NpuCheckSynccheckReport MakeBarrierDivergenceReport()
 {
-    const NpusanReportExecContext trigger =
+    const NpuCheckReportExecContext trigger =
         MakeSyncExec(2, 17, 0, "SIMT", 0x4010, "BlockReduce", 0x40, "/workspace/reduce.cpp", 91);
-    NpusanSynccheckReport report = MakeSynccheckBase(
-        4001, ReportSeverity::ERROR, NpusanReportPattern::SYNCCHECK_INTRA_CORE_DIVERGENT,
-        NpusanSyncPrimitiveKind::BARRIER, "SYNC_THREADS", trigger);
-    report.detailKind = NpusanSyncDetailKind::BARRIER;
-    report.detail = NpusanSyncBarrierError{"Divergent execution entities in block", "block", 0x0000ffff, 0xffffffff, 0};
+    NpuCheckSynccheckReport report = MakeSynccheckBase(
+        4001, ReportSeverity::ERROR, NpuCheckReportPattern::SYNCCHECK_INTRA_CORE_DIVERGENT,
+        NpuCheckSyncPrimitiveKind::BARRIER, "SYNC_THREADS", trigger);
+    report.detailKind = NpuCheckSyncDetailKind::BARRIER;
+    report.detail =
+        NpuCheckSyncBarrierError{"Divergent execution entities in block", "block", 0x0000ffff, 0xffffffff, 0};
     report.common.stacks[0].frames.push_back(MakeFrame(0x3f20, 0x120, "ReduceKernel", "/workspace/reduce.cpp", 137));
     return report;
 }
 
-NpusanSynccheckReport MakeDuplicateSetReport()
+NpuCheckSynccheckReport MakeDuplicateSetReport()
 {
-    const NpusanReportExecContext trigger =
+    const NpuCheckReportExecContext trigger =
         MakeSyncExec(1, 4, 1, "PIPE_S", 0x5040, "SignalMte", 0x40, "/workspace/pipeline.cpp", 55);
-    const NpusanReportExecContext related =
+    const NpuCheckReportExecContext related =
         MakeSyncExec(1, 4, 1, "PIPE_S", 0x5010, "SignalMte", 0x10, "/workspace/pipeline.cpp", 48);
-    NpusanSynccheckReport report = MakeSynccheckBase(
-        4002, ReportSeverity::ERROR, NpusanReportPattern::SYNCCHECK_PAIRING_MISMATCH,
-        NpusanSyncPrimitiveKind::SET_WAIT_FLAG, "SET_FLAG", trigger);
-    report.detailKind = NpusanSyncDetailKind::PAIRING;
+    NpuCheckSynccheckReport report = MakeSynccheckBase(
+        4002, ReportSeverity::ERROR, NpuCheckReportPattern::SYNCCHECK_PAIRING_MISMATCH,
+        NpuCheckSyncPrimitiveKind::SET_WAIT_FLAG, "SET_FLAG", trigger);
+    report.detailKind = NpuCheckSyncDetailKind::PAIRING;
     report.hasRelatedPoint = true;
     report.relatedPoint.operation = "SET_FLAG";
     report.relatedPoint.hasExecContext = true;
     report.relatedPoint.exec = related;
     report.relatedPoint.stackRole = ReportStackRole::SYNC_RELATED;
-    report.detail = NpusanSyncPairingError{
-        NpusanSyncMismatchReason::DUPLICATE_OPEN,
-        {NpusanSyncPairKind::SET_WAIT_FLAG, 1, 3, 0, 7},
+    report.detail = NpuCheckSyncPairingError{
+        NpuCheckSyncMismatchReason::DUPLICATE_OPEN,
+        {NpuCheckSyncPairKind::SET_WAIT_FLAG, 1, 3, 0, 7},
     };
     report.common.stacks[0].frames.push_back(MakeFrame(0x4f10, 0x90, "PipelineStage", "/workspace/pipeline.cpp", 103));
     AddFrameStack(
@@ -245,80 +246,80 @@ NpusanSynccheckReport MakeDuplicateSetReport()
     return report;
 }
 
-NpusanSynccheckReport MakeUnmatchedRlsReport()
+NpuCheckSynccheckReport MakeUnmatchedRlsReport()
 {
-    const NpusanReportExecContext trigger =
+    const NpuCheckReportExecContext trigger =
         MakeSyncExec(3, 8, 3, "PIPE_MTE3", 0x6080, "ReleaseBuffer", 0x80, "/workspace/buffer.cpp", 80);
-    NpusanSynccheckReport report = MakeSynccheckBase(
-        4003, ReportSeverity::ERROR, NpusanReportPattern::SYNCCHECK_PAIRING_MISMATCH,
-        NpusanSyncPrimitiveKind::GET_RLS_BUF, "RLS_BUF", trigger);
-    report.detailKind = NpusanSyncDetailKind::PAIRING;
+    NpuCheckSynccheckReport report = MakeSynccheckBase(
+        4003, ReportSeverity::ERROR, NpuCheckReportPattern::SYNCCHECK_PAIRING_MISMATCH,
+        NpuCheckSyncPrimitiveKind::GET_RLS_BUF, "RLS_BUF", trigger);
+    report.detailKind = NpuCheckSyncDetailKind::PAIRING;
     report.hasRelatedPoint = true;
     report.relatedPoint.operation = "GET_BUF";
-    report.detail = NpusanSyncPairingError{
-        NpusanSyncMismatchReason::UNMATCHED_CLOSE,
-        {NpusanSyncPairKind::GET_RLS_BUF, 0, 0, 2, 12},
+    report.detail = NpuCheckSyncPairingError{
+        NpuCheckSyncMismatchReason::UNMATCHED_CLOSE,
+        {NpuCheckSyncPairKind::GET_RLS_BUF, 0, 0, 2, 12},
     };
     report.common.stacks[0].frames.push_back(MakeFrame(0x5f20, 0x60, "BufferStage", "/workspace/buffer.cpp", 104));
     return report;
 }
 
-NpusanSynccheckReport MakeUnconsumedGetReport()
+NpuCheckSynccheckReport MakeUnconsumedGetReport()
 {
-    const NpusanReportExecContext trigger =
+    const NpuCheckReportExecContext trigger =
         MakeSyncExec(3, 8, 3, "PIPE_MTE3", 0x6040, "AcquireBuffer", 0x20, "/workspace/buffer.cpp", 70);
-    NpusanSynccheckReport report = MakeSynccheckBase(
-        4004, ReportSeverity::WARNING, NpusanReportPattern::SYNCCHECK_PAIRING_MISMATCH,
-        NpusanSyncPrimitiveKind::GET_RLS_BUF, "GET_BUF", trigger);
-    report.detailKind = NpusanSyncDetailKind::PAIRING;
+    NpuCheckSynccheckReport report = MakeSynccheckBase(
+        4004, ReportSeverity::WARNING, NpuCheckReportPattern::SYNCCHECK_PAIRING_MISMATCH,
+        NpuCheckSyncPrimitiveKind::GET_RLS_BUF, "GET_BUF", trigger);
+    report.detailKind = NpuCheckSyncDetailKind::PAIRING;
     report.hasRelatedPoint = true;
     report.relatedPoint.operation = "RLS_BUF";
-    report.detail = NpusanSyncPairingError{
-        NpusanSyncMismatchReason::UNCONSUMED_OPEN,
-        {NpusanSyncPairKind::GET_RLS_BUF, 0, 0, 1, 13},
+    report.detail = NpuCheckSyncPairingError{
+        NpuCheckSyncMismatchReason::UNCONSUMED_OPEN,
+        {NpuCheckSyncPairKind::GET_RLS_BUF, 0, 0, 1, 13},
     };
     return report;
 }
 
-NpusanSynccheckReport MakeSequenceMismatchReport()
+NpuCheckSynccheckReport MakeSequenceMismatchReport()
 {
-    const NpusanReportExecContext trigger =
+    const NpuCheckReportExecContext trigger =
         MakeSyncExec(5, 2, 5, "MMA", 0x7080, "MmaStage", 0x80, "/workspace/gemm.cpp", 122);
-    NpusanSynccheckReport report = MakeSynccheckBase(
-        4005, ReportSeverity::ERROR, NpusanReportPattern::SYNCCHECK_INSTRUCTION_SEQUENCE_MISMATCH,
-        NpusanSyncPrimitiveKind::INSTRUCTION_SEQUENCE, "wgmma.mma_async.m64n64k16", trigger);
-    report.detailKind = NpusanSyncDetailKind::SEQUENCE;
+    NpuCheckSynccheckReport report = MakeSynccheckBase(
+        4005, ReportSeverity::ERROR, NpuCheckReportPattern::SYNCCHECK_INSTRUCTION_SEQUENCE_MISMATCH,
+        NpuCheckSyncPrimitiveKind::INSTRUCTION_SEQUENCE, "wgmma.mma_async.m64n64k16", trigger);
+    report.detailKind = NpuCheckSyncDetailKind::SEQUENCE;
     report.hasRelatedPoint = true;
     report.relatedPoint.operation = "wgmma.commit_group";
-    report.detail = NpusanSyncSequenceError{"Instruction order differs between warps", 3, 0xffffffff};
+    report.detail = NpuCheckSyncSequenceError{"Instruction order differs between warps", 3, 0xffffffff};
     report.common.stacks[0].frames.push_back(MakeFrame(0x6f00, 0x200, "GemmKernel", "/workspace/gemm.cpp", 188));
     return report;
 }
 
-NpusanSynccheckReport MakeDeadlockReport()
+NpuCheckSynccheckReport MakeDeadlockReport()
 {
-    const NpusanReportExecContext trigger =
+    const NpuCheckReportExecContext trigger =
         MakeSyncExec(6, 1, 0, "SIMT", 0x8040, "BarrierWait", 0x40, "/workspace/barrier.cpp", 64);
-    NpusanSynccheckReport report = MakeSynccheckBase(
-        4006, ReportSeverity::ERROR, NpusanReportPattern::SYNCCHECK_DEADLOCK, NpusanSyncPrimitiveKind::SYNC_OBJECT,
+    NpuCheckSynccheckReport report = MakeSynccheckBase(
+        4006, ReportSeverity::ERROR, NpuCheckReportPattern::SYNCCHECK_DEADLOCK, NpuCheckSyncPrimitiveKind::SYNC_OBJECT,
         "BARRIER_WAIT", trigger);
-    report.detailKind = NpusanSyncDetailKind::OBJECT;
+    report.detailKind = NpuCheckSyncDetailKind::OBJECT;
     report.hasRelatedPoint = true;
     report.relatedPoint.operation = "BARRIER_ARRIVE";
-    report.detail = NpusanSyncObjectError{"Wait cannot complete", 0x21, 0x8000, 0x0f, 5000000};
+    report.detail = NpuCheckSyncObjectError{"Wait cannot complete", 0x21, 0x8000, 0x0f, 5000000};
     report.common.stacks[0].frames.push_back(MakeFrame(0x7f10, 0x70, "ConsumerStage", "/workspace/barrier.cpp", 112));
     return report;
 }
 
-NpusanSoccheckReport MakeSoccheckReport()
+NpuCheckSoccheckReport MakeSoccheckReport()
 {
-    NpusanSoccheckReport report{};
+    NpuCheckSoccheckReport report{};
     report.common.reportId = 5001;
     report.common.groupId = 9005;
     report.common.timestampNs = 1786759200123457300ULL;
     report.common.tool = ReportTool::SOCCHECK;
     report.common.severity = ReportSeverity::FATAL;
-    report.common.pattern = NpusanReportPattern::SOCCHECK_REGISTER_MISMATCH;
+    report.common.pattern = NpuCheckReportPattern::SOCCHECK_REGISTER_MISMATCH;
     report.common.exec.function = "RestoreControlState";
     report.common.exec.offset = 0x18;
     report.common.exec.file = "/workspace/control_state.cpp";
@@ -343,31 +344,31 @@ NpusanSoccheckReport MakeSoccheckReport()
 
 int main()
 {
-    NpusanMemcheckReport invalidAccess = MakeInvalidAccessReport();
-    NpusanMemcheckReport apiError = MakeApiErrorReport();
-    NpusanInitcheckReport initcheck = MakeInitcheckReport();
-    NpusanRacecheckReport racecheck = MakeRacecheckReport();
-    NpusanSynccheckReport barrierDivergence = MakeBarrierDivergenceReport();
-    NpusanSynccheckReport duplicateSet = MakeDuplicateSetReport();
-    NpusanSynccheckReport unmatchedRls = MakeUnmatchedRlsReport();
-    NpusanSynccheckReport unconsumedGet = MakeUnconsumedGetReport();
-    NpusanSynccheckReport sequenceMismatch = MakeSequenceMismatchReport();
-    NpusanSynccheckReport deadlock = MakeDeadlockReport();
-    NpusanSoccheckReport soccheck = MakeSoccheckReport();
+    NpuCheckMemcheckReport invalidAccess = MakeInvalidAccessReport();
+    NpuCheckMemcheckReport apiError = MakeApiErrorReport();
+    NpuCheckInitcheckReport initcheck = MakeInitcheckReport();
+    NpuCheckRacecheckReport racecheck = MakeRacecheckReport();
+    NpuCheckSynccheckReport barrierDivergence = MakeBarrierDivergenceReport();
+    NpuCheckSynccheckReport duplicateSet = MakeDuplicateSetReport();
+    NpuCheckSynccheckReport unmatchedRls = MakeUnmatchedRlsReport();
+    NpuCheckSynccheckReport unconsumedGet = MakeUnconsumedGetReport();
+    NpuCheckSynccheckReport sequenceMismatch = MakeSequenceMismatchReport();
+    NpuCheckSynccheckReport deadlock = MakeDeadlockReport();
+    NpuCheckSoccheckReport soccheck = MakeSoccheckReport();
 
-    const std::vector<NpusanReportRecord> records{
-        NpusanReportRecord::From(invalidAccess),     NpusanReportRecord::From(apiError),
-        NpusanReportRecord::From(initcheck),         NpusanReportRecord::From(racecheck),
-        NpusanReportRecord::From(barrierDivergence), NpusanReportRecord::From(duplicateSet),
-        NpusanReportRecord::From(unmatchedRls),      NpusanReportRecord::From(unconsumedGet),
-        NpusanReportRecord::From(sequenceMismatch),  NpusanReportRecord::From(deadlock),
-        NpusanReportRecord::From(soccheck),
+    const std::vector<NpuCheckReportRecord> records{
+        NpuCheckReportRecord::From(invalidAccess),     NpuCheckReportRecord::From(apiError),
+        NpuCheckReportRecord::From(initcheck),         NpuCheckReportRecord::From(racecheck),
+        NpuCheckReportRecord::From(barrierDivergence), NpuCheckReportRecord::From(duplicateSet),
+        NpuCheckReportRecord::From(unmatchedRls),      NpuCheckReportRecord::From(unconsumedGet),
+        NpuCheckReportRecord::From(sequenceMismatch),  NpuCheckReportRecord::From(deadlock),
+        NpuCheckReportRecord::From(soccheck),
     };
 
     std::string output;
-    const ReportRenderStatus status = RenderNpusanReportBundle(records, {}, &output);
+    const ReportRenderStatus status = RenderNpuCheckReportBundle(records, {}, &output);
     if (status != ReportRenderStatus::kSuccess) {
-        std::cerr << "Failed to render NPUSAN demo bundle, status=" << static_cast<int>(status) << '\n';
+        std::cerr << "Failed to render NPU-CHECK demo bundle, status=" << static_cast<int>(status) << '\n';
         return 1;
     }
 

@@ -14,23 +14,23 @@
 #include <cstdint>
 #include <map>
 
-namespace aclsan::cann::detail {
+namespace npucheck::detail {
 
 struct PatternDescriptor {
-    NpusanReportPattern value;
+    NpuCheckReportPattern value;
     ReportTemplate reportTemplate;
 };
 
 using PatternCatalog = std::map<ReportTemplateKey, PatternDescriptor>;
 
 const PatternCatalog& GetPatternCatalog();
-const PatternDescriptor* FindPatternDescriptor(ReportTool tool, NpusanReportPattern pattern);
+const PatternDescriptor* FindPatternDescriptor(ReportTool tool, NpuCheckReportPattern pattern);
 const PatternDescriptor* FindPatternDescriptor(const ReportTemplateKey& key);
-const char* PatternName(ReportTool tool, NpusanReportPattern pattern);
+const char* PatternName(ReportTool tool, NpuCheckReportPattern pattern);
 
 const char* ToolName(ReportTool tool);
 bool ParseToolName(const std::string& text, ReportTool* tool);
 
-} // namespace aclsan::cann::detail
+} // namespace npucheck::detail
 
 #endif

@@ -11,10 +11,10 @@
 
 #include "diagnostic/report_renderer.h"
 
-namespace aclsan::cann::detail {
+namespace npucheck::detail {
 
-ReportRenderStatus NormalizeReport(const NpusanReportRecord& record, ReportRecord* out);
+ReportRenderStatus NormalizeReport(const NpuCheckReportRecord& record, ReportRecord* out);
 
-} // namespace aclsan::cann::detail
+} // namespace npucheck::detail
 
 #endif

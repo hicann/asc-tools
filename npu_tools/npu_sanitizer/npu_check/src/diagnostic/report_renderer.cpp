@@ -13,7 +13,7 @@
 
 #include <utility>
 
-namespace aclsan::cann {
+namespace npucheck {
 
 ReportRenderStatus RenderReportBundle(
     const std::vector<ReportRecord>& records, const ReportTemplateOverrides& overrides, std::string* out)
@@ -23,7 +23,7 @@ ReportRenderStatus RenderReportBundle(
     }
 
     out->clear();
-    out->append("========= NPUSAN\n");
+    out->append("========= NPU-CHECK\n");
     for (const ReportRecord& record : records) {
         std::string rendered;
         const ReportRenderStatus status = RenderReportRecord(record, overrides, &rendered);
@@ -42,8 +42,8 @@ ReportRenderStatus RenderReportBundle(
     return ReportRenderStatus::kSuccess;
 }
 
-ReportRenderStatus RenderNpusanReportRecord(
-    const NpusanReportRecord& record, const ReportTemplateOverrides& overrides, std::string* out)
+ReportRenderStatus RenderNpuCheckReportRecord(
+    const NpuCheckReportRecord& record, const ReportTemplateOverrides& overrides, std::string* out)
 {
     ReportRecord templateRecord{};
     const ReportRenderStatus status = detail::NormalizeReport(record, &templateRecord);
@@ -56,8 +56,8 @@ ReportRenderStatus RenderNpusanReportRecord(
     return RenderReportRecord(templateRecord, overrides, out);
 }
 
-ReportRenderStatus RenderNpusanReportBundle(
-    const std::vector<NpusanReportRecord>& records, const ReportTemplateOverrides& overrides, std::string* out)
+ReportRenderStatus RenderNpuCheckReportBundle(
+    const std::vector<NpuCheckReportRecord>& records, const ReportTemplateOverrides& overrides, std::string* out)
 {
     if (out == nullptr) {
         return ReportRenderStatus::kInvalidArgument;
@@ -65,7 +65,7 @@ ReportRenderStatus RenderNpusanReportBundle(
 
     std::vector<ReportRecord> templateRecords;
     templateRecords.reserve(records.size());
-    for (const NpusanReportRecord& record : records) {
+    for (const NpuCheckReportRecord& record : records) {
         ReportRecord templateRecord{};
         const ReportRenderStatus status = detail::NormalizeReport(record, &templateRecord);
         if (status != ReportRenderStatus::kSuccess) {
@@ -77,4 +77,4 @@ ReportRenderStatus RenderNpusanReportBundle(
     return RenderReportBundle(templateRecords, overrides, out);
 }
 
-} // namespace aclsan::cann
+} // namespace npucheck

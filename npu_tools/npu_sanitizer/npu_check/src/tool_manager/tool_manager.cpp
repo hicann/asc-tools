@@ -9,7 +9,6 @@
 #include "tool_manager/tool_manager.h"
 
 #include "diagnostic/report/report_normalizer.h"
-#include "diagnostic/report/report_summary.h"
 
 #include <algorithm>
 #include <array>
@@ -51,14 +50,14 @@ std::string FormatCallStackReport(AclsanStatus status, const AclsanDeviceCallSta
     return output.str();
 }
 
-std::vector<aclsan::cann::ReportFrame> MakeReportFrames(const AclsanDeviceCallStack& callStack)
+std::vector<npucheck::ReportFrame> MakeReportFrames(const AclsanDeviceCallStack& callStack)
 {
     const uint32_t depth = std::min(callStack.depth, static_cast<uint32_t>(ACLSAN_CALL_STACK_MAX_DEPTH));
-    std::vector<aclsan::cann::ReportFrame> frames;
+    std::vector<npucheck::ReportFrame> frames;
     frames.reserve(depth);
     for (uint32_t index = 0; index < depth; ++index) {
         const AclsanDeviceCallStackFrame& source = callStack.frames[index];
-        aclsan::cann::ReportFrame frame;
+        npucheck::ReportFrame frame;
         frame.pc = callStack.pc;
         frame.function = source.functionName;
         frame.file = source.fileName;
@@ -70,22 +69,22 @@ std::vector<aclsan::cann::ReportFrame> MakeReportFrames(const AclsanDeviceCallSt
     return frames;
 }
 
-void PopulateDeviceCallStack(aclsan::cann::NpusanMemcheckReport& report) noexcept
+void PopulateDeviceCallStack(npucheck::NpuCheckMemcheckReport& report) noexcept
 {
-    if (report.common.exec.pc == 0 || report.common.stackCount > aclsan::cann::kNpusanReportStackMax) {
+    if (report.common.exec.pc == 0 || report.common.stackCount > npucheck::kNpuCheckReportStackMax) {
         return;
     }
 
     std::uint32_t stackIndex = report.common.stackCount;
-    for (std::uint32_t index = 0; index < report.common.stackCount && index < aclsan::cann::kNpusanReportStackMax;
+    for (std::uint32_t index = 0; index < report.common.stackCount && index < npucheck::kNpuCheckReportStackMax;
          ++index) {
-        if (report.common.stacks[index].role == aclsan::cann::ReportStackRole::FAULT_DEVICE) {
+        if (report.common.stacks[index].role == npucheck::ReportStackRole::FAULT_DEVICE) {
             stackIndex = index;
             break;
         }
     }
 
-    if (stackIndex == report.common.stackCount && report.common.stackCount >= aclsan::cann::kNpusanReportStackMax) {
+    if (stackIndex == report.common.stackCount && report.common.stackCount >= npucheck::kNpuCheckReportStackMax) {
         return;
     }
 
@@ -93,20 +92,19 @@ void PopulateDeviceCallStack(aclsan::cann::NpusanMemcheckReport& report) noexcep
         auto callStack = std::make_unique<AclsanDeviceCallStack>();
         const AclsanStatus status = aclsanGetDeviceCallStack(report.common.exec.pc, callStack.get());
         std::string callStackText = FormatCallStackReport(status, *callStack);
-        std::vector<aclsan::cann::ReportFrame> frames;
+        std::vector<npucheck::ReportFrame> frames;
         if (HasCallStackFrames(status)) {
             frames = MakeReportFrames(*callStack);
         }
 
         auto& stack = report.common.stacks[stackIndex];
         stack.rawText.swap(callStackText);
-        stack.role = aclsan::cann::ReportStackRole::FAULT_DEVICE;
+        stack.role = npucheck::ReportStackRole::FAULT_DEVICE;
         if (!frames.empty()) {
             stack.frames.swap(frames);
         }
         const bool hasStructuredFrames = !stack.frames.empty();
-        stack.format =
-            hasStructuredFrames ? aclsan::cann::ReportStackFormat::BOTH : aclsan::cann::ReportStackFormat::RAW_TEXT;
+        stack.format = hasStructuredFrames ? npucheck::ReportStackFormat::BOTH : npucheck::ReportStackFormat::RAW_TEXT;
         if (callStack->binaryId != 0) {
             report.common.exec.binaryId = callStack->binaryId;
         }
@@ -119,21 +117,20 @@ void PopulateDeviceCallStack(aclsan::cann::NpusanMemcheckReport& report) noexcep
 }
 
 void PopulateSyncPointCallStack(
-    aclsan::cann::NpusanReportCommon& common, aclsan::cann::NpusanSyncPoint& point,
-    aclsan::cann::ReportStackRole role) noexcept
+    npucheck::NpuCheckReportCommon& common, npucheck::NpuCheckSyncPoint& point, npucheck::ReportStackRole role) noexcept
 {
-    if (!point.hasExecContext || point.exec.pc == 0 || common.stackCount > aclsan::cann::kNpusanReportStackMax) {
+    if (!point.hasExecContext || point.exec.pc == 0 || common.stackCount > npucheck::kNpuCheckReportStackMax) {
         return;
     }
 
     std::uint32_t stackIndex = common.stackCount;
-    for (std::uint32_t index = 0; index < common.stackCount && index < aclsan::cann::kNpusanReportStackMax; ++index) {
+    for (std::uint32_t index = 0; index < common.stackCount && index < npucheck::kNpuCheckReportStackMax; ++index) {
         if (common.stacks[index].role == role) {
             stackIndex = index;
             break;
         }
     }
-    if (stackIndex == common.stackCount && common.stackCount >= aclsan::cann::kNpusanReportStackMax) {
+    if (stackIndex == common.stackCount && common.stackCount >= npucheck::kNpuCheckReportStackMax) {
         return;
     }
 
@@ -141,7 +138,7 @@ void PopulateSyncPointCallStack(
         auto callStack = std::make_unique<AclsanDeviceCallStack>();
         const AclsanStatus status = aclsanGetDeviceCallStack(point.exec.pc, callStack.get());
         std::string callStackText = FormatCallStackReport(status, *callStack);
-        std::vector<aclsan::cann::ReportFrame> frames;
+        std::vector<npucheck::ReportFrame> frames;
         if (HasCallStackFrames(status)) {
             frames = MakeReportFrames(*callStack);
         }
@@ -150,8 +147,7 @@ void PopulateSyncPointCallStack(
         stack.rawText.swap(callStackText);
         stack.role = role;
         stack.frames.swap(frames);
-        stack.format =
-            stack.frames.empty() ? aclsan::cann::ReportStackFormat::RAW_TEXT : aclsan::cann::ReportStackFormat::BOTH;
+        stack.format = stack.frames.empty() ? npucheck::ReportStackFormat::RAW_TEXT : npucheck::ReportStackFormat::BOTH;
         if (callStack->binaryId != 0) {
             point.exec.binaryId = callStack->binaryId;
         }
@@ -164,11 +160,11 @@ void PopulateSyncPointCallStack(
     }
 }
 
-void PopulateDeviceCallStack(aclsan::cann::NpusanSynccheckReport& report) noexcept
+void PopulateDeviceCallStack(npucheck::NpuCheckSynccheckReport& report) noexcept
 {
-    PopulateSyncPointCallStack(report.common, report.triggerPoint, aclsan::cann::ReportStackRole::SYNC_TRIGGER);
+    PopulateSyncPointCallStack(report.common, report.triggerPoint, npucheck::ReportStackRole::SYNC_TRIGGER);
     report.common.exec = report.triggerPoint.exec;
-    PopulateSyncPointCallStack(report.common, report.relatedPoint, aclsan::cann::ReportStackRole::SYNC_RELATED);
+    PopulateSyncPointCallStack(report.common, report.relatedPoint, npucheck::ReportStackRole::SYNC_RELATED);
 }
 
 struct CallbackSpec {
@@ -447,19 +443,27 @@ void ToolManager::Finalize()
         callbacksDrained_.wait(callbackLock, [this] { return activeCallbacks_ == 0; });
     }
 
-    // 先把实时诊断队列排空并停掉 publisher 线程：一是让 Result 独占后续线路，二是
-    // dropped_messages 只有等队列落定之后才是终值，否则写进报告的是中间数。
+    // 当前不再发布实时诊断；停掉 publisher 线程后，Result 独占后续线路，且
+    // dropped_messages 才是最终值。
     server_.StopPublisher();
 
-    std::string reportSummaries;
+    std::vector<npucheck::ReportRecord> reportRecords;
     {
         std::lock_guard<std::mutex> stateLock(stateMutex_);
-        if (!reportRecords_.empty()) {
-            aclsan::cann::detail::AppendReportSummaries(reportRecords_, &reportSummaries);
-        }
+        reportRecords.swap(reportRecords_);
     }
-    if (!reportSummaries.empty() && !report_.Append(reportSummaries) && !report_.Truncated()) {
-        logger_.Error("failed to record diagnostic summaries into the session report");
+    std::string renderedReport;
+    const auto renderStatus = npucheck::RenderReportBundle(reportRecords, {}, &renderedReport);
+    const bool reportBundleAvailable = renderStatus == npucheck::ReportRenderStatus::kSuccess;
+    if (!reportBundleAvailable) {
+        {
+            std::lock_guard<std::mutex> stateLock(stateMutex_);
+            ++frameworkErrors_;
+        }
+        logger_.Error(
+            "failed to render the session report bundle status=" + std::to_string(static_cast<int>(renderStatus)));
+    } else if (!report_.Append(renderedReport) && !report_.Truncated()) {
+        logger_.Error("failed to record the rendered session report bundle");
     }
 
     const std::string summary = BuildSummaryMessage();
@@ -499,7 +503,7 @@ void ToolManager::Finalize()
     (void)report_.Append(trailer.str());
 
     const bool hasErrors = HasDetectedErrors();
-    if (report_.Failed()) {
+    if (!reportBundleAvailable || report_.Failed()) {
         // 报告本身没能拼出来，此时宁可什么都不给，也不能把残缺的正文当成结论发出去。
         server_.SendError(
             ipc::ErrorDomain::kInternal, ipc::error_code::kReportUnavailable,
@@ -585,8 +589,8 @@ void ToolManager::LeaveCallback()
 void ToolManager::OnCallback(AclsanCallbackDomain domain, AclsanCallbackId cbid, const void* cbdata)
 {
     LogCallback(domain, cbid, cbdata);
-    std::vector<aclsan::cann::NpusanMemcheckReport> reports;
-    std::vector<aclsan::cann::NpusanSynccheckReport> syncReports;
+    std::vector<npucheck::NpuCheckMemcheckReport> reports;
+    std::vector<npucheck::NpuCheckSynccheckReport> syncReports;
     bool hasSynccheckReports = false;
     bool malformed = false;
     {
@@ -678,9 +682,9 @@ void ToolManager::OnCallback(AclsanCallbackDomain domain, AclsanCallbackId cbid,
         }
         PublishMalformed(domain, cbid, "null, truncated, or incompatible callback data");
     } else {
-        PublishDiagnostics(std::move(reports));
+        StoreDiagnostics(std::move(reports));
         if (hasSynccheckReports) {
-            PublishSynccheckReports(std::move(syncReports));
+            StoreSynccheckReports(std::move(syncReports));
         }
     }
 }
@@ -701,64 +705,36 @@ void ToolManager::OnCallbackException(const char* reason) noexcept
     }
 }
 
-void ToolManager::PublishDiagnostics(std::vector<aclsan::cann::NpusanMemcheckReport> reports)
+void ToolManager::StoreDiagnostics(std::vector<npucheck::NpuCheckMemcheckReport> reports)
 {
     for (auto& report : reports) {
         PopulateDeviceCallStack(report);
-        const aclsan::cann::NpusanReportRecord reportRecord = aclsan::cann::NpusanReportRecord::From(report);
-        std::string rendered;
-        const auto status = aclsan::cann::RenderNpusanReportRecord(reportRecord, {}, &rendered);
-        if (status != aclsan::cann::ReportRenderStatus::kSuccess) {
-            std::ostringstream message;
-            message << "report rendering failed report_id=" << report.common.reportId
-                    << " status=" << static_cast<int>(status);
-            {
-                std::lock_guard<std::mutex> stateLock(stateMutex_);
-                ++frameworkErrors_;
-            }
-            logger_.Error(message.str());
-            continue;
-        }
+        const npucheck::NpuCheckReportRecord reportRecord = npucheck::NpuCheckReportRecord::From(report);
         if (!NormalizeAndStoreReportRecord(reportRecord, report.common.reportId, "report")) {
             continue;
         }
-        logger_.Info("diagnostic report generated report_id=" + std::to_string(report.common.reportId));
-        RecordDiagnostic(rendered, "diagnostic");
+        logger_.Info("diagnostic report stored report_id=" + std::to_string(report.common.reportId));
     }
 }
 
-void ToolManager::PublishSynccheckReports(std::vector<aclsan::cann::NpusanSynccheckReport> reports)
+void ToolManager::StoreSynccheckReports(std::vector<npucheck::NpuCheckSynccheckReport> reports)
 {
     for (auto& report : reports) {
         PopulateDeviceCallStack(report);
-        const aclsan::cann::NpusanReportRecord reportRecord = aclsan::cann::NpusanReportRecord::From(report);
-        std::string rendered;
-        const auto status = aclsan::cann::RenderNpusanReportRecord(reportRecord, {}, &rendered);
-        if (status != aclsan::cann::ReportRenderStatus::kSuccess) {
-            std::ostringstream message;
-            message << "synccheck report rendering failed report_id=" << report.common.reportId
-                    << " status=" << static_cast<int>(status);
-            {
-                std::lock_guard<std::mutex> stateLock(stateMutex_);
-                ++frameworkErrors_;
-            }
-            logger_.Error(message.str());
-            continue;
-        }
+        const npucheck::NpuCheckReportRecord reportRecord = npucheck::NpuCheckReportRecord::From(report);
         if (!NormalizeAndStoreReportRecord(reportRecord, report.common.reportId, "synccheck report")) {
             continue;
         }
-        logger_.Info("synccheck diagnostic report generated report_id=" + std::to_string(report.common.reportId));
-        RecordDiagnostic(rendered, "synccheck diagnostic");
+        logger_.Info("synccheck diagnostic report stored report_id=" + std::to_string(report.common.reportId));
     }
 }
 
 bool ToolManager::NormalizeAndStoreReportRecord(
-    const aclsan::cann::NpusanReportRecord& report, uint64_t reportId, const char* what)
+    const npucheck::NpuCheckReportRecord& report, uint64_t reportId, const char* what)
 {
-    aclsan::cann::ReportRecord normalized;
-    const auto status = aclsan::cann::detail::NormalizeReport(report, &normalized);
-    if (status != aclsan::cann::ReportRenderStatus::kSuccess) {
+    npucheck::ReportRecord normalized;
+    const auto status = npucheck::detail::NormalizeReport(report, &normalized);
+    if (status != npucheck::ReportRenderStatus::kSuccess) {
         std::ostringstream message;
         message << what << " normalization failed report_id=" << reportId << " status=" << static_cast<int>(status);
         {
@@ -773,20 +749,6 @@ bool ToolManager::NormalizeAndStoreReportRecord(
         reportRecords_.push_back(std::move(normalized));
     }
     return true;
-}
-
-void ToolManager::RecordDiagnostic(const std::string& rendered, const char* what)
-{
-    // 权威路径：聚合进本次会话的 Result。追加失败只说明报告到顶了，不影响已有内容，
-    // 截断这件事由末帧的 kFlagTruncated 告诉 CLI。
-    if (!report_.Append(rendered) && !report_.Truncated()) {
-        logger_.Error(std::string("failed to record ") + what + " into the session report");
-    }
-    // 辅助路径：实时流。它是 must-ignore 消息，只为长任务下的人工观察服务，投递失败
-    // 不影响结论 —— 同一条诊断已经在 Result 里了。
-    if (!server_.Publish(ipc::MessageType::DIAGNOSTIC_STREAM, rendered)) {
-        logger_.Warning(std::string("failed to queue ") + what + " for live streaming");
-    }
 }
 
 void ToolManager::PublishMalformed(AclsanCallbackDomain domain, AclsanCallbackId cbid, const char* reason)

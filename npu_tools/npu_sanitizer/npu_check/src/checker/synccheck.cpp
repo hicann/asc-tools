@@ -14,8 +14,6 @@
 namespace npucheck {
 namespace {
 
-using namespace aclsan::cann;
-
 const char* OperationName(uint32_t syncKind, uint32_t action)
 {
     if (syncKind == ACLSAN_DEVICE_SYNC_KIND_SET_WAIT_FLAG) {
@@ -39,15 +37,15 @@ const char* OperationName(uint32_t syncKind, uint32_t action)
 const char* ExpectedOperation(uint32_t kind, uint32_t reason)
 {
     const bool setWait = kind == ACLSAN_DEVICE_SYNC_KIND_SET_WAIT_FLAG;
-    if (reason == static_cast<uint32_t>(NpusanSyncMismatchReason::UNMATCHED_CLOSE)) {
+    if (reason == static_cast<uint32_t>(NpuCheckSyncMismatchReason::UNMATCHED_CLOSE)) {
         return setWait ? "SET_FLAG" : "GET_BUF";
     }
     return setWait ? "WAIT_FLAG" : "RLS_BUF";
 }
 
-NpusanReportExecContext ExecContext(const AclsanDeviceSyncData& data)
+NpuCheckReportExecContext ExecContext(const AclsanDeviceSyncData& data)
 {
-    NpusanReportExecContext exec{};
+    NpuCheckReportExecContext exec{};
     exec.launchId = data.header.launchId;
     exec.instrExecId = data.header.instrExecId;
     exec.pc = data.header.pc;
@@ -82,7 +80,7 @@ void Synccheck::HandleFlagEvent(
             // set_flag(V, MTE2, 3) -> set_flag(V, MTE2, 3).
             ++stats_.duplicateOpens;
             reports.push_back(BuildMismatch(
-                data, &open->second, static_cast<uint32_t>(NpusanSyncMismatchReason::DUPLICATE_OPEN), key));
+                data, &open->second, static_cast<uint32_t>(NpuCheckSyncMismatchReason::DUPLICATE_OPEN), key));
         } else {
             ++stats_.pendingOpens;
         }
@@ -96,7 +94,7 @@ void Synccheck::HandleFlagEvent(
         // set_flag(V, MTE3, 3) -> wait_flag(V, MTE2, 3).
         ++stats_.unmatchedCloses;
         reports.push_back(
-            BuildMismatch(data, nullptr, static_cast<uint32_t>(NpusanSyncMismatchReason::UNMATCHED_CLOSE), key));
+            BuildMismatch(data, nullptr, static_cast<uint32_t>(NpuCheckSyncMismatchReason::UNMATCHED_CLOSE), key));
     } else {
         state.pending.erase(open);
         ++stats_.matchedPairs;
@@ -117,7 +115,7 @@ void Synccheck::HandleSyncBufEvent(
             ++stats_.duplicateOpens;
             const auto& open = state.pending.at(active->second);
             reports.push_back(
-                BuildMismatch(data, &open, static_cast<uint32_t>(NpusanSyncMismatchReason::DUPLICATE_OPEN), key));
+                BuildMismatch(data, &open, static_cast<uint32_t>(NpuCheckSyncMismatchReason::DUPLICATE_OPEN), key));
         } else {
             state.pending.emplace(key, data);
             state.activeSyncBufs.emplace(occupancyKey, key);
@@ -132,7 +130,7 @@ void Synccheck::HandleSyncBufEvent(
         // get_buf(MTE2, 2, 0) -> rls_buf(MTE2, 2, 1).
         ++stats_.unmatchedCloses;
         reports.push_back(
-            BuildMismatch(data, nullptr, static_cast<uint32_t>(NpusanSyncMismatchReason::UNMATCHED_CLOSE), key));
+            BuildMismatch(data, nullptr, static_cast<uint32_t>(NpuCheckSyncMismatchReason::UNMATCHED_CLOSE), key));
     } else {
         state.activeSyncBufs.erase(BuildSyncBufOccupancyKey(data));
         state.pending.erase(open);
@@ -164,7 +162,8 @@ std::vector<Synccheck::Report> Synccheck::OnSynchronization()
         for (const auto& entry : pending) {
             ++stats_.unconsumedOpens;
             reports.push_back(BuildMismatch(
-                entry.second, nullptr, static_cast<uint32_t>(NpusanSyncMismatchReason::UNCONSUMED_OPEN), entry.first));
+                entry.second, nullptr, static_cast<uint32_t>(NpuCheckSyncMismatchReason::UNCONSUMED_OPEN),
+                entry.first));
         }
     };
     // Open left at synchronization, for example:
@@ -184,18 +183,18 @@ std::vector<Synccheck::Report> Synccheck::OnSynchronization()
 
 SynccheckStats Synccheck::Stats() const { return stats_; }
 
-NpusanSyncPoint Synccheck::ActualPoint(const AclsanDeviceSyncData& data)
+NpuCheckSyncPoint Synccheck::ActualPoint(const AclsanDeviceSyncData& data)
 {
-    NpusanSyncPoint point{};
+    NpuCheckSyncPoint point{};
     point.operation = OperationName(data.syncKind, data.action);
     point.hasExecContext = true;
     point.exec = ExecContext(data);
     return point;
 }
 
-NpusanSyncPoint Synccheck::ExpectedPoint(const AclsanDeviceSyncData& data, uint32_t reason)
+NpuCheckSyncPoint Synccheck::ExpectedPoint(const AclsanDeviceSyncData& data, uint32_t reason)
 {
-    NpusanSyncPoint point{};
+    NpuCheckSyncPoint point{};
     point.operation = ExpectedOperation(data.syncKind, reason);
     return point;
 }
@@ -206,12 +205,12 @@ Synccheck::Report Synccheck::BuildMismatchBase(
     Report report{};
     report.common.tool = ReportTool::SYNCCHECK;
     report.common.severity = ReportSeverity::ERROR;
-    report.common.pattern = NpusanReportPattern::SYNCCHECK_PAIRING_MISMATCH;
-    report.common.flags = kNpusanReportCommonHasExecContext;
+    report.common.pattern = NpuCheckReportPattern::SYNCCHECK_PAIRING_MISMATCH;
+    report.common.flags = kNpuCheckReportCommonHasExecContext;
     report.primitiveKind = trigger.syncKind == ACLSAN_DEVICE_SYNC_KIND_SET_WAIT_FLAG ?
-                               NpusanSyncPrimitiveKind::SET_WAIT_FLAG :
-                               NpusanSyncPrimitiveKind::GET_RLS_BUF;
-    report.detailKind = NpusanSyncDetailKind::PAIRING;
+                               NpuCheckSyncPrimitiveKind::SET_WAIT_FLAG :
+                               NpuCheckSyncPrimitiveKind::GET_RLS_BUF;
+    report.detailKind = NpuCheckSyncDetailKind::PAIRING;
     report.hasRelatedPoint = true;
     report.triggerPoint = ActualPoint(trigger);
     report.common.exec = report.triggerPoint.exec;
@@ -224,9 +223,9 @@ Synccheck::Report Synccheck::BuildMismatch(
     const AclsanDeviceSyncData& trigger, const AclsanDeviceSyncData* related, uint32_t reason, const FlagPairKey& key)
 {
     Report report = BuildMismatchBase(trigger, related, reason);
-    NpusanSyncPairingError detail{};
-    detail.reason = static_cast<NpusanSyncMismatchReason>(reason);
-    detail.key.pairKind = NpusanSyncPairKind::SET_WAIT_FLAG;
+    NpuCheckSyncPairingError detail{};
+    detail.reason = static_cast<NpuCheckSyncMismatchReason>(reason);
+    detail.key.pairKind = NpuCheckSyncPairKind::SET_WAIT_FLAG;
     detail.key.srcPipe = key.srcPipe;
     detail.key.dstPipe = key.dstPipe;
     detail.key.id = key.objectId;
@@ -239,9 +238,9 @@ Synccheck::Report Synccheck::BuildMismatch(
     const SyncBufPairKey& key)
 {
     Report report = BuildMismatchBase(trigger, related, reason);
-    NpusanSyncPairingError detail{};
-    detail.reason = static_cast<NpusanSyncMismatchReason>(reason);
-    detail.key.pairKind = NpusanSyncPairKind::GET_RLS_BUF;
+    NpuCheckSyncPairingError detail{};
+    detail.reason = static_cast<NpuCheckSyncMismatchReason>(reason);
+    detail.key.pairKind = NpuCheckSyncPairKind::GET_RLS_BUF;
     detail.key.dstPipe = key.pipe;
     detail.key.mode = key.mode;
     detail.key.id = key.objectId;

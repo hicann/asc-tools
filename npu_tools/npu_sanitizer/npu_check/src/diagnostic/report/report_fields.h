@@ -11,32 +11,32 @@
 
 #include "diagnostic/report_renderer.h"
 
-namespace aclsan::cann::detail {
+namespace npucheck::detail {
 
 std::string FieldOr(const ReportFields& fields, const std::string& key, const char* fallback);
-const char* MemorySpaceName(NpusanReportMemorySpace space);
-const char* AccessModeName(NpusanReportAccessMode mode);
+const char* MemorySpaceName(NpuCheckReportMemorySpace space);
+const char* AccessModeName(NpuCheckReportAccessMode mode);
 std::string Hex(std::uint64_t value);
 std::string HexWithPrefix(std::uint64_t value);
 std::string OrUnknown(const std::string& value);
 std::string FormatCoreId(std::uint32_t coreId);
 std::string FormatBlockType(std::uint32_t blockType);
 std::string FormatLaunchId(std::uint64_t launchId);
-std::string FormatLocation(const NpusanReportExecContext& exec, bool includeAt);
+std::string FormatLocation(const NpuCheckReportExecContext& exec, bool includeAt);
 std::string FormatLocation(const ReportFrame& frame, bool includeAt);
 
-void PutExecFields(const NpusanReportExecContext& exec, ReportFields* fields);
-void PutPrefixedExecFields(const NpusanReportExecContext& exec, const std::string& prefix, ReportFields* fields);
-void PutAccessFields(const NpusanReportMemoryAccess& access, ReportFields* fields);
-void PutAllocationFields(const NpusanReportAllocation& allocation, ReportFields* fields);
+void PutExecFields(const NpuCheckReportExecContext& exec, ReportFields* fields);
+void PutPrefixedExecFields(const NpuCheckReportExecContext& exec, const std::string& prefix, ReportFields* fields);
+void PutAccessFields(const NpuCheckReportMemoryAccess& access, ReportFields* fields);
+void PutAllocationFields(const NpuCheckReportAllocation& allocation, ReportFields* fields);
 void PutDefaultHostFields(ReportFields* fields);
 void PutFrameLocationFields(const ReportFrame& frame, const std::string& prefix, ReportFields* fields);
-void PutFaultLocationFields(const NpusanReportCommon& common, ReportFields* fields);
+void PutFaultLocationFields(const NpuCheckReportCommon& common, ReportFields* fields);
 
-std::vector<ReportCallStack> ActiveCallStacks(const NpusanReportCommon& common);
-const ReportCallStack* FindStackByRole(const NpusanReportCommon& common, ReportStackRole role);
-const ReportFrame* FirstStructuredFrame(const NpusanReportCommon& common, ReportStackRole role);
+std::vector<ReportCallStack> ActiveCallStacks(const NpuCheckReportCommon& common);
+const ReportCallStack* FindStackByRole(const NpuCheckReportCommon& common, ReportStackRole role);
+const ReportFrame* FirstStructuredFrame(const NpuCheckReportCommon& common, ReportStackRole role);
 
-} // namespace aclsan::cann::detail
+} // namespace npucheck::detail
 
 #endif

@@ -21,15 +21,15 @@
 namespace npu::sanitizer {
 namespace {
 
-using aclsan::cann::NpusanMemcheckReport;
-using aclsan::cann::NpusanReportAccessMode;
-using aclsan::cann::NpusanReportAllocation;
-using aclsan::cann::NpusanReportDistanceKind;
-using aclsan::cann::NpusanReportExecContext;
-using aclsan::cann::NpusanReportMemorySpace;
-using aclsan::cann::NpusanReportPattern;
-using aclsan::cann::ReportSeverity;
-using aclsan::cann::ReportTool;
+using npucheck::NpuCheckMemcheckReport;
+using npucheck::NpuCheckReportAccessMode;
+using npucheck::NpuCheckReportAllocation;
+using npucheck::NpuCheckReportDistanceKind;
+using npucheck::NpuCheckReportExecContext;
+using npucheck::NpuCheckReportMemorySpace;
+using npucheck::NpuCheckReportPattern;
+using npucheck::ReportSeverity;
+using npucheck::ReportTool;
 
 constexpr uint32_t kAllocationStateLive = 1;
 constexpr uint32_t kAllocationStateFreed = 2;
@@ -214,9 +214,9 @@ const char* PipelineName(uint32_t pipeline)
     }
 }
 
-NpusanReportAllocation ToReportAllocation(const std::optional<Allocation>& allocation)
+NpuCheckReportAllocation ToReportAllocation(const std::optional<Allocation>& allocation)
 {
-    NpusanReportAllocation result{};
+    NpuCheckReportAllocation result{};
     if (!allocation) {
         return result;
     }
@@ -225,15 +225,15 @@ NpusanReportAllocation ToReportAllocation(const std::optional<Allocation>& alloc
     result.bytes = allocation->bytes;
     result.allocSerialNo = allocation->allocSequence;
     result.freeSerialNo = allocation->freeSequence;
-    result.memorySpace = NpusanReportMemorySpace::GM;
+    result.memorySpace = NpuCheckReportMemorySpace::GM;
     result.deviceId = allocation->deviceId;
     result.state = allocation->freeSequence == 0 ? kAllocationStateLive : kAllocationStateFreed;
     return result;
 }
 
-NpusanReportExecContext ToExecContext(const AclsanDeviceMemoryAccessData& data)
+NpuCheckReportExecContext ToExecContext(const AclsanDeviceMemoryAccessData& data)
 {
-    NpusanReportExecContext exec{};
+    NpuCheckReportExecContext exec{};
     exec.launchId = data.header.launchId;
     exec.instrExecId = data.header.instrExecId;
     exec.serialNo = data.header.serialNo;
@@ -255,7 +255,7 @@ int64_t ClampDistance(uint64_t distance)
 }
 
 void SetDistance(
-    uint64_t address, uint64_t bytes, const std::optional<Allocation>& allocation, NpusanMemcheckReport& report)
+    uint64_t address, uint64_t bytes, const std::optional<Allocation>& allocation, NpuCheckMemcheckReport& report)
 {
     if (!allocation) {
         return;
@@ -266,26 +266,26 @@ void SetDistance(
         return;
     }
     if (address < allocation->base) {
-        report.distanceKind = NpusanReportDistanceKind::BEFORE;
+        report.distanceKind = NpuCheckReportDistanceKind::BEFORE;
         report.distanceBytes = ClampDistance(allocation->base - address);
         return;
     }
     if (!accessEnd) {
-        report.distanceKind = NpusanReportDistanceKind::AFTER;
+        report.distanceKind = NpuCheckReportDistanceKind::AFTER;
         report.distanceBytes = std::numeric_limits<int64_t>::max();
         return;
     }
     if (address >= *allocationEnd) {
-        report.distanceKind = NpusanReportDistanceKind::AFTER;
+        report.distanceKind = NpuCheckReportDistanceKind::AFTER;
         report.distanceBytes = ClampDistance(address - *allocationEnd);
         return;
     }
     if (*accessEnd > *allocationEnd) {
-        report.distanceKind = NpusanReportDistanceKind::AFTER;
+        report.distanceKind = NpuCheckReportDistanceKind::AFTER;
         report.distanceBytes = ClampDistance(*accessEnd - *allocationEnd);
         return;
     }
-    report.distanceKind = NpusanReportDistanceKind::INSIDE;
+    report.distanceKind = NpuCheckReportDistanceKind::INSIDE;
 }
 
 } // namespace
@@ -315,8 +315,8 @@ void Memcheck::OnFree(const AclsanResourceData& data)
     }
 }
 
-std::vector<NpusanMemcheckReport> Memcheck::CheckAccess(
-    const AclsanDeviceMemoryAccessData& data, NpusanReportAccessMode accessMode, uint64_t address, uint64_t bytes,
+std::vector<NpuCheckMemcheckReport> Memcheck::CheckAccess(
+    const AclsanDeviceMemoryAccessData& data, NpuCheckReportAccessMode accessMode, uint64_t address, uint64_t bytes,
     uint64_t groupId)
 {
     const RangeResult range = allocations_.Classify(data.header.deviceId, address, bytes);
@@ -324,18 +324,19 @@ std::vector<NpusanMemcheckReport> Memcheck::CheckAccess(
         return {};
     }
 
-    NpusanMemcheckReport report{};
+    NpuCheckMemcheckReport report{};
     report.common.reportId = nextReportId_++;
     report.common.groupId = groupId;
     report.common.timestampNs = TimestampNs();
     report.common.tool = ReportTool::MEMCHECK;
     report.common.severity = ReportSeverity::ERROR;
-    report.common.flags = aclsan::cann::kNpusanReportCommonHasExecContext;
+    report.common.flags = npucheck::kNpuCheckReportCommonHasExecContext;
     report.common.exec = ToExecContext(data);
-    report.common.pattern = range.status == RangeStatus::USE_AFTER_FREE ? NpusanReportPattern::MEMCHECK_USE_AFTER_FREE :
-                                                                          NpusanReportPattern::MEMCHECK_INVALID_ACCESS;
+    report.common.pattern = range.status == RangeStatus::USE_AFTER_FREE ?
+                                NpuCheckReportPattern::MEMCHECK_USE_AFTER_FREE :
+                                NpuCheckReportPattern::MEMCHECK_INVALID_ACCESS;
 
-    report.access.memorySpace = NpusanReportMemorySpace::GM;
+    report.access.memorySpace = NpuCheckReportMemorySpace::GM;
     report.access.accessMode = accessMode;
     report.access.accessBytes = bytes > std::numeric_limits<uint32_t>::max() ? std::numeric_limits<uint32_t>::max() :
                                                                                static_cast<uint32_t>(bytes);
@@ -365,29 +366,29 @@ void Memcheck::QueueDeviceMemoryAccess(const AclsanDeviceMemoryAccessData& data)
     stats_.pendingDeviceOperations = pendingDeviceAccesses_.size();
 }
 
-std::vector<NpusanMemcheckReport> Memcheck::CheckDeviceMemoryAccess(
+std::vector<NpuCheckMemcheckReport> Memcheck::CheckDeviceMemoryAccess(
     const AclsanDeviceMemoryAccessData& data, uint64_t groupId)
 {
     const auto markIncomplete = [this]() {
         ++stats_.droppedDeviceOperations;
-        return std::vector<NpusanMemcheckReport>{};
+        return std::vector<NpuCheckMemcheckReport>{};
     };
     if (data.header.version != ACLSAN_API_VERSION || data.header.size < sizeof(AclsanDeviceMemoryAccessData) ||
         data.accessCount == 0 || data.accessIndex >= data.accessCount) {
         return markIncomplete();
     }
 
-    std::vector<NpusanReportAccessMode> accessModes;
+    std::vector<NpuCheckReportAccessMode> accessModes;
     switch (data.accessMode) {
         case ACLSAN_DEVICE_MEMORY_ACCESS_READ:
-            accessModes.push_back(NpusanReportAccessMode::READ);
+            accessModes.push_back(NpuCheckReportAccessMode::READ);
             break;
         case ACLSAN_DEVICE_MEMORY_ACCESS_WRITE:
-            accessModes.push_back(NpusanReportAccessMode::WRITE);
+            accessModes.push_back(NpuCheckReportAccessMode::WRITE);
             break;
         case ACLSAN_DEVICE_MEMORY_ACCESS_READ_WRITE:
-            accessModes.push_back(NpusanReportAccessMode::READ);
-            accessModes.push_back(NpusanReportAccessMode::WRITE);
+            accessModes.push_back(NpuCheckReportAccessMode::READ);
+            accessModes.push_back(NpuCheckReportAccessMode::WRITE);
             break;
         default:
             return markIncomplete();
@@ -398,9 +399,9 @@ std::vector<NpusanMemcheckReport> Memcheck::CheckDeviceMemoryAccess(
         return {};
     }
 
-    std::vector<NpusanMemcheckReport> reports;
+    std::vector<NpuCheckMemcheckReport> reports;
     auto appendAccess = [&](uint64_t address, uint64_t bytes) {
-        for (const NpusanReportAccessMode accessMode : accessModes) {
+        for (const NpuCheckReportAccessMode accessMode : accessModes) {
             auto found = CheckAccess(data, accessMode, address, bytes, groupId);
             reports.insert(reports.end(), std::make_move_iterator(found.begin()), std::make_move_iterator(found.end()));
         }
@@ -456,7 +457,7 @@ std::vector<NpusanMemcheckReport> Memcheck::CheckDeviceMemoryAccess(
     return reports;
 }
 
-std::vector<NpusanMemcheckReport> Memcheck::OnSynchronization()
+std::vector<NpuCheckMemcheckReport> Memcheck::OnSynchronization()
 {
     ++stats_.synchronizationEvents;
     std::vector<AclsanDeviceMemoryAccessData> accesses;
@@ -465,7 +466,7 @@ std::vector<NpusanMemcheckReport> Memcheck::OnSynchronization()
 
     using InstructionIdentity = std::tuple<uint32_t, uint64_t, uint32_t, uint32_t, uint64_t>;
     std::map<InstructionIdentity, uint64_t> instructionGroups;
-    std::vector<NpusanMemcheckReport> reports;
+    std::vector<NpuCheckMemcheckReport> reports;
     for (const auto& access : accesses) {
         const InstructionIdentity identity{
             access.header.deviceId, access.header.launchId, access.header.blockType, access.header.blockId,
@@ -488,7 +489,7 @@ MemcheckStats Memcheck::Stats() const
     return stats;
 }
 
-void Memcheck::Count(const std::vector<NpusanMemcheckReport>& reports)
+void Memcheck::Count(const std::vector<NpuCheckMemcheckReport>& reports)
 {
     for (const auto& report : reports) {
         if (report.common.severity == ReportSeverity::ERROR || report.common.severity == ReportSeverity::FATAL) {

@@ -38,16 +38,16 @@ public:
     void OnAllocation(const AclsanResourceData& data);
     void OnFree(const AclsanResourceData& data);
     void QueueDeviceMemoryAccess(const AclsanDeviceMemoryAccessData& data);
-    std::vector<aclsan::cann::NpusanMemcheckReport> OnSynchronization();
+    std::vector<npucheck::NpuCheckMemcheckReport> OnSynchronization();
     MemcheckStats Stats() const;
 
 private:
-    std::vector<aclsan::cann::NpusanMemcheckReport> CheckAccess(
-        const AclsanDeviceMemoryAccessData& data, aclsan::cann::NpusanReportAccessMode accessMode, uint64_t address,
+    std::vector<npucheck::NpuCheckMemcheckReport> CheckAccess(
+        const AclsanDeviceMemoryAccessData& data, npucheck::NpuCheckReportAccessMode accessMode, uint64_t address,
         uint64_t bytes, uint64_t groupId);
-    std::vector<aclsan::cann::NpusanMemcheckReport> CheckDeviceMemoryAccess(
+    std::vector<npucheck::NpuCheckMemcheckReport> CheckDeviceMemoryAccess(
         const AclsanDeviceMemoryAccessData& data, uint64_t groupId);
-    void Count(const std::vector<aclsan::cann::NpusanMemcheckReport>& reports);
+    void Count(const std::vector<npucheck::NpuCheckMemcheckReport>& reports);
 
     bool strictUnknown_ = true;
     AllocationRegistry allocations_;

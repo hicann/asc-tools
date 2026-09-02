@@ -14,10 +14,10 @@
 
 #include <sstream>
 
-namespace aclsan::cann::detail {
+namespace npucheck::detail {
 namespace {
 void PutSyncPointFields(
-    const NpusanReportCommon& common, const NpusanSyncPoint& point, const std::string& prefix, ReportFields* fields)
+    const NpuCheckReportCommon& common, const NpuCheckSyncPoint& point, const std::string& prefix, ReportFields* fields)
 {
     PutPrefixedExecFields(point.exec, prefix, fields);
     (*fields)[prefix + "Operation"] = OrUnknown(point.operation);
@@ -28,7 +28,7 @@ void PutSyncPointFields(
     }
 }
 
-bool ExecContextsEqual(const NpusanReportExecContext& lhs, const NpusanReportExecContext& rhs)
+bool ExecContextsEqual(const NpuCheckReportExecContext& lhs, const NpuCheckReportExecContext& rhs)
 {
     return lhs.launchId == rhs.launchId && lhs.binaryId == rhs.binaryId && lhs.functionId == rhs.functionId &&
            lhs.instrExecId == rhs.instrExecId && lhs.serialNo == rhs.serialNo && lhs.pc == rhs.pc &&
@@ -39,13 +39,13 @@ bool ExecContextsEqual(const NpusanReportExecContext& lhs, const NpusanReportExe
            lhs.kernelName == rhs.kernelName;
 }
 
-bool HasStackRole(const NpusanReportCommon& common, ReportStackRole role)
+bool HasStackRole(const NpuCheckReportCommon& common, ReportStackRole role)
 {
     return FindStackByRole(common, role) != nullptr;
 }
 
 bool ValidatePointStackReference(
-    const NpusanReportCommon& common, const NpusanSyncPoint& point, ReportStackRole expectedRole)
+    const NpuCheckReportCommon& common, const NpuCheckSyncPoint& point, ReportStackRole expectedRole)
 {
     const bool hasStack = HasStackRole(common, expectedRole);
     if (point.stackRole == ReportStackRole::NONE) {
@@ -58,28 +58,28 @@ bool ValidatePointStackReference(
     return frame == nullptr || frame->pc == 0 || point.exec.pc == 0 || frame->pc == point.exec.pc;
 }
 
-bool IsExpectedPoint(const NpusanSyncPoint& point)
+bool IsExpectedPoint(const NpuCheckSyncPoint& point)
 {
     return !point.hasExecContext && point.stackRole == ReportStackRole::NONE && !point.operation.empty() &&
-           ExecContextsEqual(point.exec, NpusanReportExecContext{});
+           ExecContextsEqual(point.exec, NpuCheckReportExecContext{});
 }
 
-bool IsActualPoint(const NpusanSyncPoint& point) { return point.hasExecContext && !point.operation.empty(); }
+bool IsActualPoint(const NpuCheckSyncPoint& point) { return point.hasExecContext && !point.operation.empty(); }
 
-bool IsEmptyPoint(const NpusanSyncPoint& point)
+bool IsEmptyPoint(const NpuCheckSyncPoint& point)
 {
     return !point.hasExecContext && point.operation.empty() && point.stackRole == ReportStackRole::NONE &&
-           ExecContextsEqual(point.exec, NpusanReportExecContext{});
+           ExecContextsEqual(point.exec, NpuCheckReportExecContext{});
 }
 
-const char* PairKindName(NpusanSyncPairKind pairKind)
+const char* PairKindName(NpuCheckSyncPairKind pairKind)
 {
     switch (pairKind) {
-        case NpusanSyncPairKind::SET_WAIT_FLAG:
+        case NpuCheckSyncPairKind::SET_WAIT_FLAG:
             return "SET_WAIT_FLAG";
-        case NpusanSyncPairKind::GET_RLS_BUF:
+        case NpuCheckSyncPairKind::GET_RLS_BUF:
             return "GET_RLS_BUF";
-        case NpusanSyncPairKind::UNKNOWN:
+        case NpuCheckSyncPairKind::UNKNOWN:
             return "UNKNOWN";
     }
     return "UNKNOWN";
@@ -110,44 +110,44 @@ std::string PairKeyPipeName(AclsanDevicePipeline pipe)
     return "PIPE_UNKNOWN(" + std::to_string(static_cast<std::uint32_t>(pipe)) + ")";
 }
 
-const char* PrimitiveKindName(NpusanSyncPrimitiveKind primitiveKind)
+const char* PrimitiveKindName(NpuCheckSyncPrimitiveKind primitiveKind)
 {
     switch (primitiveKind) {
-        case NpusanSyncPrimitiveKind::BARRIER:
+        case NpuCheckSyncPrimitiveKind::BARRIER:
             return "BARRIER";
-        case NpusanSyncPrimitiveKind::SET_WAIT_FLAG:
+        case NpuCheckSyncPrimitiveKind::SET_WAIT_FLAG:
             return "SET_WAIT_FLAG";
-        case NpusanSyncPrimitiveKind::GET_RLS_BUF:
+        case NpuCheckSyncPrimitiveKind::GET_RLS_BUF:
             return "GET_RLS_BUF";
-        case NpusanSyncPrimitiveKind::INSTRUCTION_SEQUENCE:
+        case NpuCheckSyncPrimitiveKind::INSTRUCTION_SEQUENCE:
             return "INSTRUCTION_SEQUENCE";
-        case NpusanSyncPrimitiveKind::SYNC_OBJECT:
+        case NpuCheckSyncPrimitiveKind::SYNC_OBJECT:
             return "SYNC_OBJECT";
-        case NpusanSyncPrimitiveKind::UNKNOWN:
+        case NpuCheckSyncPrimitiveKind::UNKNOWN:
             return "UNKNOWN";
     }
     return "UNKNOWN";
 }
 
-bool IsValidPrimitiveKind(NpusanSyncPrimitiveKind primitiveKind)
+bool IsValidPrimitiveKind(NpuCheckSyncPrimitiveKind primitiveKind)
 {
     const int value = static_cast<int>(primitiveKind);
-    return value >= static_cast<int>(NpusanSyncPrimitiveKind::BARRIER) &&
-           value <= static_cast<int>(NpusanSyncPrimitiveKind::SYNC_OBJECT);
+    return value >= static_cast<int>(NpuCheckSyncPrimitiveKind::BARRIER) &&
+           value <= static_cast<int>(NpuCheckSyncPrimitiveKind::SYNC_OBJECT);
 }
 
-const char* OpenOperation(NpusanSyncPairKind pairKind)
+const char* OpenOperation(NpuCheckSyncPairKind pairKind)
 {
-    return pairKind == NpusanSyncPairKind::SET_WAIT_FLAG ? "SET_FLAG" : "GET_BUF";
+    return pairKind == NpuCheckSyncPairKind::SET_WAIT_FLAG ? "SET_FLAG" : "GET_BUF";
 }
 
-const char* CloseOperation(NpusanSyncPairKind pairKind)
+const char* CloseOperation(NpuCheckSyncPairKind pairKind)
 {
-    return pairKind == NpusanSyncPairKind::SET_WAIT_FLAG ? "WAIT_FLAG" : "RLS_BUF";
+    return pairKind == NpuCheckSyncPairKind::SET_WAIT_FLAG ? "WAIT_FLAG" : "RLS_BUF";
 }
 
 struct PairingReasonRule {
-    NpusanSyncMismatchReason reason;
+    NpuCheckSyncMismatchReason reason;
     bool triggerIsOpen;
     bool relatedIsOpen;
     bool relatedIsActual;
@@ -156,13 +156,13 @@ struct PairingReasonRule {
     bool emitExpectedCloseBeforeOpen;
 };
 
-const PairingReasonRule* FindPairingReasonRule(NpusanSyncMismatchReason reason)
+const PairingReasonRule* FindPairingReasonRule(NpuCheckSyncMismatchReason reason)
 {
     static constexpr PairingReasonRule rules[] = {
-        {NpusanSyncMismatchReason::DUPLICATE_OPEN, true, true, true, "duplicate", "", true},
-        {NpusanSyncMismatchReason::UNMATCHED_CLOSE, false, true, false, "unmatched",
+        {NpuCheckSyncMismatchReason::DUPLICATE_OPEN, true, true, true, "duplicate", "", true},
+        {NpuCheckSyncMismatchReason::UNMATCHED_CLOSE, false, true, false, "unmatched",
          "but no matching point exists for this pair key", false},
-        {NpusanSyncMismatchReason::UNCONSUMED_OPEN, true, false, false, "redundant",
+        {NpuCheckSyncMismatchReason::UNCONSUMED_OPEN, true, false, false, "redundant",
          "but no matching point was observed", false},
     };
     for (const PairingReasonRule& rule : rules) {
@@ -173,22 +173,22 @@ const PairingReasonRule* FindPairingReasonRule(NpusanSyncMismatchReason reason)
     return nullptr;
 }
 
-bool ValidatePairingReport(const NpusanSynccheckReport& report, const NpusanSyncPairingError& detail)
+bool ValidatePairingReport(const NpuCheckSynccheckReport& report, const NpuCheckSyncPairingError& detail)
 {
     const PairingReasonRule* rule = FindPairingReasonRule(detail.reason);
     if (!report.hasRelatedPoint || rule == nullptr ||
-        (detail.key.pairKind != NpusanSyncPairKind::SET_WAIT_FLAG &&
-         detail.key.pairKind != NpusanSyncPairKind::GET_RLS_BUF)) {
+        (detail.key.pairKind != NpuCheckSyncPairKind::SET_WAIT_FLAG &&
+         detail.key.pairKind != NpuCheckSyncPairKind::GET_RLS_BUF)) {
         return false;
     }
-    if ((detail.key.pairKind == NpusanSyncPairKind::SET_WAIT_FLAG && detail.key.mode != 0) ||
-        (detail.key.pairKind == NpusanSyncPairKind::GET_RLS_BUF && detail.key.srcPipe != 0)) {
+    if ((detail.key.pairKind == NpuCheckSyncPairKind::SET_WAIT_FLAG && detail.key.mode != 0) ||
+        (detail.key.pairKind == NpuCheckSyncPairKind::GET_RLS_BUF && detail.key.srcPipe != 0)) {
         return false;
     }
-    if ((detail.key.pairKind == NpusanSyncPairKind::SET_WAIT_FLAG &&
-         report.primitiveKind != NpusanSyncPrimitiveKind::SET_WAIT_FLAG) ||
-        (detail.key.pairKind == NpusanSyncPairKind::GET_RLS_BUF &&
-         report.primitiveKind != NpusanSyncPrimitiveKind::GET_RLS_BUF)) {
+    if ((detail.key.pairKind == NpuCheckSyncPairKind::SET_WAIT_FLAG &&
+         report.primitiveKind != NpuCheckSyncPrimitiveKind::SET_WAIT_FLAG) ||
+        (detail.key.pairKind == NpuCheckSyncPairKind::GET_RLS_BUF &&
+         report.primitiveKind != NpuCheckSyncPrimitiveKind::GET_RLS_BUF)) {
         return false;
     }
 
@@ -202,9 +202,9 @@ bool ValidatePairingReport(const NpusanSynccheckReport& report, const NpusanSync
            report.relatedPoint.operation == relatedOperation;
 }
 
-bool ValidateSynccheckReport(const NpusanSynccheckReport& report)
+bool ValidateSynccheckReport(const NpuCheckSynccheckReport& report)
 {
-    if ((report.common.flags & kNpusanReportCommonHasExecContext) == 0 || !IsActualPoint(report.triggerPoint) ||
+    if ((report.common.flags & kNpuCheckReportCommonHasExecContext) == 0 || !IsActualPoint(report.triggerPoint) ||
         !ExecContextsEqual(report.common.exec, report.triggerPoint.exec) ||
         !ValidatePointStackReference(report.common, report.triggerPoint, ReportStackRole::SYNC_TRIGGER) ||
         !ValidatePointStackReference(report.common, report.relatedPoint, ReportStackRole::SYNC_RELATED)) {
@@ -222,50 +222,50 @@ bool ValidateSynccheckReport(const NpusanSynccheckReport& report)
         }
     }
 
-    const NpusanReportPattern pattern = report.common.pattern;
+    const NpuCheckReportPattern pattern = report.common.pattern;
     switch (pattern) {
-        case NpusanReportPattern::SYNCCHECK_INTRA_CORE_DIVERGENT:
-            return report.detailKind == NpusanSyncDetailKind::BARRIER && !report.hasRelatedPoint &&
-                   report.primitiveKind == NpusanSyncPrimitiveKind::BARRIER &&
-                   std::holds_alternative<NpusanSyncBarrierError>(report.detail);
-        case NpusanReportPattern::SYNCCHECK_INTER_CORE_DIVERGENT:
-        case NpusanReportPattern::SYNCCHECK_PARTICIPANT_MISMATCH:
-            return report.detailKind == NpusanSyncDetailKind::BARRIER &&
-                   report.primitiveKind == NpusanSyncPrimitiveKind::BARRIER &&
-                   std::holds_alternative<NpusanSyncBarrierError>(report.detail) &&
+        case NpuCheckReportPattern::SYNCCHECK_INTRA_CORE_DIVERGENT:
+            return report.detailKind == NpuCheckSyncDetailKind::BARRIER && !report.hasRelatedPoint &&
+                   report.primitiveKind == NpuCheckSyncPrimitiveKind::BARRIER &&
+                   std::holds_alternative<NpuCheckSyncBarrierError>(report.detail);
+        case NpuCheckReportPattern::SYNCCHECK_INTER_CORE_DIVERGENT:
+        case NpuCheckReportPattern::SYNCCHECK_PARTICIPANT_MISMATCH:
+            return report.detailKind == NpuCheckSyncDetailKind::BARRIER &&
+                   report.primitiveKind == NpuCheckSyncPrimitiveKind::BARRIER &&
+                   std::holds_alternative<NpuCheckSyncBarrierError>(report.detail) &&
                    (!report.hasRelatedPoint || IsActualPoint(report.relatedPoint) ||
                     IsExpectedPoint(report.relatedPoint));
-        case NpusanReportPattern::SYNCCHECK_INVALID_ARGUMENT:
-        case NpusanReportPattern::SYNCCHECK_OBJECT_NOT_INITIALIZED:
-            return report.detailKind == NpusanSyncDetailKind::OBJECT && !report.hasRelatedPoint &&
+        case NpuCheckReportPattern::SYNCCHECK_INVALID_ARGUMENT:
+        case NpuCheckReportPattern::SYNCCHECK_OBJECT_NOT_INITIALIZED:
+            return report.detailKind == NpuCheckSyncDetailKind::OBJECT && !report.hasRelatedPoint &&
                    IsValidPrimitiveKind(report.primitiveKind) &&
-                   std::holds_alternative<NpusanSyncObjectError>(report.detail);
-        case NpusanReportPattern::SYNCCHECK_PAIRING_MISMATCH: {
-            if (report.detailKind != NpusanSyncDetailKind::PAIRING ||
-                !std::holds_alternative<NpusanSyncPairingError>(report.detail)) {
+                   std::holds_alternative<NpuCheckSyncObjectError>(report.detail);
+        case NpuCheckReportPattern::SYNCCHECK_PAIRING_MISMATCH: {
+            if (report.detailKind != NpuCheckSyncDetailKind::PAIRING ||
+                !std::holds_alternative<NpuCheckSyncPairingError>(report.detail)) {
                 return false;
             }
-            return ValidatePairingReport(report, std::get<NpusanSyncPairingError>(report.detail));
+            return ValidatePairingReport(report, std::get<NpuCheckSyncPairingError>(report.detail));
         }
-        case NpusanReportPattern::SYNCCHECK_DEADLOCK:
-            return report.detailKind == NpusanSyncDetailKind::OBJECT && IsValidPrimitiveKind(report.primitiveKind) &&
-                   std::holds_alternative<NpusanSyncObjectError>(report.detail) &&
+        case NpuCheckReportPattern::SYNCCHECK_DEADLOCK:
+            return report.detailKind == NpuCheckSyncDetailKind::OBJECT && IsValidPrimitiveKind(report.primitiveKind) &&
+                   std::holds_alternative<NpuCheckSyncObjectError>(report.detail) &&
                    (!report.hasRelatedPoint || IsActualPoint(report.relatedPoint) ||
                     IsExpectedPoint(report.relatedPoint));
-        case NpusanReportPattern::SYNCCHECK_INSTRUCTION_SEQUENCE_MISMATCH:
-            return report.detailKind == NpusanSyncDetailKind::SEQUENCE && report.hasRelatedPoint &&
-                   report.primitiveKind == NpusanSyncPrimitiveKind::INSTRUCTION_SEQUENCE &&
-                   std::holds_alternative<NpusanSyncSequenceError>(report.detail) &&
+        case NpuCheckReportPattern::SYNCCHECK_INSTRUCTION_SEQUENCE_MISMATCH:
+            return report.detailKind == NpuCheckSyncDetailKind::SEQUENCE && report.hasRelatedPoint &&
+                   report.primitiveKind == NpuCheckSyncPrimitiveKind::INSTRUCTION_SEQUENCE &&
+                   std::holds_alternative<NpuCheckSyncSequenceError>(report.detail) &&
                    (IsActualPoint(report.relatedPoint) || IsExpectedPoint(report.relatedPoint));
         default:
             return false;
     }
 }
 
-std::string FormatPairKey(const NpusanSyncPairKey& key)
+std::string FormatPairKey(const NpuCheckSyncPairKey& key)
 {
     std::ostringstream os;
-    if (key.pairKind == NpusanSyncPairKind::SET_WAIT_FLAG) {
+    if (key.pairKind == NpuCheckSyncPairKind::SET_WAIT_FLAG) {
         os << "srcPipe=" << PairKeyPipeName(static_cast<AclsanDevicePipeline>(key.srcPipe))
            << ", dstPipe=" << PairKeyPipeName(static_cast<AclsanDevicePipeline>(key.dstPipe)) << ", id=" << key.id;
     } else {
@@ -292,7 +292,7 @@ std::string SyncObjectLine(std::uint64_t objectId, std::uint64_t address)
     return os.str();
 }
 
-std::string ActualRelatedPointLine(const NpusanSyncPoint& point, const ReportFields& fields)
+std::string ActualRelatedPointLine(const NpuCheckSyncPoint& point, const ReportFields& fields)
 {
     std::ostringstream os;
     os << "=========     related point: " << OrUnknown(point.operation) << " by aicore ("
@@ -304,7 +304,7 @@ std::string ActualRelatedPointLine(const NpusanSyncPoint& point, const ReportFie
     return os.str();
 }
 
-ReportRecord ToReportRecord(const NpusanSynccheckReport& report)
+ReportRecord ToReportRecord(const NpuCheckSynccheckReport& report)
 {
     ReportFields fields;
     PutExecFields(report.common.exec, &fields);
@@ -322,8 +322,8 @@ ReportRecord ToReportRecord(const NpusanSynccheckReport& report)
     }
 
     switch (report.detailKind) {
-        case NpusanSyncDetailKind::BARRIER: {
-            const auto& detail = std::get<NpusanSyncBarrierError>(report.detail);
+        case NpuCheckSyncDetailKind::BARRIER: {
+            const auto& detail = std::get<NpuCheckSyncBarrierError>(report.detail);
             fields["reason"] = OrUnknown(detail.reason);
             fields["scope"] = OrUnknown(detail.scope);
             fields["activeMask"] = Hex(detail.activeMask);
@@ -331,8 +331,8 @@ ReportRecord ToReportRecord(const NpusanSynccheckReport& report)
             fields["objectLine"] = SyncObjectLine(detail.objectId, 0);
             break;
         }
-        case NpusanSyncDetailKind::PAIRING: {
-            const auto& detail = std::get<NpusanSyncPairingError>(report.detail);
+        case NpuCheckSyncDetailKind::PAIRING: {
+            const auto& detail = std::get<NpuCheckSyncPairingError>(report.detail);
             const PairingReasonRule& rule = *FindPairingReasonRule(detail.reason);
             fields["pairKind"] = PairKindName(detail.key.pairKind);
             fields["pairKey"] = FormatPairKey(detail.key);
@@ -353,15 +353,15 @@ ReportRecord ToReportRecord(const NpusanSynccheckReport& report)
             }
             break;
         }
-        case NpusanSyncDetailKind::SEQUENCE: {
-            const auto& detail = std::get<NpusanSyncSequenceError>(report.detail);
+        case NpuCheckSyncDetailKind::SEQUENCE: {
+            const auto& detail = std::get<NpuCheckSyncSequenceError>(report.detail);
             fields["reason"] = OrUnknown(detail.reason);
             fields["sequenceIndex"] = std::to_string(detail.sequenceIndex);
             fields["activeMask"] = Hex(detail.activeMask);
             break;
         }
-        case NpusanSyncDetailKind::OBJECT: {
-            const auto& detail = std::get<NpusanSyncObjectError>(report.detail);
+        case NpuCheckSyncDetailKind::OBJECT: {
+            const auto& detail = std::get<NpuCheckSyncObjectError>(report.detail);
             fields["reason"] = OrUnknown(detail.reason);
             fields["waitingMask"] = Hex(detail.waitingMask);
             fields["timeoutNs"] = std::to_string(detail.timeoutNs);
@@ -378,7 +378,7 @@ ReportRecord ToReportRecord(const NpusanSynccheckReport& report)
 
 } // namespace
 
-ReportRenderStatus NormalizeSynccheckReport(const NpusanSynccheckReport& report, ReportRecord* out)
+ReportRenderStatus NormalizeSynccheckReport(const NpuCheckSynccheckReport& report, ReportRecord* out)
 {
     if (out == nullptr || !ValidateSynccheckReport(report)) {
         return ReportRenderStatus::kInvalidArgument;
@@ -387,4 +387,4 @@ ReportRenderStatus NormalizeSynccheckReport(const NpusanSynccheckReport& report,
     return ReportRenderStatus::kSuccess;
 }
 
-} // namespace aclsan::cann::detail
+} // namespace npucheck::detail

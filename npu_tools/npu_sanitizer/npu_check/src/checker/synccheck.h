@@ -33,7 +33,7 @@ struct SynccheckStats {
 class Synccheck {
 public:
     void OnDeviceSync(const AclsanDeviceSyncData& data);
-    std::vector<aclsan::cann::NpusanSynccheckReport> OnSynchronization();
+    std::vector<npucheck::NpuCheckSynccheckReport> OnSynchronization();
     SynccheckStats Stats() const;
 
 private:
@@ -126,7 +126,7 @@ private:
     using FlagPendingMap = std::unordered_map<FlagPairKey, AclsanDeviceSyncData, FlagPairKeyHash>;
     using SyncBufPendingMap = std::unordered_map<SyncBufPairKey, AclsanDeviceSyncData, SyncBufPairKeyHash>;
     using ActiveSyncBufMap = std::unordered_map<SyncBufOccupancyKey, SyncBufPairKey, SyncBufOccupancyKeyHash>;
-    using Report = aclsan::cann::NpusanSynccheckReport;
+    using Report = npucheck::NpuCheckSynccheckReport;
     using Reports = std::vector<Report>;
 
     struct FlagState {
@@ -160,8 +160,8 @@ private:
     static Report BuildMismatch(
         const AclsanDeviceSyncData& trigger, const AclsanDeviceSyncData* related, uint32_t reason,
         const SyncBufPairKey& key);
-    static aclsan::cann::NpusanSyncPoint ActualPoint(const AclsanDeviceSyncData& data);
-    static aclsan::cann::NpusanSyncPoint ExpectedPoint(const AclsanDeviceSyncData& data, uint32_t reason);
+    static npucheck::NpuCheckSyncPoint ActualPoint(const AclsanDeviceSyncData& data);
+    static npucheck::NpuCheckSyncPoint ExpectedPoint(const AclsanDeviceSyncData& data, uint32_t reason);
     void HandleFlagEvent(FlagState& state, const AclsanDeviceSyncData& data, const FlagPairKey& key, Reports& reports);
     void HandleSyncBufEvent(
         SyncBufState& state, const AclsanDeviceSyncData& data, const SyncBufPairKey& key, Reports& reports);
