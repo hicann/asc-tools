@@ -8,6 +8,14 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 # ----------------------------------------------------------------------------------------------------------
 
+option(NPU_CHECK_ENABLE_REAL_DBI_FLOW "Build the real CANN/NPU DBI full-flow sample" OFF)
+option(NPU_CHECK_ENABLE_REAL_DBI_TOOLCHAIN "Build the real Bisheng DBI toolchain sample" OFF)
+option(NPU_CHECK_RUN_REAL_DBI_HARDWARE "Register the real NPU DBI full-flow hardware test" OFF)
+set(NPU_CHECK_REAL_DBI_ARCH "" CACHE STRING "CCE architecture for real DBI tests")
+set(NPU_CHECK_REAL_DBI_KERNEL "" CACHE FILEPATH "Optional precompiled CCE kernel for real DBI tests")
+set(NPU_CHECK_REAL_DBI_TOOLCHAIN_ROOT "" CACHE PATH "CANN root for real DBI tests")
+set(NPU_CHECK_REAL_DBI_DEVICE_ID "0" CACHE STRING "NPU device ID for the real DBI full-flow test")
+
 foreach(probe_arch IN LISTS NPU_CHECK_PROBE_ARCHES)
   add_test(NAME aclsan.probe_declaration_contract.${probe_arch}
     COMMAND ${CMAKE_COMMAND}

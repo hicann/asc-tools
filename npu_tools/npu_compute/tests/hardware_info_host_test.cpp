@@ -10,7 +10,8 @@
 #include "hardware_info_host.h"
 
 #include <cstdio>
-#include <filesystem>
+#include <boost/filesystem.hpp>
+#include <boost/system/error_code.hpp>
 #include <fstream>
 #include <string>
 #include <string_view>
@@ -32,7 +33,7 @@ class TempDirectory {
 public:
     TempDirectory()
     {
-        std::string pathTemplate = (std::filesystem::temp_directory_path() / "npu-compute-host-test-XXXXXX").string();
+        std::string pathTemplate = (boost::filesystem::temp_directory_path() / "npu-compute-host-test-XXXXXX").string();
         pathTemplate.push_back('\0');
         char* created = ::mkdtemp(pathTemplate.data());
         if (created != nullptr) {
@@ -43,21 +44,21 @@ public:
     ~TempDirectory()
     {
         if (!path_.empty()) {
-            std::error_code error;
-            std::filesystem::remove_all(path_, error);
+            boost::system::error_code error;
+            boost::filesystem::remove_all(path_, error);
         }
     }
 
-    const std::filesystem::path& Path() const { return path_; }
+    const boost::filesystem::path& Path() const { return path_; }
 
 private:
-    std::filesystem::path path_;
+    boost::filesystem::path path_;
 };
 
-bool WriteFile(const std::filesystem::path& path, std::string_view content)
+bool WriteFile(const boost::filesystem::path& path, std::string_view content)
 {
-    std::error_code error;
-    std::filesystem::create_directories(path.parent_path(), error);
+    boost::system::error_code error;
+    boost::filesystem::create_directories(path.parent_path(), error);
     if (error) {
         return false;
     }
@@ -82,9 +83,9 @@ int main()
 {
     TempDirectory temporary;
     CHECK(!temporary.Path().empty());
-    const std::filesystem::path outputDirectory = temporary.Path() / "output";
-    const std::filesystem::path cpuRoot = temporary.Path() / "cpu";
-    CHECK(std::filesystem::create_directory(outputDirectory));
+    const boost::filesystem::path outputDirectory = temporary.Path() / "output";
+    const boost::filesystem::path cpuRoot = temporary.Path() / "cpu";
+    CHECK(boost::filesystem::create_directory(outputDirectory));
     CHECK(WriteFile(cpuRoot / "online", "0-3,8,10-11\n"));
     CHECK(WriteFile(cpuRoot / "cpu0/topology/physical_package_id", "0\n"));
     CHECK(WriteFile(cpuRoot / "cpu1/topology/physical_package_id", "0\n"));

@@ -11,13 +11,14 @@
 #define NPU_COMPUTE_SRC_COMPUTE_LAUNCHER_REP_DIRECTORY_PACKER_H_
 
 #include <cstdint>
-#include <filesystem>
+#include <boost/filesystem.hpp>
+#include <boost/system/error_code.hpp>
 #include <string>
 #include <vector>
 
 namespace npu_compute::compute_launcher {
 
-bool PackDirectoryToRep(const std::filesystem::path& directory, std::vector<uint8_t>* encoded, std::string* error);
+bool PackDirectoryToRep(const boost::filesystem::path& directory, std::vector<uint8_t>* encoded, std::string* error);
 
 } // namespace npu_compute::compute_launcher
 

@@ -17,11 +17,7 @@ example_bin_dir="${demo_dir}/examples/memcheck/add/build"
 output=$(mktemp)
 trap 'status=$?; if [[ ${status} -ne 0 ]]; then cat "${output}" >&2; fi; rm -f -- "${output}"' EXIT
 
-if grep -Fq 'NPU_COMPUTE_BUILD_INTEGRATION_STUBS' "${demo_dir}/CMakeLists.txt"; then
-    printf 'demo still depends on removed NPU_COMPUTE_BUILD_INTEGRATION_STUBS option\n' >&2
-    exit 1
-fi
-grep -Fq 'set(NPU_COMPUTE_BUILD_TESTS OFF CACHE BOOL "" FORCE)' "${demo_dir}/CMakeLists.txt"
+test ! -e "${demo_dir}/CMakeLists.txt"
 if rg -q 'source .*common\.sh|aclsan_(prepare|capture|expect|require|verify|complete)' \
     "${demo_dir}/examples/memcheck/add/run.sh"; then
     printf 'add runner still depends on common helper functions\n' >&2
@@ -66,6 +62,7 @@ fi
 readelf -d "${example_bin_dir}/demo" | grep -F 'libacl_rt.so'
 readelf -d "${bin_dir}/libnpu_check.so" | grep -F 'libacl_san.so'
 readelf -d "${bin_dir}/libacl_san.so" | grep -F 'libacl_tool_injection.so'
+readelf -d "${bin_dir}/libacl_san.so" | grep -E '(RPATH|RUNPATH).*[[]\$ORIGIN[]]'
 readelf -d "${bin_dir}/libacl_tool_injection.so" | grep -F 'libacl_rt.so'
 cann_home=$(sed -n 's/^ASCEND_HOME_PATH:PATH=//p' "${demo_dir}/build/CMakeCache.txt")
 test -n "${cann_home}"

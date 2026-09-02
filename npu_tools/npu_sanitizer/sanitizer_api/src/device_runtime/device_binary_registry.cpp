@@ -11,7 +11,8 @@
 #include "device_binary_registry.h"
 
 #include <cstdlib>
-#include <filesystem>
+#include <boost/filesystem.hpp>
+#include <boost/system/error_code.hpp>
 #include <fstream>
 #include <mutex>
 #include <string>
@@ -24,7 +25,7 @@
 namespace aclsan::device_runtime {
 namespace {
 
-namespace fs = std::filesystem;
+namespace fs = boost::filesystem;
 
 std::string SymbolizerPath()
 {
@@ -65,7 +66,7 @@ void RemoveDirectory(const std::string& directory) noexcept
     if (directory.empty()) {
         return;
     }
-    std::error_code error;
+    boost::system::error_code error;
     fs::remove_all(directory, error);
 }
 
@@ -85,8 +86,6 @@ struct DeviceBinaryRegistry::Impl {
     uint64_t nextBinaryId = 1;
     uintptr_t latestBinary = 0;
     std::unordered_map<uintptr_t, BinaryEntry> binaries;
-    // key: aclrtFuncHandle value: traceArgumentOffset
-    std::unordered_map<uintptr_t, uint32_t> manuallyInstrumentedFunctions;
     std::unordered_map<uintptr_t, uintptr_t> functionBinaries;
 
     uint64_t AllocateBinaryId() noexcept
@@ -133,16 +132,16 @@ bool DeviceBinaryRegistry::RecordBinaryLoadFromData(
             const fs::path session =
                 workRoot / ("aclsan-symbolizer-" + std::to_string(static_cast<unsigned long long>(getpid())) + "-" +
                             std::to_string(entry.binaryId));
-            std::error_code error;
+            boost::system::error_code error;
             fs::create_directories(workRoot, error);
             if (!error) {
-                fs::permissions(workRoot, fs::perms::owner_all, fs::perm_options::replace, error);
+                fs::permissions(workRoot, fs::perms::owner_all, error);
             }
             if (!error) {
                 fs::create_directories(session, error);
             }
             if (!error) {
-                fs::permissions(session, fs::perms::owner_all, fs::perm_options::replace, error);
+                fs::permissions(session, fs::perms::owner_all, error);
             }
             const fs::path sourceImage = session / "original_device.elf";
             if (!error && WriteImage(sourceImage, image, imageBytes)) {
@@ -222,18 +221,6 @@ void DeviceBinaryRegistry::RecordLatestBinaryFunctionLookup(uintptr_t function) 
     }
 }
 
-void DeviceBinaryRegistry::MarkFunctionInstrumented(uintptr_t function, uint32_t traceArgumentOffset) noexcept
-{
-    if (function == 0 || traceArgumentOffset == 0) {
-        return;
-    }
-    try {
-        std::lock_guard<std::mutex> lock(impl_->mutex);
-        impl_->manuallyInstrumentedFunctions[function] = traceArgumentOffset;
-    } catch (...) {
-    }
-}
-
 bool DeviceBinaryRegistry::GetFunctionTraceArgumentOffset(
     uintptr_t function, uint32_t& traceArgumentOffset) const noexcept
 {
@@ -242,11 +229,6 @@ bool DeviceBinaryRegistry::GetFunctionTraceArgumentOffset(
     }
     try {
         std::lock_guard<std::mutex> lock(impl_->mutex);
-        const auto manual = impl_->manuallyInstrumentedFunctions.find(function);
-        if (manual != impl_->manuallyInstrumentedFunctions.end()) {
-            traceArgumentOffset = manual->second;
-            return true;
-        }
         // 根据aclrtFuncHandle查询aclrtBinHandle
         const auto ownership = impl_->functionBinaries.find(function);
         if (ownership == impl_->functionBinaries.end()) {
@@ -274,7 +256,6 @@ void DeviceBinaryRegistry::Reset() noexcept
             RemoveDirectory(entry.sessionDirectory);
         }
         impl_->binaries.clear();
-        impl_->manuallyInstrumentedFunctions.clear();
         impl_->functionBinaries.clear();
         impl_->latestBinary = 0;
     } catch (...) {

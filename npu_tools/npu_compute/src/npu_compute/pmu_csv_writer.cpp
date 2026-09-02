@@ -18,7 +18,8 @@
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
-#include <filesystem>
+#include <boost/filesystem.hpp>
+#include <boost/system/error_code.hpp>
 #include <fstream>
 #include <functional>
 #include <iomanip>
@@ -1066,11 +1067,11 @@ bool IsEmptySuccessfulResult(const aclptiPmuDataResult& result)
            result.pmuLogs.empty() && result.errorStats.failedRecordCount == 0;
 }
 
-bool HasRootSectionCsv(const std::filesystem::path& outputDirectory)
+bool HasRootSectionCsv(const boost::filesystem::path& outputDirectory)
 {
     for (const auto& [section, writer] : SectionWriters()) {
         static_cast<void>(writer);
-        if (std::filesystem::exists(outputDirectory / (std::string(section) + ".csv"))) {
+        if (boost::filesystem::exists(outputDirectory / (std::string(section) + ".csv"))) {
             return true;
         }
     }
@@ -1085,20 +1086,21 @@ std::string CollectionDirectoryName(uint64_t sequence)
     return output.str();
 }
 
-std::filesystem::path CreateUniqueCollectionDirectory(const std::filesystem::path& outputDirectory)
+boost::filesystem::path CreateUniqueCollectionDirectory(const boost::filesystem::path& outputDirectory)
 {
     static std::atomic<uint64_t> sequence{0};
     for (std::size_t attempt = 0; attempt < 1024; ++attempt) {
-        const std::filesystem::path collectionDirectory = outputDirectory / CollectionDirectoryName(++sequence);
-        if (std::filesystem::create_directory(collectionDirectory)) {
+        const boost::filesystem::path collectionDirectory = outputDirectory / CollectionDirectoryName(++sequence);
+        if (boost::filesystem::create_directory(collectionDirectory)) {
             return collectionDirectory;
         }
     }
-    throw std::filesystem::filesystem_error(
-        "create unique CSV collection directory failed", outputDirectory, std::make_error_code(std::errc::file_exists));
+    throw boost::filesystem::filesystem_error(
+        "create unique CSV collection directory failed", outputDirectory,
+        boost::system::errc::make_error_code(boost::system::errc::file_exists));
 }
 
-std::filesystem::path ResolveCsvWriteDirectory(const std::filesystem::path& outputDirectory)
+boost::filesystem::path ResolveCsvWriteDirectory(const boost::filesystem::path& outputDirectory)
 {
     if (!HasRootSectionCsv(outputDirectory)) {
         return outputDirectory;
@@ -1107,27 +1109,27 @@ std::filesystem::path ResolveCsvWriteDirectory(const std::filesystem::path& outp
 }
 
 void MirrorCsvFiles(
-    const std::filesystem::path& rootDirectory, const std::filesystem::path& writeDirectory,
+    const boost::filesystem::path& rootDirectory, const boost::filesystem::path& writeDirectory,
     const std::vector<std::string>& sections, const std::string& mirrorOutputDirectory)
 {
     if (mirrorOutputDirectory.empty()) {
         return;
     }
 
-    const std::filesystem::path mirrorRoot(mirrorOutputDirectory);
+    const boost::filesystem::path mirrorRoot(mirrorOutputDirectory);
     if (!mirrorRoot.is_absolute()) {
         npu_compute::detail::DebugLog(
             "npu-compute", "CSV mirror skipped: output path must be absolute path=%s", mirrorRoot.c_str());
         return;
     }
 
-    const std::filesystem::path relativeWriteDirectory = writeDirectory.lexically_relative(rootDirectory);
-    const std::filesystem::path mirrorWriteDirectory = relativeWriteDirectory.empty() || relativeWriteDirectory == "." ?
-                                                           mirrorRoot :
-                                                           mirrorRoot / relativeWriteDirectory;
+    const boost::filesystem::path relativeWriteDirectory = writeDirectory.lexically_relative(rootDirectory);
+    const boost::filesystem::path mirrorWriteDirectory =
+        relativeWriteDirectory.empty() || relativeWriteDirectory == "." ? mirrorRoot :
+                                                                          mirrorRoot / relativeWriteDirectory;
 
-    std::error_code filesystemError;
-    std::filesystem::create_directories(mirrorWriteDirectory, filesystemError);
+    boost::system::error_code filesystemError;
+    boost::filesystem::create_directories(mirrorWriteDirectory, filesystemError);
     if (filesystemError) {
         npu_compute::detail::DebugLog(
             "npu-compute", "CSV mirror failed: create output directory failed path=%s code=%d reason=%s",
@@ -1136,15 +1138,15 @@ void MirrorCsvFiles(
     }
 
     for (const auto& section : sections) {
-        const std::filesystem::path source = writeDirectory / (section + ".csv");
-        const std::filesystem::path destination = mirrorWriteDirectory / (section + ".csv");
+        const boost::filesystem::path source = writeDirectory / (section + ".csv");
+        const boost::filesystem::path destination = mirrorWriteDirectory / (section + ".csv");
         if (source.lexically_normal() == destination.lexically_normal()) {
             npu_compute::detail::DebugLog(
                 "npu-compute", "CSV mirror skipped: source and destination match path=%s", source.c_str());
             continue;
         }
-        std::filesystem::copy_file(
-            source, destination, std::filesystem::copy_options::overwrite_existing, filesystemError);
+        boost::filesystem::copy_file(
+            source, destination, boost::filesystem::copy_options::overwrite_existing, filesystemError);
         if (filesystemError) {
             npu_compute::detail::DebugLog(
                 "npu-compute", "CSV mirror failed: copy source=%s destination=%s code=%d reason=%s", source.c_str(),
@@ -1157,7 +1159,7 @@ void MirrorCsvFiles(
     }
 }
 
-aclptiResult EnsureCsvOutputDirectory(const std::filesystem::path& outputDirectory)
+aclptiResult EnsureCsvOutputDirectory(const boost::filesystem::path& outputDirectory)
 {
     if (outputDirectory.empty()) {
         npu_compute::detail::DebugLog("npu-compute", "CSV write rejected: output path is empty");
@@ -1169,15 +1171,20 @@ aclptiResult EnsureCsvOutputDirectory(const std::filesystem::path& outputDirecto
         return ACLPTI_ERROR_INVALID_PARAMETER;
     }
 
-    std::error_code filesystemError;
-    const bool exists = std::filesystem::exists(outputDirectory, filesystemError);
+    boost::system::error_code filesystemError;
+    const boost::filesystem::file_status outputStatus =
+        boost::filesystem::symlink_status(outputDirectory, filesystemError);
+    if (filesystemError == boost::system::errc::no_such_file_or_directory) {
+        filesystemError.clear();
+    }
     if (filesystemError) {
         npu_compute::detail::DebugLog(
             "npu-compute", "CSV write rejected: inspect output path failed path=%s code=%d reason=%s",
             outputDirectory.c_str(), filesystemError.value(), filesystemError.message().c_str());
         return ACLPTI_ERROR_CSV_WRITE;
     }
-    if (exists && !std::filesystem::is_directory(outputDirectory, filesystemError)) {
+    const bool exists = boost::filesystem::exists(outputStatus);
+    if (exists && !boost::filesystem::is_directory(outputDirectory, filesystemError)) {
         if (filesystemError) {
             npu_compute::detail::DebugLog(
                 "npu-compute", "CSV write rejected: inspect output path failed path=%s code=%d reason=%s",
@@ -1190,7 +1197,7 @@ aclptiResult EnsureCsvOutputDirectory(const std::filesystem::path& outputDirecto
         return ACLPTI_ERROR_CSV_WRITE;
     }
     if (!exists) {
-        std::filesystem::create_directories(outputDirectory, filesystemError);
+        boost::filesystem::create_directories(outputDirectory, filesystemError);
         if (filesystemError) {
             npu_compute::detail::DebugLog(
                 "npu-compute", "CSV write rejected: create output directory failed path=%s code=%d reason=%s",
@@ -1245,7 +1252,7 @@ aclptiResult PmuCsvWriter::Write(
         return ACLPTI_ERROR_INVALID_PARAMETER;
     }
     try {
-        const std::filesystem::path rootDirectory(outputDirectory);
+        const boost::filesystem::path rootDirectory(outputDirectory);
         const aclptiResult outputDirectoryStatus = EnsureCsvOutputDirectory(rootDirectory);
         if (outputDirectoryStatus != ACLPTI_SUCCESS) {
             return outputDirectoryStatus;
@@ -1257,14 +1264,14 @@ aclptiResult PmuCsvWriter::Write(
                 return ACLPTI_ERROR_NOT_SUPPORTED;
             }
         }
-        const std::filesystem::path writeDirectory = ResolveCsvWriteDirectory(rootDirectory);
+        const boost::filesystem::path writeDirectory = ResolveCsvWriteDirectory(rootDirectory);
         if (writeDirectory != rootDirectory) {
             npu_compute::detail::DebugLog(
                 "npu-compute", "CSV write routed to collection directory: path=%s", writeDirectory.c_str());
         }
         for (const auto& section : sections) {
             const SectionWriter* writer = FindWriter(section);
-            const std::filesystem::path path = writeDirectory / (section + ".csv");
+            const boost::filesystem::path path = writeDirectory / (section + ".csv");
             npu_compute::detail::DebugLog(
                 "npu-compute", "CSV section write start: section=%s path=%s rows=%zu", section.c_str(), path.c_str(),
                 result.pmuLogs.size());
@@ -1305,9 +1312,9 @@ aclptiResult PmuCsvWriter::Write(
                 "npu-compute", "CSV section write complete: section=%s path=%s", section.c_str(), path.c_str());
         }
         MirrorCsvFiles(rootDirectory, writeDirectory, sections, config.mirrorOutputDirectory);
-    } catch (const std::filesystem::filesystem_error& error) {
-        const std::filesystem::path errorPath =
-            error.path1().empty() ? std::filesystem::path(outputDirectory) : error.path1();
+    } catch (const boost::filesystem::filesystem_error& error) {
+        const boost::filesystem::path errorPath =
+            error.path1().empty() ? boost::filesystem::path(outputDirectory) : error.path1();
         npu_compute::detail::DebugLog(
             "npu-compute", "CSV write failed: filesystem error path=%s code=%d reason=%s detail=%s", errorPath.c_str(),
             error.code().value(), error.code().message().c_str(), error.what());

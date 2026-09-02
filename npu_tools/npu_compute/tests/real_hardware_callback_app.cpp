@@ -15,7 +15,8 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
-#include <filesystem>
+#include <boost/filesystem.hpp>
+#include <boost/system/error_code.hpp>
 #include <fstream>
 #include <string>
 #include <type_traits>
@@ -81,15 +82,15 @@ Function ToFunction(void* symbol)
     return function;
 }
 
-bool PrepareEnvironment(const std::filesystem::path& outputDirectory)
+bool PrepareEnvironment(const boost::filesystem::path& outputDirectory)
 {
     if (!outputDirectory.is_absolute()) {
         std::fprintf(stderr, "[real_hardware_callback_app] output directory must be absolute\n");
         return false;
     }
 
-    std::error_code error;
-    if (!std::filesystem::is_directory(outputDirectory, error) || error) {
+    boost::system::error_code error;
+    if (!boost::filesystem::is_directory(outputDirectory, error) || error) {
         std::fprintf(stderr, "[real_hardware_callback_app] output directory is unavailable\n");
         return false;
     }
@@ -125,11 +126,11 @@ bool ParseCallbackId(const char* argument, aclptiCallbackId* cbid)
     return false;
 }
 
-bool HardwareInfoIsComplete(const std::filesystem::path& outputDirectory)
+bool HardwareInfoIsComplete(const boost::filesystem::path& outputDirectory)
 {
-    const std::filesystem::path output = outputDirectory / kHardwareInfoFile;
-    std::error_code error;
-    if (!std::filesystem::is_regular_file(output, error) || error || std::filesystem::is_symlink(output, error) ||
+    const boost::filesystem::path output = outputDirectory / kHardwareInfoFile;
+    boost::system::error_code error;
+    if (!boost::filesystem::is_regular_file(output, error) || error || boost::filesystem::is_symlink(output, error) ||
         error) {
         return false;
     }
@@ -158,8 +159,8 @@ int main(int argc, char** argv)
         return 2;
     }
 
-    const std::filesystem::path injectionLibrary = std::filesystem::absolute(argv[1]);
-    const std::filesystem::path outputDirectory = argv[2];
+    const boost::filesystem::path injectionLibrary = boost::filesystem::absolute(argv[1]);
+    const boost::filesystem::path outputDirectory = argv[2];
     aclptiCallbackId callbackId = ACLPTI_RUNTIME_CBID_SIZE;
     if (!ParseCallbackId(argv[3], &callbackId)) {
         std::fprintf(stderr, "[real_hardware_callback_app] unsupported callback ID: %s\n", argv[3]);

@@ -14,7 +14,8 @@
 #include <algorithm>
 #include <atomic>
 #include <cstdlib>
-#include <filesystem>
+#include <boost/filesystem.hpp>
+#include <boost/system/error_code.hpp>
 #include <fstream>
 #include <iterator>
 #include <sys/stat.h>
@@ -81,9 +82,9 @@ TEST(DbiPipelineTest, ValidatesRequestFields)
 
 TEST(DbiPipelineTest, ResolvesToolchainFromExplicitRoot)
 {
-    const std::filesystem::path root = std::filesystem::temp_directory_path() / "dbi_toolchain_test";
-    std::filesystem::remove_all(root);
-    std::filesystem::create_directories(root / "tools/bisheng_compiler/bin");
+    const boost::filesystem::path root = boost::filesystem::temp_directory_path() / "dbi_toolchain_test";
+    boost::filesystem::remove_all(root);
+    boost::filesystem::create_directories(root / "tools/bisheng_compiler/bin");
     for (const char* name : {"bisheng", "bisheng-tune", "ld.lld", "llvm-objdump"}) {
         std::ofstream(root / "tools/bisheng_compiler/bin" / name).put('\n');
     }
@@ -98,33 +99,35 @@ TEST(DbiPipelineTest, ResolvesToolchainFromExplicitRoot)
         ASSERT_EQ(chmod((root / "tools/bisheng_compiler/bin" / name).c_str(), 0755), 0);
     }
     EXPECT_TRUE(toolchain.Complete());
-    std::filesystem::remove_all(root);
+    boost::filesystem::remove_all(root);
 }
 
-TEST(DbiPipelineTest, AcceptsTrustedToolchainSymlink)
+TEST(DbiPipelineTest, ResolvesToolchainWithSymlinkedExecutable)
 {
-    const std::filesystem::path root = std::filesystem::temp_directory_path() / "dbi_toolchain_symlink_test";
-    std::filesystem::remove_all(root);
+    const boost::filesystem::path root = boost::filesystem::temp_directory_path() / "dbi_toolchain_symlink_test";
+    boost::filesystem::remove_all(root);
     const auto bin = root / "tools/bisheng_compiler/bin";
-    std::filesystem::create_directories(bin);
-    for (const char* name : {"bisheng", "bisheng-tune", "llvm-objdump", "lld"}) {
+    boost::filesystem::create_directories(bin);
+    for (const char* name : {"bisheng", "bisheng-tune", "lld", "llvm-objdump"}) {
         std::ofstream(bin / name).put('\n');
         ASSERT_EQ(chmod((bin / name).c_str(), 0755), 0);
     }
-    std::filesystem::create_symlink("lld", bin / "ld.lld");
+    boost::filesystem::create_symlink("lld", bin / "ld.lld");
 
-    EXPECT_TRUE(ResolveToolchain(root.string()).Complete());
-    std::filesystem::remove_all(root);
+    const auto toolchain = ResolveToolchain(root.string(), {});
+    EXPECT_EQ(toolchain.ldLld, (bin / "ld.lld").string());
+    EXPECT_TRUE(toolchain.Complete());
+    boost::filesystem::remove_all(root);
 }
 
 TEST(DbiPipelineTest, DoesNotMixToolsFromDifferentRoots)
 {
-    const std::filesystem::path root = std::filesystem::temp_directory_path() / "dbi_toolchain_mixed_test";
-    std::filesystem::remove_all(root);
+    const boost::filesystem::path root = boost::filesystem::temp_directory_path() / "dbi_toolchain_mixed_test";
+    boost::filesystem::remove_all(root);
     const auto first = root / "first/tools/bisheng_compiler/bin";
     const auto second = root / "second";
-    std::filesystem::create_directories(first);
-    std::filesystem::create_directories(second);
+    boost::filesystem::create_directories(first);
+    boost::filesystem::create_directories(second);
     for (const char* name : {"bisheng", "bisheng-tune"}) {
         std::ofstream(first / name).put('\n');
         ASSERT_EQ(chmod((first / name).c_str(), 0755), 0);
@@ -136,15 +139,15 @@ TEST(DbiPipelineTest, DoesNotMixToolsFromDifferentRoots)
 
     const auto toolchain = ResolveToolchain((root / "first").string());
     EXPECT_FALSE(toolchain.Complete());
-    std::filesystem::remove_all(root);
+    boost::filesystem::remove_all(root);
 }
 
 TEST(DbiPipelineTest, RejectsWorldWritableToolchainExecutable)
 {
-    const std::filesystem::path root = std::filesystem::temp_directory_path() / "dbi_toolchain_permissions_test";
-    std::filesystem::remove_all(root);
+    const boost::filesystem::path root = boost::filesystem::temp_directory_path() / "dbi_toolchain_permissions_test";
+    boost::filesystem::remove_all(root);
     const auto bin = root / "tools/bisheng_compiler/bin";
-    std::filesystem::create_directories(bin);
+    boost::filesystem::create_directories(bin);
     for (const char* name : {"bisheng", "bisheng-tune", "ld.lld", "llvm-objdump"}) {
         std::ofstream(bin / name).put('\n');
         ASSERT_EQ(chmod((bin / name).c_str(), 0755), 0);
@@ -152,24 +155,24 @@ TEST(DbiPipelineTest, RejectsWorldWritableToolchainExecutable)
     ASSERT_EQ(chmod((bin / "bisheng").c_str(), 0777), 0);
 
     EXPECT_FALSE(ResolveToolchain(root.string()).Complete());
-    std::filesystem::remove_all(root);
+    boost::filesystem::remove_all(root);
 }
 
 TEST(DbiPipelineTest, ResolvesCannRootFromLoadedRuntimeLibrary)
 {
-    const auto root = std::filesystem::temp_directory_path() / "dbi-runtime-root-test";
-    std::filesystem::remove_all(root);
+    const auto root = boost::filesystem::temp_directory_path() / "dbi-runtime-root-test";
+    boost::filesystem::remove_all(root);
     const auto tools = root / "tools/bisheng_compiler/bin";
     const auto runtime = root / "x86_64-linux/lib64/libacl_rt.so";
-    std::filesystem::create_directories(tools);
-    std::filesystem::create_directories(runtime.parent_path());
+    boost::filesystem::create_directories(tools);
+    boost::filesystem::create_directories(runtime.parent_path());
     std::ofstream(runtime).put('\n');
     for (const char* name : {"bisheng", "bisheng-tune", "ld.lld", "llvm-objdump"}) {
         std::ofstream(tools / name).put('\n');
     }
     EXPECT_EQ(CannRootFromRuntimeLibrary(runtime.string()), root.string());
     EXPECT_TRUE(CannRootFromRuntimeLibrary("/usr/lib/libacl_rt.so").empty());
-    std::filesystem::remove_all(root);
+    boost::filesystem::remove_all(root);
 }
 
 TEST(DbiPipelineTest, CacheKeyChangesWithProbeSetAndObjectIdentity)
@@ -181,7 +184,7 @@ TEST(DbiPipelineTest, CacheKeyChangesWithProbeSetAndObjectIdentity)
     EXPECT_NE(first, third);
 }
 
-std::string ReadGeneratedFile(const std::filesystem::path& path)
+std::string ReadGeneratedFile(const boost::filesystem::path& path)
 {
     std::ifstream input(path, std::ios::binary);
     return {std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>()};
@@ -195,12 +198,12 @@ TEST(CtrlbinGeneratorTest, FiltersBindingsToSelectedProbeGroups)
         EXPECT_NE(symbol.find("sanitizer_report_"), std::string::npos);
     }
 
-    const auto path = std::filesystem::temp_directory_path() / "mte2-only.ctrl.bin";
-    std::filesystem::remove(path);
+    const auto path = boost::filesystem::temp_directory_path() / "mte2-only.ctrl.bin";
+    boost::filesystem::remove(path);
     std::string diagnostic;
     EXPECT_TRUE(GenerateCtrlBin(path.string(), {ProbeGroup::Mte2}, diagnostic)) << diagnostic;
-    EXPECT_GT(std::filesystem::file_size(path), 0U);
-    std::filesystem::remove(path);
+    EXPECT_GT(boost::filesystem::file_size(path), 0U);
+    boost::filesystem::remove(path);
 
     const auto mte1Symbols = BindingSymbols({ProbeGroup::Mte1});
     EXPECT_EQ(std::find(mte1Symbols.begin(), mte1Symbols.end(), "__sanitizer_report_set_padding"), mte1Symbols.end());
@@ -250,9 +253,9 @@ TEST(CtrlbinGeneratorTest, GeneratedCatalogMatchesEveryBindingSymbol)
 
 TEST(CtrlbinGeneratorTest, ConcurrentRequestsRemainIsolated)
 {
-    const auto root = std::filesystem::temp_directory_path() / "ctrlbin_generator_concurrency";
-    std::filesystem::remove_all(root);
-    std::filesystem::create_directories(root);
+    const auto root = boost::filesystem::temp_directory_path() / "ctrlbin_generator_concurrency";
+    boost::filesystem::remove_all(root);
+    boost::filesystem::create_directories(root);
     std::string diagnostic;
     ASSERT_TRUE(GenerateCtrlBin((root / "mte2-reference.bin").string(), {ProbeGroup::Mte2}, diagnostic));
     ASSERT_TRUE(GenerateCtrlBin((root / "sync-reference.bin").string(), {ProbeGroup::Sync}, diagnostic));
@@ -288,7 +291,7 @@ TEST(CtrlbinGeneratorTest, ConcurrentRequestsRemainIsolated)
     for (std::size_t index = 0; index < kThreadCount; ++index) {
         EXPECT_TRUE(generated[index]) << "thread " << index << " produced a mixed control file";
     }
-    std::filesystem::remove_all(root);
+    boost::filesystem::remove_all(root);
 }
 
 TEST(ToolRunnerTest, CapturesStdoutStderrAndExitStatus)

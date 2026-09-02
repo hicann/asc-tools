@@ -14,12 +14,13 @@
 #include <cerrno>
 #include <cstdlib>
 #include <cstring>
-#include <filesystem>
+#include <boost/filesystem.hpp>
+#include <boost/system/error_code.hpp>
 #include <fstream>
 #include <string>
 #include <vector>
 
-namespace fs = std::filesystem;
+namespace fs = boost::filesystem;
 
 namespace {
 
@@ -174,8 +175,7 @@ void TestRealRunnerFindsBareToolOnPath()
         script << "#!/bin/sh\n"
                << "printf 'RealFunction\\n/src/kernel.asc:21:4\\n'\n";
     }
-    fs::permissions(
-        tool, fs::perms::owner_read | fs::perms::owner_write | fs::perms::owner_exec, fs::perm_options::replace);
+    fs::permissions(tool, fs::perms::owner_read | fs::perms::owner_write | fs::perms::owner_exe);
 
     ScopedEnvironmentVariable pathGuard("PATH");
     std::string path = directory.string();

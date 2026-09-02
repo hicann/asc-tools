@@ -11,7 +11,8 @@
 #define NPU_COMPUTE_SRC_COMPUTE_LAUNCHER_IMPORTED_PROFILE_RESULTS_H_
 
 #include <cstdint>
-#include <filesystem>
+#include <boost/filesystem.hpp>
+#include <boost/system/error_code.hpp>
 #include <string>
 #include <vector>
 
@@ -27,10 +28,10 @@ struct ImportedProfileEntry {
 };
 
 bool ReadImportedProfileResults(
-    const std::filesystem::path& input_path, std::vector<ImportedProfileEntry>* results, std::string* error);
+    const boost::filesystem::path& input_path, std::vector<ImportedProfileEntry>* results, std::string* error);
 
 bool UnpackImportedProfileResults(
-    const std::vector<ImportedProfileEntry>& results, const std::filesystem::path& output_directory,
+    const std::vector<ImportedProfileEntry>& results, const boost::filesystem::path& output_directory,
     std::string* error);
 
 } // namespace npu_compute::compute_launcher

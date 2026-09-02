@@ -1,18 +1,18 @@
 # Demo 冒烟用例
 
 本文档说明 `npu_tools/npu_sanitizer/demo/examples` 下样例的最小冒烟方式，用于快速确认样例编译、
-`npu_check` 启动、Device 执行和结果验证链路是否可用。所有命令均在仓库根目录执行。
+`npu-check` 启动、Device 执行和结果验证链路是否可用。所有命令均在仓库根目录执行。
 
 ## 环境准备
 
-样例默认使用 `/home/cty/cann_0829/cann`。CANN 安装位置不同时，通过环境变量覆盖：
+先加载要安装 asc-tools 的 CANN 环境：
 
 ```bash
-export ASCEND_HOME_PATH=/path/to/cann
+source /path/to/cann/set_env.sh
 ```
 
 实际运行还需要可用的 Ascend Device，以及与 CANN 匹配的 Driver。
-运行任一用例前先统一构建工具和共享库：
+运行任一用例前先打包并安装工具和共享库：
 
 ```bash
 bash npu_tools/npu_sanitizer/demo/build.sh
@@ -24,8 +24,8 @@ bash npu_tools/npu_sanitizer/demo/build.sh
 bash npu_tools/npu_sanitizer/demo/run_smoke.sh
 ```
 
-该脚本无需预先执行 `build.sh`。它先删除 `demo/build`，再调用 `build.sh` 重新构建公共工具并
-加载 CANN 环境，随后按固定顺序运行全部 18 个用例。公共工具构建失败时立即退出；用例中途
+该脚本无需预先执行 `build.sh`。它调用 `build.sh` 打包并安装 asc-tools，随后按固定顺序运行
+全部 18 个用例。打包或安装失败时立即退出；用例中途
 失败不会中断其余用例。每个用例输出保存到 `demo/build/smoke/<分类>/<用例名>.log`，最终以
 `total/passed/failed` 汇总并在任一用例失败时返回 1。
 

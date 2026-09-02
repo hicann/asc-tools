@@ -13,7 +13,8 @@
 #include <chrono>
 #include <cstdlib>
 #include <cstring>
-#include <filesystem>
+#include <boost/filesystem.hpp>
+#include <boost/system/error_code.hpp>
 #include <string>
 #include <vector>
 
@@ -31,7 +32,7 @@ void SetError(const std::string& message, std::string* error)
 
 } // namespace
 
-bool StagingDirectory::Create(const std::filesystem::path& root, StagingDirectory* result, std::string* error)
+bool StagingDirectory::Create(const boost::filesystem::path& root, StagingDirectory* result, std::string* error)
 {
     if (error != nullptr) {
         error->clear();
@@ -47,13 +48,13 @@ bool StagingDirectory::Create(const std::filesystem::path& root, StagingDirector
         return false;
     }
 
-    std::error_code filesystem_error;
-    const std::filesystem::file_status root_status = std::filesystem::status(root, filesystem_error);
+    boost::system::error_code filesystem_error;
+    const boost::filesystem::file_status root_status = boost::filesystem::status(root, filesystem_error);
     if (filesystem_error) {
         SetError("inspect collection data directory root failed: " + filesystem_error.message(), error);
         return false;
     }
-    if (!std::filesystem::is_directory(root_status)) {
+    if (!boost::filesystem::is_directory(root_status)) {
         SetError("collection data directory root is not a directory: " + root.string(), error);
         return false;
     }

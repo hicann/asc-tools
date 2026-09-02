@@ -10,7 +10,8 @@
 
 #include <gtest/gtest.h>
 
-#include <filesystem>
+#include <boost/filesystem.hpp>
+#include <boost/system/error_code.hpp>
 #include <string>
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -56,15 +57,15 @@ public:
     ~TemporaryFile()
     {
         if (!path_.empty()) {
-            std::error_code error;
-            std::filesystem::remove(path_, error);
+            boost::system::error_code error;
+            boost::filesystem::remove(path_, error);
         }
     }
 
-    const std::filesystem::path& Path() const { return path_; }
+    const boost::filesystem::path& Path() const { return path_; }
 
 private:
-    std::filesystem::path path_;
+    boost::filesystem::path path_;
 };
 
 TEST(OptionsTest, AcceptsHelpWithoutApplication)
@@ -270,7 +271,7 @@ TEST(OptionsTest, NormalizesLogFileToAbsolutePath)
     const auto result = Parse({"npu_check", "--log-file", "report.log", "./sample"});
 
     ASSERT_TRUE(result.ok) << result.error;
-    EXPECT_TRUE(std::filesystem::path(result.options.logFile).is_absolute());
+    EXPECT_TRUE(boost::filesystem::path(result.options.logFile).is_absolute());
     EXPECT_TRUE(Parse({"npu_check", "./sample"}).options.logFile.empty());
 }
 
@@ -281,8 +282,8 @@ TEST(OptionsTest, NormalizesWorkDirToAbsolutePath)
     const auto result = Parse({"npu_check", "--work-dir", "probe_runtime", "./sample"});
 
     ASSERT_TRUE(result.ok) << result.error;
-    EXPECT_TRUE(std::filesystem::path(result.options.workDir).is_absolute());
-    EXPECT_EQ(std::filesystem::path(result.options.workDir).filename().string(), "probe_runtime");
+    EXPECT_TRUE(boost::filesystem::path(result.options.workDir).is_absolute());
+    EXPECT_EQ(boost::filesystem::path(result.options.workDir).filename().string(), "probe_runtime");
 
     // 未指定时为空，由 CLI 退回临时会话目录。
     EXPECT_TRUE(Parse({"npu_check", "./sample"}).options.workDir.empty());
@@ -312,7 +313,7 @@ TEST(OptionsTest, ResolvesExplicitRegularFile)
     std::string error;
     ASSERT_TRUE(ResolveLibraryPath(library.Path().string(), resolved, error)) << error;
 
-    EXPECT_EQ(resolved, std::filesystem::canonical(library.Path()).string());
+    EXPECT_EQ(resolved, boost::filesystem::canonical(library.Path()).string());
 }
 
 TEST(OptionsTest, RejectsMissingLibrary)
@@ -352,7 +353,7 @@ TEST(OptionsTest, AcceptsLibraryWithSafePermissions)
     std::string resolved;
     std::string error;
     ASSERT_TRUE(ResolveLibraryPath(library.Path().string(), resolved, error)) << error;
-    EXPECT_EQ(resolved, std::filesystem::canonical(library.Path()).string());
+    EXPECT_EQ(resolved, boost::filesystem::canonical(library.Path()).string());
 }
 
 // --help 输出只含对外选项，内部验证选项不得外泄。
@@ -360,6 +361,8 @@ TEST(OptionsTest, UsageListsOnlyPublicOptions)
 {
     const std::string usage = Usage();
 
+    EXPECT_NE(usage.find("Usage: npu-check"), std::string::npos);
+    EXPECT_EQ(usage.find("Usage: npu_check"), std::string::npos);
     EXPECT_NE(usage.find("--tool"), std::string::npos);
     EXPECT_NE(usage.find("--log-file"), std::string::npos);
     EXPECT_NE(usage.find("--work-dir"), std::string::npos);

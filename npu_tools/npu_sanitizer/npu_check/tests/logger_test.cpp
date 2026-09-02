@@ -10,7 +10,8 @@
 
 #include <gtest/gtest.h>
 
-#include <filesystem>
+#include <boost/filesystem.hpp>
+#include <boost/system/error_code.hpp>
 #include <fstream>
 #include <regex>
 #include <sstream>
@@ -21,13 +22,13 @@
 namespace npu::sanitizer::logging {
 namespace {
 
-std::filesystem::path TemporaryLogPath(const char* suffix)
+boost::filesystem::path TemporaryLogPath(const char* suffix)
 {
-    return std::filesystem::temp_directory_path() /
+    return boost::filesystem::temp_directory_path() /
            ("npu_check_logger_" + std::to_string(getpid()) + "_" + suffix + ".log");
 }
 
-std::string ReadFile(const std::filesystem::path& path)
+std::string ReadFile(const boost::filesystem::path& path)
 {
     std::ifstream input(path);
     std::ostringstream content;
@@ -38,8 +39,8 @@ std::string ReadFile(const std::filesystem::path& path)
 TEST(LoggerTest, WritesAllLevelsAndSynchronouslyNotifiesErrors)
 {
     const auto path = TemporaryLogPath("levels");
-    std::error_code ignored;
-    std::filesystem::remove(path, ignored);
+    boost::system::error_code ignored;
+    boost::filesystem::remove(path, ignored);
 
     std::string observedError;
     {
@@ -66,14 +67,14 @@ TEST(LoggerTest, WritesAllLevelsAndSynchronouslyNotifiesErrors)
     EXPECT_NE(content.find("] callback payload is incomplete"), std::string::npos);
     EXPECT_NE(content.find("[ERROR]NPU_CHECK(pid:"), std::string::npos);
     EXPECT_NE(content.find("] UDS flow failed"), std::string::npos);
-    std::filesystem::remove(path, ignored);
+    boost::filesystem::remove(path, ignored);
 }
 
 TEST(LoggerTest, AppliesMinimumLogLevel)
 {
     const auto path = TemporaryLogPath("filter");
-    std::error_code ignored;
-    std::filesystem::remove(path, ignored);
+    boost::system::error_code ignored;
+    boost::filesystem::remove(path, ignored);
 
     {
         Logger logger;
@@ -88,7 +89,7 @@ TEST(LoggerTest, AppliesMinimumLogLevel)
     EXPECT_EQ(content.find("hidden debug"), std::string::npos);
     EXPECT_EQ(content.find("hidden info"), std::string::npos);
     EXPECT_NE(content.find("visible warning"), std::string::npos);
-    std::filesystem::remove(path, ignored);
+    boost::filesystem::remove(path, ignored);
 }
 
 } // namespace

@@ -27,9 +27,6 @@ output="build/npu_check.log"
 : >"${output}"
 exec > >(tee -a "${output}") 2>&1
 
-npu_check="../../../build/npu_tools/bin/npu_check"
-
-# 设置 DBI 运行环境。
 export ASCEND_GLOBAL_LOG_LEVEL=0
 export NPU_SAN_DEBUG=1
 
@@ -39,7 +36,7 @@ cmake --build build --parallel
 
 # 执行预期检出非法访问的 memcheck 示例。
 set +e
-"${npu_check}" --tool memcheck -- build/demo
+npu-check --tool memcheck -- build/demo
 set -e
 
 # 关注 summary 的逻辑错误总数：两个 kernel 各产生 1 个错误，errors 应为 2。

@@ -31,7 +31,7 @@ else()
 endif()
 target_link_libraries(npu_compute
   PUBLIC ${NPU_COMPUTE_LIBRARY_HEADERS}
-  PRIVATE ${CMAKE_DL_LIBS} Threads::Threads
+  PRIVATE ${CMAKE_DL_LIBS} Threads::Threads Boost::filesystem
 )
 if(TARGET acl_pti)
   target_link_libraries(npu_compute PRIVATE acl_pti)

@@ -9,6 +9,9 @@
  */
 #include "collection_file_validator.h"
 
+#include <boost/filesystem.hpp>
+#include <boost/system/error_code.hpp>
+
 #include <fstream>
 #include <string>
 #include <system_error>
@@ -24,7 +27,7 @@ bool Fail(const std::string& message, std::string* error)
     return false;
 }
 
-bool ValidateJsonl(std::ifstream* input, const std::filesystem::path& path, std::string* error)
+bool ValidateJsonl(std::ifstream* input, const boost::filesystem::path& path, std::string* error)
 {
     std::size_t line_count = 0;
     bool line_has_content = false;
@@ -61,7 +64,7 @@ bool HasContent(std::string line)
     return !line.empty();
 }
 
-bool ValidateCsv(std::ifstream* input, const std::filesystem::path& path, std::string* error)
+bool ValidateCsv(std::ifstream* input, const boost::filesystem::path& path, std::string* error)
 {
     std::string line;
     if (!std::getline(*input, line) || !HasContent(line)) {
@@ -80,7 +83,7 @@ bool ValidateCsv(std::ifstream* input, const std::filesystem::path& path, std::s
 
 } // namespace
 
-bool ResolveCollectionFileType(const std::filesystem::path& path, NpuRepFileType* type, std::string* error)
+bool ResolveCollectionFileType(const boost::filesystem::path& path, NpuRepFileType* type, std::string* error)
 {
     if (error != nullptr) {
         error->clear();
@@ -106,23 +109,23 @@ bool ResolveCollectionFileType(const std::filesystem::path& path, NpuRepFileType
     return true;
 }
 
-bool ValidateCollectionFile(const std::filesystem::path& path, NpuRepFileType type, std::string* error)
+bool ValidateCollectionFile(const boost::filesystem::path& path, NpuRepFileType type, std::string* error)
 {
     if (error != nullptr) {
         error->clear();
     }
 
-    std::error_code status_error;
-    const std::filesystem::file_status status = std::filesystem::symlink_status(path, status_error);
+    boost::system::error_code status_error;
+    const boost::filesystem::file_status status = boost::filesystem::symlink_status(path, status_error);
     if (status_error) {
         return Fail("inspect collection file failed: " + path.string() + ": " + status_error.message(), error);
     }
-    if (!std::filesystem::is_regular_file(status)) {
+    if (!boost::filesystem::is_regular_file(status)) {
         return Fail("collection path is not a regular file: " + path.string(), error);
     }
 
-    std::error_code size_error;
-    const uintmax_t size = std::filesystem::file_size(path, size_error);
+    boost::system::error_code size_error;
+    const uintmax_t size = boost::filesystem::file_size(path, size_error);
     if (size_error) {
         return Fail("read collection file size failed: " + path.string() + ": " + size_error.message(), error);
     }

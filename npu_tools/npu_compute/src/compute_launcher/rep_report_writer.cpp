@@ -15,7 +15,8 @@
 #include <atomic>
 #include <cerrno>
 #include <cstring>
-#include <filesystem>
+#include <boost/filesystem.hpp>
+#include <boost/system/error_code.hpp>
 #include <fstream>
 #include <iterator>
 #include <limits>
@@ -163,7 +164,7 @@ private:
 
 class TemporaryFileCleanup {
 public:
-    explicit TemporaryFileCleanup(std::filesystem::path path) : path_(std::move(path)) {}
+    explicit TemporaryFileCleanup(boost::filesystem::path path) : path_(std::move(path)) {}
 
     ~TemporaryFileCleanup()
     {
@@ -175,16 +176,16 @@ public:
     void Release() { active_ = false; }
 
 private:
-    std::filesystem::path path_;
+    boost::filesystem::path path_;
     bool active_ = true;
 };
 
-bool ReadStatus(const std::filesystem::path& path, std::filesystem::file_status* status, std::string* error)
+bool ReadStatus(const boost::filesystem::path& path, boost::filesystem::file_status* status, std::string* error)
 {
-    std::error_code status_error;
-    *status = std::filesystem::symlink_status(path, status_error);
-    if (status_error == std::errc::no_such_file_or_directory) {
-        *status = std::filesystem::file_status(std::filesystem::file_type::not_found);
+    boost::system::error_code status_error;
+    *status = boost::filesystem::symlink_status(path, status_error);
+    if (status_error == boost::system::errc::no_such_file_or_directory) {
+        *status = boost::filesystem::file_status(boost::filesystem::file_not_found);
         return true;
     }
     if (status_error) {
@@ -227,7 +228,7 @@ bool SyncDescriptor(
     return true;
 }
 
-bool ReadFile(const std::filesystem::path& path, std::vector<uint8_t>* content, std::string* error)
+bool ReadFile(const boost::filesystem::path& path, std::vector<uint8_t>* content, std::string* error)
 {
     std::ifstream input(path, std::ios::binary);
     if (!input.is_open()) {
@@ -242,7 +243,7 @@ bool ReadFile(const std::filesystem::path& path, std::vector<uint8_t>* content, 
 }
 
 bool CreateTemporaryFile(
-    const std::filesystem::path& directory, const std::string& target_name, std::filesystem::path* temporary_path,
+    const boost::filesystem::path& directory, const std::string& target_name, boost::filesystem::path* temporary_path,
     int* descriptor, std::string* error)
 {
     for (std::size_t attempt = 0; attempt < kMaximumTemporaryAttempts; ++attempt) {
@@ -293,30 +294,30 @@ bool PublishRepReportWithOperations(
         if (target.path.empty() || target.path.filename().empty()) {
             return Fail("report target path is empty", error);
         }
-        std::filesystem::path directory = target.path.parent_path();
+        boost::filesystem::path directory = target.path.parent_path();
         if (directory.empty()) {
             directory = ".";
         }
-        std::filesystem::file_status directory_status;
-        if (!ReadStatus(directory, &directory_status, error) || !std::filesystem::is_directory(directory_status)) {
+        boost::filesystem::file_status directory_status;
+        if (!ReadStatus(directory, &directory_status, error) || !boost::filesystem::is_directory(directory_status)) {
             if (error != nullptr && error->empty()) {
                 *error = "report target parent is not a directory: " + directory.string();
             }
             return false;
         }
 
-        std::filesystem::file_status target_status;
+        boost::filesystem::file_status target_status;
         if (!ReadStatus(target.path, &target_status, error)) {
             return false;
         }
-        if (std::filesystem::exists(target_status)) {
-            if (!std::filesystem::is_regular_file(target_status)) {
+        if (boost::filesystem::exists(target_status)) {
+            if (!boost::filesystem::is_regular_file(target_status)) {
                 return Fail("report target exists but is not a regular file: " + target.path.string(), error);
             }
             return Fail("report target already exists: " + target.path.string(), error);
         }
 
-        std::filesystem::path temporary_path;
+        boost::filesystem::path temporary_path;
         int temporary_value = -1;
         if (!CreateTemporaryFile(
                 directory, target.path.filename().string(), &temporary_path, &temporary_value, error)) {

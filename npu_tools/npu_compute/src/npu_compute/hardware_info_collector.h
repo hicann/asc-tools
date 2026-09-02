@@ -14,7 +14,8 @@
 #include "hardware_info_types.h"
 #include "hardware_info_writer.h"
 
-#include <filesystem>
+#include <boost/filesystem.hpp>
+#include <boost/system/error_code.hpp>
 #include <functional>
 #include <memory>
 #include <string>
@@ -31,9 +32,9 @@ enum class HardwareCollectionState {
     NoKernelLaunch,
 };
 
-using HostInfoCollectionFunction = std::function<bool(const std::filesystem::path&, HostInfo*, DiagnosticSink*)>;
+using HostInfoCollectionFunction = std::function<bool(const boost::filesystem::path&, HostInfo*, DiagnosticSink*)>;
 using HardwareInfoPublishFunction =
-    std::function<PublishResult(const std::filesystem::path&, std::string_view, std::string*)>;
+    std::function<PublishResult(const boost::filesystem::path&, std::string_view, std::string*)>;
 
 struct HardwareInfoDependencies {
     HostInfoCollectionFunction collectHostInfo;
@@ -53,7 +54,7 @@ public:
     HardwareInfoCollector(HardwareInfoCollector&&) = delete;
     HardwareInfoCollector& operator=(HardwareInfoCollector&&) = delete;
 
-    bool Initialize(const std::filesystem::path& outputDirectory, std::string* error);
+    bool Initialize(const boost::filesystem::path& outputDirectory, std::string* error);
     void CollectOnKernelLaunch() noexcept;
     void Stop() noexcept;
     HardwareCollectionState State() const noexcept;

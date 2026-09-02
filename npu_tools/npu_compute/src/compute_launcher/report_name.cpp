@@ -9,6 +9,9 @@
  */
 #include "report_name.h"
 
+#include <boost/filesystem.hpp>
+#include <boost/system/error_code.hpp>
+
 #include <cerrno>
 #include <chrono>
 #include <cstddef>
@@ -61,14 +64,15 @@ bool SystemRandomBytes(std::array<uint8_t, 4>* value, void*, std::string* error)
     return true;
 }
 
-bool HasReportSuffix(const std::filesystem::path& path)
+bool HasReportSuffix(const boost::filesystem::path& path)
 {
     const std::string value = path.filename().string();
     return value.size() >= sizeof(kReportSuffix) - 1U &&
            value.compare(value.size() - (sizeof(kReportSuffix) - 1U), sizeof(kReportSuffix) - 1U, kReportSuffix) == 0;
 }
 
-std::filesystem::path ResolvePath(const std::filesystem::path& path, const std::filesystem::path& current_directory)
+boost::filesystem::path ResolvePath(
+    const boost::filesystem::path& path, const boost::filesystem::path& current_directory)
 {
     if (path.is_absolute()) {
         return path.lexically_normal();
@@ -76,12 +80,12 @@ std::filesystem::path ResolvePath(const std::filesystem::path& path, const std::
     return (current_directory / path).lexically_normal();
 }
 
-bool ReadStatus(const std::filesystem::path& path, std::filesystem::file_status* status, std::string* error)
+bool ReadStatus(const boost::filesystem::path& path, boost::filesystem::file_status* status, std::string* error)
 {
-    std::error_code status_error;
-    *status = std::filesystem::symlink_status(path, status_error);
-    if (status_error == std::errc::no_such_file_or_directory) {
-        *status = std::filesystem::file_status(std::filesystem::file_type::not_found);
+    boost::system::error_code status_error;
+    *status = boost::filesystem::symlink_status(path, status_error);
+    if (status_error == boost::system::errc::no_such_file_or_directory) {
+        *status = boost::filesystem::file_status(boost::filesystem::file_not_found);
         return true;
     }
     if (status_error) {
@@ -102,13 +106,14 @@ std::string FormatRandomId(const std::array<uint8_t, 4>& bytes)
 }
 
 bool GenerateTargetInDirectory(
-    const std::filesystem::path& directory, const ReportNameSources& sources, ReportTarget* target, std::string* error)
+    const boost::filesystem::path& directory, const ReportNameSources& sources, ReportTarget* target,
+    std::string* error)
 {
-    std::filesystem::file_status directory_status;
+    boost::filesystem::file_status directory_status;
     if (!ReadStatus(directory, &directory_status, error)) {
         return false;
     }
-    if (!std::filesystem::is_directory(directory_status)) {
+    if (!boost::filesystem::is_directory(directory_status)) {
         return Fail("report output path is not a directory: " + directory.string(), error);
     }
 
@@ -121,13 +126,13 @@ bool GenerateTargetInDirectory(
         if (!sources.random_bytes(&random_bytes, sources.context, error)) {
             return false;
         }
-        const std::filesystem::path candidate = directory / ("report_" + std::to_string(epoch_milliseconds) + "_" +
-                                                             FormatRandomId(random_bytes) + kReportSuffix);
-        std::filesystem::file_status candidate_status;
+        const boost::filesystem::path candidate = directory / ("report_" + std::to_string(epoch_milliseconds) + "_" +
+                                                               FormatRandomId(random_bytes) + kReportSuffix);
+        boost::filesystem::file_status candidate_status;
         if (!ReadStatus(candidate, &candidate_status, error)) {
             return false;
         }
-        if (!std::filesystem::exists(candidate_status)) {
+        if (!boost::filesystem::exists(candidate_status)) {
             target->path = candidate;
             return true;
         }
@@ -135,23 +140,23 @@ bool GenerateTargetInDirectory(
     return Fail("unable to generate a unique report name after 128 attempts", error);
 }
 
-bool ResolveExplicitTarget(const std::filesystem::path& path, ReportTarget* target, std::string* error)
+bool ResolveExplicitTarget(const boost::filesystem::path& path, ReportTarget* target, std::string* error)
 {
-    const std::filesystem::path parent = path.parent_path();
-    std::filesystem::file_status parent_status;
+    const boost::filesystem::path parent = path.parent_path();
+    boost::filesystem::file_status parent_status;
     if (!ReadStatus(parent, &parent_status, error)) {
         return false;
     }
-    if (!std::filesystem::is_directory(parent_status)) {
+    if (!boost::filesystem::is_directory(parent_status)) {
         return Fail("report output parent is not a directory: " + parent.string(), error);
     }
 
-    std::filesystem::file_status target_status;
+    boost::filesystem::file_status target_status;
     if (!ReadStatus(path, &target_status, error)) {
         return false;
     }
-    if (std::filesystem::exists(target_status)) {
-        if (!std::filesystem::is_regular_file(target_status)) {
+    if (boost::filesystem::exists(target_status)) {
+        if (!boost::filesystem::is_regular_file(target_status)) {
             return Fail("report target exists but is not a regular file: " + path.string(), error);
         }
         return Fail("report target already exists: " + path.string(), error);
@@ -165,8 +170,8 @@ bool ResolveExplicitTarget(const std::filesystem::path& path, ReportTarget* targ
 
 bool ResolveReportTarget(const std::optional<std::string>& export_path, ReportTarget* target, std::string* error)
 {
-    std::error_code current_path_error;
-    const std::filesystem::path current_directory = std::filesystem::current_path(current_path_error);
+    boost::system::error_code current_path_error;
+    const boost::filesystem::path current_directory = boost::filesystem::current_path(current_path_error);
     if (current_path_error) {
         if (target != nullptr) {
             *target = {};
@@ -205,12 +210,12 @@ bool ResolveReportTargetWithSources(
         return Fail("report export path is empty", error);
     }
 
-    const std::filesystem::path resolved = ResolvePath(*export_path, sources.current_directory);
-    std::filesystem::file_status resolved_status;
+    const boost::filesystem::path resolved = ResolvePath(*export_path, sources.current_directory);
+    boost::filesystem::file_status resolved_status;
     if (!ReadStatus(resolved, &resolved_status, error)) {
         return false;
     }
-    if (std::filesystem::is_directory(resolved_status)) {
+    if (boost::filesystem::is_directory(resolved_status)) {
         return GenerateTargetInDirectory(resolved, sources, target, error);
     }
     if (!HasReportSuffix(resolved)) {

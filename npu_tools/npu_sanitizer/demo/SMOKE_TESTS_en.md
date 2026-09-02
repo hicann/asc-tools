@@ -2,19 +2,18 @@
 
 This document describes the minimum smoke-test workflow for the examples under
 `npu_tools/npu_sanitizer/demo/examples`. The tests quickly verify example compilation,
-`npu_check` startup, Device execution, and result validation. Run all commands from the repository root.
+`npu-check` startup, Device execution, and result validation. Run all commands from the repository root.
 
 ## Environment
 
-The examples use `/home/cty/cann_0829/cann` by default. Override the path when CANN is installed
-elsewhere:
+Load the CANN environment where asc-tools will be installed:
 
 ```bash
-export ASCEND_HOME_PATH=/path/to/cann
+source /path/to/cann/set_env.sh
 ```
 
 Running the examples also requires an available Ascend Device and a Driver compatible with the CANN installation.
-Build the tools and shared libraries before running any case:
+Package and install the tools and shared libraries before running any case:
 
 ```bash
 bash npu_tools/npu_sanitizer/demo/build.sh
@@ -26,9 +25,9 @@ bash npu_tools/npu_sanitizer/demo/build.sh
 bash npu_tools/npu_sanitizer/demo/run_smoke.sh
 ```
 
-No separate `build.sh` invocation is required. The script removes `demo/build`,
-uses `build.sh` to rebuild the shared tools and load the CANN environment, then
-runs all 18 cases in a fixed order. A shared-tool build failure stops the script
+No separate `build.sh` invocation is required. The script uses `build.sh` to package
+and install asc-tools, then runs all 18 cases in a fixed order. A package build or
+install failure stops the script
 immediately. Case failures do not stop the remaining cases. Each case output is
 saved to `demo/build/smoke/<category>/<case-name>.log`; the final summary prints
 `total/passed/failed`, and the script returns 1 when any case failed.

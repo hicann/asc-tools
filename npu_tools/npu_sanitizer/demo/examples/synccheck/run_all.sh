@@ -17,8 +17,12 @@ if [[ ! -x "${demo_dir}/build.sh" ]]; then
     printf 'missing demo build script: %s/build.sh\n' "${demo_dir}" >&2
     exit 1
 fi
-if [[ ! -x "${demo_dir}/build/npu_tools/bin/npu_check" ]]; then
-    printf 'demo tools are not built; run %s/build.sh first\n' "${demo_dir}" >&2
+if [[ -z "${ASCEND_HOME_PATH:-}" ]]; then
+    printf 'ASCEND_HOME_PATH must be set. Please source set_env.sh\n' >&2
+    exit 1
+fi
+if ! command -v npu-check >/dev/null 2>&1; then
+    printf 'npu-check is not available in PATH; run %s/build.sh first\n' "${demo_dir}" >&2
     exit 1
 fi
 

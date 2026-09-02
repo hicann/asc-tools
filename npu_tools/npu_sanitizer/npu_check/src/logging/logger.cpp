@@ -13,9 +13,11 @@
 #include <cstdio>
 #include <cstdlib>
 #include <ctime>
-#include <filesystem>
 #include <utility>
 #include <unistd.h>
+
+#include <boost/filesystem.hpp>
+#include <boost/system/error_code.hpp>
 
 namespace npu::sanitizer::logging {
 namespace {
@@ -81,10 +83,10 @@ bool Logger::Open(const std::string& path, LogLevel minimumLevel, std::string& e
         error = "npu_check log path is empty";
         return false;
     }
-    const std::filesystem::path filePath(path);
-    std::error_code filesystemError;
+    const boost::filesystem::path filePath(path);
+    boost::system::error_code filesystemError;
     if (!filePath.parent_path().empty()) {
-        std::filesystem::create_directories(filePath.parent_path(), filesystemError);
+        boost::filesystem::create_directories(filePath.parent_path(), filesystemError);
     }
     if (filesystemError) {
         error = "cannot create npu_check log directory: " + filesystemError.message();

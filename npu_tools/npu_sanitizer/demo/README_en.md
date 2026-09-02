@@ -1,7 +1,7 @@
 # ACLSan Demo
 
-This directory directly reuses the production `npu_tools/npu_sanitizer/npu_check_cli` and
-`npu_tools/npu_sanitizer/npu_check` components. `npu_check` launches an example program,
+This directory directly reuses the production `npu_sanitizer/npu_check_cli` and
+`npu_sanitizer/npu_check` components. `npu-check` launches an example program,
 loads `libnpu_check.so` through CANN API Injection, and then subscribes to and
 enables the callbacks for the selected tool through `libacl_san.so`.
 
@@ -20,8 +20,8 @@ enables the callbacks for the selected tool through `libacl_san.so`.
 
 Each example directory under `examples/synccheck` contains its own `.asc` file,
 CMake configuration, runner, and result verifier. `verify_common.py` provides common
-result checks. Each case's `run.sh` builds and runs its `.asc` from the shared
-`demo/build` tree. The
+result checks. Each case's `run.sh` builds and runs its `.asc` in its own
+`build/` directory. The
 `.asc` file contains the complete AscendC kernel, ACL initialization, kernel
 launch, and cleanup logic. The retained suite balances normal pairing, duplicate
 opens, unmatched closes, unconsumed opens, multi-launch aggregation, and
@@ -32,28 +32,28 @@ scenarios; they use `aclrtSynchronizeStreamWithTimeout` to bound the wait and
 
 ## Build and Artifacts
 
-The top-level `build.sh` recreates the fixed `npu_tools/npu_sanitizer/demo/build` directory.
-The top-level `CMakeLists.txt` builds the product tools, shared libraries, and online
-DBI sources without registering example targets. Shared tools are placed in:
+The top-level `build.sh` loads `${ASCEND_HOME_PATH}/set_env.sh`, runs
+`bash build.sh --pkg` at the repository root, and installs the generated `.run`
+package into the current `ASCEND_HOME_PATH`. Runners use:
 
 ```text
-npu_tools/npu_sanitizer/demo/build/npu_tools/bin
+${ASCEND_HOME_PATH}/<arch>-linux/bin/npu-check
 ```
 
 Every example directory is a complete standalone CMake project. Its `run.sh`
 configures and builds it under:
 
 ```text
-npu_tools/npu_sanitizer/demo/examples/<category>/<case-name>/build
+npu_sanitizer/demo/examples/<category>/<case-name>/build
 ```
 
 The example executable is written directly to that build directory, for example:
 
 ```text
-npu_tools/npu_sanitizer/demo/examples/memcheck/add/build/demo
+npu_sanitizer/demo/examples/memcheck/add/build/demo
 ```
 
-`build.sh` prepares `npu_check` and its shared libraries. The first kernel binary
+`build.sh` installs `npu-check` and its shared libraries. The first kernel binary
 load creates and caches `probe.o` and `ctrl.bin` at runtime. Each case stores
 its log and other run files in its own `build/` directory. Synccheck logs are written
 to `demo/examples/synccheck/<case-name>/build/npu_check.log`, while Matmul inputs and
@@ -63,21 +63,21 @@ outputs are stored in the case-local `build/run/` directory.
 
 | Artifact | CMake Target or Source | Source Code | How It Enters the Demo | Purpose |
 | --- | --- | --- | --- | --- |
-| `libnpu_check.so` | `npu_check` | `npu_tools/npu_sanitizer/npu_check/src/` | `npu_check` writes its absolute path to `ACL_API_INJECTION`; CANN loads it during `aclInit()` and calls `acltoolInitialize()` | Establishes the UDS session, subscribes to and enables callbacks for the selected tool, and produces diagnostics and the summary. |
-| `libacl_san.so` | `acl_san` | `npu_tools/npu_sanitizer/sanitizer_api/`, with sources explicitly listed by its `CMakeLists.txt` | A `DT_NEEDED` dependency of `libnpu_check.so` | Provides the public ACLSan API, callback routing, callback data construction, and Runtime hook replacements. |
-| `libacl_tool_injection.so` | `acl_tool_injection` | `injection/src/injection_hook.cpp` | A `DT_NEEDED` dependency of `libacl_san.so` | Installs fixed trampolines and stores and switches the `orig/hook/custom` Runtime entry points. |
+| `libnpu_check.so` | `npu_check` | `npu_sanitizer/npu_check/src/` | `npu_check` writes its absolute path to `ACL_API_INJECTION`; CANN loads it during `aclInit()` and calls `acltoolInitialize()` | Establishes the UDS session, subscribes to and enables callbacks for the selected tool, and produces diagnostics and the summary. |
+| `libacl_san.so` | `acl_san` | `npu_sanitizer/sanitizer_api/`, with sources explicitly listed by its `CMakeLists.txt` | A `DT_NEEDED` dependency of `libnpu_check.so` | Provides the public ACLSan API, callback routing, callback data construction, and Runtime hook replacements. |
+| `libacl_tool_injection.so` | `acl_tool_injection` | `npu_compute/src/injection_hook/injection_hook.cpp` | A `DT_NEEDED` dependency of `libacl_san.so` | Installs fixed trampolines and stores and switches the `orig/hook/custom` Runtime entry points. |
 | `libacl_rt.so` | CANN installation library | CANN 9.2.0 installation | A `DT_NEEDED` dependency of the examples and `libacl_tool_injection.so` | Exports `aclrt*` and `aclrtApiInjectionGetFunc/SetFunc`, then invokes the underlying RTS implementation. |
 | `libruntime.so` | CANN Runtime | CANN 9.2.0 installation | A `DT_NEEDED` dependency of `libacl_rt.so` | Provides the underlying `rt*` and RTS implementation; it does not directly export `aclrtMalloc`. |
 | `libprofapi.so` | `CANN::profapi` | CANN 9.2.0 installation | A `DT_NEEDED` dependency of `libacl_tool_injection.so` and `libruntime.so` | Provides CANN profiling and tool injection support. |
 
-`build.sh` builds only `npu_check_cli` and its dependencies.
-It does not build the test-only Runtime/Profiling stub. Explicitly building other
+The repository packaging flow builds the production asc-tools package without the
+test-only Runtime/Profiling stub. Explicitly building other
 regular `npu_compute` targets can also produce `libacl_pti.so` (target `acl_pti`)
 and `libnpu-compute.so` (target `npu_compute`), but these libraries are not part of
 the demo runtime chain. System libraries such as `libstdc++.so`, `libc.so`, and
 `libdl.so` are not generated by this repository.
 
-In addition to the shared libraries, the top-level build tree generates `npu_check`
+In addition to the shared libraries, the package contains `npu-check`
 from the `npu_check_cli` target. Case runners build their example targets on demand
 in standalone build directories. `libnpu_check.so` in the shared build tree links
 directly against `acl_san`, while the CLI specifies
@@ -91,7 +91,7 @@ Load the CANN environment, then build the shared tools from the repository root:
 
 ```bash
 source /home/cty/cann_0829/cann/set_env.sh
-bash ./npu_tools/npu_sanitizer/demo/build.sh
+bash ./npu_sanitizer/demo/build.sh
 ```
 
 Then run the script in any case directory:
@@ -107,32 +107,37 @@ bash ./npu_tools/npu_sanitizer/demo/examples/synccheck/multi_launch_pairs/run.sh
 Run all 17 basic-capability and Synccheck cases with:
 
 ```bash
-bash ./npu_tools/npu_sanitizer/demo/run_smoke.sh
+bash ./npu_sanitizer/demo/run_smoke.sh
 ```
 
 `run_smoke.sh` is the self-contained entry point for the full smoke suite; no
-separate `build.sh` invocation is required. It removes `demo/build`, uses
-`build.sh` to rebuild the shared tools and load the CANN environment, then runs
+separate `build.sh` invocation is required. It uses `build.sh` to package and install
+asc-tools, then runs
 every case in a fixed order. Each console log is saved under
-`demo/build/smoke/<category>/<case-name>.log`. A shared-tool build failure stops
+`demo/build/smoke/<category>/<case-name>.log`. A package build or install failure stops
 the script immediately. A case failure does not stop the remaining cases, and
 the script returns 1 after the complete run when any case failed.
 
 Run the complete Synccheck suite with:
 
 ```bash
-bash ./npu_tools/npu_sanitizer/demo/examples/synccheck/run_all.sh
+bash ./npu_sanitizer/demo/examples/synccheck/run_all.sh
 ```
 
-The top-level `build.sh` loads `${ASCEND_HOME_PATH}/set_env.sh` and defaults to
-`/home/cty/cann_0829/cann` when the variable is unset. Each case `run.sh` requires
+The top-level `build.sh` requires `ASCEND_HOME_PATH` and loads
+`${ASCEND_HOME_PATH}/set_env.sh`. Because the `.run` installer writes to
+`<install-path>/cann`, the script creates a temporary sibling `cann` symlink when
+the target directory has another name. An occupied or mismatched bridge path is a
+fatal error. Cleanup removes only a symlink created by the current invocation and
+only while it still points to the target CANN tree; it never removes that tree or
+its contents. Each case `run.sh` requires
 the current shell to have loaded `set_env.sh`, which provides `ASCEND_HOME_PATH` and
 the CANN toolchain environment. If CANN is installed elsewhere, load that environment
 before running:
 
 ```bash
 source /path/to/cann/set_env.sh
-bash ./npu_tools/npu_sanitizer/demo/build.sh
+bash ./npu_sanitizer/demo/build.sh
 ```
 
 Each case runner configures and builds its target under
@@ -156,7 +161,7 @@ that Memcheck and Synccheck aggregate both launches together.
 ## Runtime Flow
 
 ```text
-npu_check
+npu-check
   -> creates a private UDS session and sets ACL_API_INJECTION to the absolute path of libnpu_check.so
   -> launches the selected example
   -> the example calls aclInit() from libacl_rt.so
@@ -169,7 +174,7 @@ npu_check
 ```
 
 The only source definition of `acltoolInitialize` is in
-`npu_tools/npu_sanitizer/npu_check/src/tool_manager/entry.cpp`.
+`npu_sanitizer/npu_check/src/tool_manager/entry.cpp`.
 
 ## Verification Scope
 

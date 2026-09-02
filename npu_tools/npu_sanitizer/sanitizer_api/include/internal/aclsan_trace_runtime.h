@@ -56,8 +56,6 @@ void RecordTraceBinaryLoadFromData(
 void RecordTraceBinaryUnload(aclrtBinHandle binary) noexcept;
 void RecordTraceBinaryFunctionLookup(aclrtBinHandle binary, aclrtFuncHandle function) noexcept;
 void RecordTraceFunctionLookup(aclrtFuncHandle function) noexcept;
-void MarkTraceFunctionInstrumented(aclrtFuncHandle function, uint32_t traceArgumentOffset) noexcept;
-
 aclError PrepareTraceLaunch(
     aclrtFuncHandle function, uint32_t blockCount, const void* hostArgs, size_t argsSize,
     const aclrtPlaceHolderInfo* placeholders, size_t placeholderCount, PreparedTraceLaunch& prepared) noexcept;

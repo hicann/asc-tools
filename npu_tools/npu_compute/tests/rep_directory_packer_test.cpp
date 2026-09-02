@@ -12,7 +12,8 @@
 
 #include <cstdio>
 #include <cstdlib>
-#include <filesystem>
+#include <boost/filesystem.hpp>
+#include <boost/system/error_code.hpp>
 #include <fstream>
 #include <string>
 #include <string_view>
@@ -50,7 +51,7 @@ public:
     TempDirectory()
     {
         std::string path_template =
-            (std::filesystem::temp_directory_path() / "npu-compute-packer-test-XXXXXX").string();
+            (boost::filesystem::temp_directory_path() / "npu-compute-packer-test-XXXXXX").string();
         path_template.push_back('\0');
         char* created = ::mkdtemp(path_template.data());
         if (created != nullptr) {
@@ -61,18 +62,18 @@ public:
     ~TempDirectory()
     {
         if (!path_.empty()) {
-            std::error_code error;
-            std::filesystem::remove_all(path_, error);
+            boost::system::error_code error;
+            boost::filesystem::remove_all(path_, error);
         }
     }
 
-    const std::filesystem::path& Path() const { return path_; }
+    const boost::filesystem::path& Path() const { return path_; }
 
 private:
-    std::filesystem::path path_;
+    boost::filesystem::path path_;
 };
 
-bool WriteFile(const std::filesystem::path& path, std::string_view content)
+bool WriteFile(const boost::filesystem::path& path, std::string_view content)
 {
     std::ofstream output(path, std::ios::binary | std::ios::trunc);
     output.write(content.data(), static_cast<std::streamsize>(content.size()));
@@ -90,7 +91,7 @@ std::string HardwareInfo()
            "{\"category\":\"Memory Information\",\"hbm total(MB)\":1}\n";
 }
 
-bool ExpectPackFailure(const std::filesystem::path& directory, std::string_view error_fragment)
+bool ExpectPackFailure(const boost::filesystem::path& directory, std::string_view error_fragment)
 {
     std::vector<uint8_t> encoded = {1U, 2U, 3U};
     std::string error;
@@ -106,12 +107,12 @@ int TestRecursivePacking()
 {
     TempDirectory temporary;
     CHECK(!temporary.Path().empty());
-    const std::filesystem::path root = temporary.Path() / "staging";
-    const std::filesystem::path device = root / "device_0";
-    const std::filesystem::path details = device / "details";
-    const std::filesystem::path empty = device / "empty";
-    CHECK(std::filesystem::create_directories(details));
-    CHECK(std::filesystem::create_directory(empty));
+    const boost::filesystem::path root = temporary.Path() / "staging";
+    const boost::filesystem::path device = root / "device_0";
+    const boost::filesystem::path details = device / "details";
+    const boost::filesystem::path empty = device / "empty";
+    CHECK(boost::filesystem::create_directories(details));
+    CHECK(boost::filesystem::create_directory(empty));
 
     const std::string hardware = HardwareInfo();
     const std::string pipe = "block_id,sub_block_id\n0,0\n";
@@ -170,8 +171,8 @@ int TestRejectsSymlink()
     TempDirectory temporary;
     CHECK(!temporary.Path().empty());
     CHECK(WriteFile(temporary.Path() / "target.csv", "header\ndata\n"));
-    std::error_code error;
-    std::filesystem::create_symlink(temporary.Path() / "target.csv", temporary.Path() / "link.csv", error);
+    boost::system::error_code error;
+    boost::filesystem::create_symlink(temporary.Path() / "target.csv", temporary.Path() / "link.csv", error);
     CHECK(!error);
     CHECK(ExpectPackFailure(temporary.Path(), "link.csv"));
     return 0;
@@ -194,7 +195,7 @@ int TestRejectsTemporaryUnknownAndSpecialFiles()
     {
         TempDirectory temporary;
         CHECK(!temporary.Path().empty());
-        const std::filesystem::path fifo = temporary.Path() / "stream.csv";
+        const boost::filesystem::path fifo = temporary.Path() / "stream.csv";
         CHECK(::mkfifo(fifo.c_str(), S_IRUSR | S_IWUSR) == 0);
         CHECK(ExpectPackFailure(temporary.Path(), "stream.csv"));
     }
@@ -205,7 +206,7 @@ int TestRejectsConvertedNameConflict()
 {
     TempDirectory temporary;
     CHECK(!temporary.Path().empty());
-    CHECK(std::filesystem::create_directory(temporary.Path() / "device"));
+    CHECK(boost::filesystem::create_directory(temporary.Path() / "device"));
     CHECK(WriteFile(temporary.Path() / "device.npu.rep", "conflict"));
     CHECK(ExpectPackFailure(temporary.Path(), "conflict"));
     return 0;

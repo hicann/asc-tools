@@ -40,11 +40,13 @@ for example in "${synccheck_examples[@]}"; do
         printf 'synccheck example still depends on a shared CMake module: %s\n' "${example}" >&2
         exit 1
     fi
-    grep -Fq 'find_library(ACL_RT_LIBRARY' "${example_dir}/CMakeLists.txt"
     grep -Fq "add_executable(demo" \
         "${example_dir}/CMakeLists.txt"
     grep -Fq 'target_compile_options(demo PRIVATE' "${example_dir}/CMakeLists.txt"
-    grep -Fq 'target_link_libraries(demo PRIVATE' "${example_dir}/CMakeLists.txt"
+    if rg -n 'ACL_RT_LIBRARY|NAMES[[:space:]]+acl_rt' "${example_dir}/CMakeLists.txt"; then
+        printf 'synccheck example still finds or links acl_rt explicitly: %s\n' "${example}" >&2
+        exit 1
+    fi
     if rg -q 'ACLSAN_DEMO_ACL_RT_DIRECTORY|RUNTIME_OUTPUT_DIRECTORY|BUILD_RPATH' \
         "${example_dir}/CMakeLists.txt"; then
         printf 'synccheck example still overrides its output or build RPATH: %s\n' "${example}" >&2
@@ -61,7 +63,7 @@ for example in "${synccheck_examples[@]}"; do
     grep -Fq 'exec > >(tee -a "${output}") 2>&1' "${example_dir}/run.sh"
     grep -Fq 'cmake -B build -DCMAKE_ASC_ARCHITECTURES=dav-3510' "${example_dir}/run.sh"
     grep -Fq 'cmake --build build --parallel' "${example_dir}/run.sh"
-    grep -Fq '"${npu_check}" --tool synccheck -- build/demo' \
+    grep -Fq 'npu-check --tool synccheck -- build/demo' \
         "${example_dir}/run.sh"
     grep -Fq 'npu_check_status=$?' "${example_dir}/run.sh"
     grep -Fq 'python3 verify.py "${output}" "${npu_check_status}"' \
@@ -108,10 +110,7 @@ test -x "${synccheck_dir}/run_all.sh"
 test ! -e "${synccheck_dir}/run_example.sh"
 test ! -e "${synccheck_dir}/SynccheckExample.cmake"
 test ! -e "${synccheck_dir}/CMakeLists.txt"
-if rg -q 'examples/synccheck' "${demo_dir}/CMakeLists.txt"; then
-    printf 'demo still includes the removed Synccheck CMake aggregate\n' >&2
-    exit 1
-fi
+test ! -e "${demo_dir}/CMakeLists.txt"
 test ! -e "${demo_dir}/examples/common.sh"
 test -f "${synccheck_dir}/verify_common.py"
 grep -Fq '<npu-check-status>' "${synccheck_dir}/verify_common.py"
@@ -120,6 +119,11 @@ grep -Fq '"exit": str(actual_status)' "${synccheck_dir}/verify_common.py"
 test ! -e "${synccheck_dir}/symbol_ordering.txt"
 test ! -e "${synccheck_dir}/build_example.sh"
 grep -Fq 'if [[ ! -x "${demo_dir}/build.sh" ]]; then' "${synccheck_dir}/run_all.sh"
+grep -Fq 'command -v npu-check' "${synccheck_dir}/run_all.sh"
+if rg -q 'npu_check=|\$\{ASCEND_HOME_PATH\}.*npu-check' "${synccheck_dir}/run_all.sh"; then
+    printf 'run_all.sh still hard-codes the npu-check path\n' >&2
+    exit 1
+fi
 if rg -q 'bash .*build\.sh|SYNCCHECK_TOOL_BUILD_DIR' "${synccheck_dir}/run_all.sh"; then
     printf 'run_all.sh still builds tools or references the removed Synccheck build directory\n' >&2
     exit 1
@@ -144,7 +148,6 @@ for example in multi_launch_unconsumed multi_launch_pairs; do
     source_file="${synccheck_dir}/${example}/${example}.asc"
     grep -Fq '__vector__ __global__ __aicore__ void synccheck_demo_kernel(int32_t eventId)' "${source_file}"
     grep -Fq 'int RunSample(uint32_t blockCount = 1)' "${source_file}"
-    grep -Fq 'asc_sync_notify(PIPE_V, PIPE_MTE2, eventId)' "${source_file}"
     grep -Fq 'synccheck_demo_kernel<<<blockCount, 0, stream>>>(EVENT_ID0);' "${source_file}"
     grep -Fq 'synccheck_demo_kernel<<<blockCount, 0, stream>>>(EVENT_ID1);' "${source_file}"
     test "$(grep -Fc 'synccheck_demo_kernel<<<blockCount, 0, stream>>>' "${source_file}")" -eq 2
@@ -165,7 +168,13 @@ grep -Fq '"unconsumed_opens": 2' "${synccheck_dir}/multi_launch_unconsumed/verif
 grep -Fq '"errors": 2' "${synccheck_dir}/multi_launch_unconsumed/verify.py"
 grep -Fq 'Synchronization pairing mismatch: redundant SET_FLAG.' \
     "${synccheck_dir}/multi_launch_unconsumed/verify.py"
-grep -Fq 'asc_sync_wait(PIPE_V, PIPE_MTE2, eventId)' \
+grep -Fq 'asc_sync_notify(PIPE_V, PIPE_MTE2, static_cast<event_t>(eventId))' \
+    "${synccheck_dir}/multi_launch_unconsumed/multi_launch_unconsumed.asc"
+grep -Fq 'const event_t event = static_cast<event_t>(eventId)' \
+    "${synccheck_dir}/multi_launch_pairs/multi_launch_pairs.asc"
+grep -Fq 'asc_sync_notify(PIPE_V, PIPE_MTE2, event)' \
+    "${synccheck_dir}/multi_launch_pairs/multi_launch_pairs.asc"
+grep -Fq 'asc_sync_wait(PIPE_V, PIPE_MTE2, event)' \
     "${synccheck_dir}/multi_launch_pairs/multi_launch_pairs.asc"
 grep -Fq '"sync_events": 4' "${synccheck_dir}/multi_launch_pairs/verify.py"
 grep -Fq '"matched_pairs": 2' "${synccheck_dir}/multi_launch_pairs/verify.py"

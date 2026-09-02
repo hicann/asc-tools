@@ -10,7 +10,8 @@
 #ifndef NPU_COMPUTE_SRC_NPU_COMPUTE_HARDWARE_INFO_WRITER_H_
 #define NPU_COMPUTE_SRC_NPU_COMPUTE_HARDWARE_INFO_WRITER_H_
 
-#include <filesystem>
+#include <boost/filesystem.hpp>
+#include <boost/system/error_code.hpp>
 #include <string>
 #include <string_view>
 
@@ -23,7 +24,7 @@ enum class PublishResult {
 };
 
 PublishResult PublishHardwareInfoJsonl(
-    const std::filesystem::path& outputDirectory, std::string_view jsonl, std::string* error);
+    const boost::filesystem::path& outputDirectory, std::string_view jsonl, std::string* error);
 
 } // namespace npu_compute
 

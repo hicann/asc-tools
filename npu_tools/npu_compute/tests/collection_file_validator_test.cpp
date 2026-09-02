@@ -10,7 +10,8 @@
 #include "collection_file_validator.h"
 
 #include <cstdio>
-#include <filesystem>
+#include <boost/filesystem.hpp>
+#include <boost/system/error_code.hpp>
 #include <fstream>
 #include <iterator>
 #include <string>
@@ -44,7 +45,7 @@ public:
     TempDirectory()
     {
         std::string path_template =
-            (std::filesystem::temp_directory_path() / "npu-compute-validator-test-XXXXXX").string();
+            (boost::filesystem::temp_directory_path() / "npu-compute-validator-test-XXXXXX").string();
         path_template.push_back('\0');
         char* created = ::mkdtemp(path_template.data());
         if (created != nullptr) {
@@ -55,25 +56,25 @@ public:
     ~TempDirectory()
     {
         if (!path_.empty()) {
-            std::error_code error;
-            std::filesystem::remove_all(path_, error);
+            boost::system::error_code error;
+            boost::filesystem::remove_all(path_, error);
         }
     }
 
-    const std::filesystem::path& Path() const { return path_; }
+    const boost::filesystem::path& Path() const { return path_; }
 
 private:
-    std::filesystem::path path_;
+    boost::filesystem::path path_;
 };
 
-bool WriteFile(const std::filesystem::path& path, std::string_view content)
+bool WriteFile(const boost::filesystem::path& path, std::string_view content)
 {
     std::ofstream output(path, std::ios::binary | std::ios::trunc);
     output.write(content.data(), static_cast<std::streamsize>(content.size()));
     return output.good();
 }
 
-bool ReadFile(const std::filesystem::path& path, std::string* content)
+bool ReadFile(const boost::filesystem::path& path, std::string* content)
 {
     std::ifstream input(path, std::ios::binary);
     if (!input.is_open()) {
@@ -83,7 +84,7 @@ bool ReadFile(const std::filesystem::path& path, std::string* content)
     return !input.bad();
 }
 
-int TestFileTypeResolution(const std::filesystem::path& directory)
+int TestFileTypeResolution(const boost::filesystem::path& directory)
 {
     struct Case {
         const char* name;
@@ -105,13 +106,13 @@ int TestFileTypeResolution(const std::filesystem::path& directory)
 
     NpuRepFileType actual = NpuRepFileType::NpuRep;
     std::string error;
-    const std::filesystem::path unknown = directory / "unknown.txt";
+    const boost::filesystem::path unknown = directory / "unknown.txt";
     CHECK(!ResolveCollectionFileType(unknown, &actual, &error));
     CHECK(error.find(unknown.string()) != std::string::npos);
     return 0;
 }
 
-int TestHardwareInfoJsonl(const std::filesystem::path& directory)
+int TestHardwareInfoJsonl(const boost::filesystem::path& directory)
 {
     const std::string complete = "{\"category\":\"Host Info\",\"cpu physical count\":1,"
                                  "\"cpu logical count\":2,\"memory total size(MB)\":3,"
@@ -125,7 +126,7 @@ int TestHardwareInfoJsonl(const std::filesystem::path& directory)
                                  "\"ai cube frequency(MHZ)\":4,\"ai vector frequency(MHZ)\":5}\n"
                                  "{\"category\":\"Memory Information\",\"hbm total(MB)\":1,"
                                  "\"hbm used(MB)\":2,\"hbm frequency(MHZ)\":3}\n";
-    const std::filesystem::path path = directory / "HardwareInfo.jsonl";
+    const boost::filesystem::path path = directory / "HardwareInfo.jsonl";
     std::string error;
 
     CHECK(WriteFile(path, complete));
@@ -147,9 +148,9 @@ int TestHardwareInfoJsonl(const std::filesystem::path& directory)
     return 0;
 }
 
-int TestCsv(const std::filesystem::path& directory)
+int TestCsv(const boost::filesystem::path& directory)
 {
-    const std::filesystem::path path = directory / "PipeUtilization.csv";
+    const boost::filesystem::path path = directory / "PipeUtilization.csv";
     std::string error;
 
     const std::string complete = "block_id,sub_block_id\n0,0\n";
@@ -170,7 +171,7 @@ int TestCsv(const std::filesystem::path& directory)
     return 0;
 }
 
-int TestOtherSupportedFiles(const std::filesystem::path& directory)
+int TestOtherSupportedFiles(const boost::filesystem::path& directory)
 {
     const NpuRepFileType types[] = {
         NpuRepFileType::Json,
@@ -182,7 +183,7 @@ int TestOtherSupportedFiles(const std::filesystem::path& directory)
     std::string error;
 
     for (std::size_t index = 0; index < 4U; ++index) {
-        const std::filesystem::path path = directory / names[index];
+        const boost::filesystem::path path = directory / names[index];
         CHECK(WriteFile(path, "payload"));
         CHECK(ValidateCollectionFile(path, types[index], &error));
         CHECK(error.empty());
@@ -191,11 +192,11 @@ int TestOtherSupportedFiles(const std::filesystem::path& directory)
         CHECK(!error.empty());
     }
 
-    const std::filesystem::path missing = directory / "missing.json";
+    const boost::filesystem::path missing = directory / "missing.json";
     CHECK(!ValidateCollectionFile(missing, NpuRepFileType::Json, &error));
     CHECK(error.find(missing.string()) != std::string::npos);
 
-    const std::filesystem::path invalid_type = directory / "invalid.csv";
+    const boost::filesystem::path invalid_type = directory / "invalid.csv";
     CHECK(WriteFile(invalid_type, "header\ndata\n"));
     CHECK(!ValidateCollectionFile(invalid_type, static_cast<NpuRepFileType>(999U), &error));
     CHECK(!error.empty());

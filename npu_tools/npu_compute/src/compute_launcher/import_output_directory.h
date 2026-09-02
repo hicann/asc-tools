@@ -10,7 +10,8 @@
 #ifndef NPU_COMPUTE_SRC_COMPUTE_LAUNCHER_IMPORT_OUTPUT_DIRECTORY_H_
 #define NPU_COMPUTE_SRC_COMPUTE_LAUNCHER_IMPORT_OUTPUT_DIRECTORY_H_
 
-#include <filesystem>
+#include <boost/filesystem.hpp>
+#include <boost/system/error_code.hpp>
 #include <optional>
 #include <string>
 
@@ -25,18 +26,18 @@ public:
     ImportOutputDirectory& operator=(const ImportOutputDirectory&) = delete;
 
     static bool Create(
-        const std::filesystem::path& inputRep, const std::optional<std::string>& exportPath,
+        const boost::filesystem::path& inputRep, const std::optional<std::string>& exportPath,
         ImportOutputDirectory* directory, std::string* error);
 
-    const std::filesystem::path& TemporaryPath() const;
-    const std::filesystem::path& FinalPath() const;
+    const boost::filesystem::path& TemporaryPath() const;
+    const boost::filesystem::path& FinalPath() const;
     bool Publish(std::string* error);
 
 private:
     void CleanupTemporaryDirectory() noexcept;
 
-    std::filesystem::path temporaryPath_;
-    std::filesystem::path finalPath_;
+    boost::filesystem::path temporaryPath_;
+    boost::filesystem::path finalPath_;
 };
 
 } // namespace npu_compute::compute_launcher

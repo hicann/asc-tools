@@ -12,21 +12,22 @@
 
 #include <array>
 #include <cstdint>
-#include <filesystem>
+#include <boost/filesystem.hpp>
+#include <boost/system/error_code.hpp>
 #include <optional>
 #include <string>
 
 namespace npu_compute::compute_launcher {
 
 struct ReportTarget {
-    std::filesystem::path path;
+    boost::filesystem::path path;
 };
 
 using EpochMillisecondsSource = bool (*)(uint64_t* value, void* context, std::string* error);
 using RandomBytesSource = bool (*)(std::array<uint8_t, 4>* value, void* context, std::string* error);
 
 struct ReportNameSources {
-    std::filesystem::path current_directory;
+    boost::filesystem::path current_directory;
     EpochMillisecondsSource epoch_milliseconds = nullptr;
     RandomBytesSource random_bytes = nullptr;
     void* context = nullptr;

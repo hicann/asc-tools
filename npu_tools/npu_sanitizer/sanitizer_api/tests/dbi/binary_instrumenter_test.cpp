@@ -12,7 +12,8 @@
 #include <cstdlib>
 #include <cstring>
 #include <elf.h>
-#include <filesystem>
+#include <boost/filesystem.hpp>
+#include <boost/system/error_code.hpp>
 #include <fstream>
 #include <optional>
 #include <stdexcept>
@@ -79,12 +80,12 @@ TEST(DefaultBinaryInstrumentationConfigTest, BuildsRuntimeConfigWithoutDbiEnviro
     ASSERT_EQ(setenv("NPU_CHECK_DBI_TOOLCHAIN_ROOT", "/forged", 1), 0);
     ASSERT_EQ(setenv("NPU_CHECK_DBI_PROBE_SET", "sync", 1), 0);
 
-    const auto cannRoot = std::filesystem::temp_directory_path() / "dbi-runtime-config-test";
+    const auto cannRoot = boost::filesystem::temp_directory_path() / "dbi-runtime-config-test";
     const auto tools = cannRoot / "tools/bisheng_compiler/bin";
     const auto runtime = cannRoot / "x86_64-linux/lib64/libacl_rt.so";
-    std::filesystem::remove_all(cannRoot);
-    std::filesystem::create_directories(tools);
-    std::filesystem::create_directories(runtime.parent_path());
+    boost::filesystem::remove_all(cannRoot);
+    boost::filesystem::create_directories(tools);
+    boost::filesystem::create_directories(runtime.parent_path());
     std::ofstream(runtime).put('\n');
     for (const char* name : {"bisheng", "bisheng-tune", "ld.lld", "llvm-objdump"}) {
         std::ofstream(tools / name).put('\n');
@@ -103,7 +104,7 @@ TEST(DefaultBinaryInstrumentationConfigTest, BuildsRuntimeConfigWithoutDbiEnviro
     const std::string root = "/tmp/npu-check-" + std::to_string(static_cast<unsigned long long>(geteuid()));
     EXPECT_EQ(config.workDirectory, root + "/requests");
     EXPECT_EQ(config.cacheDirectory, root + "/cache");
-    std::filesystem::remove_all(cannRoot);
+    boost::filesystem::remove_all(cannRoot);
 }
 
 DbiResult FakePatch(const DbiRequest& request, void* userdata)
@@ -116,7 +117,7 @@ DbiResult FakePatch(const DbiRequest& request, void* userdata)
     if (!state.patchSucceeds) {
         return {false, {}, "fake", "failed"};
     }
-    std::filesystem::create_directories(std::filesystem::path(request.outputKernel).parent_path());
+    boost::filesystem::create_directories(boost::filesystem::path(request.outputKernel).parent_path());
     std::ofstream output(request.outputKernel, std::ios::binary | std::ios::trunc);
     output << "patched";
     return {output.good(), request.outputKernel, output.good() ? "complete" : "write", {}};
@@ -167,7 +168,7 @@ DbiResult ThrowingPatch(const DbiRequest& request, void* userdata)
     auto& state = *static_cast<TestState*>(userdata);
     ++state.runnerCalls;
     state.workDirectories.push_back(request.workDirectory);
-    std::filesystem::create_directories(request.workDirectory);
+    boost::filesystem::create_directories(request.workDirectory);
     throw std::runtime_error("patch failed unexpectedly");
 }
 
@@ -189,8 +190,8 @@ protected:
 
     void TearDown() override
     {
-        std::error_code error;
-        std::filesystem::remove_all(directory_, error);
+        boost::system::error_code error;
+        boost::filesystem::remove_all(directory_, error);
     }
 
     TestState state_;
@@ -256,16 +257,17 @@ TEST_F(BinaryInstrumenterTest, KeepTempRetainsRequestDirectoryAndPatchedOutput)
         BinaryInstrumentationStatus::Instrumented);
 
     ASSERT_EQ(state_.workDirectories.size(), 1U);
-    EXPECT_TRUE(std::filesystem::is_directory(state_.workDirectories.front()));
-    EXPECT_TRUE(std::filesystem::is_regular_file(std::filesystem::path(state_.workDirectories.front()) / "patched.o"));
+    EXPECT_TRUE(boost::filesystem::is_directory(state_.workDirectories.front()));
+    EXPECT_TRUE(
+        boost::filesystem::is_regular_file(boost::filesystem::path(state_.workDirectories.front()) / "patched.o"));
 }
 
 TEST_F(BinaryInstrumenterTest, CleanupRemovesRequestDirectoryButPreservesExternalCache)
 {
     state_.config.keepTemp = false;
     const std::string original = "kernel-data";
-    const std::filesystem::path cacheMarker = std::filesystem::path(state_.config.cacheDirectory) / "cache-marker";
-    std::filesystem::create_directories(cacheMarker.parent_path());
+    const boost::filesystem::path cacheMarker = boost::filesystem::path(state_.config.cacheDirectory) / "cache-marker";
+    boost::filesystem::create_directories(cacheMarker.parent_path());
     std::ofstream(cacheMarker) << "cached";
 
     ASSERT_EQ(
@@ -273,8 +275,8 @@ TEST_F(BinaryInstrumenterTest, CleanupRemovesRequestDirectoryButPreservesExterna
         BinaryInstrumentationStatus::Instrumented);
 
     ASSERT_EQ(state_.workDirectories.size(), 1U);
-    EXPECT_FALSE(std::filesystem::exists(state_.workDirectories.front()));
-    EXPECT_TRUE(std::filesystem::is_regular_file(cacheMarker));
+    EXPECT_FALSE(boost::filesystem::exists(state_.workDirectories.front()));
+    EXPECT_TRUE(boost::filesystem::is_regular_file(cacheMarker));
 }
 
 TEST_F(BinaryInstrumenterTest, ExceptionReturnsFailureAndCleansTemporaryDirectory)
@@ -288,18 +290,18 @@ TEST_F(BinaryInstrumenterTest, ExceptionReturnsFailureAndCleansTemporaryDirector
     EXPECT_EQ(result.status, BinaryInstrumentationStatus::Failed);
     EXPECT_EQ(result.stage, "exception");
     ASSERT_EQ(state_.workDirectories.size(), 1U);
-    EXPECT_FALSE(std::filesystem::exists(state_.workDirectories.front()));
+    EXPECT_FALSE(boost::filesystem::exists(state_.workDirectories.front()));
 }
 
 TEST_F(BinaryInstrumenterTest, RuntimeFacadeConsumesPatchedBytesAcrossAnAbiStableBoundary)
 {
     const std::vector<uint8_t> original = MakeKernelArgumentSizeElf(0);
     std::vector<uint8_t> consumed;
-    const auto cannRoot = std::filesystem::path(directory_) / "fake-cann";
+    const auto cannRoot = boost::filesystem::path(directory_) / "fake-cann";
     const auto tools = cannRoot / "tools/bisheng_compiler/bin";
     const auto runtime = cannRoot / "x86_64-linux/lib64/libacl_rt.so";
-    std::filesystem::create_directories(tools);
-    std::filesystem::create_directories(runtime.parent_path());
+    boost::filesystem::create_directories(tools);
+    boost::filesystem::create_directories(runtime.parent_path());
     std::ofstream(runtime).put('\n');
     for (const char* name : {"bisheng", "bisheng-tune", "ld.lld", "llvm-objdump"}) {
         std::ofstream(tools / name).put('\n');

@@ -18,19 +18,15 @@ test -f "${example_dir}/padding_register_state.asc"
 test -f "${example_dir}/CMakeLists.txt"
 test -x "${demo_dir}/tests/check_padding_register_state_end_to_end.sh"
 
-if grep -Fq 'add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/examples/basic_func/padding_register_state"' \
-    "${demo_dir}/CMakeLists.txt"; then
-    printf 'padding_register_state is still registered in the shared demo build\n' >&2
-    exit 1
-fi
-grep -Fq 'foreach(probe_source mte1 mte2 mte3 fixpipe scalar sync)' "${demo_dir}/CMakeLists.txt"
+test ! -e "${demo_dir}/CMakeLists.txt"
 grep -Fq 'cmake_minimum_required(VERSION 3.16)' "${example_dir}/CMakeLists.txt"
 grep -Fq 'find_package(ASC REQUIRED)' "${example_dir}/CMakeLists.txt"
-grep -Fq 'find_library(ACL_RT_LIBRARY' "${example_dir}/CMakeLists.txt"
 grep -Fq 'add_executable(demo' \
     "${example_dir}/CMakeLists.txt"
-grep -Fq 'target_link_libraries(demo PRIVATE' "${example_dir}/CMakeLists.txt"
-grep -Fq '${ACL_RT_LIBRARY}' "${example_dir}/CMakeLists.txt"
+if rg -n 'ACL_RT_LIBRARY|NAMES[[:space:]]+acl_rt' "${example_dir}/CMakeLists.txt"; then
+    printf 'padding_register_state still finds or links acl_rt explicitly\n' >&2
+    exit 1
+fi
 if rg -q 'ACLSAN_DEMO_ACL_RT_DIRECTORY|RUNTIME_OUTPUT_DIRECTORY|BUILD_RPATH' \
     "${example_dir}/CMakeLists.txt"; then
     printf 'padding_register_state still overrides its output or build RPATH\n' >&2

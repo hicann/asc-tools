@@ -14,7 +14,8 @@
 #include <algorithm>
 #include <array>
 #include <exception>
-#include <filesystem>
+#include <boost/filesystem.hpp>
+#include <boost/system/error_code.hpp>
 #include <iomanip>
 #include <memory>
 #include <sstream>
@@ -299,7 +300,7 @@ void ToolManager::LogHandshakeFailure(const std::string& reason) noexcept
 {
     try {
         std::string ignored;
-        const std::filesystem::path path = std::filesystem::current_path() / "npu_check.log";
+        const boost::filesystem::path path = boost::filesystem::current_path() / "npu_check.log";
         if (logger_.Path().empty() && !logger_.Open(path.string(), logging::Logger::ConfiguredLevel(), ignored)) {
             return;
         }
@@ -316,8 +317,8 @@ bool ToolManager::InitializeLogger(std::string& error)
     // 与协议无关的部署信息不再占线路。未设置时退回当前目录。
     const char* workDir = std::getenv(ipc::kWorkDirEnv);
     workDir_ = workDir != nullptr ? workDir : "";
-    const std::filesystem::path directory =
-        workDir_.empty() ? std::filesystem::current_path() : std::filesystem::path(workDir_);
+    const boost::filesystem::path directory =
+        workDir_.empty() ? boost::filesystem::current_path() : boost::filesystem::path(workDir_);
     const std::string path = (directory / "npu_check.log").string();
     if (!logger_.Open(path, logging::Logger::ConfiguredLevel(), error)) {
         return false;

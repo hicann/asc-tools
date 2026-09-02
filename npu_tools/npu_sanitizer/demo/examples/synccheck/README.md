@@ -3,7 +3,7 @@
 本目录是一组 synccheck 端到端冒烟用例，用于快速确认从样例编译、设备插桩、callback
 上报、同步配对分析、诊断渲染到会话结束的基本链路可用。每个同名子目录包含场景独有的
 同名 `.asc`、`CMakeLists.txt`、`run.sh` 和 `verify.py`。父目录集中维护批量运行和结果校验逻辑，
-公共工具和在线 DBI 源码由 `demo/build.sh` 统一准备。
+asc-tools 安装包和在线 DBI 源码由 `demo/build.sh` 统一打包并安装到 `ASCEND_HOME_PATH`。
 
 `.asc` 只保留同步场景所需的设备指令，以及 ACL 初始化、kernel launch、stream 和清理逻辑。
 正常路径与预期异常路径都属于冒烟看护范围；异常用例用于确认
@@ -11,7 +11,7 @@ synccheck 能稳定检出对应错误，不代表用例本身失效。
 
 ## 运行
 
-先从仓库根目录统一构建公共工具：
+先从仓库根目录打包并安装公共工具：
 
 ```bash
 bash npu_tools/npu_sanitizer/demo/build.sh
@@ -23,7 +23,7 @@ bash npu_tools/npu_sanitizer/demo/build.sh
 bash npu_tools/npu_sanitizer/demo/examples/synccheck/run_all.sh
 ```
 
-`run_all.sh` 使用已有的 `demo/build`，再依次执行全部用例。它保留各用例的原始输出，最后
+`run_all.sh` 使用 `${ASCEND_HOME_PATH}/$(uname -m)-linux/bin/npu-check`，再依次执行全部用例。它保留各用例的原始输出，最后
 打印逐项 `PASS/FAIL` 和 `total/passed/failed` 统计；任一用例失败时脚本返回 1。异常用例会打印
 诊断信息；只要对应 `verify.py`、summary 和会话校验通过，runner 就返回 0 并输出
 `example verification passed: synccheck/<用例名>`。

@@ -28,9 +28,6 @@ output="build/npu_check.log"
 : >"${output}"
 exec > >(tee -a "${output}") 2>&1
 
-npu_check="../../../build/npu_tools/bin/npu_check"
-
-# 设置 DBI 运行环境。
 export ASCEND_GLOBAL_LOG_LEVEL=0
 export NPU_SAN_DEBUG=1
 
@@ -40,7 +37,7 @@ cmake --build build --parallel
 
 # MTE2 和 Vector pipeline 各执行 1 组 GET_BUF/RLS_BUF，两个 mutex 配对应全部成功。
 set +e
-"${npu_check}" --tool synccheck -- build/demo
+npu-check --tool synccheck -- build/demo
 npu_check_status=$?
 set -e
 

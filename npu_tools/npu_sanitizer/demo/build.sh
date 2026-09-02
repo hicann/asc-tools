@@ -11,34 +11,36 @@
 
 set -euo pipefail
 
-demo_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-build_dir="${demo_dir}/build"
-bin_dir="${build_dir}/npu_tools/bin"
-default_cann_home="/usr/local/Ascend/cann"
-
-ASCEND_HOME_PATH="${ASCEND_HOME_PATH:-${default_cann_home}}"
-if [[ ! -f "${ASCEND_HOME_PATH}/set_env.sh" ]]; then
-    printf 'missing CANN environment script: %s/set_env.sh\n' "${ASCEND_HOME_PATH}" >&2
+if [[ -z "${ASCEND_HOME_PATH:-}" ]]; then
+    printf 'ASCEND_HOME_PATH must be set. Please source the target CANN set_env.sh first\n' >&2
     exit 1
 fi
 
-set +u
-source "${ASCEND_HOME_PATH}/set_env.sh"
-set -u
+repo_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)
+cann_home=${ASCEND_HOME_PATH%/}
+cann_parent=$(dirname -- "${cann_home}")
+package_arch=$(uname -m)
 
-rm -rf -- "${build_dir}"
-cmake -S "${demo_dir}" -B "${build_dir}" -DCMAKE_ASC_ARCHITECTURES=dav-3510
-cmake --build "${build_dir}" --target npu_check_cli --parallel
+(cd "${repo_dir}" && bash build.sh --pkg)
+run_package=$(find "${repo_dir}/build_out" -maxdepth 1 -type f \
+    -name "cann-asc-tools_*_linux-${package_arch}.run" -print -quit)
+if [[ -z "${run_package}" ]]; then
+    printf 'missing asc-tools run package\n' >&2
+    exit 1
+fi
+bash "${run_package}" --full --quiet --install-path="${cann_parent}"
 
+installed_arch_dir="${cann_home}/${package_arch}-linux"
 for artifact in \
-    "${bin_dir}/libacl_san.so" \
-    "${bin_dir}/libacl_tool_injection.so" \
-    "${bin_dir}/libnpu_check.so" \
-    "${bin_dir}/npu_check"; do
+    "${installed_arch_dir}/bin/npu-check" \
+    "${installed_arch_dir}/tools/npu_tools/bin/npu-check" \
+    "${installed_arch_dir}/tools/npu_tools/lib64/libacl_tool_injection.so" \
+    "${installed_arch_dir}/tools/npu_tools/lib64/libacl_san.so" \
+    "${installed_arch_dir}/tools/npu_tools/lib64/libnpu_check.so"; do
     if [[ ! -f "${artifact}" ]]; then
-        printf 'missing demo artifact: %s\n' "${artifact}" >&2
+        printf 'missing installed asc-tools artifact: %s\n' "${artifact}" >&2
         exit 1
     fi
 done
 
-printf 'demo build completed: %s\n' "${build_dir}"
+printf 'asc-tools package installed into CANN: %s\n' "${cann_home}"

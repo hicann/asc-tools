@@ -85,13 +85,11 @@ main()
         return 2
     fi
 
-    # 每次全量冒烟都从干净的公共工具构建目录开始，并复用 build.sh 的 CANN 环境。
-    rm -rf -- "${build_dir}"
+    # 每次全量冒烟都重新打包并安装 asc-tools，然后复用 build.sh 加载的 CANN 环境。
     source "${demo_dir}/build.sh"
 
-    if [[ ! -x "${demo_dir}/build/npu_tools/bin/npu_check" ]]; then
-        printf 'demo build did not produce npu_check: %s\n' \
-            "${demo_dir}/build/npu_tools/bin/npu_check" >&2
+    if ! command -v npu-check >/dev/null 2>&1; then
+        printf 'asc-tools package did not install npu-check in PATH\n' >&2
         return 1
     fi
 

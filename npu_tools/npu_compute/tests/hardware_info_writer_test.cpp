@@ -10,7 +10,8 @@
 #include "hardware_info_writer.h"
 
 #include <cstdio>
-#include <filesystem>
+#include <boost/filesystem.hpp>
+#include <boost/system/error_code.hpp>
 #include <fstream>
 #include <string>
 #include <string_view>
@@ -38,7 +39,8 @@ class TempDirectory {
 public:
     TempDirectory()
     {
-        std::string pathTemplate = (std::filesystem::temp_directory_path() / "npu-compute-writer-test-XXXXXX").string();
+        std::string pathTemplate =
+            (boost::filesystem::temp_directory_path() / "npu-compute-writer-test-XXXXXX").string();
         pathTemplate.push_back('\0');
         char* created = ::mkdtemp(pathTemplate.data());
         if (created != nullptr) {
@@ -49,18 +51,18 @@ public:
     ~TempDirectory()
     {
         if (!path_.empty()) {
-            std::error_code error;
-            std::filesystem::remove_all(path_, error);
+            boost::system::error_code error;
+            boost::filesystem::remove_all(path_, error);
         }
     }
 
-    const std::filesystem::path& Path() const { return path_; }
+    const boost::filesystem::path& Path() const { return path_; }
 
 private:
-    std::filesystem::path path_;
+    boost::filesystem::path path_;
 };
 
-bool ReadFile(const std::filesystem::path& path, std::string* value)
+bool ReadFile(const boost::filesystem::path& path, std::string* value)
 {
     std::ifstream input(path, std::ios::binary);
     if (!input.is_open()) {
@@ -70,10 +72,10 @@ bool ReadFile(const std::filesystem::path& path, std::string* value)
     return !input.bad();
 }
 
-bool HasTemporaryFile(const std::filesystem::path& directory)
+bool HasTemporaryFile(const boost::filesystem::path& directory)
 {
-    std::error_code error;
-    for (const auto& entry : std::filesystem::directory_iterator(directory, error)) {
+    boost::system::error_code error;
+    for (const auto& entry : boost::filesystem::directory_iterator(directory, error)) {
         if (entry.path().filename().string().compare(0, kTemporaryPrefix.size(), kTemporaryPrefix) == 0) {
             return true;
         }
@@ -93,9 +95,9 @@ bool TestPublishesCompleteFileAndKeepsStableLock()
         npu_compute::PublishHardwareInfoJsonl(temporary.Path(), content, &error) ==
         npu_compute::PublishResult::Published);
     CHECK(error.empty());
-    const std::filesystem::path finalPath = temporary.Path() / kFinalFileName;
-    CHECK(std::filesystem::is_regular_file(finalPath));
-    CHECK(std::filesystem::is_regular_file(temporary.Path() / kLockFileName));
+    const boost::filesystem::path finalPath = temporary.Path() / kFinalFileName;
+    CHECK(boost::filesystem::is_regular_file(finalPath));
+    CHECK(boost::filesystem::is_regular_file(temporary.Path() / kLockFileName));
     std::string actual;
     CHECK(ReadFile(finalPath, &actual));
     CHECK(actual == content);
@@ -128,35 +130,35 @@ bool TestFailuresDoNotCreateFinalFile()
     TempDirectory temporary;
     CHECK(!temporary.Path().empty());
     std::string error;
-    const std::filesystem::path missingDirectory = temporary.Path() / "missing";
+    const boost::filesystem::path missingDirectory = temporary.Path() / "missing";
     CHECK(
         npu_compute::PublishHardwareInfoJsonl(missingDirectory, "data", &error) == npu_compute::PublishResult::Failed);
     CHECK(!error.empty());
-    CHECK(!std::filesystem::exists(missingDirectory / kFinalFileName));
+    CHECK(!boost::filesystem::exists(missingDirectory / kFinalFileName));
 
     error.clear();
-    const std::filesystem::path invalidFinalDirectory = temporary.Path() / "invalid-final";
-    CHECK(std::filesystem::create_directory(invalidFinalDirectory));
-    CHECK(std::filesystem::create_directory(invalidFinalDirectory / kFinalFileName));
+    const boost::filesystem::path invalidFinalDirectory = temporary.Path() / "invalid-final";
+    CHECK(boost::filesystem::create_directory(invalidFinalDirectory));
+    CHECK(boost::filesystem::create_directory(invalidFinalDirectory / kFinalFileName));
     CHECK(
         npu_compute::PublishHardwareInfoJsonl(invalidFinalDirectory, "data", &error) ==
         npu_compute::PublishResult::Failed);
     CHECK(!error.empty());
-    CHECK(std::filesystem::is_directory(invalidFinalDirectory / kFinalFileName));
+    CHECK(boost::filesystem::is_directory(invalidFinalDirectory / kFinalFileName));
     CHECK(!HasTemporaryFile(invalidFinalDirectory));
 
     error.clear();
-    const std::filesystem::path blockedTemporaryDirectory = temporary.Path() / "blocked-temp";
-    CHECK(std::filesystem::create_directory(blockedTemporaryDirectory));
-    const std::filesystem::path blockedTemporaryPath =
+    const boost::filesystem::path blockedTemporaryDirectory = temporary.Path() / "blocked-temp";
+    CHECK(boost::filesystem::create_directory(blockedTemporaryDirectory));
+    const boost::filesystem::path blockedTemporaryPath =
         blockedTemporaryDirectory / (std::string(kTemporaryPrefix) + std::to_string(::getpid()));
-    CHECK(std::filesystem::create_directory(blockedTemporaryPath));
+    CHECK(boost::filesystem::create_directory(blockedTemporaryPath));
     CHECK(
         npu_compute::PublishHardwareInfoJsonl(blockedTemporaryDirectory, "data", &error) ==
         npu_compute::PublishResult::Failed);
     CHECK(!error.empty());
-    CHECK(!std::filesystem::exists(blockedTemporaryDirectory / kFinalFileName));
-    CHECK(std::filesystem::is_directory(blockedTemporaryPath));
+    CHECK(!boost::filesystem::exists(blockedTemporaryDirectory / kFinalFileName));
+    CHECK(boost::filesystem::is_directory(blockedTemporaryPath));
     return true;
 }
 

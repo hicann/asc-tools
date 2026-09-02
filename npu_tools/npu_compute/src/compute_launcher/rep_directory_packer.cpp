@@ -12,6 +12,9 @@
 #include "collection_file_validator.h"
 #include "rep_encoder.h"
 
+#include <boost/filesystem.hpp>
+#include <boost/system/error_code.hpp>
+
 #include <algorithm>
 #include <fstream>
 #include <iterator>
@@ -26,7 +29,7 @@ namespace {
 constexpr char kHardwareInfoLockName[] = ".hardware_info.lock";
 
 struct DirectoryItem {
-    std::filesystem::path path;
+    boost::filesystem::path path;
     std::string stored_name;
     bool is_directory = false;
 };
@@ -57,7 +60,7 @@ bool StoredNameLess(const DirectoryItem& left, const DirectoryItem& right)
         [](unsigned char left_byte, unsigned char right_byte) { return left_byte < right_byte; });
 }
 
-bool ReadFile(const std::filesystem::path& path, std::vector<uint8_t>* payload, std::string* error)
+bool ReadFile(const boost::filesystem::path& path, std::vector<uint8_t>* payload, std::string* error)
 {
     std::ifstream input(path, std::ios::binary);
     if (!input.is_open()) {
@@ -75,11 +78,11 @@ bool ReadFile(const std::filesystem::path& path, std::vector<uint8_t>* payload, 
 }
 
 bool CollectDirectoryItems(
-    const std::filesystem::path& directory, std::vector<DirectoryItem>* items, std::string* error)
+    const boost::filesystem::path& directory, std::vector<DirectoryItem>* items, std::string* error)
 {
-    std::error_code iterator_error;
-    std::filesystem::directory_iterator iterator(directory, iterator_error);
-    const std::filesystem::directory_iterator end;
+    boost::system::error_code iterator_error;
+    boost::filesystem::directory_iterator iterator(directory, iterator_error);
+    const boost::filesystem::directory_iterator end;
     if (iterator_error) {
         return Fail("open collection directory failed: " + directory.string() + ": " + iterator_error.message(), error);
     }
@@ -89,19 +92,19 @@ bool CollectDirectoryItems(
             return Fail(
                 "iterate collection directory failed: " + directory.string() + ": " + iterator_error.message(), error);
         }
-        const std::filesystem::path path = iterator->path();
+        const boost::filesystem::path path = iterator->path();
         const std::string name = path.filename().string();
-        std::error_code status_error;
-        const std::filesystem::file_status status = std::filesystem::symlink_status(path, status_error);
+        boost::system::error_code status_error;
+        const boost::filesystem::file_status status = boost::filesystem::symlink_status(path, status_error);
         if (status_error) {
             return Fail(
                 "inspect collection directory item failed: " + path.string() + ": " + status_error.message(), error);
         }
-        if (std::filesystem::is_symlink(status)) {
+        if (boost::filesystem::is_symlink(status)) {
             return Fail("symbolic link is not allowed in collection directory: " + path.string(), error);
         }
         if (name == kHardwareInfoLockName) {
-            if (!std::filesystem::is_regular_file(status)) {
+            if (!boost::filesystem::is_regular_file(status)) {
                 return Fail("HardwareInfo lock path is not a regular file: " + path.string(), error);
             }
             continue;
@@ -112,10 +115,10 @@ bool CollectDirectoryItems(
 
         DirectoryItem item;
         item.path = path;
-        if (std::filesystem::is_directory(status)) {
+        if (boost::filesystem::is_directory(status)) {
             item.is_directory = true;
             item.stored_name = name + ".npu.rep";
-        } else if (std::filesystem::is_regular_file(status)) {
+        } else if (boost::filesystem::is_regular_file(status)) {
             item.stored_name = name;
         } else {
             return Fail("unsupported collection directory item: " + path.string(), error);
@@ -138,7 +141,7 @@ bool CollectDirectoryItems(
     return true;
 }
 
-bool PackDirectoryInternal(const std::filesystem::path& directory, std::vector<uint8_t>* encoded, std::string* error)
+bool PackDirectoryInternal(const boost::filesystem::path& directory, std::vector<uint8_t>* encoded, std::string* error)
 {
     std::vector<DirectoryItem> items;
     if (!CollectDirectoryItems(directory, &items, error)) {
@@ -175,7 +178,7 @@ bool PackDirectoryInternal(const std::filesystem::path& directory, std::vector<u
 
 } // namespace
 
-bool PackDirectoryToRep(const std::filesystem::path& directory, std::vector<uint8_t>* encoded, std::string* error)
+bool PackDirectoryToRep(const boost::filesystem::path& directory, std::vector<uint8_t>* encoded, std::string* error)
 {
     if (error != nullptr) {
         error->clear();
@@ -186,13 +189,13 @@ bool PackDirectoryToRep(const std::filesystem::path& directory, std::vector<uint
     encoded->clear();
 
     try {
-        std::error_code status_error;
-        const std::filesystem::file_status status = std::filesystem::symlink_status(directory, status_error);
+        boost::system::error_code status_error;
+        const boost::filesystem::file_status status = boost::filesystem::symlink_status(directory, status_error);
         if (status_error) {
             return Fail(
                 "inspect collection directory failed: " + directory.string() + ": " + status_error.message(), error);
         }
-        if (!std::filesystem::is_directory(status)) {
+        if (!boost::filesystem::is_directory(status)) {
             return Fail("collection path is not a directory: " + directory.string(), error);
         }
         return PackDirectoryInternal(directory, encoded, error);

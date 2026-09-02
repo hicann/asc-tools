@@ -28,9 +28,6 @@ output="build/npu_check.log"
 : >"${output}"
 exec > >(tee -a "${output}") 2>&1
 
-npu_check="../../../build/npu_tools/bin/npu_check"
-
-# 设置 DBI 运行环境。
 export ASCEND_GLOBAL_LOG_LEVEL=0
 export NPU_SAN_DEBUG=1
 
@@ -41,7 +38,7 @@ cmake --build build --parallel
 # block 0 的 GET/RLS 配对成功，block 1 只执行 GET。
 # 共记录 3 个事件并留下 1 个未释放锁。
 set +e
-"${npu_check}" --tool synccheck -- build/demo
+npu-check --tool synccheck -- build/demo
 npu_check_status=$?
 set -e
 

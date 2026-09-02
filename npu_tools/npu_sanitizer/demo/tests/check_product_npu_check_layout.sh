@@ -13,27 +13,30 @@ set -euo pipefail
 
 demo_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 sanitizer_dir=$(cd "${demo_dir}/.." && pwd)
+npu_tools_dir=$(cd "${sanitizer_dir}/.." && pwd)
 
-grep -Fq 'add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../common" npu_check_common)' \
-    "${demo_dir}/CMakeLists.txt"
-grep -Fq 'add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../npu_check_cli" npu_check_cli)' \
-    "${demo_dir}/CMakeLists.txt"
-grep -Fq 'add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../npu_check" npu_check)' \
-    "${demo_dir}/CMakeLists.txt"
+test ! -e "${demo_dir}/CMakeLists.txt"
+grep -Fq 'add_subdirectory(injection)' "${npu_tools_dir}/CMakeLists.txt"
+grep -Fq 'add_subdirectory(common)' "${sanitizer_dir}/CMakeLists.txt"
+grep -Fq 'add_subdirectory(sanitizer_api)' "${sanitizer_dir}/CMakeLists.txt"
+grep -Fq 'add_subdirectory(npu_check_cli)' "${sanitizer_dir}/CMakeLists.txt"
+grep -Fq 'add_subdirectory(npu_check)' "${sanitizer_dir}/CMakeLists.txt"
+test ! -e "${sanitizer_dir}/dbi"
+test -d "${sanitizer_dir}/sanitizer_api/src/dbi"
+test -d "${sanitizer_dir}/sanitizer_api/include/dbi"
+if ! grep -Fq '"LINKER:-rpath,$ORIGIN"' "${sanitizer_dir}/sanitizer_api/CMakeLists.txt"; then
+    printf 'libacl_san.so does not explicitly preserve its $ORIGIN RUNPATH\n' >&2
+    exit 1
+fi
 if rg -n 'DBI_RUNTIME_SOURCE|src/probes/.*\.cpp|NPU_CHECK_DBI_SOURCE_ROOT' \
-    "${demo_dir}/CMakeLists.txt"; then
-    printf 'demo still stages or exports runtime Probe sources\n' >&2
+    "${sanitizer_dir}/CMakeLists.txt"; then
+    printf 'product npu_sanitizer still stages or exports runtime Probe sources\n' >&2
     exit 1
 fi
 
 if rg -n 'install\(DIRECTORY.*probes|share/aclsan/dbi|trace_record\.h|trace_buffer_abi\.h' \
     "${sanitizer_dir}/npu_check/CMakeLists.txt"; then
     printf 'product npu_check still installs DBI Probe sources or private ABI headers\n' >&2
-    exit 1
-fi
-
-if grep -Eq 'CMAKE_CURRENT_SOURCE_DIR}/npu_check(_exec)?"' "${demo_dir}/CMakeLists.txt"; then
-    printf 'demo CMake still references a demo-local npu_check component\n' >&2
     exit 1
 fi
 

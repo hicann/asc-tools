@@ -19,7 +19,8 @@
 #include <csignal>
 #include <cstdlib>
 #include <cstring>
-#include <filesystem>
+#include <boost/filesystem.hpp>
+#include <boost/system/error_code.hpp>
 #include <fcntl.h>
 #include <fstream>
 #include <iostream>
@@ -358,8 +359,8 @@ bool CreateSessionDirectory(std::string& directory, std::string& error)
 
 bool EnsureDirectory(const std::string& path, std::string& error)
 {
-    std::error_code filesystemError;
-    std::filesystem::create_directories(path, filesystemError);
+    boost::system::error_code filesystemError;
+    boost::filesystem::create_directories(path, filesystemError);
     if (filesystemError) {
         error = "cannot create directory '" + path + "': " + filesystemError.message();
         return false;
@@ -404,14 +405,14 @@ bool ResolveLogPath(const std::string& requested, uint64_t sessionId, std::strin
         resolved.clear();
         return true;
     }
-    std::error_code filesystemError;
-    if (std::filesystem::is_directory(requested, filesystemError) && !filesystemError) {
+    boost::system::error_code filesystemError;
+    if (boost::filesystem::is_directory(requested, filesystemError) && !filesystemError) {
         // 文件名带上 session：同一目录下并发跑多个实例不会互相覆盖。
-        resolved = (std::filesystem::path(requested) / ("npu_check-" + std::to_string(sessionId) + ".log")).string();
+        resolved = (boost::filesystem::path(requested) / ("npu_check-" + std::to_string(sessionId) + ".log")).string();
         return true;
     }
-    const auto parent = std::filesystem::path(requested).parent_path();
-    if (!parent.empty() && !std::filesystem::exists(parent, filesystemError)) {
+    const auto parent = boost::filesystem::path(requested).parent_path();
+    if (!parent.empty() && !boost::filesystem::exists(parent, filesystemError)) {
         error = "log file directory does not exist: " + parent.string();
         return false;
     }
@@ -788,8 +789,8 @@ int RunApplication(const Options& options, const std::string& libraryPath)
     // 只删自己 mkdtemp 出来的会话目录。--work-dir 指定的目录是用户的，即便本次的
     // npu_check.log 和 probe 缓存就落在里面，也一律不碰 —— 递归删一个用户给的路径
     // 是不可逆的，代价远大于留下几个文件。
-    std::error_code cleanupError;
-    std::filesystem::remove_all(sessionDirectory, cleanupError);
+    boost::system::error_code cleanupError;
+    boost::filesystem::remove_all(sessionDirectory, cleanupError);
     return exitCode;
 }
 

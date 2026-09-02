@@ -12,16 +12,17 @@
 
 #include "hardware_info_types.h"
 
-#include <filesystem>
+#include <boost/filesystem.hpp>
+#include <boost/system/error_code.hpp>
 
 namespace npu_compute {
 
 struct HostInfoCollectionOptions {
-    std::filesystem::path cpuTopologyRoot = "/sys/devices/system/cpu";
+    boost::filesystem::path cpuTopologyRoot = "/sys/devices/system/cpu";
 };
 
 bool CollectHostInfo(
-    const std::filesystem::path& outputDirectory, HostInfo* result, DiagnosticSink* diagnostics,
+    const boost::filesystem::path& outputDirectory, HostInfo* result, DiagnosticSink* diagnostics,
     const HostInfoCollectionOptions& options = HostInfoCollectionOptions{});
 
 } // namespace npu_compute

@@ -23,7 +23,7 @@ add_library(npu_compute_launcher_core STATIC
   staging_directory.cpp
 )
 target_include_directories(npu_compute_launcher_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
-target_link_libraries(npu_compute_launcher_core PUBLIC npu_compute_headers)
+target_link_libraries(npu_compute_launcher_core PUBLIC npu_compute_headers Boost::filesystem)
 
 add_executable(npu_compute_cli main.cpp)
 target_link_libraries(npu_compute_cli PRIVATE npu_compute_launcher_core)

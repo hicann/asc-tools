@@ -9,6 +9,8 @@
  */
 #include "hardware_info_writer.h"
 
+#include <boost/filesystem.hpp>
+
 #include <algorithm>
 #include <cerrno>
 #include <cstddef>
@@ -131,7 +133,7 @@ bool SyncFile(int descriptor, std::string* error)
 
 class TemporaryFileCleanup {
 public:
-    explicit TemporaryFileCleanup(std::filesystem::path path) : path_(std::move(path)) {}
+    explicit TemporaryFileCleanup(boost::filesystem::path path) : path_(std::move(path)) {}
 
     ~TemporaryFileCleanup()
     {
@@ -143,20 +145,20 @@ public:
     void Release() noexcept { active_ = false; }
 
 private:
-    std::filesystem::path path_;
+    boost::filesystem::path path_;
     bool active_ = true;
 };
 
 } // namespace
 
 PublishResult PublishHardwareInfoJsonl(
-    const std::filesystem::path& outputDirectory, std::string_view jsonl, std::string* error)
+    const boost::filesystem::path& outputDirectory, std::string_view jsonl, std::string* error)
 {
     if (error != nullptr) {
         error->clear();
     }
 
-    const std::filesystem::path lockPath = outputDirectory / kLockFileName;
+    const boost::filesystem::path lockPath = outputDirectory / kLockFileName;
     FileDescriptor lockDescriptor(
         ::open(lockPath.c_str(), O_RDWR | O_CREAT | O_CLOEXEC | O_NOFOLLOW, S_IRUSR | S_IWUSR));
     if (lockDescriptor.Get() < 0) {
@@ -167,7 +169,7 @@ PublishResult PublishHardwareInfoJsonl(
         return PublishResult::Failed;
     }
 
-    const std::filesystem::path finalPath = outputDirectory / kFinalFileName;
+    const boost::filesystem::path finalPath = outputDirectory / kFinalFileName;
     struct stat finalStatus {};
     if (::lstat(finalPath.c_str(), &finalStatus) == 0) {
         if (S_ISREG(finalStatus.st_mode)) {
@@ -181,7 +183,7 @@ PublishResult PublishHardwareInfoJsonl(
         return PublishResult::Failed;
     }
 
-    const std::filesystem::path temporaryPath =
+    const boost::filesystem::path temporaryPath =
         outputDirectory / (std::string(kTemporaryPrefix) + std::to_string(::getpid()));
     FileDescriptor temporaryDescriptor(
         ::open(temporaryPath.c_str(), O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC | O_NOFOLLOW, S_IRUSR | S_IWUSR));

@@ -16,7 +16,8 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
-#include <filesystem>
+#include <boost/filesystem.hpp>
+#include <boost/system/error_code.hpp>
 #include <fstream>
 #include <iterator>
 #include <string>
@@ -57,7 +58,7 @@ public:
     TempDirectory()
     {
         std::string path_template =
-            (std::filesystem::temp_directory_path() / "npu-compute-report-writer-test-XXXXXX").string();
+            (boost::filesystem::temp_directory_path() / "npu-compute-report-writer-test-XXXXXX").string();
         path_template.push_back('\0');
         char* created = ::mkdtemp(path_template.data());
         if (created != nullptr) {
@@ -68,15 +69,15 @@ public:
     ~TempDirectory()
     {
         if (!path_.empty()) {
-            std::error_code error;
-            std::filesystem::remove_all(path_, error);
+            boost::system::error_code error;
+            boost::filesystem::remove_all(path_, error);
         }
     }
 
-    const std::filesystem::path& Path() const { return path_; }
+    const boost::filesystem::path& Path() const { return path_; }
 
 private:
-    std::filesystem::path path_;
+    boost::filesystem::path path_;
 };
 
 std::vector<uint8_t> Bytes(std::string_view content) { return {content.begin(), content.end()}; }
@@ -91,14 +92,14 @@ bool BuildNestedRep(std::vector<uint8_t>* encoded)
     return EncodeRep({{"device_0.npu.rep", NpuRepFileType::NpuRep, child}}, encoded, &error);
 }
 
-bool WriteFile(const std::filesystem::path& path, std::string_view content)
+bool WriteFile(const boost::filesystem::path& path, std::string_view content)
 {
     std::ofstream output(path, std::ios::binary | std::ios::trunc);
     output.write(content.data(), static_cast<std::streamsize>(content.size()));
     return output.good();
 }
 
-bool ReadFile(const std::filesystem::path& path, std::vector<uint8_t>* content)
+bool ReadFile(const boost::filesystem::path& path, std::vector<uint8_t>* content)
 {
     std::ifstream input(path, std::ios::binary);
     if (!input.is_open()) {
@@ -108,10 +109,10 @@ bool ReadFile(const std::filesystem::path& path, std::vector<uint8_t>* content)
     return !input.bad();
 }
 
-bool HasTemporaryFile(const std::filesystem::path& directory)
+bool HasTemporaryFile(const boost::filesystem::path& directory)
 {
-    std::error_code error;
-    for (const auto& entry : std::filesystem::directory_iterator(directory, error)) {
+    boost::system::error_code error;
+    for (const auto& entry : boost::filesystem::directory_iterator(directory, error)) {
         if (entry.path().filename().string().find(".tmp.") != std::string::npos) {
             return true;
         }
@@ -148,7 +149,7 @@ int TestExistingTargetIsNotOverwritten()
 {
     TempDirectory temporary;
     CHECK(!temporary.Path().empty());
-    const std::filesystem::path path = temporary.Path() / "result.npu-rep";
+    const boost::filesystem::path path = temporary.Path() / "result.npu-rep";
     const std::string original = "original";
     CHECK(WriteFile(path, original));
     std::vector<uint8_t> encoded;
@@ -171,7 +172,7 @@ int TestRejectsInvalidRepAndUnwritableDirectory()
     std::string error;
     const ReportTarget invalid_target{temporary.Path() / "invalid.npu-rep"};
     CHECK(!PublishRepReport({1U, 2U, 3U}, invalid_target, &error));
-    CHECK(!std::filesystem::exists(invalid_target.path));
+    CHECK(!boost::filesystem::exists(invalid_target.path));
     CHECK(!HasTemporaryFile(temporary.Path()));
 
     std::vector<uint8_t> encoded;
@@ -180,21 +181,21 @@ int TestRejectsInvalidRepAndUnwritableDirectory()
     invalid_length[28U] ^= 0x01U;
     const ReportTarget invalid_length_target{temporary.Path() / "invalid-length.npu-rep"};
     CHECK(!PublishRepReport(invalid_length, invalid_length_target, &error));
-    CHECK(!std::filesystem::exists(invalid_length_target.path));
+    CHECK(!boost::filesystem::exists(invalid_length_target.path));
 
     std::vector<uint8_t> invalid_offset = encoded;
     invalid_offset[36U + 152U] = 0U;
     invalid_offset[36U + 153U] = 0U;
     const ReportTarget invalid_offset_target{temporary.Path() / "invalid-offset.npu-rep"};
     CHECK(!PublishRepReport(invalid_offset, invalid_offset_target, &error));
-    CHECK(!std::filesystem::exists(invalid_offset_target.path));
+    CHECK(!boost::filesystem::exists(invalid_offset_target.path));
     CHECK(!HasTemporaryFile(temporary.Path()));
 
     const ReportTarget unwritable{
-        std::filesystem::path("/proc") / ("npu-compute-report-" + std::to_string(::getpid()) + ".npu-rep")};
+        boost::filesystem::path("/proc") / ("npu-compute-report-" + std::to_string(::getpid()) + ".npu-rep")};
     CHECK(!PublishRepReport(encoded, unwritable, &error));
     CHECK(!error.empty());
-    CHECK(!std::filesystem::exists(unwritable.path));
+    CHECK(!boost::filesystem::exists(unwritable.path));
     return 0;
 }
 
@@ -297,13 +298,13 @@ int TestInjectedFailuresLeaveNoPartialReport()
         std::string error;
         CHECK(!PublishRepReportWithOperations(encoded, target, Operations(&state), &error));
         CHECK(!error.empty());
-        CHECK(!std::filesystem::exists(target.path));
+        CHECK(!boost::filesystem::exists(target.path));
         CHECK(!HasTemporaryFile(temporary.Path()));
     }
 
     TempDirectory temporary;
     CHECK(!temporary.Path().empty());
-    const std::filesystem::path path = temporary.Path() / "existing.npu-rep";
+    const boost::filesystem::path path = temporary.Path() / "existing.npu-rep";
     const std::string original = "original";
     CHECK(WriteFile(path, original));
     OperationState state;

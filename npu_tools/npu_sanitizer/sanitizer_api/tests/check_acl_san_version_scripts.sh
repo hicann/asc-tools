@@ -1,4 +1,3 @@
-#!/usr/bin/env bash
 # ----------------------------------------------------------------------------------------------------------
 # Copyright (c) 2026 Huawei Technologies Co., Ltd.
 # This program is free software, you can redistribute it and/or modify it under the terms and conditions of
@@ -9,28 +8,12 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 # ----------------------------------------------------------------------------------------------------------
 
-set -euo pipefail
-
-if [[ $# -ne 2 ]]; then
-    printf 'usage: %s <production-map> <test-map>\n' "${0##*/}" >&2
-    exit 2
-fi
-
-production_map=$1
-test_map=$2
-symbols=(
-    aclsanTestMarkInstrumentedFunction
-    aclsanTestRecordDeviceBinarySource
-    aclsanTestResetTraceRuntimeState
+set(NPU_CHECK_REPORT_RENDERER_SOURCES
+  ${CMAKE_CURRENT_LIST_DIR}/../src/diagnostic/report_renderer.cpp
+  ${CMAKE_CURRENT_LIST_DIR}/../src/diagnostic/report/report_catalog.cpp
+  ${CMAKE_CURRENT_LIST_DIR}/../src/diagnostic/report/report_fields.cpp
+  ${CMAKE_CURRENT_LIST_DIR}/../src/diagnostic/report/report_normalizer.cpp
+  ${CMAKE_CURRENT_LIST_DIR}/../src/diagnostic/report/report_summary.cpp
+  ${CMAKE_CURRENT_LIST_DIR}/../src/diagnostic/report/report_text_renderer.cpp
+  ${CMAKE_CURRENT_LIST_DIR}/../src/diagnostic/report/synccheck_adapter.cpp
 )
-
-for symbol in "${symbols[@]}"; do
-    if grep -Fq "${symbol}" "${production_map}"; then
-        printf 'test symbol must not be present in production map: %s\n' "${symbol}" >&2
-        exit 1
-    fi
-    if ! grep -Fq "${symbol}" "${test_map}"; then
-        printf 'test symbol is missing from test map: %s\n' "${symbol}" >&2
-        exit 1
-    fi
-done

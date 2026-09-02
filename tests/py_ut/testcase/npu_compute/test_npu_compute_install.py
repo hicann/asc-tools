@@ -66,13 +66,15 @@ def public_install_root(install_root, tmp_path_factory):
 
 def test_default_component_installs_the_declared_layout(install_root):
     architecture_root = install_root / f"{INSTALL_ARCH}-linux"
+    private_library_root = architecture_root / "tools/npu_tools/lib64"
     assert (architecture_root / "bin/npu-compute").is_file()
     for library in (
         "libnpu-compute.so",
         "libacl_pti.so",
         "libacl_tool_injection.so",
     ):
-        assert (architecture_root / "lib64" / library).is_file()
+        assert (private_library_root / library).is_file()
+        assert not (architecture_root / "lib64" / library).exists()
 
     aclpti_headers = architecture_root / "include/aclpti"
     for header in (
@@ -108,7 +110,7 @@ def test_default_component_installs_the_declared_layout(install_root):
             "-D",
             "--defined-only",
             "--demangle",
-            str(architecture_root / "lib64/libacl_pti.so"),
+            str(private_library_root / "libacl_pti.so"),
         ],
         text=True,
         capture_output=True,
@@ -150,7 +152,9 @@ def test_public_cli_symlink_uses_the_architecture_injection_library(
 
     assert result.returncode == 0, result.stderr
     expected = (
-        install_root / f"{INSTALL_ARCH}-linux" / "lib64/libnpu-compute.so"
+        install_root
+        / f"{INSTALL_ARCH}-linux"
+        / "tools/npu_tools/lib64/libnpu-compute.so"
     ).resolve()
     assert f"ACL_API_INJECTION={expected}" in result.stdout.splitlines()
 
@@ -159,10 +163,11 @@ def test_installed_layout_runs_the_minimal_stub_chain(
     install_root, public_install_root
 ):
     architecture_root = install_root / f"{INSTALL_ARCH}-linux"
+    private_library_root = architecture_root / "tools/npu_tools/lib64"
     cli = public_install_root / "bin/npu-compute"
     assert cli.is_file()
     environment = os.environ.copy()
-    search_paths = [str(architecture_root / "lib64"), str(BIN_DIR)]
+    search_paths = [str(private_library_root), str(BIN_DIR)]
     if environment.get("LD_LIBRARY_PATH"):
         search_paths.append(environment["LD_LIBRARY_PATH"])
     environment["LD_LIBRARY_PATH"] = ":".join(search_paths)

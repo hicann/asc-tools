@@ -13,7 +13,8 @@
 #include <chrono>
 #include <cstdio>
 #include <cstdlib>
-#include <filesystem>
+#include <boost/filesystem.hpp>
+#include <boost/system/error_code.hpp>
 #include <fstream>
 #include <iterator>
 #include <string>
@@ -46,7 +47,7 @@ aclptiPmuDataRow::CoreData Core(
     return core;
 }
 
-std::string ReadFile(const std::filesystem::path& path)
+std::string ReadFile(const boost::filesystem::path& path)
 {
     std::ifstream input(path);
     return std::string(std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>());
@@ -57,7 +58,7 @@ std::size_t FieldCount(const std::string& line)
     return line.empty() ? 0 : 1 + static_cast<std::size_t>(std::count(line.begin(), line.end(), ','));
 }
 
-bool HasMatchingColumnCounts(const std::filesystem::path& path)
+bool HasMatchingColumnCounts(const boost::filesystem::path& path)
 {
     std::ifstream input(path);
     std::string header;
@@ -65,10 +66,10 @@ bool HasMatchingColumnCounts(const std::filesystem::path& path)
     return std::getline(input, header) && std::getline(input, row) && FieldCount(header) == FieldCount(row);
 }
 
-std::vector<std::filesystem::path> NestedCsvFiles(const std::filesystem::path& root, const std::string& filename)
+std::vector<boost::filesystem::path> NestedCsvFiles(const boost::filesystem::path& root, const std::string& filename)
 {
-    std::vector<std::filesystem::path> paths;
-    for (const auto& entry : std::filesystem::recursive_directory_iterator(root)) {
+    std::vector<boost::filesystem::path> paths;
+    for (const auto& entry : boost::filesystem::recursive_directory_iterator(root)) {
         if (entry.is_regular_file() && entry.path().filename() == filename && entry.path().parent_path() != root) {
             paths.push_back(entry.path());
         }
@@ -117,7 +118,7 @@ bool CaptureStderr(Function function, std::string* output)
 int main()
 {
     const auto directory =
-        std::filesystem::temp_directory_path() /
+        boost::filesystem::temp_directory_path() /
         ("npu_compute_csv_test_" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
 
     aclptiPmuDataResult result;
@@ -165,10 +166,10 @@ int main()
     CHECK(l2.find("aic_read_hit_rate(%)") != std::string::npos);
     CHECK(l2.find("2,cube3,") != std::string::npos);
     CHECK(l2.find("2,vector3,") != std::string::npos);
-    CHECK(std::filesystem::exists(directory / "Memory.csv"));
-    CHECK(std::filesystem::exists(directory / "MemoryL0.csv"));
-    CHECK(std::filesystem::exists(directory / "MemoryUB.csv"));
-    CHECK(std::filesystem::exists(directory / "PipeUtilization.csv"));
+    CHECK(boost::filesystem::exists(directory / "Memory.csv"));
+    CHECK(boost::filesystem::exists(directory / "MemoryL0.csv"));
+    CHECK(boost::filesystem::exists(directory / "MemoryUB.csv"));
+    CHECK(boost::filesystem::exists(directory / "PipeUtilization.csv"));
     CHECK(ReadFile(directory / "PipeUtilization.csv").find(",0.25,") != std::string::npos);
     CHECK(ReadFile(directory / "MemoryUB.csv").find(",4.76837158203125,NA") != std::string::npos);
     CHECK(HasMatchingColumnCounts(directory / "L2Cache.csv"));
@@ -177,7 +178,7 @@ int main()
     CHECK(HasMatchingColumnCounts(directory / "MemoryUB.csv"));
     CHECK(HasMatchingColumnCounts(directory / "PipeUtilization.csv"));
 
-    const auto splitFrequencyDirectory = std::filesystem::temp_directory_path() /
+    const auto splitFrequencyDirectory = boost::filesystem::temp_directory_path() /
                                          ("npu_compute_csv_split_frequency_test_" +
                                           std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
     config.outputDirectory = splitFrequencyDirectory.string();
@@ -187,7 +188,7 @@ int main()
     const std::string splitFrequencyL2 = ReadFile(splitFrequencyDirectory / "L2Cache.csv");
     CHECK(splitFrequencyL2.find("2,cube3,2,1000,NA,NA") != std::string::npos);
     CHECK(splitFrequencyL2.find("2,vector3,NA,NA,1,2000") != std::string::npos);
-    std::filesystem::remove_all(splitFrequencyDirectory);
+    boost::filesystem::remove_all(splitFrequencyDirectory);
     config.outputDirectory = directory.string();
     config.aicFrequencyMhz = 0.0;
     config.aivFrequencyMhz = 0.0;
@@ -205,14 +206,14 @@ int main()
     secondResult.pmuLogs.emplace(aclptiBlockKey{8, 9, ACLPTI_CORE_TYPE_AIC, 9}, secondRow);
     CHECK(npu_compute::PmuCsvWriter::Write(secondResult, {"L2Cache"}, config) == ACLPTI_SUCCESS);
     CHECK(ReadFile(directory / "L2Cache.csv") == l2);
-    const std::vector<std::filesystem::path> nestedL2Files = NestedCsvFiles(directory, "L2Cache.csv");
+    const std::vector<boost::filesystem::path> nestedL2Files = NestedCsvFiles(directory, "L2Cache.csv");
     CHECK(nestedL2Files.size() == 1);
     CHECK(ReadFile(nestedL2Files[0]).find("8,cube9,") != std::string::npos);
 
-    std::filesystem::remove_all(directory);
+    boost::filesystem::remove_all(directory);
 
     const auto sparseDirectory =
-        std::filesystem::temp_directory_path() /
+        boost::filesystem::temp_directory_path() /
         ("npu_compute_csv_sparse_test_" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
     aclptiPmuDataResult sparseResult;
     aclptiPmuDataRow sparseRow{};
@@ -245,29 +246,29 @@ int main()
     const std::string sparseL2 = ReadFile(sparseDirectory / "L2Cache.csv");
     CHECK(sparseL2.find("4,cube5,1,1000,NA,NA") != std::string::npos);
     CHECK(sparseL2.find("10,0,NA,NA,NA,NA") != std::string::npos);
-    std::filesystem::remove_all(sparseDirectory);
+    boost::filesystem::remove_all(sparseDirectory);
 
-    const auto mirrorPrimaryDirectory = std::filesystem::temp_directory_path() /
+    const auto mirrorPrimaryDirectory = boost::filesystem::temp_directory_path() /
                                         ("npu_compute_csv_mirror_primary_test_" +
                                          std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
     const auto mirrorDirectory =
-        std::filesystem::temp_directory_path() /
+        boost::filesystem::temp_directory_path() /
         ("npu_compute_csv_mirror_test_" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
     config.outputDirectory = mirrorPrimaryDirectory.string();
     config.mirrorOutputDirectory = mirrorDirectory.string();
     CHECK(npu_compute::PmuCsvWriter::Write(sparseResult, {"L2Cache"}, config) == ACLPTI_SUCCESS);
-    CHECK(std::filesystem::exists(mirrorPrimaryDirectory / "L2Cache.csv"));
-    CHECK(std::filesystem::exists(mirrorDirectory / "L2Cache.csv"));
+    CHECK(boost::filesystem::exists(mirrorPrimaryDirectory / "L2Cache.csv"));
+    CHECK(boost::filesystem::exists(mirrorDirectory / "L2Cache.csv"));
     CHECK(ReadFile(mirrorDirectory / "L2Cache.csv") == ReadFile(mirrorPrimaryDirectory / "L2Cache.csv"));
-    std::filesystem::remove_all(mirrorPrimaryDirectory);
-    std::filesystem::remove_all(mirrorDirectory);
+    boost::filesystem::remove_all(mirrorPrimaryDirectory);
+    boost::filesystem::remove_all(mirrorDirectory);
     config.mirrorOutputDirectory.clear();
 
     const auto mirrorFailurePrimaryDirectory =
-        std::filesystem::temp_directory_path() /
+        boost::filesystem::temp_directory_path() /
         ("npu_compute_csv_mirror_failure_primary_test_" +
          std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
-    const auto blockedMirrorDirectory = std::filesystem::temp_directory_path() /
+    const auto blockedMirrorDirectory = boost::filesystem::temp_directory_path() /
                                         ("npu_compute_csv_blocked_mirror_test_" +
                                          std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
     {
@@ -283,14 +284,14 @@ int main()
         [&] { mirrorFailureStatus = npu_compute::PmuCsvWriter::Write(sparseResult, {"L2Cache"}, config); },
         &mirrorFailureLog));
     CHECK(mirrorFailureStatus == ACLPTI_SUCCESS);
-    CHECK(std::filesystem::exists(mirrorFailurePrimaryDirectory / "L2Cache.csv"));
+    CHECK(boost::filesystem::exists(mirrorFailurePrimaryDirectory / "L2Cache.csv"));
     CHECK(mirrorFailureLog.find("CSV mirror") != std::string::npos);
-    std::filesystem::remove_all(mirrorFailurePrimaryDirectory);
-    std::filesystem::remove(blockedMirrorDirectory);
+    boost::filesystem::remove_all(mirrorFailurePrimaryDirectory);
+    boost::filesystem::remove(blockedMirrorDirectory);
     config.mirrorOutputDirectory.clear();
 
     const auto blockedDirectory =
-        std::filesystem::temp_directory_path() /
+        boost::filesystem::temp_directory_path() /
         ("npu_compute_csv_blocked_test_" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
     {
         std::ofstream blockedOutput(blockedDirectory);
@@ -306,7 +307,7 @@ int main()
     CHECK(filesystemLog.find("CSV write rejected: output path is not a directory") != std::string::npos);
     CHECK(filesystemLog.find("path=" + blockedDirectory.string()) != std::string::npos);
     CHECK(filesystemLog.find("reason=") != std::string::npos);
-    std::filesystem::remove(blockedDirectory);
+    boost::filesystem::remove(blockedDirectory);
 
     config.outputDirectory = "relative_csv_output";
     std::string relativeLog;
@@ -323,10 +324,10 @@ int main()
     }
 
     const auto emptyDirectory =
-        std::filesystem::temp_directory_path() /
+        boost::filesystem::temp_directory_path() /
         ("npu_compute_csv_empty_test_" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
-    CHECK(std::filesystem::create_directories(emptyDirectory));
-    const std::filesystem::path existingCsv = emptyDirectory / "L2Cache.csv";
+    CHECK(boost::filesystem::create_directories(emptyDirectory));
+    const boost::filesystem::path existingCsv = emptyDirectory / "L2Cache.csv";
     {
         std::ofstream existingOutput(existingCsv);
         existingOutput << "sentinel\n";
@@ -342,7 +343,7 @@ int main()
     CHECK(npu_compute::PmuCsvWriter::Write(failedEmptyResult, {"L2Cache"}, config) == ACLPTI_SUCCESS);
     CHECK(ReadFile(existingCsv) == "sentinel\n");
 
-    std::filesystem::remove_all(emptyDirectory);
+    boost::filesystem::remove_all(emptyDirectory);
 
     CHECK(npu_compute::PmuCsvConfig{}.outputDirectory.empty());
     config.outputDirectory.clear();
@@ -364,7 +365,7 @@ int main()
     // scale = ceil(2/2)/2 = 0.5，aic_time = 4000/1000 * 0.5 = 2.0
     // 新旧行为一致，验证无回归。
     {
-        const auto s1Dir = std::filesystem::temp_directory_path() /
+        const auto s1Dir = boost::filesystem::temp_directory_path() /
                            ("npu_compute_csv_block_scale1_" +
                             std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
         aclptiPmuDataResult s1Result;
@@ -383,14 +384,14 @@ int main()
         s1Config.aicCoreCount = 2;
         CHECK(npu_compute::PmuCsvWriter::Write(s1Result, {"L2Cache"}, s1Config) == ACLPTI_SUCCESS);
         CHECK(ReadFile(s1Dir / "L2Cache.csv").find("0,cube0,2,") != std::string::npos);
-        std::filesystem::remove_all(s1Dir);
+        boost::filesystem::remove_all(s1Dir);
     }
 
     // === 场景 2：实际 block 数小于硬件核数（1 block，4 cores）===
     // scale = ceil(1/4)/1 = 1.0，aic_time = 4000/1000 * 1.0 = 4.0
     // 旧逻辑（blockCount=coreCount=4）：scale=0.25，time=1.0（偏小）。
     {
-        const auto s2Dir = std::filesystem::temp_directory_path() /
+        const auto s2Dir = boost::filesystem::temp_directory_path() /
                            ("npu_compute_csv_block_scale2_" +
                             std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
         aclptiPmuDataResult s2Result;
@@ -407,14 +408,14 @@ int main()
         s2Config.aicCoreCount = 4;
         CHECK(npu_compute::PmuCsvWriter::Write(s2Result, {"L2Cache"}, s2Config) == ACLPTI_SUCCESS);
         CHECK(ReadFile(s2Dir / "L2Cache.csv").find("5,cube0,4,") != std::string::npos);
-        std::filesystem::remove_all(s2Dir);
+        boost::filesystem::remove_all(s2Dir);
     }
 
     // === 场景 3：实际 block 数大于硬件核数（3 blocks，2 cores）===
     // waves = ceil(3/2) = 2，scale = 2/3，aic_time = 3000/1000 * (2/3) = 2.0
     // 旧逻辑（blockCount=coreCount=2）：scale=0.5，time=1.5（偏小）。
     {
-        const auto s3Dir = std::filesystem::temp_directory_path() /
+        const auto s3Dir = boost::filesystem::temp_directory_path() /
                            ("npu_compute_csv_block_scale3_" +
                             std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
         aclptiPmuDataResult s3Result;
@@ -433,7 +434,7 @@ int main()
         s3Config.aicCoreCount = 2;
         CHECK(npu_compute::PmuCsvWriter::Write(s3Result, {"L2Cache"}, s3Config) == ACLPTI_SUCCESS);
         CHECK(ReadFile(s3Dir / "L2Cache.csv").find("0,cube0,2,") != std::string::npos);
-        std::filesystem::remove_all(s3Dir);
+        boost::filesystem::remove_all(s3Dir);
     }
 
     // === 场景 4：AIV 侧 block 数小于核数（1 AIV block，4 AIV cores）===
@@ -441,7 +442,7 @@ int main()
     // aiv_time = 4000/1000 * 1.0 = 4.0；aic_time = NA（无 AIC 数据）。
     // 旧逻辑（blockCount=aivCoreCount=4）：scale=0.25，time=1.0（偏小）。
     {
-        const auto s4Dir = std::filesystem::temp_directory_path() /
+        const auto s4Dir = boost::filesystem::temp_directory_path() /
                            ("npu_compute_csv_block_scale4_" +
                             std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
         aclptiPmuDataResult s4Result;
@@ -458,7 +459,7 @@ int main()
         s4Config.aivCoreCount = 4;
         CHECK(npu_compute::PmuCsvWriter::Write(s4Result, {"L2Cache"}, s4Config) == ACLPTI_SUCCESS);
         CHECK(ReadFile(s4Dir / "L2Cache.csv").find("10,vector0,NA,NA,4,") != std::string::npos);
-        std::filesystem::remove_all(s4Dir);
+        boost::filesystem::remove_all(s4Dir);
     }
 
     return 0;

@@ -21,7 +21,8 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
-#include <filesystem>
+#include <boost/filesystem.hpp>
+#include <boost/system/error_code.hpp>
 #include <fstream>
 #include <iterator>
 #include <mutex>
@@ -64,7 +65,7 @@ public:
     TempDirectory()
     {
         std::string pathTemplate =
-            (std::filesystem::temp_directory_path() / "npu-compute-runtime-callback-test-XXXXXX").string();
+            (boost::filesystem::temp_directory_path() / "npu-compute-runtime-callback-test-XXXXXX").string();
         pathTemplate.push_back('\0');
         char* created = ::mkdtemp(pathTemplate.data());
         if (created != nullptr) {
@@ -75,18 +76,18 @@ public:
     ~TempDirectory()
     {
         if (!path_.empty()) {
-            std::error_code error;
-            std::filesystem::remove_all(path_, error);
+            boost::system::error_code error;
+            boost::filesystem::remove_all(path_, error);
         }
     }
 
-    const std::filesystem::path& Path() const { return path_; }
+    const boost::filesystem::path& Path() const { return path_; }
 
 private:
-    std::filesystem::path path_;
+    boost::filesystem::path path_;
 };
 
-bool SetScenarioEnvironment(const std::filesystem::path& output)
+bool SetScenarioEnvironment(const boost::filesystem::path& output)
 {
     return ::setenv("NPU_COMPUTE_OUTPUT", output.c_str(), 1) == 0 &&
            ::setenv("NPU_COMPUTE_SECTIONS", kSections, 1) == 0;
@@ -150,9 +151,9 @@ void InvokeCallbackDirectly(aclptiCallbackDomain domain, aclptiCallbackId cbid, 
     }
 }
 
-std::size_t CountLines(const std::filesystem::path& path);
+std::size_t CountLines(const boost::filesystem::path& path);
 
-bool RunSuccessChild(const std::string& scenario, const std::filesystem::path& output)
+bool RunSuccessChild(const std::string& scenario, const boost::filesystem::path& output)
 {
     CHECK(SetScenarioEnvironment(output));
     npu_compute::test::ResetAclPtiCallbackStub();
@@ -163,7 +164,7 @@ bool RunSuccessChild(const std::string& scenario, const std::filesystem::path& o
         CHECK(npu_compute::test::InvokeAclPtiCallback(
             ACLPTI_CB_DOMAIN_RUNTIME_API, ACLPTI_RUNTIME_CBID_aclrtLaunchKernel, ACLPTI_API_EXIT, ACL_SUCCESS,
             nullptr));
-        CHECK(std::filesystem::is_regular_file(output / kHardwareInfoFile));
+        CHECK(boost::filesystem::is_regular_file(output / kHardwareInfoFile));
         CHECK(CountLines(output / kHardwareInfoFile) == 5);
         return true;
     }
@@ -171,7 +172,7 @@ bool RunSuccessChild(const std::string& scenario, const std::filesystem::path& o
         CHECK(npu_compute::test::InvokeAclPtiCallback(
             ACLPTI_CB_DOMAIN_RUNTIME_API, ACLPTI_RUNTIME_CBID_aclrtLaunchKernelWithHostArgs, ACLPTI_API_EXIT,
             ACL_SUCCESS, nullptr));
-        CHECK(std::filesystem::is_regular_file(output / kHardwareInfoFile));
+        CHECK(boost::filesystem::is_regular_file(output / kHardwareInfoFile));
         CHECK(CountLines(output / kHardwareInfoFile) == 5);
         return true;
     }
@@ -179,7 +180,7 @@ bool RunSuccessChild(const std::string& scenario, const std::filesystem::path& o
         CHECK(npu_compute::test::InvokeAclPtiCallback(
             ACLPTI_CB_DOMAIN_RUNTIME_API, ACLPTI_RUNTIME_CBID_aclrtLaunchSIMTKernelWithHostArgs, ACLPTI_API_EXIT,
             ACL_SUCCESS, nullptr));
-        CHECK(std::filesystem::is_regular_file(output / kHardwareInfoFile));
+        CHECK(boost::filesystem::is_regular_file(output / kHardwareInfoFile));
         CHECK(CountLines(output / kHardwareInfoFile) == 5);
         return true;
     }
@@ -187,7 +188,7 @@ bool RunSuccessChild(const std::string& scenario, const std::filesystem::path& o
         CHECK(npu_compute::test::InvokeAclPtiCallback(
             ACLPTI_CB_DOMAIN_RUNTIME_API, ACLPTI_RUNTIME_CBID_aclrtLaunchKernel, ACLPTI_API_EXIT, ACL_SUCCESS,
             nullptr));
-        CHECK(std::filesystem::is_regular_file(output / kHardwareInfoFile));
+        CHECK(boost::filesystem::is_regular_file(output / kHardwareInfoFile));
         CHECK(CountLines(output / kHardwareInfoFile) == 5);
         CHECK(npu_compute::test::InvokeAclPtiCallback(
             ACLPTI_CB_DOMAIN_RUNTIME_API, ACLPTI_RUNTIME_CBID_aclrtLaunchKernelWithHostArgs, ACLPTI_API_EXIT,
@@ -209,7 +210,7 @@ void InvokeSuccessfulExitDirectly(aclptiCallbackId cbid)
     InvokeCallbackDirectly(ACLPTI_CB_DOMAIN_RUNTIME_API, cbid, callbackData);
 }
 
-bool RunNormalStopChild(const std::filesystem::path& output)
+bool RunNormalStopChild(const boost::filesystem::path& output)
 {
     CHECK(SetScenarioEnvironment(output));
     npu_compute::test::ResetAclPtiCallbackStub();
@@ -224,7 +225,7 @@ bool RunNormalStopChild(const std::filesystem::path& output)
     return true;
 }
 
-bool RunStopDuringCollectionChild(const std::filesystem::path& output)
+bool RunStopDuringCollectionChild(const boost::filesystem::path& output)
 {
     CHECK(SetScenarioEnvironment(output));
     npu_compute::test::ResetAclPtiCallbackStub();
@@ -300,12 +301,12 @@ bool RunStopDuringCollectionChild(const std::filesystem::path& output)
     CHECK(drainReturnedBeforeRelease);
     CHECK(drainStatus.load() == 0);
     CHECK(CheckDisableContract());
-    CHECK(std::filesystem::is_regular_file(output / kHardwareInfoFile));
+    CHECK(boost::filesystem::is_regular_file(output / kHardwareInfoFile));
     CHECK(CountLines(output / kHardwareInfoFile) == 5);
     return true;
 }
 
-bool RunIgnoredEventChild(const std::string& scenario, const std::filesystem::path& output)
+bool RunIgnoredEventChild(const std::string& scenario, const boost::filesystem::path& output)
 {
     CHECK(SetScenarioEnvironment(output));
     npu_compute::test::ResetAclPtiCallbackStub();
@@ -360,7 +361,7 @@ bool RunIgnoredEventChild(const std::string& scenario, const std::filesystem::pa
     return false;
 }
 
-bool RunSubscribeFailureChild(const std::filesystem::path& output)
+bool RunSubscribeFailureChild(const boost::filesystem::path& output)
 {
     CHECK(SetScenarioEnvironment(output));
     npu_compute::test::ResetAclPtiCallbackStub();
@@ -375,7 +376,7 @@ bool RunSubscribeFailureChild(const std::filesystem::path& output)
     return true;
 }
 
-bool RunEnableFailureChild(const std::filesystem::path& output, aclptiCallbackId failedCbid)
+bool RunEnableFailureChild(const boost::filesystem::path& output, aclptiCallbackId failedCbid)
 {
     CHECK(SetScenarioEnvironment(output));
     npu_compute::test::ResetAclPtiCallbackStub();
@@ -414,7 +415,7 @@ bool RunEnableFailureChild(const std::filesystem::path& output, aclptiCallbackId
     return true;
 }
 
-bool RunConfigFailureChild(const std::filesystem::path& output)
+bool RunConfigFailureChild(const boost::filesystem::path& output)
 {
     CHECK(SetScenarioEnvironment(output));
     npu_compute::test::ResetAclPtiCallbackStub();
@@ -430,7 +431,7 @@ bool RunConfigFailureChild(const std::filesystem::path& output)
     return true;
 }
 
-bool RunChildScenario(const std::string& scenario, const std::filesystem::path& output)
+bool RunChildScenario(const std::string& scenario, const boost::filesystem::path& output)
 {
     if (scenario.rfind("success-", 0) == 0) {
         return RunSuccessChild(scenario, output);
@@ -463,7 +464,7 @@ bool RunChildScenario(const std::string& scenario, const std::filesystem::path& 
     return false;
 }
 
-bool LaunchChild(const char* executable, const char* scenario, const std::filesystem::path& output)
+bool LaunchChild(const char* executable, const char* scenario, const boost::filesystem::path& output)
 {
     const pid_t process = ::fork();
     CHECK(process >= 0);
@@ -480,7 +481,7 @@ bool LaunchChild(const char* executable, const char* scenario, const std::filesy
     return true;
 }
 
-std::size_t CountLines(const std::filesystem::path& path)
+std::size_t CountLines(const boost::filesystem::path& path)
 {
     std::ifstream input(path);
     std::size_t lines = 0;
@@ -503,9 +504,9 @@ bool TestSuccessAndNormalExit(const char* executable)
         TempDirectory temporary;
         CHECK(!temporary.Path().empty());
         CHECK(LaunchChild(executable, scenario, temporary.Path()));
-        CHECK(std::filesystem::is_regular_file(temporary.Path() / kHardwareInfoFile));
+        CHECK(boost::filesystem::is_regular_file(temporary.Path() / kHardwareInfoFile));
         CHECK(CountLines(temporary.Path() / kHardwareInfoFile) == 5);
-        CHECK(std::filesystem::file_size(temporary.Path() / kDeviceCountFile) == 1);
+        CHECK(boost::filesystem::file_size(temporary.Path() / kDeviceCountFile) == 1);
     }
     return true;
 }
@@ -520,8 +521,8 @@ bool TestIgnoredEvents(const char* executable)
         TempDirectory temporary;
         CHECK(!temporary.Path().empty());
         CHECK(LaunchChild(executable, scenario, temporary.Path()));
-        CHECK(!std::filesystem::exists(temporary.Path() / kHardwareInfoFile));
-        CHECK(!std::filesystem::exists(temporary.Path() / kDeviceCountFile));
+        CHECK(!boost::filesystem::exists(temporary.Path() / kHardwareInfoFile));
+        CHECK(!boost::filesystem::exists(temporary.Path() / kDeviceCountFile));
     }
     return true;
 }
@@ -536,7 +537,7 @@ bool TestInitializationFailures(const char* executable)
         TempDirectory temporary;
         CHECK(!temporary.Path().empty());
         CHECK(LaunchChild(executable, scenario, temporary.Path()));
-        CHECK(!std::filesystem::exists(temporary.Path() / kHardwareInfoFile));
+        CHECK(!boost::filesystem::exists(temporary.Path() / kHardwareInfoFile));
     }
     return true;
 }
@@ -546,8 +547,8 @@ bool TestNormalStop(const char* executable)
     TempDirectory temporary;
     CHECK(!temporary.Path().empty());
     CHECK(LaunchChild(executable, "normal-stop", temporary.Path()));
-    CHECK(!std::filesystem::exists(temporary.Path() / kHardwareInfoFile));
-    CHECK(!std::filesystem::exists(temporary.Path() / kDeviceCountFile));
+    CHECK(!boost::filesystem::exists(temporary.Path() / kHardwareInfoFile));
+    CHECK(!boost::filesystem::exists(temporary.Path() / kDeviceCountFile));
     return true;
 }
 
@@ -579,7 +580,7 @@ extern "C" aclError aclrtGetDeviceCount(uint32_t* count)
             g_deviceCountCondition.wait(lock, [] { return g_releaseDeviceCount; });
         }
     }
-    const std::filesystem::path countPath = std::filesystem::path(output) / kDeviceCountFile;
+    const boost::filesystem::path countPath = boost::filesystem::path(output) / kDeviceCountFile;
     const int descriptor = ::open(countPath.c_str(), O_WRONLY | O_CREAT | O_APPEND | O_CLOEXEC, 0600);
     if (descriptor < 0) {
         return ACL_ERROR_FAILURE;

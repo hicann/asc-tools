@@ -5,8 +5,8 @@ basic path from sample compilation and device instrumentation through callback
 delivery, synchronization-pair analysis, diagnostic rendering, and session
 completion. Each same-named subdirectory contains its scenario-specific `.asc`
 file, `CMakeLists.txt`, `run.sh`, and `verify.py`. The parent directory owns batch
-execution and verification; `demo/build.sh` prepares the shared tools and online
-DBI sources.
+execution and verification; `demo/build.sh` packages and installs asc-tools and
+the online DBI sources into `ASCEND_HOME_PATH`.
 
 The `.asc` file retains only the device instructions needed by the synchronization
 scenario, plus ACL initialization, kernel launch, stream management, and cleanup.
@@ -16,7 +16,7 @@ the expected error.
 
 ## Running Smoke Tests
 
-Build the shared tools from the repository root:
+Package and install the shared tools from the repository root:
 
 ```bash
 bash npu_tools/npu_sanitizer/demo/build.sh
@@ -28,7 +28,7 @@ Then run and summarize the complete smoke suite:
 bash npu_tools/npu_sanitizer/demo/examples/synccheck/run_all.sh
 ```
 
-`run_all.sh` uses the existing `demo/build` tree and runs every case in order. It
+`run_all.sh` uses `${ASCEND_HOME_PATH}/$(uname -m)-linux/bin/npu-check` and runs every case in order. It
 preserves each case's original output and prints per-case `PASS/FAIL` results plus
 `total/passed/failed` counts. The script returns 1 if any case fails. An error case
 prints its diagnostic; when its `verify.py`, summary, and session checks succeed,

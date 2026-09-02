@@ -12,7 +12,8 @@
 
 #include <cstdio>
 #include <cstdlib>
-#include <filesystem>
+#include <boost/filesystem.hpp>
+#include <boost/system/error_code.hpp>
 #include <string>
 #include <vector>
 
@@ -55,42 +56,42 @@ public:
     ~TestDirectory()
     {
         if (!path_.empty()) {
-            std::error_code error;
-            std::filesystem::remove_all(path_, error);
+            boost::system::error_code error;
+            boost::filesystem::remove_all(path_, error);
         }
     }
 
-    const std::filesystem::path& Path() const { return path_; }
+    const boost::filesystem::path& Path() const { return path_; }
 
 private:
-    std::filesystem::path path_;
+    boost::filesystem::path path_;
 };
 
 class ScopedCurrentDirectory {
 public:
-    explicit ScopedCurrentDirectory(const std::filesystem::path& path)
+    explicit ScopedCurrentDirectory(const boost::filesystem::path& path)
     {
-        std::error_code error;
-        original_ = std::filesystem::current_path(error);
+        boost::system::error_code error;
+        original_ = boost::filesystem::current_path(error);
         if (error) {
             return;
         }
-        std::filesystem::current_path(path, error);
+        boost::filesystem::current_path(path, error);
         active_ = !error;
     }
 
     ~ScopedCurrentDirectory()
     {
         if (active_) {
-            std::error_code error;
-            std::filesystem::current_path(original_, error);
+            boost::system::error_code error;
+            boost::filesystem::current_path(original_, error);
         }
     }
 
     bool IsActive() const { return active_; }
 
 private:
-    std::filesystem::path original_;
+    boost::filesystem::path original_;
     bool active_ = false;
 };
 
@@ -129,7 +130,7 @@ CliConfig ShellConfig(const std::string& command)
     return config;
 }
 
-CliConfig ShellConfig(const std::string& command, const std::filesystem::path& output)
+CliConfig ShellConfig(const std::string& command, const boost::filesystem::path& output)
 {
     CliConfig config = ShellConfig(command);
     config.export_path = output.string();
@@ -141,13 +142,13 @@ std::string ValidCollectionCommand()
     return R"(test "$NPU_COMPUTE_CSV_OUTPUT_DIR" = "$NPU_COMPUTE_OUTPUT" && printf '{}\n{}\n{}\n{}\n{}\n' > "$NPU_COMPUTE_OUTPUT/HardwareInfo.jsonl" && printf 'name,value\npipe,1\n' > "$NPU_COMPUTE_OUTPUT/PipeUtilization.csv")";
 }
 
-bool IsCollectionDirectoryIn(const std::string& value, const std::filesystem::path& parent)
+bool IsCollectionDirectoryIn(const std::string& value, const boost::filesystem::path& parent)
 {
-    const std::filesystem::path path(value);
-    return path.is_absolute() && path.parent_path() == parent && std::filesystem::is_directory(path);
+    const boost::filesystem::path path(value);
+    return path.is_absolute() && path.parent_path() == parent && boost::filesystem::is_directory(path);
 }
 
-int CheckReportContents(const std::filesystem::path& report)
+int CheckReportContents(const boost::filesystem::path& report)
 {
     std::vector<ImportedProfileEntry> results;
     std::string error;
@@ -172,9 +173,9 @@ int TestWithoutExportPublishesReportInCurrentDirectory()
     CHECK(LaunchTarget(config, &collectionDataDirectory, &report, &error) == 0);
     CHECK(error.empty());
     CHECK(IsCollectionDirectoryIn(collectionDataDirectory, workDirectory.Path()));
-    CHECK(std::filesystem::path(report).parent_path() == workDirectory.Path());
-    CHECK(std::filesystem::path(report).extension() == ".npu-rep");
-    CHECK(std::filesystem::is_regular_file(report));
+    CHECK(boost::filesystem::path(report).parent_path() == workDirectory.Path());
+    CHECK(boost::filesystem::path(report).extension() == ".npu-rep");
+    CHECK(boost::filesystem::is_regular_file(report));
     CHECK(CheckReportContents(report) == 0);
     return 0;
 }
@@ -185,7 +186,7 @@ int TestExplicitReportKeepsDataInCurrentDirectory()
     CHECK(!workDirectory.Path().empty());
     const ScopedCurrentDirectory currentDirectory(workDirectory.Path());
     CHECK(currentDirectory.IsActive());
-    const std::filesystem::path output = workDirectory.Path() / "result.npu-rep";
+    const boost::filesystem::path output = workDirectory.Path() / "result.npu-rep";
     const CliConfig config = ShellConfig(ValidCollectionCommand(), output);
     std::string collectionDataDirectory;
     std::string report;
@@ -195,7 +196,7 @@ int TestExplicitReportKeepsDataInCurrentDirectory()
     CHECK(error.empty());
     CHECK(IsCollectionDirectoryIn(collectionDataDirectory, workDirectory.Path()));
     CHECK(report == output.string());
-    CHECK(std::filesystem::is_regular_file(output));
+    CHECK(boost::filesystem::is_regular_file(output));
     CHECK(CheckReportContents(output) == 0);
     return 0;
 }
@@ -216,8 +217,8 @@ int TestExportDirectoryDoesNotMoveCollectionData()
     CHECK(LaunchTarget(config, &collectionDataDirectory, &report, &error) == 0);
     CHECK(error.empty());
     CHECK(IsCollectionDirectoryIn(collectionDataDirectory, workDirectory.Path()));
-    CHECK(std::filesystem::path(report).parent_path() == reportDirectory.Path());
-    CHECK(std::filesystem::is_regular_file(report));
+    CHECK(boost::filesystem::path(report).parent_path() == reportDirectory.Path());
+    CHECK(boost::filesystem::is_regular_file(report));
     return 0;
 }
 
@@ -236,7 +237,7 @@ int TestInvalidTmpdirDoesNotAffectCollection()
     CHECK(LaunchTarget(config, &collectionDataDirectory, &report, &error) == 0);
     CHECK(error.empty());
     CHECK(IsCollectionDirectoryIn(collectionDataDirectory, workDirectory.Path()));
-    CHECK(std::filesystem::is_regular_file(report));
+    CHECK(boost::filesystem::is_regular_file(report));
     return 0;
 }
 
@@ -246,8 +247,8 @@ int TestInvalidExportIsRejectedBeforeAppLaunch()
     CHECK(!workDirectory.Path().empty());
     const ScopedCurrentDirectory currentDirectory(workDirectory.Path());
     CHECK(currentDirectory.IsActive());
-    const std::filesystem::path marker = workDirectory.Path() / "app-ran";
-    const std::filesystem::path output = workDirectory.Path() / "missing" / "result.npu-rep";
+    const boost::filesystem::path marker = workDirectory.Path() / "app-ran";
+    const boost::filesystem::path output = workDirectory.Path() / "missing" / "result.npu-rep";
     const CliConfig config = ShellConfig("touch app-ran", output);
     std::string collectionDataDirectory = "old directory";
     std::string report = "old report";
@@ -256,8 +257,8 @@ int TestInvalidExportIsRejectedBeforeAppLaunch()
     CHECK(LaunchTarget(config, &collectionDataDirectory, &report, &error) == 4);
     CHECK(collectionDataDirectory.empty());
     CHECK(report.empty());
-    CHECK(!std::filesystem::exists(marker));
-    CHECK(!std::filesystem::exists(output));
+    CHECK(!boost::filesystem::exists(marker));
+    CHECK(!boost::filesystem::exists(output));
     CHECK(error.find("resolve report target failed") != std::string::npos);
     return 0;
 }
@@ -268,7 +269,7 @@ int TestFailedAppRemovesEmptyDataAndDoesNotPublishReport()
     CHECK(!workDirectory.Path().empty());
     const ScopedCurrentDirectory currentDirectory(workDirectory.Path());
     CHECK(currentDirectory.IsActive());
-    const std::filesystem::path output = workDirectory.Path() / "result.npu-rep";
+    const boost::filesystem::path output = workDirectory.Path() / "result.npu-rep";
     const CliConfig config = ShellConfig("exit 23", output);
     std::string collectionDataDirectory;
     std::string report = "old report";
@@ -277,8 +278,8 @@ int TestFailedAppRemovesEmptyDataAndDoesNotPublishReport()
     CHECK(LaunchTarget(config, &collectionDataDirectory, &report, &error) == 23);
     CHECK(report.empty());
     CHECK(collectionDataDirectory.empty());
-    CHECK(std::filesystem::is_empty(workDirectory.Path()));
-    CHECK(!std::filesystem::exists(output));
+    CHECK(boost::filesystem::is_empty(workDirectory.Path()));
+    CHECK(!boost::filesystem::exists(output));
     CHECK(error.find("status 23") != std::string::npos);
     return 0;
 }
@@ -289,7 +290,7 @@ int TestMissingHardwareInfoRemovesEmptyDataAndDoesNotPublishReport()
     CHECK(!workDirectory.Path().empty());
     const ScopedCurrentDirectory currentDirectory(workDirectory.Path());
     CHECK(currentDirectory.IsActive());
-    const std::filesystem::path output = workDirectory.Path() / "result.npu-rep";
+    const boost::filesystem::path output = workDirectory.Path() / "result.npu-rep";
     const CliConfig config = ShellConfig("true", output);
     std::string collectionDataDirectory;
     std::string report;
@@ -298,8 +299,8 @@ int TestMissingHardwareInfoRemovesEmptyDataAndDoesNotPublishReport()
     CHECK(LaunchTarget(config, &collectionDataDirectory, &report, &error) == 3);
     CHECK(report.empty());
     CHECK(collectionDataDirectory.empty());
-    CHECK(std::filesystem::is_empty(workDirectory.Path()));
-    CHECK(!std::filesystem::exists(output));
+    CHECK(boost::filesystem::is_empty(workDirectory.Path()));
+    CHECK(!boost::filesystem::exists(output));
     CHECK(error.find("HardwareInfo.jsonl is missing") != std::string::npos);
     return 0;
 }
@@ -310,7 +311,7 @@ int TestMissingHardwareInfoKeepsDataAndDoesNotPublishReport()
     CHECK(!workDirectory.Path().empty());
     const ScopedCurrentDirectory currentDirectory(workDirectory.Path());
     CHECK(currentDirectory.IsActive());
-    const std::filesystem::path output = workDirectory.Path() / "result.npu-rep";
+    const boost::filesystem::path output = workDirectory.Path() / "result.npu-rep";
     const CliConfig config =
         ShellConfig(R"(printf 'name,value\npipe,1\n' > "$NPU_COMPUTE_OUTPUT/PipeUtilization.csv")", output);
     std::string collectionDataDirectory;
@@ -320,7 +321,7 @@ int TestMissingHardwareInfoKeepsDataAndDoesNotPublishReport()
     CHECK(LaunchTarget(config, &collectionDataDirectory, &report, &error) == 3);
     CHECK(report.empty());
     CHECK(IsCollectionDirectoryIn(collectionDataDirectory, workDirectory.Path()));
-    CHECK(!std::filesystem::exists(output));
+    CHECK(!boost::filesystem::exists(output));
     CHECK(error.find("HardwareInfo.jsonl is missing") != std::string::npos);
     return 0;
 }
@@ -331,7 +332,7 @@ int TestPackingFailureKeepsDataAndDoesNotPublishReport()
     CHECK(!workDirectory.Path().empty());
     const ScopedCurrentDirectory currentDirectory(workDirectory.Path());
     CHECK(currentDirectory.IsActive());
-    const std::filesystem::path output = workDirectory.Path() / "result.npu-rep";
+    const boost::filesystem::path output = workDirectory.Path() / "result.npu-rep";
     const std::string command =
         ValidCollectionCommand() + R"( && printf 'unsupported\n' > "$NPU_COMPUTE_OUTPUT/notes.txt")";
     const CliConfig config = ShellConfig(command, output);
@@ -342,7 +343,7 @@ int TestPackingFailureKeepsDataAndDoesNotPublishReport()
     CHECK(LaunchTarget(config, &collectionDataDirectory, &report, &error) == 4);
     CHECK(report.empty());
     CHECK(IsCollectionDirectoryIn(collectionDataDirectory, workDirectory.Path()));
-    CHECK(!std::filesystem::exists(output));
+    CHECK(!boost::filesystem::exists(output));
     CHECK(error.find("pack") != std::string::npos);
     CHECK(error.find("notes.txt") != std::string::npos);
     return 0;
@@ -354,8 +355,8 @@ int TestPublishingFailureKeepsCollectionDataDirectory()
     CHECK(!workDirectory.Path().empty());
     const ScopedCurrentDirectory currentDirectory(workDirectory.Path());
     CHECK(currentDirectory.IsActive());
-    const std::filesystem::path output =
-        std::filesystem::path("/proc") / ("npu-compute-launcher-" + std::to_string(::getpid()) + ".npu-rep");
+    const boost::filesystem::path output =
+        boost::filesystem::path("/proc") / ("npu-compute-launcher-" + std::to_string(::getpid()) + ".npu-rep");
     const CliConfig config = ShellConfig(ValidCollectionCommand(), output);
     std::string collectionDataDirectory;
     std::string report;
@@ -364,7 +365,7 @@ int TestPublishingFailureKeepsCollectionDataDirectory()
     CHECK(LaunchTarget(config, &collectionDataDirectory, &report, &error) == 4);
     CHECK(report.empty());
     CHECK(IsCollectionDirectoryIn(collectionDataDirectory, workDirectory.Path()));
-    CHECK(!std::filesystem::exists(output));
+    CHECK(!boost::filesystem::exists(output));
     CHECK(error.find("publish") != std::string::npos);
     return 0;
 }

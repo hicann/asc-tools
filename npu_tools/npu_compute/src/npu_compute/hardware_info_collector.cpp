@@ -13,6 +13,8 @@
 #include "hardware_info_host.h"
 #include "hardware_info_json.h"
 
+#include <boost/filesystem.hpp>
+
 #include <condition_variable>
 #include <cstdio>
 #include <exception>
@@ -35,7 +37,7 @@ void DefaultDiagnostic(std::string_view message)
 HardwareInfoDependencies MakeDefaultDependencies()
 {
     HardwareInfoDependencies dependencies;
-    dependencies.collectHostInfo = [](const std::filesystem::path& outputDirectory, HostInfo* host,
+    dependencies.collectHostInfo = [](const boost::filesystem::path& outputDirectory, HostInfo* host,
                                       DiagnosticSink* diagnostics) {
         return CollectHostInfo(outputDirectory, host, diagnostics);
     };
@@ -53,7 +55,7 @@ public:
 
     ~Impl() { Stop(); }
 
-    bool Initialize(const std::filesystem::path& outputDirectory, std::string* error)
+    bool Initialize(const boost::filesystem::path& outputDirectory, std::string* error)
     {
         std::lock_guard<std::mutex> lock(stateMutex_);
         if (error != nullptr) {
@@ -201,7 +203,7 @@ private:
     }
 
     HardwareInfoDependencies dependencies_;
-    std::filesystem::path outputDirectory_;
+    boost::filesystem::path outputDirectory_;
     mutable std::mutex stateMutex_;
     std::condition_variable stateCondition_;
     HardwareCollectionState state_ = HardwareCollectionState::Created;
@@ -215,7 +217,7 @@ HardwareInfoCollector::HardwareInfoCollector(HardwareInfoDependencies dependenci
 
 HardwareInfoCollector::~HardwareInfoCollector() = default;
 
-bool HardwareInfoCollector::Initialize(const std::filesystem::path& outputDirectory, std::string* error)
+bool HardwareInfoCollector::Initialize(const boost::filesystem::path& outputDirectory, std::string* error)
 {
     return impl_->Initialize(outputDirectory, error);
 }

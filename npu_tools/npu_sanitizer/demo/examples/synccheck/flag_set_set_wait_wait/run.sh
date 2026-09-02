@@ -28,9 +28,6 @@ output="build/npu_check.log"
 : >"${output}"
 exec > >(tee -a "${output}") 2>&1
 
-npu_check="../../../build/npu_tools/bin/npu_check"
-
-# 设置 DBI 运行环境。
 export ASCEND_GLOBAL_LOG_LEVEL=0
 export NPU_SAN_DEBUG=1
 
@@ -40,7 +37,7 @@ cmake --build build --parallel
 
 # 同一 AIC flag 执行 SET、SET、WAIT、WAIT，组合触发重复打开和无匹配关闭。
 set +e
-"${npu_check}" --tool synccheck -- build/demo
+npu-check --tool synccheck -- build/demo
 npu_check_status=$?
 set -e
 

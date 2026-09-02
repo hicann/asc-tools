@@ -12,11 +12,6 @@ cmake_minimum_required(VERSION 3.16)
 set(CMAKE_ASC_ARCHITECTURES "dav-3510" CACHE STRING "NPU architecture")
 find_package(ASC REQUIRED)
 project(matmul_leakyrelu_basic_api LANGUAGES ASC CXX)
-find_library(ACL_RT_LIBRARY
-    NAMES acl_rt
-    HINTS $ENV{ASCEND_HOME_PATH}/lib64
-    REQUIRED
-)
 add_executable(demo
     matmul_leakyrelu_basic_api.asc
 )
@@ -24,8 +19,4 @@ add_executable(demo
 target_compile_options(demo PRIVATE
     $<$<COMPILE_LANGUAGE:ASC>:--npu-arch=${CMAKE_ASC_ARCHITECTURES}>
     -g
-)
-
-target_link_libraries(demo PRIVATE
-    ${ACL_RT_LIBRARY}
 )

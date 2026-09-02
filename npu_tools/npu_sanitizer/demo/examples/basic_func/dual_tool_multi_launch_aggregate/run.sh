@@ -27,9 +27,6 @@ output="build/npu_check.log"
 : >"${output}"
 exec > >(tee -a "${output}") 2>&1
 
-npu_check="../../../build/npu_tools/bin/npu_check"
-
-# 设置 DBI 运行环境。
 export ASCEND_GLOBAL_LOG_LEVEL=0
 export NPU_SAN_DEBUG=1
 # 冒烟断言依赖 [CLI] / [UDS] 的过程记录，而它们默认不打屏，必须显式打开。
@@ -42,7 +39,7 @@ cmake --build build --parallel
 
 # 第一个 launch 触发 memcheck，第二个 launch 留下未消费 SET_FLAG；二者只在一次 synchronize 后结算。
 set +e
-"${npu_check}" --tool memcheck --tool synccheck -- build/demo
+npu-check --tool memcheck --tool synccheck -- build/demo
 set -e
 
 if [[ $(grep -Ec '^tool=memcheck .*synchronizations=1 .*errors=1([[:space:]]|$)' "${output}" || true) -ne 1 ]]; then

@@ -16,6 +16,9 @@ set(CMAKE_MODULE_PATH
 )
 message(STATUS "CMAKE_MODULE_PATH            :${CMAKE_MODULE_PATH}")
 
+add_cann_third_party(boost)
+add_compile_definitions(_GLIBCXX_USE_CXX11_ABI=0)
+
 if (NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE "Release" CACHE STRING "Build type(default Release)"
     FORCE)

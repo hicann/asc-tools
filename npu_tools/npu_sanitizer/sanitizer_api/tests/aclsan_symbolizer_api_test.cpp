@@ -9,20 +9,38 @@
  */
 
 #include "aclsan/aclsan_api.h"
+#include "kernel_argument_elf_fixture.h"
+#include "injection/injection_hook.h"
+#include "injection/runtime_stub_api.h"
 
 #include <cassert>
 #include <cstdlib>
-#include <filesystem>
+#include <boost/filesystem.hpp>
+#include <boost/system/error_code.hpp>
 #include <fstream>
 #include <memory>
 #include <string>
 #include <type_traits>
 #include <vector>
 
-extern "C" void aclsanTestRecordDeviceBinarySource(const void* binary, const void* image, size_t imageBytes);
-extern "C" void aclsanTestResetTraceRuntimeState();
+namespace fs = boost::filesystem;
 
-namespace fs = std::filesystem;
+namespace {
+
+aclError OriginalBinaryLoad(const void*, size_t, const aclrtBinaryLoadOptions*, aclrtBinHandle* binary)
+{
+    if (binary == nullptr) {
+        return ACL_ERROR_INVALID_PARAM;
+    }
+    *binary = reinterpret_cast<aclrtBinHandle>(0x51);
+    return ACL_SUCCESS;
+}
+
+aclError OriginalResetDevice(int32_t) { return ACL_SUCCESS; }
+
+void Callback(void*, AclsanCallbackDomain, AclsanCallbackId, const void*) {}
+
+} // namespace
 
 static_assert(std::is_same_v<decltype(&aclsanGetDeviceCallStack), AclsanStatus (*)(uint64_t, AclsanDeviceCallStack*)>);
 static_assert(ACLSAN_CALL_STACK_MAX_DEPTH == 16U);
@@ -56,12 +74,22 @@ int main()
         script << "#!/bin/sh\n"
                << "printf 'CopyIn\\n/src/kernel.asc:46:5\\nAddKernel\\n/src/kernel.asc:58:1\\n'\n";
     }
-    fs::permissions(
-        symbolizer, fs::perms::owner_read | fs::perms::owner_write | fs::perms::owner_exec, fs::perm_options::replace);
+    fs::permissions(symbolizer, fs::perms::owner_read | fs::perms::owner_write | fs::perms::owner_exe);
     assert(setenv("ACLSAN_SYMBOLIZER", symbolizer.c_str(), 1) == 0);
 
-    const std::vector<uint8_t> image{0x7f, 'E', 'L', 'F', 1, 2, 3, 4};
-    aclsanTestRecordDeviceBinarySource(reinterpret_cast<const void*>(0x51), image.data(), image.size());
+    assert(RuntimeStubSetOriginFunction("aclrtBinaryLoadFromData", &OriginalBinaryLoad) == ACL_SUCCESS);
+    assert(RuntimeStubSetOriginFunction("aclrtResetDevice", &OriginalResetDevice) == ACL_SUCCESS);
+    AclsanSubscriberHandle subscriber = nullptr;
+    assert(aclsanSubscribe(&subscriber, &Callback, nullptr) == ACLSAN_STATUS_SUCCESS);
+    assert(
+        aclsanEnableCallback(1, subscriber, ACLSAN_CB_DOMAIN_DEVICE_INSTRUCTION, ACLSAN_CBID_DEVICE_SYNC) ==
+        ACLSAN_STATUS_SUCCESS);
+
+    const std::vector<uint8_t> image = aclsan::test::MakeKernelArgumentSizeElf(8);
+    aclrtBinaryLoadOptions options{};
+    aclrtBinHandle binary = nullptr;
+    assert(aclrtBinaryLoadFromData(image.data(), image.size(), &options, &binary) == ACL_SUCCESS);
+    assert(binary == reinterpret_cast<aclrtBinHandle>(0x51));
     assert(aclsanGetDeviceCallStack(0x170, result.get()) == ACLSAN_STATUS_SUCCESS);
     assert(result->binaryId != 0);
     assert(result->pc == 0x170);
@@ -71,8 +99,9 @@ int main()
     assert(std::string(result->frames[0].functionName) == "CopyIn");
     assert(std::string(result->frames[0].fileName) == "/src/kernel.asc");
 
-    aclsanTestResetTraceRuntimeState();
+    assert(aclrtResetDevice(0) == ACL_SUCCESS);
     assert(aclsanGetDeviceCallStack(0x170, result.get()) == ACLSAN_STATUS_ERROR_INVALID_STATE);
+    assert(aclsanUnsubscribe(subscriber) == ACLSAN_STATUS_SUCCESS);
     fs::remove_all(work);
     unsetenv("ACLSAN_SYMBOLIZER");
     return 0;

@@ -13,7 +13,6 @@ set -euo pipefail
 
 demo_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 example_dir="${demo_dir}/examples/memcheck/memory_access"
-npu_check="${demo_dir}/build/npu_tools/bin/npu_check"
 current_output=""
 build_prepared=false
 all_targets_built=false
@@ -1487,9 +1486,9 @@ PrepareBuild()
     if [[ "${NPU_CHECK_E2E_REUSE_EXISTING_BUILD:-0}" != "1" ]]; then
         rm -rf -- "${example_dir}/build"
     fi
-    if [[ ! -x "${npu_check}" ]]; then
-        printf 'missing npu_check; run %s/build.sh first\n' "${demo_dir}" >&2
-        return 1
+    if ! command -v npu-check >/dev/null 2>&1; then
+      printf 'missing npu-check; run %s/build.sh first\n' "${demo_dir}" >&2
+      return 1
     fi
     cmake -S "${example_dir}" -B "${example_dir}/build" -DCMAKE_ASC_ARCHITECTURES=dav-3510
     build_prepared=true
@@ -1540,10 +1539,10 @@ RunCase()
         set +e
         if [[ "${case_name}" == fixpipe_quant_*_oob ]]; then
             NPU_CHECK_MEMORY_CASE_OOB=1 timeout "${case_timeout}" \
-                "${npu_check}" --tool memcheck -- "${executable}" >"${current_output}" 2>&1
+                npu-check --tool memcheck -- "${executable}" >"${current_output}" 2>&1
         else
             timeout "${case_timeout}" \
-                "${npu_check}" --tool memcheck -- "${executable}" >"${current_output}" 2>&1
+                npu-check --tool memcheck -- "${executable}" >"${current_output}" 2>&1
         fi
         run_status=$?
         set -e

@@ -342,18 +342,6 @@ void RecordTraceFunctionLookup(aclrtFuncHandle function) noexcept
     }
 }
 
-void MarkTraceFunctionInstrumented(aclrtFuncHandle function, uint32_t traceArgumentOffset) noexcept
-{
-    if (function == nullptr) {
-        return;
-    }
-    try {
-        DeviceBinaries().MarkFunctionInstrumented(reinterpret_cast<uintptr_t>(function), traceArgumentOffset);
-    } catch (...) {
-        ASC_SAN_ERROR("acl_san trace: failed to mark function %p as instrumented", function);
-    }
-}
-
 aclError PrepareTraceLaunch(
     aclrtFuncHandle function, uint32_t blockCount, const void* hostArgs, size_t argsSize,
     const aclrtPlaceHolderInfo* placeholders, size_t placeholderCount, PreparedTraceLaunch& prepared) noexcept
@@ -570,19 +558,3 @@ device_runtime::CallStackResult ResolveTraceDeviceCallStack(uint64_t pc) noexcep
 }
 
 } // namespace aclsan
-
-#if defined(ACLSAN_ENABLE_TEST_API)
-extern "C" ACLSAN_EXPORT void aclsanTestMarkInstrumentedFunction(aclrtFuncHandle function, uint32_t traceArgumentOffset)
-{
-    aclsan::MarkTraceFunctionInstrumented(function, traceArgumentOffset);
-}
-
-extern "C" ACLSAN_EXPORT void aclsanTestRecordDeviceBinarySource(
-    const void* binary, const void* image, size_t imageBytes)
-{
-    aclsan::RecordTraceBinaryLoadFromData(
-        reinterpret_cast<aclrtBinHandle>(const_cast<void*>(binary)), true, 8, image, imageBytes);
-}
-
-extern "C" ACLSAN_EXPORT void aclsanTestResetTraceRuntimeState() { aclsan::ResetTraceRuntimeState(); }
-#endif

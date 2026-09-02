@@ -16,7 +16,8 @@ set(NPU_COMPUTE_ACLPTI_TEST_BACKENDS
 find_package(Threads REQUIRED)
 
 add_executable(npu_compute_import_output_directory_test import_output_directory_test.cpp)
-target_link_libraries(npu_compute_import_output_directory_test PRIVATE npu_compute_launcher_core)
+target_link_libraries(npu_compute_import_output_directory_test
+  PRIVATE npu_compute_launcher_core Boost::filesystem)
 add_test(NAME npu_compute.import_output_directory COMMAND npu_compute_import_output_directory_test)
 
 add_executable(npu_compute_rep_encoder_test
@@ -27,52 +28,74 @@ target_link_libraries(npu_compute_rep_encoder_test PRIVATE npu_compute_launcher_
 add_test(NAME npu_compute.rep_encoder COMMAND npu_compute_rep_encoder_test)
 
 add_executable(npu_compute_collection_file_validator_test collection_file_validator_test.cpp)
-target_link_libraries(npu_compute_collection_file_validator_test PRIVATE npu_compute_launcher_core)
+target_link_libraries(npu_compute_collection_file_validator_test
+  PRIVATE npu_compute_launcher_core Boost::filesystem)
 add_test(NAME npu_compute.collection_file_validator COMMAND npu_compute_collection_file_validator_test)
 
 add_executable(npu_compute_rep_directory_packer_test
   rep_directory_packer_test.cpp
   rep_test_decoder.cpp
 )
-target_link_libraries(npu_compute_rep_directory_packer_test PRIVATE npu_compute_launcher_core)
+target_link_libraries(npu_compute_rep_directory_packer_test
+  PRIVATE npu_compute_launcher_core Boost::filesystem)
 add_test(NAME npu_compute.rep_directory_packer COMMAND npu_compute_rep_directory_packer_test)
 
 add_executable(npu_compute_report_name_test report_name_test.cpp)
-target_link_libraries(npu_compute_report_name_test PRIVATE npu_compute_launcher_core)
+target_link_libraries(npu_compute_report_name_test
+  PRIVATE npu_compute_launcher_core Boost::filesystem)
 add_test(NAME npu_compute.report_name COMMAND npu_compute_report_name_test)
 
 add_executable(npu_compute_rep_report_writer_test
   rep_report_writer_test.cpp
   rep_test_decoder.cpp
 )
-target_link_libraries(npu_compute_rep_report_writer_test PRIVATE npu_compute_launcher_core)
+target_link_libraries(npu_compute_rep_report_writer_test
+  PRIVATE npu_compute_launcher_core Boost::filesystem)
 add_test(NAME npu_compute.rep_report_writer COMMAND npu_compute_rep_report_writer_test)
 
 add_executable(npu_compute_cli_test cli_test.cpp)
 target_link_libraries(npu_compute_cli_test PRIVATE npu_compute_launcher_core)
 add_test(NAME npu_compute.cli COMMAND npu_compute_cli_test)
 
+add_executable(npu_compute_injection_path_test
+  injection_path_test.cpp
+  ../src/compute_launcher/injection_path.cpp
+)
+target_include_directories(npu_compute_injection_path_test PRIVATE
+  ../src/compute_launcher
+)
+target_link_libraries(npu_compute_injection_path_test PRIVATE Boost::filesystem)
+set_target_properties(npu_compute_injection_path_test PROPERTIES
+  RUNTIME_OUTPUT_DIRECTORY
+    "${CMAKE_CURRENT_BINARY_DIR}/injection_path_layout/${CMAKE_SYSTEM_PROCESSOR}-linux/bin"
+)
+add_test(NAME npu_compute.injection_path COMMAND npu_compute_injection_path_test)
+
 add_executable(npu_compute_rep_decoder_test rep_decoder_test.cpp)
 target_link_libraries(npu_compute_rep_decoder_test PRIVATE npu_compute_launcher_core)
 add_test(NAME npu_compute.rep_decoder COMMAND npu_compute_rep_decoder_test)
 
 add_executable(npu_compute_imported_profile_results_test imported_profile_results_test.cpp)
-target_link_libraries(npu_compute_imported_profile_results_test PRIVATE npu_compute_launcher_core)
+target_link_libraries(npu_compute_imported_profile_results_test
+  PRIVATE npu_compute_launcher_core Boost::filesystem)
 add_test(NAME npu_compute.imported_profile_results
   COMMAND npu_compute_imported_profile_results_test $<TARGET_FILE:npu_compute_cli>
 )
 
 add_executable(npu_compute_launcher_test launcher_test.cpp)
-target_link_libraries(npu_compute_launcher_test PRIVATE npu_compute_launcher_core)
+target_link_libraries(npu_compute_launcher_test
+  PRIVATE npu_compute_launcher_core Boost::filesystem)
 add_dependencies(npu_compute_launcher_test npu_compute)
 npu_compute_set_output(npu_compute_launcher_test)
 add_test(NAME npu_compute.launcher COMMAND npu_compute_launcher_test)
 
 add_executable(npu_compute_staging_directory_test staging_directory_test.cpp)
-target_link_libraries(npu_compute_staging_directory_test PRIVATE npu_compute_launcher_core)
+target_link_libraries(npu_compute_staging_directory_test
+  PRIVATE npu_compute_launcher_core Boost::filesystem)
 add_test(NAME npu_compute.staging_directory COMMAND npu_compute_staging_directory_test)
 
 add_executable(npu_compute_rep_fixture_app rep_fixture_app.cpp)
+target_link_libraries(npu_compute_rep_fixture_app PRIVATE Boost::filesystem)
 add_dependencies(npu_compute_rep_fixture_app npu_compute_cli npu_compute)
 npu_compute_set_output(npu_compute_rep_fixture_app)
 
@@ -253,7 +276,7 @@ target_include_directories(npu_compute_pmu_csv_writer_test PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}/../src/npu_compute
 )
 target_link_libraries(npu_compute_pmu_csv_writer_test
-  PRIVATE acl_pti
+  PRIVATE acl_pti Boost::filesystem
 )
 target_sources(npu_compute_pmu_csv_writer_test PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}/../src/npu_compute/pmu_csv_writer.cpp
@@ -286,6 +309,7 @@ add_executable(npu_compute_hardware_info_host_test
 target_include_directories(npu_compute_hardware_info_host_test PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}/../src/npu_compute
 )
+target_link_libraries(npu_compute_hardware_info_host_test PRIVATE Boost::filesystem)
 add_test(NAME npu_compute.hardware_info_host
   COMMAND npu_compute_hardware_info_host_test
 )
@@ -323,6 +347,7 @@ add_executable(npu_compute_hardware_info_writer_test
 target_include_directories(npu_compute_hardware_info_writer_test PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}/../src/npu_compute
 )
+target_link_libraries(npu_compute_hardware_info_writer_test PRIVATE Boost::filesystem)
 add_test(NAME npu_compute.hardware_info_writer
   COMMAND npu_compute_hardware_info_writer_test
 )
@@ -343,6 +368,7 @@ target_link_libraries(npu_compute_hardware_info_collector_test PRIVATE
   npu_compute_headers
   ${CMAKE_DL_LIBS}
   Threads::Threads
+  Boost::filesystem
 )
 add_test(NAME npu_compute.hardware_info_collector
   COMMAND npu_compute_hardware_info_collector_test
@@ -386,6 +412,7 @@ target_link_libraries(npu_compute_runtime_callback_test PRIVATE
   acl_pti
   ${CMAKE_DL_LIBS}
   Threads::Threads
+  Boost::filesystem
 )
 set_target_properties(npu_compute_runtime_callback_test PROPERTIES
   ENABLE_EXPORTS YES
@@ -409,6 +436,7 @@ if(NPU_COMPUTE_BUILD_REAL_HARDWARE_TESTS)
     acl_pti
     ${CMAKE_DL_LIBS}
     Threads::Threads
+    Boost::filesystem
   )
   set(NPU_COMPUTE_REAL_HARDWARE_VERSION_SCRIPT
     "${CMAKE_CURRENT_SOURCE_DIR}/../src/npu_compute/libnpu_compute.map"
@@ -447,6 +475,7 @@ if(NPU_COMPUTE_BUILD_REAL_HARDWARE_TESTS)
     npu_compute_headers
     "${NPU_COMPUTE_REAL_ASCENDCL_LIBRARY}"
     ${CMAKE_DL_LIBS}
+    Boost::filesystem
   )
   set_target_properties(
     npu_compute_real_hardware_callback_app PROPERTIES

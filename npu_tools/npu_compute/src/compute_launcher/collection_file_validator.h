@@ -12,14 +12,15 @@
 
 #include "rep_format.h"
 
-#include <filesystem>
+#include <boost/filesystem.hpp>
+#include <boost/system/error_code.hpp>
 #include <string>
 
 namespace npu_compute::compute_launcher {
 
-bool ResolveCollectionFileType(const std::filesystem::path& path, NpuRepFileType* type, std::string* error);
+bool ResolveCollectionFileType(const boost::filesystem::path& path, NpuRepFileType* type, std::string* error);
 
-bool ValidateCollectionFile(const std::filesystem::path& path, NpuRepFileType type, std::string* error);
+bool ValidateCollectionFile(const boost::filesystem::path& path, NpuRepFileType type, std::string* error);
 
 } // namespace npu_compute::compute_launcher
 

@@ -14,7 +14,8 @@
 #include <condition_variable>
 #include <cstdint>
 #include <cstdio>
-#include <filesystem>
+#include <boost/filesystem.hpp>
+#include <boost/system/error_code.hpp>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -42,7 +43,7 @@ public:
     TempDirectory()
     {
         std::string pathTemplate =
-            (std::filesystem::temp_directory_path() / "npu-compute-collector-test-XXXXXX").string();
+            (boost::filesystem::temp_directory_path() / "npu-compute-collector-test-XXXXXX").string();
         pathTemplate.push_back('\0');
         char* created = ::mkdtemp(pathTemplate.data());
         if (created != nullptr) {
@@ -53,15 +54,15 @@ public:
     ~TempDirectory()
     {
         if (!path_.empty()) {
-            std::error_code error;
-            std::filesystem::remove_all(path_, error);
+            boost::system::error_code error;
+            boost::filesystem::remove_all(path_, error);
         }
     }
 
-    const std::filesystem::path& Path() const { return path_; }
+    const boost::filesystem::path& Path() const { return path_; }
 
 private:
-    std::filesystem::path path_;
+    boost::filesystem::path path_;
 };
 
 struct SharedState {
@@ -160,7 +161,7 @@ npu_compute::HardwareInfoDependencies MakeDependencies(const std::shared_ptr<Sha
 {
     npu_compute::HardwareInfoDependencies dependencies;
     dependencies.collectHostInfo =
-        [state](const std::filesystem::path&, npu_compute::HostInfo* value, npu_compute::DiagnosticSink*) {
+        [state](const boost::filesystem::path&, npu_compute::HostInfo* value, npu_compute::DiagnosticSink*) {
             ++state->hostCalls;
             {
                 std::unique_lock<std::mutex> lock(state->mutex);
@@ -180,7 +181,7 @@ npu_compute::HardwareInfoDependencies MakeDependencies(const std::shared_ptr<Sha
             return true;
         };
     dependencies.deviceApi = std::make_shared<FakeHardwareDeviceApi>(state);
-    dependencies.publish = [state](const std::filesystem::path&, std::string_view jsonl, std::string* error) {
+    dependencies.publish = [state](const boost::filesystem::path&, std::string_view jsonl, std::string* error) {
         ++state->publishCalls;
         {
             std::lock_guard<std::mutex> lock(state->mutex);
@@ -349,7 +350,7 @@ bool TestStopWithoutNotificationDoesNotCollect()
     CHECK(state->hostCalls.load() == 0);
     CHECK(state->deviceCountCalls.load() == 0);
     CHECK(state->publishCalls.load() == 0);
-    CHECK(std::filesystem::is_empty(temporary.Path()));
+    CHECK(boost::filesystem::is_empty(temporary.Path()));
     return true;
 }
 

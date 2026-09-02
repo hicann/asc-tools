@@ -12,7 +12,8 @@
 #include <unistd.h>
 
 #include <array>
-#include <filesystem>
+#include <boost/filesystem.hpp>
+#include <boost/system/error_code.hpp>
 #include <string>
 #include <system_error>
 #include <vector>
@@ -24,7 +25,7 @@ constexpr const char* kInjectionLibraryName = "libnpu-compute.so";
 constexpr std::size_t kInitialPathBufferSize = 256;
 constexpr std::size_t kMaximumPathBufferSize = 1024 * 1024;
 
-bool ReadExecutablePath(std::filesystem::path* path, std::string* error)
+bool ReadExecutablePath(boost::filesystem::path* path, std::string* error)
 {
     std::vector<char> buffer(kInitialPathBufferSize);
     while (buffer.size() <= kMaximumPathBufferSize) {
@@ -48,10 +49,10 @@ bool ReadExecutablePath(std::filesystem::path* path, std::string* error)
     return false;
 }
 
-bool IsReadableRegularFile(const std::filesystem::path& path)
+bool IsReadableRegularFile(const boost::filesystem::path& path)
 {
-    std::error_code status_error;
-    const bool is_regular = std::filesystem::is_regular_file(path, status_error);
+    boost::system::error_code status_error;
+    const bool is_regular = boost::filesystem::is_regular_file(path, status_error);
     return !status_error && is_regular && access(path.c_str(), R_OK) == 0;
 }
 
@@ -66,20 +67,20 @@ bool ResolveInjectionLibraryPath(std::string* path, std::string* error)
         return false;
     }
 
-    std::filesystem::path executable;
+    boost::filesystem::path executable;
     if (!ReadExecutablePath(&executable, error)) {
         return false;
     }
 
-    const std::filesystem::path executable_directory = executable.parent_path();
-    const std::array<std::filesystem::path, 2> candidates = {
+    const boost::filesystem::path executable_directory = executable.parent_path();
+    const std::array<boost::filesystem::path, 2> candidates = {
         executable_directory / kInjectionLibraryName,
-        executable_directory / ".." / "lib64" / kInjectionLibraryName,
+        executable_directory / ".." / "tools" / "npu_tools" / "lib64" / kInjectionLibraryName,
     };
 
-    for (const std::filesystem::path& candidate : candidates) {
-        std::error_code canonical_error;
-        const std::filesystem::path canonical = std::filesystem::canonical(candidate, canonical_error);
+    for (const boost::filesystem::path& candidate : candidates) {
+        boost::system::error_code canonical_error;
+        const boost::filesystem::path canonical = boost::filesystem::canonical(candidate, canonical_error);
         if (!canonical_error && IsReadableRegularFile(canonical)) {
             *path = canonical.string();
             return true;
@@ -87,7 +88,7 @@ bool ResolveInjectionLibraryPath(std::string* path, std::string* error)
     }
 
     if (error != nullptr) {
-        *error = "libnpu-compute.so was not found next to npu-compute or in ../lib64";
+        *error = "libnpu-compute.so was not found next to npu-compute, or in ../tools/npu_tools/lib64";
     }
     return false;
 }

@@ -169,7 +169,7 @@ target_include_directories(npu_check_dbi_engine PUBLIC ${CMAKE_CURRENT_SOURCE_DI
 target_compile_options(npu_check_dbi_engine PRIVATE -Wall -Wextra -Werror)
 target_link_libraries(npu_check_dbi_engine
   PUBLIC npu_check_dbi_ctrlbin
-  PRIVATE npu_check_dbi_probe_runtime ${CMAKE_DL_LIBS} Threads::Threads
+  PRIVATE npu_check_dbi_probe_runtime ${CMAKE_DL_LIBS} Threads::Threads Boost::filesystem
 )
 set_target_properties(npu_check_dbi_engine PROPERTIES
   POSITION_INDEPENDENT_CODE ON
@@ -215,6 +215,7 @@ target_link_libraries(acl_san
     npu_check_dbi_engine
     ${CMAKE_DL_LIBS}
     Threads::Threads
+    Boost::filesystem
 )
 target_link_options(acl_san PRIVATE "LINKER:--exclude-libs,ALL")
 
@@ -224,6 +225,7 @@ if(ENABLE_TEST)
 endif()
 target_link_options(acl_san PRIVATE
   "LINKER:--version-script=${ACLSAN_VERSION_SCRIPT}"
+  "LINKER:-rpath,$ORIGIN"
 )
 set_property(TARGET acl_san APPEND PROPERTY
   LINK_DEPENDS "${ACLSAN_VERSION_SCRIPT}"
@@ -319,7 +321,8 @@ if(ENABLE_TEST)
     injection_headers
     npu_check_dbi_engine
     ${CMAKE_DL_LIBS}
-    Threads::Threads)
+    Threads::Threads
+    Boost::filesystem)
   add_test(NAME aclsan_hook_cbdata_test COMMAND aclsan_hook_cbdata_test)
 
   add_executable(aclsan_device_symbolizer_test
@@ -329,6 +332,7 @@ if(ENABLE_TEST)
   target_compile_features(aclsan_device_symbolizer_test PRIVATE cxx_std_17)
   target_compile_options(aclsan_device_symbolizer_test PRIVATE -Wall -Wextra -Werror)
   target_include_directories(aclsan_device_symbolizer_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/device_runtime)
+  target_link_libraries(aclsan_device_symbolizer_test PRIVATE Boost::filesystem)
   add_test(NAME aclsan_device_symbolizer_test COMMAND aclsan_device_symbolizer_test)
 
   add_executable(aclsan_device_binary_registry_test
@@ -339,6 +343,7 @@ if(ENABLE_TEST)
   target_compile_features(aclsan_device_binary_registry_test PRIVATE cxx_std_17)
   target_compile_options(aclsan_device_binary_registry_test PRIVATE -Wall -Wextra -Werror)
   target_include_directories(aclsan_device_binary_registry_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+  target_link_libraries(aclsan_device_binary_registry_test PRIVATE Boost::filesystem)
   add_test(NAME aclsan_device_binary_registry_test COMMAND aclsan_device_binary_registry_test)
 
   add_executable(aclsan_memory_cbdata_test
@@ -432,9 +437,13 @@ if(ENABLE_TEST)
 
   add_executable(aclsan_symbolizer_api_test tests/aclsan_symbolizer_api_test.cpp)
   target_compile_features(aclsan_symbolizer_api_test PRIVATE cxx_std_17)
-  target_compile_options(aclsan_symbolizer_api_test PRIVATE -Wall -Wextra -Werror)
-  target_include_directories(aclsan_symbolizer_api_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
-  target_link_libraries(aclsan_symbolizer_api_test PRIVATE acl_san acl_tool_injection)
+  target_compile_options(aclsan_symbolizer_api_test PRIVATE
+    -Wall -Wextra -Werror -Wno-error=cast-function-type)
+  target_include_directories(aclsan_symbolizer_api_test PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/tests/dbi)
+  target_link_libraries(aclsan_symbolizer_api_test PRIVATE
+    acl_san acl_tool_injection acl_runtime_stub Boost::filesystem)
   add_test(NAME aclsan_symbolizer_api_test COMMAND aclsan_symbolizer_api_test)
   set_tests_properties(aclsan_symbolizer_api_test PROPERTIES
     ENVIRONMENT "LD_LIBRARY_PATH=$<TARGET_FILE_DIR:acl_tool_injection>")
@@ -442,7 +451,9 @@ if(ENABLE_TEST)
   if(TARGET acl_runtime_stub)
     add_executable(aclsan_trace_d2h_hook tests/aclsan_trace_d2h_hook.cpp)
     target_compile_features(aclsan_trace_d2h_hook PRIVATE cxx_std_17)
-    target_include_directories(aclsan_trace_d2h_hook PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
+    target_include_directories(aclsan_trace_d2h_hook PRIVATE
+      ${CMAKE_CURRENT_SOURCE_DIR}/include
+      ${CMAKE_CURRENT_SOURCE_DIR}/tests/dbi)
     target_link_libraries(aclsan_trace_d2h_hook PRIVATE acl_san acl_tool_injection acl_runtime_stub)
     add_test(NAME aclsan_trace_d2h_hook COMMAND aclsan_trace_d2h_hook)
 
@@ -468,6 +479,7 @@ if(ENABLE_TEST)
       ${CMAKE_CURRENT_SOURCE_DIR}/tests/dbi/fake_dbi_tool.cpp)
     target_compile_features(aclsan_full_flow_fake_dbi_tool PRIVATE cxx_std_17)
     target_compile_options(aclsan_full_flow_fake_dbi_tool PRIVATE -Wall -Wextra -Werror)
+    target_link_libraries(aclsan_full_flow_fake_dbi_tool PRIVATE Boost::filesystem)
     add_test(NAME aclsan.full_flow_host_sample
       COMMAND ${CMAKE_COMMAND}
         -DSAMPLE=$<TARGET_FILE:aclsan_full_flow_host_sample>
@@ -476,18 +488,6 @@ if(ENABLE_TEST)
         -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/dbi/run_full_flow_host_sample.cmake)
   endif()
 endif()
-
 if(ENABLE_TEST OR NPU_CHECK_ENABLE_REAL_DBI_FLOW OR NPU_CHECK_ENABLE_REAL_DBI_TOOLCHAIN)
   add_subdirectory(tests/dbi)
 endif()
-
-install(TARGETS acl_san
-  LIBRARY DESTINATION lib ${INSTALL_OPTIONAL}
-  COMPONENT asc-tools
-)
-
-install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/include/aclsan/"
-  DESTINATION include/aclsan ${INSTALL_OPTIONAL}
-  COMPONENT asc-tools
-  FILES_MATCHING PATTERN "*.h"
-)

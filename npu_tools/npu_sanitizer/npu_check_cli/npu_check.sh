@@ -1,3 +1,4 @@
+#!/bin/sh
 # ----------------------------------------------------------------------------------------------------------
 # Copyright (c) 2026 Huawei Technologies Co., Ltd.
 # This program is free software, you can redistribute it and/or modify it under the terms and conditions of
@@ -8,14 +9,9 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 # ----------------------------------------------------------------------------------------------------------
 
-cmake_minimum_required(VERSION 3.16)
-set(CMAKE_ASC_ARCHITECTURES "dav-3510" CACHE STRING "NPU architecture")
-find_package(ASC REQUIRED)
-project(flag_set_set_wait_wait LANGUAGES ASC CXX)
-add_executable(demo
-    flag_set_set_wait_wait.asc
-)
-target_compile_options(demo PRIVATE
-    $<$<COMPILE_LANGUAGE:ASC>:--npu-arch=${CMAKE_ASC_ARCHITECTURES}>
-    -g
-)
+# Wrapper script for npu-check.
+set -e
+
+SCRIPT_DIR=$(dirname -- "$(readlink -f -- "$0")")    # absolute path of current script directory.  xx-linux/bin/xxx
+ARCH_ROOT=$(readlink -f -- "${SCRIPT_DIR}/..")       # cann path                                   cann/xx-linux
+exec "${ARCH_ROOT}/tools/npu_tools/bin/npu-check" "$@"

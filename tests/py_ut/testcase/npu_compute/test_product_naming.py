@@ -56,7 +56,6 @@ def test_npu_compute_product_naming_is_consistent():
 
 
 def test_npu_compute_build_and_log_names_are_consistent():
-    top_level_cmake = (REPO_ROOT / "CMakeLists.txt").read_text(encoding="utf-8")
     product_cmake = (REPO_ROOT / "npu_tools/npu_compute" / "CMakeLists.txt").read_text(
         encoding="utf-8"
     )
@@ -77,7 +76,6 @@ def test_npu_compute_build_and_log_names_are_consistent():
         REPO_ROOT / "npu_tools/npu_compute" / "src" / "npu_compute" / "npu_compute.cpp"
     ).read_text(encoding="utf-8")
 
-    assert "option(ASC_TOOLS_BUILD_NPU_COMPUTE " in top_level_cmake
     assert "project(npu_compute LANGUAGES CXX)" in product_cmake
     assert "add_library(npu_compute SHARED" in library_cmake
     assert "OUTPUT_NAME npu-compute" in library_cmake
@@ -87,16 +85,95 @@ def test_npu_compute_build_and_log_names_are_consistent():
     assert '"[libnpu-compute]' in library_source
 
 
-def test_default_package_build_enables_npu_compute():
-    build_script = (REPO_ROOT / "build.sh").read_text(encoding="utf-8")
-    package_configuration = re.search(
-        r'if \[ "\$\{PKG\}" == "true" \];then\n(?P<body>.*?)\n  fi',
-        build_script,
-        re.DOTALL,
+def test_root_build_always_includes_npu_compute_and_sanitizer():
+    top_level_cmake = (REPO_ROOT / "CMakeLists.txt").read_text(encoding="utf-8")
+    npu_tools_cmake = (REPO_ROOT / "npu_tools" / "CMakeLists.txt").read_text(
+        encoding="utf-8"
     )
+    sanitizer_cmake = (
+        REPO_ROOT / "npu_tools/npu_sanitizer" / "CMakeLists.txt"
+    ).read_text(encoding="utf-8")
+    build_script = (REPO_ROOT / "build.sh").read_text(encoding="utf-8")
 
-    assert package_configuration is not None
-    assert "-DASC_TOOLS_BUILD_NPU_COMPUTE=ON" in package_configuration.group("body")
+    for feature_switch in (
+        "BUILD_NPU_SANITIZER",
+        "ASC_TOOLS_BUILD_NPU_COMPUTE",
+        "NPU_COMPUTE_BUILD_INTEGRATION_STUBS",
+    ):
+        assert feature_switch not in top_level_cmake
+        assert feature_switch not in build_script
+
+    assert (
+        'set(NPU_SANITIZER_INSTALL_BINDIR "${CMAKE_SYSTEM_PROCESSOR}-linux/bin")'
+        in sanitizer_cmake
+    )
+    assert (
+        'set(NPU_SANITIZER_INSTALL_LIBDIR "${CMAKE_SYSTEM_PROCESSOR}-linux/lib64")'
+        in sanitizer_cmake
+    )
+    assert (
+        'set(NPU_SANITIZER_INSTALL_INCLUDEDIR "${CMAKE_SYSTEM_PROCESSOR}-linux/include")'
+        in sanitizer_cmake
+    )
+    assert "install(TARGETS npu_check_cli" in sanitizer_cmake
+    assert "install(TARGETS npu_check acl_san" in sanitizer_cmake
+    assert "install(FILES npu_check/include/npu_check.h" in sanitizer_cmake
+
+    for submodule in ("npu_check_cli", "npu_check", "sanitizer_api"):
+        submodule_cmake = (
+            REPO_ROOT / "npu_tools/npu_sanitizer" / submodule / "CMakeLists.txt"
+        ).read_text(encoding="utf-8")
+        assert "install(" not in submodule_cmake
+
+    assert "add_subdirectory(npu_tools)" in top_level_cmake
+    for subdirectory in ("injection", "npu_compute", "npu_sanitizer"):
+        assert f"add_subdirectory({subdirectory})" in npu_tools_cmake
+
+    sanitizer_subdirectories = (
+        "common",
+        "dbi",
+        "sanitizer_api",
+        "npu_check_cli",
+        "npu_check",
+        "dbi/test",
+    )
+    subdirectory_positions = [
+        sanitizer_cmake.index(f"add_subdirectory({subdirectory})")
+        for subdirectory in sanitizer_subdirectories
+    ]
+    assert subdirectory_positions == sorted(subdirectory_positions)
+
+
+def test_cmake_test_switches_are_owned_by_their_consumer_modules():
+    top_level_cmake = (REPO_ROOT / "CMakeLists.txt").read_text(encoding="utf-8")
+    npu_compute_cmake = (
+        REPO_ROOT / "npu_tools/npu_compute" / "CMakeLists.txt"
+    ).read_text(encoding="utf-8")
+    dbi_test_cmake = (
+        REPO_ROOT / "npu_tools/npu_sanitizer" / "dbi" / "test" / "CMakeLists.txt"
+    ).read_text(encoding="utf-8")
+
+    npu_compute_switch = "NPU_COMPUTE_BUILD_TESTS"
+    assert f"option({npu_compute_switch}" in top_level_cmake
+    assert f"option({npu_compute_switch}" in npu_compute_cmake
+
+    dbi_options = (
+        "NPU_CHECK_ENABLE_REAL_DBI_FLOW",
+        "NPU_CHECK_ENABLE_REAL_DBI_TOOLCHAIN",
+        "NPU_CHECK_RUN_REAL_DBI_HARDWARE",
+    )
+    dbi_cache_variables = (
+        "NPU_CHECK_REAL_DBI_ARCH",
+        "NPU_CHECK_REAL_DBI_KERNEL",
+        "NPU_CHECK_REAL_DBI_TOOLCHAIN_ROOT",
+        "NPU_CHECK_REAL_DBI_DEVICE_ID",
+    )
+    for option in dbi_options:
+        assert f"option({option}" in top_level_cmake
+        assert f"option({option}" in dbi_test_cmake
+    for variable in dbi_cache_variables:
+        assert f"set({variable}" in top_level_cmake
+        assert f"set({variable}" in dbi_test_cmake
 
 
 def test_cmake_targets_use_component_prefixes_and_merge_data_module():

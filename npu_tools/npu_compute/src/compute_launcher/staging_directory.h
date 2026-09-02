@@ -10,14 +10,15 @@
 #ifndef NPU_COMPUTE_SRC_COMPUTE_LAUNCHER_STAGING_DIRECTORY_H_
 #define NPU_COMPUTE_SRC_COMPUTE_LAUNCHER_STAGING_DIRECTORY_H_
 
-#include <filesystem>
+#include <boost/filesystem.hpp>
+#include <boost/system/error_code.hpp>
 #include <string>
 
 namespace npu_compute::compute_launcher {
 
 class StagingDirectory {
 public:
-    static bool Create(const std::filesystem::path& root, StagingDirectory* result, std::string* error);
+    static bool Create(const boost::filesystem::path& root, StagingDirectory* result, std::string* error);
 
     bool RemoveIfEmpty(std::string* error);
     const std::string& Path() const noexcept;

@@ -15,7 +15,8 @@
 #include <cstring>
 #include <exception>
 #include <elf.h>
-#include <filesystem>
+#include <boost/filesystem.hpp>
+#include <boost/system/error_code.hpp>
 #include <fstream>
 #include <iostream>
 #include <iterator>
@@ -28,13 +29,13 @@ namespace {
 
 std::atomic<uint64_t> g_requestId{0};
 
-bool EnsurePrivateRuntimeDirectory(const std::filesystem::path& path, std::string& diagnostic)
+bool EnsurePrivateRuntimeDirectory(const boost::filesystem::path& path, std::string& diagnostic)
 {
-    std::error_code error;
-    std::filesystem::create_directories(path, error);
-    const auto status = std::filesystem::symlink_status(path, error);
+    boost::system::error_code error;
+    boost::filesystem::create_directories(path, error);
+    const auto status = boost::filesystem::symlink_status(path, error);
     struct stat metadata {};
-    if (error || std::filesystem::is_symlink(status) || !std::filesystem::is_directory(status) ||
+    if (error || boost::filesystem::is_symlink(status) || !boost::filesystem::is_directory(status) ||
         lstat(path.c_str(), &metadata) != 0 || metadata.st_uid != geteuid()) {
         diagnostic = "DBI runtime directory is not a private owned directory: " + path.string();
         return false;
@@ -146,7 +147,7 @@ bool ResolveTraceArgumentOffset(const void* data, size_t length, uint32_t& trace
 
 DbiResult RunPipeline(const DbiRequest& request, void*) { return RunDbiPipeline(request); }
 
-bool ReadAll(const std::filesystem::path& path, std::vector<uint8_t>& data)
+bool ReadAll(const boost::filesystem::path& path, std::vector<uint8_t>& data)
 {
     std::ifstream input(path, std::ios::binary);
     if (!input) {
@@ -159,8 +160,8 @@ bool ReadAll(const std::filesystem::path& path, std::vector<uint8_t>& data)
 void Cleanup(const BinaryInstrumentationConfig& config, const std::string& work)
 {
     if (!config.keepTemp && !work.empty()) {
-        std::error_code error;
-        std::filesystem::remove_all(work, error);
+        boost::system::error_code error;
+        boost::filesystem::remove_all(work, error);
     }
 }
 
@@ -228,8 +229,8 @@ BinaryInstrumentationResult InstrumentBinary(
         work = RequestDirectory(config);
         const std::string inputPath = work + "/input.o";
         const std::string outputPath = work + "/patched.o";
-        std::error_code error;
-        std::filesystem::create_directories(work, error);
+        boost::system::error_code error;
+        boost::filesystem::create_directories(work, error);
         if (error) {
             Cleanup(config, work);
             return {BinaryInstrumentationStatus::Failed, {}, "work-directory", error.message()};

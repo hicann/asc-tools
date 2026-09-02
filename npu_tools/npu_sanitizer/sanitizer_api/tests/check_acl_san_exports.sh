@@ -11,8 +11,8 @@
 
 set -euo pipefail
 
-if [[ $# -lt 1 || $# -gt 2 || ($# -eq 2 && $2 != "--with-test-api") ]]; then
-    printf 'usage: %s <libacl_san.so> [--with-test-api]\n' "${0##*/}" >&2
+if [[ $# -ne 1 ]]; then
+    printf 'usage: %s <libacl_san.so>\n' "${0##*/}" >&2
     exit 2
 fi
 
@@ -26,15 +26,6 @@ expected_symbols=(
     aclsanSubscribe@@ACLSAN_1.0
     aclsanUnsubscribe@@ACLSAN_1.0
 )
-if [[ $# -eq 2 ]]; then
-    expected_symbols+=(
-        aclsanTestMarkInstrumentedFunction@@ACLSAN_1.0
-        aclsanTestRecordDeviceBinarySource@@ACLSAN_1.0
-        aclsanTestResetTraceRuntimeState@@ACLSAN_1.0
-    )
-    mapfile -t expected_symbols < <(printf '%s\n' "${expected_symbols[@]}" | LC_ALL=C sort)
-fi
-
 mapfile -t actual_symbols < <(
     nm -D --defined-only --format=posix "${library}" |
         awk '{print $1}' |

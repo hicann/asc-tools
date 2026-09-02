@@ -6,20 +6,33 @@
 // INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 // See LICENSE in the root of the software repository for the full text of the License.
 
+#include <cctype>
 #include <cstdlib>
-#include <filesystem>
+#include <boost/filesystem.hpp>
+#include <boost/system/error_code.hpp>
 #include <fstream>
 #include <iostream>
 #include <iterator>
-#include <regex>
 #include <set>
 #include <string>
+#include <string_view>
+#include <vector>
 
 namespace {
 
-bool EndsWith(const std::string& value, const std::string& suffix)
+std::set<std::string> ExtractReportSymbols(const std::string& input)
 {
-    return value.size() >= suffix.size() && value.compare(value.size() - suffix.size(), suffix.size(), suffix) == 0;
+    constexpr std::string_view kPrefix = "__sanitizer_report_";
+    std::set<std::string> symbols;
+    for (size_t begin = input.find(kPrefix); begin != std::string::npos; begin = input.find(kPrefix, begin)) {
+        size_t end = begin + kPrefix.size();
+        while (end < input.size() && (std::isalnum(static_cast<unsigned char>(input[end])) || input[end] == '_')) {
+            ++end;
+        }
+        symbols.insert(input.substr(begin, end - begin));
+        begin = end;
+    }
+    return symbols;
 }
 
 } // namespace
@@ -29,7 +42,7 @@ int main(int argc, char** argv)
     if (argc < 1 || argv == nullptr || argv[0] == nullptr) {
         return 2;
     }
-    const std::string tool = std::filesystem::path(argv[0]).filename().string();
+    const std::string tool = boost::filesystem::path(argv[0]).filename().string();
     const char* logPath = std::getenv("DBI_FAKE_LOG");
     if (logPath == nullptr || logPath[0] == '\0') {
         return 2;
@@ -46,51 +59,44 @@ int main(int argc, char** argv)
 
     if (tool == "llvm-objdump") {
         const std::string input = argc > 1 ? argv[argc - 1] : "";
-        if (EndsWith(input, "group.o")) {
-            std::ifstream artifact(input);
-            const std::string content{std::istreambuf_iterator<char>(artifact), std::istreambuf_iterator<char>()};
-            const std::regex symbolPattern("__sanitizer_report_[A-Za-z0-9_]+");
-            std::set<std::string> symbols;
-            for (std::sregex_iterator it(content.begin(), content.end(), symbolPattern), end; it != end; ++it) {
-                symbols.insert(it->str());
-            }
+        std::ifstream artifact(input, std::ios::binary);
+        const std::string contents{std::istreambuf_iterator<char>(artifact), std::istreambuf_iterator<char>()};
+        const std::set<std::string> symbols = ExtractReportSymbols(contents);
+        if (symbols.empty()) {
+            std::cout << "00000000 g F .text.kernel 00000010 FullFlowKernel\n";
+        } else {
             for (const std::string& symbol : symbols) {
                 std::cout << "00000000 w F .text.probe 00000010 " << symbol << '\n';
             }
-        } else if (EndsWith(input, "probe.o")) {
-            std::cout << "00000000 w F .text.probe 00000010 __sanitizer_report_probe\n";
-        } else {
-            std::cout << "00000000 g F .text.kernel 00000010 FullFlowKernel\n";
         }
         return 0;
     }
 
     std::string output;
-    std::string source;
+    std::vector<std::string> inputs;
     for (int index = 1; index < argc; ++index) {
         const std::string argument = argv[index];
         if (argument == "-o" && index + 1 < argc) {
             output = argv[++index];
-        } else if (argument == "-c" && index + 1 < argc) {
-            source = argv[++index];
         } else if (argument.rfind("-o=", 0) == 0) {
             output = argument.substr(3);
+        } else if (boost::filesystem::is_regular_file(argument)) {
+            inputs.push_back(argument);
         }
     }
     if (output.empty()) {
         return 2;
     }
-    std::error_code error;
-    std::filesystem::create_directories(std::filesystem::path(output).parent_path(), error);
+    boost::system::error_code error;
+    boost::filesystem::create_directories(boost::filesystem::path(output).parent_path(), error);
     if (error) {
         return 2;
     }
     std::ofstream artifact(output, std::ios::binary | std::ios::trunc);
-    if (tool == "bisheng" && !source.empty()) {
-        std::ifstream generated(source, std::ios::binary);
-        artifact << generated.rdbuf();
-    } else {
-        artifact << "fake-" << tool << '\n';
+    artifact << "fake-" << tool << '\n';
+    for (const std::string& input : inputs) {
+        std::ifstream source(input, std::ios::binary);
+        artifact << source.rdbuf();
     }
     return artifact.good() ? 0 : 2;
 }

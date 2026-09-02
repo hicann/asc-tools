@@ -11,14 +11,15 @@
 #include "device_runtime/device_binary_registry.h"
 
 #include <cassert>
-#include <filesystem>
+#include <boost/filesystem.hpp>
+#include <boost/system/error_code.hpp>
 #include <fstream>
 #include <string>
 #include <vector>
 
 #include <unistd.h>
 
-namespace fs = std::filesystem;
+namespace fs = boost::filesystem;
 
 namespace {
 
@@ -151,24 +152,6 @@ void TestFunctionLookupReplacesPreviousBinaryOwnership()
     assert(!registry.GetFunctionTraceArgumentOffset(latestFunction, traceArgumentOffset));
 }
 
-void TestManualInstrumentationIsIndependentOfBinaryOwnership()
-{
-    aclsan::device_runtime::DeviceBinaryRegistry registry;
-    constexpr uintptr_t binary = 0x81;
-    constexpr uintptr_t function = 0x810;
-    registry.MarkFunctionInstrumented(function, 8);
-    uint32_t traceArgumentOffset = 0;
-    assert(registry.GetFunctionTraceArgumentOffset(function, traceArgumentOffset));
-    assert(traceArgumentOffset == 8);
-    assert(!registry.RecordBinaryLoadFromData(binary, true, 0, nullptr, 0));
-    registry.RecordBinaryFunctionLookup(binary, function);
-    registry.RecordBinaryUnload(binary);
-    assert(registry.GetFunctionTraceArgumentOffset(function, traceArgumentOffset));
-    assert(traceArgumentOffset == 8);
-    registry.Reset();
-    assert(!registry.GetFunctionTraceArgumentOffset(function, traceArgumentOffset));
-}
-
 } // namespace
 
 int main()
@@ -177,6 +160,5 @@ int main()
     TestExplicitFunctionOwnershipEndsAtBinaryUnload();
     TestLatestLookupRequiresAnInstrumentedLatestBinary();
     TestFunctionLookupReplacesPreviousBinaryOwnership();
-    TestManualInstrumentationIsIndependentOfBinaryOwnership();
     return 0;
 }

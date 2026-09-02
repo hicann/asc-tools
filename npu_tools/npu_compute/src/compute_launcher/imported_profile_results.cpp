@@ -13,6 +13,9 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+#include <boost/filesystem.hpp>
+#include <boost/system/error_code.hpp>
+
 #include <algorithm>
 #include <fstream>
 #include <iterator>
@@ -125,24 +128,25 @@ bool ValidateImportedEntries(
 }
 
 bool ValidateOutputPaths(
-    const std::vector<ImportedProfileEntry>& entries, const std::filesystem::path& output_directory, std::string* error)
+    const std::vector<ImportedProfileEntry>& entries, const boost::filesystem::path& output_directory,
+    std::string* error)
 {
     for (const ImportedProfileEntry& entry : entries) {
         std::string output_name;
         if (!ResolveOutputName(entry, &output_name, error)) {
             return false;
         }
-        const std::filesystem::path output_path = output_directory / output_name;
-        std::error_code status_error;
-        const std::filesystem::file_status status = std::filesystem::symlink_status(output_path, status_error);
-        if (status_error == std::errc::no_such_file_or_directory) {
+        const boost::filesystem::path output_path = output_directory / output_name;
+        boost::system::error_code status_error;
+        const boost::filesystem::file_status status = boost::filesystem::symlink_status(output_path, status_error);
+        if (status_error == boost::system::errc::no_such_file_or_directory) {
             continue;
         }
         if (status_error) {
             return Fail(
                 "inspect imported output path failed: " + output_path.string() + ": " + status_error.message(), error);
         }
-        if (std::filesystem::exists(status)) {
+        if (boost::filesystem::exists(status)) {
             return Fail("imported output path already exists: " + output_path.string(), error);
         }
     }
@@ -165,7 +169,7 @@ public:
 
     int Get() const { return descriptor_; }
 
-    bool Close(const std::filesystem::path& path, std::string* error)
+    bool Close(const boost::filesystem::path& path, std::string* error)
     {
         if (descriptor_ < 0) {
             return true;
@@ -184,25 +188,25 @@ private:
 
 class CreatedPathCleanup {
 public:
-    explicit CreatedPathCleanup(std::filesystem::path path) : path_(std::move(path)) {}
+    explicit CreatedPathCleanup(boost::filesystem::path path) : path_(std::move(path)) {}
 
     ~CreatedPathCleanup()
     {
         if (active_) {
-            std::error_code error;
-            std::filesystem::remove_all(path_, error);
+            boost::system::error_code error;
+            boost::filesystem::remove_all(path_, error);
         }
     }
 
     void Release() { active_ = false; }
 
 private:
-    std::filesystem::path path_;
+    boost::filesystem::path path_;
     bool active_ = true;
 };
 
 bool WriteAll(
-    int descriptor, const std::vector<uint8_t>& payload, const std::filesystem::path& path, std::string* error)
+    int descriptor, const std::vector<uint8_t>& payload, const boost::filesystem::path& path, std::string* error)
 {
     std::size_t offset = 0;
     while (offset < payload.size()) {
@@ -234,7 +238,7 @@ bool SyncDescriptor(int descriptor, const std::string& description, std::string*
     return true;
 }
 
-bool WriteImportedFile(const std::filesystem::path& path, const std::vector<uint8_t>& payload, std::string* error)
+bool WriteImportedFile(const boost::filesystem::path& path, const std::vector<uint8_t>& payload, std::string* error)
 {
     FileDescriptor descriptor(
         ::open(path.c_str(), O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC | O_NOFOLLOW, S_IRUSR | S_IWUSR));
@@ -250,7 +254,7 @@ bool WriteImportedFile(const std::filesystem::path& path, const std::vector<uint
     return true;
 }
 
-bool SyncDirectory(const std::filesystem::path& path, std::string* error)
+bool SyncDirectory(const boost::filesystem::path& path, std::string* error)
 {
     FileDescriptor descriptor(::open(path.c_str(), O_RDONLY | O_DIRECTORY | O_CLOEXEC | O_NOFOLLOW));
     if (descriptor.Get() < 0) {
@@ -261,14 +265,15 @@ bool SyncDirectory(const std::filesystem::path& path, std::string* error)
 }
 
 bool UnpackImportedEntries(
-    const std::vector<ImportedProfileEntry>& entries, const std::filesystem::path& output_directory, std::string* error)
+    const std::vector<ImportedProfileEntry>& entries, const boost::filesystem::path& output_directory,
+    std::string* error)
 {
     for (const ImportedProfileEntry& entry : entries) {
         std::string output_name;
         if (!ResolveOutputName(entry, &output_name, error)) {
             return false;
         }
-        const std::filesystem::path output_path = output_directory / output_name;
+        const boost::filesystem::path output_path = output_directory / output_name;
         if (entry.type != NpuRepFileType::NpuRep) {
             if (!WriteImportedFile(output_path, entry.payload, error)) {
                 return false;
@@ -288,14 +293,14 @@ bool UnpackImportedEntries(
     return SyncDirectory(output_directory, error);
 }
 
-bool ReadInputFile(const std::filesystem::path& path, std::vector<uint8_t>* content, std::string* error)
+bool ReadInputFile(const boost::filesystem::path& path, std::vector<uint8_t>* content, std::string* error)
 {
-    std::error_code status_error;
-    const std::filesystem::file_status status = std::filesystem::symlink_status(path, status_error);
+    boost::system::error_code status_error;
+    const boost::filesystem::file_status status = boost::filesystem::symlink_status(path, status_error);
     if (status_error) {
         return Fail("inspect imported rep failed: " + path.string() + ": " + status_error.message(), error);
     }
-    if (!std::filesystem::is_regular_file(status)) {
+    if (!boost::filesystem::is_regular_file(status)) {
         return Fail("imported rep is not a regular file: " + path.string(), error);
     }
 
@@ -344,7 +349,7 @@ bool DecodeImportedEntries(
 } // namespace
 
 bool ReadImportedProfileResults(
-    const std::filesystem::path& input_path, std::vector<ImportedProfileEntry>* results, std::string* error)
+    const boost::filesystem::path& input_path, std::vector<ImportedProfileEntry>* results, std::string* error)
 {
     if (error != nullptr) {
         error->clear();
@@ -369,21 +374,22 @@ bool ReadImportedProfileResults(
 }
 
 bool UnpackImportedProfileResults(
-    const std::vector<ImportedProfileEntry>& results, const std::filesystem::path& output_directory, std::string* error)
+    const std::vector<ImportedProfileEntry>& results, const boost::filesystem::path& output_directory,
+    std::string* error)
 {
     if (error != nullptr) {
         error->clear();
     }
 
     try {
-        std::error_code status_error;
-        const std::filesystem::file_status status = std::filesystem::symlink_status(output_directory, status_error);
+        boost::system::error_code status_error;
+        const boost::filesystem::file_status status = boost::filesystem::symlink_status(output_directory, status_error);
         if (status_error) {
             return Fail(
                 "inspect import output directory failed: " + output_directory.string() + ": " + status_error.message(),
                 error);
         }
-        if (!std::filesystem::is_directory(status)) {
+        if (!boost::filesystem::is_directory(status)) {
             return Fail("import output path is not a directory: " + output_directory.string(), error);
         }
         if (!ValidateImportedEntries(results, output_directory.string(), error)) {

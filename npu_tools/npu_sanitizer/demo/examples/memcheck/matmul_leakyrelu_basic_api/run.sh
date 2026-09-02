@@ -27,7 +27,6 @@ output="build/npu_check.log"
 : >"${output}"
 exec > >(tee -a "${output}") 2>&1
 
-# 设置 DBI 运行环境。
 export ASCEND_GLOBAL_LOG_LEVEL=0
 export NPU_SAN_DEBUG=1
 # 冒烟断言依赖 [CLI] / [UDS] 的过程记录，而它们默认不打屏，必须显式打开。
@@ -44,7 +43,7 @@ cmake --build build --parallel
 
 # 从数据目录运行不应报错的 memcheck 示例。
 set +e
-(cd build && ../../../../build/npu_tools/bin/npu_check --tool memcheck -- ./demo)
+(cd build && npu-check --tool memcheck -- ./demo)
 set -e
 
 # 关注 summary：逻辑错误总数 errors 应为 0。

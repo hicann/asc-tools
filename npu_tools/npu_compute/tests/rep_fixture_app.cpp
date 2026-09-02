@@ -11,7 +11,8 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
-#include <filesystem>
+#include <boost/filesystem.hpp>
+#include <boost/system/error_code.hpp>
 #include <fstream>
 #include <string_view>
 
@@ -41,7 +42,7 @@ bool ParseExitCode(const char* value, int* exit_code)
     return true;
 }
 
-bool WriteFile(const std::filesystem::path& path, std::string_view content)
+bool WriteFile(const boost::filesystem::path& path, std::string_view content)
 {
     std::ofstream output(path, std::ios::binary | std::ios::trunc);
     if (!output.is_open()) {
@@ -74,11 +75,11 @@ int main(int argc, char** argv)
         std::fprintf(stderr, "[rep-fixture] NPU_COMPUTE_OUTPUT is missing\n");
         return 2;
     }
-    const std::filesystem::path output(output_value);
-    const std::filesystem::path device = output / "device_0";
-    const std::filesystem::path details = device / "details";
-    std::error_code directory_error;
-    std::filesystem::create_directories(details, directory_error);
+    const boost::filesystem::path output(output_value);
+    const boost::filesystem::path device = output / "device_0";
+    const boost::filesystem::path details = device / "details";
+    boost::system::error_code directory_error;
+    boost::filesystem::create_directories(details, directory_error);
     if (directory_error) {
         std::fprintf(stderr, "[rep-fixture] create directories failed: %s\n", directory_error.message().c_str());
         return 2;

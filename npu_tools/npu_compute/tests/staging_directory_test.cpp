@@ -11,7 +11,8 @@
 
 #include <cstdio>
 #include <cstdlib>
-#include <filesystem>
+#include <boost/filesystem.hpp>
+#include <boost/system/error_code.hpp>
 #include <regex>
 #include <string>
 
@@ -51,15 +52,15 @@ public:
     ~TestDirectory()
     {
         if (!path_.empty()) {
-            std::error_code error;
-            std::filesystem::remove_all(path_, error);
+            boost::system::error_code error;
+            boost::filesystem::remove_all(path_, error);
         }
     }
 
-    const std::filesystem::path& Path() const { return path_; }
+    const boost::filesystem::path& Path() const { return path_; }
 
 private:
-    std::filesystem::path path_;
+    boost::filesystem::path path_;
 };
 
 class ScopedTmpdir {
@@ -88,7 +89,7 @@ private:
     bool hadOriginal_ = false;
 };
 
-bool MatchesDirectoryName(const std::filesystem::path& path)
+bool MatchesDirectoryName(const boost::filesystem::path& path)
 {
     const std::string pattern = "^npu-compute-[0-9]+-" + std::to_string(::getpid()) + "-[A-Za-z0-9]{6}$";
     return std::regex_match(path.filename().string(), std::regex(pattern));
@@ -107,8 +108,8 @@ int TestCreatesUniqueDirectoriesUnderExplicitRoot()
     CHECK(StagingDirectory::Create(root.Path(), &second, &error));
     CHECK(error.empty());
 
-    const std::filesystem::path firstPath = first.Path();
-    const std::filesystem::path secondPath = second.Path();
+    const boost::filesystem::path firstPath = first.Path();
+    const boost::filesystem::path secondPath = second.Path();
     CHECK(firstPath.is_absolute());
     CHECK(secondPath.is_absolute());
     CHECK(firstPath.parent_path() == root.Path());
@@ -116,8 +117,8 @@ int TestCreatesUniqueDirectoriesUnderExplicitRoot()
     CHECK(firstPath != secondPath);
     CHECK(MatchesDirectoryName(firstPath));
     CHECK(MatchesDirectoryName(secondPath));
-    CHECK(std::filesystem::is_directory(firstPath));
-    CHECK(std::filesystem::is_directory(secondPath));
+    CHECK(boost::filesystem::is_directory(firstPath));
+    CHECK(boost::filesystem::is_directory(secondPath));
     return 0;
 }
 
@@ -131,7 +132,7 @@ int TestIgnoresTmpdirForExplicitRoot()
 
     CHECK(StagingDirectory::Create(root.Path(), &result, &error));
     CHECK(error.empty());
-    CHECK(std::filesystem::path(result.Path()).parent_path() == root.Path());
+    CHECK(boost::filesystem::path(result.Path()).parent_path() == root.Path());
     return 0;
 }
 
@@ -178,13 +179,13 @@ int TestRemovesEmptyDirectory()
     std::string error;
 
     CHECK(StagingDirectory::Create(root.Path(), &result, &error));
-    const std::filesystem::path created = result.Path();
-    CHECK(std::filesystem::is_directory(created));
+    const boost::filesystem::path created = result.Path();
+    CHECK(boost::filesystem::is_directory(created));
 
     CHECK(result.RemoveIfEmpty(&error));
     CHECK(error.empty());
     CHECK(result.Path().empty());
-    CHECK(!std::filesystem::exists(created));
+    CHECK(!boost::filesystem::exists(created));
     return 0;
 }
 
@@ -196,8 +197,8 @@ int TestPreservesNonEmptyDirectory()
     std::string error;
 
     CHECK(StagingDirectory::Create(root.Path(), &result, &error));
-    const std::filesystem::path created = result.Path();
-    const std::filesystem::path data = created / "partial.csv";
+    const boost::filesystem::path created = result.Path();
+    const boost::filesystem::path data = created / "partial.csv";
     std::FILE* file = std::fopen(data.c_str(), "w");
     CHECK(file != nullptr);
     CHECK(std::fputs("name,value\npartial,1\n", file) >= 0);
@@ -206,7 +207,7 @@ int TestPreservesNonEmptyDirectory()
     CHECK(result.RemoveIfEmpty(&error));
     CHECK(error.empty());
     CHECK(result.Path() == created.string());
-    CHECK(std::filesystem::is_regular_file(data));
+    CHECK(boost::filesystem::is_regular_file(data));
     return 0;
 }
 

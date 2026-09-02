@@ -9,7 +9,8 @@
 #include "dbi/dbi_pipeline.h"
 
 #include <cstdlib>
-#include <filesystem>
+#include <boost/filesystem.hpp>
+#include <boost/system/error_code.hpp>
 #include <fstream>
 #include <sstream>
 #include <sys/stat.h>
@@ -19,20 +20,20 @@
 namespace aclsan {
 namespace {
 
-void WriteFile(const std::filesystem::path& path, const std::string& content)
+void WriteFile(const boost::filesystem::path& path, const std::string& content)
 {
-    std::filesystem::create_directories(path.parent_path());
+    boost::filesystem::create_directories(path.parent_path());
     std::ofstream output(path, std::ios::binary | std::ios::trunc);
     output << content;
 }
 
-std::string ReadFile(const std::filesystem::path& path)
+std::string ReadFile(const boost::filesystem::path& path)
 {
     std::ifstream input(path, std::ios::binary);
     return {std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>()};
 }
 
-void InstallFakeTool(const std::filesystem::path& path)
+void InstallFakeTool(const boost::filesystem::path& path)
 {
     WriteFile(path, R"SH(#!/bin/sh
 name=$(basename "$0")
@@ -78,8 +79,8 @@ std::size_t CountOccurrences(const std::string& text, const std::string& needle)
 
 TEST(DbiIntegrationTest, CompilesLinksAndPatchesSelectedProbeSet)
 {
-    const auto root = std::filesystem::temp_directory_path() / "dbi_pipeline_integration";
-    std::filesystem::remove_all(root);
+    const auto root = boost::filesystem::temp_directory_path() / "dbi_pipeline_integration";
+    boost::filesystem::remove_all(root);
     const auto toolBin = root / "toolchain/tools/bisheng_compiler/bin";
     for (const char* name : {"bisheng", "bisheng-tune", "ld.lld", "llvm-objdump"}) {
         InstallFakeTool(toolBin / name);
@@ -102,14 +103,14 @@ TEST(DbiIntegrationTest, CompilesLinksAndPatchesSelectedProbeSet)
     const DbiResult result = RunDbiPipeline(request);
     EXPECT_TRUE(result.success) << result.stage << ": " << result.diagnostic;
     EXPECT_EQ(result.patchedPath, request.outputKernel);
-    EXPECT_TRUE(std::filesystem::is_regular_file(request.outputKernel));
+    EXPECT_TRUE(boost::filesystem::is_regular_file(request.outputKernel));
 
     request.outputKernel = (root / "second-patched.o").string();
     request.workDirectory = (root / "second-work").string();
     const DbiResult cachedResult = RunDbiPipeline(request);
     EXPECT_TRUE(cachedResult.success) << cachedResult.stage << ": " << cachedResult.diagnostic;
     EXPECT_EQ(cachedResult.patchedPath, request.outputKernel);
-    EXPECT_TRUE(std::filesystem::is_regular_file(request.outputKernel));
+    EXPECT_TRUE(boost::filesystem::is_regular_file(request.outputKernel));
 
     const std::string commands = ReadFile(root / "commands.log");
     EXPECT_NE(commands.find("bisheng <-xcce>"), std::string::npos) << commands;
@@ -128,13 +129,13 @@ TEST(DbiIntegrationTest, CompilesLinksAndPatchesSelectedProbeSet)
     EXPECT_EQ(CountOccurrences(commands, "ld.lld <-r>"), 1U) << commands;
     EXPECT_EQ(CountOccurrences(commands, "bisheng-tune <--action=instru-probe>"), 2U) << commands;
     unsetenv("DBI_FAKE_LOG");
-    std::filesystem::remove_all(root);
+    boost::filesystem::remove_all(root);
 }
 
 TEST(DbiIntegrationTest, FailedProbeLinkDoesNotPublishPartialCacheArtifact)
 {
-    const auto root = std::filesystem::temp_directory_path() / "dbi_pipeline_failed_cache";
-    std::filesystem::remove_all(root);
+    const auto root = boost::filesystem::temp_directory_path() / "dbi_pipeline_failed_cache";
+    boost::filesystem::remove_all(root);
     const auto toolBin = root / "toolchain/tools/bisheng_compiler/bin";
     for (const char* name : {"bisheng", "bisheng-tune", "ld.lld", "llvm-objdump"}) {
         InstallFakeTool(toolBin / name);
@@ -166,13 +167,13 @@ TEST(DbiIntegrationTest, FailedProbeLinkDoesNotPublishPartialCacheArtifact)
     const std::string commands = ReadFile(root / "commands.log");
     EXPECT_EQ(CountOccurrences(commands, "ld.lld <-r>"), 2U) << commands;
     unsetenv("DBI_FAKE_LOG");
-    std::filesystem::remove_all(root);
+    boost::filesystem::remove_all(root);
 }
 
 TEST(DbiIntegrationTest, DoesNotAcceptStalePatchedOutputWhenTuneCreatesNothing)
 {
-    const auto root = std::filesystem::temp_directory_path() / "dbi_pipeline_stale_output";
-    std::filesystem::remove_all(root);
+    const auto root = boost::filesystem::temp_directory_path() / "dbi_pipeline_stale_output";
+    boost::filesystem::remove_all(root);
     const auto toolBin = root / "toolchain/tools/bisheng_compiler/bin";
     for (const char* name : {"bisheng", "bisheng-tune", "ld.lld", "llvm-objdump"}) {
         InstallFakeTool(toolBin / name);
@@ -199,13 +200,13 @@ TEST(DbiIntegrationTest, DoesNotAcceptStalePatchedOutputWhenTuneCreatesNothing)
 
     unsetenv("DBI_FAKE_SKIP_OUTPUT");
     unsetenv("DBI_FAKE_LOG");
-    std::filesystem::remove_all(root);
+    boost::filesystem::remove_all(root);
 }
 
 TEST(DbiIntegrationTest, RebuildsNonemptyCorruptAggregateCacheAsOneUnit)
 {
-    const auto root = std::filesystem::temp_directory_path() / "dbi_pipeline_corrupt_aggregate";
-    std::filesystem::remove_all(root);
+    const auto root = boost::filesystem::temp_directory_path() / "dbi_pipeline_corrupt_aggregate";
+    boost::filesystem::remove_all(root);
     const auto toolBin = root / "toolchain/tools/bisheng_compiler/bin";
     for (const char* name : {"bisheng", "bisheng-tune", "ld.lld", "llvm-objdump"}) {
         InstallFakeTool(toolBin / name);
@@ -228,8 +229,8 @@ TEST(DbiIntegrationTest, RebuildsNonemptyCorruptAggregateCacheAsOneUnit)
     struct stat cacheStatus {};
     ASSERT_EQ(stat((root / "cache").c_str(), &cacheStatus), 0);
     EXPECT_EQ(cacheStatus.st_mode & 0777, 0700);
-    std::filesystem::path artifactDirectory;
-    for (const auto& entry : std::filesystem::directory_iterator(root / "cache/aggregates")) {
+    boost::filesystem::path artifactDirectory;
+    for (const auto& entry : boost::filesystem::directory_iterator(root / "cache/aggregates")) {
         if (entry.is_directory()) {
             artifactDirectory = entry.path();
             break;
@@ -239,7 +240,7 @@ TEST(DbiIntegrationTest, RebuildsNonemptyCorruptAggregateCacheAsOneUnit)
     struct stat artifactStatus {};
     ASSERT_EQ(stat(artifactDirectory.c_str(), &artifactStatus), 0);
     EXPECT_EQ(artifactStatus.st_mode & 0777, 0700);
-    ASSERT_TRUE(std::filesystem::is_regular_file(artifactDirectory / "manifest"));
+    ASSERT_TRUE(boost::filesystem::is_regular_file(artifactDirectory / "manifest"));
     WriteFile(artifactDirectory / "ctrl.bin", "nonempty-corruption\n");
 
     request.outputKernel = (root / "second-patched.o").string();
@@ -250,20 +251,20 @@ TEST(DbiIntegrationTest, RebuildsNonemptyCorruptAggregateCacheAsOneUnit)
     EXPECT_EQ(CountOccurrences(ReadFile(root / "commands.log"), "bisheng <-xcce>"), 2U);
 
     unsetenv("DBI_FAKE_LOG");
-    std::filesystem::remove_all(root);
+    boost::filesystem::remove_all(root);
 }
 
 TEST(DbiIntegrationTest, RejectsSymlinkCacheRoot)
 {
-    const auto root = std::filesystem::temp_directory_path() / "dbi_pipeline_symlink_cache";
-    std::filesystem::remove_all(root);
+    const auto root = boost::filesystem::temp_directory_path() / "dbi_pipeline_symlink_cache";
+    boost::filesystem::remove_all(root);
     const auto toolBin = root / "toolchain/tools/bisheng_compiler/bin";
     for (const char* name : {"bisheng", "bisheng-tune", "ld.lld", "llvm-objdump"}) {
         InstallFakeTool(toolBin / name);
     }
     WriteFile(root / "input.o", "kernel\n");
-    std::filesystem::create_directories(root / "redirected-cache");
-    std::filesystem::create_directory_symlink(root / "redirected-cache", root / "cache-link");
+    boost::filesystem::create_directories(root / "redirected-cache");
+    boost::filesystem::create_directory_symlink(root / "redirected-cache", root / "cache-link");
 
     DbiRequest request{};
     request.inputKernel = (root / "input.o").string();
@@ -277,14 +278,14 @@ TEST(DbiIntegrationTest, RejectsSymlinkCacheRoot)
     const DbiResult result = RunDbiPipeline(request);
     EXPECT_FALSE(result.success);
     EXPECT_EQ(result.stage, "cache-directory");
-    EXPECT_TRUE(std::filesystem::is_empty(root / "redirected-cache"));
-    std::filesystem::remove_all(root);
+    EXPECT_TRUE(boost::filesystem::is_empty(root / "redirected-cache"));
+    boost::filesystem::remove_all(root);
 }
 
 TEST(DbiIntegrationTest, RejectsUnsupportedGeneratedProbeArchitecture)
 {
-    const auto root = std::filesystem::temp_directory_path() / "dbi_pipeline_unsupported_arch";
-    std::filesystem::remove_all(root);
+    const auto root = boost::filesystem::temp_directory_path() / "dbi_pipeline_unsupported_arch";
+    boost::filesystem::remove_all(root);
     const auto toolBin = root / "toolchain/tools/bisheng_compiler/bin";
     for (const char* name : {"bisheng", "bisheng-tune", "ld.lld", "llvm-objdump"}) {
         InstallFakeTool(toolBin / name);
@@ -304,13 +305,13 @@ TEST(DbiIntegrationTest, RejectsUnsupportedGeneratedProbeArchitecture)
     EXPECT_FALSE(result.success);
     EXPECT_EQ(result.stage, "architecture");
     EXPECT_NE(result.diagnostic.find("dav-unknown"), std::string::npos);
-    std::filesystem::remove_all(root);
+    boost::filesystem::remove_all(root);
 }
 
 TEST(DbiIntegrationTest, RejectsGeneratedGroupWithMissingWeakSymbol)
 {
-    const auto root = std::filesystem::temp_directory_path() / "dbi_pipeline_missing_generated_symbol";
-    std::filesystem::remove_all(root);
+    const auto root = boost::filesystem::temp_directory_path() / "dbi_pipeline_missing_generated_symbol";
+    boost::filesystem::remove_all(root);
     const auto toolBin = root / "toolchain/tools/bisheng_compiler/bin";
     for (const char* name : {"bisheng", "bisheng-tune", "ld.lld", "llvm-objdump"}) {
         InstallFakeTool(toolBin / name);
@@ -334,14 +335,14 @@ TEST(DbiIntegrationTest, RejectsGeneratedGroupWithMissingWeakSymbol)
     EXPECT_FALSE(result.success);
     EXPECT_EQ(result.stage, "validate-probe");
     bool retainedStaging = false;
-    for (const auto& entry : std::filesystem::directory_iterator(root / "cache/groups")) {
+    for (const auto& entry : boost::filesystem::directory_iterator(root / "cache/groups")) {
         retainedStaging = retainedStaging || entry.path().filename().string().compare(0, 7, ".build-") == 0;
     }
     EXPECT_TRUE(retainedStaging);
 
     unsetenv("DBI_FAKE_DROP_SYMBOL");
     unsetenv("DBI_FAKE_LOG");
-    std::filesystem::remove_all(root);
+    boost::filesystem::remove_all(root);
 }
 
 } // namespace

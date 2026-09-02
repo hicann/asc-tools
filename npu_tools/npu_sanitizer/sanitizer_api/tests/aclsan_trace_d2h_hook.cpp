@@ -11,6 +11,7 @@
 #include "aclsan/aclsan_api.h"
 #include "aclsan/aclsan_cbdata_device.h"
 #include "aclsan/aclsan_cbdata_synchronize.h"
+#include "kernel_argument_elf_fixture.h"
 #include "injection/injection_hook.h"
 #include "injection/runtime_stub_api.h"
 #include "dbi/trace_buffer_abi.h"
@@ -19,8 +20,6 @@
 #include <cstdlib>
 #include <cstring>
 #include <vector>
-
-extern "C" void aclsanTestMarkInstrumentedFunction(aclrtFuncHandle function, uint32_t traceArgumentOffset);
 
 namespace {
 
@@ -80,6 +79,62 @@ size_t g_expectedLaunchArgumentBytes = 24;
 uint32_t g_expectedPlaceholderDataOffset = 0;
 uint32_t g_expectedPaddingBegin = 0;
 bool g_checkPadding = false;
+size_t g_binaryLoadCalls = 0;
+
+const auto kOffset16Binary = reinterpret_cast<aclrtBinHandle>(0x161);
+const auto kOffset8Binary = reinterpret_cast<aclrtBinHandle>(0x81);
+const auto kOffset24Binary = reinterpret_cast<aclrtBinHandle>(0x241);
+const auto kFunction = reinterpret_cast<aclrtFuncHandle>(0x101);
+const auto kOneArgumentFunction = reinterpret_cast<aclrtFuncHandle>(0x102);
+const auto kZeroArgumentFunction = reinterpret_cast<aclrtFuncHandle>(0x103);
+const auto kThreeArgumentFunction = reinterpret_cast<aclrtFuncHandle>(0x104);
+
+aclError OriginalBinaryLoad(const void*, size_t, const aclrtBinaryLoadOptions*, aclrtBinHandle* binary)
+{
+    if (binary == nullptr) {
+        return ACL_ERROR_INVALID_PARAM;
+    }
+    const aclrtBinHandle binaries[] = {kOffset16Binary, kOffset8Binary, kOffset24Binary};
+    if (g_binaryLoadCalls >= std::size(binaries)) {
+        return ACL_ERROR_INVALID_PARAM;
+    }
+    *binary = binaries[g_binaryLoadCalls++];
+    return ACL_SUCCESS;
+}
+
+aclError OriginalBinaryGetFunction(aclrtBinHandle binary, const char* name, aclrtFuncHandle* function)
+{
+    if (name == nullptr || function == nullptr) {
+        return ACL_ERROR_INVALID_PARAM;
+    }
+    if ((binary == kOffset16Binary && std::strcmp(name, "Offset16") == 0) ||
+        (binary == kOffset8Binary && std::strcmp(name, "Offset8") == 0)) {
+        *function = kFunction;
+        return ACL_SUCCESS;
+    }
+    if (binary != kOffset24Binary) {
+        return ACL_ERROR_INVALID_PARAM;
+    }
+    if (std::strcmp(name, "OneArgument") == 0) {
+        *function = kOneArgumentFunction;
+    } else if (std::strcmp(name, "ZeroArgument") == 0) {
+        *function = kZeroArgumentFunction;
+    } else if (std::strcmp(name, "ThreeArguments") == 0) {
+        *function = kThreeArgumentFunction;
+    } else {
+        return ACL_ERROR_INVALID_PARAM;
+    }
+    return ACL_SUCCESS;
+}
+
+bool LoadInstrumentedFunction(uint32_t argumentSize, const char* name, aclrtFuncHandle* function)
+{
+    const std::vector<uint8_t> image = aclsan::test::MakeKernelArgumentSizeElf(argumentSize);
+    aclrtBinaryLoadOptions options{};
+    aclrtBinHandle binary = nullptr;
+    return aclrtBinaryLoadFromData(image.data(), image.size(), &options, &binary) == ACL_SUCCESS &&
+           aclrtBinaryGetFunction(binary, name, function) == ACL_SUCCESS;
+}
 
 aclError OriginalMalloc(void** pointer, size_t bytes, aclrtMemMallocPolicy)
 {
@@ -314,6 +369,8 @@ int main()
     CHECK(RuntimeStubSetOriginFunction("aclrtGetSocName", &OriginalGetSocName) == ACL_SUCCESS);
     CHECK(RuntimeStubSetOriginFunction("aclrtGetDevice", &OriginalGetDevice) == ACL_SUCCESS);
     CHECK(RuntimeStubSetOriginFunction("aclrtGetDeviceInfo", &OriginalGetDeviceInfo) == ACL_SUCCESS);
+    CHECK(RuntimeStubSetOriginFunction("aclrtBinaryLoadFromData", &OriginalBinaryLoad) == ACL_SUCCESS);
+    CHECK(RuntimeStubSetOriginFunction("aclrtBinaryGetFunction", &OriginalBinaryGetFunction) == ACL_SUCCESS);
     CHECK(acltoolHookInit() == ACL_SUCCESS);
 
     AclsanSubscriberHandle subscriber = nullptr;
@@ -328,15 +385,15 @@ int main()
         aclsanEnableCallback(1, subscriber, ACLSAN_CB_DOMAIN_SYNCHRONIZE, ACLSAN_CBID_SYNCHRONIZE_STREAM_SYNC_END) ==
         ACLSAN_STATUS_SUCCESS);
 
-    int functionStorage = 0;
     int ordinaryFunctionStorage = 0;
     int streamStorage1 = 0;
     int streamStorage2 = 0;
-    const auto function = reinterpret_cast<aclrtFuncHandle>(&functionStorage);
+    aclrtFuncHandle function = nullptr;
     const auto ordinaryFunction = reinterpret_cast<aclrtFuncHandle>(&ordinaryFunctionStorage);
     const auto stream1 = reinterpret_cast<aclrtStream>(&streamStorage1);
     const auto stream2 = reinterpret_cast<aclrtStream>(&streamStorage2);
-    aclsanTestMarkInstrumentedFunction(function, 16);
+    CHECK(LoadInstrumentedFunction(16, "Offset16", &function));
+    CHECK(function == kFunction);
 
     uint64_t arguments[2] = {1, 2};
     CHECK(
@@ -515,7 +572,8 @@ int main()
     g_vectorCoreCount = 72;
     CHECK(g_mallocCalls == mallocCallsBeforeInvalidTopology);
 
-    aclsanTestMarkInstrumentedFunction(function, 8);
+    CHECK(LoadInstrumentedFunction(8, "Offset8", &function));
+    CHECK(function == kFunction);
     g_expectedHiddenOffset = 8;
     g_expectedPlaceholderDataOffset = 16;
     aclrtPlaceHolderInfo placeholder{0, 8};
@@ -525,15 +583,13 @@ int main()
     CHECK(placeholder.dataOffset == 8);
     CHECK(aclrtSynchronizeStream(stream1) == ACL_SUCCESS);
 
-    int oneArgumentFunctionStorage = 0;
-    int zeroArgumentFunctionStorage = 0;
-    int threeArgumentFunctionStorage = 0;
-    const auto oneArgumentFunction = reinterpret_cast<aclrtFuncHandle>(&oneArgumentFunctionStorage);
-    const auto zeroArgumentFunction = reinterpret_cast<aclrtFuncHandle>(&zeroArgumentFunctionStorage);
-    const auto threeArgumentFunction = reinterpret_cast<aclrtFuncHandle>(&threeArgumentFunctionStorage);
-    aclsanTestMarkInstrumentedFunction(oneArgumentFunction, 24);
-    aclsanTestMarkInstrumentedFunction(zeroArgumentFunction, 24);
-    aclsanTestMarkInstrumentedFunction(threeArgumentFunction, 24);
+    aclrtFuncHandle oneArgumentFunction = nullptr;
+    aclrtFuncHandle zeroArgumentFunction = nullptr;
+    aclrtFuncHandle threeArgumentFunction = nullptr;
+    CHECK(LoadInstrumentedFunction(24, "OneArgument", &oneArgumentFunction));
+    CHECK(oneArgumentFunction == kOneArgumentFunction);
+    CHECK(aclrtBinaryGetFunction(kOffset24Binary, "ZeroArgument", &zeroArgumentFunction) == ACL_SUCCESS);
+    CHECK(aclrtBinaryGetFunction(kOffset24Binary, "ThreeArguments", &threeArgumentFunction) == ACL_SUCCESS);
     g_writeRecord = false;
     g_expectedHiddenOffset = 24;
     g_expectedLaunchArgumentBytes = 32;

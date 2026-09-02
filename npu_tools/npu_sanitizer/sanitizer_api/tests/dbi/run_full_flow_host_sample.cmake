@@ -28,14 +28,13 @@ foreach(tool IN ITEMS bisheng bisheng-tune ld.lld llvm-objdump)
   file(RENAME "${tool_bin}/${fake_tool_name}" "${tool_bin}/${tool}")
 endforeach()
 
-file(WRITE "${TEST_ROOT}/input.o" "host-full-flow-kernel\n")
 file(WRITE "${TEST_ROOT}/commands.log" "")
 
 execute_process(
   COMMAND "${CMAKE_COMMAND}" -E env
     "DBI_FAKE_LOG=${TEST_ROOT}/commands.log"
     "NPU_CHECK_TRACE_RECORDS_PER_BLOCK=2"
-    "${SAMPLE}" "${TEST_ROOT}/input.o"
+    "${SAMPLE}"
   RESULT_VARIABLE sample_result
   OUTPUT_VARIABLE sample_stdout
   ERROR_VARIABLE sample_stderr
@@ -69,6 +68,7 @@ set(required_tools
   "llvm-objdump <--syms>"
   "<-execute-probe>"
   "bisheng-tune <--action=instru-probe>"
+  "<--tune-argsize=16>"
 )
 foreach(fragment IN LISTS required_tools)
   string(FIND "${tool_log}" "${fragment}" position)
@@ -76,10 +76,5 @@ foreach(fragment IN LISTS required_tools)
     message(FATAL_ERROR "missing DBI tool invocation '${fragment}':\n${tool_log}")
   endif()
 endforeach()
-
-string(FIND "${tool_log}" "--tune-argsize=" tune_argsize_position)
-if(tune_argsize_position EQUAL -1)
-  message(FATAL_ERROR "DBI tool invocation omitted tune argument size:\n${tool_log}")
-endif()
 
 message(STATUS "host full-flow sample output and DBI commands verified")

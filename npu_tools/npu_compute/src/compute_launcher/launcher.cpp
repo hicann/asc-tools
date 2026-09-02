@@ -19,7 +19,8 @@
 #include <cerrno>
 #include <cstdlib>
 #include <cstring>
-#include <filesystem>
+#include <boost/filesystem.hpp>
+#include <boost/system/error_code.hpp>
 #include <string>
 #include <vector>
 
@@ -129,7 +130,7 @@ bool RecordNestedCollection(std::string* error)
         return Fail("nested collection detection failed: collection data directory is not set", error);
     }
 
-    const std::filesystem::path marker_path = std::filesystem::path(collection_directory) / kNestedCollectionMarker;
+    const boost::filesystem::path marker_path = boost::filesystem::path(collection_directory) / kNestedCollectionMarker;
     FileDescriptor marker(
         ::open(marker_path.c_str(), O_WRONLY | O_CREAT | O_CLOEXEC | O_NOFOLLOW | O_NONBLOCK, S_IRUSR | S_IWUSR));
     if (marker.Get() < 0) {
@@ -139,10 +140,10 @@ bool RecordNestedCollection(std::string* error)
 }
 
 bool ConsumeNestedCollectionMarker(
-    const std::filesystem::path& collection_directory, bool* detected, std::string* error)
+    const boost::filesystem::path& collection_directory, bool* detected, std::string* error)
 {
     *detected = false;
-    const std::filesystem::path marker_path = collection_directory / kNestedCollectionMarker;
+    const boost::filesystem::path marker_path = collection_directory / kNestedCollectionMarker;
     if (::unlink(marker_path.c_str()) != 0) {
         if (errno == ENOENT) {
             return true;
@@ -217,8 +218,8 @@ int LaunchTarget(
         return kReportErrorExitCode;
     }
 
-    std::error_code current_directory_error;
-    const std::filesystem::path current_directory = std::filesystem::current_path(current_directory_error);
+    boost::system::error_code current_directory_error;
+    const boost::filesystem::path current_directory = boost::filesystem::current_path(current_directory_error);
     if (current_directory_error) {
         SetStageError("get current directory failed", current_directory_error.message(), error);
         return kInternalErrorExitCode;

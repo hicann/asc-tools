@@ -11,6 +11,7 @@
 
 #include <iostream>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -59,16 +60,48 @@ bool RendersControlledMte2Definition()
     return true;
 }
 
-bool RendersCanonicalVectorFlagArguments()
+std::string_view FindProbeDefinition(std::string_view source, std::string_view symbol)
+{
+    const std::size_t symbolPosition = source.find(symbol);
+    if (symbolPosition == std::string_view::npos) {
+        return {};
+    }
+    const std::size_t definitionPosition = source.rfind("// probe-definition:", symbolPosition);
+    if (definitionPosition == std::string_view::npos) {
+        return {};
+    }
+    const std::size_t nextDefinition = source.find("// probe-definition:", symbolPosition);
+    return source.substr(definitionPosition, nextDefinition - definitionPosition);
+}
+
+bool RendersNormalizedVectorSyncDefinitions()
 {
     const GeneratedProbeSource generated = GenerateProbeSource("dav-3510", ProbeGroup::Sync);
     CHECK(generated.success);
-    CHECK(
-        generated.source.find("static_cast<uint64_t>(PIPE_V), static_cast<uint64_t>(dstPipe), eventId, 0UL, 0UL") !=
-        std::string::npos);
-    CHECK(
-        generated.source.find("static_cast<uint64_t>(srcPipe), static_cast<uint64_t>(PIPE_V), eventId, 0UL, 0UL") !=
-        std::string::npos);
+
+    const std::vector<std::pair<std::string_view, std::string_view>> expected{
+        {"__sanitizer_report_set_flag_v",
+         "static_cast<uint64_t>(PIPE_V), static_cast<uint64_t>(dstPipe), eventId, 0UL, 0UL"},
+        {"__sanitizer_report_set_flagi_v",
+         "static_cast<uint64_t>(PIPE_V), static_cast<uint64_t>(dstPipe), eventId, 0UL, 0UL"},
+        {"__sanitizer_report_wait_flag_v",
+         "static_cast<uint64_t>(srcPipe), static_cast<uint64_t>(PIPE_V), eventId, 0UL, 0UL"},
+        {"__sanitizer_report_wait_flagi_v",
+         "static_cast<uint64_t>(srcPipe), static_cast<uint64_t>(PIPE_V), eventId, 0UL, 0UL"},
+        {"__sanitizer_report_get_buf_v",
+         "static_cast<uint64_t>(PIPE_V), static_cast<uint64_t>(bufId), static_cast<uint64_t>(mode), 0UL, 0UL"},
+        {"__sanitizer_report_get_bufi_v",
+         "static_cast<uint64_t>(PIPE_V), bufId, static_cast<uint64_t>(mode), 0UL, 0UL"},
+        {"__sanitizer_report_rls_buf_v",
+         "static_cast<uint64_t>(PIPE_V), static_cast<uint64_t>(bufId), static_cast<uint64_t>(mode), 0UL, 0UL"},
+        {"__sanitizer_report_rls_bufi_v",
+         "static_cast<uint64_t>(PIPE_V), bufId, static_cast<uint64_t>(mode), 0UL, 0UL"},
+    };
+    for (const auto& [symbol, arguments] : expected) {
+        const std::string_view definition = FindProbeDefinition(generated.source, symbol);
+        CHECK(!definition.empty());
+        CHECK(definition.find(arguments) != std::string_view::npos);
+    }
     return true;
 }
 
@@ -97,7 +130,7 @@ bool EmbedsPrivateProbeHeaders()
 int main()
 {
     return aclsan::GeneratesCompleteDeterministicGroupSources() && aclsan::RendersControlledMte2Definition() &&
-                   aclsan::RendersCanonicalVectorFlagArguments() && aclsan::RejectsUnsupportedRequests() &&
+                   aclsan::RendersNormalizedVectorSyncDefinitions() && aclsan::RejectsUnsupportedRequests() &&
                    aclsan::EmbedsPrivateProbeHeaders() ?
                0 :
                1;

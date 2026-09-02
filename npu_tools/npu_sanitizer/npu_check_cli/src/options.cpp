@@ -16,7 +16,8 @@
 #include <climits>
 #include <cstdlib>
 #include <cstring>
-#include <filesystem>
+#include <boost/filesystem.hpp>
+#include <boost/system/error_code.hpp>
 #include <map>
 #include <optional>
 #include <set>
@@ -54,15 +55,15 @@ std::string AbsolutePath(const std::string& path)
     if (path.empty()) {
         return {};
     }
-    std::error_code error;
-    auto absolute = std::filesystem::absolute(path, error);
+    boost::system::error_code error;
+    auto absolute = boost::filesystem::absolute(path, error);
     return error ? path : absolute.lexically_normal().string();
 }
 
-bool IsRegularFile(const std::filesystem::path& path)
+bool IsRegularFile(const boost::filesystem::path& path)
 {
-    std::error_code error;
-    return std::filesystem::is_regular_file(path, error);
+    boost::system::error_code error;
+    return boost::filesystem::is_regular_file(path, error);
 }
 
 // 注入库文件名。CLI 只负责定位它并把规范化绝对路径写进 ACL_API_INJECTION，
@@ -78,7 +79,7 @@ constexpr const char* kAscendToolkitHomeEnv = "ASCEND_TOOLKIT_HOME";
 
 // 注入库会被加载进目标进程并以目标进程的权限运行。组可写或其他人可写意味着本用户
 // 之外的人能替换它的内容，等于把任意代码执行的入口交出去，因此一律拒绝而不是警告。
-bool IsSafelyOwned(const std::filesystem::path& path, std::string& reason)
+bool IsSafelyOwned(const boost::filesystem::path& path, std::string& reason)
 {
     struct stat info {};
     if (stat(path.c_str(), &info) != 0) {
@@ -235,7 +236,7 @@ bool ParseOptions(int argc, char** argv, Options& options, std::string& error)
 
 bool ResolveLibraryPath(const std::string& requested, std::string& resolved, std::string& error)
 {
-    std::vector<std::filesystem::path> candidates;
+    std::vector<boost::filesystem::path> candidates;
     if (!requested.empty()) {
         candidates.emplace_back(requested);
     } else {
@@ -244,7 +245,7 @@ bool ResolveLibraryPath(const std::string& requested, std::string& resolved, std
         // 一、CANN 安装树。打包落地后这是正常路径。
         if (const char* toolkitHome = std::getenv(kAscendToolkitHomeEnv);
             toolkitHome != nullptr && toolkitHome[0] != '\0') {
-            const std::filesystem::path root(toolkitHome);
+            const boost::filesystem::path root(toolkitHome);
             candidates.push_back(root / "lib64" / kInjectionLibraryName);
             candidates.push_back(root / "lib" / kInjectionLibraryName);
         }
@@ -259,7 +260,7 @@ bool ResolveLibraryPath(const std::string& requested, std::string& resolved, std
         const ssize_t length = readlink("/proc/self/exe", executable.data(), PATH_MAX);
         if (length > 0 && length < PATH_MAX) {
             executable[static_cast<size_t>(length)] = '\0';
-            const auto directory = std::filesystem::path(executable.data()).parent_path();
+            const auto directory = boost::filesystem::path(executable.data()).parent_path();
             candidates.push_back(directory / kInjectionLibraryName);
             candidates.push_back(directory / ".." / "lib64" / kInjectionLibraryName);
             candidates.push_back(directory / ".." / "lib" / kInjectionLibraryName);
@@ -270,8 +271,8 @@ bool ResolveLibraryPath(const std::string& requested, std::string& resolved, std
     // 否则用户会一直去检查路径而想不到是文件模式的问题。
     std::string rejection;
     for (const auto& candidate : candidates) {
-        std::error_code filesystemError;
-        const auto canonical = std::filesystem::canonical(candidate, filesystemError);
+        boost::system::error_code filesystemError;
+        const auto canonical = boost::filesystem::canonical(candidate, filesystemError);
         if (filesystemError || !IsRegularFile(canonical)) {
             continue;
         }
@@ -290,7 +291,7 @@ bool ResolveLibraryPath(const std::string& requested, std::string& resolved, std
         return false;
     }
     error = "cannot locate " + std::string(kInjectionLibraryName) + "; searched " + std::string(kAscendToolkitHomeEnv) +
-            "/lib64, " + kAscendToolkitHomeEnv + "/lib and the directory of npu_check";
+            "/lib64, " + kAscendToolkitHomeEnv + "/lib and the directory of npu-check";
     return false;
 }
 
@@ -299,7 +300,7 @@ std::string Usage()
     // 只列对外命令行契约：--tool、--log-file、--help/-h 以及 -- 边界规则。
     // 内部验证选项（--handshake-timeout-ms、--error-exitcode）不对外承诺兼容性，
     // 不得出现在这里。
-    return "Usage: npu_check [--tool <name>]... [--log-file <path>] [--work-dir <path>]\n"
+    return "Usage: npu-check [--tool <name>]... [--log-file <path>] [--work-dir <path>]\n"
            "                 [--] <application> [args...]\n"
            "Options:\n"
            "  --tool <memcheck|synccheck>  enable a checker; repeatable and idempotent.\n"

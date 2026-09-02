@@ -32,7 +32,6 @@ public:
     void RecordBinaryUnload(uintptr_t binary) noexcept;
     void RecordBinaryFunctionLookup(uintptr_t binary, uintptr_t function) noexcept;
     void RecordLatestBinaryFunctionLookup(uintptr_t function) noexcept;
-    void MarkFunctionInstrumented(uintptr_t function, uint32_t traceArgumentOffset) noexcept;
     bool GetFunctionTraceArgumentOffset(uintptr_t function, uint32_t& traceArgumentOffset) const noexcept;
     void Reset() noexcept;
 

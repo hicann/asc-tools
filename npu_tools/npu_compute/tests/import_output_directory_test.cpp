@@ -12,7 +12,8 @@
 #include <unistd.h>
 
 #include <cstdio>
-#include <filesystem>
+#include <boost/filesystem.hpp>
+#include <boost/system/error_code.hpp>
 #include <fstream>
 #include <optional>
 #include <regex>
@@ -41,7 +42,7 @@ public:
     TempDirectory()
     {
         std::string pathTemplate =
-            (std::filesystem::temp_directory_path() / "npu-compute-import-output-test-XXXXXX").string();
+            (boost::filesystem::temp_directory_path() / "npu-compute-import-output-test-XXXXXX").string();
         pathTemplate.push_back('\0');
         char* created = ::mkdtemp(pathTemplate.data());
         if (created != nullptr) {
@@ -52,25 +53,25 @@ public:
     ~TempDirectory()
     {
         if (!path_.empty()) {
-            std::error_code error;
-            std::filesystem::remove_all(path_, error);
+            boost::system::error_code error;
+            boost::filesystem::remove_all(path_, error);
         }
     }
 
-    const std::filesystem::path& Path() const { return path_; }
+    const boost::filesystem::path& Path() const { return path_; }
 
 private:
-    std::filesystem::path path_;
+    boost::filesystem::path path_;
 };
 
 class CurrentDirectory {
 public:
-    explicit CurrentDirectory(const std::filesystem::path& path)
+    explicit CurrentDirectory(const boost::filesystem::path& path)
     {
-        std::error_code error;
-        previous_ = std::filesystem::current_path(error);
+        boost::system::error_code error;
+        previous_ = boost::filesystem::current_path(error);
         if (!error) {
-            std::filesystem::current_path(path, error);
+            boost::filesystem::current_path(path, error);
             active_ = !error;
         }
     }
@@ -78,25 +79,25 @@ public:
     ~CurrentDirectory()
     {
         if (active_) {
-            std::error_code error;
-            std::filesystem::current_path(previous_, error);
+            boost::system::error_code error;
+            boost::filesystem::current_path(previous_, error);
         }
     }
 
     bool Active() const { return active_; }
 
 private:
-    std::filesystem::path previous_;
+    boost::filesystem::path previous_;
     bool active_ = false;
 };
 
-bool MatchesFinalDirectoryName(const std::filesystem::path& path)
+bool MatchesFinalDirectoryName(const boost::filesystem::path& path)
 {
     const std::string pattern = "^npu-compute-import-[0-9]+-" + std::to_string(::getpid()) + "-[A-Za-z0-9]{6}$";
     return std::regex_match(path.filename().string(), std::regex(pattern));
 }
 
-bool MatchesTemporaryDirectoryName(const std::filesystem::path& path)
+bool MatchesTemporaryDirectoryName(const boost::filesystem::path& path)
 {
     const std::string pattern = "^\\.npu-compute-import-[0-9]+-" + std::to_string(::getpid()) + "-tmp-[A-Za-z0-9]{6}$";
     return std::regex_match(path.filename().string(), std::regex(pattern));
@@ -118,19 +119,19 @@ int TestDefaultOutputDirectory()
     CHECK(directory.TemporaryPath().parent_path() == temporary.Path());
     CHECK(MatchesFinalDirectoryName(directory.FinalPath()));
     CHECK(MatchesTemporaryDirectoryName(directory.TemporaryPath()));
-    CHECK(std::filesystem::is_directory(directory.TemporaryPath()));
-    CHECK(!std::filesystem::exists(directory.FinalPath()));
+    CHECK(boost::filesystem::is_directory(directory.TemporaryPath()));
+    CHECK(!boost::filesystem::exists(directory.FinalPath()));
     return 0;
 }
 
-bool WriteFile(const std::filesystem::path& path, const std::string& content)
+bool WriteFile(const boost::filesystem::path& path, const std::string& content)
 {
     std::ofstream output(path, std::ios::binary | std::ios::trunc);
     output.write(content.data(), static_cast<std::streamsize>(content.size()));
     return output.good();
 }
 
-std::string ReadFile(const std::filesystem::path& path)
+std::string ReadFile(const boost::filesystem::path& path)
 {
     std::ifstream input(path, std::ios::binary);
     return std::string(std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>());
@@ -142,8 +143,8 @@ int TestExistingOutputRootAndPublish()
     CHECK(!temporary.Path().empty());
     CurrentDirectory currentDirectory(temporary.Path());
     CHECK(currentDirectory.Active());
-    const std::filesystem::path outputRoot = temporary.Path() / "custom-output";
-    CHECK(std::filesystem::create_directory(outputRoot));
+    const boost::filesystem::path outputRoot = temporary.Path() / "custom-output";
+    CHECK(boost::filesystem::create_directory(outputRoot));
     CHECK(WriteFile(outputRoot / "keep.txt", "keep"));
 
     npu_compute::compute_launcher::ImportOutputDirectory directory;
@@ -159,7 +160,7 @@ int TestExistingOutputRootAndPublish()
     CHECK(directory.Publish(&error));
     CHECK(error.empty());
     CHECK(directory.TemporaryPath().empty());
-    CHECK(std::filesystem::is_directory(directory.FinalPath()));
+    CHECK(boost::filesystem::is_directory(directory.FinalPath()));
     CHECK(ReadFile(directory.FinalPath() / "marker.csv") == "name,value\npipe,1\n");
     CHECK(ReadFile(outputRoot / "keep.txt") == "keep");
     return 0;
@@ -169,8 +170,8 @@ int TestCreatesUniqueDirectoriesUnderOneRoot()
 {
     TempDirectory temporary;
     CHECK(!temporary.Path().empty());
-    const std::filesystem::path outputRoot = temporary.Path() / "output";
-    CHECK(std::filesystem::create_directory(outputRoot));
+    const boost::filesystem::path outputRoot = temporary.Path() / "output";
+    CHECK(boost::filesystem::create_directory(outputRoot));
 
     npu_compute::compute_launcher::ImportOutputDirectory first;
     npu_compute::compute_launcher::ImportOutputDirectory second;
@@ -192,30 +193,30 @@ int TestTemporaryCleanupAndPublishFailure()
 {
     TempDirectory temporary;
     CHECK(!temporary.Path().empty());
-    const std::filesystem::path outputRoot = temporary.Path() / "output";
-    CHECK(std::filesystem::create_directory(outputRoot));
-    std::filesystem::path abandoned;
+    const boost::filesystem::path outputRoot = temporary.Path() / "output";
+    CHECK(boost::filesystem::create_directory(outputRoot));
+    boost::filesystem::path abandoned;
     {
         npu_compute::compute_launcher::ImportOutputDirectory directory;
         std::string error;
         CHECK(npu_compute::compute_launcher::ImportOutputDirectory::Create(
             temporary.Path() / "input.npu-rep", std::optional<std::string>(outputRoot.string()), &directory, &error));
         abandoned = directory.TemporaryPath();
-        CHECK(std::filesystem::is_directory(abandoned));
+        CHECK(boost::filesystem::is_directory(abandoned));
     }
-    CHECK(!std::filesystem::exists(abandoned));
+    CHECK(!boost::filesystem::exists(abandoned));
 
     npu_compute::compute_launcher::ImportOutputDirectory directory;
     std::string error;
     CHECK(npu_compute::compute_launcher::ImportOutputDirectory::Create(
         temporary.Path() / "input.npu-rep", std::optional<std::string>(outputRoot.string()), &directory, &error));
-    const std::filesystem::path temporaryPath = directory.TemporaryPath();
-    const std::filesystem::path finalPath = directory.FinalPath();
-    CHECK(std::filesystem::create_directory(finalPath));
+    const boost::filesystem::path temporaryPath = directory.TemporaryPath();
+    const boost::filesystem::path finalPath = directory.FinalPath();
+    CHECK(boost::filesystem::create_directory(finalPath));
     CHECK(WriteFile(finalPath / "keep.txt", "keep"));
     CHECK(!directory.Publish(&error));
     CHECK(error.find("publish") != std::string::npos);
-    CHECK(std::filesystem::is_directory(temporaryPath));
+    CHECK(boost::filesystem::is_directory(temporaryPath));
     CHECK(ReadFile(finalPath / "keep.txt") == "keep");
     return 0;
 }
@@ -235,7 +236,7 @@ int TestInvalidTargets()
     CHECK(!npu_compute::compute_launcher::ImportOutputDirectory::Create(
         "/input/report.npu-rep", std::optional<std::string>("missing-output-root"), &directory, &error));
     CHECK(error.find("does not exist") != std::string::npos);
-    const std::filesystem::path regularFile = temporary.Path() / "regular-file";
+    const boost::filesystem::path regularFile = temporary.Path() / "regular-file";
     CHECK(WriteFile(regularFile, "keep"));
     CHECK(!npu_compute::compute_launcher::ImportOutputDirectory::Create(
         "/input/report.npu-rep", std::optional<std::string>(regularFile.string()), &directory, &error));

@@ -26,14 +26,9 @@ add_executable(npu_check_cli
 )
 target_compile_features(npu_check_cli PRIVATE cxx_std_17)
 target_include_directories(npu_check_cli PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
-target_link_libraries(npu_check_cli PRIVATE npu_check_common Threads::Threads)
+target_link_libraries(npu_check_cli PRIVATE npu_check_common Threads::Threads Boost::filesystem)
 target_compile_options(npu_check_cli PRIVATE -Wall -Wextra -Wpedantic)
-set_target_properties(npu_check_cli PROPERTIES OUTPUT_NAME npu_check)
-
-install(TARGETS npu_check_cli
-  RUNTIME DESTINATION bin ${INSTALL_OPTIONAL}
-  COMPONENT asc-tools
-)
+set_target_properties(npu_check_cli PROPERTIES OUTPUT_NAME npu-check)
 
 if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR OR ENABLE_TEST)
   enable_testing()
@@ -50,6 +45,6 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR OR ENABLE_TEST)
   target_compile_features(npu_check_cli_unit_tests PRIVATE cxx_std_17)
   target_compile_definitions(npu_check_cli_unit_tests PRIVATE _GLIBCXX_USE_CXX11_ABI=0)
   target_include_directories(npu_check_cli_unit_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
-  target_link_libraries(npu_check_cli_unit_tests PRIVATE npu_check_common GTest::gtest)
+  target_link_libraries(npu_check_cli_unit_tests PRIVATE npu_check_common GTest::gtest Boost::filesystem)
   add_test(NAME npu_check_cli_unit_tests COMMAND npu_check_cli_unit_tests)
 endif()

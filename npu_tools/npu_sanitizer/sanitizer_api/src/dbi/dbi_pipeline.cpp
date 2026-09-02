@@ -18,7 +18,8 @@
 #include <cerrno>
 #include <cstring>
 #include <cstdlib>
-#include <filesystem>
+#include <boost/filesystem.hpp>
+#include <boost/system/error_code.hpp>
 #include <fstream>
 #include <iomanip>
 #include <iterator>
@@ -51,7 +52,7 @@ public:
         }
     }
 
-    bool Acquire(const std::filesystem::path& path, std::string& diagnostic)
+    bool Acquire(const boost::filesystem::path& path, std::string& diagnostic)
     {
         descriptor_ = open(path.c_str(), O_CREAT | O_RDWR | O_CLOEXEC | O_NOFOLLOW, 0600);
         if (descriptor_ < 0) {
@@ -73,33 +74,34 @@ private:
 
 class TemporaryDirectory {
 public:
-    explicit TemporaryDirectory(std::filesystem::path path, bool keep = false) : path_(std::move(path)), released_(keep)
+    explicit TemporaryDirectory(boost::filesystem::path path, bool keep = false)
+        : path_(std::move(path)), released_(keep)
     {}
     ~TemporaryDirectory()
     {
         if (released_) {
             return;
         }
-        std::error_code error;
-        std::filesystem::remove_all(path_, error);
+        boost::system::error_code error;
+        boost::filesystem::remove_all(path_, error);
     }
     TemporaryDirectory(const TemporaryDirectory&) = delete;
     TemporaryDirectory& operator=(const TemporaryDirectory&) = delete;
     void Release() { released_ = true; }
 
 private:
-    std::filesystem::path path_;
+    boost::filesystem::path path_;
     bool released_ = false;
 };
 
 class TemporaryFile {
 public:
-    explicit TemporaryFile(std::filesystem::path path) : path_(std::move(path)) {}
+    explicit TemporaryFile(boost::filesystem::path path) : path_(std::move(path)) {}
     ~TemporaryFile()
     {
         if (!released_) {
-            std::error_code error;
-            std::filesystem::remove(path_, error);
+            boost::system::error_code error;
+            boost::filesystem::remove(path_, error);
         }
     }
     TemporaryFile(const TemporaryFile&) = delete;
@@ -107,15 +109,15 @@ public:
     void Release() { released_ = true; }
 
 private:
-    std::filesystem::path path_;
+    boost::filesystem::path path_;
     bool released_ = false;
 };
 
-std::string FindInDirectory(const std::filesystem::path& directory, const char* name)
+std::string FindInDirectory(const boost::filesystem::path& directory, const char* name)
 {
     const auto candidate = directory / name;
-    std::error_code error;
-    return std::filesystem::is_regular_file(candidate, error) ? candidate.string() : std::string{};
+    boost::system::error_code error;
+    return boost::filesystem::is_regular_file(candidate, error) ? candidate.string() : std::string{};
 }
 
 uint64_t HashText(uint64_t hash, const std::string& text)
@@ -129,11 +131,11 @@ uint64_t HashText(uint64_t hash, const std::string& text)
     return hash * kPrime;
 }
 
-bool IsNonEmptyFile(const std::filesystem::path& path)
+bool IsNonEmptyFile(const boost::filesystem::path& path)
 {
-    std::error_code error;
-    const auto status = std::filesystem::symlink_status(path, error);
-    return !error && std::filesystem::is_regular_file(status) && std::filesystem::file_size(path, error) != 0;
+    boost::system::error_code error;
+    const auto status = boost::filesystem::symlink_status(path, error);
+    return !error && boost::filesystem::is_regular_file(status) && boost::filesystem::file_size(path, error) != 0;
 }
 
 bool IsExecutableFile(const std::string& path)
@@ -149,40 +151,40 @@ bool IsExecutableFile(const std::string& path)
     return access(path.c_str(), X_OK) == 0;
 }
 
-std::string FileIdentity(const std::filesystem::path& path)
+std::string FileIdentity(const boost::filesystem::path& path)
 {
-    std::error_code error;
-    const auto canonical = std::filesystem::weakly_canonical(path, error);
+    boost::system::error_code error;
+    const auto canonical = boost::filesystem::weakly_canonical(path, error);
     if (error) {
         return path.string();
     }
-    const auto size = std::filesystem::file_size(canonical, error);
+    const auto size = boost::filesystem::file_size(canonical, error);
     if (error) {
         return canonical.string();
     }
-    const auto modified = std::filesystem::last_write_time(canonical, error);
+    const auto modified = boost::filesystem::last_write_time(canonical, error);
     if (error) {
         return canonical.string() + ":" + std::to_string(size);
     }
-    return canonical.string() + ":" + std::to_string(size) + ":" + std::to_string(modified.time_since_epoch().count());
+    return canonical.string() + ":" + std::to_string(size) + ":" + std::to_string(modified);
 }
 
-std::filesystem::path ToolchainRoot(const std::string& bisheng)
+boost::filesystem::path ToolchainRoot(const std::string& bisheng)
 {
-    std::filesystem::path root = std::filesystem::path(bisheng).parent_path();
+    boost::filesystem::path root = boost::filesystem::path(bisheng).parent_path();
     for (int depth = 0; depth < 3 && !root.empty(); ++depth) {
         root = root.parent_path();
     }
     return root;
 }
 
-std::filesystem::path AscendcDevkitRoot(const std::string& bisheng)
+boost::filesystem::path AscendcDevkitRoot(const std::string& bisheng)
 {
     const auto root = ToolchainRoot(bisheng);
     for (const char* platform : {"x86_64-linux", "aarch64-linux"}) {
         const auto candidate = root / platform;
-        std::error_code error;
-        if (std::filesystem::is_regular_file(candidate / "asc/include/kernel_operator.h", error)) {
+        boost::system::error_code error;
+        if (boost::filesystem::is_regular_file(candidate / "asc/include/kernel_operator.h", error)) {
             return candidate;
         }
     }
@@ -193,7 +195,7 @@ std::filesystem::path AscendcDevkitRoot(const std::string& bisheng)
 #endif
 }
 
-std::vector<std::string> ProbeCompileFlags(const std::string& arch, const std::filesystem::path& devkit)
+std::vector<std::string> ProbeCompileFlags(const std::string& arch, const boost::filesystem::path& devkit)
 {
     std::vector<std::string> flags{
         "-xcce",
@@ -239,16 +241,16 @@ std::string TextIdentity(const std::vector<std::string>& values)
     return output.str();
 }
 
-bool EnsurePrivateDirectory(const std::filesystem::path& path, std::string& diagnostic)
+bool EnsurePrivateDirectory(const boost::filesystem::path& path, std::string& diagnostic)
 {
-    std::error_code error;
-    std::filesystem::create_directories(path, error);
+    boost::system::error_code error;
+    boost::filesystem::create_directories(path, error);
     if (error) {
         diagnostic = "cannot create private directory " + path.string() + ": " + error.message();
         return false;
     }
-    const auto status = std::filesystem::symlink_status(path, error);
-    if (error || std::filesystem::is_symlink(status) || !std::filesystem::is_directory(status)) {
+    const auto status = boost::filesystem::symlink_status(path, error);
+    if (error || boost::filesystem::is_symlink(status) || !boost::filesystem::is_directory(status)) {
         diagnostic = "private directory is not a real directory: " + path.string();
         return false;
     }
@@ -264,7 +266,7 @@ bool EnsurePrivateDirectory(const std::filesystem::path& path, std::string& diag
     return true;
 }
 
-bool WriteExclusiveFile(const std::filesystem::path& path, const void* data, std::size_t size)
+bool WriteExclusiveFile(const boost::filesystem::path& path, const void* data, std::size_t size)
 {
     const int descriptor = open(path.c_str(), O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC | O_NOFOLLOW, 0600);
     if (descriptor < 0) {
@@ -286,12 +288,12 @@ bool WriteExclusiveFile(const std::filesystem::path& path, const void* data, std
     return close(descriptor) == 0;
 }
 
-bool WriteExclusiveFile(const std::filesystem::path& path, const std::string& content)
+bool WriteExclusiveFile(const boost::filesystem::path& path, const std::string& content)
 {
     return WriteExclusiveFile(path, content.data(), content.size());
 }
 
-bool WriteReplaceFile(const std::filesystem::path& path, const std::string& content)
+bool WriteReplaceFile(const boost::filesystem::path& path, const std::string& content)
 {
     const auto temporary =
         path.parent_path() / (".dbi-write-" + std::to_string(static_cast<unsigned long long>(getpid())) + "-" +
@@ -300,8 +302,8 @@ bool WriteReplaceFile(const std::filesystem::path& path, const std::string& cont
     if (!WriteExclusiveFile(temporary, content)) {
         return false;
     }
-    std::error_code error;
-    std::filesystem::rename(temporary, path, error);
+    boost::system::error_code error;
+    boost::filesystem::rename(temporary, path, error);
     if (error) {
         return false;
     }
@@ -309,7 +311,7 @@ bool WriteReplaceFile(const std::filesystem::path& path, const std::string& cont
     return true;
 }
 
-std::string ReadFile(const std::filesystem::path& path)
+std::string ReadFile(const boost::filesystem::path& path)
 {
     if (!IsNonEmptyFile(path)) {
         return {};
@@ -318,7 +320,7 @@ std::string ReadFile(const std::filesystem::path& path)
     return input ? std::string(std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>()) : std::string{};
 }
 
-std::string FileDigest(const std::filesystem::path& path)
+std::string FileDigest(const boost::filesystem::path& path)
 {
     const std::string content = ReadFile(path);
     if (content.empty()) {
@@ -350,7 +352,7 @@ std::string GroupIdentity(const std::vector<ProbeGroup>& groups)
 }
 
 std::string ArtifactManifest(
-    const std::filesystem::path& probeObject, const std::filesystem::path& ctrlBin, const std::string& arch,
+    const boost::filesystem::path& probeObject, const boost::filesystem::path& ctrlBin, const std::string& arch,
     const std::vector<ProbeGroup>& groups, const std::string& objectIdentity)
 {
     const std::string probeDigest = FileDigest(probeObject);
@@ -365,12 +367,12 @@ std::string ArtifactManifest(
 }
 
 bool IsValidCachedArtifact(
-    const std::filesystem::path& directory, const std::string& arch, const std::vector<ProbeGroup>& groups,
+    const boost::filesystem::path& directory, const std::string& arch, const std::vector<ProbeGroup>& groups,
     const std::string& objectIdentity)
 {
-    std::error_code error;
-    const auto status = std::filesystem::symlink_status(directory, error);
-    if (error || std::filesystem::is_symlink(status) || !std::filesystem::is_directory(status)) {
+    boost::system::error_code error;
+    const auto status = boost::filesystem::symlink_status(directory, error);
+    if (error || boost::filesystem::is_symlink(status) || !boost::filesystem::is_directory(status)) {
         return false;
     }
     const auto probeObject = directory / "probe.o";
@@ -443,12 +445,12 @@ bool HasTextSymbol(const std::string& text, const std::string& property, const s
 }
 
 struct GroupArtifact {
-    std::filesystem::path object;
+    boost::filesystem::path object;
     std::string identity;
 };
 
 std::string GroupManifest(
-    const std::filesystem::path& object, const std::string& arch, ProbeGroup group,
+    const boost::filesystem::path& object, const std::string& arch, ProbeGroup group,
     const GeneratedProbeSource& generated, const std::string& compilerIdentity)
 {
     const std::string digest = FileDigest(object);
@@ -463,12 +465,12 @@ std::string GroupManifest(
 }
 
 bool IsValidGroupArtifact(
-    const std::filesystem::path& directory, const std::string& arch, ProbeGroup group,
+    const boost::filesystem::path& directory, const std::string& arch, ProbeGroup group,
     const GeneratedProbeSource& generated, const std::string& compilerIdentity)
 {
-    std::error_code error;
-    const auto status = std::filesystem::symlink_status(directory, error);
-    if (error || std::filesystem::is_symlink(status) || !std::filesystem::is_directory(status)) {
+    boost::system::error_code error;
+    const auto status = boost::filesystem::symlink_status(directory, error);
+    if (error || boost::filesystem::is_symlink(status) || !boost::filesystem::is_directory(status)) {
         return false;
     }
     const auto object = directory / "group.o";
@@ -477,13 +479,13 @@ bool IsValidGroupArtifact(
 }
 
 bool ReplaceDirectory(
-    const std::filesystem::path& staging, const std::filesystem::path& destination, DbiResult& result,
+    const boost::filesystem::path& staging, const boost::filesystem::path& destination, DbiResult& result,
     const std::string& stage)
 {
-    std::error_code error;
-    const auto oldStatus = std::filesystem::symlink_status(destination, error);
-    if (!error && std::filesystem::exists(oldStatus)) {
-        std::filesystem::remove_all(destination, error);
+    boost::system::error_code error;
+    const auto oldStatus = boost::filesystem::symlink_status(destination, error);
+    if (!error && boost::filesystem::exists(oldStatus)) {
+        boost::filesystem::remove_all(destination, error);
         if (error) {
             result.stage = stage;
             result.diagnostic = "cannot replace invalid artifact: " + error.message();
@@ -491,7 +493,7 @@ bool ReplaceDirectory(
         }
     }
     error.clear();
-    std::filesystem::rename(staging, destination, error);
+    boost::filesystem::rename(staging, destination, error);
     if (error) {
         result.stage = stage;
         result.diagnostic = "cannot publish artifact: " + error.message();
@@ -501,7 +503,7 @@ bool ReplaceDirectory(
 }
 
 bool GetOrBuildGroupArtifact(
-    const DbiRequest& request, const ToolchainPaths& tools, const std::filesystem::path& groupsRoot, ProbeGroup group,
+    const DbiRequest& request, const ToolchainPaths& tools, const boost::filesystem::path& groupsRoot, ProbeGroup group,
     DbiResult& result, GroupArtifact& artifact)
 {
     const GeneratedProbeSource generated = GenerateProbeSource(request.arch, group);
@@ -526,8 +528,8 @@ bool GetOrBuildGroupArtifact(
         const std::string buildId = std::to_string(static_cast<unsigned long long>(getpid())) + "-" +
                                     std::to_string(g_cacheBuildId.fetch_add(1));
         const auto staging = groupsRoot / (".build-" + cacheKey + "-" + buildId);
-        std::error_code error;
-        if (!std::filesystem::create_directory(staging, error) || error ||
+        boost::system::error_code error;
+        if (!boost::filesystem::create_directory(staging, error) || error ||
             !EnsurePrivateDirectory(staging, result.diagnostic)) {
             result.stage = "group-cache-directory";
             if (result.diagnostic.empty()) {
@@ -630,7 +632,7 @@ ToolchainPaths ResolveToolchain(const std::string& cannRoot)
     if (cannRoot.empty()) {
         return {};
     }
-    const auto directory = std::filesystem::path(cannRoot) / "tools/bisheng_compiler/bin";
+    const auto directory = boost::filesystem::path(cannRoot) / "tools/bisheng_compiler/bin";
     return {
         FindInDirectory(directory, kToolNames[0]), FindInDirectory(directory, kToolNames[1]),
         FindInDirectory(directory, kToolNames[2]), FindInDirectory(directory, kToolNames[3])};
@@ -641,9 +643,9 @@ std::string CannRootFromRuntimeLibrary(const std::string& runtimeLibrary)
     if (runtimeLibrary.empty()) {
         return {};
     }
-    std::error_code error;
-    const auto library = std::filesystem::weakly_canonical(runtimeLibrary, error);
-    if (error || !std::filesystem::is_regular_file(library, error)) {
+    boost::system::error_code error;
+    const auto library = boost::filesystem::weakly_canonical(runtimeLibrary, error);
+    if (error || !boost::filesystem::is_regular_file(library, error)) {
         return {};
     }
     auto candidate = library.parent_path();
@@ -651,7 +653,7 @@ std::string CannRootFromRuntimeLibrary(const std::string& runtimeLibrary)
         const auto tools = candidate / "tools/bisheng_compiler/bin";
         bool complete = true;
         for (const char* name : kToolNames) {
-            if (!std::filesystem::is_regular_file(tools / name, error)) {
+            if (!boost::filesystem::is_regular_file(tools / name, error)) {
                 complete = false;
                 break;
             }
@@ -709,8 +711,8 @@ DbiResult RunDbiPipeline(const DbiRequest& request)
         return result;
     }
     // 准备本次流水线使用的工作目录和跨请求复用的缓存目录。
-    std::error_code error;
-    std::filesystem::create_directories(request.workDirectory, error);
+    boost::system::error_code error;
+    boost::filesystem::create_directories(request.workDirectory, error);
     if (error) {
         result.stage = "work-directory";
         result.diagnostic = error.message();
@@ -720,8 +722,8 @@ DbiResult RunDbiPipeline(const DbiRequest& request)
         result.stage = "cache-directory";
         return result;
     }
-    const auto groupsRoot = std::filesystem::path(request.cacheDirectory) / "groups";
-    const auto aggregatesRoot = std::filesystem::path(request.cacheDirectory) / "aggregates";
+    const auto groupsRoot = boost::filesystem::path(request.cacheDirectory) / "groups";
+    const auto aggregatesRoot = boost::filesystem::path(request.cacheDirectory) / "aggregates";
     if (!EnsurePrivateDirectory(groupsRoot, result.diagnostic) ||
         !EnsurePrivateDirectory(aggregatesRoot, result.diagnostic)) {
         result.stage = "cache-directory";
@@ -758,7 +760,7 @@ DbiResult RunDbiPipeline(const DbiRequest& request)
                                     std::to_string(g_cacheBuildId.fetch_add(1));
         const auto stagingDirectory = aggregatesRoot / (".build-" + cacheKey + "-" + buildId);
         error.clear();
-        if (!std::filesystem::create_directory(stagingDirectory, error) || error ||
+        if (!boost::filesystem::create_directory(stagingDirectory, error) || error ||
             !EnsurePrivateDirectory(stagingDirectory, result.diagnostic)) {
             result.stage = "cache-directory";
             if (result.diagnostic.empty()) {
@@ -825,7 +827,7 @@ DbiResult RunDbiPipeline(const DbiRequest& request)
         return result;
     }
     // 生成符号排序文件，确保链接后原始内核正文位于探针入口之前。
-    const auto orderingFile = std::filesystem::path(request.workDirectory) / "symbol_ordering.txt";
+    const auto orderingFile = boost::filesystem::path(request.workDirectory) / "symbol_ordering.txt";
     if (!WriteReplaceFile(orderingFile, kernelSymbol + "\n" + probeSymbol)) {
         result.stage = "symbol-ordering";
         result.diagnostic = "cannot write " + orderingFile.string();
@@ -833,9 +835,9 @@ DbiResult RunDbiPipeline(const DbiRequest& request)
     }
     // 按指定符号顺序将 probe.o 与原始内核链接，生成待插桩的中间内核对象。
     const auto requestBuildId = std::to_string(g_cacheBuildId.fetch_add(1));
-    const auto mergedKernel = std::filesystem::path(request.workDirectory) / "kernel_with_probe.o";
+    const auto mergedKernel = boost::filesystem::path(request.workDirectory) / "kernel_with_probe.o";
     const auto stagedMergedKernel =
-        std::filesystem::path(request.workDirectory) / (".kernel_with_probe-" + requestBuildId);
+        boost::filesystem::path(request.workDirectory) / (".kernel_with_probe-" + requestBuildId);
     TemporaryFile mergedCleanup(stagedMergedKernel);
     const std::vector<std::string> mergeArguments{
         tools.ldLld,
@@ -860,7 +862,7 @@ DbiResult RunDbiPipeline(const DbiRequest& request)
         }
         return result;
     }
-    std::filesystem::rename(stagedMergedKernel, mergedKernel, error);
+    boost::filesystem::rename(stagedMergedKernel, mergedKernel, error);
     if (error) {
         result.stage = "publish-kernel";
         result.diagnostic = "cannot publish " + mergedKernel.string() + ": " + error.message();
@@ -871,7 +873,7 @@ DbiResult RunDbiPipeline(const DbiRequest& request)
     // 使用 bisheng-tune 和 ctrl.bin 对合并后的内核执行 DBI 插桩。
     // 先输出到目标文件的临时同级文件，避免工具中途失败时暴露不完整的内核。
     const auto stagedOutput =
-        std::filesystem::path(request.outputKernel).parent_path() /
+        boost::filesystem::path(request.outputKernel).parent_path() /
         (".dbi-patched-" + std::to_string(static_cast<unsigned long long>(getpid())) + "-" + requestBuildId);
     TemporaryFile outputCleanup(stagedOutput);
     std::vector<std::string> tuneArguments{
@@ -891,7 +893,7 @@ DbiResult RunDbiPipeline(const DbiRequest& request)
         return result;
     }
     // 插桩成功后原子发布最终内核，并填写流水线成功结果。
-    std::filesystem::rename(stagedOutput, request.outputKernel, error);
+    boost::filesystem::rename(stagedOutput, request.outputKernel, error);
     if (error) {
         result.stage = "publish-kernel";
         result.diagnostic = "cannot publish " + request.outputKernel + ": " + error.message();

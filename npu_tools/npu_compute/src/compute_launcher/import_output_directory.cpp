@@ -14,6 +14,9 @@
 #include <sys/syscall.h>
 #include <unistd.h>
 
+#include <boost/filesystem.hpp>
+#include <boost/system/error_code.hpp>
+
 #include <cerrno>
 #include <chrono>
 #include <cstddef>
@@ -44,12 +47,12 @@ bool FailErrno(const std::string& message, std::string* error)
     return Fail(message + ": " + std::error_code(errno, std::generic_category()).message(), error);
 }
 
-bool ReadStatus(const std::filesystem::path& path, std::filesystem::file_status* status, std::string* error)
+bool ReadStatus(const boost::filesystem::path& path, boost::filesystem::file_status* status, std::string* error)
 {
-    std::error_code statusError;
-    *status = std::filesystem::symlink_status(path, statusError);
-    if (statusError == std::errc::no_such_file_or_directory) {
-        *status = std::filesystem::file_status(std::filesystem::file_type::not_found);
+    boost::system::error_code statusError;
+    *status = boost::filesystem::symlink_status(path, statusError);
+    if (statusError == boost::system::errc::no_such_file_or_directory) {
+        *status = boost::filesystem::file_status(boost::filesystem::file_not_found);
         return true;
     }
     if (statusError) {
@@ -58,7 +61,8 @@ bool ReadStatus(const std::filesystem::path& path, std::filesystem::file_status*
     return true;
 }
 
-std::filesystem::path ResolvePath(const std::filesystem::path& path, const std::filesystem::path& currentDirectory)
+boost::filesystem::path ResolvePath(
+    const boost::filesystem::path& path, const boost::filesystem::path& currentDirectory)
 {
     if (path.is_absolute()) {
         return path.lexically_normal();
@@ -79,7 +83,7 @@ bool RemoveSuffix(std::string* name)
     return false;
 }
 
-bool ValidateInputName(const std::filesystem::path& inputRep, std::string* error)
+bool ValidateInputName(const boost::filesystem::path& inputRep, std::string* error)
 {
     std::string name = inputRep.filename().string();
     if (!RemoveSuffix(&name)) {
@@ -89,15 +93,15 @@ bool ValidateInputName(const std::filesystem::path& inputRep, std::string* error
 }
 
 bool ResolveOutputRoot(
-    const std::filesystem::path& inputRep, const std::optional<std::string>& exportPath,
-    std::filesystem::path* outputRoot, std::string* error)
+    const boost::filesystem::path& inputRep, const std::optional<std::string>& exportPath,
+    boost::filesystem::path* outputRoot, std::string* error)
 {
     if (!ValidateInputName(inputRep, error)) {
         return false;
     }
 
-    std::error_code currentPathError;
-    const std::filesystem::path currentDirectory = std::filesystem::current_path(currentPathError);
+    boost::system::error_code currentPathError;
+    const boost::filesystem::path currentDirectory = boost::filesystem::current_path(currentPathError);
     if (currentPathError) {
         return Fail("get current directory failed: " + currentPathError.message(), error);
     }
@@ -111,22 +115,22 @@ bool ResolveOutputRoot(
         *outputRoot = currentDirectory;
     }
 
-    std::filesystem::file_status outputRootStatus;
+    boost::filesystem::file_status outputRootStatus;
     if (!ReadStatus(*outputRoot, &outputRootStatus, error)) {
         return false;
     }
-    if (!std::filesystem::exists(outputRootStatus)) {
+    if (!boost::filesystem::exists(outputRootStatus)) {
         return Fail("import output root does not exist: " + outputRoot->string(), error);
     }
-    if (!std::filesystem::is_directory(outputRootStatus)) {
+    if (!boost::filesystem::is_directory(outputRootStatus)) {
         return Fail("import output root is not a directory: " + outputRoot->string(), error);
     }
     return true;
 }
 
 bool CreateTemporaryDirectory(
-    const std::filesystem::path& outputRoot, std::filesystem::path* temporaryPath, std::filesystem::path* finalPath,
-    std::string* error)
+    const boost::filesystem::path& outputRoot, boost::filesystem::path* temporaryPath,
+    boost::filesystem::path* finalPath, std::string* error)
 {
     const auto milliseconds =
         std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch());
@@ -144,24 +148,24 @@ bool CreateTemporaryDirectory(
             return FailErrno("create import temporary directory failed", error);
         }
 
-        const std::filesystem::path createdPath = created;
+        const boost::filesystem::path createdPath = created;
         const std::string temporaryName = createdPath.filename().string();
         const std::string randomSuffix = temporaryName.substr(temporaryName.size() - kMkdtempRandomLength);
-        const std::filesystem::path candidateFinalPath = outputRoot / (namePrefix + randomSuffix);
-        std::filesystem::file_status finalStatus;
+        const boost::filesystem::path candidateFinalPath = outputRoot / (namePrefix + randomSuffix);
+        boost::filesystem::file_status finalStatus;
         if (!ReadStatus(candidateFinalPath, &finalStatus, error)) {
-            std::error_code removeError;
-            std::filesystem::remove(createdPath, removeError);
+            boost::system::error_code removeError;
+            boost::filesystem::remove(createdPath, removeError);
             return false;
         }
-        if (!std::filesystem::exists(finalStatus)) {
+        if (!boost::filesystem::exists(finalStatus)) {
             *temporaryPath = createdPath;
             *finalPath = candidateFinalPath;
             return true;
         }
 
-        std::error_code removeError;
-        if (!std::filesystem::remove(createdPath, removeError)) {
+        boost::system::error_code removeError;
+        if (!boost::filesystem::remove(createdPath, removeError)) {
             return Fail(
                 "remove colliding import temporary directory failed: " + createdPath.string() + ": " +
                     removeError.message(),
@@ -171,7 +175,7 @@ bool CreateTemporaryDirectory(
     return Fail("unable to generate a unique import output directory after 128 attempts", error);
 }
 
-bool SyncDirectory(const std::filesystem::path& directory, std::string* error)
+bool SyncDirectory(const boost::filesystem::path& directory, std::string* error)
 {
     const int descriptor = ::open(directory.c_str(), O_RDONLY | O_DIRECTORY | O_CLOEXEC | O_NOFOLLOW);
     if (descriptor < 0) {
@@ -197,7 +201,7 @@ bool SyncDirectory(const std::filesystem::path& directory, std::string* error)
 ImportOutputDirectory::~ImportOutputDirectory() { CleanupTemporaryDirectory(); }
 
 bool ImportOutputDirectory::Create(
-    const std::filesystem::path& inputRep, const std::optional<std::string>& exportPath,
+    const boost::filesystem::path& inputRep, const std::optional<std::string>& exportPath,
     ImportOutputDirectory* directory, std::string* error)
 {
     if (error != nullptr) {
@@ -209,7 +213,7 @@ bool ImportOutputDirectory::Create(
     directory->CleanupTemporaryDirectory();
     directory->finalPath_.clear();
 
-    std::filesystem::path outputRoot;
+    boost::filesystem::path outputRoot;
     if (!ResolveOutputRoot(inputRep, exportPath, &outputRoot, error)) {
         return false;
     }
@@ -220,9 +224,9 @@ bool ImportOutputDirectory::Create(
     return true;
 }
 
-const std::filesystem::path& ImportOutputDirectory::TemporaryPath() const { return temporaryPath_; }
+const boost::filesystem::path& ImportOutputDirectory::TemporaryPath() const { return temporaryPath_; }
 
-const std::filesystem::path& ImportOutputDirectory::FinalPath() const { return finalPath_; }
+const boost::filesystem::path& ImportOutputDirectory::FinalPath() const { return finalPath_; }
 
 bool ImportOutputDirectory::Publish(std::string* error)
 {
@@ -240,8 +244,8 @@ bool ImportOutputDirectory::Publish(std::string* error)
     }
     temporaryPath_.clear();
     if (!SyncDirectory(finalPath_.parent_path(), error)) {
-        std::error_code removeError;
-        std::filesystem::remove_all(finalPath_, removeError);
+        boost::system::error_code removeError;
+        boost::filesystem::remove_all(finalPath_, removeError);
         return false;
     }
     return true;
@@ -250,8 +254,8 @@ bool ImportOutputDirectory::Publish(std::string* error)
 void ImportOutputDirectory::CleanupTemporaryDirectory() noexcept
 {
     if (!temporaryPath_.empty()) {
-        std::error_code error;
-        std::filesystem::remove_all(temporaryPath_, error);
+        boost::system::error_code error;
+        boost::filesystem::remove_all(temporaryPath_, error);
         temporaryPath_.clear();
     }
 }

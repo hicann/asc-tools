@@ -43,7 +43,6 @@ test -x "${demo_dir}/examples/memcheck/matmul_leakyrelu_basic_api/run.sh"
 for example in matmul_basic_api matmul_leakyrelu_basic_api; do
     example_dir="${demo_dir}/examples/memcheck/${example}"
     grep -Fq 'add_executable(demo' "${example_dir}/CMakeLists.txt"
-    grep -Fq 'target_link_libraries' "${example_dir}/CMakeLists.txt"
     grep -Fq -- '-- ./demo' "${example_dir}/run.sh"
     if rg -q 'NPU_CHECK_DBI_SOURCE_ROOT|dbi_runtime_sources' "${example_dir}/run.sh"; then
         printf '%s runner still depends on an external Probe source directory\n' "${example}" >&2
@@ -59,14 +58,7 @@ for example in matmul_basic_api matmul_leakyrelu_basic_api; do
     grep -Fq 'cmake -B build' "${example_dir}/run.sh"
     bash -n "${example_dir}/run.sh"
 done
-if grep -Fq 'examples/test' "${demo_dir}/CMakeLists.txt"; then
-    printf 'demo CMake still references the removed examples/test directory\n' >&2
-    exit 1
-fi
-if grep -Fq 'add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/examples/' "${demo_dir}/CMakeLists.txt"; then
-    printf 'demo CMake still registers example subdirectories\n' >&2
-    exit 1
-fi
+test ! -e "${demo_dir}/CMakeLists.txt"
 standalone_examples=(
     basic_func/multi_kernel
     basic_func/padding_register_state
@@ -83,19 +75,15 @@ for example in "${standalone_examples[@]}"; do
     runner="${example_dir}/run.sh"
     grep -Fq 'cmake_minimum_required(VERSION 3.16)' "${cmake_file}"
     grep -Fq 'find_package(ASC REQUIRED)' "${cmake_file}"
-    grep -Fq 'find_library(ACL_RT_LIBRARY' "${cmake_file}"
-    grep -Fq 'HINTS $ENV{ASCEND_HOME_PATH}/lib64' "${cmake_file}"
     if grep -Fq 'ASCEND_CANN_PACKAGE_LINUX_PATH' "${cmake_file}"; then
         printf 'standalone example still uses the secondary CANN package path: %s\n' "${example}" >&2
         exit 1
     fi
-    grep -Fq 'target_link_libraries' "${cmake_file}"
     if [[ "${example}" == memcheck/memory_access ]]; then
+        grep -Fq 'target_link_libraries' "${cmake_file}"
         grep -Fq 'target_link_libraries("${target}" PRIVATE ${ACL_RT_LIBRARY})' "${cmake_file}"
-    else
-        grep -Fq 'target_link_libraries(demo PRIVATE' "${cmake_file}"
+        grep -Fq '${ACL_RT_LIBRARY}' "${cmake_file}"
     fi
-    grep -Fq '${ACL_RT_LIBRARY}' "${cmake_file}"
     if rg -q 'ACLSAN_DEMO_ACL_RT_DIRECTORY|RUNTIME_OUTPUT_DIRECTORY|BUILD_RPATH' "${cmake_file}"; then
         printf 'standalone example still overrides its output or build RPATH: %s\n' "${example}" >&2
         exit 1
@@ -140,24 +128,28 @@ if [[ -e "${demo_dir}/run.sh" ]]; then
     exit 1
 fi
 bash -n "${demo_dir}/build.sh"
-grep -Fq 'bin_dir="${build_dir}/npu_tools/bin"' "${demo_dir}/build.sh"
-if grep -Fq 'npu_compute/bin' "${demo_dir}/build.sh"; then
-    printf 'demo build script still checks the retired npu_compute output directory\n' >&2
+grep -Fq 'if [[ -z "${ASCEND_HOME_PATH:-}" ]]' "${demo_dir}/build.sh"
+grep -Fq 'bash build.sh --pkg' "${demo_dir}/build.sh"
+grep -Fq -- '--install-path="${cann_parent}"' "${demo_dir}/build.sh"
+for artifact in libacl_tool_injection.so libacl_san.so libnpu_check.so npu-check; do
+    grep -Fq "${artifact}" "${demo_dir}/build.sh"
+done
+if rg -q '^[[:space:]]*source[[:space:]].*set_env\.sh|install_run_package|temporary_link_created|cleanup_temporary_link' \
+    "${demo_dir}/build.sh"; then
+    printf 'demo build script still contains the expanded installation flow\n' >&2
     exit 1
 fi
 test ! -e "${demo_dir}/examples/common.sh"
 
 while IFS= read -r cmake_file; do
-    grep -Fq 'HINTS $ENV{ASCEND_HOME_PATH}/lib64' "${cmake_file}"
-    if grep -Fq 'ASCEND_CANN_PACKAGE_LINUX_PATH' "${cmake_file}"; then
-        printf 'example CMake still uses the secondary CANN package path: %s\n' "${cmake_file}" >&2
+    if [[ "${cmake_file}" == "${memory_access_dir}/CMakeLists.txt" ]]; then
+        continue
+    fi
+    if rg -q 'ACL_RT_LIBRARY|NAMES[[:space:]]+acl_rt' "${cmake_file}"; then
+        printf 'example CMake still finds or links acl_rt explicitly: %s\n' "${cmake_file}" >&2
         exit 1
     fi
-    if rg -q 'ACLSAN_DEMO_ACL_RT_DIRECTORY|RUNTIME_OUTPUT_DIRECTORY|BUILD_RPATH' "${cmake_file}"; then
-        printf 'example CMake still overrides its output or build RPATH: %s\n' "${cmake_file}" >&2
-        exit 1
-    fi
-done < <(rg -l 'find_library\(ACL_RT_LIBRARY' "${demo_dir}/examples" -g 'CMakeLists.txt')
+done < <(find "${demo_dir}/examples" -name CMakeLists.txt -type f)
 
 legacy_cann_root='NPUCOMPUTE_CANN_''ROOT'
 if rg -q "${legacy_cann_root}" "${demo_dir}" -g '!**/build/**'; then
@@ -180,6 +172,7 @@ for runner in "${demo_dir}"/examples/basic_func/*/run.sh "${demo_dir}"/examples/
     fi
     grep -Fq 'cmake -B build -DCMAKE_ASC_ARCHITECTURES=dav-3510' "${runner}"
     grep -Fq 'cmake --build build --parallel' "${runner}"
+    grep -Fq 'npu-check --tool' "${runner}"
     grep -Fq 'set +e' "${runner}"
     if rg -q 'npu_check_status|npu_check raw status|expected npu_check status|--error-exitcode' "${runner}"; then
         printf 'example runner still validates npu_check status: %s\n' "${runner}" >&2
@@ -189,7 +182,22 @@ for runner in "${demo_dir}"/examples/basic_func/*/run.sh "${demo_dir}"/examples/
         printf 'example runner still uses an expanded path: %s\n' "${runner}" >&2
         exit 1
     fi
+    if rg -q 'build/npu_compute/bin/npu_check|/bin/npu_check(["[:space:]]|$)' "${runner}"; then
+        printf 'example runner still uses the build-tree or old npu_check command: %s\n' "${runner}" >&2
+        exit 1
+    fi
     bash -n "${runner}"
+done
+
+for runner in "${demo_dir}"/examples/*/*/run.sh; do
+    if rg -q 'npu_check=|npu_tools_lib_dir=|export LD_LIBRARY_PATH=' "${runner}"; then
+        printf 'example runner still overrides npu-check command or library paths: %s\n' "${runner}" >&2
+        exit 1
+    fi
+    if rg -q 'if \[\[ ! -x "\$\{npu_check\}" \]\]|missing installed npu-check' "${runner}"; then
+        printf 'example runner still pre-validates the installed npu-check command: %s\n' "${runner}" >&2
+        exit 1
+    fi
 done
 
 add_runner="${demo_dir}/examples/memcheck/add/run.sh"
@@ -242,6 +250,11 @@ smoke_runner="${demo_dir}/run_smoke.sh"
 test -x "${smoke_runner}"
 bash -n "${smoke_runner}"
 grep -Fq 'run_smoke_examples()' "${smoke_runner}"
+grep -Fq 'command -v npu-check' "${smoke_runner}"
+if rg -q 'npu_check=|\$\{ASCEND_HOME_PATH\}.*npu-check' "${smoke_runner}"; then
+    printf 'smoke runner still hard-codes the npu-check path\n' >&2
+    exit 1
+fi
 smoke_examples=(
     memcheck/add
     memcheck/datacopy_stride
@@ -275,12 +288,13 @@ printf '%s\n' \
     '#!/usr/bin/env bash' \
     'set -euo pipefail' \
     'fixture_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)' \
-    'test ! -e "${fixture_dir}/build/stale"' \
+    'test -e "${fixture_dir}/build/stale"' \
     'printf "BUILD\n" >>"${fixture_dir}/trace.log"' \
     'export ASCEND_HOME_PATH="${fixture_dir}/fake-cann"' \
-    'mkdir -p "${fixture_dir}/build/npu_tools/bin"' \
-    'printf "#!/usr/bin/env bash\n" >"${fixture_dir}/build/npu_tools/bin/npu_check"' \
-    'chmod +x "${fixture_dir}/build/npu_tools/bin/npu_check"' \
+    'mkdir -p "${ASCEND_HOME_PATH}/$(uname -m)-linux/bin"' \
+    'printf "#!/usr/bin/env bash\n" >"${ASCEND_HOME_PATH}/$(uname -m)-linux/bin/npu-check"' \
+    'chmod +x "${ASCEND_HOME_PATH}/$(uname -m)-linux/bin/npu-check"' \
+    'export PATH="${ASCEND_HOME_PATH}/$(uname -m)-linux/bin:${PATH}"' \
     >"${workflow_fixture_dir}/build.sh"
 chmod +x "${workflow_fixture_dir}/build.sh"
 
@@ -307,7 +321,7 @@ if [[ ${workflow_status} -ne 0 ]]; then
     cat "${output}" >&2
     exit 1
 fi
-test ! -e "${workflow_fixture_dir}/build/stale"
+test -e "${workflow_fixture_dir}/build/stale"
 test "$(sed -n '1p' "${workflow_fixture_dir}/trace.log")" = "BUILD"
 test "$(grep -c '^RUN ' "${workflow_fixture_dir}/trace.log")" -eq 18
 grep -Fq 'total=18 passed=18 failed=0' "${output}"

@@ -19,7 +19,8 @@
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
-#include <filesystem>
+#include <boost/filesystem.hpp>
+#include <boost/system/error_code.hpp>
 #include <fstream>
 #include <memory>
 #include <string>
@@ -50,7 +51,7 @@ bool DebugEnabled()
     return value != nullptr && value[0] == '1' && value[1] == '\0';
 }
 
-bool LoadOutputDirectory(std::filesystem::path* outputDirectory, std::string* error)
+bool LoadOutputDirectory(boost::filesystem::path* outputDirectory, std::string* error)
 {
     const char* value = std::getenv("NPU_COMPUTE_OUTPUT");
     if (value == nullptr || value[0] == '\0') {
@@ -58,14 +59,14 @@ bool LoadOutputDirectory(std::filesystem::path* outputDirectory, std::string* er
         return false;
     }
 
-    std::filesystem::path candidate(value);
+    boost::filesystem::path candidate(value);
     if (!candidate.is_absolute()) {
         *error = "NPU_COMPUTE_OUTPUT must be an absolute path";
         return false;
     }
 
-    std::error_code filesystemError;
-    if (!std::filesystem::is_directory(candidate, filesystemError)) {
+    boost::system::error_code filesystemError;
+    if (!boost::filesystem::is_directory(candidate, filesystemError)) {
         *error = filesystemError ? "inspect NPU_COMPUTE_OUTPUT failed: " + filesystemError.message() :
                                    "NPU_COMPUTE_OUTPUT is not a directory";
         return false;
@@ -137,7 +138,7 @@ void LoadCsvHardwareInfoMetadata(PmuCsvConfig* config, bool loadFrequencies)
     if (config == nullptr) {
         return;
     }
-    const std::filesystem::path path = std::filesystem::path(config->outputDirectory) / "HardwareInfo.jsonl";
+    const boost::filesystem::path path = boost::filesystem::path(config->outputDirectory) / "HardwareInfo.jsonl";
     std::ifstream input(path);
     if (!input.is_open()) {
         npu_compute::detail::DebugLog(
@@ -194,7 +195,7 @@ int NpuComputeRuntime::Initialize()
 {
     std::lock_guard<std::mutex> lock(mutex_);
     std::string error;
-    std::filesystem::path outputDirectory;
+    boost::filesystem::path outputDirectory;
     if (!LoadOutputDirectory(&outputDirectory, &error)) {
         std::fprintf(stderr, "[libnpu-compute] invalid NPU_COMPUTE_OUTPUT: %s\n", error.c_str());
         return kInitializeFailed;

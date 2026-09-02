@@ -13,7 +13,8 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
-#include <filesystem>
+#include <boost/filesystem.hpp>
+#include <boost/system/error_code.hpp>
 #include <fstream>
 #include <optional>
 #include <string>
@@ -48,7 +49,7 @@ public:
     TempDirectory()
     {
         std::string path_template =
-            (std::filesystem::temp_directory_path() / "npu-compute-report-name-test-XXXXXX").string();
+            (boost::filesystem::temp_directory_path() / "npu-compute-report-name-test-XXXXXX").string();
         path_template.push_back('\0');
         char* created = ::mkdtemp(path_template.data());
         if (created != nullptr) {
@@ -59,15 +60,15 @@ public:
     ~TempDirectory()
     {
         if (!path_.empty()) {
-            std::error_code error;
-            std::filesystem::remove_all(path_, error);
+            boost::system::error_code error;
+            boost::filesystem::remove_all(path_, error);
         }
     }
 
-    const std::filesystem::path& Path() const { return path_; }
+    const boost::filesystem::path& Path() const { return path_; }
 
 private:
-    std::filesystem::path path_;
+    boost::filesystem::path path_;
 };
 
 struct FixedSources {
@@ -104,7 +105,7 @@ bool FixedRandom(std::array<uint8_t, 4>* value, void* context, std::string* erro
     return true;
 }
 
-ReportNameSources Sources(const std::filesystem::path& current_directory, FixedSources* fixed)
+ReportNameSources Sources(const boost::filesystem::path& current_directory, FixedSources* fixed)
 {
     ReportNameSources sources;
     sources.current_directory = current_directory;
@@ -114,7 +115,7 @@ ReportNameSources Sources(const std::filesystem::path& current_directory, FixedS
     return sources;
 }
 
-bool WriteFile(const std::filesystem::path& path)
+bool WriteFile(const boost::filesystem::path& path)
 {
     std::ofstream output(path, std::ios::binary | std::ios::trunc);
     output << "existing";
@@ -139,8 +140,8 @@ int TestDefaultAndDirectoryTargets()
     CHECK(error.empty());
     CHECK(target.path == temporary.Path() / "report_1700000000123_0123abff.npu-rep");
 
-    const std::filesystem::path output_directory = temporary.Path() / "reports";
-    CHECK(std::filesystem::create_directory(output_directory));
+    const boost::filesystem::path output_directory = temporary.Path() / "reports";
+    CHECK(boost::filesystem::create_directory(output_directory));
     CHECK(ResolveReportTargetWithSources(output_directory.string(), sources, &target, &error));
     CHECK(target.path == output_directory / "report_1700000000123_deadbeef.npu-rep");
     return 0;
@@ -213,7 +214,7 @@ int TestProductionEntryForExplicitTarget()
 {
     TempDirectory temporary;
     CHECK(!temporary.Path().empty());
-    const std::filesystem::path explicit_path = temporary.Path() / "production.npu-rep";
+    const boost::filesystem::path explicit_path = temporary.Path() / "production.npu-rep";
     ReportTarget target;
     std::string error;
     CHECK(ResolveReportTarget(explicit_path.string(), &target, &error));

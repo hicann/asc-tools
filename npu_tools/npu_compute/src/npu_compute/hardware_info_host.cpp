@@ -9,6 +9,8 @@
  */
 #include "hardware_info_host.h"
 
+#include <boost/filesystem.hpp>
+
 #include <charconv>
 #include <cstdint>
 #include <fstream>
@@ -60,7 +62,7 @@ bool ParseInteger(std::string_view text, Integer* value)
     return parsed.ec == std::errc{} && parsed.ptr == trimmed.data() + trimmed.size();
 }
 
-bool ReadFile(const std::filesystem::path& path, std::string* content)
+bool ReadFile(const boost::filesystem::path& path, std::string* content)
 {
     std::ifstream input(path);
     if (!input.is_open()) {
@@ -122,7 +124,7 @@ bool ParseOnlineCpuList(std::string_view text, std::vector<uint32_t>* cpuIds)
 
 void CollectPhysicalCpuCount(const HostInfoCollectionOptions& options, HostInfo* result, DiagnosticSink* diagnostics)
 {
-    const std::filesystem::path onlinePath = options.cpuTopologyRoot / "online";
+    const boost::filesystem::path onlinePath = options.cpuTopologyRoot / "online";
     std::string online;
     if (!ReadFile(onlinePath, &online)) {
         Diagnose(diagnostics, "read CPU online list failed: " + onlinePath.string());
@@ -137,7 +139,7 @@ void CollectPhysicalCpuCount(const HostInfoCollectionOptions& options, HostInfo*
 
     std::set<std::int64_t> packageIds;
     for (const uint32_t cpuId : cpuIds) {
-        const std::filesystem::path packagePath =
+        const boost::filesystem::path packagePath =
             options.cpuTopologyRoot / ("cpu" + std::to_string(cpuId)) / "topology/physical_package_id";
         std::string packageText;
         if (!ReadFile(packagePath, &packageText)) {
@@ -187,7 +189,7 @@ void CollectMemoryTotal(HostInfo* result, DiagnosticSink* diagnostics)
     result->memoryTotalSizeMb = static_cast<double>(bytes) / static_cast<double>(kBytesPerMb);
 }
 
-void CollectDiskTotal(const std::filesystem::path& outputDirectory, HostInfo* result, DiagnosticSink* diagnostics)
+void CollectDiskTotal(const boost::filesystem::path& outputDirectory, HostInfo* result, DiagnosticSink* diagnostics)
 {
     struct statvfs information {};
     if (::statvfs(outputDirectory.c_str(), &information) != 0) {
@@ -208,7 +210,7 @@ void CollectDiskTotal(const std::filesystem::path& outputDirectory, HostInfo* re
 } // namespace
 
 bool CollectHostInfo(
-    const std::filesystem::path& outputDirectory, HostInfo* result, DiagnosticSink* diagnostics,
+    const boost::filesystem::path& outputDirectory, HostInfo* result, DiagnosticSink* diagnostics,
     const HostInfoCollectionOptions& options)
 {
     if (result == nullptr) {

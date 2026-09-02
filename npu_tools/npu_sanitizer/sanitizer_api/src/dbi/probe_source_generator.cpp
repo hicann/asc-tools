@@ -365,16 +365,18 @@ const std::array<ProbeDefinition, 94> kDefinitions{{
      R"ARGS(static_cast<uint64_t>(pipe), bufId, static_cast<uint64_t>(mode), 0UL, 0UL)ARGS"},
     {460, ProbeGroup::Sync, "__sanitizer_report_get_buf_v",
      R"PARAM(__gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, uint8_t bufId, bool mode)PARAM", "Synchronization",
-     "PIPE_S", R"ARGS(static_cast<uint64_t>(bufId), static_cast<uint64_t>(mode), 0UL, 0UL, 0UL)ARGS"},
+     "PIPE_S",
+     R"ARGS(static_cast<uint64_t>(PIPE_V), static_cast<uint64_t>(bufId), static_cast<uint64_t>(mode), 0UL, 0UL)ARGS"},
     {461, ProbeGroup::Sync, "__sanitizer_report_get_bufi_v",
      R"PARAM(__gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, uint64_t bufId, bool mode)PARAM", "Synchronization",
-     "PIPE_S", R"ARGS(bufId, static_cast<uint64_t>(mode), 0UL, 0UL, 0UL)ARGS"},
+     "PIPE_S", R"ARGS(static_cast<uint64_t>(PIPE_V), bufId, static_cast<uint64_t>(mode), 0UL, 0UL)ARGS"},
     {462, ProbeGroup::Sync, "__sanitizer_report_rls_buf_v",
      R"PARAM(__gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, uint8_t bufId, bool mode)PARAM", "Synchronization",
-     "PIPE_S", R"ARGS(static_cast<uint64_t>(bufId), static_cast<uint64_t>(mode), 0UL, 0UL, 0UL)ARGS"},
+     "PIPE_S",
+     R"ARGS(static_cast<uint64_t>(PIPE_V), static_cast<uint64_t>(bufId), static_cast<uint64_t>(mode), 0UL, 0UL)ARGS"},
     {463, ProbeGroup::Sync, "__sanitizer_report_rls_bufi_v",
      R"PARAM(__gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, uint64_t bufId, bool mode)PARAM", "Synchronization",
-     "PIPE_S", R"ARGS(bufId, static_cast<uint64_t>(mode), 0UL, 0UL, 0UL)ARGS"},
+     "PIPE_S", R"ARGS(static_cast<uint64_t>(PIPE_V), bufId, static_cast<uint64_t>(mode), 0UL, 0UL)ARGS"},
 }};
 
 uint64_t HashText(uint64_t hash, std::string_view text)
