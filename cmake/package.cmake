@@ -173,9 +173,6 @@ function(pack_built_in)
       ${CANN_CMAKE_DIR}/scripts/install/version_compatiable.inc
       ${CANN_CMAKE_DIR}/scripts/install/check_version_required.awk
   )
-  set(CONF_FILES
-      ${CANN_CMAKE_DIR}/scripts/package/cfg/path.cfg
-  )
   install(FILES ${CMAKE_BINARY_DIR}/version.asc-tools.info
       DESTINATION share/info/asc-tools
       RENAME version.info
@@ -205,10 +202,6 @@ function(pack_built_in)
     COMPONENT asc-tools
   )
 
-  install(FILES ${CONF_FILES}
-      DESTINATION ${CMAKE_SYSTEM_PROCESSOR}-linux/conf
-      COMPONENT asc-tools
-  )
   install(FILES ${PACKAGE_FILES}
       DESTINATION share/info/asc-tools/script
       PERMISSIONS

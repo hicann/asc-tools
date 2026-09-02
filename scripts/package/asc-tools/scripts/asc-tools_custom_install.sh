@@ -114,8 +114,6 @@ installMsprofWhlPackage() {
         log_and_print ${LEVEL_ERROR} "Install ${_package} failed."
         return 1
     fi
-    changeDirMode 550 ${_python_local_path}
-    changeFileMode 550 ${_python_local_path}
     log ${LEVEL_INFO} "install ${_package} succeed."
     return 0
 }

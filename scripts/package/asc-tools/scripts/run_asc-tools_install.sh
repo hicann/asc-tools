@@ -99,7 +99,7 @@ copyVersionInfo() {
             log_and_print $LEVEL_ERROR "ERR_NO:0x0089;ERR_DES: copy version.info failed."
             return 1
         fi
-        changeFileMode 440 "${install_dir}/share/info/${PACKAGE_NAME}/version.info"
+        changeFileMode 640 "${install_dir}/share/info/${PACKAGE_NAME}/version.info"
         chown -hf "${username}:${usergroup}" "${install_dir}/share/info/${PACKAGE_NAME}/version.info"
     else
         log_and_print $LEVEL_ERROR "ERR_NO:0x0080;ERR_DES: The file version.info does not exist."
@@ -150,16 +150,12 @@ installTool()
     fi
     "$INSTALL_COMMON_PARSER_PATH" --copy_all --install ${shell_options_} ${custom_options_} --feature=$feature_type --use-share-info --chip=$chip_type\
         "${install_type}" "${input_install_path}" "${FILELIST_PATH}"
-    if [ -d "$install_dir/tools/ascendc_tools" ];then
-        chmod 555 "$install_dir/tools/ascendc_tools"
-    fi
     if [ $? -ne 0 ]; then
         log_and_print $LEVEL_ERROR "Install ${PACKAGE_NAME} files failed."
         removeVersionInfo
         return 1
     fi
 
-    chmod -Rf 500 "${install_dir}/share/info/${PACKAGE_NAME}/script"
     if [ "$(id -u)" -eq 0 ]; then
         chown -Rf root:root "${install_dir}/share/info/${PACKAGE_NAME}/script"
     fi

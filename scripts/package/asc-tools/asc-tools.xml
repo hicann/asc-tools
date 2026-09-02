@@ -31,7 +31,6 @@
 
     <block_info dependtree="false" dst_path="asc-tools" block_conf_path="ascend">
         <block name="EngineeringCommon"/>
-        <block name="EngineeringFiles"/>
         <block name="ToolsCommon"/>
     </block_info>
 

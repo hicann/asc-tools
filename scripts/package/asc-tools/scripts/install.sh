@@ -255,7 +255,7 @@ updateInstallInfo() {
     updateInstallParam "Install_Path_Param" "${input_install_path}" "${installInfo}"
     updateInstallParam "Docker_Root_Path_Param" "${docker_root_path}" "${installInfo}"
 
-    changeFileMode 440 "${installInfo}"
+    changeFileMode 640 "${installInfo}"
 }
 
 # check target architecture
@@ -562,10 +562,8 @@ removeInstallShell()
     local _install_shell="$_script_path/install.sh"
     local _pkg_install_shell="$_script_path/run_asc-tools_install.sh"
 
-    chmod +w "$_script_path"
     [ -f "$_install_shell" ] && rm -f "$_install_shell"
     [ -f "$_pkg_install_shell" ] && rm -f "$_pkg_install_shell"
-    chmod -w "$_script_path"
 }
 
 installRun() {
