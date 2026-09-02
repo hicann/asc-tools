@@ -333,8 +333,6 @@ void TestSynchronizeStreamCallbackData()
     assert(g_callbackCapture.callbackId == ACLSAN_CBID_SYNCHRONIZE_STREAM_SYNC_END);
     CheckCommonData(g_callbackCapture.synchronize.common, sizeof(AclsanSynchronizeData), "aclrtSynchronizeStream");
     assert(g_callbackCapture.synchronize.stream == stream);
-    assert(g_callbackCapture.synchronize.traceCollectionStatus == ACLSAN_TRACE_COLLECTION_COMPLETE);
-    assert(g_callbackCapture.synchronize.pendingTraceLaunches == 0);
 }
 
 void TestSynchronizeStreamWithTimeoutCallbackData()
@@ -352,8 +350,6 @@ void TestSynchronizeStreamWithTimeoutCallbackData()
     CheckCommonData(
         g_callbackCapture.synchronize.common, sizeof(AclsanSynchronizeData), "aclrtSynchronizeStreamWithTimeout");
     assert(g_callbackCapture.synchronize.stream == stream);
-    assert(g_callbackCapture.synchronize.traceCollectionStatus == ACLSAN_TRACE_COLLECTION_COMPLETE);
-    assert(g_callbackCapture.synchronize.pendingTraceLaunches == 0);
 }
 
 void TestSetPaddingRecordsUpdateLaunchStateWithoutCallback()

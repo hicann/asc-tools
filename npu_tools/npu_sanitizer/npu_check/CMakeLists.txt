@@ -113,7 +113,6 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR OR ENABLE_TEST)
     tests/memcheck_test.cpp
     tests/report_buffer_test.cpp
     tests/synccheck_test.cpp
-    tests/tool_manager_trace_collection_test.cpp
     tests/uds_server_test.cpp
     tests/wire_protocol_test.cpp
     ${NPU_CHECK_REPORT_RENDERER_SOURCES}

@@ -19,28 +19,14 @@
 #include "wire_protocol.h"
 
 #include <atomic>
-#include <cstddef>
 #include <condition_variable>
 #include <cstdint>
 #include <memory>
 #include <mutex>
 #include <string>
-#include <unordered_map>
 #include <vector>
 
 namespace npu::sanitizer {
-
-class TraceCollectionTracker {
-public:
-    bool Observe(const AclsanSynchronizeData& data) noexcept;
-    bool IsComplete() const noexcept;
-    uint64_t Failures() const noexcept;
-    size_t PendingStreams() const noexcept;
-
-private:
-    uint64_t failures_ = 0;
-    std::unordered_map<void*, uint32_t> pendingStreams_;
-};
 
 class ToolManager {
 public:
@@ -140,7 +126,6 @@ private:
     std::atomic<uint64_t> callbackCount_{0};
     uint64_t malformedCallbacks_ = 0;
     uint64_t frameworkErrors_ = 0;
-    TraceCollectionTracker traceCollections_;
 };
 
 } // namespace npu::sanitizer

@@ -189,12 +189,9 @@ AclsanResourceData MakeDeviceResourceData(
         static_cast<uint64_t>(reinterpret_cast<uintptr_t>(deviceAddress))};
 }
 
-AclsanSynchronizeData MakeSynchronizeData(
-    const char* apiName, aclrtStream stream, int result, const aclsan::TraceCollectionResult& collection) noexcept
+AclsanSynchronizeData MakeSynchronizeData(const char* apiName, aclrtStream stream, int result) noexcept
 {
-    return {
-        MakeCallbackCommonData(apiName, result, static_cast<uint32_t>(sizeof(AclsanSynchronizeData))), stream,
-        static_cast<uint32_t>(collection.status), collection.pendingLaunches};
+    return {MakeCallbackCommonData(apiName, result, static_cast<uint32_t>(sizeof(AclsanSynchronizeData))), stream};
 }
 
 // ==============================================
@@ -363,9 +360,8 @@ aclError aclrtSynchronizeStreamHook(aclrtStream stream) noexcept
 {
     const auto original = GetOriginalRuntimeFunction<ACL_RT_API_aclrtSynchronizeStream>("aclrtSynchronizeStream");
     const aclError result = original(stream);
-    const aclsan::TraceCollectionResult collection = aclsan::CollectTraceStream(stream, result);
-    const AclsanSynchronizeData callbackData =
-        MakeSynchronizeData("aclrtSynchronizeStream", stream, result, collection);
+    aclsan::CollectTraceStream(stream);
+    const AclsanSynchronizeData callbackData = MakeSynchronizeData("aclrtSynchronizeStream", stream, result);
     aclsan::AclsanCallbackDispatcher::DispatchSynchronizeEnd(callbackData);
     return result;
 }
@@ -376,9 +372,8 @@ aclError aclrtSynchronizeStreamWithTimeoutHook(aclrtStream stream, int32_t timeo
     const auto original =
         GetOriginalRuntimeFunction<ACL_RT_API_aclrtSynchronizeStreamWithTimeout>("aclrtSynchronizeStreamWithTimeout");
     const aclError result = original(stream, timeout);
-    const aclsan::TraceCollectionResult collection = aclsan::CollectTraceStream(stream, result);
-    const AclsanSynchronizeData callbackData =
-        MakeSynchronizeData("aclrtSynchronizeStreamWithTimeout", stream, result, collection);
+    aclsan::CollectTraceStream(stream);
+    const AclsanSynchronizeData callbackData = MakeSynchronizeData("aclrtSynchronizeStreamWithTimeout", stream, result);
     aclsan::AclsanCallbackDispatcher::DispatchSynchronizeEnd(callbackData);
     return result;
 }

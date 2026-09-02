@@ -10,7 +10,6 @@
 
 #include "aclsan/aclsan_api.h"
 #include "aclsan/aclsan_cbdata_device.h"
-#include "aclsan/aclsan_cbdata_synchronize.h"
 #include "kernel_argument_elf_fixture.h"
 #include "injection/injection_hook.h"
 #include "injection/runtime_stub_api.h"
@@ -57,16 +56,12 @@ struct CapturedMemoryAccess {
 
 std::vector<CapturedRecord> g_records;
 std::vector<CapturedMemoryAccess> g_memoryAccesses;
-std::vector<AclsanSynchronizeData> g_synchronizations;
 size_t g_mallocCalls = 0;
 size_t g_freeCalls = 0;
 size_t g_d2hCalls = 0;
 size_t g_deviceInfoCalls = 0;
 bool g_failLaunch = false;
 aclError g_syncResult = ACL_SUCCESS;
-bool g_failD2H = false;
-bool g_corruptD2H = false;
-bool g_forceOverflow = false;
 bool g_failDeviceInfo = false;
 bool g_failVectorDeviceInfo = false;
 bool g_writeRecord = true;
@@ -157,14 +152,8 @@ aclError OriginalMemcpy(void* dst, size_t dstMax, const void* src, size_t bytes,
     }
     if (kind == ACL_MEMCPY_DEVICE_TO_HOST) {
         ++g_d2hCalls;
-        if (g_failD2H) {
-            return ACL_ERROR_FAILURE;
-        }
     }
     std::memcpy(dst, src, bytes);
-    if (kind == ACL_MEMCPY_DEVICE_TO_HOST && g_corruptD2H) {
-        static_cast<uint8_t*>(dst)[0] ^= 0xffU;
-    }
     return ACL_SUCCESS;
 }
 
@@ -261,7 +250,7 @@ aclError OriginalLaunch(
     record->reserved = 0;
     slice->phyCoreId = phyCoreId;
     slice->recordCount = 1;
-    slice->overflowCount = g_forceOverflow ? 1U : 0U;
+    slice->overflowCount = 0;
     if (!g_writeMemoryRecord) {
         auto* second = record + 1;
         second->pc = 0x2234;
@@ -316,14 +305,7 @@ aclError OriginalGetDeviceInfo(uint32_t deviceId, aclrtDevAttr attr, int64_t* va
 
 void Callback(void*, AclsanCallbackDomain domain, AclsanCallbackId id, const void* data)
 {
-    if (data == nullptr) {
-        return;
-    }
-    if (domain == ACLSAN_CB_DOMAIN_SYNCHRONIZE && id == ACLSAN_CBID_SYNCHRONIZE_STREAM_SYNC_END) {
-        g_synchronizations.push_back(*static_cast<const AclsanSynchronizeData*>(data));
-        return;
-    }
-    if (domain != ACLSAN_CB_DOMAIN_DEVICE_INSTRUCTION) {
+    if (domain != ACLSAN_CB_DOMAIN_DEVICE_INSTRUCTION || data == nullptr) {
         return;
     }
     if (id == ACLSAN_CBID_DEVICE_MEMORY_ACCESS) {
@@ -380,9 +362,6 @@ int main()
         ACLSAN_STATUS_SUCCESS);
     CHECK(
         aclsanEnableCallback(1, subscriber, ACLSAN_CB_DOMAIN_DEVICE_INSTRUCTION, ACLSAN_CBID_DEVICE_MEMORY_ACCESS) ==
-        ACLSAN_STATUS_SUCCESS);
-    CHECK(
-        aclsanEnableCallback(1, subscriber, ACLSAN_CB_DOMAIN_SYNCHRONIZE, ACLSAN_CBID_SYNCHRONIZE_STREAM_SYNC_END) ==
         ACLSAN_STATUS_SUCCESS);
 
     int ordinaryFunctionStorage = 0;
@@ -456,24 +435,17 @@ int main()
     CHECK(g_memoryAccesses[1].secondCount == 2);
     g_writeMultiMemoryRecords = false;
 
-    const size_t recordsBeforeDeferredSync = g_records.size();
-    const size_t d2hBeforeDeferredSync = g_d2hCalls;
-    const size_t freesBeforeDeferredSync = g_freeCalls;
+    const size_t recordsBeforeTimedOutSync = g_records.size();
+    const size_t d2hBeforeTimedOutSync = g_d2hCalls;
+    const size_t freesBeforeTimedOutSync = g_freeCalls;
     g_syncResult = ACL_ERROR_RT_STREAM_SYNC_TIMEOUT;
     CHECK(
         aclrtLaunchKernelWithHostArgs(function, 2, stream1, nullptr, arguments, sizeof(arguments), nullptr, 0) ==
         ACL_SUCCESS);
     CHECK(aclrtSynchronizeStream(stream1) == ACL_ERROR_RT_STREAM_SYNC_TIMEOUT);
-    CHECK(g_records.size() == recordsBeforeDeferredSync);
-    CHECK(g_d2hCalls == d2hBeforeDeferredSync);
-    CHECK(g_freeCalls == freesBeforeDeferredSync);
-    CHECK(g_synchronizations.back().traceCollectionStatus == ACLSAN_TRACE_COLLECTION_DEFERRED);
-    CHECK(g_synchronizations.back().pendingTraceLaunches == 1);
-    g_syncResult = ACL_SUCCESS;
-    CHECK(aclrtSynchronizeStream(stream1) == ACL_SUCCESS);
-    CHECK(g_records.size() == recordsBeforeDeferredSync + 2);
-    CHECK(g_synchronizations.back().traceCollectionStatus == ACLSAN_TRACE_COLLECTION_COMPLETE);
-    CHECK(g_synchronizations.back().pendingTraceLaunches == 0);
+    CHECK(g_records.size() == recordsBeforeTimedOutSync + 2);
+    CHECK(g_d2hCalls == d2hBeforeTimedOutSync + 1);
+    CHECK(g_freeCalls == freesBeforeTimedOutSync + 1);
 
     const size_t recordsBeforeGenericFailure = g_records.size();
     const size_t d2hBeforeGenericFailure = g_d2hCalls;
@@ -483,53 +455,12 @@ int main()
         aclrtLaunchKernelWithHostArgs(function, 2, stream1, nullptr, arguments, sizeof(arguments), nullptr, 0) ==
         ACL_SUCCESS);
     CHECK(aclrtSynchronizeStream(stream1) == ACL_ERROR_FAILURE);
-    CHECK(g_records.size() == recordsBeforeGenericFailure);
-    CHECK(g_d2hCalls == d2hBeforeGenericFailure);
-    CHECK(g_freeCalls == freesBeforeGenericFailure);
-    CHECK(g_synchronizations.back().traceCollectionStatus == ACLSAN_TRACE_COLLECTION_DEFERRED);
-    CHECK(g_synchronizations.back().pendingTraceLaunches == 1);
+    CHECK(g_records.size() == recordsBeforeGenericFailure + 2);
+    CHECK(g_d2hCalls == d2hBeforeGenericFailure + 1);
+    CHECK(g_freeCalls == freesBeforeGenericFailure + 1);
     g_syncResult = ACL_SUCCESS;
     CHECK(aclrtSynchronizeStream(stream1) == ACL_SUCCESS);
     CHECK(g_records.size() == recordsBeforeGenericFailure + 2);
-    CHECK(g_synchronizations.back().traceCollectionStatus == ACLSAN_TRACE_COLLECTION_COMPLETE);
-
-    const size_t recordsBeforeAicoreException = g_records.size();
-    g_syncResult = ACL_ERROR_RT_AICORE_EXCEPTION;
-    CHECK(
-        aclrtLaunchKernelWithHostArgs(function, 2, stream1, nullptr, arguments, sizeof(arguments), nullptr, 0) ==
-        ACL_SUCCESS);
-    CHECK(aclrtSynchronizeStream(stream1) == ACL_ERROR_RT_AICORE_EXCEPTION);
-    CHECK(g_records.size() == recordsBeforeAicoreException + 2);
-    CHECK(g_synchronizations.back().traceCollectionStatus == ACLSAN_TRACE_COLLECTION_COMPLETE);
-    CHECK(g_synchronizations.back().pendingTraceLaunches == 0);
-    g_syncResult = ACL_SUCCESS;
-
-    g_failD2H = true;
-    CHECK(
-        aclrtLaunchKernelWithHostArgs(function, 2, stream1, nullptr, arguments, sizeof(arguments), nullptr, 0) ==
-        ACL_SUCCESS);
-    CHECK(aclrtSynchronizeStream(stream1) == ACL_SUCCESS);
-    CHECK(g_synchronizations.back().traceCollectionStatus == ACLSAN_TRACE_COLLECTION_FAILED);
-    CHECK(g_synchronizations.back().pendingTraceLaunches == 0);
-    g_failD2H = false;
-
-    g_corruptD2H = true;
-    CHECK(
-        aclrtLaunchKernelWithHostArgs(function, 2, stream1, nullptr, arguments, sizeof(arguments), nullptr, 0) ==
-        ACL_SUCCESS);
-    CHECK(aclrtSynchronizeStream(stream1) == ACL_SUCCESS);
-    CHECK(g_synchronizations.back().traceCollectionStatus == ACLSAN_TRACE_COLLECTION_FAILED);
-    CHECK(g_synchronizations.back().pendingTraceLaunches == 0);
-    g_corruptD2H = false;
-
-    g_forceOverflow = true;
-    CHECK(
-        aclrtLaunchKernelWithHostArgs(function, 2, stream1, nullptr, arguments, sizeof(arguments), nullptr, 0) ==
-        ACL_SUCCESS);
-    CHECK(aclrtSynchronizeStream(stream1) == ACL_SUCCESS);
-    CHECK(g_synchronizations.back().traceCollectionStatus == ACLSAN_TRACE_COLLECTION_FAILED);
-    CHECK(g_synchronizations.back().pendingTraceLaunches == 0);
-    g_forceOverflow = false;
 
     const size_t freesBeforeFailedLaunch = g_freeCalls;
     g_failLaunch = true;

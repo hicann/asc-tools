@@ -193,38 +193,6 @@ std::string StatusMessage(const char* operation, AclsanStatus status)
 
 } // namespace
 
-bool TraceCollectionTracker::Observe(const AclsanSynchronizeData& data) noexcept
-{
-    const auto status = static_cast<AclsanTraceCollectionStatus>(data.traceCollectionStatus);
-    const bool statusValid = status == ACLSAN_TRACE_COLLECTION_NOT_REQUIRED ||
-                             status == ACLSAN_TRACE_COLLECTION_COMPLETE || status == ACLSAN_TRACE_COLLECTION_DEFERRED ||
-                             status == ACLSAN_TRACE_COLLECTION_FAILED;
-    const bool countValid =
-        status == ACLSAN_TRACE_COLLECTION_DEFERRED ? data.pendingTraceLaunches != 0 : data.pendingTraceLaunches == 0;
-    if (!statusValid || !countValid) {
-        return false;
-    }
-    try {
-        if (status == ACLSAN_TRACE_COLLECTION_DEFERRED) {
-            pendingStreams_[data.stream] = data.pendingTraceLaunches;
-        } else if (status != ACLSAN_TRACE_COLLECTION_NOT_REQUIRED) {
-            pendingStreams_.erase(data.stream);
-        }
-    } catch (...) {
-        return false;
-    }
-    if (status == ACLSAN_TRACE_COLLECTION_FAILED) {
-        ++failures_;
-    }
-    return true;
-}
-
-bool TraceCollectionTracker::IsComplete() const noexcept { return failures_ == 0 && pendingStreams_.empty(); }
-
-uint64_t TraceCollectionTracker::Failures() const noexcept { return failures_; }
-
-size_t TraceCollectionTracker::PendingStreams() const noexcept { return pendingStreams_.size(); }
-
 ToolManager::~ToolManager() noexcept
 {
     try {
@@ -482,8 +450,7 @@ void ToolManager::Finalize()
             const npucheck::SynccheckStats stats = synccheck_->Stats();
             analysisComplete = analysisComplete && stats.pendingOpens == 0;
         }
-        analysisComplete =
-            analysisComplete && malformedCallbacks_ == 0 && frameworkErrors_ == 0 && traceCollections_.IsComplete();
+        analysisComplete = analysisComplete && malformedCallbacks_ == 0 && frameworkErrors_ == 0;
     }
     const bool truncated = report_.Truncated();
     std::ostringstream sessionEnd;
@@ -642,22 +609,14 @@ void ToolManager::OnCallback(AclsanCallbackDomain domain, AclsanCallbackId cbid,
             case ACLSAN_CB_DOMAIN_SYNCHRONIZE: {
                 const auto* data = ValidateCallbackData<AclsanSynchronizeData>(cbdata);
                 malformed = data == nullptr;
-                const bool collectionValid = data != nullptr && traceCollections_.Observe(*data);
-                malformed = malformed || !collectionValid;
-                const bool collectionComplete =
-                    collectionValid && data->traceCollectionStatus == ACLSAN_TRACE_COLLECTION_COMPLETE;
-                const bool collectionFailed =
-                    collectionValid && data->traceCollectionStatus == ACLSAN_TRACE_COLLECTION_FAILED;
-                const bool synchronizationTerminal = collectionComplete || collectionFailed;
-                if (synchronizationTerminal && memcheck_ != nullptr) {
+                if (data != nullptr && memcheck_ != nullptr && data->common.result == 0) {
                     reports = memcheck_->OnSynchronization();
                     std::ostringstream message;
-                    message << "synchronization observed reports=" << reports.size() << " stream=" << data->stream
-                            << " result=" << data->common.result;
+                    message << "synchronization completed reports=" << reports.size() << " stream=" << data->stream;
                     logger_.Info(message.str());
                 }
-                if (synchronizationTerminal && synccheck_ != nullptr) {
-                    syncReports = synccheck_->OnSynchronization();
+                if (data != nullptr && synccheck_ != nullptr) {
+                    syncReports = synccheck_->OnSynchronization(); // TODO: 换个名字 finalizeCbdataAndReport
                     hasSynccheckReports = true;
                     std::ostringstream message;
                     message << "synchronization observed reports=" << syncReports.size() << " stream=" << data->stream
@@ -803,9 +762,7 @@ std::string ToolManager::BuildSummaryMessage() const
                << " errors=" << errors << " warnings=0" << '\n';
     }
     output << "callbacks=" << callbackCount_.load() << " malformed_callbacks=" << malformedCallbacks_
-           << " framework_errors=" << frameworkErrors_ << " dropped_messages=" << server_.DroppedMessages()
-           << " trace_collection_failures=" << traceCollections_.Failures()
-           << " pending_trace_streams=" << traceCollections_.PendingStreams();
+           << " framework_errors=" << frameworkErrors_ << " dropped_messages=" << server_.DroppedMessages();
     return output.str();
 }
 

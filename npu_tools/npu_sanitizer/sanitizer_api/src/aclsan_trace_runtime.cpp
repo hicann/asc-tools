@@ -452,36 +452,13 @@ void CompleteTraceLaunch(
     }
 }
 
-TraceCollectionResult CollectTraceStream(aclrtStream stream, aclError synchronizeResult) noexcept
+void CollectTraceStream(aclrtStream stream) noexcept
 {
     std::vector<PendingTrace> completed;
-    uint32_t matchingLaunches = 0;
     try {
         {
             TraceRuntimeState& state = State();
             std::lock_guard<std::mutex> lock(state.mutex);
-            for (const PendingTrace& pending : state.pending) {
-                if (pending.stream == stream) {
-                    ++matchingLaunches;
-                }
-            }
-            if (matchingLaunches == 0) {
-                return {
-                    synchronizeResult == ACL_SUCCESS ? ACLSAN_TRACE_COLLECTION_COMPLETE :
-                                                       ACLSAN_TRACE_COLLECTION_NOT_REQUIRED,
-                    0};
-            }
-            const bool dav3510AicoreException =
-                synchronizeResult == ACL_ERROR_RT_AICORE_EXCEPTION &&
-                std::all_of(state.pending.begin(), state.pending.end(), [stream](const PendingTrace& pending) {
-                    return pending.stream != stream ||
-                           (pending.decoder != nullptr && pending.decoder->architecture != nullptr &&
-                            std::strcmp(pending.decoder->architecture, "dav_3510") == 0);
-                });
-            if (synchronizeResult != ACL_SUCCESS && !dav3510AicoreException) {
-                return {ACLSAN_TRACE_COLLECTION_DEFERRED, matchingLaunches};
-            }
-            completed.reserve(matchingLaunches);
             for (auto it = state.pending.begin(); it != state.pending.end();) {
                 if (it->stream == stream) {
                     completed.push_back(std::move(*it));
@@ -493,10 +470,9 @@ TraceCollectionResult CollectTraceStream(aclrtStream stream, aclError synchroniz
         }
     } catch (...) {
         ASC_SAN_ERROR("acl_san trace: failed to detach completed launches for stream=%p", stream);
-        return {ACLSAN_TRACE_COLLECTION_DEFERRED, matchingLaunches};
+        return;
     }
 
-    bool collectionComplete = true;
     const auto memcpyFunction = Original<aclrtMemcpyFunc>(ACL_RT_API_aclrtMemcpy);
     for (PendingTrace& pending : completed) {
         try {
@@ -507,7 +483,6 @@ TraceCollectionResult CollectTraceStream(aclrtStream stream, aclError synchroniz
                 ASC_SAN_ERROR(
                     "acl_san trace: D2H failed for launch=%llu", static_cast<unsigned long long>(pending.launchId));
                 ReleaseDeviceBuffer(pending.deviceBuffer);
-                collectionComplete = false;
                 continue;
             }
 
@@ -518,7 +493,6 @@ TraceCollectionResult CollectTraceStream(aclrtStream stream, aclError synchroniz
                 ASC_SAN_ERROR(
                     "acl_san trace: malformed buffer for launch=%llu: %s",
                     static_cast<unsigned long long>(pending.launchId), parsed.error.c_str());
-                collectionComplete = false;
             } else {
                 if (!parsed.records.empty() && pending.decoder != nullptr) {
                     DispatchTraceRecords(parsed.records, *pending.decoder);
@@ -528,18 +502,15 @@ TraceCollectionResult CollectTraceStream(aclrtStream stream, aclError synchroniz
                         "acl_san trace: launch=%llu dropped %llu records",
                         static_cast<unsigned long long>(pending.launchId),
                         static_cast<unsigned long long>(parsed.overflowCount));
-                    collectionComplete = false;
                 }
             }
         } catch (...) {
             ASC_SAN_ERROR(
                 "acl_san trace: unexpected D2H processing failure for launch=%llu",
                 static_cast<unsigned long long>(pending.launchId));
-            collectionComplete = false;
         }
         ReleaseDeviceBuffer(pending.deviceBuffer);
     }
-    return {collectionComplete ? ACLSAN_TRACE_COLLECTION_COMPLETE : ACLSAN_TRACE_COLLECTION_FAILED, 0};
 }
 
 void ResetTraceRuntimeState() noexcept

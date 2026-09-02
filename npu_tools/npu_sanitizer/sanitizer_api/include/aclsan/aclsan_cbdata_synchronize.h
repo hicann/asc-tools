@@ -13,18 +13,9 @@
 
 #include "aclsan/aclsan_cbdata_common.h"
 
-typedef enum AclsanTraceCollectionStatus {
-    ACLSAN_TRACE_COLLECTION_NOT_REQUIRED = 0,
-    ACLSAN_TRACE_COLLECTION_COMPLETE = 1,
-    ACLSAN_TRACE_COLLECTION_DEFERRED = 2,
-    ACLSAN_TRACE_COLLECTION_FAILED = 3,
-} AclsanTraceCollectionStatus;
-
 typedef struct AclsanSynchronizeData {
     AclsanCallbackCommonData common;
-    void* stream;                   // 对应aclrtStream
-    uint32_t traceCollectionStatus; // 本次同步后的插桩 trace 采集状态。
-    uint32_t pendingTraceLaunches;  // DEFERRED 时仍由 sanitizer 持有的 launch 数。
+    void* stream; // 对应aclrtStream
 } AclsanSynchronizeData;
 
 #endif
