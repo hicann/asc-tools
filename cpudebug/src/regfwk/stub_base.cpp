@@ -101,7 +101,21 @@ void SetKernelMode(KernelMode mode)
 
 void AddNameArg(const char* name, unsigned long val) { GetArgVal().emplace(name, val); }
 
-unsigned long GetNameArg(const char* name) { return static_cast<unsigned long>(GetArgVal().find(name)->second); }
+unsigned long GetNameArg(const char* name)
+{
+    if (name == nullptr) {
+        std::cerr << "GetNameArg Error: name must not be null." << std::endl;
+        raise(SIGABRT);
+        return 0;
+    }
+    const auto iter = GetArgVal().find(name);
+    if (iter == GetArgVal().end()) {
+        std::cerr << "GetNameArg Error: name argument not found: " << name << std::endl;
+        raise(SIGABRT);
+        return 0;
+    }
+    return static_cast<unsigned long>(iter->second);
+}
 
 std::string BuildExp(uint64_t val)
 {

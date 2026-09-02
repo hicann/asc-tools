@@ -58,6 +58,9 @@ static bool CheckTensorWhlOverflowLowCounter(
 static bool CheckTensorWhlOverflowLowNorm(
     const VecReduceWhlApiParams& param, const uint64_t unit, const std::string& tensorName, const std::string& apiName)
 {
+    if (param.repeatTimes == 0) {
+        return true;
+    }
     uint32_t needSize = (param.repeatTimes - 1) * param.dstRepeatStride * unit;
     if (param.order == ReduceOrder::ORDER_VALUE_INDEX || param.order == ReduceOrder::ORDER_INDEX_VALUE) {
         needSize = needSize + param.dstDtypeBytes * 2; // the DtypeBytes of index

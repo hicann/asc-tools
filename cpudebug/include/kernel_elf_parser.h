@@ -289,7 +289,7 @@ inline Elf64_Shdr GetSectionHeader(const uint8_t* const elfData, size_t dataSize
     data += 8;
     shdr.sh_offset = GetByte(data, 8);
     data += 8;
-    shdr.sh_size = GetByte(data, 4);
+    shdr.sh_size = GetByte(data, 8);
     data += 8;
     shdr.sh_link = static_cast<uint32_t>(GetByte(data, 4));
     data += 4;

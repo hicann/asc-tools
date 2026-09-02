@@ -463,7 +463,7 @@ private:
             delete[] cpuL0AMx;
             cpuL0AMx = nullptr;
         }
-        if (cpuL0B != nullptr) {
+        if (cpuL0BMx != nullptr) {
             delete[] cpuL0BMx;
             cpuL0BMx = nullptr;
         }
