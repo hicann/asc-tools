@@ -21,4 +21,4 @@ target_link_libraries(acl_runtime_stub
 set_target_properties(acl_runtime_stub PROPERTIES
   OUTPUT_NAME runtime
 )
-injection_set_output(acl_runtime_stub)
+injection_set_test_output(acl_runtime_stub)

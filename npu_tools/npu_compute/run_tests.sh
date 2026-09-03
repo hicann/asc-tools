@@ -21,7 +21,7 @@ cmake -S "${SCRIPT_DIR}/.." -B "${BUILD_DIR}" \
 
 cmake --build "${BUILD_DIR}" -j2
 
-LD_LIBRARY_PATH="${BUILD_DIR}/bin${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}" \
+LD_LIBRARY_PATH="${BUILD_DIR}/lib64:${BUILD_DIR}/bin${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}" \
 ctest --test-dir "${BUILD_DIR}" --output-on-failure
 
 NPU_COMPUTE_BUILD_DIR="${BUILD_DIR}" \

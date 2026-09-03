@@ -30,7 +30,7 @@ boost::filesystem::path TemporaryLogPath(const char* suffix)
 
 std::string ReadFile(const boost::filesystem::path& path)
 {
-    std::ifstream input(path);
+    std::ifstream input(path.string());
     std::ostringstream content;
     content << input.rdbuf();
     return content.str();

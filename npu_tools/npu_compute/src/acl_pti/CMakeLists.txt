@@ -44,16 +44,4 @@ set_target_properties(acl_pti PROPERTIES
   CXX_VISIBILITY_PRESET hidden
   VISIBILITY_INLINES_HIDDEN YES
 )
-npu_compute_set_output(acl_pti)
-
-install(TARGETS acl_pti
-  LIBRARY DESTINATION "${NPU_COMPUTE_INSTALL_LIBDIR}"
-  PERMISSIONS OWNER_READ OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE
-  COMPONENT asc-tools
-)
-
-install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/../../include/aclpti/"
-  DESTINATION "${NPU_COMPUTE_INSTALL_INCLUDEDIR}/aclpti"
-  COMPONENT asc-tools
-  FILES_MATCHING PATTERN "*.h"
-)
+npu_compute_set_product_output(acl_pti)

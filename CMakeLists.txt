@@ -81,9 +81,9 @@ if(ENABLE_TEST OR NPU_COMPUTE_BUILD_TESTS OR NPU_CHECK_ENABLE_REAL_DBI_FLOW OR
     NPU_CHECK_ENABLE_REAL_DBI_TOOLCHAIN)
   enable_testing()
 endif()
-if(ASC_TOOLS_BUILD_NPU_COMPUTE OR BUILD_NPU_SANITIZER)
-  add_subdirectory(npu_tools)
-endif()
+
+add_subdirectory(npu_tools)
+
 if(ENABLE_TEST)
   add_subdirectory(tests)
 endif()

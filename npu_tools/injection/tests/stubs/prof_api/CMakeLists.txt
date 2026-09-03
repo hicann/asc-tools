@@ -23,4 +23,4 @@ set_target_properties(acl_prof_api_stub PROPERTIES
   CXX_VISIBILITY_PRESET hidden
   VISIBILITY_INLINES_HIDDEN YES
 )
-injection_set_output(acl_prof_api_stub)
+injection_set_test_output(acl_prof_api_stub)

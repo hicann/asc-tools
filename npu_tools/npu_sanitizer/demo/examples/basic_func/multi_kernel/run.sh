@@ -46,7 +46,7 @@ if [[ $(grep -Ec '^tool=memcheck .*errors=2([[:space:]]|$)' "${output}" || true)
 fi
 
 # 关注非法访问的大小和报告次数：kernel1 与 kernel2 的 AIC 各报告 1 次 32-byte GM 越界读。
-if [[ $(grep -Fc 'npu_check: DIAGNOSTIC ========= ERROR: Invalid GM read of size 32 bytes' "${output}" || true) -ne 2 ]]; then
+if [[ $(grep -Fxc '========= ERROR: Invalid GM read of size 32 bytes' "${output}" || true) -ne 2 ]]; then
     printf 'unexpected Invalid GM read diagnostic count: %s\n' "${output}" >&2
     exit 1
 fi

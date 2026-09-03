@@ -57,8 +57,8 @@ if [[ $(grep -Ec '^\[UDS\] phase=handshake .* result=ok$' "${output}" || true) -
     exit 1
 fi
 
-# 关注访问大小和日志数量：完整报告中应出现 2 条 8256-byte GM 越界读标题。
-if [[ $(grep -Fc 'Invalid GM read of size 8256 bytes' "${output}" || true) -ne 2 ]]; then
+# 关注访问大小和日志数量：1 个逻辑错误在完整报告中应出现 1 条 8256-byte GM 越界读标题。
+if [[ $(grep -Fc 'Invalid GM read of size 8256 bytes' "${output}" || true) -ne 1 ]]; then
     printf 'unexpected Invalid GM read diagnostic count: %s\n' "${output}" >&2
     exit 1
 fi

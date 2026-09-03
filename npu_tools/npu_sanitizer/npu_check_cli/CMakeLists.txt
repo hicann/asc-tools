@@ -32,7 +32,9 @@ set_target_properties(npu_check_cli PROPERTIES OUTPUT_NAME npu-check)
 
 if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR OR ENABLE_TEST)
   enable_testing()
-  find_package(GTest REQUIRED)
+  if(NOT TARGET GTest::gtest)
+    find_package(GTest REQUIRED)
+  endif()
 
   target_compile_definitions(npu_check_common PRIVATE _GLIBCXX_USE_CXX11_ABI=0)
   target_compile_definitions(npu_check_cli PRIVATE _GLIBCXX_USE_CXX11_ABI=0)

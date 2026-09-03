@@ -1275,7 +1275,7 @@ aclptiResult PmuCsvWriter::Write(
             npu_compute::detail::DebugLog(
                 "npu-compute", "CSV section write start: section=%s path=%s rows=%zu", section.c_str(), path.c_str(),
                 result.pmuLogs.size());
-            std::ofstream output(path, std::ios::out | std::ios::trunc);
+            std::ofstream output(path.string(), std::ios::out | std::ios::trunc);
             if (!output.is_open()) {
                 const int errorNumber = errno;
                 npu_compute::detail::DebugLog(

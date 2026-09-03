@@ -250,27 +250,24 @@ bash build.sh --pkg
 `uname -m` 的输出值：
 
 ```text
-<arch>-linux/bin/npu-compute
-<arch>-linux/lib64/libnpu-compute.so
-<arch>-linux/lib64/libacl_pti.so
-<arch>-linux/lib64/libacl_tool_injection.so
-<arch>-linux/include/aclpti/*.h
+<arch>-linux/bin/npu-compute                         # 公开包装脚本
+<arch>-linux/tools/npu_tools/bin/npu-compute         # 真实 CLI
+<arch>-linux/tools/npu_tools/lib64/libnpu-compute.so
+<arch>-linux/tools/npu_tools/lib64/libacl_pti.so
+<arch>-linux/tools/npu_tools/lib64/libacl_tool_injection.so
 ```
 
-安装期间，CANN 通过顶层的 `bin`、`lib64` 和 `include` 符号链接公开架构相关
-目录。执行 `source <install-root>/cann/set_env.sh` 后，对外安装路径如下：
+安装期间，CANN 通过顶层的 `bin` 符号链接公开架构相关的包装脚本。执行
+`source <install-root>/cann/set_env.sh` 后，用户通过以下路径启动工具：
 
 ```text
 $ASCEND_HOME_PATH/bin/npu-compute
-$ASCEND_HOME_PATH/lib64/libnpu-compute.so
-$ASCEND_HOME_PATH/lib64/libacl_pti.so
-$ASCEND_HOME_PATH/lib64/libacl_tool_injection.so
-$ASCEND_HOME_PATH/include/aclpti/*.h
 ```
 
-匹配的 CANN Runtime 基础包会在同一公共 `lib64` 路径下提供 `libprofapi.so` 和
-`libacl_rt.so`。ProfAPI 桩和 Runtime 桩保留为构建目录中的测试产物，不会由
-asc-tools run 包安装。
+包装脚本通过 `exec` 启动私有 CLI，私有 CLI 从同级 `../lib64` 解析
+`libnpu-compute.so`。NPU Compute 不安装 ACLPTI 头文件。匹配的 CANN Runtime
+基础包提供 `libprofapi.so` 和 `libacl_rt.so`；ProfAPI 桩和 Runtime 桩保留为构建
+目录中的测试产物，不会由 asc-tools run 包安装。
 
 ## 重放约定
 

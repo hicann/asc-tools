@@ -135,7 +135,7 @@ bool HardwareInfoIsComplete(const boost::filesystem::path& outputDirectory)
         return false;
     }
 
-    std::ifstream stream(output);
+    std::ifstream stream(output.string());
     if (!stream) {
         return false;
     }

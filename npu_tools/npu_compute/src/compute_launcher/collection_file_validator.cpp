@@ -147,7 +147,7 @@ bool ValidateCollectionFile(const boost::filesystem::path& path, NpuRepFileType 
             return Fail("unknown collection file type for: " + path.string(), error);
     }
 
-    std::ifstream input(path, std::ios::binary);
+    std::ifstream input(path.string(), std::ios::binary);
     if (!input.is_open()) {
         return Fail("open collection file failed: " + path.string(), error);
     }

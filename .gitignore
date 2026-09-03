@@ -7,6 +7,9 @@ libraries
 third_party/*.tar.gz
 third_party/makeself
 third_party/msot
+third_party/boost
+third_party/lib_cache
+third_party/msopgen
 oat_reports/
 
 log/

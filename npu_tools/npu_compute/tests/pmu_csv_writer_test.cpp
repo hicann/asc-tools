@@ -49,7 +49,7 @@ aclptiPmuDataRow::CoreData Core(
 
 std::string ReadFile(const boost::filesystem::path& path)
 {
-    std::ifstream input(path);
+    std::ifstream input(path.string());
     return std::string(std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>());
 }
 
@@ -60,7 +60,7 @@ std::size_t FieldCount(const std::string& line)
 
 bool HasMatchingColumnCounts(const boost::filesystem::path& path)
 {
-    std::ifstream input(path);
+    std::ifstream input(path.string());
     std::string header;
     std::string row;
     return std::getline(input, header) && std::getline(input, row) && FieldCount(header) == FieldCount(row);
@@ -272,7 +272,7 @@ int main()
                                         ("npu_compute_csv_blocked_mirror_test_" +
                                          std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
     {
-        std::ofstream blockedOutput(blockedMirrorDirectory);
+        std::ofstream blockedOutput(blockedMirrorDirectory.string());
         blockedOutput << "not a directory\n";
     }
     config.outputDirectory = mirrorFailurePrimaryDirectory.string();
@@ -294,7 +294,7 @@ int main()
         boost::filesystem::temp_directory_path() /
         ("npu_compute_csv_blocked_test_" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
     {
-        std::ofstream blockedOutput(blockedDirectory);
+        std::ofstream blockedOutput(blockedDirectory.string());
         blockedOutput << "not a directory\n";
     }
     config.outputDirectory = blockedDirectory.string();
@@ -329,7 +329,7 @@ int main()
     CHECK(boost::filesystem::create_directories(emptyDirectory));
     const boost::filesystem::path existingCsv = emptyDirectory / "L2Cache.csv";
     {
-        std::ofstream existingOutput(existingCsv);
+        std::ofstream existingOutput(existingCsv.string());
         existingOutput << "sentinel\n";
     }
     aclptiProfilingDataResult emptyResult;

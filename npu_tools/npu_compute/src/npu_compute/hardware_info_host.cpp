@@ -64,7 +64,7 @@ bool ParseInteger(std::string_view text, Integer* value)
 
 bool ReadFile(const boost::filesystem::path& path, std::string* content)
 {
-    std::ifstream input(path);
+    std::ifstream input(path.string());
     if (!input.is_open()) {
         return false;
     }

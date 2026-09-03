@@ -23,13 +23,13 @@ namespace {
 void WriteFile(const boost::filesystem::path& path, const std::string& content)
 {
     boost::filesystem::create_directories(path.parent_path());
-    std::ofstream output(path, std::ios::binary | std::ios::trunc);
+    std::ofstream output(path.string(), std::ios::binary | std::ios::trunc);
     output << content;
 }
 
 std::string ReadFile(const boost::filesystem::path& path)
 {
-    std::ifstream input(path, std::ios::binary);
+    std::ifstream input(path.string(), std::ios::binary);
     return {std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>()};
 }
 

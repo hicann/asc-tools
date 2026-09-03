@@ -316,7 +316,7 @@ std::string ReadFile(const boost::filesystem::path& path)
     if (!IsNonEmptyFile(path)) {
         return {};
     }
-    std::ifstream input(path, std::ios::binary);
+    std::ifstream input(path.string(), std::ios::binary);
     return input ? std::string(std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>()) : std::string{};
 }
 

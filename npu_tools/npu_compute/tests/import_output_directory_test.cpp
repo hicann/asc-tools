@@ -126,14 +126,14 @@ int TestDefaultOutputDirectory()
 
 bool WriteFile(const boost::filesystem::path& path, const std::string& content)
 {
-    std::ofstream output(path, std::ios::binary | std::ios::trunc);
+    std::ofstream output(path.string(), std::ios::binary | std::ios::trunc);
     output.write(content.data(), static_cast<std::streamsize>(content.size()));
     return output.good();
 }
 
 std::string ReadFile(const boost::filesystem::path& path)
 {
-    std::ifstream input(path, std::ios::binary);
+    std::ifstream input(path.string(), std::ios::binary);
     return std::string(std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>());
 }
 

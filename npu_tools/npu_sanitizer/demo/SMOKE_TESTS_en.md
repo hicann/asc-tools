@@ -39,8 +39,8 @@ bash npu_tools/npu_sanitizer/demo/examples/memcheck/add/run.sh
 ```
 
 This example runs vector addition under `memcheck` and intentionally triggers one
-8256-byte GM out-of-bounds read. The runner checks `errors=1` and a complete session
-before returning 0.
+8256-byte GM out-of-bounds read. The runner checks `child_exit=0`, one diagnostic,
+`errors=1` in the summary, and a complete session before returning 0.
 
 ## DataCopy Stride
 
@@ -130,7 +130,8 @@ and pass criteria.
 
 ## Result Criteria
 
-- A runner build failure, abnormal application exit, failed tool handshake, or incomplete session is a failure.
+- A runner build failure, abnormal application exit, failed tool handshake, a mismatch between the captured
+  application status and the expected status, or an incomplete session is a failure.
 - `add`, `datacopy_stride`, and `multi_kernel` are expected memcheck-error cases; each runner checks its fixed
   error count. `dual_tool_multi_launch_aggregate` is an expected dual-tool error case and checks both error counts.
   Both matmul examples and `padding_register_state` require `errors=0`; matmul must also pass

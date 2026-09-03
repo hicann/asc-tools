@@ -66,8 +66,13 @@ def public_install_root(install_root, tmp_path_factory):
 
 def test_default_component_installs_the_declared_layout(install_root):
     architecture_root = install_root / f"{INSTALL_ARCH}-linux"
+    public_cli = architecture_root / "bin/npu-compute"
+    private_cli = architecture_root / "tools/npu_tools/bin/npu-compute"
     private_library_root = architecture_root / "tools/npu_tools/lib64"
-    assert (architecture_root / "bin/npu-compute").is_file()
+    assert public_cli.is_file()
+    assert public_cli.read_bytes().startswith(b"#!/bin/sh\n")
+    assert private_cli.is_file()
+    assert private_cli.read_bytes().startswith(b"\x7fELF")
     for library in (
         "libnpu-compute.so",
         "libacl_pti.so",
@@ -76,24 +81,7 @@ def test_default_component_installs_the_declared_layout(install_root):
         assert (private_library_root / library).is_file()
         assert not (architecture_root / "lib64" / library).exists()
 
-    aclpti_headers = architecture_root / "include/aclpti"
-    for header in (
-        "aclpti.h",
-        "aclpti_activity.h",
-        "aclpti_callback.h",
-        "aclpti_data.h",
-        "aclpti_export.h",
-        "aclpti_range_profiler.h",
-        "aclpti_runtime_api.h",
-        "aclpti_types.h",
-    ):
-        assert (aclpti_headers / header).is_file()
-    data_header = (aclpti_headers / "aclpti_data.h").read_text(encoding="utf-8")
-    assert "PtiStatus" not in data_header
-    assert "PtiDataModule" not in data_header
-    assert "class Module" not in data_header
-    assert "ReplayPrepareInfo" not in data_header
-    assert "npu_compute::pti" not in data_header
+    assert not (architecture_root / "include/aclpti").exists()
     assert not (architecture_root / "include/npu_compute/acl_pti.h").exists()
     assert not (architecture_root / "include/npu_compute/pti_data_module.h").exists()
 

@@ -230,7 +230,7 @@ bool SyncDescriptor(
 
 bool ReadFile(const boost::filesystem::path& path, std::vector<uint8_t>* content, std::string* error)
 {
-    std::ifstream input(path, std::ios::binary);
+    std::ifstream input(path.string(), std::ios::binary);
     if (!input.is_open()) {
         return Fail("open temporary rep for verification failed: " + path.string(), error);
     }

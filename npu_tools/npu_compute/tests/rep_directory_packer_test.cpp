@@ -75,7 +75,7 @@ private:
 
 bool WriteFile(const boost::filesystem::path& path, std::string_view content)
 {
-    std::ofstream output(path, std::ios::binary | std::ios::trunc);
+    std::ofstream output(path.string(), std::ios::binary | std::ios::trunc);
     output.write(content.data(), static_cast<std::streamsize>(content.size()));
     return output.good();
 }

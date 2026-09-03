@@ -91,10 +91,7 @@ struct Frame {
 // 收到比自己高的 minor 绝不能判为错误。一旦拒绝，新版本就永远无法与旧版本互通，minor
 // 这个字段也就失去了存在意义 —— 它的全部用途就是让两端在不同版本下仍能谈拢一个共同
 // 子集。高位 minor 新增的消息和标志位另有 must-ignore 规则兜底。
-constexpr uint16_t NegotiateMinor(uint16_t peerMinor)
-{
-    return peerMinor < kProtocolMinor ? peerMinor : kProtocolMinor;
-}
+constexpr uint16_t NegotiateMinor(uint16_t peerMinor) { return std::min(peerMinor, kProtocolMinor); }
 
 // Hello payload 固定 8 字节。这两个字段的唯一用途是与 SO_PEERCRED 的结果交叉比对；
 // 会话归属由帧头的 session_id 承担，payload 不再携带任何会话秘密。

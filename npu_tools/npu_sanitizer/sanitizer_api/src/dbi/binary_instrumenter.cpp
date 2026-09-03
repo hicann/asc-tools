@@ -149,7 +149,7 @@ DbiResult RunPipeline(const DbiRequest& request, void*) { return RunDbiPipeline(
 
 bool ReadAll(const boost::filesystem::path& path, std::vector<uint8_t>& data)
 {
-    std::ifstream input(path, std::ios::binary);
+    std::ifstream input(path.string(), std::ios::binary);
     if (!input) {
         return false;
     }

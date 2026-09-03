@@ -44,6 +44,28 @@
         <file value="compile_options_config.json" install_softlink="compiler/conf/compile_options_config.json"/>
     </file_info>
 
+    <dir_info value="npu_tools" install_mod="550">
+        <path value="$(TARGET_ENV)/tools"/>
+        <path value="$(TARGET_ENV)/tools/npu_tools"/>
+        <path value="$(TARGET_ENV)/tools/npu_tools/lib64"/>
+        <path value="$(TARGET_ENV)/tools/npu_tools/bin"/>
+    </dir_info>
+    <file_info value="npu_tools_lib64" copy_type="delivery" src_path="" dst_path="$(TARGET_ENV)/tools/npu_tools/lib64" install_path="$(TARGET_ENV)/tools/npu_tools/lib64" install_mod="550">
+        <!-- <file value="libacl_pti.so"/> -->
+        <file value="libacl_san.so"/>
+        <file value="libacl_tool_injection.so"/>
+        <!-- <file value="libnpu-compute.so"/> -->
+        <file value="libnpu_check.so"/>
+    </file_info>
+    <file_info value="npu_tools_bin" copy_type="delivery" src_path="" dst_path="$(TARGET_ENV)/tools/npu_tools/bin" install_path="$(TARGET_ENV)/tools/npu_tools/bin" install_mod="550">
+        <file value="npu-check"/>
+        <!-- <file value="npu-compute"/> -->
+    </file_info>
+    <file_info value="npu_tools_entry" copy_type="delivery" src_path="" dst_path="$(TARGET_ENV)/bin" install_path="$(TARGET_ENV)/bin" install_mod="550">
+        <file value="npu-check"/>
+        <!-- <file value="npu-compute"/> -->
+    </file_info>
+
     <block_info dependtree="false" dst_path="" install_path="" block_conf_path="ascend" install_mod="550">
         <block name="TIKCppSim"/>
         <block name="AscendCToolkits" feature="ascendc"/>

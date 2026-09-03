@@ -86,7 +86,7 @@ TEST(DbiPipelineTest, ResolvesToolchainFromExplicitRoot)
     boost::filesystem::remove_all(root);
     boost::filesystem::create_directories(root / "tools/bisheng_compiler/bin");
     for (const char* name : {"bisheng", "bisheng-tune", "ld.lld", "llvm-objdump"}) {
-        std::ofstream(root / "tools/bisheng_compiler/bin" / name).put('\n');
+        std::ofstream((root / "tools/bisheng_compiler/bin" / name).string()).put('\n');
     }
 
     const auto toolchain = ResolveToolchain(root.string());
@@ -109,12 +109,12 @@ TEST(DbiPipelineTest, ResolvesToolchainWithSymlinkedExecutable)
     const auto bin = root / "tools/bisheng_compiler/bin";
     boost::filesystem::create_directories(bin);
     for (const char* name : {"bisheng", "bisheng-tune", "lld", "llvm-objdump"}) {
-        std::ofstream(bin / name).put('\n');
+        std::ofstream((bin / name).string()).put('\n');
         ASSERT_EQ(chmod((bin / name).c_str(), 0755), 0);
     }
     boost::filesystem::create_symlink("lld", bin / "ld.lld");
 
-    const auto toolchain = ResolveToolchain(root.string(), {});
+    const auto toolchain = ResolveToolchain(root.string());
     EXPECT_EQ(toolchain.ldLld, (bin / "ld.lld").string());
     EXPECT_TRUE(toolchain.Complete());
     boost::filesystem::remove_all(root);
@@ -129,11 +129,11 @@ TEST(DbiPipelineTest, DoesNotMixToolsFromDifferentRoots)
     boost::filesystem::create_directories(first);
     boost::filesystem::create_directories(second);
     for (const char* name : {"bisheng", "bisheng-tune"}) {
-        std::ofstream(first / name).put('\n');
+        std::ofstream((first / name).string()).put('\n');
         ASSERT_EQ(chmod((first / name).c_str(), 0755), 0);
     }
     for (const char* name : {"ld.lld", "llvm-objdump"}) {
-        std::ofstream(second / name).put('\n');
+        std::ofstream((second / name).string()).put('\n');
         ASSERT_EQ(chmod((second / name).c_str(), 0755), 0);
     }
 
@@ -149,7 +149,7 @@ TEST(DbiPipelineTest, RejectsWorldWritableToolchainExecutable)
     const auto bin = root / "tools/bisheng_compiler/bin";
     boost::filesystem::create_directories(bin);
     for (const char* name : {"bisheng", "bisheng-tune", "ld.lld", "llvm-objdump"}) {
-        std::ofstream(bin / name).put('\n');
+        std::ofstream((bin / name).string()).put('\n');
         ASSERT_EQ(chmod((bin / name).c_str(), 0755), 0);
     }
     ASSERT_EQ(chmod((bin / "bisheng").c_str(), 0777), 0);
@@ -166,9 +166,9 @@ TEST(DbiPipelineTest, ResolvesCannRootFromLoadedRuntimeLibrary)
     const auto runtime = root / "x86_64-linux/lib64/libacl_rt.so";
     boost::filesystem::create_directories(tools);
     boost::filesystem::create_directories(runtime.parent_path());
-    std::ofstream(runtime).put('\n');
+    std::ofstream(runtime.string()).put('\n');
     for (const char* name : {"bisheng", "bisheng-tune", "ld.lld", "llvm-objdump"}) {
-        std::ofstream(tools / name).put('\n');
+        std::ofstream((tools / name).string()).put('\n');
     }
     EXPECT_EQ(CannRootFromRuntimeLibrary(runtime.string()), root.string());
     EXPECT_TRUE(CannRootFromRuntimeLibrary("/usr/lib/libacl_rt.so").empty());
@@ -186,7 +186,7 @@ TEST(DbiPipelineTest, CacheKeyChangesWithProbeSetAndObjectIdentity)
 
 std::string ReadGeneratedFile(const boost::filesystem::path& path)
 {
-    std::ifstream input(path, std::ios::binary);
+    std::ifstream input(path.string(), std::ios::binary);
     return {std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>()};
 }
 

@@ -304,7 +304,7 @@ bool ReadInputFile(const boost::filesystem::path& path, std::vector<uint8_t>* co
         return Fail("imported rep is not a regular file: " + path.string(), error);
     }
 
-    std::ifstream input(path, std::ios::binary);
+    std::ifstream input(path.string(), std::ios::binary);
     if (!input.is_open()) {
         return Fail("open imported rep failed: " + path.string(), error);
     }

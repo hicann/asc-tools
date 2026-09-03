@@ -203,11 +203,22 @@ done
 add_runner="${demo_dir}/examples/memcheck/add/run.sh"
 grep -Fq '^tool=memcheck .*errors=1' "${add_runner}"
 grep -Fq "Invalid GM read of size 8256 bytes" "${add_runner}"
+grep -Fq "Invalid GM read of size 8256 bytes' \"\${output}\" || true) -ne 1" "${add_runner}"
 grep -Fq "'test pass!'" "${add_runner}"
 
 datacopy_runner="${demo_dir}/examples/memcheck/datacopy_stride/run.sh"
 grep -Fq '^tool=memcheck .*errors=4' "${datacopy_runner}"
 grep -Fq "Invalid GM read of size 32 bytes" "${datacopy_runner}"
+grep -Fq "Invalid GM read of size 32 bytes' \"\${output}\" || true) -ne 4" "${datacopy_runner}"
+
+smoke_tests_doc="${demo_dir}/SMOKE_TESTS.md"
+if grep -Fq '状态为 2' "${smoke_tests_doc}"; then
+    printf 'SMOKE_TESTS.md still documents the obsolete memcheck exit status\n' >&2
+    exit 1
+fi
+grep -Fq '一条 8256 字节的 GM 越界读' "${smoke_tests_doc}"
+grep -Fq '4 条 32 字节 GM 越界读' "${smoke_tests_doc}"
+grep -Fq '`child_exit=0`' "${smoke_tests_doc}"
 
 multi_kernel_runner="${demo_dir}/examples/basic_func/multi_kernel/run.sh"
 if rg -q 'source .*common\.sh|aclsan_(prepare|capture|expect|require|verify|complete)' \

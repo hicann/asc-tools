@@ -282,29 +282,26 @@ Inside the asc-tools run package, architecture-dependent files use the CANN
 architecture directory. Here, `<arch>` is the value reported by `uname -m`:
 
 ```text
-<arch>-linux/bin/npu-compute
-<arch>-linux/lib64/libnpu-compute.so
-<arch>-linux/lib64/libacl_pti.so
-<arch>-linux/lib64/libacl_tool_injection.so
-<arch>-linux/include/aclpti/*.h
+<arch>-linux/bin/npu-compute                         # public wrapper
+<arch>-linux/tools/npu_tools/bin/npu-compute         # real CLI
+<arch>-linux/tools/npu_tools/lib64/libnpu-compute.so
+<arch>-linux/tools/npu_tools/lib64/libacl_pti.so
+<arch>-linux/tools/npu_tools/lib64/libacl_tool_injection.so
 ```
 
-During installation, CANN exposes the architecture-dependent directories
-through the top-level `bin`, `lib64`, and `include` symbolic links. After
-running `source <install-root>/cann/set_env.sh`, the public installed paths are:
+During installation, CANN exposes the architecture-dependent wrapper through
+the top-level `bin` symbolic link. After running
+`source <install-root>/cann/set_env.sh`, users start the tool through:
 
 ```text
 $ASCEND_HOME_PATH/bin/npu-compute
-$ASCEND_HOME_PATH/lib64/libnpu-compute.so
-$ASCEND_HOME_PATH/lib64/libacl_pti.so
-$ASCEND_HOME_PATH/lib64/libacl_tool_injection.so
-$ASCEND_HOME_PATH/include/aclpti/*.h
 ```
 
-The matching base CANN Runtime package provides `libprofapi.so` and
-`libacl_rt.so` under the same public `lib64` path. The ProfAPI and Runtime stubs
-remain build-tree test artifacts and are not installed by the asc-tools run
-package.
+The wrapper uses `exec` to start the private CLI, which resolves
+`libnpu-compute.so` from the sibling `../lib64` directory. NPU Compute does not
+install ACLPTI headers. The matching base CANN Runtime package provides
+`libprofapi.so` and `libacl_rt.so`. The ProfAPI and Runtime stubs remain
+build-tree test artifacts and are not installed by the asc-tools run package.
 
 ## Replay Contract
 

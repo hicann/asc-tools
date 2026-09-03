@@ -62,7 +62,7 @@ bool StoredNameLess(const DirectoryItem& left, const DirectoryItem& right)
 
 bool ReadFile(const boost::filesystem::path& path, std::vector<uint8_t>* payload, std::string* error)
 {
-    std::ifstream input(path, std::ios::binary);
+    std::ifstream input(path.string(), std::ios::binary);
     if (!input.is_open()) {
         return Fail("open collection file for packing failed: " + path.string(), error);
     }

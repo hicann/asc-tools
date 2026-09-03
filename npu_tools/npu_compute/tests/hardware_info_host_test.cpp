@@ -62,7 +62,7 @@ bool WriteFile(const boost::filesystem::path& path, std::string_view content)
     if (error) {
         return false;
     }
-    std::ofstream output(path);
+    std::ofstream output(path.string());
     output << content;
     return output.good();
 }

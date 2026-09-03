@@ -171,7 +171,7 @@ void TestRealRunnerFindsBareToolOnPath()
     const fs::path directory = TestDirectory("aclsan-device-symbolizer-real-runner-test");
     const fs::path tool = directory / "fake-symbolizer";
     {
-        std::ofstream script(tool);
+        std::ofstream script(tool.string());
         script << "#!/bin/sh\n"
                << "printf 'RealFunction\\n/src/kernel.asc:21:4\\n'\n";
     }

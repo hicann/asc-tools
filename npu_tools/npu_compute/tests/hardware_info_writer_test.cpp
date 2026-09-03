@@ -64,7 +64,7 @@ private:
 
 bool ReadFile(const boost::filesystem::path& path, std::string* value)
 {
-    std::ifstream input(path, std::ios::binary);
+    std::ifstream input(path.string(), std::ios::binary);
     if (!input.is_open()) {
         return false;
     }

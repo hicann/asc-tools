@@ -14,8 +14,8 @@ endif()
 
 option(NPU_COMPUTE_BUILD_TESTS "Build NPU Compute tests" OFF)
 
-set(NPU_TOOLS_OUTPUT_DIR "${CMAKE_CURRENT_BINARY_DIR}/bin")
-set(INJECTION_OUTPUT_DIR "${NPU_TOOLS_OUTPUT_DIR}")
+set(NPU_TOOLS_LIBRARY_OUTPUT_DIR "${CMAKE_CURRENT_BINARY_DIR}/lib64")
+set(NPU_TOOLS_RUNTIME_OUTPUT_DIR "${CMAKE_CURRENT_BINARY_DIR}/bin")
 
 if(NPU_COMPUTE_BUILD_TESTS OR ENABLE_TEST)
   enable_testing()
@@ -23,5 +23,13 @@ if(NPU_COMPUTE_BUILD_TESTS OR ENABLE_TEST)
 endif()
 
 add_subdirectory(injection)
-add_subdirectory(npu_compute)
+if(ASC_TOOLS_BUILD_NPU_COMPUTE)
+  add_subdirectory(npu_compute)
+endif()
 add_subdirectory(npu_sanitizer)
+
+if(ASC_TOOLS_BUILD_NPU_COMPUTE AND (NPU_COMPUTE_BUILD_TESTS OR ENABLE_TEST))
+  add_test(NAME npu_tools.product_build_output_layout
+    COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/tests/check_product_build_output_layout.sh"
+      "${CMAKE_CURRENT_BINARY_DIR}")
+endif()

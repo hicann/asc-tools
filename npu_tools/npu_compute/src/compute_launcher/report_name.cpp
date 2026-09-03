@@ -18,7 +18,9 @@
 #include <string>
 #include <system_error>
 
-#include <sys/random.h>
+#include <fcntl.h>
+#include <sys/syscall.h>
+#include <unistd.h>
 
 namespace npu_compute::compute_launcher {
 namespace {
@@ -32,6 +34,54 @@ bool Fail(const std::string& message, std::string* error)
         *error = message;
     }
     return false;
+}
+
+class UniqueFd {
+public:
+    explicit UniqueFd(int fd) noexcept : fd_(fd) {}
+    ~UniqueFd()
+    {
+        if (fd_ >= 0) {
+            (void)close(fd_);
+        }
+    }
+
+    UniqueFd(const UniqueFd&) = delete;
+    UniqueFd& operator=(const UniqueFd&) = delete;
+
+    int Get() const noexcept { return fd_; }
+
+private:
+    int fd_;
+};
+
+bool ReadRandomDevice(uint8_t* output, std::size_t size, std::string* error)
+{
+    int fd = -1;
+    do {
+        fd = open("/dev/urandom", O_RDONLY | O_CLOEXEC);
+    } while (fd < 0 && errno == EINTR);
+    if (fd < 0) {
+        return Fail("open /dev/urandom failed: " + std::error_code(errno, std::generic_category()).message(), error);
+    }
+
+    UniqueFd randomDevice(fd);
+    std::size_t offset = 0;
+    while (offset < size) {
+        const ssize_t result = read(randomDevice.Get(), output + offset, size - offset);
+        if (result < 0) {
+            if (errno == EINTR) {
+                continue;
+            }
+            return Fail(
+                "read /dev/urandom failed: " + std::error_code(errno, std::generic_category()).message(), error);
+        }
+        if (result == 0) {
+            return Fail("read /dev/urandom returned zero bytes", error);
+        }
+        offset += static_cast<std::size_t>(result);
+    }
+    return true;
 }
 
 bool SystemEpochMilliseconds(uint64_t* value, void*, std::string* error)
@@ -48,20 +98,29 @@ bool SystemEpochMilliseconds(uint64_t* value, void*, std::string* error)
 bool SystemRandomBytes(std::array<uint8_t, 4>* value, void*, std::string* error)
 {
     std::size_t offset = 0;
+#ifdef SYS_getrandom
     while (offset < value->size()) {
-        const ssize_t result = ::getrandom(value->data() + offset, value->size() - offset, 0);
+        const ssize_t result = syscall(SYS_getrandom, value->data() + offset, value->size() - offset, 0);
         if (result < 0) {
             if (errno == EINTR) {
                 continue;
             }
-            return Fail("getrandom failed: " + std::error_code(errno, std::generic_category()).message(), error);
+            if (errno == ENOSYS) {
+                break;
+            }
+            return Fail(
+                "getrandom syscall failed: " + std::error_code(errno, std::generic_category()).message(), error);
         }
         if (result == 0) {
-            return Fail("getrandom returned zero bytes", error);
+            return Fail("getrandom syscall returned zero bytes", error);
         }
         offset += static_cast<std::size_t>(result);
     }
-    return true;
+    if (offset == value->size()) {
+        return true;
+    }
+#endif
+    return ReadRandomDevice(value->data() + offset, value->size() - offset, error);
 }
 
 bool HasReportSuffix(const boost::filesystem::path& path)

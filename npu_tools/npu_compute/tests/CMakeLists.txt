@@ -88,7 +88,7 @@ add_executable(npu_compute_launcher_test launcher_test.cpp)
 target_link_libraries(npu_compute_launcher_test
   PRIVATE npu_compute_launcher_core Boost::filesystem)
 add_dependencies(npu_compute_launcher_test npu_compute)
-npu_compute_set_output(npu_compute_launcher_test)
+npu_compute_set_test_output(npu_compute_launcher_test)
 add_test(NAME npu_compute.launcher COMMAND npu_compute_launcher_test)
 
 add_executable(npu_compute_staging_directory_test staging_directory_test.cpp)
@@ -99,12 +99,12 @@ add_test(NAME npu_compute.staging_directory COMMAND npu_compute_staging_director
 add_executable(npu_compute_rep_fixture_app rep_fixture_app.cpp)
 target_link_libraries(npu_compute_rep_fixture_app PRIVATE Boost::filesystem)
 add_dependencies(npu_compute_rep_fixture_app npu_compute_cli npu_compute)
-npu_compute_set_output(npu_compute_rep_fixture_app)
+npu_compute_set_test_output(npu_compute_rep_fixture_app)
 
 add_executable(npu_compute_stub_demo_app stub_demo_app.cpp)
 target_link_libraries(npu_compute_stub_demo_app PRIVATE acl_runtime_stub)
 add_dependencies(npu_compute_stub_demo_app npu_compute acl_pti)
-npu_compute_set_output(npu_compute_stub_demo_app)
+npu_compute_set_test_output(npu_compute_stub_demo_app)
 
 add_executable(acl_pti_public_api_test public_api_test.cpp)
 target_link_libraries(acl_pti_public_api_test
@@ -458,7 +458,7 @@ if(NPU_COMPUTE_BUILD_REAL_HARDWARE_TESTS)
     VISIBILITY_INLINES_HIDDEN YES
     LINK_DEPENDS "${NPU_COMPUTE_REAL_HARDWARE_VERSION_SCRIPT}"
   )
-  npu_compute_set_output(npu_compute_real_hardware_test_library)
+  npu_compute_set_test_output(npu_compute_real_hardware_test_library)
 
   find_library(NPU_COMPUTE_REAL_ASCENDCL_LIBRARY
     NAMES ascendcl
@@ -488,7 +488,7 @@ if(NPU_COMPUTE_BUILD_REAL_HARDWARE_TESTS)
     npu_compute_real_hardware_callback_app PROPERTIES
     OUTPUT_NAME npu_compute_real_hardware_callback_app
   )
-  npu_compute_set_output(npu_compute_real_hardware_callback_app)
+  npu_compute_set_test_output(npu_compute_real_hardware_callback_app)
 endif()
 
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
@@ -520,7 +520,7 @@ endif()
 add_test(
   NAME npu_compute.hardware_info_integration
   COMMAND ${CMAKE_COMMAND} -E env
-    "NPU_COMPUTE_TEST_BIN_DIR=$<TARGET_FILE_DIR:npu_compute>"
+    "NPU_COMPUTE_TEST_BIN_DIR=$<TARGET_FILE_DIR:npu_compute_cli>"
     "NPU_COMPUTE_CALLBACK_STUB=$<TARGET_FILE:acl_pti_callback_stub>"
     "NPU_COMPUTE_HARDWARE_API_STUB=$<TARGET_FILE:npu_compute_hardware_api_stub>"
     ${Python3_EXECUTABLE} -m pytest -q -p no:cacheprovider
@@ -530,7 +530,7 @@ add_test(
 add_test(
   NAME npu_compute.subscribe_lifecycle
   COMMAND ${CMAKE_COMMAND} -E env
-    "NPU_COMPUTE_TEST_BIN_DIR=$<TARGET_FILE_DIR:npu_compute>"
+    "NPU_COMPUTE_TEST_BIN_DIR=$<TARGET_FILE_DIR:npu_compute_cli>"
     ${Python3_EXECUTABLE} -m pytest -q -p no:cacheprovider
     ${CMAKE_CURRENT_SOURCE_DIR}/test_subscriber_lifecycle.py
 )
@@ -538,7 +538,7 @@ add_test(
 add_test(
   NAME npu_compute.integration_stubs
   COMMAND ${CMAKE_COMMAND} -E env
-    "NPU_COMPUTE_TEST_BIN_DIR=$<TARGET_FILE_DIR:npu_compute>"
+    "NPU_COMPUTE_TEST_BIN_DIR=$<TARGET_FILE_DIR:npu_compute_cli>"
     ${Python3_EXECUTABLE} -m pytest -q -p no:cacheprovider
     ${CMAKE_CURRENT_SOURCE_DIR}/test_integration_stubs.py
 )
@@ -546,7 +546,7 @@ add_test(
 add_test(
   NAME npu_compute.connected_integration
   COMMAND ${CMAKE_COMMAND} -E env
-    "NPU_COMPUTE_TEST_BIN_DIR=$<TARGET_FILE_DIR:npu_compute>"
+    "NPU_COMPUTE_TEST_BIN_DIR=$<TARGET_FILE_DIR:npu_compute_cli>"
     ${Python3_EXECUTABLE} -m pytest -q -p no:cacheprovider
     ${CMAKE_CURRENT_SOURCE_DIR}/../../../tests/py_ut/testcase/npu_compute/test_npu_compute_integration.py
 )
@@ -555,7 +555,7 @@ add_test(
   NAME npu_compute.install_layout
   COMMAND ${CMAKE_COMMAND} -E env
     "NPU_COMPUTE_TEST_BUILD_DIR=${CMAKE_BINARY_DIR}"
-    "NPU_COMPUTE_TEST_BIN_DIR=$<TARGET_FILE_DIR:npu_compute>"
+    "NPU_COMPUTE_TEST_BIN_DIR=$<TARGET_FILE_DIR:npu_compute_cli>"
     ${Python3_EXECUTABLE} -m pytest -q -p no:cacheprovider
     ${CMAKE_CURRENT_SOURCE_DIR}/../../../tests/py_ut/testcase/npu_compute/test_npu_compute_install.py
 )

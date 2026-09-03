@@ -45,10 +45,4 @@ set_target_properties(npu_compute PROPERTIES
   VISIBILITY_INLINES_HIDDEN YES
   LINK_DEPENDS "${NPU_COMPUTE_VERSION_SCRIPT}"
 )
-npu_compute_set_output(npu_compute)
-
-install(TARGETS npu_compute
-  LIBRARY DESTINATION "${NPU_COMPUTE_INSTALL_LIBDIR}"
-  PERMISSIONS OWNER_READ OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE
-  COMPONENT asc-tools
-)
+npu_compute_set_product_output(npu_compute)

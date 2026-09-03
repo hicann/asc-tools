@@ -13,6 +13,7 @@ set -euo pipefail
 
 demo_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 bin_dir="${demo_dir}/build/npu_tools/bin"
+library_dir="${demo_dir}/build/npu_tools/lib64"
 example_bin_dir="${demo_dir}/examples/memcheck/add/build"
 output=$(mktemp)
 trap 'status=$?; if [[ ${status} -ne 0 ]]; then cat "${output}" >&2; fi; rm -f -- "${output}"' EXIT
@@ -44,26 +45,26 @@ grep -F '[PASSED] memcheck/add' "${output}"
 
 test -x "${bin_dir}/npu_check"
 test ! -e "${bin_dir}/npucheck"
-test -f "${bin_dir}/libnpu_check.so"
-test -f "${bin_dir}/libacl_tool_injection.so"
-test -f "${bin_dir}/libacl_san.so"
+test -f "${library_dir}/libnpu_check.so"
+test -f "${library_dir}/libacl_tool_injection.so"
+test -f "${library_dir}/libacl_san.so"
 test ! -e "${bin_dir}/libaclsan_demo_tool.so"
-bash "${demo_dir}/../sanitizer_api/tests/check_acl_san_exports.sh" "${bin_dir}/libacl_san.so"
-nm -D --defined-only "${bin_dir}/libnpu_check.so" | grep -F ' acltoolInitialize@@NPU_CHECK_1.0'
-if nm -D --undefined-only "${bin_dir}/libnpu_check.so" |
+bash "${demo_dir}/../sanitizer_api/tests/check_acl_san_exports.sh" "${library_dir}/libacl_san.so"
+nm -D --defined-only "${library_dir}/libnpu_check.so" | grep -F ' acltoolInitialize@@NPU_CHECK_1.0'
+if nm -D --undefined-only "${library_dir}/libnpu_check.so" |
     grep -Eq 'aclsan(SymbolizeDevicePc|GetPatchSiteInfo)'; then
     printf 'legacy SourceResolver symbol dependency remains\n' >&2
     exit 1
 fi
-if nm -D --defined-only "${bin_dir}/libnpu_check.so" | grep -Fq 'acltoolInitalize'; then
+if nm -D --defined-only "${library_dir}/libnpu_check.so" | grep -Fq 'acltoolInitalize'; then
     printf 'misspelled injection entry is still exported\n' >&2
     exit 1
 fi
 readelf -d "${example_bin_dir}/demo" | grep -F 'libacl_rt.so'
-readelf -d "${bin_dir}/libnpu_check.so" | grep -F 'libacl_san.so'
-readelf -d "${bin_dir}/libacl_san.so" | grep -F 'libacl_tool_injection.so'
-readelf -d "${bin_dir}/libacl_san.so" | grep -E '(RPATH|RUNPATH).*[[]\$ORIGIN[]]'
-readelf -d "${bin_dir}/libacl_tool_injection.so" | grep -F 'libacl_rt.so'
+readelf -d "${library_dir}/libnpu_check.so" | grep -F 'libacl_san.so'
+readelf -d "${library_dir}/libacl_san.so" | grep -F 'libacl_tool_injection.so'
+readelf -d "${library_dir}/libacl_san.so" | grep -E '(RPATH|RUNPATH).*[[]\$ORIGIN[]]'
+readelf -d "${library_dir}/libacl_tool_injection.so" | grep -F 'libacl_rt.so'
 cann_home=$(sed -n 's/^ASCEND_HOME_PATH:PATH=//p' "${demo_dir}/build/CMakeCache.txt")
 test -n "${cann_home}"
 readelf -d "${cann_home}/lib64/libacl_rt.so" | grep -F 'libruntime.so'

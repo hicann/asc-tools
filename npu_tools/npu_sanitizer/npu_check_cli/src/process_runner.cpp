@@ -26,8 +26,8 @@
 #include <iostream>
 #include <mutex>
 #include <poll.h>
-#include <sys/random.h>
 #include <sys/stat.h>
+#include <sys/syscall.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <system_error>
@@ -305,12 +305,20 @@ private:
     bool logRequired_ = false;
 };
 
-bool RandomBytes(void* output, size_t size)
+bool ReadRandomDevice(unsigned char* output, size_t size)
 {
-    auto* cursor = static_cast<unsigned char*>(output);
+    int fd = -1;
+    do {
+        fd = open("/dev/urandom", O_RDONLY | O_CLOEXEC);
+    } while (fd < 0 && errno == EINTR);
+    if (fd < 0) {
+        return false;
+    }
+
+    UniqueFd randomDevice(fd);
     size_t total = 0;
     while (total < size) {
-        const ssize_t result = getrandom(cursor + total, size - total, 0);
+        const ssize_t result = read(randomDevice.Get(), output + total, size - total);
         if (result < 0 && errno == EINTR) {
             continue;
         }
@@ -320,6 +328,31 @@ bool RandomBytes(void* output, size_t size)
         total += static_cast<size_t>(result);
     }
     return true;
+}
+
+bool RandomBytes(void* output, size_t size)
+{
+    auto* cursor = static_cast<unsigned char*>(output);
+    size_t total = 0;
+#ifdef SYS_getrandom
+    while (total < size) {
+        const ssize_t result = syscall(SYS_getrandom, cursor + total, size - total, 0);
+        if (result < 0 && errno == EINTR) {
+            continue;
+        }
+        if (result < 0 && errno == ENOSYS) {
+            break;
+        }
+        if (result <= 0) {
+            return false;
+        }
+        total += static_cast<size_t>(result);
+    }
+    if (total == size) {
+        return true;
+    }
+#endif
+    return ReadRandomDevice(cursor + total, size - total);
 }
 
 // 生成 32 个十六进制字符（16 字节随机数）。失败返回空串。

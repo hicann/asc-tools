@@ -139,7 +139,7 @@ void LoadCsvHardwareInfoMetadata(PmuCsvConfig* config, bool loadFrequencies)
         return;
     }
     const boost::filesystem::path path = boost::filesystem::path(config->outputDirectory) / "HardwareInfo.jsonl";
-    std::ifstream input(path);
+    std::ifstream input(path.string());
     if (!input.is_open()) {
         npu_compute::detail::DebugLog(
             "npu-compute", "CSV hardware metadata fallback: HardwareInfo unavailable path=%s", path.c_str());

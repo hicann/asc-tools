@@ -83,14 +83,14 @@ std::vector<uint8_t> Bytes(std::string_view value) { return {value.begin(), valu
 
 bool WriteFile(const boost::filesystem::path& path, const std::vector<uint8_t>& content)
 {
-    std::ofstream output(path, std::ios::binary | std::ios::trunc);
+    std::ofstream output(path.string(), std::ios::binary | std::ios::trunc);
     output.write(reinterpret_cast<const char*>(content.data()), static_cast<std::streamsize>(content.size()));
     return output.good();
 }
 
 bool ReadFile(const boost::filesystem::path& path, std::vector<uint8_t>* content)
 {
-    std::ifstream input(path, std::ios::binary);
+    std::ifstream input(path.string(), std::ios::binary);
     if (!input.is_open()) {
         return false;
     }

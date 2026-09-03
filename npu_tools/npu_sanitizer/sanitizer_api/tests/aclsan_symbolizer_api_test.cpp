@@ -70,7 +70,7 @@ int main()
     fs::remove_all(work);
     fs::create_directories(work);
     {
-        std::ofstream script(symbolizer);
+        std::ofstream script(symbolizer.string());
         script << "#!/bin/sh\n"
                << "printf 'CopyIn\\n/src/kernel.asc:46:5\\nAddKernel\\n/src/kernel.asc:58:1\\n'\n";
     }

@@ -486,7 +486,7 @@ bool LaunchChild(const char* executable, const char* scenario, const boost::file
 
 std::size_t CountLines(const boost::filesystem::path& path)
 {
-    std::ifstream input(path);
+    std::ifstream input(path.string());
     std::size_t lines = 0;
     std::string line;
     while (std::getline(input, line)) {

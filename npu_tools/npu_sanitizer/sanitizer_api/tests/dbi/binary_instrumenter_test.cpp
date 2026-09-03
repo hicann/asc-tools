@@ -86,9 +86,9 @@ TEST(DefaultBinaryInstrumentationConfigTest, BuildsRuntimeConfigWithoutDbiEnviro
     boost::filesystem::remove_all(cannRoot);
     boost::filesystem::create_directories(tools);
     boost::filesystem::create_directories(runtime.parent_path());
-    std::ofstream(runtime).put('\n');
+    std::ofstream(runtime.string()).put('\n');
     for (const char* name : {"bisheng", "bisheng-tune", "ld.lld", "llvm-objdump"}) {
-        std::ofstream(tools / name).put('\n');
+        std::ofstream((tools / name).string()).put('\n');
     }
 
     BinaryInstrumentationConfig config;
@@ -268,7 +268,7 @@ TEST_F(BinaryInstrumenterTest, CleanupRemovesRequestDirectoryButPreservesExterna
     const std::string original = "kernel-data";
     const boost::filesystem::path cacheMarker = boost::filesystem::path(state_.config.cacheDirectory) / "cache-marker";
     boost::filesystem::create_directories(cacheMarker.parent_path());
-    std::ofstream(cacheMarker) << "cached";
+    std::ofstream(cacheMarker.string()) << "cached";
 
     ASSERT_EQ(
         InstrumentBinary(state_.config, original.data(), original.size(), &FakePatch, &state_).status,
@@ -302,9 +302,9 @@ TEST_F(BinaryInstrumenterTest, RuntimeFacadeConsumesPatchedBytesAcrossAnAbiStabl
     const auto runtime = cannRoot / "x86_64-linux/lib64/libacl_rt.so";
     boost::filesystem::create_directories(tools);
     boost::filesystem::create_directories(runtime.parent_path());
-    std::ofstream(runtime).put('\n');
+    std::ofstream(runtime.string()).put('\n');
     for (const char* name : {"bisheng", "bisheng-tune", "ld.lld", "llvm-objdump"}) {
-        std::ofstream(tools / name).put('\n');
+        std::ofstream((tools / name).string()).put('\n');
     }
 
     const RuntimeBinaryInstrumentationResult result = InstrumentRuntimeBinary(

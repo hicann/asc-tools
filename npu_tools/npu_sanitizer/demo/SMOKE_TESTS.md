@@ -35,8 +35,8 @@ bash npu_tools/npu_sanitizer/demo/run_smoke.sh
 bash npu_tools/npu_sanitizer/demo/examples/memcheck/add/run.sh
 ```
 
-该用例通过 `memcheck` 运行向量加法，并故意触发一条 8256 字节的 GM 越界读。runner 校验原始
-`npu_check` 状态为 2、summary 的 `errors=1` 和完整会话后返回 0。
+该用例通过 `memcheck` 运行向量加法，并故意触发一条 8256 字节的 GM 越界读。runner 校验
+`child_exit=0`、一条诊断、summary 的 `errors=1` 和完整会话后返回 0。
 
 ## DataCopy Stride
 

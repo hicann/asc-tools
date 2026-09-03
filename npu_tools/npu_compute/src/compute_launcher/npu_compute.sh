@@ -1,3 +1,4 @@
+#!/bin/sh
 # ----------------------------------------------------------------------------------------------------------
 # Copyright (c) 2026 Huawei Technologies Co., Ltd.
 # This program is free software, you can redistribute it and/or modify it under the terms and conditions of
@@ -7,25 +8,9 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # ----------------------------------------------------------------------------------------------------------
-add_library(npu_compute_launcher_core STATIC
-  collection_file_validator.cpp
-  config.cpp
-  import_output_directory.cpp
-  imported_profile_results.cpp
-  injection_path.cpp
-  launcher.cpp
-  process_launcher.cpp
-  rep_decoder.cpp
-  rep_directory_packer.cpp
-  rep_encoder.cpp
-  rep_report_writer.cpp
-  report_name.cpp
-  staging_directory.cpp
-)
-target_include_directories(npu_compute_launcher_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
-target_link_libraries(npu_compute_launcher_core PUBLIC npu_compute_headers Boost::filesystem)
 
-add_executable(npu_compute_cli main.cpp)
-target_link_libraries(npu_compute_cli PRIVATE npu_compute_launcher_core)
-set_target_properties(npu_compute_cli PROPERTIES OUTPUT_NAME npu-compute)
-npu_compute_set_product_output(npu_compute_cli)
+set -e
+
+SCRIPT_DIR=$(dirname -- "$(readlink -f -- "$0")")
+ARCH_ROOT=$(readlink -f -- "${SCRIPT_DIR}/..")
+exec "${ARCH_ROOT}/tools/npu_tools/bin/npu-compute" "$@"

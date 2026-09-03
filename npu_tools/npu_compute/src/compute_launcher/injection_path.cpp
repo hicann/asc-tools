@@ -75,7 +75,7 @@ bool ResolveInjectionLibraryPath(std::string* path, std::string* error)
     const boost::filesystem::path executable_directory = executable.parent_path();
     const std::array<boost::filesystem::path, 2> candidates = {
         executable_directory / kInjectionLibraryName,
-        executable_directory / ".." / "tools" / "npu_tools" / "lib64" / kInjectionLibraryName,
+        executable_directory / ".." / "lib64" / kInjectionLibraryName,
     };
 
     for (const boost::filesystem::path& candidate : candidates) {
@@ -88,7 +88,7 @@ bool ResolveInjectionLibraryPath(std::string* path, std::string* error)
     }
 
     if (error != nullptr) {
-        *error = "libnpu-compute.so was not found next to npu-compute, or in ../tools/npu_tools/lib64";
+        *error = "libnpu-compute.so was not found next to npu-compute or in ../lib64";
     }
     return false;
 }

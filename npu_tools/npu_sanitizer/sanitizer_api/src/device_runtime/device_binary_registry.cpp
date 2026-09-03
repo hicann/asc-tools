@@ -56,7 +56,7 @@ bool WriteImage(const fs::path& destination, const void* image, size_t imageByte
     if (image == nullptr || imageBytes == 0) {
         return false;
     }
-    std::ofstream output(destination, std::ios::binary | std::ios::trunc);
+    std::ofstream output(destination.string(), std::ios::binary | std::ios::trunc);
     output.write(static_cast<const char*>(image), static_cast<std::streamsize>(imageBytes));
     return output.good();
 }

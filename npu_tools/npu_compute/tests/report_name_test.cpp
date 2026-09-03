@@ -117,7 +117,7 @@ ReportNameSources Sources(const boost::filesystem::path& current_directory, Fixe
 
 bool WriteFile(const boost::filesystem::path& path)
 {
-    std::ofstream output(path, std::ios::binary | std::ios::trunc);
+    std::ofstream output(path.string(), std::ios::binary | std::ios::trunc);
     output << "existing";
     return output.good();
 }
@@ -223,12 +223,28 @@ int TestProductionEntryForExplicitTarget()
     return 0;
 }
 
+int TestProductionRandomSource()
+{
+    TempDirectory temporary;
+    CHECK(!temporary.Path().empty());
+    ReportTarget target;
+    std::string error;
+
+    CHECK(ResolveReportTarget(temporary.Path().string(), &target, &error));
+    CHECK(error.empty());
+    CHECK(target.path.parent_path() == temporary.Path());
+    CHECK(target.path.filename().string().find("report_") == 0U);
+    CHECK(target.path.extension() == ".npu-rep");
+    return 0;
+}
+
 } // namespace
 
 int main()
 {
     if (TestDefaultAndDirectoryTargets() != 0 || TestExplicitFileTarget() != 0 || TestCollisionRetry() != 0 ||
-        TestInvalidTargetsAndSources() != 0 || TestProductionEntryForExplicitTarget() != 0) {
+        TestInvalidTargetsAndSources() != 0 || TestProductionEntryForExplicitTarget() != 0 ||
+        TestProductionRandomSource() != 0) {
         return 1;
     }
     return 0;
