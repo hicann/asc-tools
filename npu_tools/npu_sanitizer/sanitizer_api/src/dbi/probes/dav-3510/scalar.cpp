@@ -12,10 +12,10 @@
 
 // SET_PADDING, API ID 392.
 extern __attribute__((noinline)) __attribute__((weak)) __aicore__ void __sanitizer_report_set_padding(
-    __gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, uint64_t value)
+    __gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, uint64_t config)
 {
     aclsan::WriteTraceRecord(
-        memInfo, pc, bid, aclsan::DeviceInstructionCategory::RegisterState, static_cast<uint16_t>(PIPE_S), 392, value,
+        memInfo, pc, bid, aclsan::DeviceInstructionCategory::RegisterState, static_cast<uint16_t>(PIPE_S), 392, config,
         0UL, 0UL, 0UL, 0UL);
 }
 
@@ -34,15 +34,6 @@ extern __attribute__((noinline)) __attribute__((weak)) __aicore__ void __sanitiz
 {
     aclsan::WriteTraceRecord(
         memInfo, pc, bid, aclsan::DeviceInstructionCategory::RegisterState, static_cast<uint16_t>(PIPE_S), 124, config,
-        0UL, 0UL, 0UL, 0UL);
-}
-
-// PAD_CNT_NDDMA, API ID 131.
-extern __attribute__((noinline)) __attribute__((weak)) __aicore__ void __sanitizer_report_set_pad_cnt_nddma(
-    __gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, uint64_t config)
-{
-    aclsan::WriteTraceRecord(
-        memInfo, pc, bid, aclsan::DeviceInstructionCategory::RegisterState, static_cast<uint16_t>(PIPE_S), 131, config,
         0UL, 0UL, 0UL, 0UL);
 }
 
@@ -91,12 +82,44 @@ extern __attribute__((noinline)) __attribute__((weak)) __aicore__ void __sanitiz
         0UL, 0UL, 0UL, 0UL);
 }
 
+extern __attribute__((noinline)) __attribute__((weak)) __aicore__ void __sanitizer_report_st_atomic_b8(
+    __gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, uint64_t addr, int64_t offset, uint64_t post)
+{
+    aclsan::WriteTraceRecord(
+        memInfo, pc, bid, aclsan::DeviceInstructionCategory::MemoryAccess, static_cast<uint16_t>(PIPE_S), 58, addr,
+        static_cast<uint64_t>(offset), post, 0UL, 0UL);
+}
+
+extern __attribute__((noinline)) __attribute__((weak)) __aicore__ void __sanitizer_report_dc_preload(
+    __gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, __gm__ uint64_t* address, int64_t offset)
+{
+    aclsan::WriteTraceRecord(
+        memInfo, pc, bid, aclsan::DeviceInstructionCategory::MemoryAccess, static_cast<uint16_t>(PIPE_S), 62,
+        reinterpret_cast<uint64_t>(address), static_cast<uint64_t>(offset), 0UL, 0UL, 0UL);
+}
+
+extern __attribute__((noinline)) __attribute__((weak)) __aicore__ void __sanitizer_report_dc_preloadi(
+    __gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, __gm__ uint64_t* address, int16_t offset)
+{
+    aclsan::WriteTraceRecord(
+        memInfo, pc, bid, aclsan::DeviceInstructionCategory::MemoryAccess, static_cast<uint16_t>(PIPE_S), 63,
+        reinterpret_cast<uint64_t>(address), static_cast<uint64_t>(static_cast<int64_t>(offset)), 0UL, 0UL, 0UL);
+}
+
 // LOOP3_PARA, API ID 90.
 extern __attribute__((noinline)) __attribute__((weak)) __aicore__ void __sanitizer_report_set_loop3_para(
     __gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, uint64_t config)
 {
     aclsan::WriteTraceRecord(
         memInfo, pc, bid, aclsan::DeviceInstructionCategory::RegisterState, static_cast<uint16_t>(PIPE_S), 90, config,
+        0UL, 0UL, 0UL, 0UL);
+}
+
+extern __attribute__((noinline)) __attribute__((weak)) __aicore__ void __sanitizer_report_set_channel_para(
+    __gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, uint64_t config)
+{
+    aclsan::WriteTraceRecord(
+        memInfo, pc, bid, aclsan::DeviceInstructionCategory::RegisterState, static_cast<uint16_t>(PIPE_S), 123, config,
         0UL, 0UL, 0UL, 0UL);
 }
 
@@ -151,6 +174,95 @@ extern __attribute__((noinline)) __attribute__((weak)) __aicore__ void __sanitiz
 {
     aclsan::WriteTraceRecord(
         memInfo, pc, bid, aclsan::DeviceInstructionCategory::RegisterState, static_cast<uint16_t>(PIPE_S), 130, config,
+        0UL, 0UL, 0UL, 0UL);
+}
+
+// PAD_CNT_NDDMA, API ID 131.
+extern __attribute__((noinline)) __attribute__((weak)) __aicore__ void __sanitizer_report_set_pad_cnt_nddma(
+    __gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, uint64_t config)
+{
+    aclsan::WriteTraceRecord(
+        memInfo, pc, bid, aclsan::DeviceInstructionCategory::RegisterState, static_cast<uint16_t>(PIPE_S), 131, config,
+        0UL, 0UL, 0UL, 0UL);
+}
+
+extern __attribute__((noinline)) __attribute__((weak)) __aicore__ void __sanitizer_report_set_ffts_base_addr(
+    __gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, uint64_t config)
+{
+    aclsan::WriteTraceRecord(
+        memInfo, pc, bid, aclsan::DeviceInstructionCategory::RegisterState, static_cast<uint16_t>(PIPE_S), 160, config,
+        0UL, 0UL, 0UL, 0UL);
+}
+
+extern __attribute__((noinline)) __attribute__((weak)) __aicore__ void __sanitizer_report_set_fpc(
+    __gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, uint64_t config)
+{
+    aclsan::WriteTraceRecord(
+        memInfo, pc, bid, aclsan::DeviceInstructionCategory::RegisterState, static_cast<uint16_t>(PIPE_S), 161, config,
+        0UL, 0UL, 0UL, 0UL);
+}
+
+extern __attribute__((noinline)) __attribute__((weak)) __aicore__ void __sanitizer_report_set_quant_pre(
+    __gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, uint64_t config)
+{
+    aclsan::WriteTraceRecord(
+        memInfo, pc, bid, aclsan::DeviceInstructionCategory::RegisterState, static_cast<uint16_t>(PIPE_S), 162, config,
+        0UL, 0UL, 0UL, 0UL);
+}
+
+extern __attribute__((noinline)) __attribute__((weak)) __aicore__ void __sanitizer_report_set_quant_post(
+    __gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, uint64_t config)
+{
+    aclsan::WriteTraceRecord(
+        memInfo, pc, bid, aclsan::DeviceInstructionCategory::RegisterState, static_cast<uint16_t>(PIPE_S), 163, config,
+        0UL, 0UL, 0UL, 0UL);
+}
+
+extern __attribute__((noinline)) __attribute__((weak)) __aicore__ void __sanitizer_report_set_lrelu_alpha(
+    __gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, uint64_t config)
+{
+    aclsan::WriteTraceRecord(
+        memInfo, pc, bid, aclsan::DeviceInstructionCategory::RegisterState, static_cast<uint16_t>(PIPE_S), 164, config,
+        0UL, 0UL, 0UL, 0UL);
+}
+
+extern __attribute__((noinline)) __attribute__((weak)) __aicore__ void __sanitizer_report_set_fmatrix(
+    __gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, uint64_t config)
+{
+    aclsan::WriteTraceRecord(
+        memInfo, pc, bid, aclsan::DeviceInstructionCategory::RegisterState, static_cast<uint16_t>(PIPE_S), 386, config,
+        0UL, 0UL, 0UL, 0UL);
+}
+
+extern __attribute__((noinline)) __attribute__((weak)) __aicore__ void __sanitizer_report_set_fmatrix_b(
+    __gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, uint64_t config)
+{
+    aclsan::WriteTraceRecord(
+        memInfo, pc, bid, aclsan::DeviceInstructionCategory::RegisterState, static_cast<uint16_t>(PIPE_S), 387, config,
+        0UL, 0UL, 0UL, 0UL);
+}
+
+extern __attribute__((noinline)) __attribute__((weak)) __aicore__ void __sanitizer_report_set_l3d_rpt(
+    __gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, uint64_t config)
+{
+    aclsan::WriteTraceRecord(
+        memInfo, pc, bid, aclsan::DeviceInstructionCategory::RegisterState, static_cast<uint16_t>(PIPE_S), 390, config,
+        0UL, 0UL, 0UL, 0UL);
+}
+
+extern __attribute__((noinline)) __attribute__((weak)) __aicore__ void __sanitizer_report_set_l3d_rpt_b(
+    __gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, uint64_t config)
+{
+    aclsan::WriteTraceRecord(
+        memInfo, pc, bid, aclsan::DeviceInstructionCategory::RegisterState, static_cast<uint16_t>(PIPE_S), 391, config,
+        0UL, 0UL, 0UL, 0UL);
+}
+
+extern __attribute__((noinline)) __attribute__((weak)) __aicore__ void __sanitizer_report_set_padding_b(
+    __gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, uint64_t config)
+{
+    aclsan::WriteTraceRecord(
+        memInfo, pc, bid, aclsan::DeviceInstructionCategory::RegisterState, static_cast<uint16_t>(PIPE_S), 393, config,
         0UL, 0UL, 0UL, 0UL);
 }
 

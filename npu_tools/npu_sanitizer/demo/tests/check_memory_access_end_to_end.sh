@@ -476,9 +476,6 @@ CheckTraceProcessingComplete()
         '^tool=memcheck .*dropped_device_operations=0([[:space:]]|$)' \
         'zero dropped device operations' "${output}" || return 1
     RequirePattern \
-        '^\[UDS\] phase=result .* has_errors=[01]$' \
-        'complete sanitizer result' "${output}" || return 1
-    RequirePattern \
         '^\[CLI\] outcome=forwarded has_errors=[01] truncated=0 child_exit=0 exit=(0|2)$' \
         'complete forwarded CLI result' "${output}" || return 1
     RejectPattern 'status=incomplete|outcome=infra_failed|malformed_callbacks=[1-9]|framework_errors=[1-9]' \
@@ -496,7 +493,6 @@ CheckCommonOutput()
     layout_kind=$(ExpectedLayoutKind "${case_name}")
     access_name=$(ExpectedAccessName "${case_name}")
 
-    RequirePattern '^\[UDS\] phase=handshake .* result=ok$' 'memcheck handshake' "${output}" || return 1
     RequirePattern "\\[raw\\].*instrId=${instruction_id}([[:space:]]|$)" \
         "raw instruction ID ${instruction_id}" "${output}" || return 1
     RequirePattern "\\[cbdata\\] type=AclsanDeviceMemoryAccessData .*layoutKind=${layout_kind}([[:space:]]|$)" \
@@ -842,7 +838,6 @@ CheckNdDmaP0Output()
 CheckNdDmaMissingStrideOutput()
 {
     local output=$1
-    RequirePattern '^\[UDS\] phase=handshake .* result=ok$' 'memcheck handshake' "${output}" || return 1
     RequirePattern 'NDDMA_MISSING_ACTIVE_STRIDE=loop0 NDDMA_REQUIRED_SET_INSTR_ID=132' \
         'missing active NDDMA stride intent' "${output}" || return 1
     RequirePattern '\[raw\].*instrId=87([[:space:]]|$)' 'raw ID 87 NDDMA access' "${output}" || return 1

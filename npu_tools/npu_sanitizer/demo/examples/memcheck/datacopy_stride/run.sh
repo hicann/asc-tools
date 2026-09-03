@@ -29,9 +29,6 @@ exec > >(tee -a "${output}") 2>&1
 
 export ASCEND_GLOBAL_LOG_LEVEL=0
 export NPU_SAN_DEBUG=1
-# 冒烟断言依赖 [CLI] / [UDS] 的过程记录，而它们默认不打屏，必须显式打开。
-# 结果摘要行 [CLI] outcome=... 不受该开关控制，任何路径下都会输出。
-export NPU_CHECK_CLI_DEBUG=1
 
 # 配置并构建示例。
 cmake -B build -DCMAKE_ASC_ARCHITECTURES=dav-3510
@@ -48,17 +45,15 @@ if [[ $(grep -Ec '^tool=memcheck .*errors=4([[:space:]]|$)' "${output}" || true)
     exit 1
 fi
 
-# 关注会话完整性：handshake、result 和 CLI 转发记录都应各出现 1 次。
-if [[ $(grep -Ec '^\[UDS\] phase=handshake .* result=ok$' "${output}" || true) -ne 1 ||
-    $(grep -Ec '^\[UDS\] phase=result .* has_errors=[01]$' "${output}" || true) -ne 1 ||
-    $(grep -Ec '^\[CLI\] outcome=forwarded has_errors=[01] truncated=[01] child_exit=0 exit=(0|2)$' \
-        "${output}" || true) -ne 1 ]]; then
-    printf 'incomplete npu_check session: %s\n' "${output}" >&2
+# 关注命令执行结果：应转发应用且报告完整。
+if [[ $(grep -Ec '^\[CLI\] outcome=forwarded has_errors=[01] truncated=[01] child_exit=0 exit=(0|2)$' \
+    "${output}" || true) -ne 1 ]]; then
+    printf 'unexpected npu-check result: %s\n' "${output}" >&2
     exit 1
 fi
 
-# 关注访问大小和日志数量：4 个逻辑错误在完整报告中应出现 4 条 32-byte GM 越界读标题。
-if [[ $(grep -Fc 'Invalid GM read of size 32 bytes' "${output}" || true) -ne 4 ]]; then
+# 关注访问大小和日志数量：4 个逻辑错误在 ReportBundle 中应各出现 1 条 32-byte GM 越界读标题。
+if [[ $(grep -Fxc '========= ERROR: Invalid GM read of size 32 bytes' "${output}" || true) -ne 4 ]]; then
     printf 'unexpected Invalid GM read diagnostic count: %s\n' "${output}" >&2
     exit 1
 fi

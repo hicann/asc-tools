@@ -72,14 +72,21 @@ void Callback(void*, AclsanCallbackDomain, AclsanCallbackId, const void*) {}
 int main()
 {
     using aclsan::PROBE_GROUP_FIXPIPE;
+    using aclsan::PROBE_GROUP_MATRIX;
     using aclsan::PROBE_GROUP_MTE1;
     using aclsan::PROBE_GROUP_MTE2;
     using aclsan::PROBE_GROUP_MTE3;
     using aclsan::PROBE_GROUP_SCALAR;
     using aclsan::PROBE_GROUP_SYNC;
+    using aclsan::PROBE_GROUP_VECTOR;
 
     constexpr uint32_t memoryProbeMask =
         PROBE_GROUP_MTE1 | PROBE_GROUP_MTE2 | PROBE_GROUP_MTE3 | PROBE_GROUP_FIXPIPE | PROBE_GROUP_SCALAR;
+
+    CHECK((memoryProbeMask & (PROBE_GROUP_MATRIX | PROBE_GROUP_VECTOR)) == 0);
+    CHECK(
+        (aclsan::PROBE_GROUP_ALL & (PROBE_GROUP_MATRIX | PROBE_GROUP_VECTOR)) ==
+        (PROBE_GROUP_MATRIX | PROBE_GROUP_VECTOR));
 
     CHECK(
         aclsan::ProbeGroupMaskForCallback(ACLSAN_CB_DOMAIN_DEVICE_INSTRUCTION, ACLSAN_CBID_DEVICE_MEMORY_ACCESS) ==

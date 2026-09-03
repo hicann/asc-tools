@@ -237,3 +237,43 @@ extern __attribute__((noinline)) __attribute__((weak)) __aicore__ void __sanitiz
         memInfo, pc, bid, aclsan::DeviceInstructionCategory::Synchronization, static_cast<uint16_t>(PIPE_S), 463,
         static_cast<uint64_t>(PIPE_V), bufId, static_cast<uint64_t>(mode), 0UL, 0UL);
 }
+
+extern __attribute__((noinline)) __attribute__((weak)) __aicore__ void __sanitizer_report_pipe_barrier(
+    __gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, pipe_t pipe)
+{
+    aclsan::WriteTraceRecord(
+        memInfo, pc, bid, aclsan::DeviceInstructionCategory::Synchronization, static_cast<uint16_t>(PIPE_S), 439,
+        static_cast<uint64_t>(pipe), 0UL, 0UL, 0UL, 0UL);
+}
+
+extern __attribute__((noinline)) __attribute__((weak)) __aicore__ void __sanitizer_report_set_intra_block(
+    __gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, pipe_t pipe, uint64_t syncId)
+{
+    aclsan::WriteTraceRecord(
+        memInfo, pc, bid, aclsan::DeviceInstructionCategory::Synchronization, static_cast<uint16_t>(PIPE_S), 452,
+        static_cast<uint64_t>(pipe), syncId, 0UL, 0UL, 0UL);
+}
+
+extern __attribute__((noinline)) __attribute__((weak)) __aicore__ void __sanitizer_report_set_intra_blocki(
+    __gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, pipe_t pipe, uint8_t syncId)
+{
+    aclsan::WriteTraceRecord(
+        memInfo, pc, bid, aclsan::DeviceInstructionCategory::Synchronization, static_cast<uint16_t>(PIPE_S), 453,
+        static_cast<uint64_t>(pipe), static_cast<uint64_t>(syncId), 0UL, 0UL, 0UL);
+}
+
+extern __attribute__((noinline)) __attribute__((weak)) __aicore__ void __sanitizer_report_wait_intra_block(
+    __gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, pipe_t pipe, uint64_t syncId)
+{
+    aclsan::WriteTraceRecord(
+        memInfo, pc, bid, aclsan::DeviceInstructionCategory::Synchronization, static_cast<uint16_t>(PIPE_S), 454,
+        static_cast<uint64_t>(pipe), syncId, 0UL, 0UL, 0UL);
+}
+
+extern __attribute__((noinline)) __attribute__((weak)) __aicore__ void __sanitizer_report_wait_intra_blocki(
+    __gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, pipe_t pipe, uint8_t syncId)
+{
+    aclsan::WriteTraceRecord(
+        memInfo, pc, bid, aclsan::DeviceInstructionCategory::Synchronization, static_cast<uint16_t>(PIPE_S), 455,
+        static_cast<uint64_t>(pipe), static_cast<uint64_t>(syncId), 0UL, 0UL, 0UL);
+}

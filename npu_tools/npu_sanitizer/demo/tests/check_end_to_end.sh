@@ -34,11 +34,9 @@ if [[ ${run_status} -ne 0 ]]; then
     exit 1
 fi
 
-grep -E '^\[UDS\] phase=handshake .* result=ok$' "${output}"
 grep -F 'npu_check: DIAGNOSTIC' "${output}"
 grep -E 'Invalid GM read of size 8256 bytes' "${output}"
 grep -E '^tool=memcheck .*[[:space:]]errors=[1-9][0-9]*([[:space:]]|$)' "${output}"
-grep -E '^\[UDS\] phase=result .* has_errors=1$' "${output}"
 grep -F '[CLI] outcome=forwarded has_errors=1 truncated=0 child_exit=0' "${output}"
 grep -F 'test pass!' "${output}"
 grep -F '[PASSED] memcheck/add' "${output}"

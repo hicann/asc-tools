@@ -17,10 +17,10 @@
 #include <string>
 #include <vector>
 
-#include "MSBit.h"
+#include "ctrlbin_bindings.h"
 #include "dbi/ctrlbin_generator.h"
 
-extern "C" void MSBitStart(const char* output, uint16_t length);
+extern "C" void CtrlbinWriterStart(const char* output, uint16_t length);
 
 namespace {
 
@@ -42,7 +42,14 @@ aclsan::ProbeGroup BindingGroup(const BindingSpec& binding)
 {
     using aclsan::ProbeGroup;
     const uint16_t id = binding.apiId;
-    if (id == 90 || (id >= 124 && id <= 136) || id == 392 || (id >= 394 && id <= 399)) {
+    if (id >= 400 && id <= 415) {
+        return ProbeGroup::Matrix;
+    }
+    if ((id >= 174 && id <= 178) || (id >= 417 && id <= 421)) {
+        return ProbeGroup::Vector;
+    }
+    if (id == 58 || (id >= 62 && id <= 63) || id == 90 || id == 123 || (id >= 124 && id <= 136) ||
+        (id >= 160 && id <= 164) || (id >= 386 && id <= 387) || (id >= 390 && id <= 399)) {
         return ProbeGroup::Scalar;
     }
     if ((id >= 72 && id <= 82) || (id >= 84 && id <= 89) || id == 149 || id == 150) {
@@ -51,7 +58,7 @@ aclsan::ProbeGroup BindingGroup(const BindingSpec& binding)
     if (id == 83 || id == 173) {
         return ProbeGroup::Mte3;
     }
-    if ((id >= 137 && id <= 148) || (id >= 153 && id <= 158) || (id >= 422 && id <= 426)) {
+    if ((id >= 137 && id <= 158) || (id >= 422 && id <= 426)) {
         return ProbeGroup::Mte1;
     }
     if (id == 91 || id == 92 || (id >= 167 && id <= 171)) {
@@ -224,6 +231,55 @@ const std::vector<BindingSpec>& AllBindings()
         {InstrType::GET_BUFI_V, 461, "__sanitizer_report_get_bufi_v", {0, 1}},
         {InstrType::RLS_BUF_V, 462, "__sanitizer_report_rls_buf_v", {0, 1}},
         {InstrType::RLS_BUFI_V, 463, "__sanitizer_report_rls_bufi_v", {0, 1}},
+
+        // Reference-backed dav-3510 coverage.
+        {InstrType::LOAD_CBUF_TO_CA_MX, 151, "__sanitizer_report_load_cbuf_to_ca_mx_2dv2", {0, 1, 2, 3}},
+        {InstrType::LOAD_CBUF_TO_CB_MX, 152, "__sanitizer_report_load_cbuf_to_cb_mx_2dv2", {0, 1, 2, 3}},
+        {InstrType::MAD_S8, 400, "__sanitizer_report_mad_s8", {0, 1, 2, 3}},
+        {InstrType::MAD_F16_F32, 401, "__sanitizer_report_mad_f16_f32", {0, 1, 2, 3}},
+        {InstrType::MAD_BF16_F32, 402, "__sanitizer_report_mad_bf16_f32", {0, 1, 2, 3}},
+        {InstrType::MAD_F32_F32, 403, "__sanitizer_report_mad_f32_f32", {0, 1, 2, 3}},
+        {InstrType::MAD_E4M3_E4M3, 404, "__sanitizer_report_mad_e4m3_e4m3", {0, 1, 2, 3}},
+        {InstrType::MAD_E4M3_E5M2, 405, "__sanitizer_report_mad_e4m3_e5m2", {0, 1, 2, 3}},
+        {InstrType::MAD_E5M2_E4M3, 406, "__sanitizer_report_mad_e5m2_e4m3", {0, 1, 2, 3}},
+        {InstrType::MAD_E5M2_E5M2, 407, "__sanitizer_report_mad_e5m2_e5m2", {0, 1, 2, 3}},
+        {InstrType::MAD_MX_E1M2X2_E1M2X2, 408, "__sanitizer_report_mad_mx_e1m2_e1m2", {0, 1, 2, 3}},
+        {InstrType::MAD_MX_E1M2X2_E2M1X2, 409, "__sanitizer_report_mad_mx_e1m2_e2m1", {0, 1, 2, 3}},
+        {InstrType::MAD_MX_E2M1X2_E1M2X2, 410, "__sanitizer_report_mad_mx_e2m1_e1m2", {0, 1, 2, 3}},
+        {InstrType::MAD_MX_E2M1X2_E2M1X2, 411, "__sanitizer_report_mad_mx_e2m1_e2m1", {0, 1, 2, 3}},
+        {InstrType::MAD_MX_E4M3_E4M3, 412, "__sanitizer_report_mad_mx_e4m3_e4m3", {0, 1, 2, 3}},
+        {InstrType::MAD_MX_E4M3_E5M2, 413, "__sanitizer_report_mad_mx_e4m3_e5m2", {0, 1, 2, 3}},
+        {InstrType::MAD_MX_E5M2_E4M3, 414, "__sanitizer_report_mad_mx_e5m2_e4m3", {0, 1, 2, 3}},
+        {InstrType::MAD_MX_E5M2_E5M2, 415, "__sanitizer_report_mad_mx_e5m2_e5m2", {0, 1, 2, 3}},
+        {InstrType::COPY_UBUF_TO_UBUF, 174, "__sanitizer_report_copy_ubuf_to_ubuf", {0, 1, 2}},
+        {InstrType::SCATTER_VNCHWCONV_B16, 175, "__sanitizer_report_scatter_vnchwconv_b16", {0, 1, 2}},
+        {InstrType::SCATTER_VNCHWCONV_B32, 176, "__sanitizer_report_scatter_vnchwconv_b32", {0, 1, 2}},
+        {InstrType::SCATTER_VNCHWCONV_B8, 177, "__sanitizer_report_scatter_vnchwconv_b8", {0, 1, 2, 3, 4}},
+        {InstrType::VTRANSPOSE_B16, 178, "__sanitizer_report_vtranspose", {0, 1}},
+        {InstrType::LDVA, 417, "__sanitizer_report_ldva", {0, 1, 2}},
+        {InstrType::VBS32_F16, 418, "__sanitizer_report_vbs32_f16", {0, 1, 2, 3}},
+        {InstrType::VBS32_F32, 419, "__sanitizer_report_vbs32_f32", {0, 1, 2, 3}},
+        {InstrType::VMRGSORT_F16, 420, "__sanitizer_report_vmrgsort4_f16", {0, 1, 2, 3}},
+        {InstrType::VMRGSORT_F32, 421, "__sanitizer_report_vmrgsort4_f32", {0, 1, 2, 3}},
+        {InstrType::ST_ATOMIC_B8, 58, "__sanitizer_report_st_atomic_b8", {1, 2, 3}},
+        {InstrType::DC_PRELOAD, 62, "__sanitizer_report_dc_preload", {0, 1}},
+        {InstrType::DC_PRELOADI, 63, "__sanitizer_report_dc_preloadi", {0, 1}},
+        {InstrType::CHANNEL_PARA, 123, "__sanitizer_report_set_channel_para", {0}},
+        {InstrType::SET_FFTS_BASE_ADDR, 160, "__sanitizer_report_set_ffts_base_addr", {0}},
+        {InstrType::SET_FPC, 161, "__sanitizer_report_set_fpc", {0}},
+        {InstrType::SET_QUANT_PRE, 162, "__sanitizer_report_set_quant_pre", {0}},
+        {InstrType::SET_QUANT_POST, 163, "__sanitizer_report_set_quant_post", {0}},
+        {InstrType::SET_LRELU_ALPHA, 164, "__sanitizer_report_set_lrelu_alpha", {0}},
+        {InstrType::SET_FMATRIX, 386, "__sanitizer_report_set_fmatrix", {0}},
+        {InstrType::SET_FMATRIX_B, 387, "__sanitizer_report_set_fmatrix_b", {0}},
+        {InstrType::SET_L3D_RPT, 390, "__sanitizer_report_set_l3d_rpt", {0}},
+        {InstrType::SET_L3D_RPT_B, 391, "__sanitizer_report_set_l3d_rpt_b", {0}},
+        {InstrType::SET_PADDING_B, 393, "__sanitizer_report_set_padding_b", {0}},
+        {InstrType::PIPE_BARRIER, 439, "__sanitizer_report_pipe_barrier", {0}},
+        {InstrType::SET_INTRA_BLOCK, 452, "__sanitizer_report_set_intra_block", {0, 1}},
+        {InstrType::SET_INTRA_BLOCKI, 453, "__sanitizer_report_set_intra_blocki", {0, 1}},
+        {InstrType::WAIT_INTRA_BLOCK, 454, "__sanitizer_report_wait_intra_block", {0, 1}},
+        {InstrType::WAIT_INTRA_BLOCKI, 455, "__sanitizer_report_wait_intra_blocki", {0, 1}},
     };
     return bindings;
 }
@@ -261,11 +317,11 @@ bool IsNonEmptyFile(const std::string& path)
 
 } // namespace
 
-extern "C" void MSBitAtInit()
+extern "C" void RegisterCtrlbinBindings()
 {
     for (const auto& binding : AllBindings()) {
         if (IsSelected(binding)) {
-            Bind(binding.instrType, binding.stubName, binding.paraMask);
+            RegisterCtrlbinBinding(binding.instrType, binding.stubName, binding.paraMask);
         }
     }
 }
@@ -274,8 +330,8 @@ namespace aclsan {
 
 std::vector<ProbeGroup> AllProbeGroups()
 {
-    return {ProbeGroup::Mte1,    ProbeGroup::Mte2,   ProbeGroup::Mte3,
-            ProbeGroup::Fixpipe, ProbeGroup::Scalar, ProbeGroup::Sync};
+    return {ProbeGroup::Mte1,   ProbeGroup::Mte2, ProbeGroup::Mte3,   ProbeGroup::Fixpipe,
+            ProbeGroup::Scalar, ProbeGroup::Sync, ProbeGroup::Matrix, ProbeGroup::Vector};
 }
 
 std::vector<std::string> BindingSymbols(const std::vector<ProbeGroup>& groups)
@@ -331,7 +387,7 @@ bool GenerateCtrlBin(const std::string& outputPath, const std::vector<ProbeGroup
         return false;
     }
     g_selectedGroups = &selected;
-    MSBitStart(outputPath.c_str(), static_cast<uint16_t>(outputPath.size()));
+    CtrlbinWriterStart(outputPath.c_str(), static_cast<uint16_t>(outputPath.size()));
     g_selectedGroups = nullptr;
     if (!IsNonEmptyFile(outputPath)) {
         diagnostic = "failed to generate a non-empty file: " + outputPath;

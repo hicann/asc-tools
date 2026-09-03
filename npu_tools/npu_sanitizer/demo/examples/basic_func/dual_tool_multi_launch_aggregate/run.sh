@@ -29,9 +29,6 @@ exec > >(tee -a "${output}") 2>&1
 
 export ASCEND_GLOBAL_LOG_LEVEL=0
 export NPU_SAN_DEBUG=1
-# 冒烟断言依赖 [CLI] / [UDS] 的过程记录，而它们默认不打屏，必须显式打开。
-# 结果摘要行 [CLI] outcome=... 不受该开关控制，任何路径下都会输出。
-export NPU_CHECK_CLI_DEBUG=1
 
 # 配置并构建示例。
 cmake -B build -DCMAKE_ASC_ARCHITECTURES=dav-3510
@@ -61,14 +58,9 @@ for diagnostic in \
     fi
 done
 
-for lifecycle in \
-    '[UDS] phase=handshake' \
-    '[UDS] phase=result' \
-    '[CLI] outcome=forwarded has_errors=1 truncated=0 child_exit=0 exit=0'; do
-    if [[ $(grep -Fc "${lifecycle}" "${output}" || true) -ne 1 ]]; then
-        printf 'unexpected lifecycle record count for %s: %s\n' "${lifecycle}" "${output}" >&2
-        exit 1
-    fi
-done
+if [[ $(grep -Fxc '[CLI] outcome=forwarded has_errors=1 truncated=0 child_exit=0 exit=0' "${output}" || true) -ne 1 ]]; then
+    printf 'unexpected npu-check result: %s\n' "${output}" >&2
+    exit 1
+fi
 
 printf '[PASSED] basic_func/dual_tool_multi_launch_aggregate\n'

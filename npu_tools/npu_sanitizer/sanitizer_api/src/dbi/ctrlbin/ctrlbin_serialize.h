@@ -6,8 +6,8 @@
 // INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 // See LICENSE in the root of the software repository for the full text of the License.
 
-#ifndef __UTILS__SERIALIZER_H__
-#define __UTILS__SERIALIZER_H__
+#ifndef ACLSAN_CTRLBIN_SERIALIZE_H
+#define ACLSAN_CTRLBIN_SERIALIZE_H
 
 #include <string>
 #include <type_traits>
@@ -64,4 +64,4 @@ inline bool Deserialize(const Strings& msg, T& val)
     return true;
 }
 
-#endif // __UTILS__SERIALIZER_H__
+#endif // ACLSAN_CTRLBIN_SERIALIZE_H

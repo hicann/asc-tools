@@ -6,11 +6,13 @@ endforeach()
 
 set(probe_sources
   "${DBI_ROOT}/src/dbi/probes/${PROBE_ARCH}/fixpipe.cpp"
+  "${DBI_ROOT}/src/dbi/probes/${PROBE_ARCH}/matrix.cpp"
   "${DBI_ROOT}/src/dbi/probes/${PROBE_ARCH}/mte1.cpp"
   "${DBI_ROOT}/src/dbi/probes/${PROBE_ARCH}/mte2.cpp"
   "${DBI_ROOT}/src/dbi/probes/${PROBE_ARCH}/mte3.cpp"
   "${DBI_ROOT}/src/dbi/probes/${PROBE_ARCH}/scalar.cpp"
   "${DBI_ROOT}/src/dbi/probes/${PROBE_ARCH}/sync.cpp"
+  "${DBI_ROOT}/src/dbi/probes/${PROBE_ARCH}/vector.cpp"
 )
 
 set(probe_content "")
@@ -42,7 +44,8 @@ foreach(required_abi_token IN ITEMS
     "ASCSAN_PHYSICAL_CORE_PART_COUNT"
     "ASCSAN_AIC_CORE_RATIO_DENOMINATOR"
     "ASCSAN_PHYSICAL_CORE_TOPOLOGY_UNIT"
-    "physicalCoreCount")
+    "physicalCoreCount"
+    "segmentBytes")
   string(FIND "${trace_buffer_abi_content}" "${required_abi_token}" token_offset)
   if(token_offset EQUAL -1)
     message(FATAL_ERROR "trace_buffer_abi.h must contain ${required_abi_token}")
@@ -62,25 +65,24 @@ foreach(required_record_token IN ITEMS
 endforeach()
 string(REGEX MATCHALL "DeviceInstructionCategory::MemoryAccess" memory_access_categories "${probe_content}")
 list(LENGTH memory_access_categories memory_access_category_count)
-if(NOT memory_access_category_count EQUAL 49)
-  message(FATAL_ERROR "expected 49 memory-access probe categories, found ${memory_access_category_count}")
+if(NOT memory_access_category_count EQUAL 80)
+  message(FATAL_ERROR "expected 80 memory-access probe categories, found ${memory_access_category_count}")
 endif()
 string(REGEX MATCHALL "DeviceInstructionCategory::Synchronization" synchronization_categories "${probe_content}")
 list(LENGTH synchronization_categories synchronization_category_count)
-if(NOT synchronization_category_count EQUAL 24)
-  message(FATAL_ERROR "expected 24 synchronization probe categories, found ${synchronization_category_count}")
+if(NOT synchronization_category_count EQUAL 29)
+  message(FATAL_ERROR "expected 29 synchronization probe categories, found ${synchronization_category_count}")
 endif()
 string(REGEX MATCHALL "DeviceInstructionCategory::RegisterState" register_state_categories "${probe_content}")
 list(LENGTH register_state_categories register_state_category_count)
-if(NOT register_state_category_count EQUAL 21)
-  message(FATAL_ERROR "expected 21 register-state probe categories, found ${register_state_category_count}")
+if(NOT register_state_category_count EQUAL 32)
+  message(FATAL_ERROR "expected 32 register-state probe categories, found ${register_state_category_count}")
 endif()
-foreach(expected_pipeline IN ITEMS PIPE_S PIPE_MTE1 PIPE_MTE2 PIPE_MTE3 PIPE_FIX)
+foreach(expected_pipeline IN ITEMS PIPE_S PIPE_M PIPE_V PIPE_MTE1 PIPE_MTE2 PIPE_MTE3 PIPE_FIX)
   if(NOT probe_content MATCHES "static_cast<uint16_t>\\(${expected_pipeline}\\)")
     message(FATAL_ERROR "probe sources must record ${expected_pipeline}")
   endif()
 endforeach()
-
 if(trace_record_content MATCHES "PIPELINE_SET_WAIT_FLAG|PIPELINE_GET_RLS_BUF|PIPELINE_MTE[123]|PIPELINE_FIXPIPE")
   message(FATAL_ERROR "trace_record.h must not mix instruction categories with execution pipelines")
 endif()
@@ -103,8 +105,8 @@ string(REGEX MATCHALL
   "__sanitizer_report_[A-Za-z0-9_]+[ \t\r\n]*\\("
   probe_definitions "${probe_content}")
 list(LENGTH probe_definitions probe_count)
-if(NOT probe_count EQUAL 94)
-  message(FATAL_ERROR "expected 94 probe definitions, found ${probe_count}")
+if(NOT probe_count EQUAL 141)
+  message(FATAL_ERROR "expected 141 probe definitions, found ${probe_count}")
 endif()
 
 string(REGEX MATCHALL "__sanitizer_report_[A-Za-z0-9_]+" probe_symbols "${probe_content}")
@@ -124,8 +126,8 @@ string(CONCAT explicit_declaration
   "__sanitizer_report_[A-Za-z0-9_]+[ \t\r\n]*\\(")
 string(REGEX MATCHALL "${explicit_declaration}" explicit_probes "${probe_content}")
 list(LENGTH explicit_probes explicit_probe_count)
-if(NOT explicit_probe_count EQUAL 94)
-  message(FATAL_ERROR "expected 94 explicit probe declarations, found ${explicit_probe_count}")
+if(NOT explicit_probe_count EQUAL 141)
+  message(FATAL_ERROR "expected 141 explicit probe declarations, found ${explicit_probe_count}")
 endif()
 
 # Vector synchronization instructions omit PIPE_V from their explicit operands.

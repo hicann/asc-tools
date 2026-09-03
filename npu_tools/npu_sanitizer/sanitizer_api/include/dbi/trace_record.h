@@ -17,6 +17,8 @@
 
 namespace aclsan {
 
+// Device probe 执行时调用该函数，将记录直接写入当前 launch 独占的 Device GM trace buffer。
+// memInfo 是 Host 在 kernel launch 时注入的隐藏参数；binary load 阶段只插入 probe 调用，不产生记录。
 __aicore__ inline void WriteTraceRecord(
     __gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, DeviceInstructionCategory category, uint16_t pipeline,
     uint16_t apiId, uint64_t arg0, uint64_t arg1, uint64_t arg2, uint64_t arg3, uint64_t arg4)
@@ -46,6 +48,11 @@ __aicore__ inline void WriteTraceRecord(
 
     const uint64_t sliceBytes = sizeof(aclsan::AclsanTraceSliceHeader) +
                                 static_cast<uint64_t>(header->recordsPerCore) * sizeof(aclsan::AclsanRawTraceRecord);
+    if (sliceBytes > (UINT64_MAX - sizeof(aclsan::AclsanTraceBufferHeader)) / physicalCoreCount ||
+        header->segmentBytes !=
+            sizeof(aclsan::AclsanTraceBufferHeader) + static_cast<uint64_t>(physicalCoreCount) * sliceBytes) {
+        return;
+    }
     __gm__ uint8_t* sliceAddress =
         memInfo + sizeof(aclsan::AclsanTraceBufferHeader) + static_cast<uint64_t>(phyCoreId) * sliceBytes;
     __gm__ aclsan::AclsanTraceSliceHeader* slice =

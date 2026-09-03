@@ -50,9 +50,10 @@ TEST(DbiPipelineTest, AddsScalarDependencyForEveryMemoryConsumerGroup)
 TEST(DbiPipelineTest, ObjectAndCtrlbinPlansAgreeForEveryProbeMask)
 {
     const std::pair<uint32_t, ProbeGroup> groupBits[] = {
-        {PROBE_GROUP_MTE1, ProbeGroup::Mte1}, {PROBE_GROUP_MTE2, ProbeGroup::Mte2},
-        {PROBE_GROUP_MTE3, ProbeGroup::Mte3}, {PROBE_GROUP_FIXPIPE, ProbeGroup::Fixpipe},
-        {PROBE_GROUP_SYNC, ProbeGroup::Sync}, {PROBE_GROUP_SCALAR, ProbeGroup::Scalar},
+        {PROBE_GROUP_MTE1, ProbeGroup::Mte1},     {PROBE_GROUP_MTE2, ProbeGroup::Mte2},
+        {PROBE_GROUP_MTE3, ProbeGroup::Mte3},     {PROBE_GROUP_FIXPIPE, ProbeGroup::Fixpipe},
+        {PROBE_GROUP_SYNC, ProbeGroup::Sync},     {PROBE_GROUP_SCALAR, ProbeGroup::Scalar},
+        {PROBE_GROUP_MATRIX, ProbeGroup::Matrix}, {PROBE_GROUP_VECTOR, ProbeGroup::Vector},
     };
     for (uint32_t mask = 0; mask <= PROBE_GROUP_ALL; ++mask) {
         std::vector<ProbeGroup> rawGroups;
@@ -65,6 +66,14 @@ TEST(DbiPipelineTest, ObjectAndCtrlbinPlansAgreeForEveryProbeMask)
         EXPECT_EQ(ProbeGroupsFromMask(mask), normalized) << "mask=" << mask;
         EXPECT_EQ(BindingSymbols(rawGroups), BindingSymbols(normalized)) << "mask=" << mask;
     }
+}
+
+TEST(DbiPipelineTest, NamesNewPipelineGroups)
+{
+    EXPECT_EQ(ProbeGroupName(ProbeGroup::Matrix), "matrix");
+    EXPECT_EQ(ProbeGroupName(ProbeGroup::Vector), "vector");
+    EXPECT_EQ(PROBE_GROUP_ALL & PROBE_GROUP_MATRIX, PROBE_GROUP_MATRIX);
+    EXPECT_EQ(PROBE_GROUP_ALL & PROBE_GROUP_VECTOR, PROBE_GROUP_VECTOR);
 }
 
 TEST(DbiPipelineTest, ValidatesRequestFields)
@@ -193,7 +202,7 @@ std::string ReadGeneratedFile(const boost::filesystem::path& path)
 TEST(CtrlbinGeneratorTest, FiltersBindingsToSelectedProbeGroups)
 {
     const auto symbols = BindingSymbols({ProbeGroup::Mte2});
-    EXPECT_EQ(symbols.size(), 38U);
+    EXPECT_EQ(symbols.size(), 52U);
     for (const auto& symbol : symbols) {
         EXPECT_NE(symbol.find("sanitizer_report_"), std::string::npos);
     }
@@ -209,7 +218,7 @@ TEST(CtrlbinGeneratorTest, FiltersBindingsToSelectedProbeGroups)
     EXPECT_EQ(std::find(mte1Symbols.begin(), mte1Symbols.end(), "__sanitizer_report_set_padding"), mte1Symbols.end());
 
     const auto scalarSymbols = BindingSymbols({ProbeGroup::Scalar});
-    ASSERT_EQ(scalarSymbols.size(), 19U);
+    ASSERT_EQ(scalarSymbols.size(), 33U);
     EXPECT_NE(
         std::find(scalarSymbols.begin(), scalarSymbols.end(), "__sanitizer_report_set_padding"), scalarSymbols.end());
     EXPECT_NE(
@@ -218,6 +227,9 @@ TEST(CtrlbinGeneratorTest, FiltersBindingsToSelectedProbeGroups)
     EXPECT_EQ(
         std::find(scalarSymbols.begin(), scalarSymbols.end(), "__sanitizer_report_set_l1_2d_b16"), scalarSymbols.end());
     EXPECT_NE(std::find(symbols.begin(), symbols.end(), "__sanitizer_report_set_l1_2d_b16"), symbols.end());
+
+    EXPECT_EQ(BindingSymbols({ProbeGroup::Matrix}).size(), 16U);
+    EXPECT_EQ(BindingSymbols({ProbeGroup::Vector}).size(), 10U);
 }
 
 TEST(CtrlbinGeneratorTest, IncludesScalarStateBindingsForMte3AndFixpipeConsumers)
@@ -233,7 +245,7 @@ TEST(CtrlbinGeneratorTest, IncludesScalarStateBindingsForMte3AndFixpipeConsumers
         fixpipeSymbols.end());
 }
 
-TEST(CtrlbinGeneratorTest, AllGroupsPreserveBindingCount) { EXPECT_EQ(BindingSymbols(AllProbeGroups()).size(), 94U); }
+TEST(CtrlbinGeneratorTest, AllGroupsPreserveBindingCount) { EXPECT_EQ(BindingSymbols(AllProbeGroups()).size(), 141U); }
 
 TEST(CtrlbinGeneratorTest, ExposesStableBindingIdentity) { EXPECT_EQ(CtrlBinGeneratorIdentity().size(), 16U); }
 

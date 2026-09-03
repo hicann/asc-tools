@@ -6,7 +6,7 @@
 // INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 // See LICENSE in the root of the software repository for the full text of the License.
 
-#include "MSBit.h"
+#include "ctrlbin_bindings.h"
 
 #include <vector>
 #include <string>
@@ -15,10 +15,10 @@
 #include <fstream>
 #include <unordered_map>
 
-#include "Serialize.h"
-#include "FileSystem.h"
-#include "Singleton.h"
-#include "Ustring.h"
+#include "ctrlbin_serialize.h"
+#include "ctrlbin_file_io.h"
+#include "ctrlbin_singleton.h"
+#include "ctrlbin_string_utils.h"
 
 using namespace std;
 
@@ -53,7 +53,7 @@ struct FuncInfo {
 
 // ====================== 以上结构体是和bisheng-tune组件约定的数据结构，请勿改动
 
-struct InjectInfo {
+struct CtrlbinBinding {
     uint16_t instrId{};
     uint16_t injectFuncId{};
     vector<uint16_t> paraMask;
@@ -66,9 +66,9 @@ struct InjectInfo {
     }
 };
 
-class InjectBindHelper : public Singleton<InjectBindHelper, true> {
+class CtrlbinBindingRegistry : public Singleton<CtrlbinBindingRegistry, true> {
 public:
-    friend class Singleton<InjectBindHelper, true>;
+    friend class Singleton<CtrlbinBindingRegistry, true>;
 
     void Reset()
     {
@@ -77,14 +77,14 @@ public:
         injectInfo_.clear();
     }
 
-    void Bind(InstrType instrType, const string& injectedFuncName, const vector<uint16_t>& paraMask)
+    void RegisterCtrlbinBinding(InstrType instrType, const string& injectedFuncName, const vector<uint16_t>& paraMask)
     {
         if (injectFuncIdMap_.count(injectedFuncName) == 0) {
             injectFuncIdMap_[injectedFuncName] = static_cast<uint16_t>(funcNames_.size());
             funcNames_.push_back(injectedFuncName);
         }
 
-        InjectInfo injectInfo;
+        CtrlbinBinding injectInfo;
         injectInfo.instrId = static_cast<uint16_t>(instrType);
         injectInfo.injectFuncId = injectFuncIdMap_[injectedFuncName];
         injectInfo.paraMask = paraMask;
@@ -119,12 +119,12 @@ public:
     }
 
 private:
-    InjectBindHelper() = default;
+    CtrlbinBindingRegistry() = default;
 
 private:
     vector<string> funcNames_;
     unordered_map<string, uint16_t> injectFuncIdMap_;
-    vector<InjectInfo> injectInfo_;
+    vector<CtrlbinBinding> injectInfo_;
 };
 
 void WriteToBin(const string& outputData, const string& filepath)
@@ -140,27 +140,27 @@ void WriteToBin(const string& outputData, const string& filepath)
 }
 
 // 生成的数据格式是和bisheng-tune组件约定好的结构
-void GenerateCtrlBin(const string& outputPath)
+void WriteCtrlbin(const string& outputPath)
 {
     stringstream ss;
-    InjectBindHelper::Instance().Serialize(ss);
+    CtrlbinBindingRegistry::Instance().Serialize(ss);
     WriteToBin(ss.str(), outputPath);
 }
 } // namespace
 
-void Bind(InstrType instrType, const string& injectedFuncName, const vector<uint16_t>& paraMask)
+void RegisterCtrlbinBinding(InstrType instrType, const string& injectedFuncName, const vector<uint16_t>& paraMask)
 {
-    InjectBindHelper::Instance().Bind(instrType, injectedFuncName, paraMask);
+    CtrlbinBindingRegistry::Instance().RegisterCtrlbinBinding(instrType, injectedFuncName, paraMask);
 }
 
 extern "C" {
-void MSBitAtInit() { return; }
+void RegisterCtrlbinBindings() { return; }
 
-void MSBitStart(const char* output, uint16_t length)
+void CtrlbinWriterStart(const char* output, uint16_t length)
 {
-    InjectBindHelper::Instance().Reset();
-    MSBitAtInit();
+    CtrlbinBindingRegistry::Instance().Reset();
+    RegisterCtrlbinBindings();
     string outputPath(output, length);
-    GenerateCtrlBin(outputPath);
+    WriteCtrlbin(outputPath);
 }
 }

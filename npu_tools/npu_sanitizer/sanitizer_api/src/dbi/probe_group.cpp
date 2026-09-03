@@ -29,6 +29,7 @@ std::vector<ProbeGroup> ProbeGroupsFromMask(uint32_t mask)
         {PROBE_GROUP_MTE1, ProbeGroup::Mte1},     {PROBE_GROUP_MTE2, ProbeGroup::Mte2},
         {PROBE_GROUP_MTE3, ProbeGroup::Mte3},     {PROBE_GROUP_FIXPIPE, ProbeGroup::Fixpipe},
         {PROBE_GROUP_SCALAR, ProbeGroup::Scalar}, {PROBE_GROUP_SYNC, ProbeGroup::Sync},
+        {PROBE_GROUP_MATRIX, ProbeGroup::Matrix}, {PROBE_GROUP_VECTOR, ProbeGroup::Vector},
     };
     std::vector<ProbeGroup> selected;
     for (const auto& group : groups) {
@@ -54,6 +55,10 @@ std::string ProbeGroupName(ProbeGroup group)
             return "scalar";
         case ProbeGroup::Sync:
             return "sync";
+        case ProbeGroup::Matrix:
+            return "matrix";
+        case ProbeGroup::Vector:
+            return "vector";
     }
     return {};
 }

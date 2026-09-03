@@ -23,6 +23,14 @@ Fail()
 
 [[ ! -e "${api_dir}/src/probe" ]] || Fail 'sanitizer_api/src/probe must not exist'
 [[ ! -e "${api_dir}/../dbi" ]] || Fail 'top-level npu_sanitizer/dbi must not exist'
+[[ ! -e "${api_dir}/src/dbi/msbit" ]] || Fail 'legacy msbit implementation directory must not remain'
+[[ -f "${api_dir}/src/dbi/ctrlbin/ctrlbin_writer.cpp" ]] || Fail 'ctrlbin writer implementation is missing'
+[[ -f "${api_dir}/src/dbi/ctrlbin/ctrlbin_bindings.h" ]] || Fail 'ctrlbin binding declarations are missing'
+if rg -n -i '\bmsbit\b|src/dbi/msbit' "${api_dir}/src" "${api_dir}/CMakeLists.txt"; then
+    Fail 'production DBI code must not retain MSBit naming'
+fi
+grep -Fq 'src/dbi/ctrlbin/ctrlbin_writer.cpp' "${api_dir}/CMakeLists.txt" || \
+    Fail 'ctrlbin writer is not registered with the build'
 
 required_files=(
     "${api_dir}/src/device_runtime/device_symbolizer.h"
@@ -73,6 +81,10 @@ for trace_type in AclsanTraceBufferHeader AclsanTraceSliceHeader AclsanRawTraceR
 done
 grep -Fq 'ASCSAN_TRACE_BUFFER_MAGIC' "${trace_buffer_abi}" || \
     Fail 'trace buffer ABI does not define its magic'
+grep -Fq 'uint64_t segmentBytes;' "${trace_buffer_abi}" || \
+    Fail 'trace buffer ABI does not define launch segment boundaries'
+grep -Fq 'using AclsanTraceSegmentHeader = AclsanTraceBufferHeader;' "${trace_buffer_abi}" || \
+    Fail 'trace buffer ABI does not expose launch segment terminology'
 if grep -Eq 'ASCSAN_TRACE_BUFFER_MAGIC_V[0-9]+' "${trace_buffer_abi}"; then
     Fail 'trace buffer ABI must expose only one unversioned magic'
 fi
@@ -90,6 +102,8 @@ grep -Fq 'parsed.phyCoreId = expectedPhyCoreId;' "${trace_buffer}" || \
     Fail 'physical core ID is not derived from the physical slice'
 grep -Fq 'parsed.launchId = header.launchId;' "${trace_buffer}" || \
     Fail 'launch ID is not propagated from the validated trace buffer header'
+grep -Fq 'header.segmentBytes != requiredBytes' "${trace_buffer}" || \
+    Fail 'trace parser does not validate the launch segment boundary'
 grep -Fq 'parsed.deviceId = deviceId;' "${trace_buffer}" || \
     Fail 'launch-owned device ID is not propagated to parsed records'
 if rg -n 'ASCSAN_TRACE_SLICES_PER_BLOCK|TraceSliceCount' "${trace_buffer_abi}" "${trace_buffer}"; then
@@ -128,12 +142,19 @@ grep -Fq 'registerState.Update(key, *value);' "${trace_runtime}" || \
 
 binding_source="${dbi_source_dir}/dynamic_bind.cpp"
 probe_generator="${dbi_source_dir}/probe_source_generator.cpp"
-grep -Fq '{InstrType::SET_PADDING, 392, "__sanitizer_report_set_padding", {0}}' "${binding_source}" || \
+ctrlbin_bindings="${dbi_source_dir}/ctrlbin/ctrlbin_bindings.h"
+binding_catalog=$(tr '\n\r\t' ' ' < "${binding_source}" | tr -s ' ')
+grep -Fq 'enum class InstrType' "${ctrlbin_bindings}" || Fail 'ctrlbin instruction type is not named InstrType'
+if rg -n '\bCtrlbinInstructionType\b' "${binding_source}" "${ctrlbin_bindings}"; then
+    Fail 'CtrlbinInstructionType alias remains in the binding path'
+fi
+grep -Fq '{InstrType::SET_PADDING, 392, "__sanitizer_report_set_padding", {0}}' \
+    <<< "${binding_catalog}" || \
     Fail 'DBI does not bind SET_PADDING argument 0 to instruction ID 392'
-grep -Fq '{InstrType::PAD_CNT_NDDMA, 131, "__sanitizer_report_set_pad_cnt_nddma", {0}}' "${binding_source}" || \
-    Fail 'DBI does not bind PAD_CNT_NDDMA argument 0 to instruction ID 131'
-grep -Fq 'return ProbeGroup::Scalar;' "${binding_source}" || \
-    Fail 'SET_PADDING is not assigned to the Scalar probe group'
+grep -Fq 'return ProbeGroup::Matrix;' "${binding_source}" || Fail 'PIPE_M instruction IDs are not assigned to the Matrix group'
+grep -Fq 'return ProbeGroup::Vector;' "${binding_source}" || Fail 'PIPE_V instruction IDs are not assigned to the Vector group'
+binding_count=$(grep -Ec '^[[:space:]]+\{InstrType::' "${binding_source}")
+[[ "${binding_count}" -eq 141 ]] || Fail "expected 141 DBI bindings, found ${binding_count}"
 grep -Fq '{392, ProbeGroup::Scalar, "__sanitizer_report_set_padding"' "${probe_generator}" || \
     Fail 'Scalar SET_PADDING ProbeDefinition is missing'
 grep -Fq '"RegisterState", "PIPE_S"' "${probe_generator}" || \
@@ -159,13 +180,22 @@ required_scalar_probes=(
 )
 for specification in "${required_scalar_probes[@]}"; do
     IFS='|' read -r instruction_type instruction_id probe_symbol <<< "${specification}"
-    grep -Fq "{InstrType::${instruction_type}, ${instruction_id}, \"${probe_symbol}\", {0}}" "${binding_source}" || \
+    grep -Fq "{InstrType::${instruction_type}, ${instruction_id}, \"${probe_symbol}\", {0}}" \
+        <<< "${binding_catalog}" || \
         Fail "DBI binding is missing for instruction ID ${instruction_id}"
     grep -Fq "{${instruction_id}, ProbeGroup::Scalar, \"${probe_symbol}\"" "${probe_generator}" || \
         Fail "Scalar ProbeDefinition is missing for instruction ID ${instruction_id}"
 done
-grep -Fq 'std::array<ProbeDefinition, 94>' "${probe_generator}" || \
-    Fail 'generated probe definition count is not 94'
+grep -Fq '{InstrType::MAD_S8, 400, "__sanitizer_report_mad_s8", {0, 1, 2, 3}}' \
+    <<< "${binding_catalog}" || \
+    Fail 'PIPE_M MAD binding is missing or has the wrong argument mask'
+grep -Fq '{InstrType::SCATTER_VNCHWCONV_B8, 177, "__sanitizer_report_scatter_vnchwconv_b8", {0, 1, 2, 3, 4}}' \
+    <<< "${binding_catalog}" || Fail 'PIPE_V VNCHWCONV binding is missing or has the wrong argument mask'
+grep -Fq '{InstrType::ST_ATOMIC_B8, 58, "__sanitizer_report_st_atomic_b8", {1, 2, 3}}' \
+    <<< "${binding_catalog}" || Fail 'Scalar ST_ATOMIC binding is missing or has the wrong argument mask'
+grep -Fq '{InstrType::PIPE_BARRIER, 439, "__sanitizer_report_pipe_barrier", {0}}' \
+    <<< "${binding_catalog}" || \
+    Fail 'Sync PIPE_BARRIER binding is missing or has the wrong argument mask'
 
 hook_source="${api_dir}/src/aclsan/aclsan_hook_aclrt.cpp"
 grep -Fq 'InstrumentRuntimeBinary' "${hook_source}" || \

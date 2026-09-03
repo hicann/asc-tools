@@ -7,8 +7,11 @@
 // See LICENSE in the root of the software repository for the full text of the License.
 
 #include "dbi/probe_source_generator.h"
+#include "dbi/ctrlbin_generator.h"
 #include "dbi/embedded_probe_resources.h"
 
+#include <algorithm>
+#include <filesystem>
 #include <iostream>
 #include <string>
 #include <string_view>
@@ -26,11 +29,13 @@ namespace {
         }                                                                                \
     } while (false)
 
+std::string_view FindProbeDefinition(std::string_view source, std::string_view symbol);
+
 bool GeneratesCompleteDeterministicGroupSources()
 {
     const std::vector<std::pair<ProbeGroup, std::size_t>> expected{
-        {ProbeGroup::Mte1, 23U},   {ProbeGroup::Mte2, 19U},  {ProbeGroup::Mte3, 2U},
-        {ProbeGroup::Fixpipe, 7U}, {ProbeGroup::Scalar, 8U}, {ProbeGroup::Sync, 24U},
+        {ProbeGroup::Mte1, 25U},   {ProbeGroup::Mte2, 19U}, {ProbeGroup::Mte3, 2U},    {ProbeGroup::Fixpipe, 7U},
+        {ProbeGroup::Scalar, 33U}, {ProbeGroup::Sync, 29U}, {ProbeGroup::Matrix, 16U}, {ProbeGroup::Vector, 10U},
     };
     for (const auto& [group, symbolCount] : expected) {
         const GeneratedProbeSource first = GenerateProbeSource("dav-3510", group);
@@ -45,6 +50,35 @@ bool GeneratesCompleteDeterministicGroupSources()
         CHECK(first.sourceMap == second.sourceMap);
         CHECK(first.identity == second.identity);
     }
+    return true;
+}
+
+bool RendersNewPipelineDefinitions()
+{
+    const GeneratedProbeSource matrix = GenerateProbeSource("dav-3510", ProbeGroup::Matrix);
+    CHECK(matrix.success);
+    CHECK(matrix.source.find("__sanitizer_report_mad_mx_e5m2_e5m2") != std::string::npos);
+    CHECK(matrix.source.find("static_cast<uint16_t>(PIPE_M), 415") != std::string::npos);
+    CHECK(matrix.sourceMap.find("apiId=400 symbol=__sanitizer_report_mad_s8") != std::string::npos);
+
+    const GeneratedProbeSource vector = GenerateProbeSource("dav-3510", ProbeGroup::Vector);
+    CHECK(vector.success);
+    CHECK(vector.source.find("__sanitizer_report_scatter_vnchwconv_b8") != std::string::npos);
+    CHECK(vector.source.find("static_cast<uint16_t>(PIPE_V), 177") != std::string::npos);
+    CHECK(vector.source.find("config, dstHighHalf, srcHighHalf") != std::string::npos);
+
+    const GeneratedProbeSource scalar = GenerateProbeSource("dav-3510", ProbeGroup::Scalar);
+    CHECK(scalar.success);
+    CHECK(scalar.source.find("__sanitizer_report_st_atomic_b8") != std::string::npos);
+    CHECK(scalar.source.find("addr, static_cast<uint64_t>(offset), post, 0UL, 0UL") != std::string::npos);
+    const std::string_view mte2Nz = FindProbeDefinition(scalar.source, "__sanitizer_report_set_mte2_nz_para");
+    CHECK(!mte2Nz.empty());
+    CHECK(mte2Nz.find("config, 0UL, 0UL, 0UL, 0UL") != std::string_view::npos);
+
+    const GeneratedProbeSource sync = GenerateProbeSource("dav-3510", ProbeGroup::Sync);
+    CHECK(sync.success);
+    CHECK(sync.source.find("__sanitizer_report_pipe_barrier") != std::string::npos);
+    CHECK(sync.source.find("static_cast<uint16_t>(PIPE_S), 439") != std::string::npos);
     return true;
 }
 
@@ -124,14 +158,46 @@ bool EmbedsPrivateProbeHeaders()
     return true;
 }
 
+bool ValidatesCompleteBindingCatalog()
+{
+    CHECK(BindingSymbols({ProbeGroup::Mte1}).size() == 25U);
+    CHECK(BindingSymbols({ProbeGroup::Mte2}).size() == 52U);
+    CHECK(BindingSymbols({ProbeGroup::Scalar}).size() == 33U);
+    CHECK(BindingSymbols({ProbeGroup::Sync}).size() == 29U);
+    CHECK(BindingSymbols({ProbeGroup::Matrix}).size() == 16U);
+    CHECK(BindingSymbols({ProbeGroup::Vector}).size() == 10U);
+
+    std::vector<std::string> generatedSymbols;
+    for (const ProbeGroup group : AllProbeGroups()) {
+        const GeneratedProbeSource generated = GenerateProbeSource("dav-3510", group);
+        CHECK(generated.success);
+        generatedSymbols.insert(generatedSymbols.end(), generated.symbols.begin(), generated.symbols.end());
+    }
+    std::vector<std::string> bindingSymbols = BindingSymbols(AllProbeGroups());
+    std::sort(generatedSymbols.begin(), generatedSymbols.end());
+    std::sort(bindingSymbols.begin(), bindingSymbols.end());
+    CHECK(generatedSymbols == bindingSymbols);
+    CHECK(bindingSymbols.size() == 141U);
+
+    const std::filesystem::path ctrlBin = std::filesystem::temp_directory_path() / "aclsan-all-probes.ctrl.bin";
+    std::filesystem::remove(ctrlBin);
+    std::string diagnostic;
+    CHECK(GenerateCtrlBin(ctrlBin.string(), AllProbeGroups(), diagnostic));
+    CHECK(diagnostic.empty());
+    CHECK(std::filesystem::file_size(ctrlBin) > 0U);
+    std::filesystem::remove(ctrlBin);
+    return true;
+}
+
 } // namespace
 } // namespace aclsan
 
 int main()
 {
     return aclsan::GeneratesCompleteDeterministicGroupSources() && aclsan::RendersControlledMte2Definition() &&
-                   aclsan::RendersNormalizedVectorSyncDefinitions() && aclsan::RejectsUnsupportedRequests() &&
-                   aclsan::EmbedsPrivateProbeHeaders() ?
+                   aclsan::RendersNewPipelineDefinitions() && aclsan::RendersNormalizedVectorSyncDefinitions() &&
+                   aclsan::RejectsUnsupportedRequests() && aclsan::EmbedsPrivateProbeHeaders() &&
+                   aclsan::ValidatesCompleteBindingCatalog() ?
                0 :
                1;
 }

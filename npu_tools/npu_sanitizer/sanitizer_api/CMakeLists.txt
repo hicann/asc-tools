@@ -19,8 +19,9 @@ set(NPU_CHECK_EMBED_PROBE_RESOURCES_SCRIPT_CONTENT [=[# Copyright (c) 2026 Huawe
 cmake_policy(SET CMP0054 NEW)
 
 foreach(required IN ITEMS
-    TRACE_RECORD TRACE_BUFFER_ABI CTRLBIN_SOURCE CTRLBIN_HEADER MSBIT_SOURCE MSBIT_HEADER
-    MSBIT_FILESYSTEM_HEADER MSBIT_SERIALIZE_HEADER MSBIT_SINGLETON_HEADER MSBIT_USTRING_HEADER OUTPUT)
+    TRACE_RECORD TRACE_BUFFER_ABI CTRLBIN_BINDING_SOURCE CTRLBIN_PUBLIC_HEADER CTRLBIN_WRITER_SOURCE
+    CTRLBIN_BINDINGS_HEADER CTRLBIN_FILE_IO_HEADER CTRLBIN_SERIALIZE_HEADER CTRLBIN_SINGLETON_HEADER
+    CTRLBIN_STRING_UTILS_HEADER OUTPUT)
   if(NOT DEFINED ${required} OR "${${required}}" STREQUAL "")
     message(FATAL_ERROR "${required} is required")
   endif()
@@ -36,8 +37,8 @@ file(SHA256 "${TRACE_BUFFER_ABI}" trace_buffer_abi_sha)
 string(SHA256 resource_identity "trace_record.h:${trace_record_sha}\ntrace_buffer_abi.h:${trace_buffer_abi_sha}\n")
 set(ctrlbin_identity_input "")
 foreach(ctrlbin_input IN ITEMS
-    CTRLBIN_SOURCE CTRLBIN_HEADER MSBIT_SOURCE MSBIT_HEADER MSBIT_FILESYSTEM_HEADER
-    MSBIT_SERIALIZE_HEADER MSBIT_SINGLETON_HEADER MSBIT_USTRING_HEADER)
+    CTRLBIN_BINDING_SOURCE CTRLBIN_PUBLIC_HEADER CTRLBIN_WRITER_SOURCE CTRLBIN_BINDINGS_HEADER
+    CTRLBIN_FILE_IO_HEADER CTRLBIN_SERIALIZE_HEADER CTRLBIN_SINGLETON_HEADER CTRLBIN_STRING_UTILS_HEADER)
   file(SHA256 "${${ctrlbin_input}}" ctrlbin_input_sha)
   get_filename_component(ctrlbin_input_name "${${ctrlbin_input}}" NAME)
   string(APPEND ctrlbin_identity_input "${ctrlbin_input_name}:${ctrlbin_input_sha}\n")
@@ -103,14 +104,14 @@ add_custom_command(
   COMMAND "${CMAKE_COMMAND}"
     "-DTRACE_RECORD=${CMAKE_CURRENT_SOURCE_DIR}/include/dbi/trace_record.h"
     "-DTRACE_BUFFER_ABI=${CMAKE_CURRENT_SOURCE_DIR}/include/dbi/trace_buffer_abi.h"
-    "-DCTRLBIN_SOURCE=${CMAKE_CURRENT_SOURCE_DIR}/src/dbi/dynamic_bind.cpp"
-    "-DCTRLBIN_HEADER=${CMAKE_CURRENT_SOURCE_DIR}/include/dbi/ctrlbin_generator.h"
-    "-DMSBIT_SOURCE=${CMAKE_CURRENT_SOURCE_DIR}/src/dbi/msbit/MSBit.cpp"
-    "-DMSBIT_HEADER=${CMAKE_CURRENT_SOURCE_DIR}/src/dbi/msbit/MSBit.h"
-    "-DMSBIT_FILESYSTEM_HEADER=${CMAKE_CURRENT_SOURCE_DIR}/src/dbi/msbit/FileSystem.h"
-    "-DMSBIT_SERIALIZE_HEADER=${CMAKE_CURRENT_SOURCE_DIR}/src/dbi/msbit/Serialize.h"
-    "-DMSBIT_SINGLETON_HEADER=${CMAKE_CURRENT_SOURCE_DIR}/src/dbi/msbit/Singleton.h"
-    "-DMSBIT_USTRING_HEADER=${CMAKE_CURRENT_SOURCE_DIR}/src/dbi/msbit/Ustring.h"
+    "-DCTRLBIN_BINDING_SOURCE=${CMAKE_CURRENT_SOURCE_DIR}/src/dbi/dynamic_bind.cpp"
+    "-DCTRLBIN_PUBLIC_HEADER=${CMAKE_CURRENT_SOURCE_DIR}/include/dbi/ctrlbin_generator.h"
+    "-DCTRLBIN_WRITER_SOURCE=${CMAKE_CURRENT_SOURCE_DIR}/src/dbi/ctrlbin/ctrlbin_writer.cpp"
+    "-DCTRLBIN_BINDINGS_HEADER=${CMAKE_CURRENT_SOURCE_DIR}/src/dbi/ctrlbin/ctrlbin_bindings.h"
+    "-DCTRLBIN_FILE_IO_HEADER=${CMAKE_CURRENT_SOURCE_DIR}/src/dbi/ctrlbin/ctrlbin_file_io.h"
+    "-DCTRLBIN_SERIALIZE_HEADER=${CMAKE_CURRENT_SOURCE_DIR}/src/dbi/ctrlbin/ctrlbin_serialize.h"
+    "-DCTRLBIN_SINGLETON_HEADER=${CMAKE_CURRENT_SOURCE_DIR}/src/dbi/ctrlbin/ctrlbin_singleton.h"
+    "-DCTRLBIN_STRING_UTILS_HEADER=${CMAKE_CURRENT_SOURCE_DIR}/src/dbi/ctrlbin/ctrlbin_string_utils.h"
     "-DOUTPUT=${NPU_CHECK_PROBE_RESOURCE_SOURCE}"
     -P "${NPU_CHECK_EMBED_PROBE_RESOURCES_SCRIPT}"
   DEPENDS
@@ -118,12 +119,12 @@ add_custom_command(
     "${CMAKE_CURRENT_SOURCE_DIR}/include/dbi/trace_buffer_abi.h"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/dbi/dynamic_bind.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/include/dbi/ctrlbin_generator.h"
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/dbi/msbit/MSBit.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/dbi/msbit/MSBit.h"
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/dbi/msbit/FileSystem.h"
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/dbi/msbit/Serialize.h"
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/dbi/msbit/Singleton.h"
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/dbi/msbit/Ustring.h"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/dbi/ctrlbin/ctrlbin_writer.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/dbi/ctrlbin/ctrlbin_bindings.h"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/dbi/ctrlbin/ctrlbin_file_io.h"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/dbi/ctrlbin/ctrlbin_serialize.h"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/dbi/ctrlbin/ctrlbin_singleton.h"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/dbi/ctrlbin/ctrlbin_string_utils.h"
     "${NPU_CHECK_EMBED_PROBE_RESOURCES_SCRIPT}"
   VERBATIM)
 
@@ -143,16 +144,16 @@ set_target_properties(npu_check_dbi_probe_runtime PROPERTIES
 
 add_library(npu_check_dbi_ctrlbin STATIC
   src/dbi/dynamic_bind.cpp
-  src/dbi/msbit/MSBit.cpp
+  src/dbi/ctrlbin/ctrlbin_writer.cpp
 )
 target_compile_features(npu_check_dbi_ctrlbin PUBLIC cxx_std_17)
 target_include_directories(npu_check_dbi_ctrlbin
   PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include
-  PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/dbi/msbit
+  PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/dbi/ctrlbin
 )
 target_compile_options(npu_check_dbi_ctrlbin PRIVATE -Wall -Wextra -Werror)
 target_link_libraries(npu_check_dbi_ctrlbin PUBLIC npu_check_dbi_probe_group)
-set_source_files_properties(src/dbi/msbit/MSBit.cpp PROPERTIES COMPILE_OPTIONS -Wno-missing-field-initializers)
+set_source_files_properties(src/dbi/ctrlbin/ctrlbin_writer.cpp PROPERTIES COMPILE_OPTIONS -Wno-missing-field-initializers)
 set_target_properties(npu_check_dbi_ctrlbin PROPERTIES
   POSITION_INDEPENDENT_CODE ON
   CXX_VISIBILITY_PRESET hidden

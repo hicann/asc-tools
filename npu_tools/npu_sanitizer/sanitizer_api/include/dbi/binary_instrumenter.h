@@ -19,6 +19,7 @@ namespace aclsan {
 
 struct BinaryInstrumentationConfig {
     std::string arch;
+    // 隐藏 trace buffer 指针的 kernel 参数偏移；为 0 时在 binary load 插桩阶段从 Device ELF 元数据计算。
     uint32_t traceArgumentOffset = 0;
     std::vector<ProbeGroup> probeGroups;
     std::string toolchainRoot;
@@ -36,6 +37,7 @@ struct BinaryInstrumentationResult {
     std::vector<uint8_t> binary;
     std::string stage;
     std::string diagnostic;
+    // 插桩后确定的隐藏参数偏移，供 launch hook 为每次 launch 注入独立的 Device GM buffer 指针。
     uint32_t traceArgumentOffset = 0;
 };
 
@@ -47,6 +49,7 @@ struct RuntimeBinaryInstrumentationResult {
     BinaryInstrumentationStatus status = BinaryInstrumentationStatus::Skipped;
     uint32_t strict = 0;
     int32_t consumerStatus = 0;
+    // 跨 ABI 返回给 binary load hook 的已解析隐藏参数偏移。
     uint32_t traceArgumentOffset = 0;
 };
 

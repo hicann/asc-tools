@@ -45,6 +45,7 @@ bool InitializeTraceBuffer(
     aclsan::AclsanTraceBufferHeader header{};
     header.magic = aclsan::ASCSAN_TRACE_BUFFER_MAGIC;
     header.launchId = launchId;
+    header.segmentBytes = static_cast<uint64_t>(bytes);
     header.blockCount = blockCount;
     header.recordsPerCore = recordsPerCore;
     header.physicalCoreCount = physicalCoreCount;
@@ -78,9 +79,9 @@ TraceBufferParseResult ParseTraceBuffer(
     aclsan::AclsanTraceBufferHeader header{};
     std::memcpy(&header, buffer, sizeof(header));
     if (header.magic != aclsan::ASCSAN_TRACE_BUFFER_MAGIC || header.launchId != expectedLaunchId ||
-        header.blockCount != expectedBlockCount || header.recordsPerCore != expectedRecordsPerCore ||
-        header.physicalCoreCount != expectedPhysicalCoreCount || header.reserved != 0U) {
-        result.error = "trace buffer header does not match the launch-owned layout";
+        header.segmentBytes != requiredBytes || header.blockCount != expectedBlockCount ||
+        header.recordsPerCore != expectedRecordsPerCore || header.physicalCoreCount != expectedPhysicalCoreCount) {
+        result.error = "trace segment header does not match the launch-owned layout";
         return result;
     }
 

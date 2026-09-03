@@ -10,6 +10,24 @@
 
 #include "trace_record.h"
 
+extern __attribute__((noinline)) __attribute__((weak)) __aicore__ void __sanitizer_report_load_cbuf_to_ca_mx_2dv2(
+    __gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, uint64_t dst, __cbuf__ void* src, uint64_t config0,
+    uint64_t config1)
+{
+    aclsan::WriteTraceRecord(
+        memInfo, pc, bid, aclsan::DeviceInstructionCategory::MemoryAccess, static_cast<uint16_t>(PIPE_MTE1), 151, dst,
+        reinterpret_cast<uint64_t>(src), config0, config1, 0UL);
+}
+
+extern __attribute__((noinline)) __attribute__((weak)) __aicore__ void __sanitizer_report_load_cbuf_to_cb_mx_2dv2(
+    __gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, uint64_t dst, __cbuf__ void* src, uint64_t config0,
+    uint64_t config1)
+{
+    aclsan::WriteTraceRecord(
+        memInfo, pc, bid, aclsan::DeviceInstructionCategory::MemoryAccess, static_cast<uint16_t>(PIPE_MTE1), 152, dst,
+        reinterpret_cast<uint64_t>(src), config0, config1, 0UL);
+}
+
 // MOV_L1_TO_BT.bf16, API ID 426.
 extern __attribute__((noinline)) __attribute__((weak)) __aicore__ void __sanitizer_report_copy_cbuf_to_bt_b16(
     __gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, uint64_t dst, __cbuf__ void* src, uint64_t config)

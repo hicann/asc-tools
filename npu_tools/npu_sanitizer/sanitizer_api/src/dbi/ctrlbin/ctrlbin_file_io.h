@@ -8,11 +8,11 @@
  * See LICENSE in the root of the software repository for the full text of the License.
  */
 
-/* Minimal FileSystem stub for standalone MSBit build.
- * Mirrors the subset of msopscommon/utils/FileSystem.h used by MSBit.cpp.
+/* Minimal file I/O helpers for the standalone ctrl.bin writer.
+ * Provides only the write-path validation and permission hooks used by ctrlbin_writer.cpp.
  */
-#ifndef MSBIT_FILESYSTEM_H
-#define MSBIT_FILESYSTEM_H
+#ifndef ACLSAN_CTRLBIN_FILE_IO_H
+#define ACLSAN_CTRLBIN_FILE_IO_H
 
 #include <string>
 #include <sys/stat.h>
@@ -27,4 +27,4 @@ inline bool Chmod(const std::string& path, mode_t /*mode*/)
     return true;
 }
 
-#endif // MSBIT_FILESYSTEM_H
+#endif // ACLSAN_CTRLBIN_FILE_IO_H

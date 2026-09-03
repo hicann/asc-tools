@@ -187,6 +187,7 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR OR ENABLE_TEST)
   target_compile_features(npu_check_probe_source_generator_tests PRIVATE cxx_std_17)
   target_compile_definitions(npu_check_probe_source_generator_tests PRIVATE _GLIBCXX_USE_CXX11_ABI=0)
   target_include_directories(npu_check_probe_source_generator_tests PRIVATE ${NPU_CHECK_DBI_INCLUDE_DIR})
-  target_link_libraries(npu_check_probe_source_generator_tests PRIVATE npu_check_dbi_probe_runtime)
+  target_link_libraries(npu_check_probe_source_generator_tests PRIVATE
+    npu_check_dbi_probe_runtime npu_check_dbi_ctrlbin)
   add_test(NAME npu_check_probe_source_generator COMMAND npu_check_probe_source_generator_tests)
 endif()

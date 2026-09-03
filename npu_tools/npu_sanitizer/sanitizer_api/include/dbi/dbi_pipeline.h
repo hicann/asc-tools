@@ -14,7 +14,7 @@
 
 namespace aclsan {
 
-enum class ProbeGroup : uint8_t { Mte1, Mte2, Mte3, Fixpipe, Scalar, Sync };
+enum class ProbeGroup : uint8_t { Mte1, Mte2, Mte3, Fixpipe, Scalar, Sync, Matrix, Vector };
 
 enum ProbeGroupMask : uint32_t {
     PROBE_GROUP_MTE1 = 1U << 0U,
@@ -23,8 +23,10 @@ enum ProbeGroupMask : uint32_t {
     PROBE_GROUP_FIXPIPE = 1U << 3U,
     PROBE_GROUP_SYNC = 1U << 4U,
     PROBE_GROUP_SCALAR = 1U << 5U,
+    PROBE_GROUP_MATRIX = 1U << 6U,
+    PROBE_GROUP_VECTOR = 1U << 7U,
     PROBE_GROUP_ALL = PROBE_GROUP_MTE1 | PROBE_GROUP_MTE2 | PROBE_GROUP_MTE3 | PROBE_GROUP_FIXPIPE | PROBE_GROUP_SYNC |
-                      PROBE_GROUP_SCALAR,
+                      PROBE_GROUP_SCALAR | PROBE_GROUP_MATRIX | PROBE_GROUP_VECTOR,
 };
 
 struct ToolchainPaths {
@@ -40,6 +42,7 @@ struct DbiRequest {
     std::string inputKernel;
     std::string outputKernel;
     std::string arch;
+    // DBI 在 binary load 阶段为隐藏的、每次 launch 注入的 trace buffer 指针预留的 kernel 参数偏移。
     uint32_t traceArgumentOffset = 0;
     std::vector<ProbeGroup> probeGroups;
     std::string toolchainRoot;
@@ -55,6 +58,7 @@ struct DbiResult {
     std::string patchedPath;
     std::string stage;
     std::string diagnostic;
+    // 已写入 patched binary，并由 launch hook 用于填充隐藏 trace buffer 指针的参数偏移。
     uint32_t traceArgumentOffset = 0;
 };
 

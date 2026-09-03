@@ -52,6 +52,9 @@ constexpr bool IsTraceBlockIdValid(uint64_t blockId, bool isAic, uint32_t blockC
     return blockId < blockLimit;
 }
 
+// 每次已插桩 kernel launch 当前独占一个 trace segment。Host 在 launch 前初始化 header 并拷贝到
+// Device GM，Device probe 执行时只写入本次 launch 注入的 segment。segmentBytes 明确给出
+// [segment base, segment base + segmentBytes) 边界；未来多个 segment 可在共享 buffer 中连续存放。
 // Buffer 的三层布局：
 //   [AclsanTraceBufferHeader]
 //   [physical core slice 0: AclsanTraceSliceHeader][record 0] ... [record recordsPerCore - 1]
@@ -61,21 +64,24 @@ constexpr bool IsTraceBlockIdValid(uint64_t blockId, bool isAic, uint32_t blockC
 //   sliceBytes  = sizeof(AclsanTraceSliceHeader) +
 //                 recordsPerCore * sizeof(AclsanRawTraceRecord)
 //   sliceCount  = physicalCoreCount
-//   bufferBytes = sizeof(AclsanTraceBufferHeader) + sliceCount * sliceBytes
+//   segmentBytes = sizeof(AclsanTraceBufferHeader) + sliceCount * sliceBytes
 //   sliceOffset(sliceIndex) = sizeof(AclsanTraceBufferHeader) + sliceIndex * sliceBytes
 //
 // blockCount 保存 launch blockDim A，只用于校验 record 携带的逻辑 blockId。物理核分为两部分，
 // 每部分的前 1/3 为 AIC、后 2/3 为 AIV。sliceIndex 等于 get_coreid()；每个物理核执行的
-// 所有逻辑 block 共享一个 slice，有效记录下标范围为 [0, recordCount)。
+// 所有逻辑 block 共享一个 slice，有效记录下标范围为 [0, recordCount)。recordCount 即该 slice 的
+// 有效结尾，不额外写入 record 或 launch 尾标志。
 struct AclsanTraceBufferHeader {
-    uint64_t magic; // Trace buffer 格式标识，固定为 ASCSAN_TRACE_BUFFER_MAGIC。
-    // launchId在多次launch的时候区分不出来id，先考虑单kernel 单launch
-    uint64_t launchId;          // Host 分配的标识，用于将 buffer 与一次 kernel launch 关联。
-    uint32_t blockCount;        // 本次 kernel launch 的 blockDim，即 A。
+    uint64_t magic;        // Trace segment 格式标识，固定为 ASCSAN_TRACE_BUFFER_MAGIC。
+    uint64_t launchId;     // Host 为本次 launch 分配的标识；该 segment 内所有 record 均继承此归属。
+    uint64_t segmentBytes; // 包含 header 和所有定长 slice 的完整 segment 字节数。
+    uint32_t blockCount;   // 本次 kernel launch 的 blockDim，即 A。
     uint32_t recordsPerCore;    // 每个物理核 slice 最多可保存的原始 trace 记录数。
     uint32_t physicalCoreCount; // Host 查询得到的 Cube 与 Vector 物理核数量之和。
-    uint32_t reserved;          // 保持 header 的 64 位对齐，固定写 0。
 };
+
+// 新代码可使用 segment 术语；保留 AclsanTraceBufferHeader 名称以兼容现有调用点。
+using AclsanTraceSegmentHeader = AclsanTraceBufferHeader;
 
 // 单个物理 slice 的写入状态。phyCoreId 仅在 recordCount 大于 0 时有效。
 struct AclsanTraceSliceHeader {
@@ -85,12 +91,13 @@ struct AclsanTraceSliceHeader {
     uint32_t reserved;      // 保持后续 AclsanRawTraceRecord 的 64 位对齐，固定写 0。
 };
 
-// Device probe 生成的一条原始 trace 记录，固定占用 72 字节：
+// Device probe 生成的一条原始 trace 记录，固定占用 72 字节。record 不重复保存 launchId；Host 解析时
+// 从所属 AclsanTraceBufferHeader 取得 launchId，并附加到 ParsedTraceRecord。
 //   [pc: 8][args[0..4]: 40][instrId: 4][siteId: 4][category: 2][pipeline: 2][blockId: 4][reserved: 4][padding: 4]
 struct AclsanRawTraceRecord {
     uint64_t pc;                        // 被插桩指令的 PC。
     uint64_t args[5];                   // Probe 捕获的指令参数，具体含义由对应指令协议定义。
-    uint32_t instrId;                   // 指令标识；probe 写入 apiId，Host 按 CceInstructionId 解析。
+    uint32_t instrId;                   // 指令标识；probe 写入 apiId，Host 按 InstructionId 解析。
     uint32_t siteId;                    // 插桩点标识，用于关联 patch 元数据；当前写入固定填 0。
     DeviceInstructionCategory category; // 指令功能分类。
     uint16_t pipeline;                  // 指令实际执行的 Device PIPE_* 值。

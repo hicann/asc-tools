@@ -8,12 +8,11 @@
  * See LICENSE in the root of the software repository for the full text of the License.
  */
 
-/* Minimal Ustring header for standalone MSBit build.
- * Provides only the Join template used by MSBit.cpp.
- * Sourced from msopscommon/csrc/utils/Ustring.h.
+/* Minimal string helpers for the standalone ctrl.bin writer.
+ * Provides only the Join template used by ctrlbin_writer.cpp.
  */
-#ifndef MSBIT_USTRING_H
-#define MSBIT_USTRING_H
+#ifndef ACLSAN_CTRLBIN_STRING_UTILS_H
+#define ACLSAN_CTRLBIN_STRING_UTILS_H
 
 #include <string>
 
@@ -32,4 +31,4 @@ inline std::string Join(Iterator beg, Iterator end, std::string const& sep = " "
     return ret;
 }
 
-#endif // MSBIT_USTRING_H
+#endif // ACLSAN_CTRLBIN_STRING_UTILS_H

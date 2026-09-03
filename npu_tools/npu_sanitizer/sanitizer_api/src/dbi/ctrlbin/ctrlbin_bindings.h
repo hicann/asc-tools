@@ -170,7 +170,14 @@ enum class InstrType {
     IMG2COLV2_CBUF_TO_CB_B8,
     IMG2COLV2_CBUF_TO_CB_B32,
     COPY_CBUF_TO_UBUF = 158,
-    // reserved 159-166
+    SET_CTRL,
+    SET_FFTS_BASE_ADDR,
+    SET_FPC,
+    SET_QUANT_PRE,
+    SET_QUANT_POST,
+    SET_LRELU_ALPHA,
+    MOVE_MASK_0,
+    MOVE_MASK_1,
     COPY_CBUF_TO_FBUF = 167,
     COPY_MATRIX_CC_TO_CBUF_F32,
     COPY_MATRIX_CC_TO_CBUF_S32,
@@ -489,8 +496,9 @@ enum class InstrType {
 };
 
 #if !defined(__CCE_IS_AICORE__)
-void Bind(InstrType instrType, const std::string& injectedFuncName, const std::vector<uint16_t>& paraMask);
+void RegisterCtrlbinBinding(
+    InstrType instrType, const std::string& injectedFuncName, const std::vector<uint16_t>& paraMask);
 #endif
 extern "C" {
-__attribute__((weak)) void MSBitAtInit();
+__attribute__((weak)) void RegisterCtrlbinBindings();
 }
