@@ -14,7 +14,7 @@
 
 extern "C" ACLPTI_EXPORT aclptiResult aclptiRangeProfilerSetConfig(aclptiRangeProfilerSetConfigParams* pParams)
 {
-    const aclptiResult result = npu_compute::aclpti::profiling::GetReplayRuntime().SetSections(pParams);
+    const aclptiResult result = npu_compute::aclpti::profiling::GetReplayRuntime().SetConfig(pParams);
     npu_compute::detail::DebugLog("aclpti", "range config result=%d", static_cast<int>(result));
     return result;
 }

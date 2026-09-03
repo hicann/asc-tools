@@ -15,8 +15,9 @@
 #include <cstdio>
 #include <type_traits>
 
-static_assert(std::is_same_v<decltype(aclptiPmuDataResult{}.status), aclptiResult>);
-static_assert(std::is_same_v<decltype(&aclptiRegisterPmuDataCallback), aclptiResult (*)(aclptiPmuDataCallback)>);
+static_assert(std::is_same_v<decltype(aclptiProfilingDataResult{}.status), aclptiResult>);
+static_assert(
+    std::is_same_v<decltype(&aclptiRegisterProfilingDataCallback), aclptiResult (*)(aclptiProfilingDataCallback)>);
 static_assert(std::is_same_v<
               decltype(&aclptiRegisterDataModuleShutdownCallback),
               aclptiResult (*)(aclptiDataModuleShutdownCallback, void*)>);
@@ -70,6 +71,21 @@ int main()
     empty.sections = nullptr;
     empty.numSections = 0;
     CHECK(aclptiRangeProfilerSetConfig(&empty) == ACLPTI_ERROR_INVALID_PARAMETER);
+
+    aclptiRangeProfilerSetConfigParams pipeline_only{nullptr, 0, ACLPTI_BLOCK_RESULT_DISABLED, true, false};
+    CHECK(aclptiRangeProfilerSetConfig(&pipeline_only) == ACLPTI_SUCCESS);
+
+    aclptiRangeProfilerSetConfigParams pc_sampling_only{nullptr, 0, ACLPTI_BLOCK_RESULT_DISABLED, false, true};
+    CHECK(aclptiRangeProfilerSetConfig(&pc_sampling_only) == ACLPTI_SUCCESS);
+
+    aclptiRangeProfilerSetConfigParams instruction_collection{nullptr, 0, ACLPTI_BLOCK_RESULT_ALL, true, true};
+    CHECK(aclptiRangeProfilerSetConfig(&instruction_collection) == ACLPTI_SUCCESS);
+
+    aclptiRangeProfilerSetConfigParams block_only{nullptr, 0, ACLPTI_BLOCK_RESULT_ALL, false, false};
+    CHECK(aclptiRangeProfilerSetConfig(&block_only) == ACLPTI_ERROR_INVALID_PARAMETER);
+
+    aclptiRangeProfilerSetConfigParams invalid_block{nullptr, 0, static_cast<aclptiBlockResultMode>(3), true, false};
+    CHECK(aclptiRangeProfilerSetConfig(&invalid_block) == ACLPTI_ERROR_INVALID_PARAMETER);
 
     const char* unknown_sections[] = {"UnknownMetric"};
     aclptiRangeProfilerSetConfigParams unknown{unknown_sections, 1};

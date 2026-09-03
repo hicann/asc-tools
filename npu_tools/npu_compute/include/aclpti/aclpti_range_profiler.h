@@ -12,6 +12,7 @@
 
 #include "aclpti/aclpti_types.h"
 
+#include <stdbool.h>
 #include <stddef.h>
 
 #ifdef __cplusplus
@@ -21,9 +22,18 @@ extern "C" {
 #define ACLPTI_MAX_NUM_SECTIONS ((size_t)64)
 #define ACLPTI_MAX_SECTION_NAME_LENGTH ((size_t)64)
 
+typedef enum aclptiBlockResultMode {
+    ACLPTI_BLOCK_RESULT_DISABLED = 0,
+    ACLPTI_BLOCK_RESULT_ALL = 1,
+    ACLPTI_BLOCK_RESULT_SHRINK = 2,
+} aclptiBlockResultMode;
+
 typedef struct aclptiRangeProfilerSetConfigParams {
     const char* const* sections;
     size_t numSections;
+    aclptiBlockResultMode blockResult;
+    bool collectPipeline;
+    bool collectPcSampling;
 } aclptiRangeProfilerSetConfigParams;
 
 ACLPTI_EXPORT aclptiResult aclptiRangeProfilerSetConfig(aclptiRangeProfilerSetConfigParams* pParams);

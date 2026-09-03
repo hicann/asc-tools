@@ -46,6 +46,10 @@ struct KernelArgs {
 struct ObservedConfig {
     std::uint32_t devNums;
     std::uint32_t deviceId;
+    std::uint64_t profSwitch;
+    std::uint32_t primaryAttr;
+    std::uint32_t instrMode;
+    std::uint32_t blockMode;
     std::array<std::uint32_t, COMPUTE_AICORE_METRICS_NUM> pmuEvents;
 };
 
@@ -157,13 +161,28 @@ int ProfilerStart(uint32_t, const void* config, uint32_t length)
         return -1;
     }
     const auto* msprofConfig = static_cast<const MsprofConfig*>(config);
-    if (msprofConfig->configInfo.attrs == nullptr || msprofConfig->configInfo.numAttrs != 1 ||
-        msprofConfig->configInfo.attrs[0].id != PROF_CONFIG_ATTR_AICORE_METRICS) {
+    if (msprofConfig->configInfo.attrs == nullptr || msprofConfig->configInfo.numAttrs != 2 ||
+        msprofConfig->configInfo.attrs[1].id != PROF_CONFIG_ATTR_TASK_BLOCK) {
         return -1;
     }
-    ObservedConfig observed{msprofConfig->devNums, msprofConfig->devIdList[0], {}};
-    std::memcpy(
-        observed.pmuEvents.data(), msprofConfig->configInfo.attrs[0].value.aicoreMetrics, sizeof(observed.pmuEvents));
+    ObservedConfig observed{
+        msprofConfig->devNums,
+        msprofConfig->devIdList[0],
+        msprofConfig->profSwitch,
+        msprofConfig->configInfo.attrs[0].id,
+        0,
+        msprofConfig->configInfo.attrs[1].value.taskBlockMode,
+        {},
+    };
+    if (observed.primaryAttr == PROF_CONFIG_ATTR_AICORE_METRICS) {
+        std::memcpy(
+            observed.pmuEvents.data(), msprofConfig->configInfo.attrs[0].value.aicoreMetrics,
+            sizeof(observed.pmuEvents));
+    } else if (observed.primaryAttr == PROF_CONFIG_ATTR_INSTR) {
+        observed.instrMode = msprofConfig->configInfo.attrs[0].value.instrMode;
+    } else {
+        return -1;
+    }
     g_configs.push_back(observed);
     g_started_config = config;
     return 0;
@@ -223,8 +242,11 @@ extern "C" aclError aclrtGetDevice(std::int32_t* deviceId)
     return ACL_SUCCESS;
 }
 
-int main()
+int main(int argc, char** argv)
 {
+    const bool useShrinkBlock = argc == 2 && std::strcmp(argv[1], "shrink") == 0;
+    const aclptiBlockResultMode blockResult = useShrinkBlock ? ACLPTI_BLOCK_RESULT_SHRINK : ACLPTI_BLOCK_RESULT_ALL;
+    const std::uint32_t expectedBlockMode = useShrinkBlock ? PROF_COMPUTE_BLOCK_SHRINK : PROF_COMPUTE_ALL_BLOCK;
     CHECK(RuntimeStubSetOriginFunction("aclrtMalloc", &RealMalloc) == 0);
     CHECK(RuntimeStubSetOriginFunction("aclrtMallocAlign32", &RealMalloc) == 0);
     CHECK(RuntimeStubSetOriginFunction("aclrtFree", &RealFree) == 0);
@@ -274,8 +296,10 @@ int main()
     CHECK(aclptiActivityDisable(subscriber, ACLPTI_ACTIVITY_KIND_FULL, nullptr) == ACLPTI_SUCCESS);
     CHECK(aclptiActivityDisable(subscriber, ACLPTI_ACTIVITY_KIND_FULL, nullptr) == ACLPTI_SUCCESS);
     const char* sections[] = {"PipeUtilization", "ResourceConflictRatio"};
-    aclptiRangeProfilerSetConfigParams config{sections, std::size(sections)};
+    aclptiRangeProfilerSetConfigParams config{sections, std::size(sections), blockResult, true, true};
     CHECK(aclptiRangeProfilerSetConfig(&config) == ACLPTI_SUCCESS);
+    aclptiRangeProfilerSetConfigParams invalidConfig{nullptr, 0, ACLPTI_BLOCK_RESULT_ALL, false, false};
+    CHECK(aclptiRangeProfilerSetConfig(&invalidConfig) == ACLPTI_ERROR_INVALID_PARAMETER);
 
     void* alignedAllocation = nullptr;
     CHECK(aclrtMallocAlign32(&alignedAllocation, 1, ACL_MEM_MALLOC_HUGE_FIRST) == 0);
@@ -294,30 +318,47 @@ int main()
     CHECK(aclrtSetDevice(7) == 0);
     CHECK(g_set_device_calls == 1);
     CHECK(aclrtLaunchKernel(nullptr, 1, &args, sizeof(args), nullptr) == 0);
-    CHECK(g_start_calls == 3);
-    CHECK(g_stop_calls == 3);
+    CHECK(g_start_calls == 5);
+    CHECK(g_stop_calls == 5);
     CHECK(g_start_data_type == 8);
     CHECK(g_stop_data_type == 8);
-    CHECK(g_launch_calls == 4);
-    CHECK(g_sync_calls == 4);
+    CHECK(g_launch_calls == 6);
+    CHECK(g_sync_calls == 6);
     CHECK(g_get_device_calls == 1);
     CHECK(g_soc_name_calls == 0);
-    CHECK((g_kernel_inputs == std::vector<std::uint8_t>{5, 5, 5, 5}));
+    CHECK((g_kernel_inputs == std::vector<std::uint8_t>{5, 5, 5, 5, 5, 5}));
     CHECK(*static_cast<std::uint8_t*>(allocation) == 6);
 
-    CHECK(g_configs.size() == 3);
+    CHECK(g_configs.size() == 5);
     const auto expected_first = ExpectedPmus({0, 1, 10, 36, 52, 53, 514, 515, 810, 1281});
     const auto expected_second = ExpectedPmus({1794, 1812, 1813, 11, 12, 13, 14, 15, 1344, 1366});
     const auto expected_third = ExpectedPmus({1376, 1377, 1378, 1379});
     CHECK(g_configs[0].pmuEvents == expected_first);
+    CHECK(g_configs[0].profSwitch == (PROF_TASK_TIME_MASK | PROF_AICORE_METRICS_MASK));
+    CHECK(g_configs[0].primaryAttr == PROF_CONFIG_ATTR_AICORE_METRICS);
+    CHECK(g_configs[0].blockMode == expectedBlockMode);
     CHECK(g_configs[0].devNums == 1);
     CHECK(g_configs[0].deviceId == 7);
     CHECK(g_configs[1].pmuEvents == expected_second);
+    CHECK(g_configs[1].profSwitch == (PROF_TASK_TIME_MASK | PROF_AICORE_METRICS_MASK));
+    CHECK(g_configs[1].primaryAttr == PROF_CONFIG_ATTR_AICORE_METRICS);
+    CHECK(g_configs[1].blockMode == expectedBlockMode);
     CHECK(g_configs[1].devNums == 1);
     CHECK(g_configs[1].deviceId == 7);
     CHECK(g_configs[2].pmuEvents == expected_third);
+    CHECK(g_configs[2].profSwitch == (PROF_TASK_TIME_MASK | PROF_AICORE_METRICS_MASK));
+    CHECK(g_configs[2].primaryAttr == PROF_CONFIG_ATTR_AICORE_METRICS);
+    CHECK(g_configs[2].blockMode == expectedBlockMode);
     CHECK(g_configs[2].devNums == 1);
     CHECK(g_configs[2].deviceId == 7);
+    CHECK(g_configs[3].profSwitch == (PROF_TASK_TIME_MASK | PROF_INSTR_MASK));
+    CHECK(g_configs[3].primaryAttr == PROF_CONFIG_ATTR_INSTR);
+    CHECK(g_configs[3].instrMode == PROF_COMPUTE_BIU_PERF);
+    CHECK(g_configs[3].blockMode == expectedBlockMode);
+    CHECK(g_configs[4].profSwitch == (PROF_TASK_TIME_MASK | PROF_INSTR_MASK));
+    CHECK(g_configs[4].primaryAttr == PROF_CONFIG_ATTR_INSTR);
+    CHECK(g_configs[4].instrMode == PROF_COMPUTE_PC_SAMPLING);
+    CHECK(g_configs[4].blockMode == expectedBlockMode);
 
     const std::size_t starts_after_first_launch = g_start_calls;
     const std::size_t syncs_after_first_launch = g_sync_calls;
@@ -326,7 +367,7 @@ int main()
     CHECK(aclrtLaunchKernel(nullptr, 1, &args, sizeof(args), nullptr) == ACL_ERROR_PROFILING_FAILURE);
     CHECK(g_start_calls == starts_after_first_launch);
     CHECK(g_sync_calls == syncs_after_first_launch);
-    CHECK(g_launch_calls == 5);
+    CHECK(g_launch_calls == 7);
     CHECK(g_get_device_calls == 1);
     CHECK(g_kernel_inputs.back() == 10);
     CHECK(*static_cast<std::uint8_t*>(allocation) == 11);

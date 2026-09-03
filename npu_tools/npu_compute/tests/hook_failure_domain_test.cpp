@@ -219,24 +219,40 @@ int TestShadowMallocStopsProfiling()
 
 int TestReplaySynchronizeFailure()
 {
-    gFailSyncCall = 1;
+    gFailSyncCall = 2;
     const std::size_t memcpyCallsBeforeLaunch = gMemcpyCalls;
     aclError launchStatus = ACL_ERROR_INTERNAL_ERROR;
     std::string logText;
     CHECK(CaptureStderr([&] { launchStatus = aclrtLaunchKernel(nullptr, 1, nullptr, 0, nullptr); }, &logText));
 
-    CHECK(launchStatus == ACL_ERROR_PROFILING_FAILURE);
-    CHECK(logText.find("[aclpti] error operation=replay_initial_sync") != std::string::npos);
+    CHECK(launchStatus == ACL_ERROR_INTERNAL_ERROR);
+    CHECK(logText.find("[aclpti] error operation=replay_sync") != std::string::npos);
     CHECK(logText.find("status=-43") != std::string::npos);
     CHECK(logText.find("domain=") == std::string::npos);
-    CHECK(gLaunchCalls == 1);
-    CHECK(gStartCalls == 0);
-    CHECK(gSyncCalls == 1);
+    CHECK(gLaunchCalls == 2);
+    CHECK(gStartCalls == 1);
+    CHECK(gSyncCalls == 2);
     CHECK(gMemcpyCalls == memcpyCallsBeforeLaunch);
     const std::size_t startsBeforeRetry = gStartCalls;
     CHECK(aclrtLaunchKernel(nullptr, 1, nullptr, 0, nullptr) == ACL_ERROR_PROFILING_FAILURE);
-    CHECK(gLaunchCalls == 2);
+    CHECK(gLaunchCalls == 3);
     CHECK(gStartCalls == startsBeforeRetry);
+    return 0;
+}
+
+int TestInitialSynchronizeFailure()
+{
+    gFailSyncCall = 1;
+    aclError launchStatus = ACL_SUCCESS;
+    std::string logText;
+    CHECK(CaptureStderr([&] { launchStatus = aclrtLaunchKernel(nullptr, 1, nullptr, 0, nullptr); }, &logText));
+
+    CHECK(launchStatus == ACL_ERROR_INTERNAL_ERROR);
+    CHECK(logText.find("[aclpti] error operation=replay_initial_sync") != std::string::npos);
+    CHECK(logText.find("status=-43") != std::string::npos);
+    CHECK(gLaunchCalls == 1);
+    CHECK(gStartCalls == 0);
+    CHECK(gSyncCalls == 1);
     return 0;
 }
 
@@ -442,6 +458,9 @@ int main(int argc, char** argv)
     }
     if (scenario == "replay-sync") {
         return TestReplaySynchronizeFailure();
+    }
+    if (scenario == "replay-initial-sync-failure") {
+        return TestInitialSynchronizeFailure();
     }
     if (scenario == "replay-initial-sync") {
         return TestReplayInitialSynchronize();

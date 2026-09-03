@@ -22,7 +22,6 @@
 #include <cstddef>
 #include <cstdint>
 #include <functional>
-#include <string>
 #include <vector>
 
 struct MsprofConfig;
@@ -37,8 +36,8 @@ public:
     /// Initializes raw profiling data collection and uploader callbacks.
     aclptiResult Initialize();
 
-    /// Resolves requested profiling sections into the PMU events to collect.
-    aclptiResult SetSections(const aclptiRangeProfilerSetConfigParams* params);
+    /// Validates and stores the requested PMU and instruction collection configuration.
+    aclptiResult SetConfig(const aclptiRangeProfilerSetConfigParams* params);
 
     /// Replays a kernel and distinguishes profiling-only failures from unreliable device results.
     aclptiResult ReplayKernel(
@@ -48,23 +47,28 @@ public:
     aclptiResult Shutdown();
 
 private:
+    struct ReplayRound;
+    struct ProfilingRoundConfig;
+
     /// Resolves replay dependencies and synchronizes the stream before profiling starts.
     aclptiResult PrepareReplayEnvironment(
         const ReplayLaunchFunction& launchFunction, aclrtStream stream, std::int32_t* deviceId,
         aclrtSynchronizeStreamFunc* synchronizeFunction) const;
 
-    /// Builds the PMU, Msprof, and data-module configuration and returns the valid PMU event count.
-    std::size_t ConfigureProfilingRound(
-        std::size_t round, std::int32_t deviceId, MsprofConfigAttr* attr, MsprofConfig* config,
-        data::ReplayPrepareInfo* prepareInfo) const;
+    /// Expands the logical collection request into deterministic PMU and instruction rounds.
+    std::vector<ReplayRound> BuildReplayRounds() const;
+
+    /// Builds the Msprof and data-module configuration owned by one replay round.
+    void ConfigureProfilingRound(
+        const ReplayRound& round, std::size_t roundId, std::int32_t deviceId, ProfilingRoundConfig* config) const;
 
     /// Prepares raw-data collection and starts Msprof for one profiling round.
     aclptiResult StartProfilingRound(
-        std::size_t round, std::int32_t deviceId, MsprofConfigAttr* attr, MsprofConfig* config);
+        const ReplayRound& round, std::size_t roundId, std::int32_t deviceId, ProfilingRoundConfig* config);
 
     /// Synchronizes the replayed kernel, stops Msprof, records its data, and releases the round.
     aclptiResult FinishProfilingRound(
-        std::size_t round, const MsprofConfig& config, aclError launchStatus,
+        std::size_t round, const ProfilingRoundConfig& config, aclError launchStatus,
         aclrtSynchronizeStreamFunc synchronizeFunction, aclrtStream stream);
 
     /// Maps launch, synchronization, collection, recording, and release results to an ACL PTI status.
@@ -73,7 +77,9 @@ private:
         const data::ReplayResult& replayResult, aclptiResult releaseStatus) const;
 
     std::vector<uint32_t> pmuEvents_;
-    std::string sectionName_ = "default";
+    aclptiBlockResultMode blockResult_ = ACLPTI_BLOCK_RESULT_DISABLED;
+    bool collectPipeline_ = false;
+    bool collectPcSampling_ = false;
     data::Module dataModule_;
 };
 

@@ -234,13 +234,13 @@ int NpuComputeRuntime::Initialize()
     }
 
     auto consumer = PmuDataConsumer::Create(
-        [this](std::shared_ptr<const aclptiPmuDataResult> result) { return ProcessPmuData(std::move(result)); });
+        [this](std::shared_ptr<const aclptiProfilingDataResult> result) { return ProcessPmuData(std::move(result)); });
     if (consumer == nullptr || consumer->Start() != ACLPTI_SUCCESS) {
         return kInitializeFailed;
     }
     std::weak_ptr<PmuDataConsumer> weakConsumer = consumer;
     const aclptiResult registerStatus =
-        aclptiRegisterPmuDataCallback([weakConsumer](std::shared_ptr<const aclptiPmuDataResult> result) {
+        aclptiRegisterProfilingDataCallback([weakConsumer](std::shared_ptr<const aclptiProfilingDataResult> result) {
             const auto activeConsumer = weakConsumer.lock();
             return activeConsumer == nullptr ? ACLPTI_ERROR_INVALID_STATE : activeConsumer->Submit(std::move(result));
         });
@@ -347,7 +347,7 @@ int NpuComputeRuntime::ShutdownAfterPtiDrain()
     return consumer->ShutdownAndDrain() == ACLPTI_SUCCESS ? 0 : kInitializeFailed;
 }
 
-aclptiResult NpuComputeRuntime::ProcessPmuData(std::shared_ptr<const aclptiPmuDataResult> result)
+aclptiResult NpuComputeRuntime::ProcessPmuData(std::shared_ptr<const aclptiProfilingDataResult> result)
 {
     if (result == nullptr) {
         return ACLPTI_ERROR_INVALID_PARAMETER;

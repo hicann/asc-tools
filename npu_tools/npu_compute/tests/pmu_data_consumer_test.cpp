@@ -26,9 +26,9 @@
         }                                                                                        \
     } while (false)
 
-std::shared_ptr<const aclptiPmuDataResult> Result(uint64_t replayId)
+std::shared_ptr<const aclptiProfilingDataResult> Result(uint64_t replayId)
 {
-    auto result = std::make_shared<aclptiPmuDataResult>();
+    auto result = std::make_shared<aclptiProfilingDataResult>();
     result->status = ACLPTI_SUCCESS;
     aclptiPmuDataRow row{};
     row.blockId = static_cast<uint16_t>(replayId);
@@ -47,7 +47,7 @@ int main()
     const std::thread::id submitThread = std::this_thread::get_id();
     std::atomic<bool> usedSubmitThread{false};
 
-    auto consumer = npu_compute::PmuDataConsumer::Create([&](std::shared_ptr<const aclptiPmuDataResult> result) {
+    auto consumer = npu_compute::PmuDataConsumer::Create([&](std::shared_ptr<const aclptiProfilingDataResult> result) {
         if (std::this_thread::get_id() == submitThread) {
             usedSubmitThread = true;
         }

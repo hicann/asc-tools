@@ -57,19 +57,21 @@ add_executable(npu_compute_cli_test cli_test.cpp)
 target_link_libraries(npu_compute_cli_test PRIVATE npu_compute_launcher_core)
 add_test(NAME npu_compute.cli COMMAND npu_compute_cli_test)
 
-add_executable(npu_compute_injection_path_test
-  injection_path_test.cpp
-  ../src/compute_launcher/injection_path.cpp
-)
-target_include_directories(npu_compute_injection_path_test PRIVATE
-  ../src/compute_launcher
-)
-target_link_libraries(npu_compute_injection_path_test PRIVATE Boost::filesystem)
-set_target_properties(npu_compute_injection_path_test PROPERTIES
-  RUNTIME_OUTPUT_DIRECTORY
-    "${CMAKE_CURRENT_BINARY_DIR}/injection_path_layout/${CMAKE_SYSTEM_PROCESSOR}-linux/bin"
-)
-add_test(NAME npu_compute.injection_path COMMAND npu_compute_injection_path_test)
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/injection_path_test.cpp")
+  add_executable(npu_compute_injection_path_test
+    injection_path_test.cpp
+    ../src/compute_launcher/injection_path.cpp
+  )
+  target_include_directories(npu_compute_injection_path_test PRIVATE
+    ../src/compute_launcher
+  )
+  target_link_libraries(npu_compute_injection_path_test PRIVATE Boost::filesystem)
+  set_target_properties(npu_compute_injection_path_test PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY
+      "${CMAKE_CURRENT_BINARY_DIR}/injection_path_layout/${CMAKE_SYSTEM_PROCESSOR}-linux/bin"
+  )
+  add_test(NAME npu_compute.injection_path COMMAND npu_compute_injection_path_test)
+endif()
 
 add_executable(npu_compute_rep_decoder_test rep_decoder_test.cpp)
 target_link_libraries(npu_compute_rep_decoder_test PRIVATE npu_compute_launcher_core)
@@ -124,6 +126,7 @@ target_link_libraries(acl_pti_replay_test
 )
 set_target_properties(acl_pti_replay_test PROPERTIES ENABLE_EXPORTS YES)
 add_test(NAME npu_compute.replay COMMAND acl_pti_replay_test)
+add_test(NAME npu_compute.replay_shrink_block COMMAND acl_pti_replay_test shrink)
 
 add_executable(acl_pti_simt_replay_test simt_replay_test.cpp)
 target_link_libraries(acl_pti_simt_replay_test
@@ -193,6 +196,9 @@ add_test(NAME npu_compute.hook_failure.shadow_malloc_stop
 add_test(NAME npu_compute.hook_failure.replay_sync
   COMMAND acl_pti_hook_failure_domain_test replay-sync
 )
+add_test(NAME npu_compute.hook_failure.replay_initial_sync_failure
+  COMMAND acl_pti_hook_failure_domain_test replay-initial-sync-failure
+)
 add_test(NAME npu_compute.hook_failure.replay_initial_sync
   COMMAND acl_pti_hook_failure_domain_test replay-initial-sync
 )
@@ -238,6 +244,7 @@ target_link_libraries(acl_prof_api_stub_test PRIVATE acl_prof_api_stub)
 add_test(NAME npu_compute.prof_api_stub COMMAND acl_prof_api_stub_test)
 
 add_executable(acl_pti_data_module_test pti_data_module_impl_test.cpp)
+target_compile_definitions(acl_pti_data_module_test PRIVATE NPU_COMPUTE_ENABLE_TEST_CONTROLS=1)
 target_sources(acl_pti_data_module_test PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}/../src/acl_pti/data/api.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/../src/acl_pti/data/module.cpp

@@ -17,7 +17,8 @@ namespace {
 constexpr std::size_t kTaskLogSize = 32;
 constexpr std::size_t kPmuRecordSize = 128;
 constexpr uint32_t kPmuMagic = 0x6bd3U;
-constexpr uint32_t kPmuFunction = 0x2aU;
+constexpr uint32_t kBlockPmuFunction = 0x29U;
+constexpr uint32_t kTaskPmuFunction = 0x2aU;
 constexpr uint32_t kTaskStartFunction = 0x00U;
 constexpr uint32_t kTaskEndFunction = 0x01U;
 constexpr uint32_t kBlockStartFunction = 0x24U;
@@ -78,7 +79,7 @@ ResultOr<DecodedRecord> DecodeRawRecord(
         return ResultOr<DecodedRecord>(DecodedRecord{recordIndex, record});
     }
 
-    if ((Word(data, 0) >> 16U) != kPmuMagic || function != kPmuFunction) {
+    if ((Word(data, 0) >> 16U) != kPmuMagic || (function != kBlockPmuFunction && function != kTaskPmuFunction)) {
         return ResultOr<DecodedRecord>(ACLPTI_ERROR_DECODE);
     }
 

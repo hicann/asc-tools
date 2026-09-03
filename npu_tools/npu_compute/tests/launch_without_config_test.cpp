@@ -116,8 +116,8 @@ int main()
     CHECK(aclrtSetDevice(0) == ACL_SUCCESS);
 
     CHECK(aclrtLaunchKernel(nullptr, 1, nullptr, 0, nullptr) == 0);
-    CHECK(g_launch_calls == 2);
-    CHECK(g_start_calls == 1);
-    CHECK(g_stop_calls == 1);
+    CHECK(g_launch_calls == 1);
+    CHECK(g_start_calls == 0);
+    CHECK(g_stop_calls == 0);
     return 0;
 }

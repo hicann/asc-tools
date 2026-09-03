@@ -24,23 +24,54 @@ namespace {
 void* g_injectionHandle = nullptr;
 bool g_injectionInitialized = false;
 MsprofRawDataCallback g_rawDataCallback = nullptr;
+RawDataType g_activeRawDataType = PMU_DATA_TYPE;
 
 using AcltoolInitializeFn = int (*)();
 
 std::size_t CountConfiguredPmus(const MsprofConfig& config)
 {
-    if (config.configInfo.attrs == nullptr || config.configInfo.numAttrs != 1 ||
-        config.configInfo.attrs[0].id != PROF_CONFIG_ATTR_AICORE_METRICS) {
+    if (config.configInfo.attrs == nullptr) {
+        return 0;
+    }
+
+    const MsprofConfigAttr* metrics = nullptr;
+    for (std::size_t i = 0; i < config.configInfo.numAttrs; ++i) {
+        if (config.configInfo.attrs[i].id == PROF_CONFIG_ATTR_AICORE_METRICS) {
+            metrics = &config.configInfo.attrs[i];
+            break;
+        }
+    }
+    if (metrics == nullptr) {
         return 0;
     }
 
     std::size_t pmuCount = 0;
-    for (uint32_t event : config.configInfo.attrs[0].value.aicoreMetrics) {
+    for (uint32_t event : metrics->value.aicoreMetrics) {
         if (event != MSPROF_INVALID_AICORE_METRIC) {
             ++pmuCount;
         }
     }
     return pmuCount;
+}
+
+RawDataType ResolveRawDataType(const MsprofConfig& config)
+{
+    if (config.configInfo.attrs == nullptr) {
+        return PMU_DATA_TYPE;
+    }
+    for (std::size_t i = 0; i < config.configInfo.numAttrs; ++i) {
+        const MsprofConfigAttr& attr = config.configInfo.attrs[i];
+        if (attr.id != PROF_CONFIG_ATTR_INSTR) {
+            continue;
+        }
+        if (attr.value.instrMode == PROF_COMPUTE_BIU_PERF) {
+            return BIU_PERF_DATA_TYPE;
+        }
+        if (attr.value.instrMode == PROF_COMPUTE_PC_SAMPLING) {
+            return PC_SAMPLING_DATA_TYPE;
+        }
+    }
+    return PMU_DATA_TYPE;
 }
 
 } // namespace
@@ -115,9 +146,10 @@ extern "C" ACL_TOOL_INJECTION_EXPORT std::int32_t MsprofStart(uint32_t dataType,
 
     const auto* config = static_cast<const MsprofConfig*>(data);
     const std::size_t pmuCount = CountConfiguredPmus(*config);
+    g_activeRawDataType = ResolveRawDataType(*config);
     injection::detail::DebugLog(
-        "prof_api_stub", "MsprofStart type=%u profSwitch=0x%llx pmuCount=%zu", dataType,
-        static_cast<unsigned long long>(config->profSwitch), pmuCount);
+        "prof_api_stub", "MsprofStart type=%u profSwitch=0x%llx pmuCount=%zu rawDataType=%d", dataType,
+        static_cast<unsigned long long>(config->profSwitch), pmuCount, static_cast<int>(g_activeRawDataType));
     return 0;
 }
 
@@ -129,17 +161,23 @@ extern "C" ACL_TOOL_INJECTION_EXPORT std::int32_t MsprofStop(uint32_t dataType, 
     rawData.isLastChunk = true;
     rawData.offset = 0;
     rawData.deviceId = 0;
-    rawData.type = PMU_DATA_TYPE;
-    // Emit one structurally valid PMU record so the integration stub exercises
-    // the same decoder path as the production data module.
-    std::array<uint32_t, 32> record{};
-    record[0] = 0x6bd3002aU;
-    record[1] = (1U << 16U) | 1U;
-    record[2] = 100U;
-    record[5] = 1U << 8U;
-    record[6] = 1U << 16U;
-    rawData.chunkSize = sizeof(record);
-    std::memcpy(rawData.chunk, record.data(), sizeof(record));
+    rawData.type = g_activeRawDataType;
+    if (g_activeRawDataType == PMU_DATA_TYPE) {
+        // Emit one structurally valid PMU record so the integration stub exercises
+        // the same decoder path as the production data module.
+        std::array<uint32_t, 32> record{};
+        record[0] = 0x6bd3002aU;
+        record[1] = (1U << 16U) | 1U;
+        record[2] = 100U;
+        record[5] = 1U << 8U;
+        record[6] = 1U << 16U;
+        rawData.chunkSize = sizeof(record);
+        std::memcpy(rawData.chunk, record.data(), sizeof(record));
+    } else {
+        constexpr std::array<char, 4> kOpaqueData = {'a', 'c', 'l', 'p'};
+        rawData.chunkSize = kOpaqueData.size();
+        std::memcpy(rawData.chunk, kOpaqueData.data(), kOpaqueData.size());
+    }
     if (g_rawDataCallback != nullptr) {
         g_rawDataCallback(&rawData);
     }

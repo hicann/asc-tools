@@ -56,7 +56,7 @@ public:
         return ACLPTI_SUCCESS;
     }
 
-    aclptiResult Submit(std::shared_ptr<const aclptiPmuDataResult> result)
+    aclptiResult Submit(std::shared_ptr<const aclptiProfilingDataResult> result)
     {
         if (!result) {
             npu_compute::detail::DebugLog("npu-compute", "PMU consumer submit rejected: null result");
@@ -114,7 +114,7 @@ private:
     {
         npu_compute::detail::DebugLog("npu-compute", "PMU consumer thread started");
         while (true) {
-            std::shared_ptr<const aclptiPmuDataResult> result;
+            std::shared_ptr<const aclptiProfilingDataResult> result;
             {
                 std::unique_lock<std::mutex> lock(mutex_);
                 readable_.wait(lock, [this] { return state_ != ConsumerState::Running || !queue_.empty(); });
@@ -146,7 +146,7 @@ private:
     Processor processor_;
     std::mutex mutex_;
     std::condition_variable readable_;
-    std::deque<std::shared_ptr<const aclptiPmuDataResult>> queue_;
+    std::deque<std::shared_ptr<const aclptiProfilingDataResult>> queue_;
     ConsumerState state_ = ConsumerState::Created;
     aclptiResult status_ = ACLPTI_SUCCESS;
     std::thread worker_;
@@ -166,7 +166,7 @@ PmuDataConsumer::~PmuDataConsumer() = default;
 
 aclptiResult PmuDataConsumer::Start() { return impl_->Start(); }
 
-aclptiResult PmuDataConsumer::Submit(std::shared_ptr<const aclptiPmuDataResult> result)
+aclptiResult PmuDataConsumer::Submit(std::shared_ptr<const aclptiProfilingDataResult> result)
 {
     return impl_->Submit(std::move(result));
 }

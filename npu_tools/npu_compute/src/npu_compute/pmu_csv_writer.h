@@ -35,7 +35,7 @@ struct PmuCsvConfig {
 class PmuCsvWriter final {
 public:
     static aclptiResult Write(
-        const aclptiPmuDataResult& result, const std::vector<std::string>& sections, const PmuCsvConfig& config);
+        const aclptiProfilingDataResult& result, const std::vector<std::string>& sections, const PmuCsvConfig& config);
 };
 
 } // namespace npu_compute

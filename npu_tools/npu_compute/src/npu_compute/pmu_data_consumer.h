@@ -19,7 +19,7 @@ namespace npu_compute {
 
 class PmuDataConsumer final {
 public:
-    using Processor = std::function<aclptiResult(std::shared_ptr<const aclptiPmuDataResult>)>;
+    using Processor = std::function<aclptiResult(std::shared_ptr<const aclptiProfilingDataResult>)>;
 
     static std::shared_ptr<PmuDataConsumer> Create(Processor processor);
     ~PmuDataConsumer();
@@ -28,7 +28,7 @@ public:
     PmuDataConsumer& operator=(const PmuDataConsumer&) = delete;
 
     aclptiResult Start();
-    aclptiResult Submit(std::shared_ptr<const aclptiPmuDataResult> result);
+    aclptiResult Submit(std::shared_ptr<const aclptiProfilingDataResult> result);
     aclptiResult ShutdownAndDrain();
 
 private:

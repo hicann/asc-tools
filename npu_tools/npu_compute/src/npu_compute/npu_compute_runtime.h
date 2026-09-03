@@ -38,7 +38,7 @@ private:
         const aclptiCallbackData* callbackData) noexcept;
 
     void DisableHardwareCallbacks() noexcept;
-    aclptiResult ProcessPmuData(std::shared_ptr<const aclptiPmuDataResult> result);
+    aclptiResult ProcessPmuData(std::shared_ptr<const aclptiProfilingDataResult> result);
 
     std::mutex mutex_;
     std::shared_ptr<PmuDataConsumer> pmu_consumer_;

@@ -121,7 +121,7 @@ int main()
         boost::filesystem::temp_directory_path() /
         ("npu_compute_csv_test_" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
 
-    aclptiPmuDataResult result;
+    aclptiProfilingDataResult result;
     result.status = ACLPTI_SUCCESS;
     aclptiPmuDataRow aicRow{};
     aicRow.blockId = 2;
@@ -193,7 +193,7 @@ int main()
     config.aicFrequencyMhz = 0.0;
     config.aivFrequencyMhz = 0.0;
 
-    aclptiPmuDataResult secondResult = result;
+    aclptiProfilingDataResult secondResult = result;
     secondResult.pmuLogs.clear();
     aclptiPmuDataRow secondRow = aicRow;
     secondRow.blockId = 8;
@@ -215,7 +215,7 @@ int main()
     const auto sparseDirectory =
         boost::filesystem::temp_directory_path() /
         ("npu_compute_csv_sparse_test_" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
-    aclptiPmuDataResult sparseResult;
+    aclptiProfilingDataResult sparseResult;
     aclptiPmuDataRow sparseRow{};
     sparseRow.blockId = 4;
     sparseRow.subBlockId = 5;
@@ -332,12 +332,12 @@ int main()
         std::ofstream existingOutput(existingCsv);
         existingOutput << "sentinel\n";
     }
-    aclptiPmuDataResult emptyResult;
+    aclptiProfilingDataResult emptyResult;
     config.outputDirectory = emptyDirectory.string();
     CHECK(npu_compute::PmuCsvWriter::Write(emptyResult, {"L2Cache"}, config) == ACLPTI_SUCCESS);
     CHECK(ReadFile(existingCsv) == "sentinel\n");
 
-    aclptiPmuDataResult failedEmptyResult;
+    aclptiProfilingDataResult failedEmptyResult;
     failedEmptyResult.status = ACLPTI_ERROR_DECODE;
     failedEmptyResult.errorStats.failedRecordCount = 1;
     CHECK(npu_compute::PmuCsvWriter::Write(failedEmptyResult, {"L2Cache"}, config) == ACLPTI_SUCCESS);
@@ -368,7 +368,7 @@ int main()
         const auto s1Dir = boost::filesystem::temp_directory_path() /
                            ("npu_compute_csv_block_scale1_" +
                             std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
-        aclptiPmuDataResult s1Result;
+        aclptiProfilingDataResult s1Result;
         for (uint16_t i = 0; i < 2; ++i) {
             aclptiPmuDataRow row{};
             row.blockId = i;
@@ -394,7 +394,7 @@ int main()
         const auto s2Dir = boost::filesystem::temp_directory_path() /
                            ("npu_compute_csv_block_scale2_" +
                             std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
-        aclptiPmuDataResult s2Result;
+        aclptiProfilingDataResult s2Result;
         aclptiPmuDataRow s2Row{};
         s2Row.blockId = 5;
         s2Row.subBlockId = 0;
@@ -418,7 +418,7 @@ int main()
         const auto s3Dir = boost::filesystem::temp_directory_path() /
                            ("npu_compute_csv_block_scale3_" +
                             std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
-        aclptiPmuDataResult s3Result;
+        aclptiProfilingDataResult s3Result;
         for (uint16_t i = 0; i < 3; ++i) {
             aclptiPmuDataRow row{};
             row.blockId = i;
@@ -445,7 +445,7 @@ int main()
         const auto s4Dir = boost::filesystem::temp_directory_path() /
                            ("npu_compute_csv_block_scale4_" +
                             std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
-        aclptiPmuDataResult s4Result;
+        aclptiProfilingDataResult s4Result;
         aclptiPmuDataRow s4Row{};
         s4Row.blockId = 10;
         s4Row.subBlockId = 0;

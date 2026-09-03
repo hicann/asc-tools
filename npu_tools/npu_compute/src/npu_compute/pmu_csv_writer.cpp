@@ -806,7 +806,7 @@ CsvRow MemoryUBRow(const RowMetrics& row, const PmuCsvConfig& config)
     AppendMetric(
         values, xgu.has_value() && duration.has_value() ? Bandwidth(*xgu * 128.0, *duration) : std::nullopt,
         EventBandwidthReason(row.aiv, {0x422U, 0x57fU, 0x580U}, aivFrequencyMhz));
-    // UB_TO_GM_DATA is supplied by DBI, which is not part of aclptiPmuDataResult yet.
+    // UB_TO_GM_DATA is supplied by DBI, which is not part of aclptiProfilingDataResult yet.
     AppendMetric(
         values, std::nullopt, row.aiv.present ? MissingReason::DbiUnavailable : MissingReason::CoreTypeNotApplicable);
     return values;
@@ -1061,7 +1061,7 @@ std::string FormatMissingReasons(const std::map<std::string, std::size_t>& missi
 
 std::string ResolveOutputDirectory(const PmuCsvConfig& config) { return config.outputDirectory; }
 
-bool IsEmptySuccessfulResult(const aclptiPmuDataResult& result)
+bool IsEmptySuccessfulResult(const aclptiProfilingDataResult& result)
 {
     return result.status == ACLPTI_SUCCESS && result.taskLogs.empty() && result.blockLogs.empty() &&
            result.pmuLogs.empty() && result.errorStats.failedRecordCount == 0;
@@ -1218,7 +1218,7 @@ aclptiResult EnsureCsvOutputDirectory(const boost::filesystem::path& outputDirec
 } // namespace
 
 aclptiResult PmuCsvWriter::Write(
-    const aclptiPmuDataResult& result, const std::vector<std::string>& sections, const PmuCsvConfig& config)
+    const aclptiProfilingDataResult& result, const std::vector<std::string>& sections, const PmuCsvConfig& config)
 {
     const std::string outputDirectory = ResolveOutputDirectory(config);
     npu_compute::detail::DebugLog(

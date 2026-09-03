@@ -85,6 +85,9 @@ bool SectionConfig::LoadFromEnvironment(const char* name, std::string* error)
     }
     params_.sections = section_pointers_.data();
     params_.numSections = section_pointers_.size();
+    params_.blockResult = ACLPTI_BLOCK_RESULT_ALL;
+    params_.collectPipeline = false;
+    params_.collectPcSampling = false;
     return true;
 }
 

@@ -18,7 +18,6 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
-#include <string>
 
 namespace npu_compute::aclpti::data {
 
@@ -26,10 +25,12 @@ inline constexpr std::size_t kMaxPmuSlots = 10;
 inline constexpr uint32_t kInvalidPmuEvent = 0xffffffffU;
 using PmuSlots = std::array<uint32_t, kMaxPmuSlots>;
 
+enum class ReplayKind { Pmu, Pipeline, PcSampling };
+
 struct ReplayPrepareInfo {
     uint64_t replayId;
-    std::string sectionName;
     PmuSlots pmuEventIds;
+    ReplayKind kind = ReplayKind::Pmu;
 };
 
 struct ReplayStopInfo {
@@ -67,7 +68,7 @@ public:
 class NPU_COMPUTE_LOCAL Module final : public ReplayControl {
 public:
     Module();
-    explicit Module(aclptiPmuDataCallback callback);
+    explicit Module(aclptiProfilingDataCallback callback);
     ~Module() override;
 
     Module(const Module&) = delete;
@@ -88,7 +89,7 @@ private:
     std::unique_ptr<Impl> impl_;
 };
 
-aclptiResult RegisterPmuDataCallback(aclptiPmuDataCallback callback);
+aclptiResult RegisterProfilingDataCallback(aclptiProfilingDataCallback callback);
 aclptiResult RegisterShutdownCallback(aclptiDataModuleShutdownCallback callback, void* userData);
 
 } // namespace npu_compute::aclpti::data

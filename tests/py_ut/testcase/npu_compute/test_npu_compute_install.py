@@ -117,7 +117,7 @@ def test_default_component_installs_the_declared_layout(install_root):
         check=False,
     )
     assert aclpti_symbols.returncode == 0, aclpti_symbols.stderr
-    assert "aclptiRegisterPmuDataCallback" in aclpti_symbols.stdout
+    assert "aclptiRegisterProfilingDataCallback" in aclpti_symbols.stdout
     assert "aclptiRegisterDataModuleShutdownCallback" in aclpti_symbols.stdout
     for internal_namespace in (
         "activity",

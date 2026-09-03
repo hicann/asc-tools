@@ -15,6 +15,7 @@
 
 #ifdef __cplusplus
 
+#include <cstddef>
 #include <cstdint>
 #include <functional>
 #include <map>
@@ -99,20 +100,31 @@ struct aclptiTaskLogRow {
     uint8_t coreTypeId;
 };
 
-struct aclptiPmuDataResult {
+struct aclptiRawDataChunk {
+    uint64_t replayId;
+    int32_t deviceId;
+    int32_t chunkModule;
+    size_t offset;
+    bool isLastChunk;
+    std::vector<uint8_t> bytes;
+};
+
+struct aclptiProfilingDataResult {
     aclptiResult status = ACLPTI_SUCCESS;
     std::map<uint16_t, std::vector<aclptiTaskLogRow>> taskLogs;
     std::map<aclptiBlockKey, std::vector<aclptiTaskLogRow>> blockLogs;
     std::map<aclptiBlockKey, aclptiPmuDataRow> pmuLogs;
+    std::vector<aclptiRawDataChunk> pipelineData;
+    std::vector<aclptiRawDataChunk> pcSamplingData;
     struct ErrorStats {
         uint64_t failedRecordCount = 0;
         std::map<uint64_t, uint64_t> failedRecordCountByReplay;
     } errorStats;
 };
 
-using aclptiPmuDataCallback = std::function<aclptiResult(std::shared_ptr<const aclptiPmuDataResult>)>;
+using aclptiProfilingDataCallback = std::function<aclptiResult(std::shared_ptr<const aclptiProfilingDataResult>)>;
 
-ACLPTI_EXPORT aclptiResult aclptiRegisterPmuDataCallback(aclptiPmuDataCallback callback);
+ACLPTI_EXPORT aclptiResult aclptiRegisterProfilingDataCallback(aclptiProfilingDataCallback callback);
 
 using aclptiDataModuleShutdownCallback = aclptiResult (*)(void* userData);
 

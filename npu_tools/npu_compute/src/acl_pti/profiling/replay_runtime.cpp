@@ -31,9 +31,9 @@ aclptiResult ReplayRuntime::Initialize()
     return ACLPTI_SUCCESS;
 }
 
-aclptiResult ReplayRuntime::SetSections(const aclptiRangeProfilerSetConfigParams* params)
+aclptiResult ReplayRuntime::SetConfig(const aclptiRangeProfilerSetConfigParams* params)
 {
-    return rangeProfiler_.SetSections(params);
+    return rangeProfiler_.SetConfig(params);
 }
 
 aclptiResult ReplayRuntime::MirrorMalloc(void** devPtr, std::size_t size, aclrtMemMallocPolicy policy)

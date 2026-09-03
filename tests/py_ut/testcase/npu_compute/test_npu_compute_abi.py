@@ -148,7 +148,7 @@ def test_range_config_calls_replay_runtime_directly():
     profiling_api = ACLPTI_PROFILING_API_SOURCE.read_text(encoding="utf-8")
 
     assert "GetManager" not in profiling_api
-    assert "GetReplayRuntime().SetSections" in profiling_api
+    assert "GetReplayRuntime().SetConfig" in profiling_api
 
 
 def test_replay_runtime_owns_the_profiling_health_policy():
@@ -171,7 +171,7 @@ def test_replay_runtime_owns_the_profiling_health_policy():
     assert "StopProfiling()" in source
 
 
-def test_unavailable_replay_runtime_reports_profiling_failure():
+def test_unavailable_replay_runtime_reports_profiling_failure_to_acl_callers():
     source = (ACLPTI_SOURCE / "profiling/replay_runtime.cpp").read_text(
         encoding="utf-8"
     )

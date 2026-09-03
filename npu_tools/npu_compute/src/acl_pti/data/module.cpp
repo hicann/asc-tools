@@ -19,7 +19,9 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <condition_variable>
 #include <map>
+#include <limits>
 #include <mutex>
 #include <new>
 #include <optional>
@@ -44,7 +46,7 @@ constexpr std::size_t kLogRecordSize = 32;
 constexpr int kLogDataType = 7;
 
 std::mutex gCallbackMutex;
-aclptiPmuDataCallback gCallback;
+aclptiProfilingDataCallback gCallback;
 std::mutex gShutdownCallbackMutex;
 aclptiDataModuleShutdownCallback gShutdownCallback = nullptr;
 void* gShutdownCallbackUserData = nullptr;
@@ -60,7 +62,12 @@ struct ReplaySession {
     ReplayState state = ReplayState::Accepting;
     CallbackStats stats{0, 0, 0, 0, 0, 0, 0};
     uint64_t nextRecordIndex = 0;
+    std::size_t nextOpaqueOffset = 0;
+    bool opaqueLastSeen = false;
+    uint64_t completedItemCount = 0;
+    std::condition_variable completed;
     std::atomic<uint64_t> failedRecordCount{0};
+    aclptiResult resultStatus = ACLPTI_SUCCESS;
 };
 
 struct RawRecord {
@@ -79,8 +86,21 @@ struct DecodedRecordItem {
     DecodedRecord record;
 };
 
-using RawItem = std::variant<RawRecord, ReplayEnd>;
-using DecodedItem = std::variant<DecodedRecordItem, ReplayEnd>;
+struct OpaqueChunkItem {
+    std::shared_ptr<ReplaySession> session;
+    RawDataType type;
+    aclptiRawDataChunk chunk;
+};
+
+using RawItem = std::variant<RawRecord, OpaqueChunkItem, ReplayEnd>;
+using DecodedItem = std::variant<DecodedRecordItem, OpaqueChunkItem, ReplayEnd>;
+
+void MarkCompleted(const std::shared_ptr<ReplaySession>& session)
+{
+    std::lock_guard<std::mutex> lock(session->mutex);
+    ++session->completedItemCount;
+    session->completed.notify_all();
+}
 
 const char* ModuleStateName(ModuleState state)
 {
@@ -131,6 +151,19 @@ const char* RawDataTypeName(RawDataType type)
             return "pc-sampling";
     }
     return "unknown";
+}
+
+RawDataType PrimaryRawDataType(ReplayKind kind)
+{
+    switch (kind) {
+        case ReplayKind::Pmu:
+            return PMU_DATA_TYPE;
+        case ReplayKind::Pipeline:
+            return BIU_PERF_DATA_TYPE;
+        case ReplayKind::PcSampling:
+            return PC_SAMPLING_DATA_TYPE;
+    }
+    return DEFAULT_DATA_TYPE;
 }
 
 std::size_t CountConfiguredPmuEvents(const PmuSlots& events)
@@ -396,6 +429,8 @@ struct AggregateState {
     std::map<uint16_t, std::vector<aclptiTaskLogRow>> taskLogs;
     std::map<aclptiBlockKey, std::vector<aclptiTaskLogRow>> blockLogs;
     std::map<aclptiBlockKey, PmuAccumulator> pmuLogs;
+    std::vector<aclptiRawDataChunk> pipelineData;
+    std::vector<aclptiRawDataChunk> pcSamplingData;
 
     void Add(const DecodedRecordItem& item)
     {
@@ -416,9 +451,24 @@ struct AggregateState {
         pmuLogs[aclptiBlockKey{record.blockId, record.subBlockId, record.coreType, record.coreId}].Add(record);
     }
 
-    aclptiPmuDataResult::ErrorStats ErrorStats(const std::vector<std::shared_ptr<ReplaySession>>& sessions) const
+    void Add(OpaqueChunkItem item)
     {
-        aclptiPmuDataResult::ErrorStats result;
+#if defined(NPU_COMPUTE_ENABLE_TEST_CONTROLS)
+        const char* forceAllocationFailure = std::getenv("NPU_COMPUTE_TEST_OPAQUE_AGGREGATE_OOM");
+        if (forceAllocationFailure != nullptr && forceAllocationFailure[0] != '\0') {
+            throw std::bad_alloc();
+        }
+#endif
+        if (item.type == BIU_PERF_DATA_TYPE) {
+            pipelineData.push_back(std::move(item.chunk));
+        } else {
+            pcSamplingData.push_back(std::move(item.chunk));
+        }
+    }
+
+    aclptiProfilingDataResult::ErrorStats ErrorStats(const std::vector<std::shared_ptr<ReplaySession>>& sessions) const
+    {
+        aclptiProfilingDataResult::ErrorStats result;
         for (const auto& session : sessions) {
             std::lock_guard<std::mutex> lock(session->mutex);
             const uint64_t failedRecordCount = session->failedRecordCount.load();
@@ -430,10 +480,26 @@ struct AggregateState {
         return result;
     }
 
-    aclptiPmuDataResult Snapshot(const std::vector<std::shared_ptr<ReplaySession>>& sessions) const
+    aclptiResult ResultStatus(const std::vector<std::shared_ptr<ReplaySession>>& sessions) const
     {
-        aclptiPmuDataResult result;
+        aclptiResult result = ACLPTI_SUCCESS;
+        for (const auto& session : sessions) {
+            std::lock_guard<std::mutex> lock(session->mutex);
+            if (session->resultStatus == ACLPTI_ERROR_RESULT_UNRELIABLE) {
+                return session->resultStatus;
+            }
+            if (result == ACLPTI_SUCCESS && session->resultStatus != ACLPTI_SUCCESS) {
+                result = session->resultStatus;
+            }
+        }
+        return result;
+    }
+
+    aclptiProfilingDataResult Snapshot(const std::vector<std::shared_ptr<ReplaySession>>& sessions) const
+    {
+        aclptiProfilingDataResult result;
         result.errorStats = ErrorStats(sessions);
+        result.status = ResultStatus(sessions);
         for (const auto& [taskId, logs] : taskLogs) {
             result.taskLogs.emplace(taskId, logs);
         }
@@ -443,14 +509,24 @@ struct AggregateState {
         for (const auto& [key, aggregate] : pmuLogs) {
             result.pmuLogs.emplace(key, aggregate.Snapshot(key));
         }
+        result.pipelineData = pipelineData;
+        result.pcSamplingData = pcSamplingData;
+        if (result.status == ACLPTI_SUCCESS && result.errorStats.failedRecordCount != 0) {
+            result.status = ACLPTI_ERROR_PROFILING_FAILED;
+        }
         return result;
     }
 };
 
 bool IsValidReplayInfo(const ReplayPrepareInfo& info)
 {
-    if (info.sectionName.empty()) {
-        return false;
+    switch (info.kind) {
+        case ReplayKind::Pmu:
+        case ReplayKind::Pipeline:
+        case ReplayKind::PcSampling:
+            break;
+        default:
+            return false;
     }
 
     bool unusedSlotSeen = false;
@@ -466,10 +542,11 @@ bool IsValidReplayInfo(const ReplayPrepareInfo& info)
     return true;
 }
 
-bool HasPublishableResult(const aclptiPmuDataResult& result, std::size_t sessionCount)
+bool HasPublishableResult(const aclptiProfilingDataResult& result, std::size_t sessionCount)
 {
     return sessionCount != 0 || result.status != ACLPTI_SUCCESS || !result.taskLogs.empty() ||
-           !result.blockLogs.empty() || !result.pmuLogs.empty() || result.errorStats.failedRecordCount != 0;
+           !result.blockLogs.empty() || !result.pmuLogs.empty() || !result.pipelineData.empty() ||
+           !result.pcSamplingData.empty() || result.errorStats.failedRecordCount != 0;
 }
 
 } // namespace
@@ -478,7 +555,7 @@ class Module::Impl {
 public:
     Impl() = default;
 
-    explicit Impl(aclptiPmuDataCallback callback) : callback_(std::move(callback))
+    explicit Impl(aclptiProfilingDataCallback callback) : callback_(std::move(callback))
     {
         if (!callback_) {
             throw std::invalid_argument("PTI data callback is required");
@@ -523,7 +600,7 @@ public:
             // collection and replay lifecycle functional while dropping the
             // final aggregate in that standalone mode.
             npu_compute::detail::DebugLog("aclpti-data", "initialize using default drop-result callback");
-            callback_ = [](std::shared_ptr<const aclptiPmuDataResult>) { return ACLPTI_SUCCESS; };
+            callback_ = [](std::shared_ptr<const aclptiProfilingDataResult>) { return ACLPTI_SUCCESS; };
         }
         router_ = this;
         state_ = ModuleState::Running;
@@ -562,16 +639,16 @@ public:
     {
         if (!IsValidReplayInfo(info)) {
             npu_compute::detail::DebugLog(
-                "aclpti-data", "prepare replay rejected: replay=%llu invalid info section=%s events=%zu",
-                static_cast<unsigned long long>(info.replayId), info.sectionName.c_str(),
+                "aclpti-data", "prepare replay rejected: replay=%llu kind=%d events=%zu",
+                static_cast<unsigned long long>(info.replayId), static_cast<int>(info.kind),
                 CountConfiguredPmuEvents(info.pmuEventIds));
             return ACLPTI_ERROR_INVALID_PARAMETER;
         }
 
         std::lock_guard<std::mutex> lock(mutex_);
         npu_compute::detail::DebugLog(
-            "aclpti-data", "prepare replay requested: replay=%llu section=%s events=%zu state=%s active=%d",
-            static_cast<unsigned long long>(info.replayId), info.sectionName.c_str(),
+            "aclpti-data", "prepare replay requested: replay=%llu kind=%d events=%zu state=%s active=%d",
+            static_cast<unsigned long long>(info.replayId), static_cast<int>(info.kind),
             CountConfiguredPmuEvents(info.pmuEventIds), ModuleStateName(state_), active_ ? 1 : 0);
         if (state_ != ModuleState::Running) {
             npu_compute::detail::DebugLog(
@@ -640,7 +717,7 @@ public:
             return result;
         }
 
-        std::lock_guard<std::mutex> sessionLock(active_->mutex);
+        std::unique_lock<std::mutex> sessionLock(active_->mutex);
         result.callbackStats = active_->stats;
         if (active_->state != ReplayState::Accepting) {
             result.status = ACLPTI_ERROR_INVALID_STATE;
@@ -650,7 +727,12 @@ public:
             return result;
         }
         active_->state = ReplayState::Closed;
-        result.status = info.stopStatus;
+        active_->completed.wait(
+            sessionLock, [this] { return active_->completedItemCount == active_->stats.copiedRecordCount; });
+        result.status = info.stopStatus == ACLPTI_SUCCESS && active_->failedRecordCount.load() != 0 ?
+                            ACLPTI_ERROR_PROFILING_FAILED :
+                            info.stopStatus;
+        active_->resultStatus = result.status;
         LogCallbackStats("record replay status complete", info.replayId, result.callbackStats, result.status);
         npu_compute::detail::DebugLog(
             "aclpti-data", "record replay diagnostics: replay=%llu failedRecords=%llu",
@@ -754,7 +836,7 @@ public:
             state_ = ModuleState::Stopped;
         }
         const std::size_t sessionCount = sessions_.size();
-        auto result = std::make_shared<aclptiPmuDataResult>(aggregate_.Snapshot(sessions_));
+        auto result = std::make_shared<aclptiProfilingDataResult>(aggregate_.Snapshot(sessions_));
         npu_compute::detail::DebugLog(
             "aclpti-data",
             "shutdown aggregate: status=%d sessions=%zu tasks=%zu blocks=%zu pmuBlocks=%zu failedRecords=%llu",
@@ -797,6 +879,7 @@ public:
     aclptiResult ForceShutdown()
     {
         std::shared_ptr<ReplaySession> session;
+        aclptiResult releaseStatus = ACLPTI_SUCCESS;
         {
             std::lock_guard<std::mutex> routerLock(routerMutex_);
             std::lock_guard<std::mutex> lock(mutex_);
@@ -811,9 +894,22 @@ public:
             }
         }
         if (session) {
-            rawQueue_.Push(ReplayEnd{std::move(session)});
+            try {
+                if (!rawQueue_.Push(ReplayEnd{session})) {
+                    releaseStatus = ACLPTI_ERROR_INVALID_STATE;
+                }
+            } catch (const std::bad_alloc&) {
+                releaseStatus = ACLPTI_ERROR_OUT_OF_MEMORY;
+            }
+            if (releaseStatus != ACLPTI_SUCCESS) {
+                session->failedRecordCount.fetch_add(1);
+                npu_compute::detail::DebugLog(
+                    "aclpti-data", "force shutdown replay end failed: replay=%llu status=%d",
+                    static_cast<unsigned long long>(session->info.replayId), static_cast<int>(releaseStatus));
+            }
         }
-        return Shutdown();
+        const aclptiResult shutdownStatus = Shutdown();
+        return releaseStatus == ACLPTI_SUCCESS ? shutdownStatus : releaseStatus;
     }
 
 private:
@@ -841,7 +937,6 @@ private:
             return static_cast<std::int32_t>(ACLPTI_ERROR_NO_ACTIVE_REPLAY);
         }
 
-        std::lock_guard<std::mutex> sessionLock(active_->mutex);
         if (active_->state != ReplayState::Accepting) {
             npu_compute::detail::DebugLog(
                 "aclpti-data", "raw callback rejected: replay=%llu replayState=%s",
@@ -859,11 +954,59 @@ private:
         if (rawData == nullptr) {
             return fail(ACLPTI_ERROR_INVALID_RAW_DATA);
         }
+        const RawDataType expectedPrimaryType = PrimaryRawDataType(active_->info.kind);
+        if (rawData->type != expectedPrimaryType && rawData->type != static_cast<RawDataType>(kLogDataType)) {
+            npu_compute::detail::DebugLog(
+                "aclpti-data", "raw callback type mismatch: replay=%llu expected=%d(%s) actual=%d(%s)",
+                static_cast<unsigned long long>(active_->info.replayId), static_cast<int>(expectedPrimaryType),
+                RawDataTypeName(expectedPrimaryType), static_cast<int>(rawData->type), RawDataTypeName(rawData->type));
+            return fail(ACLPTI_ERROR_INVALID_RAW_DATA);
+        }
+        if (rawData->chunkSize == 0 || rawData->chunkSize > sizeof(rawData->chunk)) {
+            npu_compute::detail::DebugLog(
+                "aclpti-data",
+                "raw callback invalid chunk: replay=%llu type=%d(%s) device=%d chunkSize=%zu offset=%zu isLast=%d",
+                static_cast<unsigned long long>(active_->info.replayId), static_cast<int>(rawData->type),
+                RawDataTypeName(rawData->type), rawData->deviceId, rawData->chunkSize, rawData->offset,
+                rawData->isLastChunk ? 1 : 0);
+            return fail(ACLPTI_ERROR_INVALID_RAW_DATA);
+        }
+        if (rawData->type == BIU_PERF_DATA_TYPE || rawData->type == PC_SAMPLING_DATA_TYPE) {
+            if (active_->opaqueLastSeen || rawData->offset != active_->nextOpaqueOffset ||
+                rawData->offset > std::numeric_limits<std::size_t>::max() - rawData->chunkSize) {
+                npu_compute::detail::DebugLog(
+                    "aclpti-data",
+                    "opaque chunk sequence rejected: replay=%llu expectedOffset=%zu actualOffset=%zu "
+                    "lastSeen=%d",
+                    static_cast<unsigned long long>(active_->info.replayId), active_->nextOpaqueOffset, rawData->offset,
+                    active_->opaqueLastSeen ? 1 : 0);
+                return fail(ACLPTI_ERROR_INVALID_RAW_DATA);
+            }
+            try {
+                aclptiRawDataChunk chunk{
+                    active_->info.replayId, rawData->deviceId,    rawData->chunkModule,
+                    rawData->offset,        rawData->isLastChunk, {},
+                };
+                const auto* begin = reinterpret_cast<const uint8_t*>(rawData->chunk);
+                chunk.bytes.assign(begin, begin + rawData->chunkSize);
+                if (!rawQueue_.Push(OpaqueChunkItem{active_, rawData->type, std::move(chunk)})) {
+                    return fail(ACLPTI_ERROR_INVALID_STATE);
+                }
+            } catch (const std::bad_alloc&) {
+                return fail(ACLPTI_ERROR_OUT_OF_MEMORY);
+            }
+            active_->nextOpaqueOffset = rawData->offset + rawData->chunkSize;
+            active_->opaqueLastSeen = rawData->isLastChunk;
+            ++active_->stats.copiedRecordCount;
+            active_->stats.copiedBytes += rawData->chunkSize;
+            active_->stats.receivedBytes += rawData->chunkSize;
+            LogCallbackStats("opaque callback complete", active_->info.replayId, active_->stats, ACLPTI_SUCCESS);
+            return static_cast<std::int32_t>(ACLPTI_SUCCESS);
+        }
         const std::size_t recordSize = rawData->type == PMU_DATA_TYPE                          ? kPmuRecordSize :
                                        rawData->type == static_cast<RawDataType>(kLogDataType) ? kLogRecordSize :
                                                                                                  0;
-        if (recordSize == 0 || rawData->chunkSize == 0 || rawData->chunkSize > sizeof(rawData->chunk) ||
-            rawData->chunkSize % recordSize != 0) {
+        if (recordSize == 0 || rawData->chunkSize % recordSize != 0) {
             npu_compute::detail::DebugLog(
                 "aclpti-data",
                 "raw callback invalid chunk: replay=%llu type=%d(%s) device=%d chunkSize=%zu recordSize=%zu "
@@ -889,11 +1032,22 @@ private:
             record.recordIndex = active_->nextRecordIndex++;
             std::memcpy(record.bytes.data(), rawData->chunk + offset, recordSize);
             // Backpressure the producer instead of dropping raw records when the decoder falls behind.
-            if (!rawQueue_.Push(std::move(record))) {
+            const uint64_t recordIndex = record.recordIndex;
+            bool pushed = false;
+            try {
+                pushed = rawQueue_.Push(std::move(record));
+            } catch (const std::bad_alloc&) {
+                npu_compute::detail::DebugLog(
+                    "aclpti-data", "raw callback queue allocation failed: replay=%llu recordIndex=%llu",
+                    static_cast<unsigned long long>(active_->info.replayId),
+                    static_cast<unsigned long long>(recordIndex));
+                return fail(ACLPTI_ERROR_OUT_OF_MEMORY);
+            }
+            if (!pushed) {
                 npu_compute::detail::DebugLog(
                     "aclpti-data", "raw callback queue closed: replay=%llu recordIndex=%llu",
                     static_cast<unsigned long long>(active_->info.replayId),
-                    static_cast<unsigned long long>(active_->nextRecordIndex - 1));
+                    static_cast<unsigned long long>(recordIndex));
                 return fail(ACLPTI_ERROR_INVALID_STATE);
             }
             ++active_->stats.copiedRecordCount;
@@ -908,47 +1062,97 @@ private:
         return static_cast<std::int32_t>(ACLPTI_SUCCESS);
     }
 
+    void DecodeAndQueueRecord(RawRecord& raw)
+    {
+        try {
+#if defined(NPU_COMPUTE_ENABLE_TEST_CONTROLS)
+            const char* forceAllocationFailure = std::getenv("NPU_COMPUTE_TEST_DECODE_OOM");
+            if (forceAllocationFailure != nullptr && forceAllocationFailure[0] != '\0') {
+                throw std::bad_alloc();
+            }
+#endif
+            npu_compute::detail::DebugLog(
+                "aclpti-data", "decode raw record: replay=%llu recordIndex=%llu size=%zu",
+                static_cast<unsigned long long>(raw.session->info.replayId),
+                static_cast<unsigned long long>(raw.recordIndex), raw.size);
+            auto decoded = DecodeRawRecord(raw.bytes.data(), raw.size, raw.recordIndex, raw.session->info.pmuEventIds);
+            if (!decoded.Ok()) {
+                npu_compute::detail::DebugLog(
+                    "aclpti-data", "decode raw record failed: replay=%llu recordIndex=%llu status=%d",
+                    static_cast<unsigned long long>(raw.session->info.replayId),
+                    static_cast<unsigned long long>(raw.recordIndex), static_cast<int>(decoded.Status()));
+                raw.session->failedRecordCount.fetch_add(1);
+                MarkCompleted(raw.session);
+                return;
+            }
+            if (!decodedQueue_.Push(DecodedRecordItem{raw.session, decoded.Value()})) {
+                npu_compute::detail::DebugLog(
+                    "aclpti-data", "decode queue push failed: replay=%llu recordIndex=%llu",
+                    static_cast<unsigned long long>(raw.session->info.replayId),
+                    static_cast<unsigned long long>(raw.recordIndex));
+                raw.session->failedRecordCount.fetch_add(1);
+                MarkCompleted(raw.session);
+                return;
+            }
+            npu_compute::detail::DebugLog(
+                "aclpti-data", "decode raw record complete: replay=%llu recordIndex=%llu",
+                static_cast<unsigned long long>(raw.session->info.replayId),
+                static_cast<unsigned long long>(raw.recordIndex));
+        } catch (const std::bad_alloc&) {
+            raw.session->failedRecordCount.fetch_add(1);
+            MarkCompleted(raw.session);
+            npu_compute::detail::DebugLog(
+                "aclpti-data", "decode raw record allocation failed: replay=%llu recordIndex=%llu",
+                static_cast<unsigned long long>(raw.session->info.replayId),
+                static_cast<unsigned long long>(raw.recordIndex));
+        }
+    }
+
     void DecodeLoop()
     {
         npu_compute::detail::DebugLog("aclpti-data", "decode thread started");
         RawItem item;
         while (rawQueue_.Pop(item)) {
             if (auto* raw = std::get_if<RawRecord>(&item)) {
-                npu_compute::detail::DebugLog(
-                    "aclpti-data", "decode raw record: replay=%llu recordIndex=%llu size=%zu",
-                    static_cast<unsigned long long>(raw->session->info.replayId),
-                    static_cast<unsigned long long>(raw->recordIndex), raw->size);
-                auto decoded =
-                    DecodeRawRecord(raw->bytes.data(), raw->size, raw->recordIndex, raw->session->info.pmuEventIds);
-                if (!decoded.Ok()) {
+                DecodeAndQueueRecord(*raw);
+            } else if (auto* opaque = std::get_if<OpaqueChunkItem>(&item)) {
+                const std::shared_ptr<ReplaySession> session = opaque->session;
+                const std::size_t offset = opaque->chunk.offset;
+                bool pushed = false;
+                try {
+                    pushed = decodedQueue_.Push(std::move(*opaque));
+                } catch (const std::bad_alloc&) {
                     npu_compute::detail::DebugLog(
-                        "aclpti-data", "decode raw record failed: replay=%llu recordIndex=%llu status=%d",
-                        static_cast<unsigned long long>(raw->session->info.replayId),
-                        static_cast<unsigned long long>(raw->recordIndex), static_cast<int>(decoded.Status()));
-                    raw->session->failedRecordCount.fetch_add(1);
-                    continue;
+                        "aclpti-data", "opaque queue allocation failed: replay=%llu offset=%zu",
+                        static_cast<unsigned long long>(session->info.replayId), offset);
                 }
-                if (!decodedQueue_.Push(DecodedRecordItem{raw->session, decoded.Value()})) {
+                if (!pushed) {
                     npu_compute::detail::DebugLog(
-                        "aclpti-data", "decode queue push failed: replay=%llu recordIndex=%llu",
-                        static_cast<unsigned long long>(raw->session->info.replayId),
-                        static_cast<unsigned long long>(raw->recordIndex));
-                    raw->session->failedRecordCount.fetch_add(1);
-                    continue;
+                        "aclpti-data", "opaque chunk queue push failed: replay=%llu offset=%zu",
+                        static_cast<unsigned long long>(session->info.replayId), offset);
+                    session->failedRecordCount.fetch_add(1);
+                    MarkCompleted(session);
                 }
-                npu_compute::detail::DebugLog(
-                    "aclpti-data", "decode raw record complete: replay=%llu recordIndex=%llu",
-                    static_cast<unsigned long long>(raw->session->info.replayId),
-                    static_cast<unsigned long long>(raw->recordIndex));
-            } else if (!decodedQueue_.Push(std::get<ReplayEnd>(item))) {
-                npu_compute::detail::DebugLog(
-                    "aclpti-data", "decode replay end push failed: replay=%llu",
-                    static_cast<unsigned long long>(std::get<ReplayEnd>(item).session->info.replayId));
-                std::get<ReplayEnd>(item).session->failedRecordCount.fetch_add(1);
             } else {
-                npu_compute::detail::DebugLog(
-                    "aclpti-data", "decode replay end queued: replay=%llu",
-                    static_cast<unsigned long long>(std::get<ReplayEnd>(item).session->info.replayId));
+                const std::shared_ptr<ReplaySession> session = std::get<ReplayEnd>(item).session;
+                bool pushed = false;
+                try {
+                    pushed = decodedQueue_.Push(std::get<ReplayEnd>(item));
+                } catch (const std::bad_alloc&) {
+                    npu_compute::detail::DebugLog(
+                        "aclpti-data", "decode replay end allocation failed: replay=%llu",
+                        static_cast<unsigned long long>(session->info.replayId));
+                }
+                if (!pushed) {
+                    npu_compute::detail::DebugLog(
+                        "aclpti-data", "decode replay end push failed: replay=%llu",
+                        static_cast<unsigned long long>(session->info.replayId));
+                    session->failedRecordCount.fetch_add(1);
+                } else {
+                    npu_compute::detail::DebugLog(
+                        "aclpti-data", "decode replay end queued: replay=%llu",
+                        static_cast<unsigned long long>(session->info.replayId));
+                }
             }
         }
         decodedQueue_.Close();
@@ -961,11 +1165,36 @@ private:
         DecodedItem item;
         while (decodedQueue_.Pop(item)) {
             if (auto* decoded = std::get_if<DecodedRecordItem>(&item)) {
-                aggregate_.Add(*decoded);
-                npu_compute::detail::DebugLog(
-                    "aclpti-data", "assemble decoded record: replay=%llu recordIndex=%llu",
-                    static_cast<unsigned long long>(decoded->session->info.replayId),
-                    static_cast<unsigned long long>(decoded->record.recordIndex));
+                const std::shared_ptr<ReplaySession> session = decoded->session;
+                try {
+                    aggregate_.Add(*decoded);
+                    npu_compute::detail::DebugLog(
+                        "aclpti-data", "assemble decoded record: replay=%llu recordIndex=%llu",
+                        static_cast<unsigned long long>(session->info.replayId),
+                        static_cast<unsigned long long>(decoded->record.recordIndex));
+                } catch (const std::bad_alloc&) {
+                    session->failedRecordCount.fetch_add(1);
+                    npu_compute::detail::DebugLog(
+                        "aclpti-data", "assemble decoded record allocation failed: replay=%llu recordIndex=%llu",
+                        static_cast<unsigned long long>(session->info.replayId),
+                        static_cast<unsigned long long>(decoded->record.recordIndex));
+                }
+                MarkCompleted(session);
+            } else if (auto* opaque = std::get_if<OpaqueChunkItem>(&item)) {
+                const std::shared_ptr<ReplaySession> session = opaque->session;
+                const std::size_t offset = opaque->chunk.offset;
+                try {
+                    aggregate_.Add(std::move(*opaque));
+                    npu_compute::detail::DebugLog(
+                        "aclpti-data", "assemble opaque chunk: replay=%llu offset=%zu",
+                        static_cast<unsigned long long>(session->info.replayId), offset);
+                } catch (const std::bad_alloc&) {
+                    session->failedRecordCount.fetch_add(1);
+                    npu_compute::detail::DebugLog(
+                        "aclpti-data", "assemble opaque chunk allocation failed: replay=%llu offset=%zu",
+                        static_cast<unsigned long long>(session->info.replayId), offset);
+                }
+                MarkCompleted(session);
             } else {
                 npu_compute::detail::DebugLog(
                     "aclpti-data", "assemble replay end: replay=%llu",
@@ -975,7 +1204,7 @@ private:
         npu_compute::detail::DebugLog("aclpti-data", "assemble thread stopped");
     }
 
-    aclptiPmuDataCallback callback_;
+    aclptiProfilingDataCallback callback_;
     std::mutex mutex_;
     ModuleState state_ = ModuleState::Created;
     aclptiResult shutdownStatus_ = ACLPTI_SUCCESS;
@@ -995,7 +1224,7 @@ private:
 std::mutex Module::Impl::routerMutex_;
 Module::Impl* Module::Impl::router_ = nullptr;
 
-aclptiResult RegisterPmuDataCallback(aclptiPmuDataCallback callback)
+aclptiResult RegisterProfilingDataCallback(aclptiProfilingDataCallback callback)
 {
     if (!callback) {
         return ACLPTI_ERROR_INVALID_PARAMETER;
@@ -1024,7 +1253,7 @@ aclptiResult RegisterShutdownCallback(aclptiDataModuleShutdownCallback callback,
 
 Module::Module() : impl_(std::make_unique<Impl>()) {}
 
-Module::Module(aclptiPmuDataCallback callback) : impl_(std::make_unique<Impl>(std::move(callback))) {}
+Module::Module(aclptiProfilingDataCallback callback) : impl_(std::make_unique<Impl>(std::move(callback))) {}
 
 Module::~Module() = default;
 

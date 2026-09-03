@@ -43,6 +43,9 @@ void* CapturedAclPtiUserData();
 aclptiSubscribeHandle CapturedAclPtiSubscriber();
 std::vector<AclPtiEnableCall> CapturedAclPtiEnableCalls();
 std::vector<std::string> CapturedAclPtiSections();
+aclptiBlockResultMode CapturedAclPtiBlockResult();
+bool CapturedAclPtiCollectPipeline();
+bool CapturedAclPtiCollectPcSampling();
 bool InvokeAclPtiCallback(
     aclptiCallbackDomain domain, aclptiCallbackId cbid, aclptiCallbackSite site, aclError retval, void* functionParams);
 bool InvokeAclPtiRuntimeReady();

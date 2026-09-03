@@ -124,6 +124,9 @@ bool CheckSubscribeAndEnableContract()
     CHECK(npu_compute::test::AclPtiRangeConfigSequence() > previousSequence);
     const std::vector<std::string> sections = npu_compute::test::CapturedAclPtiSections();
     CHECK(sections == std::vector<std::string>({"PipeUtilization", "Memory"}));
+    CHECK(npu_compute::test::CapturedAclPtiBlockResult() == ACLPTI_BLOCK_RESULT_ALL);
+    CHECK(!npu_compute::test::CapturedAclPtiCollectPipeline());
+    CHECK(!npu_compute::test::CapturedAclPtiCollectPcSampling());
     return true;
 }
 

@@ -39,6 +39,9 @@ std::size_t g_subscribeSequence = 0;
 std::size_t g_rangeConfigCount = 0;
 std::size_t g_rangeConfigSequence = 0;
 std::vector<std::string> g_sections;
+aclptiBlockResultMode g_blockResult = ACLPTI_BLOCK_RESULT_DISABLED;
+bool g_collectPipeline = false;
+bool g_collectPcSampling = false;
 
 uint64_t CallbackKey(aclptiCallbackDomain domain, aclptiCallbackId cbid)
 {
@@ -66,6 +69,9 @@ void ResetAclPtiCallbackStub()
     g_rangeConfigCount = 0;
     g_rangeConfigSequence = 0;
     g_sections.clear();
+    g_blockResult = ACLPTI_BLOCK_RESULT_DISABLED;
+    g_collectPipeline = false;
+    g_collectPcSampling = false;
 }
 
 void SetAclPtiSubscribeResult(aclptiResult result)
@@ -144,6 +150,24 @@ std::vector<std::string> CapturedAclPtiSections()
 {
     std::lock_guard<std::mutex> lock(g_mutex);
     return g_sections;
+}
+
+aclptiBlockResultMode CapturedAclPtiBlockResult()
+{
+    std::lock_guard<std::mutex> lock(g_mutex);
+    return g_blockResult;
+}
+
+bool CapturedAclPtiCollectPipeline()
+{
+    std::lock_guard<std::mutex> lock(g_mutex);
+    return g_collectPipeline;
+}
+
+bool CapturedAclPtiCollectPcSampling()
+{
+    std::lock_guard<std::mutex> lock(g_mutex);
+    return g_collectPcSampling;
 }
 
 bool InvokeAclPtiCallback(
@@ -255,6 +279,9 @@ extern "C" aclptiResult aclptiRangeProfilerSetConfig(aclptiRangeProfilerSetConfi
     ++g_rangeConfigCount;
     g_rangeConfigSequence = ++g_callSequence;
     g_sections.clear();
+    g_blockResult = params == nullptr ? ACLPTI_BLOCK_RESULT_DISABLED : params->blockResult;
+    g_collectPipeline = params != nullptr && params->collectPipeline;
+    g_collectPcSampling = params != nullptr && params->collectPcSampling;
     if (params != nullptr && params->sections != nullptr) {
         for (std::size_t index = 0; index < params->numSections; ++index) {
             if (params->sections[index] != nullptr) {

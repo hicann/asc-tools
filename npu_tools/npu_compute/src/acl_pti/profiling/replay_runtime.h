@@ -26,8 +26,8 @@ public:
     /// Initializes the range profiler once while preserving its failure result.
     aclptiResult Initialize();
 
-    /// Applies the requested profiling section configuration.
-    aclptiResult SetSections(const aclptiRangeProfilerSetConfigParams* params);
+    /// Applies the requested profiling collection configuration.
+    aclptiResult SetConfig(const aclptiRangeProfilerSetConfigParams* params);
 
     /// Allocates replay shadow memory for a successful device allocation.
     aclptiResult MirrorMalloc(void** devPtr, std::size_t size, aclrtMemMallocPolicy policy);

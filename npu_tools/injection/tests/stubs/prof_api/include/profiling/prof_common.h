@@ -20,18 +20,26 @@
 
 #define PROF_AICORE_METRICS_MASK 0x00000004ULL
 #define PROF_TASK_TIME_MASK 0x00000800ULL
+#define PROF_INSTR_MASK 0x00800000ULL
 
 #define COMPUTE_AICORE_METRICS_NUM 10
 #define MSPROF_INVALID_AICORE_METRIC UINT32_MAX
 #define MSPROF_CONFIG_ATTR_MAX_NUM 16
 
-enum MsprofConfigAttrId { PROF_CONFIG_ATTR_AICORE_METRICS = 0, PROF_CONFIG_ATTR_INSTR = 1 };
+enum MsprofConfigAttrId {
+    PROF_CONFIG_ATTR_AICORE_METRICS = 0,
+    PROF_CONFIG_ATTR_INSTR = 1,
+    PROF_CONFIG_ATTR_TASK_BLOCK = 2
+};
 
 enum MsprofComputeInstrMode { PROF_COMPUTE_BIU_PERF = 1, PROF_COMPUTE_PC_SAMPLING = 2 };
+
+enum MsprofComputeBlockMode { PROF_COMPUTE_ALL_BLOCK = 1, PROF_COMPUTE_BLOCK_SHRINK = 2 };
 
 union MsprofConfigAttrValue {
     uint32_t aicoreMetrics[COMPUTE_AICORE_METRICS_NUM];
     uint32_t instrMode;
+    uint32_t taskBlockMode;
 };
 
 struct MsprofConfigAttr {

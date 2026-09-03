@@ -13,9 +13,9 @@
 
 #include <utility>
 
-aclptiResult aclptiRegisterPmuDataCallback(aclptiPmuDataCallback callback)
+aclptiResult aclptiRegisterProfilingDataCallback(aclptiProfilingDataCallback callback)
 {
-    return npu_compute::aclpti::data::RegisterPmuDataCallback(std::move(callback));
+    return npu_compute::aclpti::data::RegisterProfilingDataCallback(std::move(callback));
 }
 
 extern "C" aclptiResult aclptiRegisterDataModuleShutdownCallback(

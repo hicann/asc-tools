@@ -13,6 +13,7 @@
 #include "profiling/prof_api.h"
 
 #include <algorithm>
+#include <array>
 #include <cstring>
 #include <new>
 #include <string_view>
@@ -38,7 +39,6 @@ constexpr uint32_t kMemoryUb[] = {1058, 1059, 1393, 1394, 1397, 1398, 1407, 1408
 constexpr uint32_t kL2Cache[] = {1060, 1061, 1062, 1063, 1064, 1065, 1066, 1067, 1068, 1069, 1070, 1071};
 
 constexpr uint32_t kMsprofCollectionType = 8;
-constexpr uint64_t kDefaultProfSwitch = PROF_AICORE_METRICS_MASK | PROF_TASK_TIME_MASK;
 
 constexpr SectionDefinition kSectionCatalog[] = {
     {"ArithmeticUtilization", kArithmeticUtilization, std::size(kArithmeticUtilization)},
@@ -61,6 +61,18 @@ const SectionDefinition* FindSection(std::string_view name)
 }
 
 } // namespace
+
+struct RangeProfiler::ReplayRound {
+    data::ReplayKind kind;
+    std::size_t firstPmuEvent = 0;
+    std::size_t pmuEventCount = 0;
+};
+
+struct RangeProfiler::ProfilingRoundConfig {
+    MsprofConfig msprof{};
+    std::array<MsprofConfigAttr, 2> attrs{};
+    data::ReplayPrepareInfo prepareInfo{};
+};
 
 aclptiResult RangeProfiler::Initialize()
 {
@@ -98,18 +110,20 @@ aclptiResult RangeProfiler::Shutdown()
     return status;
 }
 
-aclptiResult RangeProfiler::SetSections(const aclptiRangeProfilerSetConfigParams* params)
+aclptiResult RangeProfiler::SetConfig(const aclptiRangeProfilerSetConfigParams* params)
 {
-    if (params == nullptr || params->sections == nullptr || params->numSections == 0 ||
-        params->numSections > ACLPTI_MAX_NUM_SECTIONS) {
-        npu_compute::detail::DebugLog("aclpti", "section configuration rejected: invalid parameters");
+    if (params == nullptr || params->numSections > ACLPTI_MAX_NUM_SECTIONS ||
+        (params->numSections != 0 && params->sections == nullptr) ||
+        (params->blockResult != ACLPTI_BLOCK_RESULT_DISABLED && params->blockResult != ACLPTI_BLOCK_RESULT_ALL &&
+         params->blockResult != ACLPTI_BLOCK_RESULT_SHRINK) ||
+        (params->numSections == 0 && !params->collectPipeline && !params->collectPcSampling)) {
+        npu_compute::detail::DebugLog("aclpti", "profiling configuration rejected: invalid parameters");
         return ACLPTI_ERROR_INVALID_PARAMETER;
     }
 
     try {
         std::vector<uint32_t> events;
         std::unordered_set<uint32_t> seen;
-        std::string sectionName;
         for (std::size_t index = 0; index < params->numSections; ++index) {
             const char* name = params->sections[index];
             if (name == nullptr) {
@@ -131,9 +145,6 @@ aclptiResult RangeProfiler::SetSections(const aclptiRangeProfilerSetConfigParams
                     name);
                 return ACLPTI_ERROR_NOT_SUPPORTED;
             }
-            if (sectionName.empty()) {
-                sectionName.assign(name, length);
-            }
             npu_compute::detail::DebugLog("aclpti", "selected section name=%.*s", static_cast<int>(length), name);
             for (std::size_t eventIndex = 0; eventIndex < section->eventCount; ++eventIndex) {
                 const uint32_t event = section->events[eventIndex];
@@ -143,9 +154,12 @@ aclptiResult RangeProfiler::SetSections(const aclptiRangeProfilerSetConfigParams
             }
         }
         pmuEvents_ = std::move(events);
-        sectionName_ = std::move(sectionName);
+        blockResult_ = params->blockResult;
+        collectPipeline_ = params->collectPipeline;
+        collectPcSampling_ = params->collectPcSampling;
         npu_compute::detail::DebugLog(
-            "aclpti", "requested sections=%zu events=%zu", params->numSections, pmuEvents_.size());
+            "aclpti", "requested sections=%zu events=%zu block=%d pipeline=%d pcSampling=%d", params->numSections,
+            pmuEvents_.size(), static_cast<int>(blockResult_), collectPipeline_ ? 1 : 0, collectPcSampling_ ? 1 : 0);
         return ACLPTI_SUCCESS;
     } catch (const std::bad_alloc&) {
         npu_compute::detail::DebugLog("aclpti", "section configuration failed: out of memory");
@@ -178,49 +192,78 @@ aclptiResult RangeProfiler::PrepareReplayEnvironment(
     npu_compute::detail::DebugLog("aclpti", "initial replay synchronization result=%d", initialSyncResult);
     if (initialSyncResult != ACL_SUCCESS) {
         npu_compute::detail::DebugLog("aclpti", "error operation=replay_initial_sync status=%d", initialSyncResult);
-        return ACLPTI_ERROR_PROFILING_FAILED;
+        return ACLPTI_ERROR_RESULT_UNRELIABLE;
     }
 
     return ACLPTI_SUCCESS;
 }
 
-std::size_t RangeProfiler::ConfigureProfilingRound(
-    std::size_t round, std::int32_t deviceId, MsprofConfigAttr* attr, MsprofConfig* config,
-    data::ReplayPrepareInfo* prepareInfo) const
+std::vector<RangeProfiler::ReplayRound> RangeProfiler::BuildReplayRounds() const
 {
-    const std::size_t firstEvent = round * COMPUTE_AICORE_METRICS_NUM;
-    const std::size_t eventCount = std::min(
-        pmuEvents_.size() - std::min(firstEvent, pmuEvents_.size()),
-        static_cast<std::size_t>(COMPUTE_AICORE_METRICS_NUM));
+    std::vector<ReplayRound> rounds;
+    const std::size_t pmuRoundCount = (pmuEvents_.size() + COMPUTE_AICORE_METRICS_NUM - 1) / COMPUTE_AICORE_METRICS_NUM;
+    rounds.reserve(
+        pmuRoundCount + static_cast<std::size_t>(collectPipeline_) + static_cast<std::size_t>(collectPcSampling_));
+    for (std::size_t round = 0; round < pmuRoundCount; ++round) {
+        const std::size_t firstEvent = round * COMPUTE_AICORE_METRICS_NUM;
+        rounds.push_back(ReplayRound{
+            data::ReplayKind::Pmu,
+            firstEvent,
+            std::min(pmuEvents_.size() - firstEvent, static_cast<std::size_t>(COMPUTE_AICORE_METRICS_NUM)),
+        });
+    }
+    if (collectPipeline_) {
+        rounds.push_back(ReplayRound{data::ReplayKind::Pipeline});
+    }
+    if (collectPcSampling_) {
+        rounds.push_back(ReplayRound{data::ReplayKind::PcSampling});
+    }
+    return rounds;
+}
 
-    *attr = {};
-    attr->id = PROF_CONFIG_ATTR_AICORE_METRICS;
-    std::fill_n(attr->value.aicoreMetrics, COMPUTE_AICORE_METRICS_NUM, MSPROF_INVALID_AICORE_METRIC);
-    *prepareInfo = {};
-    prepareInfo->replayId = round;
-    prepareInfo->sectionName = sectionName_;
-    prepareInfo->pmuEventIds.fill(data::kInvalidPmuEvent);
-    for (std::size_t index = 0; index < eventCount; ++index) {
-        const uint32_t event = pmuEvents_[firstEvent + index];
-        attr->value.aicoreMetrics[index] = event;
-        prepareInfo->pmuEventIds[index] = event;
+void RangeProfiler::ConfigureProfilingRound(
+    const ReplayRound& round, std::size_t roundId, std::int32_t deviceId, ProfilingRoundConfig* config) const
+{
+    *config = {};
+    config->prepareInfo.replayId = roundId;
+    config->prepareInfo.kind = round.kind;
+    config->prepareInfo.pmuEventIds.fill(data::kInvalidPmuEvent);
+    MsprofConfigAttr& primaryAttr = config->attrs[0];
+    if (round.kind == data::ReplayKind::Pmu) {
+        config->msprof.profSwitch = PROF_TASK_TIME_MASK | PROF_AICORE_METRICS_MASK;
+        primaryAttr.id = PROF_CONFIG_ATTR_AICORE_METRICS;
+        std::fill_n(primaryAttr.value.aicoreMetrics, COMPUTE_AICORE_METRICS_NUM, MSPROF_INVALID_AICORE_METRIC);
+        for (std::size_t index = 0; index < round.pmuEventCount; ++index) {
+            const uint32_t event = pmuEvents_[round.firstPmuEvent + index];
+            primaryAttr.value.aicoreMetrics[index] = event;
+            config->prepareInfo.pmuEventIds[index] = event;
+        }
+    } else {
+        config->msprof.profSwitch = PROF_TASK_TIME_MASK | PROF_INSTR_MASK;
+        primaryAttr.id = PROF_CONFIG_ATTR_INSTR;
+        primaryAttr.value.instrMode =
+            round.kind == data::ReplayKind::Pipeline ? PROF_COMPUTE_BIU_PERF : PROF_COMPUTE_PC_SAMPLING;
     }
 
-    *config = {};
-    config->profSwitch = kDefaultProfSwitch;
-    config->devNums = 1;
-    config->devIdList[0] = static_cast<std::uint32_t>(deviceId);
-    config->configInfo.attrs = attr;
-    config->configInfo.numAttrs = 1;
+    std::size_t attrCount = 1;
+    if (blockResult_ != ACLPTI_BLOCK_RESULT_DISABLED) {
+        MsprofConfigAttr& blockAttr = config->attrs[attrCount++];
+        blockAttr.id = PROF_CONFIG_ATTR_TASK_BLOCK;
+        blockAttr.value.taskBlockMode =
+            blockResult_ == ACLPTI_BLOCK_RESULT_ALL ? PROF_COMPUTE_ALL_BLOCK : PROF_COMPUTE_BLOCK_SHRINK;
+    }
+    config->msprof.devNums = 1;
+    config->msprof.devIdList[0] = static_cast<std::uint32_t>(deviceId);
+    config->msprof.configInfo.attrs = config->attrs.data();
+    config->msprof.configInfo.numAttrs = attrCount;
 
     npu_compute::detail::DebugLog(
-        "aclpti", "prepare replay round=%zu section=%s pmuCount=%zu", round, prepareInfo->sectionName.c_str(),
-        eventCount);
-    for (std::size_t index = 0; index < eventCount; ++index) {
+        "aclpti", "prepare replay round=%zu kind=%d pmuCount=%zu attrs=%zu", roundId, static_cast<int>(round.kind),
+        round.pmuEventCount, attrCount);
+    for (std::size_t index = 0; index < round.pmuEventCount; ++index) {
         npu_compute::detail::DebugLog(
-            "aclpti", "replay pmu round=%zu slot=%zu value=%u", round, index, prepareInfo->pmuEventIds[index]);
+            "aclpti", "replay pmu round=%zu slot=%zu value=%u", roundId, index, config->prepareInfo.pmuEventIds[index]);
     }
-    return eventCount;
 }
 
 aclptiResult RangeProfiler::ResolveProfilingRoundStatus(
@@ -261,45 +304,48 @@ aclptiResult RangeProfiler::ResolveProfilingRoundStatus(
 }
 
 aclptiResult RangeProfiler::StartProfilingRound(
-    std::size_t round, std::int32_t deviceId, MsprofConfigAttr* attr, MsprofConfig* config)
+    const ReplayRound& round, std::size_t roundId, std::int32_t deviceId, ProfilingRoundConfig* config)
 {
-    data::ReplayPrepareInfo prepareInfo{};
-    const std::size_t eventCount = ConfigureProfilingRound(round, deviceId, attr, config, &prepareInfo);
+    ConfigureProfilingRound(round, roundId, deviceId, config);
 
-    const aclptiResult prepareStatus = dataModule_.PrepareReplay(prepareInfo);
+    const aclptiResult prepareStatus = dataModule_.PrepareReplay(config->prepareInfo);
     if (prepareStatus != ACLPTI_SUCCESS) {
         npu_compute::detail::DebugLog(
             "aclpti", "error operation=replay_prepare status=%d replay=%llu round=%zu", static_cast<int>(prepareStatus),
-            static_cast<unsigned long long>(round), round);
+            static_cast<unsigned long long>(roundId), roundId);
         return ACLPTI_ERROR_RESULT_UNRELIABLE;
     }
 
     npu_compute::detail::DebugLog(
-        "aclpti", "start profiling replay round=%zu device=%d pmuCount=%zu", round, deviceId, eventCount);
-    const int startResult = MsprofStart(kMsprofCollectionType, config, sizeof(*config));
+        "aclpti", "start profiling replay round=%zu device=%d pmuCount=%zu", roundId, deviceId, round.pmuEventCount);
+    const int startResult = MsprofStart(kMsprofCollectionType, &config->msprof, sizeof(config->msprof));
     if (startResult != 0) {
-        dataModule_.RecordReplayStatus({round, ACLPTI_ERROR_INTERNAL});
-        dataModule_.ReleaseReplay(round);
+        dataModule_.RecordReplayStatus({roundId, ACLPTI_ERROR_RESULT_UNRELIABLE});
+        dataModule_.ReleaseReplay(roundId);
         npu_compute::detail::DebugLog(
             "aclpti", "error operation=prof_start status=%d replay=%llu round=%zu", startResult,
-            static_cast<unsigned long long>(round), round);
+            static_cast<unsigned long long>(roundId), roundId);
         return ACLPTI_ERROR_RESULT_UNRELIABLE;
     }
     return ACLPTI_SUCCESS;
 }
 
 aclptiResult RangeProfiler::FinishProfilingRound(
-    std::size_t round, const MsprofConfig& config, aclError launchStatus,
+    std::size_t round, const ProfilingRoundConfig& config, aclError launchStatus,
     aclrtSynchronizeStreamFunc synchronizeFunction, aclrtStream stream)
 {
     npu_compute::detail::DebugLog("aclpti", "synchronize replay kernel round=%zu", round);
     const aclError syncResult = synchronizeFunction(stream);
     npu_compute::detail::DebugLog("aclpti", "synchronize replay kernel result round=%zu result=%d", round, syncResult);
     npu_compute::detail::DebugLog("aclpti", "stop profiling replay round=%zu", round);
-    const int stopResult = MsprofStop(kMsprofCollectionType, &config, sizeof(config));
+    const int stopResult = MsprofStop(kMsprofCollectionType, &config.msprof, sizeof(config.msprof));
     npu_compute::detail::DebugLog("aclpti", "stop profiling replay result round=%zu result=%d", round, stopResult);
 
-    const data::ReplayStopInfo stopInfo{round, stopResult == 0 ? ACLPTI_SUCCESS : ACLPTI_ERROR_INTERNAL};
+    const aclptiResult roundStatus = launchStatus != ACL_SUCCESS || syncResult != ACL_SUCCESS ?
+                                         ACLPTI_ERROR_RESULT_UNRELIABLE :
+                                     stopResult != 0 ? ACLPTI_ERROR_PROFILING_FAILED :
+                                                       ACLPTI_SUCCESS;
+    const data::ReplayStopInfo stopInfo{round, roundStatus};
     npu_compute::detail::DebugLog("aclpti", "record replay status round=%zu", round);
     const data::ReplayResult replayResult = dataModule_.RecordReplayStatus(stopInfo);
     npu_compute::detail::DebugLog(
@@ -331,11 +377,10 @@ aclptiResult RangeProfiler::ReplayKernel(
             return status;
         }
 
-        const std::size_t roundCount =
-            std::max<std::size_t>(1, (pmuEvents_.size() + COMPUTE_AICORE_METRICS_NUM - 1) / COMPUTE_AICORE_METRICS_NUM);
-        npu_compute::detail::DebugLog("aclpti", "replay rounds=%zu events=%zu", roundCount, pmuEvents_.size());
+        const std::vector<ReplayRound> rounds = BuildReplayRounds();
+        npu_compute::detail::DebugLog("aclpti", "replay rounds=%zu events=%zu", rounds.size(), pmuEvents_.size());
 
-        for (std::size_t round = 0; round < roundCount; ++round) {
+        for (std::size_t round = 0; round < rounds.size(); ++round) {
             status = replayMemory.Restore();
             if (status != ACLPTI_SUCCESS) {
                 npu_compute::detail::DebugLog(
@@ -343,9 +388,8 @@ aclptiResult RangeProfiler::ReplayKernel(
                     round);
                 return status;
             }
-            MsprofConfigAttr attr{};
-            MsprofConfig config{};
-            status = StartProfilingRound(round, deviceId, &attr, &config);
+            ProfilingRoundConfig config{};
+            status = StartProfilingRound(rounds[round], round, deviceId, &config);
             if (status != ACLPTI_SUCCESS) {
                 return status;
             }
@@ -364,7 +408,7 @@ aclptiResult RangeProfiler::ReplayKernel(
     } catch (const std::bad_alloc&) {
         npu_compute::detail::DebugLog(
             "aclpti", "error operation=replay_metadata_alloc status=%d", ACLPTI_ERROR_OUT_OF_MEMORY);
-        return ACLPTI_ERROR_RESULT_UNRELIABLE;
+        return ACLPTI_ERROR_OUT_OF_MEMORY;
     }
 }
 

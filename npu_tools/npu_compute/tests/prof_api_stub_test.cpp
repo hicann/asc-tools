@@ -70,9 +70,22 @@ int main()
     config.configInfo.numAttrs = 1;
 
     CHECK(MsprofRegisterDataCallback(8, reinterpret_cast<void*>(&CaptureRawData)) == 0);
+
+    instrModeAttr.value.instrMode = PROF_COMPUTE_BIU_PERF;
+    CHECK(MsprofStart(8, &instrModeConfig, sizeof(instrModeConfig)) == 0);
+    CHECK(MsprofStop(8, &instrModeConfig, sizeof(instrModeConfig)) == 0);
+    CHECK(g_callbackCount == 1);
+    CHECK(g_rawData.type == BIU_PERF_DATA_TYPE);
+
+    instrModeAttr.value.instrMode = PROF_COMPUTE_PC_SAMPLING;
+    CHECK(MsprofStart(8, &instrModeConfig, sizeof(instrModeConfig)) == 0);
+    CHECK(MsprofStop(8, &instrModeConfig, sizeof(instrModeConfig)) == 0);
+    CHECK(g_callbackCount == 2);
+    CHECK(g_rawData.type == PC_SAMPLING_DATA_TYPE);
+
     CHECK(MsprofStart(8, &config, sizeof(config)) == 0);
     CHECK(MsprofStop(8, &config, sizeof(config)) == 0);
-    CHECK(g_callbackCount == 1);
+    CHECK(g_callbackCount == 3);
     CHECK(g_rawData.isLastChunk);
     CHECK(g_rawData.type == PMU_DATA_TYPE);
     CHECK(g_rawData.deviceId == 0);
