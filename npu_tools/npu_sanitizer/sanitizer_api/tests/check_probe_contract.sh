@@ -37,6 +37,7 @@ required_files=(
     "${api_dir}/src/device_runtime/device_symbolizer.cpp"
     "${api_dir}/src/aclsan_trace_buffer.cpp"
     "${api_dir}/src/aclsan_trace_runtime.cpp"
+    "${api_dir}/include/device_instr/soc_version.h"
     "${api_dir}/include/internal/aclsan_active_probe_plan.h"
     "${api_dir}/include/internal/aclsan_trace_buffer.h"
     "${api_dir}/include/internal/aclsan_trace_runtime.h"
@@ -73,6 +74,11 @@ grep -Fq 'npu_check_dbi_engine' "${cmake_file}" || Fail 'acl_san does not link t
 grep -Fq 'src/aclsan_trace_buffer.cpp' "${cmake_file}" || Fail 'trace buffer adapter is not built'
 grep -Fq 'src/aclsan_trace_runtime.cpp' "${cmake_file}" || Fail 'trace runtime is not built'
 grep -Fq 'src/device_runtime/device_symbolizer.cpp' "${cmake_file}" || Fail 'device symbolizer is not built'
+
+soc_version_header="${api_dir}/include/device_instr/soc_version.h"
+grep -Fq 'using SocVersionMappings = std::unordered_map<std::string, SocVersion>;' "${soc_version_header}" || \
+    Fail 'SoC version mappings must use unordered_map<string, SocVersion>'
+grep -Fq 'DAV_3510' "${soc_version_header}" || Fail 'DAV_3510 SoC version is missing'
 
 trace_buffer="${api_dir}/src/aclsan_trace_buffer.cpp"
 trace_buffer_abi="${dbi_include_dir}/trace_buffer_abi.h"
@@ -111,8 +117,10 @@ if rg -n 'ASCSAN_TRACE_SLICES_PER_BLOCK|TraceSliceCount' "${trace_buffer_abi}" "
 fi
 
 trace_runtime="${api_dir}/src/aclsan_trace_runtime.cpp"
-grep -Fq 'aclsan::FindDeviceInstructionDecoder(getSocName())' "${trace_runtime}" || \
-    Fail 'trace runtime does not select the local instruction decoder'
+grep -Fq 'aclsan::ResolveSocVersion(getSocName())' "${trace_runtime}" || \
+    Fail 'trace runtime does not resolve the runtime SoC version'
+grep -Fq 'aclsan::FindDeviceInstructionDecoder(*socVersion)' "${trace_runtime}" || \
+    Fail 'trace runtime does not select the decoder by SoC version'
 grep -Fq 'TranslateDecodedTraceToCallbackData(parsed, *decoded, memoryState)' "${trace_runtime}" || \
     Fail 'decoded DBI records and independent register state are not translated to public callback data'
 trace_translator="${api_dir}/src/aclsan/aclsan_translate_device_data.cpp"

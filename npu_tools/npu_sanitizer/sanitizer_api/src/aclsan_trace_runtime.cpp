@@ -18,6 +18,7 @@
 #include "internal/aclsan_device_data_log.h"
 #include "internal/aclsan_dispatch.h"
 #include "internal/aclsan_log.h"
+#include "internal/aclsan_runtime_hook.h"
 #include "internal/aclsan_trace_buffer.h"
 #include "injection/injection_hook.h"
 #include "dbi/trace_buffer_abi.h"
@@ -67,12 +68,6 @@ device_runtime::DeviceBinaryRegistry& DeviceBinaries()
     return binaries;
 }
 
-template <typename Function>
-Function Original(aclrtApiId id)
-{
-    return reinterpret_cast<Function>(acltoolGetOriginalRuntimeApi(id));
-}
-
 bool ParsePositiveUint32(const char* name, uint32_t& value)
 {
     const char* text = std::getenv(name);
@@ -93,13 +88,12 @@ constexpr bool StrictModeEnabled() { return true; }
 
 bool QueryPhysicalCoreCount(uint32_t deviceId, uint32_t& physicalCoreCount)
 {
-    const auto getDeviceInfo = Original<aclrtGetDeviceInfoFunc>(ACL_RT_API_aclrtGetDeviceInfo);
+    const auto getDeviceInfo =
+        GetOriginalRuntimeFunction<aclrtGetDeviceInfoFunc>(ACL_RT_API_aclrtGetDeviceInfo, "aclrtGetDeviceInfo");
     int64_t cubeCoreCount = 0;
     int64_t vectorCoreCount = 0;
-    if (getDeviceInfo == nullptr ||
-        getDeviceInfo(deviceId, ACL_DEV_ATTR_CUBE_CORE_NUM, &cubeCoreCount) != ACL_SUCCESS ||
-        getDeviceInfo(deviceId, ACL_DEV_ATTR_VECTOR_CORE_NUM, &vectorCoreCount) != ACL_SUCCESS || cubeCoreCount <= 0 ||
-        vectorCoreCount != 2 * cubeCoreCount) {
+    if (getDeviceInfo(deviceId, ACL_DEV_ATTR_CUBE_CORE_NUM, &cubeCoreCount) != ACL_SUCCESS ||
+        getDeviceInfo(deviceId, ACL_DEV_ATTR_VECTOR_CORE_NUM, &vectorCoreCount) != ACL_SUCCESS) {
         return false;
     }
     physicalCoreCount = static_cast<uint32_t>(cubeCoreCount + vectorCoreCount);
@@ -188,24 +182,32 @@ void ReleaseDeviceBuffer(void* buffer) noexcept
     if (buffer == nullptr) {
         return;
     }
-    const auto freeFunction = Original<aclrtFreeFunc>(ACL_RT_API_aclrtFree);
-    if (freeFunction == nullptr || freeFunction(buffer) != ACL_SUCCESS) {
+    const auto freeFunction = GetOriginalRuntimeFunction<aclrtFreeFunc>(ACL_RT_API_aclrtFree, "aclrtFree");
+    if (freeFunction(buffer) != ACL_SUCCESS) {
         ASC_SAN_ERROR("acl_san trace: failed to release launch-owned GM buffer %p", buffer);
     }
 }
 
 aclError ResolveLaunchContext(PreparedTraceLaunch& prepared) noexcept
 {
-    const auto getSocName = Original<aclrtGetSocNameFunc>(ACL_RT_API_aclrtGetSocName);
-    prepared.decoder = getSocName == nullptr ? nullptr : aclsan::FindDeviceInstructionDecoder(getSocName());
-    if (prepared.decoder == nullptr || prepared.decoder->decode == nullptr) {
-        ASC_SAN_ERROR("acl_san trace: cannot select Device instruction decoder");
+    const auto getSocName =
+        GetOriginalRuntimeFunction<aclrtGetSocNameFunc>(ACL_RT_API_aclrtGetSocName, "aclrtGetSocName");
+
+    const std::optional<aclsan::SocVersion> socVersion = aclsan::ResolveSocVersion(getSocName());
+    if (!socVersion.has_value()) {
+        ASC_SAN_ERROR("acl_san trace: get unsupported soc name %s.", getSocName());
         return ACL_ERROR_RT_INTERNAL_ERROR;
     }
 
-    const auto getDevice = Original<aclrtGetDeviceFunc>(ACL_RT_API_aclrtGetDevice);
+    prepared.decoder = aclsan::FindDeviceInstructionDecoder(*socVersion);
+    if (prepared.decoder == nullptr) {
+        ASC_SAN_ERROR("acl_san trace: cannot select Device instruction decoder for soc %s.", getSocName());
+        return ACL_ERROR_RT_INTERNAL_ERROR;
+    }
+
+    const auto getDevice = GetOriginalRuntimeFunction<aclrtGetDeviceFunc>(ACL_RT_API_aclrtGetDevice, "aclrtGetDevice");
     int32_t deviceId = -1;
-    if (getDevice == nullptr || getDevice(&deviceId) != ACL_SUCCESS || deviceId < 0) {
+    if (getDevice(&deviceId) != ACL_SUCCESS || deviceId < 0) {
         ASC_SAN_ERROR("acl_san trace: cannot query current Device ID");
         return ACL_ERROR_RT_INTERNAL_ERROR;
     }
@@ -383,18 +385,13 @@ aclError PrepareTraceLaunch(
         }
         prepared.recordsPerCore = capacity;
 
-        const auto mallocFunction = Original<aclrtMallocFunc>(ACL_RT_API_aclrtMalloc);
-        const auto memcpyFunction = Original<aclrtMemcpyFunc>(ACL_RT_API_aclrtMemcpy);
-        aclError status =
-            mallocFunction == nullptr ?
-                ACL_ERROR_UNINITIALIZE :
-                mallocFunction(&prepared.deviceBuffer, prepared.hostBuffer.size(), ACL_MEM_MALLOC_HUGE_FIRST);
-        if (status == ACL_SUCCESS && memcpyFunction != nullptr) {
+        const auto mallocFunction = GetOriginalRuntimeFunction<aclrtMallocFunc>(ACL_RT_API_aclrtMalloc, "aclrtMalloc");
+        const auto memcpyFunction = GetOriginalRuntimeFunction<aclrtMemcpyFunc>(ACL_RT_API_aclrtMemcpy, "aclrtMemcpy");
+        aclError status = mallocFunction(&prepared.deviceBuffer, prepared.hostBuffer.size(), ACL_MEM_MALLOC_HUGE_FIRST);
+        if (status == ACL_SUCCESS) {
             status = memcpyFunction(
                 prepared.deviceBuffer, prepared.hostBuffer.size(), prepared.hostBuffer.data(),
                 prepared.hostBuffer.size(), ACL_MEMCPY_HOST_TO_DEVICE);
-        } else if (status == ACL_SUCCESS) {
-            status = ACL_ERROR_UNINITIALIZE;
         }
         if (status != ACL_SUCCESS) {
             ASC_SAN_ERROR("acl_san trace: cannot allocate or initialize launch GM buffer, status=%d", status);
@@ -473,11 +470,10 @@ void CollectTraceStream(aclrtStream stream) noexcept
         return;
     }
 
-    const auto memcpyFunction = Original<aclrtMemcpyFunc>(ACL_RT_API_aclrtMemcpy);
+    const auto memcpyFunction = GetOriginalRuntimeFunction<aclrtMemcpyFunc>(ACL_RT_API_aclrtMemcpy, "aclrtMemcpy");
     for (PendingTrace& pending : completed) {
         try {
-            if (memcpyFunction == nullptr ||
-                memcpyFunction(
+            if (memcpyFunction(
                     pending.hostBuffer.data(), pending.hostBuffer.size(), pending.deviceBuffer,
                     pending.hostBuffer.size(), ACL_MEMCPY_DEVICE_TO_HOST) != ACL_SUCCESS) {
                 ASC_SAN_ERROR(

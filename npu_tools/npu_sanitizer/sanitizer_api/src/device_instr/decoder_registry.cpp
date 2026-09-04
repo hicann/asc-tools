@@ -9,42 +9,15 @@
  */
 
 #include "device_instr/decoder_registry.h"
-
 #include "device_instr/arch/dav_3510/decoder.h"
-#include "internal/aclsan_log.h"
-
-#include <array>
-#include <cstring>
 
 namespace aclsan {
-namespace {
-
-using GetDecoderFunc = const DeviceInstructionDecoder& (*)() noexcept;
-
-struct DecoderRegistration {
-    const char* socName;
-    GetDecoderFunc getDecoder;
-};
-
-// TODO: 映射表需要加全
-constexpr std::array<DecoderRegistration, 1> DECODER_REGISTRATIONS{{
-    {"Ascend950PR_9599", dav3510::GetDeviceInstructionDecoder},
-}};
-
-} // namespace
-
-const DeviceInstructionDecoder* FindDeviceInstructionDecoder(const char* socName) noexcept
+const DeviceInstructionDecoder* FindDeviceInstructionDecoder(SocVersion version) noexcept
 {
-    if (socName == nullptr || socName[0] == '\0') {
-        ASC_SAN_ERROR("FindDeviceInstructionDecoder failed: socName is nullptr or empty");
-        return nullptr;
+    switch (version) {
+        case SocVersion::DAV_3510:
+            return &dav3510::GetDeviceInstructionDecoder();
     }
-    for (const DecoderRegistration& registration : DECODER_REGISTRATIONS) {
-        if (std::strcmp(socName, registration.socName) == 0) {
-            return &registration.getDecoder();
-        }
-    }
-    ASC_SAN_ERROR("FindDeviceInstructionDecoder failed: unsupported SoC=%s", socName);
     return nullptr;
 }
 

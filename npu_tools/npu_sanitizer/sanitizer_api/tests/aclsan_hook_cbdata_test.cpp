@@ -180,7 +180,7 @@ aclError FakeAclrtGetFunctionAttribute(aclrtFuncHandle, aclrtFuncAttribute, int6
     return ACL_SUCCESS;
 }
 
-const char* FakeAclrtGetSocName() { return "Ascend950PR_9599"; }
+const char* FakeAclrtGetSocName() { return "Ascend950PR_9589"; }
 
 aclError FakeAclrtGetDeviceInfo(uint32_t, aclrtDevAttr attr, int64_t* value)
 {
@@ -355,7 +355,8 @@ void TestSynchronizeStreamWithTimeoutCallbackData()
 void TestSetPaddingRecordsUpdateLaunchStateWithoutCallback()
 {
     ResetCapture();
-    const aclsan::DeviceInstructionDecoder* decoder = aclsan::FindDeviceInstructionDecoder("Ascend950PR_9599");
+    const aclsan::DeviceInstructionDecoder* decoder =
+        aclsan::FindDeviceInstructionDecoder(aclsan::SocVersion::DAV_3510);
     assert(decoder != nullptr);
 
     aclsan::ParsedTraceRecord first{};
@@ -435,7 +436,8 @@ void TestDefinedInstructionIdUsesDecoder()
 void TestNdDmaPadCountStatePreservesExactGmFootprint()
 {
     ResetCapture();
-    const aclsan::DeviceInstructionDecoder* decoder = aclsan::FindDeviceInstructionDecoder("Ascend950PR_9599");
+    const aclsan::DeviceInstructionDecoder* decoder =
+        aclsan::FindDeviceInstructionDecoder(aclsan::SocVersion::DAV_3510);
     assert(decoder != nullptr);
 
     aclsan::ParsedTraceRecord base{};
@@ -509,7 +511,8 @@ void TestNdDmaPadCountStatePreservesExactGmFootprint()
 void TestDmaOuterLoopStateReachesMemoryCallback()
 {
     ResetCapture();
-    const aclsan::DeviceInstructionDecoder* decoder = aclsan::FindDeviceInstructionDecoder("Ascend950PR_9599");
+    const aclsan::DeviceInstructionDecoder* decoder =
+        aclsan::FindDeviceInstructionDecoder(aclsan::SocVersion::DAV_3510);
     assert(decoder != nullptr);
 
     aclsan::ParsedTraceRecord base{};
@@ -563,7 +566,8 @@ void TestDmaOuterLoopStateReachesMemoryCallback()
 void TestUbufToGmOuterLoopStateReachesMemoryCallback()
 {
     ResetCapture();
-    const aclsan::DeviceInstructionDecoder* decoder = aclsan::FindDeviceInstructionDecoder("Ascend950PR_9599");
+    const aclsan::DeviceInstructionDecoder* decoder =
+        aclsan::FindDeviceInstructionDecoder(aclsan::SocVersion::DAV_3510);
     assert(decoder != nullptr);
 
     aclsan::ParsedTraceRecord base{};
@@ -613,7 +617,8 @@ void TestUbufToGmOuterLoopStateReachesMemoryCallback()
 void TestGmToL1OuterLoopStateReachesMemoryCallback()
 {
     ResetCapture();
-    const aclsan::DeviceInstructionDecoder* decoder = aclsan::FindDeviceInstructionDecoder("Ascend950PR_9599");
+    const aclsan::DeviceInstructionDecoder* decoder =
+        aclsan::FindDeviceInstructionDecoder(aclsan::SocVersion::DAV_3510);
     assert(decoder != nullptr);
 
     aclsan::ParsedTraceRecord base{};
@@ -664,7 +669,8 @@ void TestGmToL1OuterLoopStateReachesMemoryCallback()
 void TestFixpipeLoop3StateReachesMemoryCallback()
 {
     ResetCapture();
-    const aclsan::DeviceInstructionDecoder* decoder = aclsan::FindDeviceInstructionDecoder("Ascend950PR_9599");
+    const aclsan::DeviceInstructionDecoder* decoder =
+        aclsan::FindDeviceInstructionDecoder(aclsan::SocVersion::DAV_3510);
     assert(decoder != nullptr);
 
     aclsan::ParsedTraceRecord base{};

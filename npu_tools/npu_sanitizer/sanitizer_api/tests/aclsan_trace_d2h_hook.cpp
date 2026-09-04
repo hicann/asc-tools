@@ -272,7 +272,7 @@ aclError OriginalLaunch(
 
 aclError OriginalSync(aclrtStream) { return g_syncResult; }
 
-const char* OriginalGetSocName() { return "Ascend950PR_9599"; }
+const char* OriginalGetSocName() { return "Ascend950PR_9589"; }
 
 aclError OriginalGetDevice(int32_t* deviceId)
 {

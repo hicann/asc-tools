@@ -11,6 +11,7 @@
 cmake_minimum_required(VERSION 3.16.0)
 project(aclsan_sanitizer_api)
 
+# TODO: 需要洲杰把这段逻辑从cmake移除
 set(NPU_CHECK_EMBED_PROBE_RESOURCES_SCRIPT_CONTENT [=[# Copyright (c) 2026 Huawei Technologies Co., Ltd.
 # This program is free software, you can redistribute it and/or modify it under the terms and conditions of
 # CANN Open Software License Agreement Version 2.0 (the "License").
@@ -82,10 +83,8 @@ file(GENERATE
   OUTPUT "${NPU_CHECK_EMBED_PROBE_RESOURCES_SCRIPT}"
   CONTENT "${NPU_CHECK_EMBED_PROBE_RESOURCES_SCRIPT_CONTENT}")
 
-find_package(Threads REQUIRED)
 
-set(NPU_CHECK_PROBE_ARCHES "dav-3510" CACHE STRING
-  "Public NPU architecture names supported by the runtime Probe generator")
+find_package(Threads REQUIRED)
 
 add_library(npu_check_dbi_probe_group STATIC src/dbi/probe_group.cpp)
 target_compile_features(npu_check_dbi_probe_group PUBLIC cxx_std_17)
@@ -97,6 +96,7 @@ set_target_properties(npu_check_dbi_probe_group PROPERTIES
   VISIBILITY_INLINES_HIDDEN YES
 )
 
+# TODO: 需要洲杰把这段逻辑从cmake移除
 set(NPU_CHECK_PROBE_RESOURCE_SOURCE "${CMAKE_CURRENT_BINARY_DIR}/generated/embedded_probe_resources.cpp")
 add_custom_command(
   OUTPUT "${NPU_CHECK_PROBE_RESOURCE_SOURCE}"
@@ -178,9 +178,9 @@ set_target_properties(npu_check_dbi_engine PROPERTIES
   VISIBILITY_INLINES_HIDDEN YES
 )
 
-if(NOT TARGET injection_headers OR NOT TARGET acl_tool_injection)
-  message(FATAL_ERROR
-    "sanitizer_api requires Runtime injection targets: injection_headers and acl_tool_injection")
+# libacl_san.so 依赖 libacl_tool_injection.so提供的hook能力
+if(NOT TARGET acl_tool_injection)
+  message(FATAL_ERROR "sanitizer_api requires Runtime injection target: acl_tool_injection")
 endif()
 
 add_library(acl_san SHARED
@@ -211,19 +211,15 @@ target_include_directories(acl_san
 )
 target_link_libraries(acl_san
   PRIVATE
-    injection_headers
     acl_tool_injection
     npu_check_dbi_engine
-    ${CMAKE_DL_LIBS}
-    Threads::Threads
+    dl
+    pthread
     Boost::filesystem
 )
 target_link_options(acl_san PRIVATE "LINKER:--exclude-libs,ALL")
 
 set(ACLSAN_VERSION_SCRIPT "${CMAKE_CURRENT_SOURCE_DIR}/cmake/acl_san.map")
-if(ENABLE_TEST)
-  set(ACLSAN_VERSION_SCRIPT "${CMAKE_CURRENT_SOURCE_DIR}/cmake/acl_san_test.map")
-endif()
 target_link_options(acl_san PRIVATE
   "LINKER:--version-script=${ACLSAN_VERSION_SCRIPT}"
   "LINKER:-rpath,$ORIGIN"
@@ -242,14 +238,9 @@ set_target_properties(acl_san PROPERTIES
 
 if(ENABLE_TEST)
   enable_testing()
-  target_compile_definitions(acl_san PRIVATE ACLSAN_ENABLE_TEST_API=1)
   add_test(NAME acl_san_exports
     COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/tests/check_acl_san_exports.sh"
-      $<TARGET_FILE:acl_san> --with-test-api)
-  add_test(NAME acl_san_version_scripts
-    COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/tests/check_acl_san_version_scripts.sh"
-      "${CMAKE_CURRENT_SOURCE_DIR}/cmake/acl_san.map"
-      "${CMAKE_CURRENT_SOURCE_DIR}/cmake/acl_san_test.map")
+      $<TARGET_FILE:acl_san>)
   add_test(NAME aclsan.probe_contract
     COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/tests/check_probe_contract.sh")
   add_test(NAME aclsan.device_memory_access_producer_contract

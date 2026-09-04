@@ -28,7 +28,8 @@ void TestCallbackUsesRawRecordPipeline()
 
     aclsan::ParsedTraceRecord parsed{};
     parsed.record = record;
-    const aclsan::DeviceInstructionDecoder* decoder = aclsan::FindDeviceInstructionDecoder("Ascend950PR_9599");
+    const aclsan::DeviceInstructionDecoder* decoder =
+        aclsan::FindDeviceInstructionDecoder(aclsan::SocVersion::DAV_3510);
     assert(decoder != nullptr);
     const auto decoded = decoder->decode(record);
     assert(decoded.has_value());
@@ -50,7 +51,8 @@ void TestMemoryCallbackUsesRawRecordPipeline()
 
     aclsan::ParsedTraceRecord parsed{};
     parsed.record = record;
-    const aclsan::DeviceInstructionDecoder* decoder = aclsan::FindDeviceInstructionDecoder("Ascend950PR_9599");
+    const aclsan::DeviceInstructionDecoder* decoder =
+        aclsan::FindDeviceInstructionDecoder(aclsan::SocVersion::DAV_3510);
     assert(decoder != nullptr);
     const auto decoded = decoder->decode(record);
     assert(decoded.has_value());
@@ -66,7 +68,8 @@ void TestMemoryCallbackUsesRawRecordPipeline()
 
 void TestLocalOnlyInstructionReturnsEmptyGmAccessList()
 {
-    const aclsan::DeviceInstructionDecoder* decoder = aclsan::FindDeviceInstructionDecoder("Ascend950PR_9599");
+    const aclsan::DeviceInstructionDecoder* decoder =
+        aclsan::FindDeviceInstructionDecoder(aclsan::SocVersion::DAV_3510);
     assert(decoder != nullptr);
     aclsan::AclsanRawTraceRecord record{};
     record.instrId = static_cast<uint32_t>(aclsan::InstructionId::CopyUbufToCbuf);
@@ -84,7 +87,8 @@ void TestLocalOnlyInstructionReturnsEmptyGmAccessList()
 
 void TestUnknownInstructionReturnsNoDecodedResult()
 {
-    const aclsan::DeviceInstructionDecoder* decoder = aclsan::FindDeviceInstructionDecoder("Ascend950PR_9599");
+    const aclsan::DeviceInstructionDecoder* decoder =
+        aclsan::FindDeviceInstructionDecoder(aclsan::SocVersion::DAV_3510);
     assert(decoder != nullptr);
     aclsan::AclsanRawTraceRecord record{};
     record.instrId = UINT32_MAX;

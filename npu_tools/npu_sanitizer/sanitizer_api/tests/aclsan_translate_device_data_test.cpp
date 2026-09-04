@@ -53,7 +53,8 @@ static_assert(std::is_same_v<aclsan::DeviceMemoryAccessDataList, std::vector<Acl
 
 std::optional<aclsan::DecodedInstruction> DecodeRecord(const aclsan::AclsanRawTraceRecord& record)
 {
-    const aclsan::DeviceInstructionDecoder* decoder = aclsan::FindDeviceInstructionDecoder("Ascend950PR_9599");
+    const aclsan::DeviceInstructionDecoder* decoder =
+        aclsan::FindDeviceInstructionDecoder(aclsan::SocVersion::DAV_3510);
     assert(decoder != nullptr);
     return decoder->decode(record);
 }

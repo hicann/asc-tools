@@ -6,6 +6,7 @@
 // INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 // See LICENSE in the root of the software repository for the full text of the License.
 #include "dbi/binary_instrumenter.h"
+#include "device_instr/soc_version.h"
 
 #include <gtest/gtest.h>
 
@@ -93,17 +94,20 @@ TEST(DefaultBinaryInstrumentationConfigTest, BuildsRuntimeConfigWithoutDbiEnviro
 
     BinaryInstrumentationConfig config;
     std::string diagnostic;
-    ASSERT_TRUE(
-        BuildRuntimeInstrumentationConfig("Ascend950PR_9599", runtime.c_str(), PROBE_GROUP_MTE2, config, diagnostic))
-        << diagnostic;
-    EXPECT_EQ(config.arch, "dav-3510");
-    EXPECT_EQ(config.toolchainRoot, cannRoot.string());
-    EXPECT_EQ(config.probeGroups, (std::vector<ProbeGroup>{ProbeGroup::Mte2, ProbeGroup::Scalar}));
-    EXPECT_TRUE(config.strict);
-    EXPECT_FALSE(config.keepTemp);
-    const std::string root = "/tmp/npu-check-" + std::to_string(static_cast<unsigned long long>(geteuid()));
-    EXPECT_EQ(config.workDirectory, root + "/requests");
-    EXPECT_EQ(config.cacheDirectory, root + "/cache");
+    for (const auto& mapping : GetSocVersionMappings()) {
+        EXPECT_EQ(mapping.second, SocVersion::DAV_3510);
+        const char* socName = mapping.first.c_str();
+        ASSERT_TRUE(BuildRuntimeInstrumentationConfig(socName, runtime.c_str(), PROBE_GROUP_MTE2, config, diagnostic))
+            << socName << ": " << diagnostic;
+        EXPECT_EQ(config.arch, "dav-3510");
+        EXPECT_EQ(config.toolchainRoot, cannRoot.string());
+        EXPECT_EQ(config.probeGroups, (std::vector<ProbeGroup>{ProbeGroup::Mte2, ProbeGroup::Scalar}));
+        EXPECT_TRUE(config.strict);
+        EXPECT_FALSE(config.keepTemp);
+        const std::string root = "/tmp/npu-check-" + std::to_string(static_cast<unsigned long long>(geteuid()));
+        EXPECT_EQ(config.workDirectory, root + "/requests");
+        EXPECT_EQ(config.cacheDirectory, root + "/cache");
+    }
     boost::filesystem::remove_all(cannRoot);
 }
 
@@ -308,7 +312,7 @@ TEST_F(BinaryInstrumenterTest, RuntimeFacadeConsumesPatchedBytesAcrossAnAbiStabl
     }
 
     const RuntimeBinaryInstrumentationResult result = InstrumentRuntimeBinary(
-        original.data(), original.size(), PROBE_GROUP_MTE2, "Ascend950PR_9599", runtime.c_str(),
+        original.data(), original.size(), PROBE_GROUP_MTE2, "Ascend950PR_9589", runtime.c_str(),
         &CaptureInstrumentedBinary, &consumed, &FakePatch, &state_);
 
     EXPECT_EQ(result.status, BinaryInstrumentationStatus::Instrumented);

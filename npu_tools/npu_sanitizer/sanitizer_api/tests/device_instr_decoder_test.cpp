@@ -9,15 +9,13 @@
  */
 
 #include "device_instr/decoder_registry.h"
+#include "device_instr/soc_version.h"
 
 #include <array>
 #include <cassert>
-#include <cstdio>
 #include <cstring>
 #include <limits>
-#include <string>
 #include <variant>
-#include <unistd.h>
 
 namespace {
 
@@ -39,57 +37,28 @@ aclsan::DecodedInstruction DecodeAndAssertDataBits(
     return *decoded;
 }
 
-template <typename Action>
-std::string CaptureErrorLogs(Action action)
+void TestSocVersionMappingsSelectDav3510Decoder()
 {
-    int pipeFds[2] = {-1, -1};
-    assert(pipe(pipeFds) == 0);
-    const int savedStderr = dup(STDERR_FILENO);
-    assert(savedStderr >= 0);
-    assert(dup2(pipeFds[1], STDERR_FILENO) >= 0);
-    assert(close(pipeFds[1]) == 0);
-
-    action();
-    assert(std::fflush(stderr) == 0);
-    assert(dup2(savedStderr, STDERR_FILENO) >= 0);
-    assert(close(savedStderr) == 0);
-
-    std::string logs;
-    char buffer[256] = {};
-    ssize_t bytesRead = 0;
-    while ((bytesRead = read(pipeFds[0], buffer, sizeof(buffer))) > 0) {
-        logs.append(buffer, static_cast<size_t>(bytesRead));
+    const auto& mappings = aclsan::GetSocVersionMappings();
+    assert(mappings.size() == 35U);
+    for (const auto& mapping : mappings) {
+        const std::optional<aclsan::SocVersion> version = aclsan::ResolveSocVersion(mapping.first.c_str());
+        assert(version.has_value());
+        assert(*version == aclsan::SocVersion::DAV_3510);
+        const aclsan::DeviceInstructionDecoder* decoder = aclsan::FindDeviceInstructionDecoder(*version);
+        assert(decoder != nullptr);
+        assert(std::strcmp(decoder->architecture, "dav_3510") == 0);
     }
-    assert(bytesRead == 0);
-    assert(close(pipeFds[0]) == 0);
-    return logs;
-}
 
-void TestFindsDav3510DecoderBySocName()
-{
-    const aclsan::DeviceInstructionDecoder* decoder = aclsan::FindDeviceInstructionDecoder("Ascend950PR_9599");
-
-    assert(decoder != nullptr);
-    assert(std::strcmp(decoder->architecture, "dav_3510") == 0);
-}
-
-void TestLogsDecoderLookupFailures()
-{
-    const std::string nullLogs =
-        CaptureErrorLogs([] { assert(aclsan::FindDeviceInstructionDecoder(nullptr) == nullptr); });
-    assert(nullLogs.find("FindDeviceInstructionDecoder failed: socName is nullptr or empty") != std::string::npos);
-
-    const std::string emptyLogs = CaptureErrorLogs([] { assert(aclsan::FindDeviceInstructionDecoder("") == nullptr); });
-    assert(emptyLogs.find("FindDeviceInstructionDecoder failed: socName is nullptr or empty") != std::string::npos);
-
-    const std::string unknownLogs =
-        CaptureErrorLogs([] { assert(aclsan::FindDeviceInstructionDecoder("UnknownSoc") == nullptr); });
-    assert(unknownLogs.find("FindDeviceInstructionDecoder failed: unsupported SoC=UnknownSoc") != std::string::npos);
+    assert(!aclsan::ResolveSocVersion(nullptr).has_value());
+    assert(!aclsan::ResolveSocVersion("").has_value());
+    assert(!aclsan::ResolveSocVersion("UnknownSoc").has_value());
 }
 
 void TestDecodesDav3510CopyInstruction()
 {
-    const aclsan::DeviceInstructionDecoder* decoder = aclsan::FindDeviceInstructionDecoder("Ascend950PR_9599");
+    const aclsan::DeviceInstructionDecoder* decoder =
+        aclsan::FindDeviceInstructionDecoder(aclsan::SocVersion::DAV_3510);
     assert(decoder != nullptr);
 
     aclsan::AclsanRawTraceRecord record{};
@@ -141,7 +110,8 @@ void TestDecodesDav3510CopyInstruction()
 
 void TestDecodesInclusiveMovAlignV2Ranges()
 {
-    const aclsan::DeviceInstructionDecoder* decoder = aclsan::FindDeviceInstructionDecoder("Ascend950PR_9599");
+    const aclsan::DeviceInstructionDecoder* decoder =
+        aclsan::FindDeviceInstructionDecoder(aclsan::SocVersion::DAV_3510);
     assert(decoder != nullptr);
 
     aclsan::AclsanRawTraceRecord record{};
@@ -159,7 +129,8 @@ void TestDecodesInclusiveMovAlignV2Ranges()
 
 void TestDecodesDav3510CopyUbufToGmAlignV2Instruction()
 {
-    const aclsan::DeviceInstructionDecoder* decoder = aclsan::FindDeviceInstructionDecoder("Ascend950PR_9599");
+    const aclsan::DeviceInstructionDecoder* decoder =
+        aclsan::FindDeviceInstructionDecoder(aclsan::SocVersion::DAV_3510);
     assert(decoder != nullptr);
 
     aclsan::AclsanRawTraceRecord record{};
@@ -208,7 +179,8 @@ void AssertCopyGmToCbufMultiParams(
 
 void TestDecodesDav3510CopyGmToCbufMultiInstructions()
 {
-    const aclsan::DeviceInstructionDecoder* decoder = aclsan::FindDeviceInstructionDecoder("Ascend950PR_9599");
+    const aclsan::DeviceInstructionDecoder* decoder =
+        aclsan::FindDeviceInstructionDecoder(aclsan::SocVersion::DAV_3510);
     assert(decoder != nullptr);
 
     aclsan::AclsanRawTraceRecord record{};
@@ -230,7 +202,8 @@ void TestDecodesDav3510CopyGmToCbufMultiInstructions()
 
 void TestDecodesDav3510CopyGmToCbufV2Instruction()
 {
-    const aclsan::DeviceInstructionDecoder* decoder = aclsan::FindDeviceInstructionDecoder("Ascend950PR_9599");
+    const aclsan::DeviceInstructionDecoder* decoder =
+        aclsan::FindDeviceInstructionDecoder(aclsan::SocVersion::DAV_3510);
     assert(decoder != nullptr);
 
     aclsan::AclsanRawTraceRecord record{};
@@ -261,7 +234,8 @@ void TestDecodesDav3510CopyGmToCbufV2Instruction()
 
 void TestDecodesDav3510LoadGmToCbuf2DV2Instruction()
 {
-    const aclsan::DeviceInstructionDecoder* decoder = aclsan::FindDeviceInstructionDecoder("Ascend950PR_9599");
+    const aclsan::DeviceInstructionDecoder* decoder =
+        aclsan::FindDeviceInstructionDecoder(aclsan::SocVersion::DAV_3510);
     assert(decoder != nullptr);
 
     aclsan::AclsanRawTraceRecord record{};
@@ -292,7 +266,8 @@ void TestDecodesDav3510LoadGmToCbuf2DV2Instruction()
 
 void TestDecodesDav3510NdDmaOutToUbufInstruction()
 {
-    const aclsan::DeviceInstructionDecoder* decoder = aclsan::FindDeviceInstructionDecoder("Ascend950PR_9599");
+    const aclsan::DeviceInstructionDecoder* decoder =
+        aclsan::FindDeviceInstructionDecoder(aclsan::SocVersion::DAV_3510);
     assert(decoder != nullptr);
 
     aclsan::AclsanRawTraceRecord record{};
@@ -326,7 +301,8 @@ void TestDecodesDav3510NdDmaOutToUbufInstruction()
 
 void TestDecodesDav3510NdDmaPadCountInstruction()
 {
-    const aclsan::DeviceInstructionDecoder* decoder = aclsan::FindDeviceInstructionDecoder("Ascend950PR_9599");
+    const aclsan::DeviceInstructionDecoder* decoder =
+        aclsan::FindDeviceInstructionDecoder(aclsan::SocVersion::DAV_3510);
     assert(decoder != nullptr);
 
     aclsan::AclsanRawTraceRecord record{};
@@ -346,7 +322,8 @@ void TestDecodesDav3510NdDmaPadCountInstruction()
 
 void TestDecodesDav3510RegisterFieldsWithoutChangingMoverFields()
 {
-    const aclsan::DeviceInstructionDecoder* decoder = aclsan::FindDeviceInstructionDecoder("Ascend950PR_9599");
+    const aclsan::DeviceInstructionDecoder* decoder =
+        aclsan::FindDeviceInstructionDecoder(aclsan::SocVersion::DAV_3510);
     assert(decoder != nullptr);
 
     aclsan::AclsanRawTraceRecord source{};
@@ -381,7 +358,8 @@ void TestDecodesDav3510RegisterFieldsWithoutChangingMoverFields()
 
 void TestDecodesDav3510DmaOuterLoopFields()
 {
-    const aclsan::DeviceInstructionDecoder* decoder = aclsan::FindDeviceInstructionDecoder("Ascend950PR_9599");
+    const aclsan::DeviceInstructionDecoder* decoder =
+        aclsan::FindDeviceInstructionDecoder(aclsan::SocVersion::DAV_3510);
     assert(decoder != nullptr);
 
     aclsan::AclsanRawTraceRecord size{};
@@ -418,7 +396,8 @@ void TestDecodesDav3510DmaOuterLoopFields()
 
 void TestDecodesDav3510SetL12DInstruction()
 {
-    const aclsan::DeviceInstructionDecoder* decoder = aclsan::FindDeviceInstructionDecoder("Ascend950PR_9599");
+    const aclsan::DeviceInstructionDecoder* decoder =
+        aclsan::FindDeviceInstructionDecoder(aclsan::SocVersion::DAV_3510);
     assert(decoder != nullptr);
 
     aclsan::AclsanRawTraceRecord record{};
@@ -442,7 +421,8 @@ void TestDecodesDav3510SetL12DInstruction()
 
 void TestDecodesDav3510SetPaddingInstruction()
 {
-    const aclsan::DeviceInstructionDecoder* decoder = aclsan::FindDeviceInstructionDecoder("Ascend950PR_9599");
+    const aclsan::DeviceInstructionDecoder* decoder =
+        aclsan::FindDeviceInstructionDecoder(aclsan::SocVersion::DAV_3510);
     assert(decoder != nullptr);
 
     aclsan::AclsanRawTraceRecord record{};
@@ -460,7 +440,8 @@ void TestDecodesDav3510SetPaddingInstruction()
 
 void TestDecodesDav3510FixL0cToOutInstruction()
 {
-    const aclsan::DeviceInstructionDecoder* decoder = aclsan::FindDeviceInstructionDecoder("Ascend950PR_9599");
+    const aclsan::DeviceInstructionDecoder* decoder =
+        aclsan::FindDeviceInstructionDecoder(aclsan::SocVersion::DAV_3510);
     assert(decoder != nullptr);
 
     aclsan::AclsanRawTraceRecord record{};
@@ -509,7 +490,8 @@ void TestDecodesDav3510FixL0cToOutInstruction()
 
 void TestDecodesDav3510FixpipeQuantPreHighBit()
 {
-    const aclsan::DeviceInstructionDecoder* decoder = aclsan::FindDeviceInstructionDecoder("Ascend950PR_9599");
+    const aclsan::DeviceInstructionDecoder* decoder =
+        aclsan::FindDeviceInstructionDecoder(aclsan::SocVersion::DAV_3510);
     assert(decoder != nullptr);
 
     for (uint8_t quantPre = 31; quantPre <= 36; ++quantPre) {
@@ -540,7 +522,8 @@ void TestDecodesDav3510LocalMemoryTransfersWithoutLosingRawConfig()
         {171, aclsan::LocalMemoryTransferKind::FixL0cToUbufS32},
         {173, aclsan::LocalMemoryTransferKind::CopyUbufToCbuf},
     };
-    const aclsan::DeviceInstructionDecoder* decoder = aclsan::FindDeviceInstructionDecoder("Ascend950PR_9599");
+    const aclsan::DeviceInstructionDecoder* decoder =
+        aclsan::FindDeviceInstructionDecoder(aclsan::SocVersion::DAV_3510);
     assert(decoder != nullptr);
 
     for (const ExpectedLocalTransfer& expected : EXPECTED) {
@@ -568,7 +551,8 @@ void TestDecodesDav3510LocalMemoryTransfersWithoutLosingRawConfig()
 
 void TestDecodesDav3510S4FixpipeUsesSourceIntrinsicId()
 {
-    const aclsan::DeviceInstructionDecoder* decoder = aclsan::FindDeviceInstructionDecoder("Ascend950PR_9599");
+    const aclsan::DeviceInstructionDecoder* decoder =
+        aclsan::FindDeviceInstructionDecoder(aclsan::SocVersion::DAV_3510);
     assert(decoder != nullptr);
 
     for (const uint64_t instructionId : {UINT64_C(91), UINT64_C(92)}) {
@@ -597,7 +581,8 @@ void TestDecodesDav3510S4FixpipeUsesSourceIntrinsicId()
 
 void TestDecodesDav3510SyncInstruction()
 {
-    const aclsan::DeviceInstructionDecoder* decoder = aclsan::FindDeviceInstructionDecoder("Ascend950PR_9599");
+    const aclsan::DeviceInstructionDecoder* decoder =
+        aclsan::FindDeviceInstructionDecoder(aclsan::SocVersion::DAV_3510);
     assert(decoder != nullptr);
 
     aclsan::AclsanRawTraceRecord record{};
@@ -619,7 +604,8 @@ void TestDecodesDav3510SyncInstruction()
 
 void TestDecodesDav3510BufferInstruction()
 {
-    const aclsan::DeviceInstructionDecoder* decoder = aclsan::FindDeviceInstructionDecoder("Ascend950PR_9599");
+    const aclsan::DeviceInstructionDecoder* decoder =
+        aclsan::FindDeviceInstructionDecoder(aclsan::SocVersion::DAV_3510);
     assert(decoder != nullptr);
 
     aclsan::AclsanRawTraceRecord record{};
@@ -648,7 +634,8 @@ void TestDecodesDav3510BufferInstruction()
 
 void TestRejectsUnknownDav3510Instruction()
 {
-    const aclsan::DeviceInstructionDecoder* decoder = aclsan::FindDeviceInstructionDecoder("Ascend950PR_9599");
+    const aclsan::DeviceInstructionDecoder* decoder =
+        aclsan::FindDeviceInstructionDecoder(aclsan::SocVersion::DAV_3510);
     assert(decoder != nullptr);
 
     aclsan::AclsanRawTraceRecord record{};
@@ -658,7 +645,8 @@ void TestRejectsUnknownDav3510Instruction()
 
 void TestDecodesDav3510DataBits()
 {
-    const aclsan::DeviceInstructionDecoder* decoder = aclsan::FindDeviceInstructionDecoder("Ascend950PR_9599");
+    const aclsan::DeviceInstructionDecoder* decoder =
+        aclsan::FindDeviceInstructionDecoder(aclsan::SocVersion::DAV_3510);
     assert(decoder != nullptr);
 
     DecodeAndAssertDataBits<aclsan::CopyGmToCbufAlignV2ParamField>(*decoder, 74, 8);
@@ -752,7 +740,8 @@ void TestClassifiesCurrentDav3510InstructionSet()
         {463, aclsan::DeviceInstructionKind::RlsBuf},
     };
 
-    const aclsan::DeviceInstructionDecoder* decoder = aclsan::FindDeviceInstructionDecoder("Ascend950PR_9599");
+    const aclsan::DeviceInstructionDecoder* decoder =
+        aclsan::FindDeviceInstructionDecoder(aclsan::SocVersion::DAV_3510);
     assert(decoder != nullptr);
     for (const ExpectedInstruction& expected : expectedInstructions) {
         aclsan::AclsanRawTraceRecord record{};
@@ -774,8 +763,7 @@ void TestClassifiesCurrentDav3510InstructionSet()
 
 int main()
 {
-    TestFindsDav3510DecoderBySocName();
-    TestLogsDecoderLookupFailures();
+    TestSocVersionMappingsSelectDav3510Decoder();
     TestDecodesDav3510CopyInstruction();
     TestDecodesInclusiveMovAlignV2Ranges();
     TestDecodesDav3510CopyUbufToGmAlignV2Instruction();

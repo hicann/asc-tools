@@ -6,10 +6,10 @@
 // INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 // See LICENSE in the root of the software repository for the full text of the License.
 #include "dbi/binary_instrumenter.h"
+#include "device_instr/soc_version.h"
 
 #include <unistd.h>
 
-#include <algorithm>
 #include <atomic>
 #include <cstdlib>
 #include <cstring>
@@ -181,11 +181,16 @@ bool BuildRuntimeInstrumentationConfig(
     std::string& diagnostic)
 {
     config = {};
-    if (socName == nullptr || std::strcmp(socName, "Ascend950PR_9599") != 0) {
+    const std::optional<SocVersion> version = ResolveSocVersion(socName);
+    if (!version.has_value()) {
         diagnostic = "unsupported Runtime SoC";
         return false;
     }
-    config.arch = "dav-3510";
+    switch (*version) {
+        case SocVersion::DAV_3510:
+            config.arch = "dav-3510";
+            break;
+    }
     config.toolchainRoot = CannRootFromRuntimeLibrary(runtimeLibrary == nullptr ? "" : runtimeLibrary);
     if (config.toolchainRoot.empty()) {
         diagnostic = "cannot derive CANN root from loaded Runtime library";

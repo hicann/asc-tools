@@ -12,11 +12,12 @@
 #define NPU_SANITIZER_SANITIZER_API_DEVICE_INSTR_DECODER_REGISTRY_H_
 
 #include "device_instr/decoder.h"
+#include "device_instr/soc_version.h"
 
 namespace aclsan {
 
-// 根据运行时aclrtGetSocName获取的 SoC 名称，找到对应架构的指令解码器。
-const DeviceInstructionDecoder* FindDeviceInstructionDecoder(const char* socName) noexcept;
+// 根据获取到的芯片版本，寻找对应架构的指令解码器
+const DeviceInstructionDecoder* FindDeviceInstructionDecoder(SocVersion version) noexcept;
 
 } // namespace aclsan
 
