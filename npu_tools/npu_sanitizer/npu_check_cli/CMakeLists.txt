@@ -36,9 +36,6 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR OR ENABLE_TEST)
     find_package(GTest REQUIRED)
   endif()
 
-  target_compile_definitions(npu_check_common PRIVATE _GLIBCXX_USE_CXX11_ABI=0)
-  target_compile_definitions(npu_check_cli PRIVATE _GLIBCXX_USE_CXX11_ABI=0)
-
   add_executable(npu_check_cli_unit_tests
     tests/gtest_main.cpp
     tests/options_test.cpp

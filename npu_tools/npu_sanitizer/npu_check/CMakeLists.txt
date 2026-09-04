@@ -100,14 +100,6 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR OR ENABLE_TEST)
     find_package(GTest REQUIRED)
   endif()
 
-  target_compile_definitions(npu_check_common PRIVATE _GLIBCXX_USE_CXX11_ABI=0)
-  target_compile_definitions(npu_check_core PRIVATE _GLIBCXX_USE_CXX11_ABI=0)
-  target_compile_definitions(npu_check PRIVATE _GLIBCXX_USE_CXX11_ABI=0)
-  foreach(dbi_target IN ITEMS
-      npu_check_dbi_probe_group npu_check_dbi_probe_runtime npu_check_dbi_ctrlbin npu_check_dbi_engine)
-    target_compile_definitions(${dbi_target} PRIVATE _GLIBCXX_USE_CXX11_ABI=0)
-  endforeach()
-
   add_executable(npu_check_unit_tests
     tests/gtest_main.cpp
     tests/allocation_registry_test.cpp

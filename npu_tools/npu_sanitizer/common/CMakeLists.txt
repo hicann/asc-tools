@@ -18,6 +18,9 @@ add_library(npu_check_common STATIC
   src/uds_transport.cpp
 )
 target_compile_features(npu_check_common PUBLIC cxx_std_17)
+target_compile_definitions(npu_check_common PUBLIC
+  _GLIBCXX_USE_CXX11_ABI=0
+)
 target_include_directories(npu_check_common PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src>
 )

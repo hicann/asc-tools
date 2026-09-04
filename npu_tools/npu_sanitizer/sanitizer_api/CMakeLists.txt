@@ -88,6 +88,9 @@ find_package(Threads REQUIRED)
 
 add_library(npu_check_dbi_probe_group STATIC src/dbi/probe_group.cpp)
 target_compile_features(npu_check_dbi_probe_group PUBLIC cxx_std_17)
+target_compile_definitions(npu_check_dbi_probe_group PUBLIC
+  _GLIBCXX_USE_CXX11_ABI=0
+)
 target_include_directories(npu_check_dbi_probe_group PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_compile_options(npu_check_dbi_probe_group PRIVATE -Wall -Wextra -Werror)
 set_target_properties(npu_check_dbi_probe_group PROPERTIES

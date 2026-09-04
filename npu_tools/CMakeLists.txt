@@ -17,6 +17,16 @@ option(NPU_COMPUTE_BUILD_TESTS "Build NPU Compute tests" OFF)
 set(NPU_TOOLS_LIBRARY_OUTPUT_DIR "${CMAKE_CURRENT_BINARY_DIR}/lib64")
 set(NPU_TOOLS_RUNTIME_OUTPUT_DIR "${CMAKE_CURRENT_BINARY_DIR}/bin")
 
+# libboost_filesystem.a of third party use legacy libstdc++ ABI => _GLIBCXX_USE_CXX11_ABI=0
+get_target_property(boost_filesystem_target Boost::filesystem ALIASED_TARGET)
+if(NOT boost_filesystem_target)
+  set(boost_filesystem_target Boost::filesystem)
+endif()
+# any target that links boost filesystem must set ABI to 0
+target_compile_definitions(${boost_filesystem_target} INTERFACE
+  _GLIBCXX_USE_CXX11_ABI=0
+)
+
 if(NPU_COMPUTE_BUILD_TESTS OR ENABLE_TEST)
   enable_testing()
   set(INJECTION_BUILD_TESTS ON CACHE BOOL "Build Runtime injection tests" FORCE)
