@@ -419,8 +419,15 @@ struct AggregateState {
     {
         if (const auto* log = std::get_if<TaskLog32>(&item.record.payload)) {
             const aclptiTaskLogRow row{
-                log->funcType, log->taskId,     log->rtStreamId, log->systemCounter,
-                log->blockId,  log->subBlockId, log->coreType,   log->coreTypeId,
+                item.session->info.replayId,
+                log->funcType,
+                log->taskId,
+                log->rtStreamId,
+                log->systemCounter,
+                log->blockId,
+                log->subBlockId,
+                log->coreType,
+                log->coreTypeId,
             };
             if (log->funcType == 0x00U || log->funcType == 0x01U) {
                 taskLogs[log->taskId].push_back(row);

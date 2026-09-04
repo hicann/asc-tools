@@ -52,6 +52,7 @@ private:
     aclptiSubscribeHandle subscriber_ = nullptr;
     std::size_t enabled_hardware_callback_count_ = 0;
     bool csv_frequency_override_ = false;
+    bool csv_device_info_loaded_ = false;
     bool csv_hardware_metadata_loaded_ = false;
     SectionConfig section_config_;
     PmuCsvConfig csv_config_;

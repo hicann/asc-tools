@@ -74,6 +74,46 @@ struct RangeProfiler::ProfilingRoundConfig {
     data::ReplayPrepareInfo prepareInfo{};
 };
 
+void LogMsprofConfig(const MsprofConfig& config, std::size_t roundId)
+{
+    const std::size_t dumpPathLength = ::strnlen(config.dumpPath, sizeof(config.dumpPath));
+    const std::size_t sampleConfigLength = ::strnlen(config.sampleConfig, sizeof(config.sampleConfig));
+    npu_compute::detail::DebugLog(
+        "aclpti",
+        "msprof config round=%zu collectionType=%u profSwitch=0x%llx devNums=%u devId[0]=%u "
+        "dumpPath=\"%.*s\" dumpPathLength=%zu sampleConfig=\"%.*s\" sampleConfigLength=%zu "
+        "configInfo.attrs=%p configInfo.numAttrs=%zu",
+        roundId, kMsprofCollectionType, static_cast<unsigned long long>(config.profSwitch), config.devNums,
+        config.devIdList[0], static_cast<int>(dumpPathLength), config.dumpPath, dumpPathLength,
+        static_cast<int>(sampleConfigLength), config.sampleConfig, sampleConfigLength,
+        static_cast<const void*>(config.configInfo.attrs), config.configInfo.numAttrs);
+
+    if (config.configInfo.attrs == nullptr) {
+        return;
+    }
+    for (std::size_t attrIndex = 0; attrIndex < config.configInfo.numAttrs; ++attrIndex) {
+        const MsprofConfigAttr& attr = config.configInfo.attrs[attrIndex];
+        if (attr.id == PROF_CONFIG_ATTR_AICORE_METRICS) {
+            for (std::size_t slot = 0; slot < COMPUTE_AICORE_METRICS_NUM; ++slot) {
+                npu_compute::detail::DebugLog(
+                    "aclpti", "msprof config round=%zu attr[%zu] id=%u aicoreMetrics[%zu]=%u", roundId, attrIndex,
+                    attr.id, slot, attr.value.aicoreMetrics[slot]);
+            }
+        } else if (attr.id == PROF_CONFIG_ATTR_INSTR) {
+            npu_compute::detail::DebugLog(
+                "aclpti", "msprof config round=%zu attr[%zu] id=%u instrMode=%u", roundId, attrIndex, attr.id,
+                attr.value.instrMode);
+        } else if (attr.id == PROF_CONFIG_ATTR_TASK_BLOCK) {
+            npu_compute::detail::DebugLog(
+                "aclpti", "msprof config round=%zu attr[%zu] id=%u taskBlockMode=%u", roundId, attrIndex, attr.id,
+                attr.value.taskBlockMode);
+        } else {
+            npu_compute::detail::DebugLog(
+                "aclpti", "msprof config round=%zu attr[%zu] id=%u", roundId, attrIndex, attr.id);
+        }
+    }
+}
+
 aclptiResult RangeProfiler::Initialize()
 {
     const aclptiResult initializeStatus = dataModule_.Initialize();
@@ -201,15 +241,16 @@ aclptiResult RangeProfiler::PrepareReplayEnvironment(
 std::vector<RangeProfiler::ReplayRound> RangeProfiler::BuildReplayRounds() const
 {
     std::vector<ReplayRound> rounds;
-    const std::size_t pmuRoundCount = (pmuEvents_.size() + COMPUTE_AICORE_METRICS_NUM - 1) / COMPUTE_AICORE_METRICS_NUM;
+    const std::size_t payloadPmuSlots = COMPUTE_AICORE_METRICS_NUM - 1;
+    const std::size_t pmuRoundCount = (pmuEvents_.size() + payloadPmuSlots - 1) / payloadPmuSlots;
     rounds.reserve(
         pmuRoundCount + static_cast<std::size_t>(collectPipeline_) + static_cast<std::size_t>(collectPcSampling_));
     for (std::size_t round = 0; round < pmuRoundCount; ++round) {
-        const std::size_t firstEvent = round * COMPUTE_AICORE_METRICS_NUM;
+        const std::size_t firstEvent = round * payloadPmuSlots;
         rounds.push_back(ReplayRound{
             data::ReplayKind::Pmu,
             firstEvent,
-            std::min(pmuEvents_.size() - firstEvent, static_cast<std::size_t>(COMPUTE_AICORE_METRICS_NUM)),
+            std::min(pmuEvents_.size() - firstEvent, payloadPmuSlots),
         });
     }
     if (collectPipeline_) {
@@ -233,10 +274,12 @@ void RangeProfiler::ConfigureProfilingRound(
         config->msprof.profSwitch = PROF_TASK_TIME_MASK | PROF_AICORE_METRICS_MASK;
         primaryAttr.id = PROF_CONFIG_ATTR_AICORE_METRICS;
         std::fill_n(primaryAttr.value.aicoreMetrics, COMPUTE_AICORE_METRICS_NUM, MSPROF_INVALID_AICORE_METRIC);
+        primaryAttr.value.aicoreMetrics[0] = data::kRedundantPmuEvent;
+        config->prepareInfo.pmuEventIds[0] = data::kRedundantPmuEvent;
         for (std::size_t index = 0; index < round.pmuEventCount; ++index) {
             const uint32_t event = pmuEvents_[round.firstPmuEvent + index];
-            primaryAttr.value.aicoreMetrics[index] = event;
-            config->prepareInfo.pmuEventIds[index] = event;
+            primaryAttr.value.aicoreMetrics[index + 1] = event;
+            config->prepareInfo.pmuEventIds[index + 1] = event;
         }
     } else {
         config->msprof.profSwitch = PROF_TASK_TIME_MASK | PROF_INSTR_MASK;
@@ -318,6 +361,7 @@ aclptiResult RangeProfiler::StartProfilingRound(
 
     npu_compute::detail::DebugLog(
         "aclpti", "start profiling replay round=%zu device=%d pmuCount=%zu", roundId, deviceId, round.pmuEventCount);
+    LogMsprofConfig(config->msprof, roundId);
     const int startResult = MsprofStart(kMsprofCollectionType, &config->msprof, sizeof(config->msprof));
     if (startResult != 0) {
         dataModule_.RecordReplayStatus({roundId, ACLPTI_ERROR_RESULT_UNRELIABLE});

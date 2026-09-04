@@ -127,6 +127,35 @@ bool ParsePositiveUintField(std::string_view line, std::string_view field, std::
     return true;
 }
 
+bool ParseNonEmptyStringField(std::string_view line, std::string_view field, std::string* value)
+{
+    if (value == nullptr) {
+        return false;
+    }
+    const std::string key = "\"" + std::string(field) + "\":\"";
+    const std::size_t keyPosition = line.find(key);
+    if (keyPosition == std::string_view::npos) {
+        return false;
+    }
+    const std::size_t begin = keyPosition + key.size();
+    std::size_t end = begin;
+    while (end < line.size()) {
+        if (line[end] == '\\') {
+            end += 2;
+            continue;
+        }
+        if (line[end] == '\"') {
+            break;
+        }
+        ++end;
+    }
+    if (end == begin || end >= line.size()) {
+        return false;
+    }
+    value->assign(line.substr(begin, end - begin));
+    return true;
+}
+
 } // namespace
 
 bool SerializeHardwareInfoJsonl(const HardwareInfoSnapshot& snapshot, std::string* jsonl, std::string* error)
@@ -206,6 +235,39 @@ bool ParseHardwareInfoFrequenciesJsonl(std::string_view jsonl, HardwareInfoFrequ
     }
 
     SetError("HardwareInfo AI Core Information row is missing", error);
+    return false;
+}
+
+bool ParseHardwareInfoSocNameJsonl(std::string_view jsonl, std::string* socName, std::string* error)
+{
+    if (error != nullptr) {
+        error->clear();
+    }
+    if (socName == nullptr) {
+        SetError("HardwareInfo SoC output is null", error);
+        return false;
+    }
+    socName->clear();
+
+    std::size_t begin = 0;
+    while (begin <= jsonl.size()) {
+        const std::size_t end = jsonl.find('\n', begin);
+        const std::string_view line =
+            end == std::string_view::npos ? jsonl.substr(begin) : jsonl.substr(begin, end - begin);
+        if (line.find("\"category\":\"Device Info\"") != std::string_view::npos) {
+            if (!ParseNonEmptyStringField(line, "chip info", socName)) {
+                SetError("HardwareInfo Device Info chip info is missing or empty", error);
+                return false;
+            }
+            return true;
+        }
+        if (end == std::string_view::npos) {
+            break;
+        }
+        begin = end + 1;
+    }
+
+    SetError("HardwareInfo Device Info row is missing", error);
     return false;
 }
 

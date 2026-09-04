@@ -114,27 +114,12 @@ void CollectCpuInfo(HardwareDeviceApi& api, CpuInfo* cpu, DiagnosticSink* diagno
     }
 }
 
-void ReadFrequency(
-    HardwareDeviceApi& api, std::int32_t type, std::string_view fieldName, uint32_t* result,
-    DiagnosticSink* diagnostics)
-{
-    std::string text;
-    if (!api.GetPlatformValue(type, &text)) {
-        Diagnose(diagnostics, "GetPlatformValue failed: " + std::string(fieldName));
-        return;
-    }
-    if (!ParseUnsigned(text, result)) {
-        Diagnose(diagnostics, "invalid " + std::string(fieldName));
-    }
-}
-
 void CollectAiCoreInfo(HardwareDeviceApi& api, AiCoreInfo* aiCore, DiagnosticSink* diagnostics)
 {
     ReadCountAttribute(api, kDeviceAttributeAiCoreCount, "AI Core count", &aiCore->aiCoreCount, diagnostics);
     ReadCountAttribute(api, kDeviceAttributeCubeCoreCount, "Cube Core count", &aiCore->aiCubeCount, diagnostics);
     ReadCountAttribute(api, kDeviceAttributeVectorCoreCount, "Vector Core count", &aiCore->aiVectorCount, diagnostics);
-    ReadFrequency(api, kPlatformCubeFrequency, "Cube frequency", &aiCore->aiCubeFrequencyMhz, diagnostics);
-    ReadFrequency(api, kPlatformVectorFrequency, "Vector frequency", &aiCore->aiVectorFrequencyMhz, diagnostics);
+    CollectAiCoreFrequencies(api, &aiCore->aiCubeFrequencyMhz, &aiCore->aiVectorFrequencyMhz, diagnostics);
 }
 
 void CollectMemoryInfo(HardwareDeviceApi& api, MemoryInfo* memory, DiagnosticSink* diagnostics)
@@ -222,6 +207,26 @@ bool CollectAiCoreCounts(
     *aiCubeCount = cubeCount;
     *aiVectorCount = vectorCount;
     return true;
+}
+
+bool CollectAiCoreFrequencies(
+    HardwareDeviceApi& api, std::uint32_t* aiCubeFrequencyMhz, std::uint32_t* aiVectorFrequencyMhz,
+    DiagnosticSink* diagnostics)
+{
+    if (aiCubeFrequencyMhz == nullptr || aiVectorFrequencyMhz == nullptr) {
+        Diagnose(diagnostics, "AI Core frequency output is null");
+        return false;
+    }
+
+    *aiCubeFrequencyMhz = kAiCoreFrequencyFallbackMhz;
+    *aiVectorFrequencyMhz = kAiCoreFrequencyFallbackMhz;
+    if (api.GetAiCoreFrequencies(kDeviceId, aiCubeFrequencyMhz, aiVectorFrequencyMhz)) {
+        return true;
+    }
+    *aiCubeFrequencyMhz = kAiCoreFrequencyFallbackMhz;
+    *aiVectorFrequencyMhz = kAiCoreFrequencyFallbackMhz;
+    Diagnose(diagnostics, "GetAiCoreFrequencies failed for Device 0; use 1650 MHz fallback");
+    return false;
 }
 
 } // namespace npu_compute

@@ -45,6 +45,7 @@ public:
     bool GetPlatformValue(std::int32_t type, std::string* value) override;
     bool GetControlCpuCount(std::int32_t deviceId, uint32_t* value) override;
     bool GetAiCpuFrequency(std::int32_t deviceId, uint32_t* value) override;
+    bool GetAiCoreFrequencies(std::int32_t deviceId, uint32_t* aicFrequencyMhz, uint32_t* aivFrequencyMhz) override;
     bool GetChipVersion(std::int32_t deviceId, std::string* value) override;
     bool GetHbmUsage(std::int32_t deviceId, uint64_t* freeBytes, uint64_t* totalBytes) override;
     bool GetHbmFrequency(std::int32_t deviceId, uint32_t* value) override;

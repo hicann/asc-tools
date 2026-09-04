@@ -416,6 +416,7 @@ target_include_directories(npu_compute_runtime_callback_test PRIVATE
 )
 target_link_libraries(npu_compute_runtime_callback_test PRIVATE
   acl_pti_callback_stub
+  acl_runtime_stub
   npu_compute_integration_headers
   acl_pti
   ${CMAKE_DL_LIBS}
@@ -426,7 +427,9 @@ set_target_properties(npu_compute_runtime_callback_test PROPERTIES
   ENABLE_EXPORTS YES
 )
 add_test(NAME npu_compute.runtime_callback
-  COMMAND npu_compute_runtime_callback_test
+  COMMAND ${CMAKE_COMMAND} -E env
+    "LD_LIBRARY_PATH=$<TARGET_FILE_DIR:acl_runtime_stub>:$ENV{LD_LIBRARY_PATH}"
+    $<TARGET_FILE:npu_compute_runtime_callback_test>
 )
 
 if(NPU_COMPUTE_BUILD_REAL_HARDWARE_TESTS)
@@ -548,6 +551,7 @@ add_test(
   NAME npu_compute.connected_integration
   COMMAND ${CMAKE_COMMAND} -E env
     "NPU_COMPUTE_TEST_BIN_DIR=$<TARGET_FILE_DIR:npu_compute_cli>"
+    "LD_PRELOAD=$<TARGET_FILE:npu_compute_hardware_api_stub>:$ENV{LD_PRELOAD}"
     ${Python3_EXECUTABLE} -m pytest -q -p no:cacheprovider
     ${CMAKE_CURRENT_SOURCE_DIR}/../../../tests/py_ut/testcase/npu_compute/test_npu_compute_integration.py
 )

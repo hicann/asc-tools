@@ -28,6 +28,7 @@ struct HardwareInfoFrequencies {
 bool SerializeHardwareInfoJsonl(const HardwareInfoSnapshot& snapshot, std::string* jsonl, std::string* error);
 bool ParseHardwareInfoFrequenciesJsonl(
     std::string_view jsonl, HardwareInfoFrequencies* frequencies, std::string* error);
+bool ParseHardwareInfoSocNameJsonl(std::string_view jsonl, std::string* socName, std::string* error);
 
 } // namespace npu_compute
 

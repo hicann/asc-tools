@@ -22,7 +22,7 @@ import pytest
 
 PACKAGE_ARCH = os.environ.get("NPU_COMPUTE_TEST_ARCH", platform.machine())
 ARCH_ROOT = f"{PACKAGE_ARCH}-linux"
-SANITIZER_ROOT = "tools/npu_tools"
+SANITIZER_ROOT = f"{ARCH_ROOT}/tools/npu_tools"
 NPU_COMPUTE_ROOT = f"{ARCH_ROOT}/tools/npu_tools"
 NPU_COMPUTE_PATHS = frozenset(
     {
@@ -454,7 +454,7 @@ def test_third_npu_check_file_conflicts_with_wrapper_and_executable(tmp_path):
 
 def test_npu_check_wrapper_is_installed_to_arch_bin():
     sanitizer_cmake = (
-        Path(__file__).parents[4] / "npu_sanitizer" / "CMakeLists.txt"
+        Path(__file__).parents[4] / "npu_tools" / "npu_sanitizer" / "CMakeLists.txt"
     ).read_text(encoding="utf-8")
 
     wrapper_install = re.compile(
@@ -472,7 +472,7 @@ def test_npu_check_library_keeps_origin_rpath_for_packaged_dependency():
     repo_root = Path(__file__).parents[4]
     top_level_cmake = (repo_root / "CMakeLists.txt").read_text(encoding="utf-8")
     npu_check_cmake = (
-        repo_root / "npu_sanitizer" / "npu_check" / "CMakeLists.txt"
+        repo_root / "npu_tools" / "npu_sanitizer" / "npu_check" / "CMakeLists.txt"
     ).read_text(encoding="utf-8")
 
     assert "set(CMAKE_SKIP_RPATH TRUE)" in top_level_cmake
@@ -481,7 +481,9 @@ def test_npu_check_library_keeps_origin_rpath_for_packaged_dependency():
 
 def test_npu_check_wrapper_executes_real_binary(tmp_path):
     repo_root = Path(__file__).parents[4]
-    wrapper_source = repo_root / "npu_sanitizer" / "npu_check_cli" / "npu_check.sh"
+    wrapper_source = (
+        repo_root / "npu_tools" / "npu_sanitizer" / "npu_check_cli" / "npu_check.sh"
+    )
     install_root = tmp_path / "cann"
     arch_bin = install_root / ARCH_ROOT / "bin"
     wrapper = arch_bin / "npu-check"

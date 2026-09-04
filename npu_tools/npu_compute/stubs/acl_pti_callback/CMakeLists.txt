@@ -11,7 +11,9 @@ add_library(acl_pti_callback_stub SHARED
   acl_pti_callback_stub.cpp
 )
 target_link_libraries(acl_pti_callback_stub
-  PUBLIC npu_compute_integration_headers
+  PUBLIC
+    npu_compute_integration_headers
+    Boost::filesystem
 )
 target_include_directories(acl_pti_callback_stub PUBLIC
   "${CMAKE_CURRENT_SOURCE_DIR}/include"

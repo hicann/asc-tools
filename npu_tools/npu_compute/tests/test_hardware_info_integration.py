@@ -57,9 +57,14 @@ def test_cli_profapi_callback_collector_and_jsonl_end_to_end(tmp_path):
     assert result.returncode == 0, result.stderr
     assert "[demo] completed" in result.stderr
     assert result.stderr.count("[acl_pti_callback_stub] subscribe") == 1
-    assert result.stderr.count("[acl_pti_callback_stub] enable=1") == 2
-    assert result.stderr.count("[acl_pti_callback_stub] enable=0") == 2
-    for cbid in (13, 0):
+    hardware_info_trigger_cbids = (13, 0, 16)
+    assert result.stderr.count("[acl_pti_callback_stub] enable=1") == len(
+        hardware_info_trigger_cbids
+    )
+    assert result.stderr.count("[acl_pti_callback_stub] enable=0") == len(
+        hardware_info_trigger_cbids
+    )
+    for cbid in hardware_info_trigger_cbids:
         assert (
             f"[acl_pti_callback_stub] enable=1 domain=1 cbid={cbid} result=0"
             in result.stderr
@@ -118,7 +123,7 @@ def test_cli_profapi_callback_collector_and_jsonl_end_to_end(tmp_path):
                 '"ai cpu count":8,"ai cpu frequency(MHZ)":1500}',
                 '{"category":"AI Core Information","ai core count":32,'
                 '"ai cube count":16,"ai vector count":16,'
-                '"ai cube frequency(MHZ)":1800,"ai vector frequency(MHZ)":1600}',
+                '"ai cube frequency(MHZ)":1650,"ai vector frequency(MHZ)":1650}',
                 '{"category":"Memory Information","hbm total(MB)":65536,'
                 '"hbm used(MB)":16384,"hbm frequency(MHZ)":3200}',
             ]

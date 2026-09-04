@@ -100,6 +100,17 @@ public:
         return true;
     }
 
+    bool GetAiCoreFrequencies(std::int32_t deviceId, uint32_t* aicValue, uint32_t* aivValue) override
+    {
+        deviceIds.push_back(deviceId);
+        if (failAiCoreFrequencies) {
+            return false;
+        }
+        *aicValue = aicFrequency;
+        *aivValue = aivFrequency;
+        return true;
+    }
+
     bool GetChipVersion(std::int32_t deviceId, std::string* value) override
     {
         deviceIds.push_back(deviceId);
@@ -142,6 +153,8 @@ public:
     std::string chipVersion = "V100";
     uint32_t controlCpuCount = 1;
     uint32_t aiCpuFrequency = 1500;
+    uint32_t aicFrequency = 1650;
+    uint32_t aivFrequency = 1650;
     uint64_t hbmFreeBytes = 10ULL * 1024ULL * 1024ULL;
     uint64_t hbmTotalBytes = 16ULL * 1024ULL * 1024ULL;
     uint32_t hbmFrequency = 3200;
@@ -160,6 +173,7 @@ public:
     bool failSocName = false;
     bool failControlCpuCount = false;
     bool failAiCpuFrequency = false;
+    bool failAiCoreFrequencies = false;
     bool failChipVersion = false;
     bool failHbmUsage = false;
     bool failHbmFrequency = false;
@@ -200,8 +214,8 @@ bool TestCompleteMapping()
     CHECK(aiCore.aiCoreCount == 36);
     CHECK(aiCore.aiCubeCount == 36);
     CHECK(aiCore.aiVectorCount == 72);
-    CHECK(aiCore.aiCubeFrequencyMhz == 1800);
-    CHECK(aiCore.aiVectorFrequencyMhz == 1700);
+    CHECK(aiCore.aiCubeFrequencyMhz == 1650);
+    CHECK(aiCore.aiVectorFrequencyMhz == 1650);
     CHECK(memory.hbmTotalMb == 131072.0);
     CHECK(memory.hbmUsedMb == 6.0);
     CHECK(memory.hbmFrequencyMhz == 3200);
@@ -212,11 +226,7 @@ bool TestCompleteMapping()
         npu_compute::kDeviceAttributeAiCoreCount,     npu_compute::kDeviceAttributeCubeCoreCount,
         npu_compute::kDeviceAttributeVectorCoreCount,
     };
-    const std::vector<std::int32_t> expectedPlatformTypes = {
-        npu_compute::kPlatformCubeFrequency,
-        npu_compute::kPlatformVectorFrequency,
-        npu_compute::kPlatformMemorySize,
-    };
+    const std::vector<std::int32_t> expectedPlatformTypes = {npu_compute::kPlatformMemorySize};
     CHECK(api.deviceAttributes == expectedAttributes);
     CHECK(api.platformTypes == expectedPlatformTypes);
     CHECK(!api.deviceIds.empty());
@@ -249,14 +259,48 @@ bool TestCollectAiCoreCountsOnlyReadsCountAttributes()
     return true;
 }
 
+bool TestCollectAiCoreFrequencies()
+{
+    FakeHardwareDeviceApi api;
+    std::uint32_t cubeFrequency = 99;
+    std::uint32_t vectorFrequency = 99;
+    std::vector<std::string> diagnostics;
+    npu_compute::DiagnosticSink sink = [&diagnostics](std::string_view value) { diagnostics.emplace_back(value); };
+
+    CHECK(npu_compute::CollectAiCoreFrequencies(api, &cubeFrequency, &vectorFrequency, &sink));
+    CHECK(cubeFrequency == 1650);
+    CHECK(vectorFrequency == 1650);
+    CHECK(api.deviceCountCalls == 0);
+    CHECK(api.socNameCalls == 0);
+    CHECK(api.deviceAttributes.empty());
+    CHECK(api.deviceIds == std::vector<std::int32_t>({0}));
+    CHECK(diagnostics.empty());
+
+    api = FakeHardwareDeviceApi{};
+    diagnostics.clear();
+    cubeFrequency = 99;
+    vectorFrequency = 99;
+    api.failAiCoreFrequencies = true;
+    CHECK(!npu_compute::CollectAiCoreFrequencies(api, &cubeFrequency, &vectorFrequency, &sink));
+    CHECK(cubeFrequency == 1650);
+    CHECK(vectorFrequency == 1650);
+    CHECK(Contains(diagnostics, "GetAiCoreFrequencies"));
+
+    api = FakeHardwareDeviceApi{};
+    diagnostics.clear();
+    CHECK(!npu_compute::CollectAiCoreFrequencies(api, nullptr, &vectorFrequency, &sink));
+    CHECK(api.platformTypes.empty());
+    CHECK(Contains(diagnostics, "output is null"));
+    return true;
+}
+
 bool TestPartialFailuresAndInvalidValues()
 {
     FakeHardwareDeviceApi api;
     api.failSocName = true;
     api.failedDeviceAttributes.insert(npu_compute::kDeviceAttributeAiCoreCount);
     api.deviceAttributeValues[npu_compute::kDeviceAttributeAiCpuCoreCount] = -1;
-    api.platformValues[npu_compute::kPlatformCubeFrequency] = "invalid";
-    api.platformValues[npu_compute::kPlatformVectorFrequency] = "4294967296";
+    api.failAiCoreFrequencies = true;
     api.platformValues[npu_compute::kPlatformMemorySize] = "not-bytes";
     api.hbmFreeBytes = 20;
     api.hbmTotalBytes = 10;
@@ -279,16 +323,15 @@ bool TestPartialFailuresAndInvalidValues()
     CHECK(aiCore.aiCoreCount == 0);
     CHECK(aiCore.aiCubeCount == 36);
     CHECK(aiCore.aiVectorCount == 72);
-    CHECK(aiCore.aiCubeFrequencyMhz == 0);
-    CHECK(aiCore.aiVectorFrequencyMhz == 0);
+    CHECK(aiCore.aiCubeFrequencyMhz == 1650);
+    CHECK(aiCore.aiVectorFrequencyMhz == 1650);
     CHECK(memory.hbmTotalMb == 0);
     CHECK(memory.hbmUsedMb == 0);
     CHECK(memory.hbmFrequencyMhz == 0);
     CHECK(Contains(diagnostics, "GetSocName"));
     CHECK(Contains(diagnostics, "AI CPU core count"));
     CHECK(Contains(diagnostics, "AI Core count"));
-    CHECK(Contains(diagnostics, "Cube frequency"));
-    CHECK(Contains(diagnostics, "Vector frequency"));
+    CHECK(Contains(diagnostics, "GetAiCoreFrequencies"));
     CHECK(Contains(diagnostics, "HBM total"));
     CHECK(Contains(diagnostics, "HBM usage"));
     CHECK(Contains(diagnostics, "GetHbmFrequency"));
@@ -340,8 +383,8 @@ bool TestInvalidDeviceCountAndOutputPointers()
 int main()
 {
     if (!TestCompleteMapping() || !TestCollectAiCoreCountsOnlyReadsCountAttributes() ||
-        !TestPartialFailuresAndInvalidValues() || !TestNoVisibleDeviceSkipsDeviceQueries() ||
-        !TestInvalidDeviceCountAndOutputPointers()) {
+        !TestCollectAiCoreFrequencies() || !TestPartialFailuresAndInvalidValues() ||
+        !TestNoVisibleDeviceSkipsDeviceQueries() || !TestInvalidDeviceCountAndOutputPointers()) {
         return 1;
     }
     return 0;

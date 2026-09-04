@@ -303,6 +303,12 @@ int TestRawDataDecoder()
     CHECK(blockPmuRecord.subBlockId == 0x5678);
     CHECK(blockPmuRecord.pmuValues.at(0x10) == 0x100000000ULL);
 
+    const auto redundantSlot = data_detail::DecodeRawRecord(pmu.data(), pmu.size(), 6, PmuEvents({796, 0x10}));
+    CHECK(redundantSlot.Ok());
+    const auto& redundantSlotRecord = std::get<data_detail::PmuRecord128>(redundantSlot.Value().payload);
+    CHECK(redundantSlotRecord.pmuValues.at(796) == 0x100000000ULL);
+    CHECK(redundantSlotRecord.pmuValues.at(0x10) == 0x100000001ULL);
+
     StoreWord(pmu.data(), 0, 0x6bd3002aU);
 
     StoreWord(pmu.data(), 8, 100U);
@@ -842,6 +848,7 @@ int TestCrossReplayAggregate()
     CHECK(result != nullptr);
     CHECK(result->status == ACLPTI_SUCCESS);
     CHECK(result->taskLogs.at(7).size() == 1);
+    CHECK(result->taskLogs.at(7).at(0).replayId == 201);
     CHECK(result->blockLogs.at(aclptiBlockKey{2, 3}).size() == 2);
     CHECK(result->pmuLogs.size() == 2);
     const auto& aicRow = result->pmuLogs.at(aclptiBlockKey{2, 3, ACLPTI_CORE_TYPE_AIC, 1});

@@ -26,6 +26,7 @@ inline constexpr std::int32_t kDeviceAttributeNpuArch = 601;
 inline constexpr std::int32_t kPlatformMemorySize = 5;
 inline constexpr std::int32_t kPlatformCubeFrequency = 6;
 inline constexpr std::int32_t kPlatformVectorFrequency = 7;
+inline constexpr std::uint32_t kAiCoreFrequencyFallbackMhz = 1650;
 
 class HardwareDeviceApi {
 public:
@@ -37,6 +38,7 @@ public:
     virtual bool GetPlatformValue(std::int32_t type, std::string* value) = 0;
     virtual bool GetControlCpuCount(std::int32_t deviceId, uint32_t* value) = 0;
     virtual bool GetAiCpuFrequency(std::int32_t deviceId, uint32_t* value) = 0;
+    virtual bool GetAiCoreFrequencies(std::int32_t deviceId, uint32_t* aicFrequencyMhz, uint32_t* aivFrequencyMhz) = 0;
     virtual bool GetChipVersion(std::int32_t deviceId, std::string* value) = 0;
     virtual bool GetHbmUsage(std::int32_t deviceId, uint64_t* freeBytes, uint64_t* totalBytes) = 0;
     virtual bool GetHbmFrequency(std::int32_t deviceId, uint32_t* value) = 0;
@@ -48,6 +50,10 @@ bool CollectDevice0Info(
 
 bool CollectAiCoreCounts(
     HardwareDeviceApi& api, std::uint32_t* aiCubeCount, std::uint32_t* aiVectorCount, DiagnosticSink* diagnostics);
+
+bool CollectAiCoreFrequencies(
+    HardwareDeviceApi& api, std::uint32_t* aiCubeFrequencyMhz, std::uint32_t* aiVectorFrequencyMhz,
+    DiagnosticSink* diagnostics);
 
 } // namespace npu_compute
 

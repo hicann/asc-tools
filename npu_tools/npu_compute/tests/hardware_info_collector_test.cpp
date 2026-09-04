@@ -134,6 +134,13 @@ public:
         return true;
     }
 
+    bool GetAiCoreFrequencies(std::int32_t, uint32_t* aicValue, uint32_t* aivValue) override
+    {
+        *aicValue = 1650;
+        *aivValue = 1650;
+        return true;
+    }
+
     bool GetChipVersion(std::int32_t, std::string* value) override
     {
         *value = "V100";

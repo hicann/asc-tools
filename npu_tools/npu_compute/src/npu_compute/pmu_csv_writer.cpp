@@ -40,6 +40,7 @@ using Metric = std::optional<double>;
 
 constexpr double kBytesPerGb = 1024.0 * 1024.0 * 1024.0;
 constexpr double kBytesPerKb = 1024.0;
+constexpr double kA5TaskSchedulerFrequencyKHz = 1000000.0;
 
 struct TypeMetrics {
     bool present = false;
@@ -201,11 +202,15 @@ MissingReason RatioReason(const TypeMetrics& metrics, std::initializer_list<uint
 }
 
 MissingReason EventBandwidthReason(
-    const TypeMetrics& metrics, std::initializer_list<uint32_t> events, double frequencyMhz)
+    const TypeMetrics& metrics, std::initializer_list<uint32_t> events, double frequencyMhz,
+    Metric operationDurationUs = std::nullopt)
 {
     const MissingReason eventReason = EventReason(metrics, events);
     if (eventReason != MissingReason::Unknown) {
         return eventReason;
+    }
+    if (operationDurationUs.has_value()) {
+        return MissingReason::Unknown;
     }
     const MissingReason timeReason = TimeReason(metrics, frequencyMhz);
     return timeReason == MissingReason::Unknown && metrics.Cycles() == 0.0 ? MissingReason::InvalidFrequencyOrDuration :
@@ -281,6 +286,64 @@ std::optional<double> Time(const TypeMetrics& metrics, double frequencyMhz)
     return metrics.Cycles() / frequencyMhz;
 }
 
+struct TaskLogCounterPair {
+    uint16_t taskId = 0;
+    uint16_t streamId = 0;
+    bool hasIdentity = false;
+    bool invalid = false;
+    std::optional<uint64_t> start;
+    std::optional<uint64_t> end;
+};
+
+Metric TaskLogDurationUs(const aclptiProfilingDataResult& result)
+{
+    std::map<uint64_t, TaskLogCounterPair> pairs;
+    for (const auto& [taskId, logs] : result.taskLogs) {
+        static_cast<void>(taskId);
+        for (const aclptiTaskLogRow& log : logs) {
+            TaskLogCounterPair& pair = pairs[log.replayId];
+            if (!pair.hasIdentity) {
+                pair.taskId = log.taskId;
+                pair.streamId = log.rtStreamId;
+                pair.hasIdentity = true;
+            } else if (pair.taskId != log.taskId || pair.streamId != log.rtStreamId) {
+                pair.invalid = true;
+            }
+            if (log.funcType == 0x00U) {
+                if (pair.start.has_value()) {
+                    pair.invalid = true;
+                } else {
+                    pair.start = log.systemCounter;
+                }
+            } else if (log.funcType == 0x01U) {
+                if (pair.end.has_value()) {
+                    pair.invalid = true;
+                } else {
+                    pair.end = log.systemCounter;
+                }
+            }
+        }
+    }
+
+    std::vector<double> durations;
+    for (const auto& [replayId, pair] : pairs) {
+        static_cast<void>(replayId);
+        if (pair.invalid || !pair.start.has_value() || !pair.end.has_value() || *pair.end <= *pair.start) {
+            continue;
+        }
+        const double durationUs = static_cast<double>(*pair.end - *pair.start) * 1000.0 / kA5TaskSchedulerFrequencyKHz;
+        if (std::isfinite(durationUs) && durationUs > 0.0) {
+            durations.push_back(durationUs);
+        }
+    }
+    if (durations.empty()) {
+        return std::nullopt;
+    }
+    std::sort(durations.begin(), durations.end());
+    const std::size_t middle = durations.size() / 2;
+    return durations.size() % 2U == 0U ? (durations[middle - 1] + durations[middle]) / 2.0 : durations[middle];
+}
+
 std::optional<double> ValueRatio(const TypeMetrics& metrics, uint32_t eventId)
 {
     const auto value = metrics.Value(eventId);
@@ -318,10 +381,11 @@ std::optional<double> Bandwidth(double bytes, double durationUs)
 }
 
 std::optional<double> EventBandwidth(
-    const TypeMetrics& metrics, uint32_t eventId, double bytesPerEvent, double frequencyMhz)
+    const TypeMetrics& metrics, uint32_t eventId, double bytesPerEvent, double frequencyMhz,
+    Metric operationDurationUs = std::nullopt)
 {
     const auto value = metrics.Value(eventId);
-    const auto duration = Time(metrics, frequencyMhz);
+    const auto duration = operationDurationUs.has_value() ? operationDurationUs : Time(metrics, frequencyMhz);
     if (!value.has_value() || !duration.has_value()) {
         return std::nullopt;
     }
@@ -552,14 +616,15 @@ std::vector<std::string> MemoryHeader()
         "UB_to_GM_bw_usage_rate(%)"};
 }
 
-CsvRow MemoryRow(const RowMetrics& row, const PmuCsvConfig& config)
+CsvRow MemoryRow(const RowMetrics& row, const PmuCsvConfig& config, Metric operationDurationUs)
 {
     CsvFields fields = CommonFields(row, config);
     const double aicFrequencyMhz = AicFrequencyMhz(config);
     const double aivFrequencyMhz = AivFrequencyMhz(config);
-    const auto duration = Time(row.aiv, aivFrequencyMhz);
+    const auto duration = operationDurationUs.has_value() ? operationDurationUs : Time(row.aiv, aivFrequencyMhz);
     const auto xgu = NonNegativeDifference(row.aiv, 0x422U, {0x57fU, 0x580U});
-    const MissingReason xguReason = EventBandwidthReason(row.aiv, {0x422U, 0x57fU, 0x580U}, aivFrequencyMhz);
+    const MissingReason xguReason =
+        EventBandwidthReason(row.aiv, {0x422U, 0x57fU, 0x580U}, aivFrequencyMhz, operationDurationUs);
     SetMetric(
         fields, "aiv_ub_to_gm_bw(GB/s)", std::nullopt,
         row.aiv.present ? MissingReason::DbiUnavailable : MissingReason::CoreTypeNotApplicable);
@@ -567,17 +632,19 @@ CsvRow MemoryRow(const RowMetrics& row, const PmuCsvConfig& config)
         fields, "aiv_gm_to_ub_bw(GB/s)",
         xgu.has_value() && duration.has_value() ? Bandwidth(*xgu * 128.0, *duration) : std::nullopt, xguReason);
     SetMetric(
-        fields, "aic_l1_read_bw(GB/s)", EventBandwidth(row.aic, 0x707U, 256.0, aicFrequencyMhz),
-        EventBandwidthReason(row.aic, {0x707U}, aicFrequencyMhz));
+        fields, "aic_l1_read_bw(GB/s)", EventBandwidth(row.aic, 0x707U, 256.0, aicFrequencyMhz, operationDurationUs),
+        EventBandwidthReason(row.aic, {0x707U}, aicFrequencyMhz, operationDurationUs));
     SetMetric(
-        fields, "aic_l1_write_bw(GB/s)", EventBandwidth(row.aic, 0x709U, 128.0, aicFrequencyMhz),
-        EventBandwidthReason(row.aic, {0x709U}, aicFrequencyMhz));
+        fields, "aic_l1_write_bw(GB/s)", EventBandwidth(row.aic, 0x709U, 128.0, aicFrequencyMhz, operationDurationUs),
+        EventBandwidthReason(row.aic, {0x709U}, aicFrequencyMhz, operationDurationUs));
     SetMetric(
-        fields, "aic_main_mem_read_bw(GB/s)", EventBandwidth(row.aic, 0x422U, 128.0, aicFrequencyMhz),
-        EventBandwidthReason(row.aic, {0x422U}, aicFrequencyMhz));
+        fields, "aic_main_mem_read_bw(GB/s)",
+        EventBandwidth(row.aic, 0x422U, 128.0, aicFrequencyMhz, operationDurationUs),
+        EventBandwidthReason(row.aic, {0x422U}, aicFrequencyMhz, operationDurationUs));
     SetMetric(
-        fields, "aic_main_mem_write_bw(GB/s)", EventBandwidth(row.aic, 0x423U, 128.0, aicFrequencyMhz),
-        EventBandwidthReason(row.aic, {0x423U}, aicFrequencyMhz));
+        fields, "aic_main_mem_write_bw(GB/s)",
+        EventBandwidth(row.aic, 0x423U, 128.0, aicFrequencyMhz, operationDurationUs),
+        EventBandwidthReason(row.aic, {0x423U}, aicFrequencyMhz, operationDurationUs));
     SetEvent(fields, "aic_mte1_instructions", row.aic, 0x700U);
     SetMetric(fields, "aic_mte1_ratio", ValueRatio(row.aic, 0x702U), RatioReason(row.aic, {0x702U}));
     SetEvent(fields, "aic_mte2_instructions", row.aic, 0x200U);
@@ -585,11 +652,13 @@ CsvRow MemoryRow(const RowMetrics& row, const PmuCsvConfig& config)
     SetEvent(fields, "aic_mte3_instructions", row.aic, 0x201U);
     SetMetric(fields, "aic_mte3_ratio", ValueRatio(row.aic, 0x203U), RatioReason(row.aic, {0x203U}));
     SetMetric(
-        fields, "aiv_main_mem_read_bw(GB/s)", EventBandwidth(row.aiv, 0x422U, 128.0, aivFrequencyMhz),
-        EventBandwidthReason(row.aiv, {0x422U}, aivFrequencyMhz));
+        fields, "aiv_main_mem_read_bw(GB/s)",
+        EventBandwidth(row.aiv, 0x422U, 128.0, aivFrequencyMhz, operationDurationUs),
+        EventBandwidthReason(row.aiv, {0x422U}, aivFrequencyMhz, operationDurationUs));
     SetMetric(
-        fields, "aiv_main_mem_write_bw(GB/s)", EventBandwidth(row.aiv, 0x423U, 128.0, aivFrequencyMhz),
-        EventBandwidthReason(row.aiv, {0x423U}, aivFrequencyMhz));
+        fields, "aiv_main_mem_write_bw(GB/s)",
+        EventBandwidth(row.aiv, 0x423U, 128.0, aivFrequencyMhz, operationDurationUs),
+        EventBandwidthReason(row.aiv, {0x423U}, aivFrequencyMhz, operationDurationUs));
     SetEvent(fields, "aiv_mte2_instructions", row.aiv, 0x200U);
     SetMetric(fields, "aiv_mte2_ratio", ValueRatio(row.aiv, 0x202U), RatioReason(row.aiv, {0x202U}));
     SetEvent(fields, "aiv_mte3_instructions", row.aiv, 0x201U);
@@ -621,16 +690,16 @@ CsvRow MemoryRow(const RowMetrics& row, const PmuCsvConfig& config)
     const double gmToUbMax = MaxBandwidth(config.socName, "GM_TO_UB");
     SetMetric(
         fields, "GM_to_L1_bw_usage_rate(%)",
-        UsageRate(EventBandwidth(row.aic, 0x422U, 128.0, aicFrequencyMhz), gmToL1Max),
-        UsageRateReason(EventBandwidthReason(row.aic, {0x422U}, aicFrequencyMhz), gmToL1Max));
+        UsageRate(EventBandwidth(row.aic, 0x422U, 128.0, aicFrequencyMhz, operationDurationUs), gmToL1Max),
+        UsageRateReason(EventBandwidthReason(row.aic, {0x422U}, aicFrequencyMhz, operationDurationUs), gmToL1Max));
     SetMetric(
         fields, "L0C_to_L1_bw_usage_rate(%)",
-        UsageRate(EventBandwidth(row.aic, 0x70eU, 128.0, aicFrequencyMhz), l0cToL1Max),
-        UsageRateReason(EventBandwidthReason(row.aic, {0x70eU}, aicFrequencyMhz), l0cToL1Max));
+        UsageRate(EventBandwidth(row.aic, 0x70eU, 128.0, aicFrequencyMhz, operationDurationUs), l0cToL1Max),
+        UsageRateReason(EventBandwidthReason(row.aic, {0x70eU}, aicFrequencyMhz, operationDurationUs), l0cToL1Max));
     SetMetric(
         fields, "L0C_to_GM_bw_usage_rate(%)",
-        UsageRate(EventBandwidth(row.aic, 0x423U, 128.0, aicFrequencyMhz), l0cToGmMax),
-        UsageRateReason(EventBandwidthReason(row.aic, {0x423U}, aicFrequencyMhz), l0cToGmMax));
+        UsageRate(EventBandwidth(row.aic, 0x423U, 128.0, aicFrequencyMhz, operationDurationUs), l0cToGmMax),
+        UsageRateReason(EventBandwidthReason(row.aic, {0x423U}, aicFrequencyMhz, operationDurationUs), l0cToGmMax));
     SetMetric(
         fields, "GM_to_UB_bw_usage_rate(%)",
         UsageRate(
@@ -659,7 +728,7 @@ std::vector<std::string> MemoryL0Header()
         "aiv_total_cycles"};
 }
 
-CsvRow MemoryL0Row(const RowMetrics& row, const PmuCsvConfig& config)
+CsvRow MemoryL0Row(const RowMetrics& row, const PmuCsvConfig& config, Metric operationDurationUs)
 {
     CsvFields fields = CommonFields(row, config);
     const double aicFrequencyMhz = AicFrequencyMhz(config);
@@ -670,8 +739,8 @@ CsvRow MemoryL0Row(const RowMetrics& row, const PmuCsvConfig& config)
     for (const auto& [event, bytes] : std::initializer_list<std::pair<uint32_t, double>>{
              {0x304U, 64.0}, {0x703U, 256.0}, {0x306U, 256.0}, {0x705U, 256.0}, {0x30aU, 1024.0}, {0x308U, 1024.0}}) {
         SetMetric(
-            fields, names[index++], EventBandwidth(row.aic, event, bytes, aicFrequencyMhz),
-            EventBandwidthReason(row.aic, {event}, aicFrequencyMhz));
+            fields, names[index++], EventBandwidth(row.aic, event, bytes, aicFrequencyMhz, operationDurationUs),
+            EventBandwidthReason(row.aic, {event}, aicFrequencyMhz, operationDurationUs));
     }
     return BuildRow(MemoryL0Header(), fields);
 }
@@ -691,25 +760,27 @@ std::vector<std::string> MemoryUBHeader()
         "aiv_ub_write_bw_gm(GB/s)"};
 }
 
-CsvRow MemoryUBRow(const RowMetrics& row, const PmuCsvConfig& config)
+CsvRow MemoryUBRow(const RowMetrics& row, const PmuCsvConfig& config, Metric operationDurationUs)
 {
     CsvFields fields = CommonFields(row, config);
     const double aivFrequencyMhz = AivFrequencyMhz(config);
     SetMetric(
-        fields, "aiv_ub_read_bw_vector(GB/s)", EventBandwidth(row.aiv, 0x571U, 256.0, aivFrequencyMhz),
-        EventBandwidthReason(row.aiv, {0x571U}, aivFrequencyMhz));
+        fields, "aiv_ub_read_bw_vector(GB/s)",
+        EventBandwidth(row.aiv, 0x571U, 256.0, aivFrequencyMhz, operationDurationUs),
+        EventBandwidthReason(row.aiv, {0x571U}, aivFrequencyMhz, operationDurationUs));
     SetMetric(
-        fields, "aiv_ub_write_bw_vector(GB/s)", EventBandwidth(row.aiv, 0x572U, 256.0, aivFrequencyMhz),
-        EventBandwidthReason(row.aiv, {0x572U}, aivFrequencyMhz));
+        fields, "aiv_ub_write_bw_vector(GB/s)",
+        EventBandwidth(row.aiv, 0x572U, 256.0, aivFrequencyMhz, operationDurationUs),
+        EventBandwidthReason(row.aiv, {0x572U}, aivFrequencyMhz, operationDurationUs));
     const auto xgu = NonNegativeDifference(row.aiv, 0x422U, {0x57fU, 0x580U});
-    const auto duration = Time(row.aiv, aivFrequencyMhz);
+    const auto duration = operationDurationUs.has_value() ? operationDurationUs : Time(row.aiv, aivFrequencyMhz);
     SetMetric(
         fields, "aiv_ub_read_bw_gm(GB/s)", std::nullopt,
         row.aiv.present ? MissingReason::DbiUnavailable : MissingReason::CoreTypeNotApplicable);
     SetMetric(
         fields, "aiv_ub_write_bw_gm(GB/s)",
         xgu.has_value() && duration.has_value() ? Bandwidth(*xgu * 128.0, *duration) : std::nullopt,
-        EventBandwidthReason(row.aiv, {0x422U, 0x57fU, 0x580U}, aivFrequencyMhz));
+        EventBandwidthReason(row.aiv, {0x422U, 0x57fU, 0x580U}, aivFrequencyMhz, operationDurationUs));
     return BuildRow(MemoryUBHeader(), fields);
 }
 
@@ -814,21 +885,25 @@ CsvRow PipeRow(const RowMetrics& row, const PmuCsvConfig& config)
 
 struct SectionWriter {
     std::vector<std::string> (*header)();
-    std::function<CsvRow(const RowMetrics&, const PmuCsvConfig&)> row;
+    std::function<CsvRow(const RowMetrics&, const PmuCsvConfig&, Metric)> row;
 };
 
 const std::map<std::string_view, SectionWriter>& SectionWriters()
 {
     static const std::map<std::string_view, SectionWriter> writers = {
-        {"L2Cache", {&L2Header, [](const RowMetrics& row, const PmuCsvConfig& config) { return L2Row(row, config); }}},
+        {"L2Cache",
+         {&L2Header, [](const RowMetrics& row, const PmuCsvConfig& config, Metric) { return L2Row(row, config); }}},
         {"Memory",
-         {&MemoryHeader, [](const RowMetrics& row, const PmuCsvConfig& config) { return MemoryRow(row, config); }}},
+         {&MemoryHeader, [](const RowMetrics& row, const PmuCsvConfig& config,
+                            Metric duration) { return MemoryRow(row, config, duration); }}},
         {"MemoryL0",
-         {&MemoryL0Header, [](const RowMetrics& row, const PmuCsvConfig& config) { return MemoryL0Row(row, config); }}},
+         {&MemoryL0Header, [](const RowMetrics& row, const PmuCsvConfig& config,
+                              Metric duration) { return MemoryL0Row(row, config, duration); }}},
         {"MemoryUB",
-         {&MemoryUBHeader, [](const RowMetrics& row, const PmuCsvConfig& config) { return MemoryUBRow(row, config); }}},
+         {&MemoryUBHeader, [](const RowMetrics& row, const PmuCsvConfig& config,
+                              Metric duration) { return MemoryUBRow(row, config, duration); }}},
         {"PipeUtilization",
-         {&PipeHeader, [](const RowMetrics& row, const PmuCsvConfig& config) { return PipeRow(row, config); }}},
+         {&PipeHeader, [](const RowMetrics& row, const PmuCsvConfig& config, Metric) { return PipeRow(row, config); }}},
     };
     return writers;
 }
@@ -1123,6 +1198,10 @@ aclptiResult PmuCsvWriter::Write(
             config.frequencyMhz, config.aicFrequencyMhz, config.aivFrequencyMhz);
         return ACLPTI_ERROR_INVALID_PARAMETER;
     }
+    const Metric taskLogDurationUs = TaskLogDurationUs(result);
+    npu_compute::detail::DebugLog(
+        "npu-compute", "CSV task-log duration: valueUs=%f source=%s", taskLogDurationUs.value_or(0.0),
+        taskLogDurationUs.has_value() ? "median" : "pmu-cycles-fallback");
     try {
         const boost::filesystem::path rootDirectory(outputDirectory);
         const aclptiResult outputDirectoryStatus = EnsureCsvOutputDirectory(rootDirectory);
@@ -1159,7 +1238,7 @@ aclptiResult PmuCsvWriter::Write(
             CsvSectionStats stats;
             WriteCsvLine(output, header);
             for (const auto& [key, row] : pmuLogs) {
-                const CsvRow values = writer->row(MakeRowMetrics(key, row), config);
+                const CsvRow values = writer->row(MakeRowMetrics(key, row), config, taskLogDurationUs);
                 UpdateMissingStats(header, values, &stats);
                 WriteCsvLine(output, values);
             }

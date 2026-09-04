@@ -379,9 +379,9 @@ int main(int argc, char** argv)
     CHECK(*static_cast<std::uint8_t*>(allocation) == 6);
 
     CHECK(g_configs.size() == 5);
-    const auto expected_first = ExpectedPmus({0, 1, 10, 36, 52, 53, 514, 515, 810, 1281});
-    const auto expected_second = ExpectedPmus({1794, 1812, 1813, 11, 12, 13, 14, 15, 1344, 1366});
-    const auto expected_third = ExpectedPmus({1376, 1377, 1378, 1379});
+    const auto expected_first = ExpectedPmus({796, 0, 1, 10, 36, 52, 53, 514, 515, 810});
+    const auto expected_second = ExpectedPmus({796, 1281, 1794, 1812, 1813, 11, 12, 13, 14, 15});
+    const auto expected_third = ExpectedPmus({796, 1344, 1366, 1376, 1377, 1378, 1379});
     CHECK(g_configs[0].pmuEvents == expected_first);
     CHECK(g_configs[0].profSwitch == (PROF_TASK_TIME_MASK | PROF_AICORE_METRICS_MASK));
     CHECK(g_configs[0].primaryAttr == PROF_CONFIG_ATTR_AICORE_METRICS);
@@ -418,8 +418,9 @@ int main(int argc, char** argv)
         CHECK(profilingLog.find("sampleConfig=\"\" sampleConfigLength=0") != std::string::npos);
         CHECK(profilingLog.find("configInfo.attrs=") != std::string::npos);
         CHECK(profilingLog.find("configInfo.numAttrs=2") != std::string::npos);
-        CHECK(profilingLog.find("attr[0] id=0 aicoreMetrics[0]=0") != std::string::npos);
-        CHECK(profilingLog.find("aicoreMetrics[9]=1281") != std::string::npos);
+        CHECK(profilingLog.find("attr[0] id=0 aicoreMetrics[0]=796") != std::string::npos);
+        CHECK(profilingLog.find("aicoreMetrics[9]=810") != std::string::npos);
+        CHECK(profilingLog.find("round=1 attr[0] id=0 aicoreMetrics[1]=1281") != std::string::npos);
         CHECK(profilingLog.find("attr[1] id=2 taskBlockMode=1") != std::string::npos);
         CHECK(profilingLog.find("attr[0] id=1 instrMode=1") != std::string::npos);
         CHECK(profilingLog.find("attr[0] id=1 instrMode=2") != std::string::npos);

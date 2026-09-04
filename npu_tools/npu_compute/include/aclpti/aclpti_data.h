@@ -90,6 +90,7 @@ struct aclptiBlockKey {
 };
 
 struct aclptiTaskLogRow {
+    uint64_t replayId;
     uint8_t funcType;
     uint16_t taskId;
     uint16_t rtStreamId;

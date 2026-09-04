@@ -260,6 +260,43 @@ bool DynamicHardwareDeviceApi::GetAiCpuFrequency(std::int32_t deviceId, uint32_t
     return true;
 }
 
+bool DynamicHardwareDeviceApi::GetAiCoreFrequencies(
+    std::int32_t deviceId, uint32_t* aicFrequencyMhz, uint32_t* aivFrequencyMhz)
+{
+    if (deviceId < 0 || aicFrequencyMhz == nullptr || aivFrequencyMhz == nullptr) {
+        return false;
+    }
+    *aicFrequencyMhz = 0;
+    *aivFrequencyMhz = 0;
+
+    using Function = drvError_t (*)(uint32_t, std::int32_t, std::int32_t, std::int64_t*);
+    const Function function = ToFunction<Function>(impl_->Resolve("halGetDeviceInfo", kHalLibrary));
+    if (function == nullptr) {
+        return false;
+    }
+
+    const auto readFrequency = [function, deviceId](std::int32_t moduleType, uint32_t* value) {
+        std::int64_t frequency = 0;
+        if (function(static_cast<uint32_t>(deviceId), moduleType, INFO_TYPE_CURRENT_FREQ, &frequency) ==
+                DRV_ERROR_NONE &&
+            frequency > 0 && static_cast<uint64_t>(frequency) <= std::numeric_limits<uint32_t>::max()) {
+            *value = static_cast<uint32_t>(frequency);
+            return true;
+        }
+        frequency = 0;
+        if (function(static_cast<uint32_t>(deviceId), moduleType, INFO_TYPE_FREQUE, &frequency) != DRV_ERROR_NONE ||
+            frequency <= 0 || static_cast<uint64_t>(frequency) > std::numeric_limits<uint32_t>::max()) {
+            return false;
+        }
+        *value = static_cast<uint32_t>(frequency);
+        return true;
+    };
+
+    const bool readAic = readFrequency(MODULE_TYPE_AICORE, aicFrequencyMhz);
+    const bool readAiv = readFrequency(MODULE_TYPE_VECTOR_CORE, aivFrequencyMhz);
+    return readAic && readAiv;
+}
+
 bool DynamicHardwareDeviceApi::GetChipVersion(std::int32_t deviceId, std::string* value)
 {
     if (deviceId < 0 || value == nullptr) {

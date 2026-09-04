@@ -727,6 +727,25 @@ int main()
         CHECK(CsvValue(formulaDir / "PipeUtilization.csv", "vector7", "aiv_vec_time(us)") == "0.500000");
         CHECK(CsvValue(formulaDir / "PipeUtilization.csv", "vector7", "aiv_mte2_active_bw(GB/s)") == "41.723251");
         CHECK(CsvValue(formulaDir / "PipeUtilization.csv", "vector7", "aiv_mte3_active_bw(GB/s)") == "NA");
+
+        formulaResult.taskLogs.emplace(
+            1, std::vector<aclptiTaskLogRow>{{1, 0x00U, 1, 2, 1000}, {1, 0x01U, 1, 2, 3000}});
+        formulaResult.taskLogs.emplace(
+            2, std::vector<aclptiTaskLogRow>{{2, 0x00U, 1, 2, 1000}, {2, 0x01U, 1, 2, 5000}});
+        formulaResult.taskLogs.emplace(
+            3, std::vector<aclptiTaskLogRow>{{3, 0x00U, 1, 2, 1000}, {3, 0x01U, 1, 2, 7000}});
+        const boost::filesystem::path taskDurationDir = formulaDir.string() + "_task_duration";
+        formulaConfig.outputDirectory = taskDurationDir.string();
+        CHECK(
+            npu_compute::PmuCsvWriter::Write(
+                formulaResult, {"Memory", "MemoryL0", "MemoryUB", "PipeUtilization"}, formulaConfig) == ACLPTI_SUCCESS);
+        CHECK(CsvValue(taskDurationDir / "Memory.csv", "cube7", "aic_l1_read_bw(GB/s)") == "0.238419");
+        CHECK(CsvValue(taskDurationDir / "Memory.csv", "vector7", "aiv_gm_to_ub_bw(GB/s)") == "2.086163");
+        CHECK(CsvValue(taskDurationDir / "MemoryL0.csv", "cube7", "aic_l0a_read_bw(GB/s)") == "0.014901");
+        CHECK(CsvValue(taskDurationDir / "MemoryUB.csv", "vector7", "aiv_ub_read_bw_vector(GB/s)") == "0.119209");
+        CHECK(CsvValue(taskDurationDir / "MemoryUB.csv", "vector7", "aiv_ub_write_bw_gm(GB/s)") == "2.086163");
+        CHECK(CsvValue(taskDurationDir / "PipeUtilization.csv", "cube7", "aic_mte1_active_bw(GB/s)") == "4.768372");
+        boost::filesystem::remove_all(taskDurationDir);
         boost::filesystem::remove_all(formulaDir);
     }
 

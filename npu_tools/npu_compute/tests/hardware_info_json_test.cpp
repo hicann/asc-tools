@@ -77,6 +77,14 @@ int main()
     CHECK(frequencies.aiCubeFrequencyMhz == 1800);
     CHECK(frequencies.aiVectorFrequencyMhz == 1800);
 
+    std::string socName;
+    CHECK(npu_compute::ParseHardwareInfoSocNameJsonl(jsonl, &socName, &error));
+    CHECK(error.empty());
+    CHECK(socName == "Ascend 950PR_9599 V100");
+    CHECK(!npu_compute::ParseHardwareInfoSocNameJsonl(
+        "{\"category\":\"Device Info\",\"chip info\":\"\"}\n", &socName, &error));
+    CHECK(!error.empty());
+
     CHECK(!npu_compute::ParseHardwareInfoFrequenciesJsonl(
         "{\"category\":\"AI Core Information\",\"ai cube frequency(MHZ)\":0,"
         "\"ai vector frequency(MHZ)\":1800}\n",

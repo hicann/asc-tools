@@ -10,6 +10,7 @@
 #include "npu_compute_runtime.h"
 
 #include "common/debug_log.h"
+#include "hardware_device_api.h"
 #include "hardware_info_json.h"
 
 #include <algorithm>
@@ -107,33 +108,61 @@ bool ParsePositiveDouble(std::string_view text, double* result)
     return true;
 }
 
-void LoadCsvHardwareInfoMetadata(PmuCsvConfig* config, bool loadFrequencies)
+void LoadCsvSocNameFromHardwareInfo(PmuCsvConfig* config)
 {
     if (config == nullptr) {
         return;
     }
+
     const boost::filesystem::path path = boost::filesystem::path(config->outputDirectory) / "HardwareInfo.jsonl";
     std::ifstream input(path.string());
     if (!input.is_open()) {
         npu_compute::detail::DebugLog(
-            "npu-compute", "CSV hardware metadata fallback: HardwareInfo unavailable path=%s", path.c_str());
+            "npu-compute", "CSV hardware config: HardwareInfo SoC unavailable path=%s fallback=%s", path.c_str(),
+            config->socName.c_str());
         return;
     }
     const std::string jsonl((std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>());
-    HardwareInfoFrequencies frequencies;
-    std::string error;
-    if (!ParseHardwareInfoFrequenciesJsonl(jsonl, &frequencies, &error)) {
+    std::string socName;
+    std::string socError;
+    if (ParseHardwareInfoSocNameJsonl(jsonl, &socName, &socError)) {
+        config->socName = std::move(socName);
         npu_compute::detail::DebugLog(
-            "npu-compute", "CSV hardware metadata fallback: parse HardwareInfo failed path=%s reason=%s", path.c_str(),
-            error.c_str());
+            "npu-compute", "CSV hardware config: source=HardwareInfo socName=%s", config->socName.c_str());
+    } else {
+        npu_compute::detail::DebugLog(
+            "npu-compute", "CSV hardware config: HardwareInfo SoC unavailable fallback=%s reason=%s",
+            config->socName.c_str(), socError.c_str());
+    }
+}
+
+void LoadCsvDeviceInfo(PmuCsvConfig* config, bool loadFrequencies)
+{
+    if (config == nullptr) {
         return;
     }
+
+    DynamicHardwareDeviceApi api;
+    DiagnosticSink diagnostics = [](std::string_view message) {
+        npu_compute::detail::DebugLog(
+            "npu-compute", "CSV hardware config diagnostic: %.*s", static_cast<int>(message.size()), message.data());
+    };
+
     if (loadFrequencies) {
-        config->aicFrequencyMhz = static_cast<double>(frequencies.aiCubeFrequencyMhz);
-        config->aivFrequencyMhz = static_cast<double>(frequencies.aiVectorFrequencyMhz);
+        std::uint32_t aiCubeFrequencyMhz = 0;
+        std::uint32_t aiVectorFrequencyMhz = 0;
+        CollectAiCoreFrequencies(api, &aiCubeFrequencyMhz, &aiVectorFrequencyMhz, &diagnostics);
+        if (aiCubeFrequencyMhz != 0) {
+            config->aicFrequencyMhz = static_cast<double>(aiCubeFrequencyMhz);
+        }
+        if (aiVectorFrequencyMhz != 0) {
+            config->aivFrequencyMhz = static_cast<double>(aiVectorFrequencyMhz);
+        }
     }
     npu_compute::detail::DebugLog(
-        "npu-compute", "CSV hardware config: source=HardwareInfo fallbackFrequency=%f aicFrequency=%f aivFrequency=%f",
+        "npu-compute",
+        "CSV hardware config: source=DeviceApi fallbackFrequency=%f aicFrequency=%f "
+        "aivFrequency=%f",
         config->frequencyMhz, config->aicFrequencyMhz, config->aivFrequencyMhz);
 }
 
@@ -206,6 +235,7 @@ int NpuComputeRuntime::Initialize()
         csv_config_.mirrorOutputDirectory = mirrorOutputDirectory;
     }
     csv_frequency_override_ = false;
+    csv_device_info_loaded_ = false;
     csv_hardware_metadata_loaded_ = false;
     csv_config_.frequencyMhz = kMsopprofA5FallbackFrequencyMhz;
     csv_config_.aicFrequencyMhz = 0.0;
@@ -221,9 +251,6 @@ int NpuComputeRuntime::Initialize()
         csv_config_.aicFrequencyMhz = parsed;
         csv_config_.aivFrequencyMhz = parsed;
         csv_frequency_override_ = true;
-    }
-    if (const char* socName = std::getenv("NPU_COMPUTE_SOC"); socName != nullptr && socName[0] != '\0') {
-        csv_config_.socName = socName;
     }
     npu_compute::detail::DebugLog(
         "npu-compute", "PMU data level configured: %s",
@@ -357,13 +384,17 @@ aclptiResult NpuComputeRuntime::ProcessPmuData(std::shared_ptr<const aclptiProfi
         }
     }
     PmuCsvConfig csvConfig;
-    // Kernel EXIT is delivered after PMU processing on the replay call path.
-    // Stopping here would suppress the callback that publishes HardwareInfo.
+    // Kernel EXIT arrives after replay PMU data, so publish HardwareInfo before reading CSV metadata.
+    hardware_info_collector_.CollectOnKernelLaunch();
     {
         std::lock_guard<std::mutex> lock(mutex_);
         if (!csv_hardware_metadata_loaded_) {
-            LoadCsvHardwareInfoMetadata(&csv_config_, !csv_frequency_override_);
+            LoadCsvSocNameFromHardwareInfo(&csv_config_);
             csv_hardware_metadata_loaded_ = true;
+        }
+        if (!csv_device_info_loaded_) {
+            LoadCsvDeviceInfo(&csv_config_, !csv_frequency_override_);
+            csv_device_info_loaded_ = true;
         }
         csvConfig = csv_config_;
     }

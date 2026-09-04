@@ -33,7 +33,12 @@ namespace {
 constexpr std::int32_t kAclSuccess = 0;
 constexpr std::int32_t kAclHbmMem = 1;
 constexpr std::int32_t kHalModuleTypeCcpu = 2;
+constexpr std::int32_t kHalModuleTypeAiCore = 4;
+constexpr std::int32_t kHalModuleTypeVectorCore = 7;
 constexpr std::int32_t kHalInfoTypeCoreNum = 3;
+constexpr std::int32_t kHalInfoTypeFrequency = 4;
+constexpr std::int32_t kHalInfoTypeCurrentFrequency = 32;
+constexpr std::int32_t kHalErrorInvalidValue = 3;
 constexpr std::int32_t kDsmiDeviceTypeHbm = 2;
 constexpr std::size_t kDsmiTextLength = 32;
 constexpr std::size_t kDsmiAiCpuCount = 16;
@@ -117,8 +122,20 @@ extern "C" std::int32_t StubHalGetDeviceInfo(
     g_calls.halDeviceIds.push_back(deviceId);
     g_calls.halModuleTypes.push_back(moduleType);
     g_calls.halInfoTypes.push_back(infoType);
-    *value = 1;
-    return 0;
+    if (moduleType == kHalModuleTypeCcpu && infoType == kHalInfoTypeCoreNum) {
+        *value = 1;
+        return 0;
+    }
+    if ((moduleType == kHalModuleTypeAiCore || moduleType == kHalModuleTypeVectorCore) &&
+        infoType == kHalInfoTypeCurrentFrequency) {
+        return kHalErrorInvalidValue;
+    }
+    if ((moduleType == kHalModuleTypeAiCore || moduleType == kHalModuleTypeVectorCore) &&
+        infoType == kHalInfoTypeFrequency) {
+        *value = 1650;
+        return 0;
+    }
+    return kHalErrorInvalidValue;
 }
 
 extern "C" std::int32_t StubDsmiGetAiCpuInfo(std::int32_t deviceId, FakeDsmiAiCpuInfo* value)
@@ -282,6 +299,11 @@ bool TestLoadedSymbolsAndExactArguments()
         CHECK(text == "1800");
         CHECK(api.GetControlCpuCount(0, &unsignedValue));
         CHECK(unsignedValue == 1);
+        uint32_t aicFrequency = 0;
+        uint32_t aivFrequency = 0;
+        CHECK(api.GetAiCoreFrequencies(0, &aicFrequency, &aivFrequency));
+        CHECK(aicFrequency == 1650);
+        CHECK(aivFrequency == 1650);
         CHECK(api.GetAiCpuFrequency(0, &unsignedValue));
         CHECK(unsignedValue == 1500);
         CHECK(api.GetChipVersion(0, &text));
@@ -297,9 +319,23 @@ bool TestLoadedSymbolsAndExactArguments()
         CHECK(g_calls.platformTypes == std::vector<std::int32_t>{npu_compute::kPlatformCubeFrequency});
         CHECK(g_calls.setDeviceIds == std::vector<std::int32_t>{0});
         CHECK(g_calls.memoryAttributes == std::vector<std::int32_t>{kAclHbmMem});
-        CHECK(g_calls.halDeviceIds == std::vector<uint32_t>{0});
-        CHECK(g_calls.halModuleTypes == std::vector<std::int32_t>{kHalModuleTypeCcpu});
-        CHECK(g_calls.halInfoTypes == std::vector<std::int32_t>{kHalInfoTypeCoreNum});
+        CHECK((g_calls.halDeviceIds == std::vector<uint32_t>{0, 0, 0, 0, 0}));
+        CHECK(
+            g_calls.halModuleTypes == std::vector<std::int32_t>({
+                                          kHalModuleTypeCcpu,
+                                          kHalModuleTypeAiCore,
+                                          kHalModuleTypeAiCore,
+                                          kHalModuleTypeVectorCore,
+                                          kHalModuleTypeVectorCore,
+                                      }));
+        CHECK(
+            g_calls.halInfoTypes == std::vector<std::int32_t>({
+                                        kHalInfoTypeCoreNum,
+                                        kHalInfoTypeCurrentFrequency,
+                                        kHalInfoTypeFrequency,
+                                        kHalInfoTypeCurrentFrequency,
+                                        kHalInfoTypeFrequency,
+                                    }));
         CHECK(g_calls.dsmiAiCpuDeviceIds == std::vector<std::int32_t>{0});
         CHECK(g_calls.dsmiChipDeviceIds == std::vector<std::int32_t>{0});
         CHECK(g_calls.dsmiFrequencyDeviceIds == std::vector<std::int32_t>{0});
@@ -351,6 +387,7 @@ bool TestMissingDriverLibrariesAreIndependent()
     std::int32_t count = 0;
 
     CHECK(!api.GetControlCpuCount(0, &value));
+    CHECK(!api.GetAiCoreFrequencies(0, &value, &value));
     CHECK(!api.GetAiCpuFrequency(0, &value));
     CHECK(!api.GetChipVersion(0, &text));
     CHECK(!api.GetHbmFrequency(0, &value));
@@ -387,6 +424,7 @@ bool TestMissingSingleAndAllSymbols()
     CHECK(!emptyApi.GetDeviceAttribute(0, npu_compute::kDeviceAttributeNpuArch, &attributeValue));
     CHECK(!emptyApi.GetPlatformValue(npu_compute::kPlatformMemorySize, &text));
     CHECK(!emptyApi.GetControlCpuCount(0, &value));
+    CHECK(!emptyApi.GetAiCoreFrequencies(0, &value, &value));
     CHECK(!emptyApi.GetAiCpuFrequency(0, &value));
     CHECK(!emptyApi.GetChipVersion(0, &text));
     CHECK(!emptyApi.GetHbmUsage(0, &freeBytes, &totalBytes));

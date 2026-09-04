@@ -87,13 +87,25 @@ extern "C" aclError aclplatformGetDeviceInfo(aclplatformDevInfo information, cha
     }
 }
 
-extern "C" drvError_t halGetDeviceInfo(uint32_t deviceId, std::int32_t, std::int32_t, std::int64_t* value)
+extern "C" drvError_t halGetDeviceInfo(
+    uint32_t deviceId, std::int32_t moduleType, std::int32_t infoType, std::int64_t* value)
 {
     if (deviceId != 0 || value == nullptr) {
-        return static_cast<drvError_t>(-1);
+        return DRV_ERROR_INVALID_VALUE;
     }
-    *value = 4;
-    return static_cast<drvError_t>(0);
+    if (moduleType == MODULE_TYPE_CCPU && infoType == INFO_TYPE_CORE_NUM) {
+        *value = 4;
+        return DRV_ERROR_NONE;
+    }
+    if ((moduleType == MODULE_TYPE_AICORE || moduleType == MODULE_TYPE_VECTOR_CORE) &&
+        infoType == INFO_TYPE_CURRENT_FREQ) {
+        return DRV_ERROR_INVALID_VALUE;
+    }
+    if ((moduleType == MODULE_TYPE_AICORE || moduleType == MODULE_TYPE_VECTOR_CORE) && infoType == INFO_TYPE_FREQUE) {
+        *value = 1650;
+        return DRV_ERROR_NONE;
+    }
+    return DRV_ERROR_INVALID_VALUE;
 }
 
 extern "C" int dsmi_get_aicpu_info(int deviceId, struct dsmi_aicpu_info_stru* information)
