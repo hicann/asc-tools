@@ -92,6 +92,13 @@ else()
             COMMAND git submodule update --remote msopgen
             WORKING_DIRECTORY "${_ms_root}/msot"
         )
+        set(_ms_template_dst "${_ms_root}/msot/msopgen/thirdparty/asc-tools/utils/templates/new_op_project_template")
+        set(_ms_template_src "${CMAKE_CURRENT_LIST_DIR}/../utils/templates/new_op_project_template")
+        if(NOT EXISTS "${_ms_template_dst}")
+            execute_process(
+                COMMAND ${CMAKE_COMMAND} -E copy_directory ${_ms_template_src} ${_ms_template_dst}
+            )
+        endif()
     endif()
 endif()
 
