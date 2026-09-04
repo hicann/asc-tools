@@ -60,6 +60,20 @@ L2Cache
 独立于所选的 PMU Section。目标程序首次成功的目标 Kernel 启动 Runtime EXIT 回调
 会启动唯一一次采集。重复的 Section 会被去重，同时保留首次出现的顺序。
 
+## PMU 数据级别
+
+五种 Section 的 CSV 默认使用 block PMU（function type `0x29`）。设置以下环境变量可
+切换为 task PMU（function type `0x2a`）：
+
+```bash
+NPU_COMPUTE_PMU_LEVEL=task npu-compute --section Memory ./application
+```
+
+`NPU_COMPUTE_PMU_LEVEL` 只接受 `block` 或 `task`。未设置、设置为空字符串或设置为
+`block` 时均使用 block PMU；其他值会使 `libnpu-compute.so` 初始化失败。切换级别只
+改变 CSV 的 PMU 数据源，不改变 CSV 文件名、表头、字段顺序、计算公式、数值格式以及
+记录自身的 `block_id/sub_block_id`。task 模式仅输出采集到的 task PMU 行。
+
 ## CLI
 
 ```text

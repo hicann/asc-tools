@@ -60,6 +60,7 @@ struct ReplaySession {
     ReplayPrepareInfo info;
     std::mutex mutex;
     ReplayState state = ReplayState::Accepting;
+    aclptiResult stopStatus = ACLPTI_ERROR_INVALID_STATE;
     CallbackStats stats{0, 0, 0, 0, 0, 0, 0};
     uint64_t nextRecordIndex = 0;
     std::size_t nextOpaqueOffset = 0;
@@ -311,54 +312,26 @@ void LogRawDataDiagnostics(const ReplaySession& session, const MsprofRawData& ra
     }
 }
 
-struct PmuValueAccumulator {
-    long double sum = 0.0L;
-    uint64_t count = 0;
+struct LogicalPmuKey {
+    uint16_t blockId = 0;
+    uint16_t subBlockId = 0;
+    aclptiCoreType coreType = ACLPTI_CORE_TYPE_AIC;
+
+    bool operator<(const LogicalPmuKey& other) const
+    {
+        if (blockId != other.blockId) {
+            return blockId < other.blockId;
+        }
+        if (subBlockId != other.subBlockId) {
+            return subBlockId < other.subBlockId;
+        }
+        return coreType < other.coreType;
+    }
 };
 
-struct CorePmuAccumulator {
-    aclptiCoreType coreType = ACLPTI_CORE_TYPE_AIC;
-    uint8_t coreId = 0;
-    uint64_t sampleCount = 0;
-    bool overflow = false;
-    long double totalCyclesSum = 0.0L;
-    std::map<uint32_t, PmuValueAccumulator> values;
-    std::vector<aclptiPmuDataRow::SystemCounter> systemCounters;
-
-    void Add(const PmuRecord128& record)
-    {
-        ++sampleCount;
-        overflow = overflow || record.overflow;
-        totalCyclesSum += static_cast<long double>(record.totalCycles);
-        for (const auto& [eventId, value] : record.pmuValues) {
-            auto& accumulator = values[eventId];
-            accumulator.sum += static_cast<long double>(value);
-            ++accumulator.count;
-        }
-        systemCounters.push_back(
-            aclptiPmuDataRow::SystemCounter{record.taskStartSystemCounter, record.taskEndSystemCounter});
-    }
-
-    aclptiPmuDataRow::CoreData Snapshot() const
-    {
-        aclptiPmuDataRow::CoreData result{};
-        result.coreType = coreType;
-        result.coreId = coreId;
-        result.sampleCount = sampleCount;
-        result.totalCycles =
-            sampleCount == 0 ? 0.0 : static_cast<double>(totalCyclesSum / static_cast<long double>(sampleCount));
-        result.overflow = overflow;
-        result.systemCounters = systemCounters;
-        for (const auto& [eventId, accumulator] : values) {
-            if (accumulator.count == 0) {
-                continue;
-            }
-            result.values.emplace(
-                eventId, static_cast<double>(accumulator.sum / static_cast<long double>(accumulator.count)));
-            result.valueCounts.emplace(eventId, accumulator.count);
-        }
-        return result;
-    }
+struct ReplayPmuRecord {
+    std::shared_ptr<ReplaySession> session;
+    PmuRecord128 record{};
 };
 
 struct PmuAccumulator {
@@ -366,38 +339,36 @@ struct PmuAccumulator {
     aclptiCoreType coreType = ACLPTI_CORE_TYPE_AIC;
     uint8_t coreId = 0;
     std::map<std::pair<aclptiCoreType, uint8_t>, uint64_t> coreInfoCounts;
-    std::map<std::pair<aclptiCoreType, uint8_t>, CorePmuAccumulator> coreData;
     bool overflow = false;
-    long double totalCyclesSum = 0.0L;
-    uint64_t totalCyclesCount = 0;
-    std::map<uint32_t, PmuValueAccumulator> values;
     std::vector<aclptiPmuDataRow::SystemCounter> systemCounters;
+    std::vector<ReplayPmuRecord> replayRecords;
 
-    void Add(const PmuRecord128& record)
+    void Add(const std::shared_ptr<ReplaySession>& session, const PmuRecord128& record)
     {
         if (!initialized) {
             initialized = true;
             coreType = record.coreType;
-            coreId = record.coreId;
         }
+        coreId = record.coreId;
         ++coreInfoCounts[{record.coreType, record.coreId}];
-        auto& core = coreData[{record.coreType, record.coreId}];
-        core.coreType = record.coreType;
-        core.coreId = record.coreId;
-        core.Add(record);
         overflow = overflow || record.overflow;
-        totalCyclesSum += static_cast<long double>(record.totalCycles);
-        ++totalCyclesCount;
-        for (const auto& [eventId, value] : record.pmuValues) {
-            auto& accumulator = values[eventId];
-            accumulator.sum += static_cast<long double>(value);
-            ++accumulator.count;
+        if (!replayRecords.empty() && replayRecords.back().session->info.replayId == session->info.replayId) {
+            replayRecords.back().record = record;
+        } else {
+            replayRecords.push_back(ReplayPmuRecord{session, record});
         }
         systemCounters.push_back(
             aclptiPmuDataRow::SystemCounter{record.taskStartSystemCounter, record.taskEndSystemCounter});
     }
 
-    aclptiPmuDataRow Snapshot(aclptiBlockKey key) const
+    bool HasSuccessfulReplay() const
+    {
+        return std::any_of(replayRecords.begin(), replayRecords.end(), [](const ReplayPmuRecord& replay) {
+            return replay.session->stopStatus == ACLPTI_SUCCESS;
+        });
+    }
+
+    aclptiPmuDataRow Snapshot(const LogicalPmuKey& key) const
     {
         aclptiPmuDataRow row{};
         row.blockId = key.blockId;
@@ -407,20 +378,31 @@ struct PmuAccumulator {
         for (const auto& [core, count] : coreInfoCounts) {
             row.coreInfos.push_back(aclptiPmuDataRow::CoreInfo{core.first, core.second, count});
         }
-        for (const auto& [core, accumulator] : coreData) {
-            row.coreData.push_back(accumulator.Snapshot());
-        }
-        row.totalCycles = totalCyclesCount == 0 ?
-                              0.0 :
-                              static_cast<double>(totalCyclesSum / static_cast<long double>(totalCyclesCount));
         row.overflow = overflow;
         row.systemCounters = systemCounters;
-        for (const auto& [eventId, accumulator] : values) {
-            if (accumulator.count != 0) {
-                row.values.emplace(
-                    eventId, static_cast<double>(accumulator.sum / static_cast<long double>(accumulator.count)));
+        for (const auto& replay : replayRecords) {
+            if (replay.session->stopStatus != ACLPTI_SUCCESS) {
+                continue;
+            }
+            row.coreId = replay.record.coreId;
+            row.totalCycles = static_cast<double>(replay.record.totalCycles);
+            for (const auto& [eventId, value] : replay.record.pmuValues) {
+                row.values.emplace(eventId, value);
             }
         }
+        aclptiPmuDataRow::CoreData core{};
+        core.coreType = row.coreType;
+        core.coreId = row.coreId;
+        core.sampleCount = 1;
+        core.totalCycles = row.totalCycles;
+        core.overflow = row.overflow;
+        core.values = row.values;
+        core.systemCounters = row.systemCounters;
+        for (const auto& [eventId, value] : core.values) {
+            static_cast<void>(value);
+            core.valueCounts.emplace(eventId, 1);
+        }
+        row.coreData.push_back(std::move(core));
         return row;
     }
 };
@@ -428,7 +410,8 @@ struct PmuAccumulator {
 struct AggregateState {
     std::map<uint16_t, std::vector<aclptiTaskLogRow>> taskLogs;
     std::map<aclptiBlockKey, std::vector<aclptiTaskLogRow>> blockLogs;
-    std::map<aclptiBlockKey, PmuAccumulator> pmuLogs;
+    std::map<LogicalPmuKey, PmuAccumulator> pmuLogs;
+    std::map<LogicalPmuKey, PmuAccumulator> taskPmuLogs;
     std::vector<aclptiRawDataChunk> pipelineData;
     std::vector<aclptiRawDataChunk> pcSamplingData;
 
@@ -448,7 +431,8 @@ struct AggregateState {
         }
 
         const auto& record = std::get<PmuRecord128>(item.record.payload);
-        pmuLogs[aclptiBlockKey{record.blockId, record.subBlockId, record.coreType, record.coreId}].Add(record);
+        auto& destination = record.funcType == detail::kTaskPmuFunctionType ? taskPmuLogs : pmuLogs;
+        destination[LogicalPmuKey{record.blockId, record.subBlockId, record.coreType}].Add(item.session, record);
     }
 
     void Add(OpaqueChunkItem item)
@@ -507,7 +491,20 @@ struct AggregateState {
             result.blockLogs.emplace(key, logs);
         }
         for (const auto& [key, aggregate] : pmuLogs) {
-            result.pmuLogs.emplace(key, aggregate.Snapshot(key));
+            if (!aggregate.HasSuccessfulReplay()) {
+                continue;
+            }
+            aclptiPmuDataRow row = aggregate.Snapshot(key);
+            result.pmuLogs.emplace(
+                aclptiBlockKey{row.blockId, row.subBlockId, row.coreType, row.coreId}, std::move(row));
+        }
+        for (const auto& [key, aggregate] : taskPmuLogs) {
+            if (!aggregate.HasSuccessfulReplay()) {
+                continue;
+            }
+            aclptiPmuDataRow row = aggregate.Snapshot(key);
+            result.taskPmuLogs.emplace(
+                aclptiBlockKey{row.blockId, row.subBlockId, row.coreType, row.coreId}, std::move(row));
         }
         result.pipelineData = pipelineData;
         result.pcSamplingData = pcSamplingData;
@@ -545,8 +542,8 @@ bool IsValidReplayInfo(const ReplayPrepareInfo& info)
 bool HasPublishableResult(const aclptiProfilingDataResult& result, std::size_t sessionCount)
 {
     return sessionCount != 0 || result.status != ACLPTI_SUCCESS || !result.taskLogs.empty() ||
-           !result.blockLogs.empty() || !result.pmuLogs.empty() || !result.pipelineData.empty() ||
-           !result.pcSamplingData.empty() || result.errorStats.failedRecordCount != 0;
+           !result.blockLogs.empty() || !result.pmuLogs.empty() || !result.taskPmuLogs.empty() ||
+           !result.pipelineData.empty() || !result.pcSamplingData.empty() || result.errorStats.failedRecordCount != 0;
 }
 
 } // namespace
@@ -733,6 +730,7 @@ public:
                             ACLPTI_ERROR_PROFILING_FAILED :
                             info.stopStatus;
         active_->resultStatus = result.status;
+        active_->stopStatus = result.status;
         LogCallbackStats("record replay status complete", info.replayId, result.callbackStats, result.status);
         npu_compute::detail::DebugLog(
             "aclpti-data", "record replay diagnostics: replay=%llu failedRecords=%llu",
@@ -839,9 +837,11 @@ public:
         auto result = std::make_shared<aclptiProfilingDataResult>(aggregate_.Snapshot(sessions_));
         npu_compute::detail::DebugLog(
             "aclpti-data",
-            "shutdown aggregate: status=%d sessions=%zu tasks=%zu blocks=%zu pmuBlocks=%zu failedRecords=%llu",
+            "shutdown aggregate: status=%d sessions=%zu tasks=%zu blocks=%zu pmuBlocks=%zu pmuTasks=%zu "
+            "failedRecords=%llu",
             static_cast<int>(result->status), sessionCount, result->taskLogs.size(), result->blockLogs.size(),
-            result->pmuLogs.size(), static_cast<unsigned long long>(result->errorStats.failedRecordCount));
+            result->pmuLogs.size(), result->taskPmuLogs.size(),
+            static_cast<unsigned long long>(result->errorStats.failedRecordCount));
         aclptiResult callbackStatus = ACLPTI_SUCCESS;
         if (HasPublishableResult(*result, sessionCount)) {
             try {

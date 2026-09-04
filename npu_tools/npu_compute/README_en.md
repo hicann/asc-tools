@@ -64,6 +64,23 @@ successful target kernel-launch Runtime EXIT starts the single collection
 attempt. Repeated sections are deduplicated while preserving first-occurrence
 order.
 
+## PMU Data Level
+
+CSV output for all five sections uses block PMU records (function type `0x29`) by
+default. Set the following environment variable to select task PMU records
+(function type `0x2a`):
+
+```bash
+NPU_COMPUTE_PMU_LEVEL=task npu-compute --section Memory ./application
+```
+
+`NPU_COMPUTE_PMU_LEVEL` accepts only `block` or `task`. An unset or empty value,
+or an explicit `block`, selects block PMU records. Any other value causes
+`libnpu-compute.so` initialization to fail. The setting changes only the PMU data
+source. CSV names, headers, column order, formulas, numeric formatting, and the
+record's own `block_id/sub_block_id` remain unchanged. Task mode writes only the
+collected task PMU rows.
+
 ## CLI
 
 ```text

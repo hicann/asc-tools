@@ -26,7 +26,6 @@
 #include <initializer_list>
 #include <map>
 #include <optional>
-#include <set>
 #include <sstream>
 #include <string_view>
 #include <system_error>
@@ -44,21 +43,19 @@ constexpr double kBytesPerKb = 1024.0;
 
 struct TypeMetrics {
     bool present = false;
-    uint64_t sampleCount = 0;
-    double totalCyclesSum = 0.0;
+    double totalCycles = 0.0;
     bool overflow = false;
-    std::map<uint32_t, double> valueSums;
-    std::map<uint32_t, uint64_t> valueCounts;
+    std::map<uint32_t, double> values;
 
-    double Cycles() const { return sampleCount == 0 ? 0.0 : totalCyclesSum / static_cast<double>(sampleCount); }
+    double Cycles() const { return totalCycles; }
 
     Metric Value(uint32_t eventId) const
     {
-        const auto count = valueCounts.find(eventId);
-        if (count == valueCounts.end() || count->second == 0) {
+        const auto value = values.find(eventId);
+        if (value == values.end()) {
             return std::nullopt;
         }
-        return valueSums.at(eventId) / static_cast<double>(count->second);
+        return value->second;
     }
 };
 
@@ -97,6 +94,7 @@ struct CsvCell {
 };
 
 using CsvRow = std::vector<CsvCell>;
+using CsvFields = std::map<std::string, CsvCell>;
 
 const char* MissingReasonName(MissingReason reason)
 {
@@ -129,13 +127,23 @@ std::string Number(double value)
         return "NA";
     }
     std::ostringstream output;
-    output << std::setprecision(17) << value;
+    output << std::fixed << std::setprecision(6) << value;
     return output.str();
 }
 
 std::string Number(const Metric& value) { return value.has_value() ? Number(*value) : "NA"; }
 
 std::string Integer(uint16_t value) { return std::to_string(value); }
+
+std::string Counter(double value)
+{
+    if (!std::isfinite(value) || value < 0.0) {
+        return "NA";
+    }
+    std::ostringstream output;
+    output << std::fixed << std::setprecision(0) << value;
+    return output.str();
+}
 
 CsvCell ValueCell(std::string value) { return CsvCell{std::move(value), MissingReason::None}; }
 
@@ -147,6 +155,11 @@ CsvCell MissingCell(MissingReason reason)
 CsvCell MetricCell(const Metric& value, MissingReason missingReason)
 {
     return value.has_value() ? ValueCell(Number(*value)) : MissingCell(missingReason);
+}
+
+CsvCell CounterCell(const Metric& value, MissingReason missingReason)
+{
+    return value.has_value() ? ValueCell(Counter(*value)) : MissingCell(missingReason);
 }
 
 bool HasEvent(const TypeMetrics& metrics, uint32_t eventId) { return metrics.Value(eventId).has_value(); }
@@ -199,14 +212,6 @@ MissingReason EventBandwidthReason(
                                                                              timeReason;
 }
 
-MissingReason EventSumReason(const TypeMetrics& first, const TypeMetrics& second, uint32_t eventId)
-{
-    if (!first.present || !second.present) {
-        return MissingReason::CoreTypeNotApplicable;
-    }
-    return HasEvent(first, eventId) && HasEvent(second, eventId) ? MissingReason::Unknown : MissingReason::EventMissing;
-}
-
 MissingReason UsageRateReason(MissingReason bandwidthReason, double maxBandwidth)
 {
     if (maxBandwidth <= 0.0) {
@@ -219,30 +224,16 @@ std::string CoreSubBlockLabel(const aclptiBlockKey& key)
 {
     std::ostringstream output;
     output << (key.coreType == ACLPTI_CORE_TYPE_AIC ? "cube" : "vector") << key.subBlockId;
-    if (key.coreId != static_cast<uint8_t>(key.subBlockId)) {
-        output << "_core" << static_cast<unsigned int>(key.coreId);
-    }
     return output.str();
-}
-
-void AddValue(TypeMetrics& metrics, uint32_t eventId, double value, uint64_t count)
-{
-    metrics.valueSums[eventId] += value * static_cast<double>(count);
-    metrics.valueCounts[eventId] += count;
 }
 
 void AddCore(TypeMetrics& metrics, const aclptiPmuDataRow::CoreData& core)
 {
-    const uint64_t sampleCount = core.sampleCount == 0 ? 1 : core.sampleCount;
     metrics.present = true;
-    metrics.sampleCount += sampleCount;
-    metrics.totalCyclesSum += core.totalCycles * static_cast<double>(sampleCount);
+    metrics.totalCycles = core.totalCycles;
     metrics.overflow = metrics.overflow || core.overflow;
     for (const auto& [eventId, value] : core.values) {
-        const auto countIt = core.valueCounts.find(eventId);
-        const uint64_t count =
-            countIt == core.valueCounts.end() || countIt->second == 0 ? sampleCount : countIt->second;
-        AddValue(metrics, eventId, value, count);
+        metrics.values.emplace(eventId, value);
     }
 }
 
@@ -252,7 +243,9 @@ RowMetrics MakeRowMetrics(aclptiBlockKey key, const aclptiPmuDataRow& row)
     metrics.key = key;
     if (!row.coreData.empty()) {
         for (const auto& core : row.coreData) {
-            AddCore(core.coreType == ACLPTI_CORE_TYPE_AIC ? metrics.aic : metrics.aiv, core);
+            if (core.coreType == key.coreType) {
+                AddCore(key.coreType == ACLPTI_CORE_TYPE_AIC ? metrics.aic : metrics.aiv, core);
+            }
         }
         return metrics;
     }
@@ -272,31 +265,6 @@ RowMetrics MakeRowMetrics(aclptiBlockKey key, const aclptiPmuDataRow& row)
     return metrics;
 }
 
-struct BlockCounts {
-    uint32_t aic = 0;
-    uint32_t aiv = 0;
-};
-
-// 从采集结果统计真实启动的 AIC / AIV block 数，按 (blockId, subBlockId) 去重。
-// core type 判定方式与 MakeRowMetrics 保持一致：优先看 coreData，各 core 按自身
-// coreType 归类；coreData 为空时退回用 row.coreType。
-BlockCounts ComputeBlockCounts(const std::map<aclptiBlockKey, aclptiPmuDataRow>& pmuLogs)
-{
-    std::set<std::pair<uint16_t, uint16_t>> aicBlocks;
-    std::set<std::pair<uint16_t, uint16_t>> aivBlocks;
-    for (const auto& [key, row] : pmuLogs) {
-        const std::pair<uint16_t, uint16_t> block{key.blockId, key.subBlockId};
-        if (!row.coreData.empty()) {
-            for (const auto& core : row.coreData) {
-                (core.coreType == ACLPTI_CORE_TYPE_AIC ? aicBlocks : aivBlocks).insert(block);
-            }
-        } else {
-            (row.coreType == ACLPTI_CORE_TYPE_AIC ? aicBlocks : aivBlocks).insert(block);
-        }
-    }
-    return {static_cast<uint32_t>(aicBlocks.size()), static_cast<uint32_t>(aivBlocks.size())};
-}
-
 std::optional<double> Ratio(double numerator, double denominator)
 {
     if (denominator == 0.0) {
@@ -311,23 +279,6 @@ std::optional<double> Time(const TypeMetrics& metrics, double frequencyMhz)
         return std::nullopt;
     }
     return metrics.Cycles() / frequencyMhz;
-}
-
-double MsprofTimeScale(uint32_t blockCount, uint32_t coreCount)
-{
-    if (blockCount == 0) {
-        return 1.0;
-    }
-    const uint32_t waves = coreCount == 0 ? 1U : ((blockCount + coreCount - 1U) / coreCount);
-    return static_cast<double>(waves) / static_cast<double>(blockCount);
-}
-
-std::optional<double> Time(const TypeMetrics& metrics, double frequencyMhz, uint32_t blockCount, uint32_t coreCount)
-{
-    if (!metrics.present || frequencyMhz <= 0.0) {
-        return std::nullopt;
-    }
-    return metrics.Cycles() / frequencyMhz * MsprofTimeScale(blockCount, coreCount);
 }
 
 std::optional<double> ValueRatio(const TypeMetrics& metrics, uint32_t eventId)
@@ -358,31 +309,6 @@ std::optional<double> EventTime(const TypeMetrics& metrics, uint32_t eventId, do
     return *value / frequencyMhz;
 }
 
-std::optional<double> EventTime(
-    const TypeMetrics& metrics, uint32_t eventId, double frequencyMhz, uint32_t blockCount, uint32_t coreCount)
-{
-    const auto value = metrics.Value(eventId);
-    if (!metrics.present || !value.has_value() || frequencyMhz <= 0.0) {
-        return std::nullopt;
-    }
-    return *value / frequencyMhz * MsprofTimeScale(blockCount, coreCount);
-}
-
-uint32_t AicCubeEventId(const TypeMetrics& metrics)
-{
-    constexpr uint32_t kMsprofAicCubeEvent = 0x301U;
-    constexpr uint32_t kA5AicCubeFallbackEvent = 0x32aU;
-    const auto primary = metrics.Value(kMsprofAicCubeEvent);
-    if (primary.has_value() && *primary != 0.0) {
-        return kMsprofAicCubeEvent;
-    }
-    const auto fallback = metrics.Value(kA5AicCubeFallbackEvent);
-    if (fallback.has_value() && *fallback != 0.0) {
-        return kA5AicCubeFallbackEvent;
-    }
-    return kMsprofAicCubeEvent;
-}
-
 std::optional<double> Bandwidth(double bytes, double durationUs)
 {
     if (durationUs <= 0.0) {
@@ -402,43 +328,12 @@ std::optional<double> EventBandwidth(
     return Bandwidth(*value * bytesPerEvent, *duration);
 }
 
-std::optional<double> EventBandwidth(
-    const TypeMetrics& metrics, uint32_t eventId, double bytesPerEvent, double frequencyMhz, uint32_t blockCount,
-    uint32_t coreCount)
-{
-    const auto value = metrics.Value(eventId);
-    const auto duration = Time(metrics, frequencyMhz, blockCount, coreCount);
-    if (!value.has_value() || !duration.has_value()) {
-        return std::nullopt;
-    }
-    return Bandwidth(*value * bytesPerEvent, *duration);
-}
-
 std::optional<double> ActiveBandwidth(double bytes, double activeCycles, double frequencyMhz)
 {
     if (frequencyMhz <= 0.0 || activeCycles <= 0.0) {
         return std::nullopt;
     }
     return Bandwidth(bytes, activeCycles / frequencyMhz);
-}
-
-std::optional<double> ActiveBandwidth(
-    double bytes, double activeCycles, double frequencyMhz, uint32_t blockCount, uint32_t coreCount)
-{
-    if (frequencyMhz <= 0.0 || activeCycles <= 0.0) {
-        return std::nullopt;
-    }
-    return Bandwidth(bytes, activeCycles / frequencyMhz * MsprofTimeScale(blockCount, coreCount));
-}
-
-Metric EventSum(const TypeMetrics& first, const TypeMetrics& second, uint32_t eventId)
-{
-    const auto firstValue = first.Value(eventId);
-    const auto secondValue = second.Value(eventId);
-    if (!firstValue.has_value() || !secondValue.has_value()) {
-        return std::nullopt;
-    }
-    return *firstValue + *secondValue;
 }
 
 Metric SumEvents(const TypeMetrics& metrics, std::initializer_list<uint32_t> events)
@@ -481,15 +376,6 @@ Metric ActiveBandwidthMetric(const Metric& bytes, const Metric& activeCycles, do
     return ActiveBandwidth(*bytes, *activeCycles, frequencyMhz);
 }
 
-Metric ActiveBandwidthMetric(
-    const Metric& bytes, const Metric& activeCycles, double frequencyMhz, uint32_t blockCount, uint32_t coreCount)
-{
-    if (!bytes.has_value() || !activeCycles.has_value()) {
-        return std::nullopt;
-    }
-    return ActiveBandwidth(*bytes, *activeCycles, frequencyMhz, blockCount, coreCount);
-}
-
 std::optional<double> UsageRate(const std::optional<double>& bandwidth, double maxBandwidth)
 {
     if (!bandwidth.has_value() || maxBandwidth <= 0.0) {
@@ -508,23 +394,9 @@ double AivFrequencyMhz(const PmuCsvConfig& config)
     return config.aivFrequencyMhz > 0.0 ? config.aivFrequencyMhz : config.frequencyMhz;
 }
 
-uint32_t AicCoreCount(const PmuCsvConfig& config) { return config.aicCoreCount; }
-
-uint32_t AivCoreCount(const PmuCsvConfig& config) { return config.aivCoreCount; }
-
-uint32_t AicBlockCount(const PmuCsvConfig& config)
-{
-    return config.aicBlockCount != 0 ? config.aicBlockCount : config.aicCoreCount;
-}
-
-uint32_t AivBlockCount(const PmuCsvConfig& config)
-{
-    return config.aivBlockCount != 0 ? config.aivBlockCount : config.aivCoreCount;
-}
-
 double MaxBandwidth(std::string_view soc, std::string_view kind)
 {
-    const bool is959 = soc.find("959") != std::string_view::npos;
+    const bool is959 = soc.find("959") != std::string_view::npos || soc.find("95A") != std::string_view::npos;
     if (kind == "GM_TO_L1") {
         return is959 ? 177.57 : 162.77;
     }
@@ -543,32 +415,43 @@ double MaxBandwidth(std::string_view soc, std::string_view kind)
     return 0.0;
 }
 
-void AppendCommon(CsvRow& values, const RowMetrics& row, const PmuCsvConfig& config)
+void SetMetric(CsvFields& fields, std::string name, const Metric& metric, MissingReason missingReason)
 {
+    fields.emplace(std::move(name), MetricCell(metric, missingReason));
+}
+
+void SetEvent(CsvFields& fields, std::string name, const TypeMetrics& metrics, uint32_t eventId)
+{
+    fields.emplace(std::move(name), CounterCell(metrics.Value(eventId), EventReason(metrics, {eventId})));
+}
+
+CsvFields CommonFields(const RowMetrics& row, const PmuCsvConfig& config)
+{
+    CsvFields fields;
+    fields.emplace("block_id", ValueCell(Integer(row.key.blockId)));
+    fields.emplace("sub_block_id", ValueCell(CoreSubBlockLabel(row.key)));
     const double aicFrequencyMhz = AicFrequencyMhz(config);
     const double aivFrequencyMhz = AivFrequencyMhz(config);
-    const uint32_t aicBlockCount = AicBlockCount(config);
-    const uint32_t aivBlockCount = AivBlockCount(config);
-    values.push_back(ValueCell(Integer(row.key.blockId)));
-    values.push_back(ValueCell(CoreSubBlockLabel(row.key)));
-    const auto aicTime = Time(row.aic, aicFrequencyMhz, aicBlockCount, AicCoreCount(config));
-    const auto aivTime = Time(row.aiv, aivFrequencyMhz, aivBlockCount, AivCoreCount(config));
-    values.push_back(MetricCell(aicTime, TimeReason(row.aic, aicFrequencyMhz)));
-    values.push_back(
-        row.aic.present ? ValueCell(Number(row.aic.Cycles())) : MissingCell(MissingReason::CoreTypeNotApplicable));
-    values.push_back(MetricCell(aivTime, TimeReason(row.aiv, aivFrequencyMhz)));
-    values.push_back(
-        row.aiv.present ? ValueCell(Number(row.aiv.Cycles())) : MissingCell(MissingReason::CoreTypeNotApplicable));
+    SetMetric(fields, "aic_time(us)", Time(row.aic, aicFrequencyMhz), TimeReason(row.aic, aicFrequencyMhz));
+    fields.emplace(
+        "aic_total_cycles",
+        row.aic.present ? ValueCell(Counter(row.aic.Cycles())) : MissingCell(MissingReason::CoreTypeNotApplicable));
+    SetMetric(fields, "aiv_time(us)", Time(row.aiv, aivFrequencyMhz), TimeReason(row.aiv, aivFrequencyMhz));
+    fields.emplace(
+        "aiv_total_cycles",
+        row.aiv.present ? ValueCell(Counter(row.aiv.Cycles())) : MissingCell(MissingReason::CoreTypeNotApplicable));
+    return fields;
 }
 
-void AppendMetric(CsvRow& values, const Metric& metric, MissingReason missingReason)
+CsvRow BuildRow(const std::vector<std::string>& header, const CsvFields& fields)
 {
-    values.push_back(MetricCell(metric, missingReason));
-}
-
-void AppendEvent(CsvRow& values, const TypeMetrics& metrics, uint32_t eventId)
-{
-    values.push_back(MetricCell(metrics.Value(eventId), EventReason(metrics, {eventId})));
+    CsvRow row;
+    row.reserve(header.size());
+    for (const auto& name : header) {
+        const auto value = fields.find(name);
+        row.push_back(value == fields.end() ? MissingCell(MissingReason::CoreTypeNotApplicable) : value->second);
+    }
+    return row;
 }
 
 std::vector<std::string> L2Header()
@@ -577,9 +460,10 @@ std::vector<std::string> L2Header()
         "read_close_hit",  "read_close_miss",  "read_close_victim", "read_far_hit",     "read_far_miss",
         "read_far_victim", "read_hit_rate(%)", "write_close_hit",   "write_close_miss", "write_close_victim",
         "write_far_hit",   "write_far_miss",   "write_far_victim",  "write_hit_rate(%)"};
-    std::vector<std::string> header = {"block_id",         "sub_block_id", "aic_time(us)",
-                                       "aic_total_cycles", "aiv_time(us)", "aiv_total_cycles"};
+    std::vector<std::string> header = {"block_id", "sub_block_id"};
     for (const char* prefix : {"aic_", "aiv_"}) {
+        header.emplace_back(std::string(prefix) + "time(us)");
+        header.emplace_back(std::string(prefix) + "total_cycles");
         for (const auto& suffix : suffixes) {
             header.emplace_back(std::string(prefix) + suffix);
         }
@@ -589,33 +473,42 @@ std::vector<std::string> L2Header()
 
 CsvRow L2Row(const RowMetrics& row, const PmuCsvConfig& config)
 {
-    CsvRow values;
-    AppendCommon(values, row, config);
-    for (const TypeMetrics* metrics : {&row.aic, &row.aiv}) {
+    CsvFields fields = CommonFields(row, config);
+    for (const auto& [prefix, metrics] :
+         {std::pair<const char*, const TypeMetrics*>{"aic_", &row.aic}, {"aiv_", &row.aiv}}) {
+        if (!metrics->present) {
+            continue;
+        }
+        const std::vector<std::string> names = {"read_close_hit", "read_close_miss", "read_close_victim",
+                                                "read_far_hit",   "read_far_miss",   "read_far_victim"};
+        std::size_t index = 0;
         for (const uint32_t event : {0x424U, 0x425U, 0x426U, 0x427U, 0x428U, 0x429U}) {
-            AppendEvent(values, *metrics, event);
+            SetEvent(fields, std::string(prefix) + names[index++], *metrics, event);
         }
         const auto readHit = SumEvents(*metrics, {0x424U, 0x427U});
         const auto readTotal = SumEvents(*metrics, {0x424U, 0x425U, 0x426U, 0x427U, 0x428U, 0x429U});
-        AppendMetric(
-            values,
+        SetMetric(
+            fields, std::string(prefix) + "read_hit_rate(%)",
             !readHit.has_value() || !readTotal.has_value() ? std::nullopt :
             *readTotal == 0.0                              ? Metric(0.0) :
                                                              Metric(100.0 * *readHit / *readTotal),
             EventReason(*metrics, {0x424U, 0x425U, 0x426U, 0x427U, 0x428U, 0x429U}));
+        const std::vector<std::string> writeNames = {"write_close_hit", "write_close_miss", "write_close_victim",
+                                                     "write_far_hit",   "write_far_miss",   "write_far_victim"};
+        index = 0;
         for (const uint32_t event : {0x42aU, 0x42bU, 0x42cU, 0x42dU, 0x42eU, 0x42fU}) {
-            AppendEvent(values, *metrics, event);
+            SetEvent(fields, std::string(prefix) + writeNames[index++], *metrics, event);
         }
         const auto writeHit = SumEvents(*metrics, {0x42aU, 0x42dU});
         const auto writeTotal = SumEvents(*metrics, {0x42aU, 0x42bU, 0x42cU, 0x42dU, 0x42eU, 0x42fU});
-        AppendMetric(
-            values,
+        SetMetric(
+            fields, std::string(prefix) + "write_hit_rate(%)",
             !writeHit.has_value() || !writeTotal.has_value() ? std::nullopt :
             *writeTotal == 0.0                               ? Metric(0.0) :
                                                                Metric(100.0 * *writeHit / *writeTotal),
             EventReason(*metrics, {0x42aU, 0x42bU, 0x42cU, 0x42dU, 0x42eU, 0x42fU}));
     }
-    return values;
+    return BuildRow(L2Header(), fields);
 }
 
 std::vector<std::string> MemoryHeader()
@@ -625,10 +518,6 @@ std::vector<std::string> MemoryHeader()
         "sub_block_id",
         "aic_time(us)",
         "aic_total_cycles",
-        "aiv_time(us)",
-        "aiv_total_cycles",
-        "aiv_ub_to_gm_bw(GB/s)",
-        "aiv_gm_to_ub_bw(GB/s)",
         "aic_l1_read_bw(GB/s)",
         "aic_l1_write_bw(GB/s)",
         "aic_main_mem_read_bw(GB/s)",
@@ -639,6 +528,10 @@ std::vector<std::string> MemoryHeader()
         "aic_mte2_ratio",
         "aic_mte3_instructions",
         "aic_mte3_ratio",
+        "aiv_time(us)",
+        "aiv_total_cycles",
+        "aiv_ub_to_gm_bw(GB/s)",
+        "aiv_gm_to_ub_bw(GB/s)",
         "aiv_main_mem_read_bw(GB/s)",
         "aiv_main_mem_write_bw(GB/s)",
         "aiv_mte2_instructions",
@@ -648,96 +541,105 @@ std::vector<std::string> MemoryHeader()
         "read_main_memory_datas(KB)",
         "write_main_memory_datas(KB)",
         "GM_to_L1_datas(KB)",
-        "L0C_to_L1_datas(KB)",
-        "L0C_to_GM_datas(KB)",
-        "GM_to_UB_datas(KB)",
-        "UB_to_GM_datas(KB)",
         "GM_to_L1_bw_usage_rate(%)",
+        "L0C_to_L1_datas(KB)",
         "L0C_to_L1_bw_usage_rate(%)",
+        "L0C_to_GM_datas(KB)",
         "L0C_to_GM_bw_usage_rate(%)",
+        "GM_to_UB_datas(KB)",
         "GM_to_UB_bw_usage_rate(%)",
+        "UB_to_GM_datas(KB)",
         "UB_to_GM_bw_usage_rate(%)"};
 }
 
 CsvRow MemoryRow(const RowMetrics& row, const PmuCsvConfig& config)
 {
-    CsvRow values;
+    CsvFields fields = CommonFields(row, config);
     const double aicFrequencyMhz = AicFrequencyMhz(config);
     const double aivFrequencyMhz = AivFrequencyMhz(config);
-    const uint32_t aicCoreCount = AicCoreCount(config);
-    const uint32_t aivCoreCount = AivCoreCount(config);
-    const uint32_t aicBlockCount = AicBlockCount(config);
-    const uint32_t aivBlockCount = AivBlockCount(config);
-    AppendCommon(values, row, config);
-    const auto duration = Time(row.aiv, aivFrequencyMhz, aivBlockCount, aivCoreCount);
+    const auto duration = Time(row.aiv, aivFrequencyMhz);
     const auto xgu = NonNegativeDifference(row.aiv, 0x422U, {0x57fU, 0x580U});
     const MissingReason xguReason = EventBandwidthReason(row.aiv, {0x422U, 0x57fU, 0x580U}, aivFrequencyMhz);
-    AppendMetric(
-        values, std::nullopt, row.aiv.present ? MissingReason::DbiUnavailable : MissingReason::CoreTypeNotApplicable);
-    AppendMetric(
-        values, xgu.has_value() && duration.has_value() ? Bandwidth(*xgu * 128.0, *duration) : std::nullopt, xguReason);
-    AppendMetric(
-        values, EventBandwidth(row.aic, 0x707U, 256.0, aicFrequencyMhz, aicBlockCount, aicCoreCount),
+    SetMetric(
+        fields, "aiv_ub_to_gm_bw(GB/s)", std::nullopt,
+        row.aiv.present ? MissingReason::DbiUnavailable : MissingReason::CoreTypeNotApplicable);
+    SetMetric(
+        fields, "aiv_gm_to_ub_bw(GB/s)",
+        xgu.has_value() && duration.has_value() ? Bandwidth(*xgu * 128.0, *duration) : std::nullopt, xguReason);
+    SetMetric(
+        fields, "aic_l1_read_bw(GB/s)", EventBandwidth(row.aic, 0x707U, 256.0, aicFrequencyMhz),
         EventBandwidthReason(row.aic, {0x707U}, aicFrequencyMhz));
-    AppendMetric(
-        values, EventBandwidth(row.aic, 0x709U, 128.0, aicFrequencyMhz, aicBlockCount, aicCoreCount),
+    SetMetric(
+        fields, "aic_l1_write_bw(GB/s)", EventBandwidth(row.aic, 0x709U, 128.0, aicFrequencyMhz),
         EventBandwidthReason(row.aic, {0x709U}, aicFrequencyMhz));
-    AppendMetric(
-        values, EventBandwidth(row.aic, 0x422U, 128.0, aicFrequencyMhz, aicBlockCount, aicCoreCount),
+    SetMetric(
+        fields, "aic_main_mem_read_bw(GB/s)", EventBandwidth(row.aic, 0x422U, 128.0, aicFrequencyMhz),
         EventBandwidthReason(row.aic, {0x422U}, aicFrequencyMhz));
-    AppendMetric(
-        values, EventBandwidth(row.aic, 0x423U, 128.0, aicFrequencyMhz, aicBlockCount, aicCoreCount),
+    SetMetric(
+        fields, "aic_main_mem_write_bw(GB/s)", EventBandwidth(row.aic, 0x423U, 128.0, aicFrequencyMhz),
         EventBandwidthReason(row.aic, {0x423U}, aicFrequencyMhz));
-    AppendEvent(values, row.aic, 0x700U);
-    AppendMetric(values, ValueRatio(row.aic, 0x702U), RatioReason(row.aic, {0x702U}));
-    AppendEvent(values, row.aic, 0x200U);
-    AppendMetric(values, ValueRatio(row.aic, 0x202U), RatioReason(row.aic, {0x202U}));
-    AppendEvent(values, row.aic, 0x201U);
-    AppendMetric(values, ValueRatio(row.aic, 0x203U), RatioReason(row.aic, {0x203U}));
-    AppendMetric(
-        values, EventBandwidth(row.aiv, 0x422U, 128.0, aivFrequencyMhz, aivBlockCount, aivCoreCount),
+    SetEvent(fields, "aic_mte1_instructions", row.aic, 0x700U);
+    SetMetric(fields, "aic_mte1_ratio", ValueRatio(row.aic, 0x702U), RatioReason(row.aic, {0x702U}));
+    SetEvent(fields, "aic_mte2_instructions", row.aic, 0x200U);
+    SetMetric(fields, "aic_mte2_ratio", ValueRatio(row.aic, 0x202U), RatioReason(row.aic, {0x202U}));
+    SetEvent(fields, "aic_mte3_instructions", row.aic, 0x201U);
+    SetMetric(fields, "aic_mte3_ratio", ValueRatio(row.aic, 0x203U), RatioReason(row.aic, {0x203U}));
+    SetMetric(
+        fields, "aiv_main_mem_read_bw(GB/s)", EventBandwidth(row.aiv, 0x422U, 128.0, aivFrequencyMhz),
         EventBandwidthReason(row.aiv, {0x422U}, aivFrequencyMhz));
-    AppendMetric(
-        values, EventBandwidth(row.aiv, 0x423U, 128.0, aivFrequencyMhz, aivBlockCount, aivCoreCount),
+    SetMetric(
+        fields, "aiv_main_mem_write_bw(GB/s)", EventBandwidth(row.aiv, 0x423U, 128.0, aivFrequencyMhz),
         EventBandwidthReason(row.aiv, {0x423U}, aivFrequencyMhz));
-    AppendEvent(values, row.aiv, 0x200U);
-    AppendMetric(values, ValueRatio(row.aiv, 0x202U), RatioReason(row.aiv, {0x202U}));
-    AppendEvent(values, row.aiv, 0x201U);
-    AppendMetric(values, ValueRatio(row.aiv, 0x203U), RatioReason(row.aiv, {0x203U}));
-    const auto mainRead = EventSum(row.aic, row.aiv, 0x422U);
-    const auto mainWrite = EventSum(row.aic, row.aiv, 0x423U);
-    values.push_back(MetricCell(Scale(mainRead, 128.0 / kBytesPerKb), EventSumReason(row.aic, row.aiv, 0x422U)));
-    values.push_back(MetricCell(Scale(mainWrite, 128.0 / kBytesPerKb), EventSumReason(row.aic, row.aiv, 0x423U)));
-    values.push_back(MetricCell(Scale(row.aic.Value(0x422U), 128.0 / kBytesPerKb), EventReason(row.aic, {0x422U})));
-    values.push_back(MetricCell(Scale(row.aic.Value(0x70eU), 128.0 / kBytesPerKb), EventReason(row.aic, {0x70eU})));
-    values.push_back(MetricCell(Scale(row.aic.Value(0x423U), 128.0 / kBytesPerKb), EventReason(row.aic, {0x423U})));
-    values.push_back(MetricCell(Scale(xgu, 128.0 / kBytesPerKb), EventReason(row.aiv, {0x422U, 0x57fU, 0x580U})));
-    AppendMetric(
-        values, std::nullopt, row.aiv.present ? MissingReason::DbiUnavailable : MissingReason::CoreTypeNotApplicable);
+    SetEvent(fields, "aiv_mte2_instructions", row.aiv, 0x200U);
+    SetMetric(fields, "aiv_mte2_ratio", ValueRatio(row.aiv, 0x202U), RatioReason(row.aiv, {0x202U}));
+    SetEvent(fields, "aiv_mte3_instructions", row.aiv, 0x201U);
+    SetMetric(fields, "aiv_mte3_ratio", ValueRatio(row.aiv, 0x203U), RatioReason(row.aiv, {0x203U}));
+    const TypeMetrics& current = row.key.coreType == ACLPTI_CORE_TYPE_AIC ? row.aic : row.aiv;
+    SetMetric(
+        fields, "read_main_memory_datas(KB)", Scale(current.Value(0x422U), 128.0 / kBytesPerKb),
+        EventReason(current, {0x422U}));
+    SetMetric(
+        fields, "write_main_memory_datas(KB)", Scale(current.Value(0x423U), 128.0 / kBytesPerKb),
+        EventReason(current, {0x423U}));
+    SetMetric(
+        fields, "GM_to_L1_datas(KB)", Scale(row.aic.Value(0x422U), 128.0 / kBytesPerKb),
+        EventReason(row.aic, {0x422U}));
+    SetMetric(
+        fields, "L0C_to_L1_datas(KB)", Scale(row.aic.Value(0x70eU), 128.0 / kBytesPerKb),
+        EventReason(row.aic, {0x70eU}));
+    SetMetric(
+        fields, "L0C_to_GM_datas(KB)", Scale(row.aic.Value(0x423U), 128.0 / kBytesPerKb),
+        EventReason(row.aic, {0x423U}));
+    SetMetric(
+        fields, "GM_to_UB_datas(KB)", Scale(xgu, 128.0 / kBytesPerKb), EventReason(row.aiv, {0x422U, 0x57fU, 0x580U}));
+    SetMetric(
+        fields, "UB_to_GM_datas(KB)", std::nullopt,
+        row.aiv.present ? MissingReason::DbiUnavailable : MissingReason::CoreTypeNotApplicable);
     const double gmToL1Max = MaxBandwidth(config.socName, "GM_TO_L1");
     const double l0cToL1Max = MaxBandwidth(config.socName, "L0C_TO_L1");
     const double l0cToGmMax = MaxBandwidth(config.socName, "L0C_TO_GM");
     const double gmToUbMax = MaxBandwidth(config.socName, "GM_TO_UB");
-    AppendMetric(
-        values,
-        UsageRate(EventBandwidth(row.aic, 0x422U, 128.0, aicFrequencyMhz, aicBlockCount, aicCoreCount), gmToL1Max),
+    SetMetric(
+        fields, "GM_to_L1_bw_usage_rate(%)",
+        UsageRate(EventBandwidth(row.aic, 0x422U, 128.0, aicFrequencyMhz), gmToL1Max),
         UsageRateReason(EventBandwidthReason(row.aic, {0x422U}, aicFrequencyMhz), gmToL1Max));
-    AppendMetric(
-        values,
-        UsageRate(EventBandwidth(row.aic, 0x70eU, 128.0, aicFrequencyMhz, aicBlockCount, aicCoreCount), l0cToL1Max),
+    SetMetric(
+        fields, "L0C_to_L1_bw_usage_rate(%)",
+        UsageRate(EventBandwidth(row.aic, 0x70eU, 128.0, aicFrequencyMhz), l0cToL1Max),
         UsageRateReason(EventBandwidthReason(row.aic, {0x70eU}, aicFrequencyMhz), l0cToL1Max));
-    AppendMetric(
-        values,
-        UsageRate(EventBandwidth(row.aic, 0x423U, 128.0, aicFrequencyMhz, aicBlockCount, aicCoreCount), l0cToGmMax),
+    SetMetric(
+        fields, "L0C_to_GM_bw_usage_rate(%)",
+        UsageRate(EventBandwidth(row.aic, 0x423U, 128.0, aicFrequencyMhz), l0cToGmMax),
         UsageRateReason(EventBandwidthReason(row.aic, {0x423U}, aicFrequencyMhz), l0cToGmMax));
-    AppendMetric(
-        values,
+    SetMetric(
+        fields, "GM_to_UB_bw_usage_rate(%)",
         UsageRate(
             xgu.has_value() && duration.has_value() ? Bandwidth(*xgu * 128.0, *duration) : std::nullopt, gmToUbMax),
         UsageRateReason(xguReason, gmToUbMax));
-    AppendMetric(
-        values, std::nullopt, row.aiv.present ? MissingReason::DbiUnavailable : MissingReason::CoreTypeNotApplicable);
-    return values;
+    SetMetric(
+        fields, "UB_to_GM_bw_usage_rate(%)", std::nullopt,
+        row.aiv.present ? MissingReason::DbiUnavailable : MissingReason::CoreTypeNotApplicable);
+    return BuildRow(MemoryHeader(), fields);
 }
 
 std::vector<std::string> MemoryL0Header()
@@ -747,30 +649,31 @@ std::vector<std::string> MemoryL0Header()
         "sub_block_id",
         "aic_time(us)",
         "aic_total_cycles",
-        "aiv_time(us)",
-        "aiv_total_cycles",
         "aic_l0a_read_bw(GB/s)",
         "aic_l0a_write_bw(GB/s)",
         "aic_l0b_read_bw(GB/s)",
         "aic_l0b_write_bw(GB/s)",
         "aic_l0c_read_bw_cube(GB/s)",
-        "aic_l0c_write_bw_cube(GB/s)"};
+        "aic_l0c_write_bw_cube(GB/s)",
+        "aiv_time(us)",
+        "aiv_total_cycles"};
 }
 
 CsvRow MemoryL0Row(const RowMetrics& row, const PmuCsvConfig& config)
 {
-    CsvRow values;
+    CsvFields fields = CommonFields(row, config);
     const double aicFrequencyMhz = AicFrequencyMhz(config);
-    const uint32_t aicCoreCount = AicCoreCount(config);
-    const uint32_t aicBlockCount = AicBlockCount(config);
-    AppendCommon(values, row, config);
+    const std::vector<std::string> names = {"aic_l0a_read_bw(GB/s)",      "aic_l0a_write_bw(GB/s)",
+                                            "aic_l0b_read_bw(GB/s)",      "aic_l0b_write_bw(GB/s)",
+                                            "aic_l0c_read_bw_cube(GB/s)", "aic_l0c_write_bw_cube(GB/s)"};
+    std::size_t index = 0;
     for (const auto& [event, bytes] : std::initializer_list<std::pair<uint32_t, double>>{
              {0x304U, 64.0}, {0x703U, 256.0}, {0x306U, 256.0}, {0x705U, 256.0}, {0x30aU, 1024.0}, {0x308U, 1024.0}}) {
-        AppendMetric(
-            values, EventBandwidth(row.aic, event, bytes, aicFrequencyMhz, aicBlockCount, aicCoreCount),
+        SetMetric(
+            fields, names[index++], EventBandwidth(row.aic, event, bytes, aicFrequencyMhz),
             EventBandwidthReason(row.aic, {event}, aicFrequencyMhz));
     }
-    return values;
+    return BuildRow(MemoryL0Header(), fields);
 }
 
 std::vector<std::string> MemoryUBHeader()
@@ -784,32 +687,30 @@ std::vector<std::string> MemoryUBHeader()
         "aiv_total_cycles",
         "aiv_ub_read_bw_vector(GB/s)",
         "aiv_ub_write_bw_vector(GB/s)",
-        "aiv_ub_write_bw_gm(GB/s)",
-        "aiv_ub_read_bw_gm(GB/s)"};
+        "aiv_ub_read_bw_gm(GB/s)",
+        "aiv_ub_write_bw_gm(GB/s)"};
 }
 
 CsvRow MemoryUBRow(const RowMetrics& row, const PmuCsvConfig& config)
 {
-    CsvRow values;
+    CsvFields fields = CommonFields(row, config);
     const double aivFrequencyMhz = AivFrequencyMhz(config);
-    const uint32_t aivCoreCount = AivCoreCount(config);
-    const uint32_t aivBlockCount = AivBlockCount(config);
-    AppendCommon(values, row, config);
-    AppendMetric(
-        values, EventBandwidth(row.aiv, 0x571U, 256.0, aivFrequencyMhz, aivBlockCount, aivCoreCount),
+    SetMetric(
+        fields, "aiv_ub_read_bw_vector(GB/s)", EventBandwidth(row.aiv, 0x571U, 256.0, aivFrequencyMhz),
         EventBandwidthReason(row.aiv, {0x571U}, aivFrequencyMhz));
-    AppendMetric(
-        values, EventBandwidth(row.aiv, 0x572U, 256.0, aivFrequencyMhz, aivBlockCount, aivCoreCount),
+    SetMetric(
+        fields, "aiv_ub_write_bw_vector(GB/s)", EventBandwidth(row.aiv, 0x572U, 256.0, aivFrequencyMhz),
         EventBandwidthReason(row.aiv, {0x572U}, aivFrequencyMhz));
     const auto xgu = NonNegativeDifference(row.aiv, 0x422U, {0x57fU, 0x580U});
-    const auto duration = Time(row.aiv, aivFrequencyMhz, aivBlockCount, aivCoreCount);
-    AppendMetric(
-        values, xgu.has_value() && duration.has_value() ? Bandwidth(*xgu * 128.0, *duration) : std::nullopt,
+    const auto duration = Time(row.aiv, aivFrequencyMhz);
+    SetMetric(
+        fields, "aiv_ub_read_bw_gm(GB/s)", std::nullopt,
+        row.aiv.present ? MissingReason::DbiUnavailable : MissingReason::CoreTypeNotApplicable);
+    SetMetric(
+        fields, "aiv_ub_write_bw_gm(GB/s)",
+        xgu.has_value() && duration.has_value() ? Bandwidth(*xgu * 128.0, *duration) : std::nullopt,
         EventBandwidthReason(row.aiv, {0x422U, 0x57fU, 0x580U}, aivFrequencyMhz));
-    // UB_TO_GM_DATA is supplied by DBI, which is not part of aclptiProfilingDataResult yet.
-    AppendMetric(
-        values, std::nullopt, row.aiv.present ? MissingReason::DbiUnavailable : MissingReason::CoreTypeNotApplicable);
-    return values;
+    return BuildRow(MemoryUBHeader(), fields);
 }
 
 std::vector<std::string> PipeHeader()
@@ -819,91 +720,64 @@ std::vector<std::string> PipeHeader()
         "sub_block_id",
         "aic_time(us)",
         "aic_total_cycles",
-        "aiv_time(us)",
-        "aiv_total_cycles",
-        "aiv_vec_time(us)",
-        "aiv_vec_ratio",
         "aic_cube_time(us)",
         "aic_cube_ratio",
         "aic_scalar_time(us)",
         "aic_scalar_ratio",
-        "aiv_scalar_time(us)",
-        "aiv_scalar_ratio",
-        "aic_fixpipe_time(us)",
-        "aic_fixpipe_ratio",
         "aic_mte1_time(us)",
         "aic_mte1_ratio",
+        "aic_mte1_active_bw(GB/s)",
         "aic_mte2_time(us)",
         "aic_mte2_ratio",
-        "aiv_mte2_time(us)",
-        "aiv_mte2_ratio",
+        "aic_mte2_active_bw(GB/s)",
         "aic_mte3_time(us)",
         "aic_mte3_ratio",
+        "aic_mte3_active_bw(GB/s)",
+        "aic_fixpipe_time(us)",
+        "aic_fixpipe_ratio",
+        "aic_fixpipe_active_bw(GB/s)",
+        "aic_icache_miss_rate",
+        "aiv_time(us)",
+        "aiv_total_cycles",
+        "aiv_vec_time(us)",
+        "aiv_vec_ratio",
+        "aiv_scalar_time(us)",
+        "aiv_scalar_ratio",
+        "aiv_mte2_time(us)",
+        "aiv_mte2_ratio",
+        "aiv_mte2_active_bw(GB/s)",
         "aiv_mte3_time(us)",
         "aiv_mte3_ratio",
-        "aic_icache_miss_rate",
-        "aiv_icache_miss_rate",
-        "aic_mte3_active_bw(GB/s)",
         "aiv_mte3_active_bw(GB/s)",
-        "aic_fixpipe_active_bw(GB/s)",
-        "aiv_mte2_active_bw(GB/s)",
-        "aic_mte1_active_bw(GB/s)",
-        "aic_mte2_active_bw(GB/s)"};
+        "aiv_icache_miss_rate",
+    };
 }
 
 CsvRow PipeRow(const RowMetrics& row, const PmuCsvConfig& config)
 {
-    CsvRow values;
+    CsvFields fields = CommonFields(row, config);
     const double aicFrequencyMhz = AicFrequencyMhz(config);
     const double aivFrequencyMhz = AivFrequencyMhz(config);
-    const uint32_t aicCoreCount = AicCoreCount(config);
-    const uint32_t aivCoreCount = AivCoreCount(config);
-    const uint32_t aicBlockCount = AicBlockCount(config);
-    const uint32_t aivBlockCount = AivBlockCount(config);
-    const uint32_t aicCubeEvent = AicCubeEventId(row.aic);
-    AppendCommon(values, row, config);
-    AppendMetric(
-        values, EventTime(row.aiv, 0x501U, aivFrequencyMhz, aivBlockCount, aivCoreCount),
-        EventBandwidthReason(row.aiv, {0x501U}, aivFrequencyMhz));
-    AppendMetric(values, ValueRatio(row.aiv, 0x501U), RatioReason(row.aiv, {0x501U}));
-    AppendMetric(
-        values, EventTime(row.aic, aicCubeEvent, aicFrequencyMhz, aicBlockCount, aicCoreCount),
-        EventBandwidthReason(row.aic, {aicCubeEvent}, aicFrequencyMhz));
-    AppendMetric(values, ValueRatio(row.aic, aicCubeEvent), RatioReason(row.aic, {aicCubeEvent}));
-    AppendMetric(
-        values, EventTime(row.aic, 0x1U, aicFrequencyMhz, aicBlockCount, aicCoreCount),
-        EventBandwidthReason(row.aic, {0x1U}, aicFrequencyMhz));
-    AppendMetric(values, ValueRatio(row.aic, 0x1U), RatioReason(row.aic, {0x1U}));
-    AppendMetric(
-        values, EventTime(row.aiv, 0x1U, aivFrequencyMhz, aivBlockCount, aivCoreCount),
-        EventBandwidthReason(row.aiv, {0x1U}, aivFrequencyMhz));
-    AppendMetric(values, ValueRatio(row.aiv, 0x1U), RatioReason(row.aiv, {0x1U}));
-    AppendMetric(
-        values, EventTime(row.aic, 0x714U, aicFrequencyMhz, aicBlockCount, aicCoreCount),
-        EventBandwidthReason(row.aic, {0x714U}, aicFrequencyMhz));
-    AppendMetric(values, ValueRatio(row.aic, 0x714U), RatioReason(row.aic, {0x714U}));
-    AppendMetric(
-        values, EventTime(row.aic, 0x702U, aicFrequencyMhz, aicBlockCount, aicCoreCount),
-        EventBandwidthReason(row.aic, {0x702U}, aicFrequencyMhz));
-    AppendMetric(values, ValueRatio(row.aic, 0x702U), RatioReason(row.aic, {0x702U}));
-    AppendMetric(
-        values, EventTime(row.aic, 0x202U, aicFrequencyMhz, aicBlockCount, aicCoreCount),
-        EventBandwidthReason(row.aic, {0x202U}, aicFrequencyMhz));
-    AppendMetric(values, ValueRatio(row.aic, 0x202U), RatioReason(row.aic, {0x202U}));
-    AppendMetric(
-        values, EventTime(row.aiv, 0x202U, aivFrequencyMhz, aivBlockCount, aivCoreCount),
-        EventBandwidthReason(row.aiv, {0x202U}, aivFrequencyMhz));
-    AppendMetric(values, ValueRatio(row.aiv, 0x202U), RatioReason(row.aiv, {0x202U}));
-    AppendMetric(
-        values, EventTime(row.aic, 0x203U, aicFrequencyMhz, aicBlockCount, aicCoreCount),
-        EventBandwidthReason(row.aic, {0x203U}, aicFrequencyMhz));
-    AppendMetric(values, ValueRatio(row.aic, 0x203U), RatioReason(row.aic, {0x203U}));
-    AppendMetric(
-        values, EventTime(row.aiv, 0x203U, aivFrequencyMhz, aivBlockCount, aivCoreCount),
-        EventBandwidthReason(row.aiv, {0x203U}, aivFrequencyMhz));
-    AppendMetric(values, ValueRatio(row.aiv, 0x203U), RatioReason(row.aiv, {0x203U}));
-    AppendMetric(values, IcacheMissRate(row.aic), EventReason(row.aic, {0x35U, 0x34U}));
-    AppendMetric(values, IcacheMissRate(row.aiv), EventReason(row.aiv, {0x35U, 0x34U}));
+    constexpr uint32_t kA5CubeEvent = 810U;
+    const auto setPipePair = [&](const char* timeName, const char* ratioName, const TypeMetrics& metrics,
+                                 uint32_t eventId, double frequencyMhz) {
+        SetMetric(
+            fields, timeName, EventTime(metrics, eventId, frequencyMhz),
+            EventBandwidthReason(metrics, {eventId}, frequencyMhz));
+        SetMetric(fields, ratioName, ValueRatio(metrics, eventId), RatioReason(metrics, {eventId}));
+    };
+    setPipePair("aic_cube_time(us)", "aic_cube_ratio", row.aic, kA5CubeEvent, aicFrequencyMhz);
+    setPipePair("aic_scalar_time(us)", "aic_scalar_ratio", row.aic, 0x1U, aicFrequencyMhz);
+    setPipePair("aic_mte1_time(us)", "aic_mte1_ratio", row.aic, 0x702U, aicFrequencyMhz);
+    setPipePair("aic_mte2_time(us)", "aic_mte2_ratio", row.aic, 0x202U, aicFrequencyMhz);
+    setPipePair("aic_mte3_time(us)", "aic_mte3_ratio", row.aic, 0x203U, aicFrequencyMhz);
+    setPipePair("aic_fixpipe_time(us)", "aic_fixpipe_ratio", row.aic, 0x714U, aicFrequencyMhz);
+    SetMetric(fields, "aic_icache_miss_rate", IcacheMissRate(row.aic), EventReason(row.aic, {0x35U, 0x34U}));
+    setPipePair("aiv_vec_time(us)", "aiv_vec_ratio", row.aiv, 0x501U, aivFrequencyMhz);
+    setPipePair("aiv_scalar_time(us)", "aiv_scalar_ratio", row.aiv, 0x1U, aivFrequencyMhz);
+    setPipePair("aiv_mte2_time(us)", "aiv_mte2_ratio", row.aiv, 0x202U, aivFrequencyMhz);
+    setPipePair("aiv_mte3_time(us)", "aiv_mte3_ratio", row.aiv, 0x203U, aivFrequencyMhz);
+    SetMetric(fields, "aiv_icache_miss_rate", IcacheMissRate(row.aiv), EventReason(row.aiv, {0x35U, 0x34U}));
 
     const auto xgu = NonNegativeDifference(row.aiv, 0x422U, {0x57fU, 0x580U});
     const auto xulBase = NonNegativeDifference(row.aic, 0x709U, {0x70eU});
@@ -912,31 +786,30 @@ CsvRow PipeRow(const RowMetrics& row, const PmuCsvConfig& config)
                          Metric(std::max(0.0, *xulBase - std::floor(*aicMainRead / 2.0))) :
                          std::nullopt;
     const auto xfp = SumEvents(row.aic, {0x70cU, 0x70eU, 0x717U, 0x423U});
-    AppendMetric(
-        values,
-        ActiveBandwidthMetric(Scale(xul, 256.0), row.aic.Value(0x203U), aicFrequencyMhz, aicBlockCount, aicCoreCount),
+    SetMetric(
+        fields, "aic_mte3_active_bw(GB/s)",
+        ActiveBandwidthMetric(Scale(xul, 256.0), row.aic.Value(0x203U), aicFrequencyMhz),
         EventBandwidthReason(row.aic, {0x709U, 0x70eU, 0x422U, 0x203U}, aicFrequencyMhz));
-    AppendMetric(
-        values, std::nullopt, row.aiv.present ? MissingReason::DbiUnavailable : MissingReason::CoreTypeNotApplicable);
-    AppendMetric(
-        values,
-        ActiveBandwidthMetric(Scale(xfp, 128.0), row.aic.Value(0x714U), aicFrequencyMhz, aicBlockCount, aicCoreCount),
+    SetMetric(
+        fields, "aiv_mte3_active_bw(GB/s)", std::nullopt,
+        row.aiv.present ? MissingReason::DbiUnavailable : MissingReason::CoreTypeNotApplicable);
+    SetMetric(
+        fields, "aic_fixpipe_active_bw(GB/s)",
+        ActiveBandwidthMetric(Scale(xfp, 128.0), row.aic.Value(0x714U), aicFrequencyMhz),
         EventBandwidthReason(row.aic, {0x70cU, 0x70eU, 0x717U, 0x423U, 0x714U}, aicFrequencyMhz));
-    AppendMetric(
-        values,
-        ActiveBandwidthMetric(Scale(xgu, 128.0), row.aiv.Value(0x202U), aivFrequencyMhz, aivBlockCount, aivCoreCount),
+    SetMetric(
+        fields, "aiv_mte2_active_bw(GB/s)",
+        ActiveBandwidthMetric(Scale(xgu, 128.0), row.aiv.Value(0x202U), aivFrequencyMhz),
         EventBandwidthReason(row.aiv, {0x422U, 0x57fU, 0x580U, 0x202U}, aivFrequencyMhz));
-    AppendMetric(
-        values,
-        ActiveBandwidthMetric(
-            Scale(row.aic.Value(0x707U), 256.0), row.aic.Value(0x702U), aicFrequencyMhz, aicBlockCount, aicCoreCount),
+    SetMetric(
+        fields, "aic_mte1_active_bw(GB/s)",
+        ActiveBandwidthMetric(Scale(row.aic.Value(0x707U), 256.0), row.aic.Value(0x702U), aicFrequencyMhz),
         EventBandwidthReason(row.aic, {0x707U, 0x702U}, aicFrequencyMhz));
-    AppendMetric(
-        values,
-        ActiveBandwidthMetric(
-            Scale(row.aic.Value(0x422U), 128.0), row.aic.Value(0x202U), aicFrequencyMhz, aicBlockCount, aicCoreCount),
+    SetMetric(
+        fields, "aic_mte2_active_bw(GB/s)",
+        ActiveBandwidthMetric(Scale(row.aic.Value(0x422U), 128.0), row.aic.Value(0x202U), aicFrequencyMhz),
         EventBandwidthReason(row.aic, {0x422U, 0x202U}, aicFrequencyMhz));
-    return values;
+    return BuildRow(PipeHeader(), fields);
 }
 
 struct SectionWriter {
@@ -1061,10 +934,12 @@ std::string FormatMissingReasons(const std::map<std::string, std::size_t>& missi
 
 std::string ResolveOutputDirectory(const PmuCsvConfig& config) { return config.outputDirectory; }
 
+const char* PmuDataLevelName(PmuDataLevel level) { return level == PmuDataLevel::Task ? "task" : "block"; }
+
 bool IsEmptySuccessfulResult(const aclptiProfilingDataResult& result)
 {
     return result.status == ACLPTI_SUCCESS && result.taskLogs.empty() && result.blockLogs.empty() &&
-           result.pmuLogs.empty() && result.errorStats.failedRecordCount == 0;
+           result.pmuLogs.empty() && result.taskPmuLogs.empty() && result.errorStats.failedRecordCount == 0;
 }
 
 bool HasRootSectionCsv(const boost::filesystem::path& outputDirectory)
@@ -1221,29 +1096,26 @@ aclptiResult PmuCsvWriter::Write(
     const aclptiProfilingDataResult& result, const std::vector<std::string>& sections, const PmuCsvConfig& config)
 {
     const std::string outputDirectory = ResolveOutputDirectory(config);
+    const auto& pmuLogs = config.pmuDataLevel == PmuDataLevel::Task ? result.taskPmuLogs : result.pmuLogs;
+    const char* pmuLevel = PmuDataLevelName(config.pmuDataLevel);
     npu_compute::detail::DebugLog(
-        "npu-compute", "CSV write requested: output=%s sections=%zu pmuBlocks=%zu status=%d failedRecords=%llu",
-        outputDirectory.c_str(), sections.size(), result.pmuLogs.size(), static_cast<int>(result.status),
+        "npu-compute",
+        "CSV write requested: output=%s sections=%zu pmuLevel=%s pmuRows=%zu status=%d "
+        "failedRecords=%llu",
+        outputDirectory.c_str(), sections.size(), pmuLevel, pmuLogs.size(), static_cast<int>(result.status),
         static_cast<unsigned long long>(result.errorStats.failedRecordCount));
     if (IsEmptySuccessfulResult(result)) {
         npu_compute::detail::DebugLog("npu-compute", "CSV write skipped: empty successful result");
         return ACLPTI_SUCCESS;
     }
-    if (result.pmuLogs.empty()) {
+    if (pmuLogs.empty()) {
         npu_compute::detail::DebugLog(
-            "npu-compute", "CSV write skipped: no PMU rows status=%d failedRecords=%llu",
+            "npu-compute", "CSV write skipped: no PMU rows pmuLevel=%s status=%d failedRecords=%llu", pmuLevel,
             static_cast<int>(result.status), static_cast<unsigned long long>(result.errorStats.failedRecordCount));
         return ACLPTI_SUCCESS;
     }
-    PmuCsvConfig csvConfig = config;
-    const BlockCounts blockCounts = ComputeBlockCounts(result.pmuLogs);
-    csvConfig.aicBlockCount = blockCounts.aic;
-    csvConfig.aivBlockCount = blockCounts.aiv;
-    npu_compute::detail::DebugLog(
-        "npu-compute", "CSV timing config: aicBlockCount=%u aicCoreCount=%u aivBlockCount=%u aivCoreCount=%u",
-        AicBlockCount(csvConfig), AicCoreCount(csvConfig), AivBlockCount(csvConfig), AivCoreCount(csvConfig));
-    const double aicFrequencyMhz = AicFrequencyMhz(csvConfig);
-    const double aivFrequencyMhz = AivFrequencyMhz(csvConfig);
+    const double aicFrequencyMhz = AicFrequencyMhz(config);
+    const double aivFrequencyMhz = AivFrequencyMhz(config);
     if (aicFrequencyMhz <= 0.0 || !std::isfinite(aicFrequencyMhz) || aivFrequencyMhz <= 0.0 ||
         !std::isfinite(aivFrequencyMhz)) {
         npu_compute::detail::DebugLog(
@@ -1273,8 +1145,8 @@ aclptiResult PmuCsvWriter::Write(
             const SectionWriter* writer = FindWriter(section);
             const boost::filesystem::path path = writeDirectory / (section + ".csv");
             npu_compute::detail::DebugLog(
-                "npu-compute", "CSV section write start: section=%s path=%s rows=%zu", section.c_str(), path.c_str(),
-                result.pmuLogs.size());
+                "npu-compute", "CSV section write start: section=%s path=%s pmuLevel=%s rows=%zu", section.c_str(),
+                path.c_str(), pmuLevel, pmuLogs.size());
             std::ofstream output(path.string(), std::ios::out | std::ios::trunc);
             if (!output.is_open()) {
                 const int errorNumber = errno;
@@ -1286,8 +1158,8 @@ aclptiResult PmuCsvWriter::Write(
             const std::vector<std::string> header = writer->header();
             CsvSectionStats stats;
             WriteCsvLine(output, header);
-            for (const auto& [key, row] : result.pmuLogs) {
-                const CsvRow values = writer->row(MakeRowMetrics(key, row), csvConfig);
+            for (const auto& [key, row] : pmuLogs) {
+                const CsvRow values = writer->row(MakeRowMetrics(key, row), config);
                 UpdateMissingStats(header, values, &stats);
                 WriteCsvLine(output, values);
             }

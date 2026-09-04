@@ -19,10 +19,17 @@
 #include <cstddef>
 #include <memory>
 #include <mutex>
+#include <string>
 
 namespace npu_compute {
 
 inline constexpr int kInitializeFailed = -1;
+
+namespace detail {
+
+bool LoadPmuDataLevelFromEnvironment(const char* variableName, PmuDataLevel* level, std::string* error);
+
+} // namespace detail
 
 class NpuComputeRuntime {
 public:

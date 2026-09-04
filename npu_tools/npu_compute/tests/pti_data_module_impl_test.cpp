@@ -76,10 +76,11 @@ std::array<std::byte, 32> TaskLog(
     return bytes;
 }
 
-std::array<std::byte, 128> PmuRecord(uint16_t taskId, uint16_t streamId, uint16_t blockId, uint64_t firstCounter)
+std::array<std::byte, 128> PmuRecord(
+    uint16_t taskId, uint16_t streamId, uint16_t blockId, uint64_t firstCounter, uint8_t funcType = 0x29U)
 {
     std::array<std::byte, 128> bytes{};
-    StoreWord(bytes.data(), 0, 0x6bd3002aU);
+    StoreWord(bytes.data(), 0, 0x6bd30000U | funcType);
     StoreWord(bytes.data(), 1, (uint32_t(taskId) << 16U) | streamId);
     StoreWord(bytes.data(), 2, 100U);
     StoreWord(bytes.data(), 5, 3U << 8U);
@@ -280,6 +281,7 @@ int TestRawDataDecoder()
     CHECK(decoded.Ok());
     CHECK(std::holds_alternative<data_detail::PmuRecord128>(decoded.Value().payload));
     const auto& record = std::get<data_detail::PmuRecord128>(decoded.Value().payload);
+    CHECK(record.funcType == 0x2aU);
     CHECK(record.taskId == 0x4321);
     CHECK(record.rtStreamId == 0x0078);
     CHECK(record.totalCycles == 0xfedcba9876543210ULL);
@@ -296,6 +298,7 @@ int TestRawDataDecoder()
     const auto blockPmu = data_detail::DecodeRawRecord(pmu.data(), pmu.size(), 6, PmuEvents({0x10}));
     CHECK(blockPmu.Ok());
     const auto& blockPmuRecord = std::get<data_detail::PmuRecord128>(blockPmu.Value().payload);
+    CHECK(blockPmuRecord.funcType == 0x29U);
     CHECK(blockPmuRecord.blockId == 0x1234);
     CHECK(blockPmuRecord.subBlockId == 0x5678);
     CHECK(blockPmuRecord.pmuValues.at(0x10) == 0x100000000ULL);
@@ -317,6 +320,52 @@ int TestRawDataDecoder()
     CHECK(data_detail::DecodeRawRecord(pmu.data(), pmu.size(), 0).Status() == ACLPTI_ERROR_DECODE);
     StoreWord(taskLog.data(), 0, 0x6bd30002U);
     CHECK(data_detail::DecodeRawRecord(taskLog.data(), taskLog.size(), 0).Status() == ACLPTI_ERROR_DECODE);
+    return 0;
+}
+
+int TestBlockAndTaskPmuAreAggregatedSeparately()
+{
+    ResultSink sink;
+    data::Module module([&sink](const auto& result) { return sink.Accept(result); });
+    CHECK(module.Initialize() == ACLPTI_SUCCESS);
+    CHECK(module.PrepareReplay({41, PmuEvents({0x701})}) == ACLPTI_SUCCESS);
+
+    const MsprofRawDataCallback callback = module.GetRawDataCallback();
+    CHECK(callback != nullptr);
+    auto blockPayload = PmuRecord(1, 2, 0, 100, 0x29U);
+    auto taskPayload = PmuRecord(1, 2, 0, 1000, 0x2aU);
+    StoreWord(taskPayload.data(), 2, 1000U);
+    auto block = RawData(blockPayload, PMU_DATA_TYPE);
+    auto task = RawData(taskPayload, PMU_DATA_TYPE);
+    CHECK(callback(&block) == 0);
+    CHECK(callback(&task) == 0);
+    CHECK(module.RecordReplayStatus({41, ACLPTI_SUCCESS}).status == ACLPTI_SUCCESS);
+    CHECK(module.ReleaseReplay(41) == ACLPTI_SUCCESS);
+
+    CHECK(module.PrepareReplay({42, PmuEvents({0x702})}) == ACLPTI_SUCCESS);
+    blockPayload = PmuRecord(1, 2, 0, 200, 0x29U);
+    taskPayload = PmuRecord(1, 2, 0, 2000, 0x2aU);
+    StoreWord(blockPayload.data(), 2, 200U);
+    StoreWord(taskPayload.data(), 2, 2000U);
+    block = RawData(blockPayload, PMU_DATA_TYPE);
+    task = RawData(taskPayload, PMU_DATA_TYPE);
+    CHECK(callback(&block) == 0);
+    CHECK(callback(&task) == 0);
+    CHECK(module.RecordReplayStatus({42, ACLPTI_SUCCESS}).status == ACLPTI_SUCCESS);
+    CHECK(module.ReleaseReplay(42) == ACLPTI_SUCCESS);
+    CHECK(module.Shutdown() == ACLPTI_SUCCESS);
+
+    const auto result = sink.Wait();
+    CHECK(result != nullptr);
+    CHECK(result->pmuLogs.size() == 1);
+    CHECK(result->taskPmuLogs.size() == 1);
+    const aclptiBlockKey key{0, 0, ACLPTI_CORE_TYPE_AIC, 3};
+    CHECK(result->pmuLogs.at(key).totalCycles == 200.0);
+    CHECK(result->pmuLogs.at(key).values.at(0x701) == 100.0);
+    CHECK(result->pmuLogs.at(key).values.at(0x702) == 200.0);
+    CHECK(result->taskPmuLogs.at(key).totalCycles == 2000.0);
+    CHECK(result->taskPmuLogs.at(key).values.at(0x701) == 1000.0);
+    CHECK(result->taskPmuLogs.at(key).values.at(0x702) == 2000.0);
     return 0;
 }
 
@@ -821,6 +870,70 @@ int TestCrossReplayAggregate()
     return 0;
 }
 
+int TestMsopprofA5ReplayMerge()
+{
+    ResultSink sink;
+    data::Module module([&sink](const auto& result) { return sink.Accept(result); });
+    CHECK(module.Initialize() == ACLPTI_SUCCESS);
+
+    CHECK(module.PrepareReplay({211, PmuEvents({10, 20})}) == ACLPTI_SUCCESS);
+    auto first = PmuRecord(7, 8, 4, 10);
+    StoreWord(first.data(), 2, 100);
+    StoreWord(first.data(), 5, 1U << 8U);
+    StoreWord(first.data(), 6, (4U << 16U) | 1U);
+    auto firstRaw = RawData(first, PMU_DATA_TYPE);
+    CHECK(module.GetRawDataCallback()(&firstRaw) == 0);
+
+    auto duplicate = PmuRecord(7, 8, 4, 20);
+    StoreWord(duplicate.data(), 2, 200);
+    StoreWord(duplicate.data(), 5, 2U << 8U);
+    StoreWord(duplicate.data(), 6, (4U << 16U) | 1U);
+    auto duplicateRaw = RawData(duplicate, PMU_DATA_TYPE);
+    CHECK(module.GetRawDataCallback()(&duplicateRaw) == 0);
+    CHECK(module.RecordReplayStatus({211, ACLPTI_SUCCESS}).status == ACLPTI_SUCCESS);
+    CHECK(module.ReleaseReplay(211) == ACLPTI_SUCCESS);
+
+    CHECK(module.PrepareReplay({212, PmuEvents({20, 30})}) == ACLPTI_SUCCESS);
+    auto second = PmuRecord(9, 10, 4, 30);
+    StoreWord(second.data(), 2, 300);
+    StoreWord(second.data(), 5, 3U << 8U);
+    StoreWord(second.data(), 6, (4U << 16U) | 1U);
+    auto secondRaw = RawData(second, PMU_DATA_TYPE);
+    CHECK(module.GetRawDataCallback()(&secondRaw) == 0);
+    CHECK(module.RecordReplayStatus({212, ACLPTI_SUCCESS}).status == ACLPTI_SUCCESS);
+    CHECK(module.ReleaseReplay(212) == ACLPTI_SUCCESS);
+
+    CHECK(module.PrepareReplay({213, PmuEvents({40})}) == ACLPTI_SUCCESS);
+    auto failed = PmuRecord(11, 12, 4, 40);
+    StoreWord(failed.data(), 2, 400);
+    StoreWord(failed.data(), 5, 4U << 8U);
+    StoreWord(failed.data(), 6, (4U << 16U) | 1U);
+    auto failedRaw = RawData(failed, PMU_DATA_TYPE);
+    CHECK(module.GetRawDataCallback()(&failedRaw) == 0);
+    CHECK(module.RecordReplayStatus({213, ACLPTI_ERROR_RESULT_UNRELIABLE}).status == ACLPTI_ERROR_RESULT_UNRELIABLE);
+    CHECK(module.ReleaseReplay(213) == ACLPTI_SUCCESS);
+
+    CHECK(module.Shutdown() == ACLPTI_SUCCESS);
+    const auto result = sink.Wait();
+    CHECK(result != nullptr);
+    CHECK(result->pmuLogs.size() == 1);
+    const auto& [key, row] = *result->pmuLogs.begin();
+    CHECK(key.blockId == 4);
+    CHECK(key.subBlockId == 1);
+    CHECK(key.coreType == ACLPTI_CORE_TYPE_AIC);
+    CHECK(key.coreId == 3);
+    CHECK(row.totalCycles == 300.0);
+    CHECK(row.values.size() == 3);
+    CHECK(row.values.count(10) == 1);
+    CHECK(row.values.count(20) == 1);
+    CHECK(row.values.count(30) == 1);
+    CHECK(row.values.at(10) == 20.0);
+    CHECK(row.values.at(20) == 21.0);
+    CHECK(row.values.at(30) == 31.0);
+    CHECK(row.values.count(40) == 0);
+    return 0;
+}
+
 int TestFailedPackageIsDropped()
 {
     constexpr std::size_t kMalformedRecordCount = 5000;
@@ -852,7 +965,7 @@ int TestFailedPackageIsDropped()
     CHECK(result->status == ACLPTI_ERROR_PROFILING_FAILED);
     CHECK(result->errorStats.failedRecordCount == kMalformedRecordCount);
     CHECK(result->errorStats.failedRecordCountByReplay.at(303) == kMalformedRecordCount);
-    CHECK(result->pmuLogs.at(aclptiBlockKey{8, 9, ACLPTI_CORE_TYPE_AIC, 3}).values.at(0x55) == 77.0);
+    CHECK(result->pmuLogs.empty());
     return 0;
 }
 
@@ -891,6 +1004,9 @@ int main()
     if (TestRawDataDecoder() != 0) {
         return 1;
     }
+    if (TestBlockAndTaskPmuAreAggregatedSeparately() != 0) {
+        return 1;
+    }
     if (TestReplayLifecycle() != 0) {
         return 1;
     }
@@ -925,6 +1041,9 @@ int main()
         return 1;
     }
     if (TestCrossReplayAggregate() != 0) {
+        return 1;
+    }
+    if (TestMsopprofA5ReplayMerge() != 0) {
         return 1;
     }
     if (TestFailedPackageIsDropped() != 0) {

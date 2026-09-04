@@ -90,7 +90,44 @@ private:
 bool SetScenarioEnvironment(const boost::filesystem::path& output)
 {
     return ::setenv("NPU_COMPUTE_OUTPUT", output.c_str(), 1) == 0 &&
-           ::setenv("NPU_COMPUTE_SECTIONS", kSections, 1) == 0;
+           ::setenv("NPU_COMPUTE_SECTIONS", kSections, 1) == 0 && ::unsetenv("NPU_COMPUTE_PMU_LEVEL") == 0;
+}
+
+bool TestPmuLevelEnvironment()
+{
+    const char* previous = std::getenv("NPU_COMPUTE_PMU_LEVEL");
+    const bool hadPrevious = previous != nullptr;
+    const std::string previousValue = hadPrevious ? previous : "";
+    npu_compute::PmuDataLevel level = npu_compute::PmuDataLevel::Task;
+    std::string error;
+
+    CHECK(::unsetenv("NPU_COMPUTE_PMU_LEVEL") == 0);
+    CHECK(npu_compute::detail::LoadPmuDataLevelFromEnvironment("NPU_COMPUTE_PMU_LEVEL", &level, &error));
+    CHECK(level == npu_compute::PmuDataLevel::Block);
+
+    CHECK(::setenv("NPU_COMPUTE_PMU_LEVEL", "", 1) == 0);
+    level = npu_compute::PmuDataLevel::Task;
+    CHECK(npu_compute::detail::LoadPmuDataLevelFromEnvironment("NPU_COMPUTE_PMU_LEVEL", &level, &error));
+    CHECK(level == npu_compute::PmuDataLevel::Block);
+
+    CHECK(::setenv("NPU_COMPUTE_PMU_LEVEL", "block", 1) == 0);
+    CHECK(npu_compute::detail::LoadPmuDataLevelFromEnvironment("NPU_COMPUTE_PMU_LEVEL", &level, &error));
+    CHECK(level == npu_compute::PmuDataLevel::Block);
+
+    CHECK(::setenv("NPU_COMPUTE_PMU_LEVEL", "task", 1) == 0);
+    CHECK(npu_compute::detail::LoadPmuDataLevelFromEnvironment("NPU_COMPUTE_PMU_LEVEL", &level, &error));
+    CHECK(level == npu_compute::PmuDataLevel::Task);
+
+    CHECK(::setenv("NPU_COMPUTE_PMU_LEVEL", "TASK", 1) == 0);
+    error.clear();
+    CHECK(!npu_compute::detail::LoadPmuDataLevelFromEnvironment("NPU_COMPUTE_PMU_LEVEL", &level, &error));
+    CHECK(error.find("NPU_COMPUTE_PMU_LEVEL") != std::string::npos);
+    CHECK(error.find("TASK") != std::string::npos);
+    CHECK(error.find("block") != std::string::npos);
+    CHECK(error.find("task") != std::string::npos);
+
+    return hadPrevious ? ::setenv("NPU_COMPUTE_PMU_LEVEL", previousValue.c_str(), 1) == 0 :
+                         ::unsetenv("NPU_COMPUTE_PMU_LEVEL") == 0;
 }
 
 bool CheckSubscribeAndEnableContract()
@@ -434,6 +471,18 @@ bool RunConfigFailureChild(const boost::filesystem::path& output)
     return true;
 }
 
+bool RunPmuLevelFailureChild(const boost::filesystem::path& output)
+{
+    CHECK(SetScenarioEnvironment(output));
+    CHECK(::setenv("NPU_COMPUTE_PMU_LEVEL", "invalid-level", 1) == 0);
+    npu_compute::test::ResetAclPtiCallbackStub();
+    CHECK(acltoolInitialize() == npu_compute::kInitializeFailed);
+    CHECK(npu_compute::test::AclPtiSubscribeCount() == 0);
+    CHECK(npu_compute::test::AclPtiEnableCount() == 0);
+    CHECK(npu_compute::test::AclPtiRangeConfigCount() == 0);
+    return true;
+}
+
 bool RunChildScenario(const std::string& scenario, const boost::filesystem::path& output)
 {
     if (scenario.rfind("success-", 0) == 0) {
@@ -456,6 +505,9 @@ bool RunChildScenario(const std::string& scenario, const boost::filesystem::path
     }
     if (scenario == "config-failure") {
         return RunConfigFailureChild(output);
+    }
+    if (scenario == "pmu-level-failure") {
+        return RunPmuLevelFailureChild(output);
     }
     if (scenario == "normal-stop") {
         return RunNormalStopChild(output);
@@ -532,9 +584,9 @@ bool TestIgnoredEvents(const char* executable)
 
 bool TestInitializationFailures(const char* executable)
 {
-    constexpr std::array<const char*, 5> scenarios = {
+    constexpr std::array<const char*, 6> scenarios = {
         "subscribe-failure", "enable-failure-launch", "enable-failure-host-args", "enable-failure-simt-host-args",
-        "config-failure",
+        "config-failure",    "pmu-level-failure",
     };
     for (const char* scenario : scenarios) {
         TempDirectory temporary;
@@ -603,8 +655,9 @@ int main(int argc, char** argv)
         std::fprintf(stderr, "unexpected runtime callback test arguments\n");
         return 2;
     }
-    return TestSuccessAndNormalExit(argv[0]) && TestIgnoredEvents(argv[0]) && TestInitializationFailures(argv[0]) &&
-                   TestNormalStop(argv[0]) && TestStopDuringCollectionDoesNotHoldRuntimeMutex(argv[0]) ?
+    return TestPmuLevelEnvironment() && TestSuccessAndNormalExit(argv[0]) && TestIgnoredEvents(argv[0]) &&
+                   TestInitializationFailures(argv[0]) && TestNormalStop(argv[0]) &&
+                   TestStopDuringCollectionDoesNotHoldRuntimeMutex(argv[0]) ?
                0 :
                1;
 }

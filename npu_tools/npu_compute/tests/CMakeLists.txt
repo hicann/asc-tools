@@ -126,6 +126,7 @@ target_link_libraries(acl_pti_replay_test
 )
 set_target_properties(acl_pti_replay_test PROPERTIES ENABLE_EXPORTS YES)
 add_test(NAME npu_compute.replay COMMAND acl_pti_replay_test)
+add_test(NAME npu_compute.replay_debug COMMAND acl_pti_replay_test debug)
 add_test(NAME npu_compute.replay_shrink_block COMMAND acl_pti_replay_test shrink)
 
 add_executable(acl_pti_simt_replay_test simt_replay_test.cpp)

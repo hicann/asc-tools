@@ -22,6 +22,9 @@
 
 namespace npu_compute::aclpti::data::detail {
 
+constexpr uint8_t kBlockPmuFunctionType = 0x29U;
+constexpr uint8_t kTaskPmuFunctionType = 0x2aU;
+
 template <typename T>
 class ResultOr {
 public:
@@ -49,6 +52,7 @@ struct TaskLog32 {
 };
 
 struct PmuRecord128 {
+    uint8_t funcType;
     uint16_t taskId;
     uint16_t rtStreamId;
     uint64_t totalCycles;

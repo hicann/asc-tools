@@ -114,6 +114,7 @@ struct aclptiProfilingDataResult {
     std::map<uint16_t, std::vector<aclptiTaskLogRow>> taskLogs;
     std::map<aclptiBlockKey, std::vector<aclptiTaskLogRow>> blockLogs;
     std::map<aclptiBlockKey, aclptiPmuDataRow> pmuLogs;
+    std::map<aclptiBlockKey, aclptiPmuDataRow> taskPmuLogs;
     std::vector<aclptiRawDataChunk> pipelineData;
     std::vector<aclptiRawDataChunk> pcSamplingData;
     struct ErrorStats {

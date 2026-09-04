@@ -19,17 +19,19 @@
 
 namespace npu_compute {
 
+enum class PmuDataLevel {
+    Block,
+    Task,
+};
+
 struct PmuCsvConfig {
     std::string outputDirectory;
     std::string mirrorOutputDirectory;
     double frequencyMhz = 1000.0;
     double aicFrequencyMhz = 0.0;
     double aivFrequencyMhz = 0.0;
-    std::uint32_t aicCoreCount = 0;
-    std::uint32_t aivCoreCount = 0;
-    std::uint32_t aicBlockCount = 0; // 真实启动 AIC block 数，0=不可用(退回核数)
-    std::uint32_t aivBlockCount = 0; // 真实启动 AIV block 数，0=不可用(退回核数)
     std::string socName = "950X";
+    PmuDataLevel pmuDataLevel = PmuDataLevel::Block;
 };
 
 class PmuCsvWriter final {

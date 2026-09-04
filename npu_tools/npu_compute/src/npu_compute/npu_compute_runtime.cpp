@@ -10,7 +10,6 @@
 #include "npu_compute_runtime.h"
 
 #include "common/debug_log.h"
-#include "hardware_device_api.h"
 #include "hardware_info_json.h"
 
 #include <algorithm>
@@ -108,31 +107,6 @@ bool ParsePositiveDouble(std::string_view text, double* result)
     return true;
 }
 
-void LoadCsvAiCoreCountsFromDevice(PmuCsvConfig* config)
-{
-    if (config == nullptr || (config->aicCoreCount != 0 && config->aivCoreCount != 0)) {
-        return;
-    }
-
-    DynamicHardwareDeviceApi api;
-    std::uint32_t aiCubeCount = 0;
-    std::uint32_t aiVectorCount = 0;
-    DiagnosticSink diagnostics = [](std::string_view message) {
-        npu_compute::detail::DebugLog(
-            "npu-compute", "CSV hardware count fallback diagnostic: %.*s", static_cast<int>(message.size()),
-            message.data());
-    };
-    if (!CollectAiCoreCounts(api, &aiCubeCount, &aiVectorCount, &diagnostics)) {
-        npu_compute::detail::DebugLog("npu-compute", "CSV hardware count fallback unavailable");
-        return;
-    }
-    config->aicCoreCount = aiCubeCount;
-    config->aivCoreCount = aiVectorCount;
-    npu_compute::detail::DebugLog(
-        "npu-compute", "CSV hardware config: source=DeviceAttributes aicCoreCount=%u aivCoreCount=%u",
-        config->aicCoreCount, config->aivCoreCount);
-}
-
 void LoadCsvHardwareInfoMetadata(PmuCsvConfig* config, bool loadFrequencies)
 {
     if (config == nullptr) {
@@ -143,7 +117,6 @@ void LoadCsvHardwareInfoMetadata(PmuCsvConfig* config, bool loadFrequencies)
     if (!input.is_open()) {
         npu_compute::detail::DebugLog(
             "npu-compute", "CSV hardware metadata fallback: HardwareInfo unavailable path=%s", path.c_str());
-        LoadCsvAiCoreCountsFromDevice(config);
         return;
     }
     const std::string jsonl((std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>());
@@ -153,24 +126,42 @@ void LoadCsvHardwareInfoMetadata(PmuCsvConfig* config, bool loadFrequencies)
         npu_compute::detail::DebugLog(
             "npu-compute", "CSV hardware metadata fallback: parse HardwareInfo failed path=%s reason=%s", path.c_str(),
             error.c_str());
-        LoadCsvAiCoreCountsFromDevice(config);
         return;
     }
     if (loadFrequencies) {
         config->aicFrequencyMhz = static_cast<double>(frequencies.aiCubeFrequencyMhz);
         config->aivFrequencyMhz = static_cast<double>(frequencies.aiVectorFrequencyMhz);
     }
-    config->aicCoreCount = frequencies.aiCubeCount;
-    config->aivCoreCount = frequencies.aiVectorCount;
     npu_compute::detail::DebugLog(
-        "npu-compute",
-        "CSV hardware config: source=HardwareInfo fallbackFrequency=%f aicFrequency=%f "
-        "aivFrequency=%f aicCoreCount=%u aivCoreCount=%u",
-        config->frequencyMhz, config->aicFrequencyMhz, config->aivFrequencyMhz, config->aicCoreCount,
-        config->aivCoreCount);
+        "npu-compute", "CSV hardware config: source=HardwareInfo fallbackFrequency=%f aicFrequency=%f aivFrequency=%f",
+        config->frequencyMhz, config->aicFrequencyMhz, config->aivFrequencyMhz);
 }
 
 } // namespace
+
+namespace detail {
+
+bool LoadPmuDataLevelFromEnvironment(const char* variableName, PmuDataLevel* level, std::string* error)
+{
+    if (variableName == nullptr || level == nullptr || error == nullptr) {
+        return false;
+    }
+    const char* value = std::getenv(variableName);
+    if (value == nullptr || value[0] == '\0' || std::string_view(value) == "block") {
+        *level = PmuDataLevel::Block;
+        error->clear();
+        return true;
+    }
+    if (std::string_view(value) == "task") {
+        *level = PmuDataLevel::Task;
+        error->clear();
+        return true;
+    }
+    *error = std::string(variableName) + " has invalid value '" + value + "'; expected block or task";
+    return false;
+}
+
+} // namespace detail
 
 namespace {
 
@@ -204,6 +195,10 @@ int NpuComputeRuntime::Initialize()
         std::fprintf(stderr, "[libnpu-compute] invalid NPU_COMPUTE_SECTIONS: %s\n", error.c_str());
         return kInitializeFailed;
     }
+    if (!detail::LoadPmuDataLevelFromEnvironment("NPU_COMPUTE_PMU_LEVEL", &csv_config_.pmuDataLevel, &error)) {
+        std::fprintf(stderr, "[libnpu-compute] invalid PMU data level: %s\n", error.c_str());
+        return kInitializeFailed;
+    }
     csv_config_.outputDirectory = outputDirectory.string();
     csv_config_.mirrorOutputDirectory.clear();
     if (const char* mirrorOutputDirectory = std::getenv("NPU_COMPUTE_CSV_OUTPUT_DIR");
@@ -215,8 +210,6 @@ int NpuComputeRuntime::Initialize()
     csv_config_.frequencyMhz = kMsopprofA5FallbackFrequencyMhz;
     csv_config_.aicFrequencyMhz = 0.0;
     csv_config_.aivFrequencyMhz = 0.0;
-    csv_config_.aicCoreCount = 0;
-    csv_config_.aivCoreCount = 0;
     if (const char* frequency = std::getenv("NPU_COMPUTE_FREQUENCY_MHZ");
         frequency != nullptr && frequency[0] != '\0') {
         double parsed = 0.0;
@@ -232,6 +225,9 @@ int NpuComputeRuntime::Initialize()
     if (const char* socName = std::getenv("NPU_COMPUTE_SOC"); socName != nullptr && socName[0] != '\0') {
         csv_config_.socName = socName;
     }
+    npu_compute::detail::DebugLog(
+        "npu-compute", "PMU data level configured: %s",
+        csv_config_.pmuDataLevel == PmuDataLevel::Task ? "task" : "block");
 
     auto consumer = PmuDataConsumer::Create(
         [this](std::shared_ptr<const aclptiProfilingDataResult> result) { return ProcessPmuData(std::move(result)); });
@@ -352,10 +348,12 @@ aclptiResult NpuComputeRuntime::ProcessPmuData(std::shared_ptr<const aclptiProfi
     if (result == nullptr) {
         return ACLPTI_ERROR_INVALID_PARAMETER;
     }
-    for (const auto& [blockKey, row] : result->pmuLogs) {
-        if (blockKey.blockId != row.blockId || blockKey.subBlockId != row.subBlockId ||
-            blockKey.coreType != row.coreType || blockKey.coreId != row.coreId) {
-            return ACLPTI_ERROR_ASSEMBLE;
+    for (const auto* pmuLogs : {&result->pmuLogs, &result->taskPmuLogs}) {
+        for (const auto& [blockKey, row] : *pmuLogs) {
+            if (blockKey.blockId != row.blockId || blockKey.subBlockId != row.subBlockId ||
+                blockKey.coreType != row.coreType || blockKey.coreId != row.coreId) {
+                return ACLPTI_ERROR_ASSEMBLE;
+            }
         }
     }
     PmuCsvConfig csvConfig;

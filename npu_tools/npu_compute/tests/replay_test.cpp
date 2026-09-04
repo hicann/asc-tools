@@ -19,6 +19,8 @@
 #include <cstdlib>
 #include <cstring>
 #include <initializer_list>
+#include <string>
+#include <unistd.h>
 #include <vector>
 
 namespace {
@@ -38,6 +40,42 @@ int Check(bool condition, const char* expression, int line)
             return 1;                                          \
         }                                                      \
     } while (false)
+
+template <typename Function>
+bool CaptureStderr(Function function, std::string* output)
+{
+    FILE* capture = std::tmpfile();
+    if (capture == nullptr) {
+        return false;
+    }
+
+    const int savedStderr = dup(STDERR_FILENO);
+    if (savedStderr < 0) {
+        std::fclose(capture);
+        return false;
+    }
+
+    bool success = std::fflush(stderr) == 0 && dup2(fileno(capture), STDERR_FILENO) >= 0;
+    if (success) {
+        function();
+        success = std::fflush(stderr) == 0;
+    }
+    success = dup2(savedStderr, STDERR_FILENO) >= 0 && success;
+    close(savedStderr);
+
+    if (success) {
+        std::rewind(capture);
+        char buffer[256];
+        std::size_t count = 0;
+        while ((count = std::fread(buffer, 1, sizeof(buffer), capture)) != 0) {
+            output->append(buffer, count);
+        }
+        success = std::ferror(capture) == 0;
+    }
+
+    success = std::fclose(capture) == 0 && success;
+    return success;
+}
 
 struct KernelArgs {
     uint8_t* value;
@@ -245,6 +283,13 @@ extern "C" aclError aclrtGetDevice(std::int32_t* deviceId)
 int main(int argc, char** argv)
 {
     const bool useShrinkBlock = argc == 2 && std::strcmp(argv[1], "shrink") == 0;
+    const bool useDebugLog = argc == 2 && std::strcmp(argv[1], "debug") == 0;
+    CHECK(argc == 1 || useShrinkBlock || useDebugLog);
+    if (useDebugLog) {
+        CHECK(setenv("NPU_COMPUTE_DEBUG", "1", 1) == 0);
+    } else {
+        CHECK(unsetenv("NPU_COMPUTE_DEBUG") == 0);
+    }
     const aclptiBlockResultMode blockResult = useShrinkBlock ? ACLPTI_BLOCK_RESULT_SHRINK : ACLPTI_BLOCK_RESULT_ALL;
     const std::uint32_t expectedBlockMode = useShrinkBlock ? PROF_COMPUTE_BLOCK_SHRINK : PROF_COMPUTE_ALL_BLOCK;
     CHECK(RuntimeStubSetOriginFunction("aclrtMalloc", &RealMalloc) == 0);
@@ -317,7 +362,11 @@ int main(int argc, char** argv)
 
     CHECK(aclrtSetDevice(7) == 0);
     CHECK(g_set_device_calls == 1);
-    CHECK(aclrtLaunchKernel(nullptr, 1, &args, sizeof(args), nullptr) == 0);
+    std::string profilingLog;
+    aclError firstLaunchStatus = ACL_ERROR_RT_FAILURE;
+    CHECK(CaptureStderr(
+        [&] { firstLaunchStatus = aclrtLaunchKernel(nullptr, 1, &args, sizeof(args), nullptr); }, &profilingLog));
+    CHECK(firstLaunchStatus == ACL_SUCCESS);
     CHECK(g_start_calls == 5);
     CHECK(g_stop_calls == 5);
     CHECK(g_start_data_type == 8);
@@ -359,6 +408,24 @@ int main(int argc, char** argv)
     CHECK(g_configs[4].primaryAttr == PROF_CONFIG_ATTR_INSTR);
     CHECK(g_configs[4].instrMode == PROF_COMPUTE_PC_SAMPLING);
     CHECK(g_configs[4].blockMode == expectedBlockMode);
+
+    if (useDebugLog) {
+        CHECK(profilingLog.find("[aclpti] msprof config round=0 collectionType=8") != std::string::npos);
+        CHECK(profilingLog.find("profSwitch=0x804") != std::string::npos);
+        CHECK(profilingLog.find("devNums=1") != std::string::npos);
+        CHECK(profilingLog.find("devId[0]=7") != std::string::npos);
+        CHECK(profilingLog.find("dumpPath=\"\" dumpPathLength=0") != std::string::npos);
+        CHECK(profilingLog.find("sampleConfig=\"\" sampleConfigLength=0") != std::string::npos);
+        CHECK(profilingLog.find("configInfo.attrs=") != std::string::npos);
+        CHECK(profilingLog.find("configInfo.numAttrs=2") != std::string::npos);
+        CHECK(profilingLog.find("attr[0] id=0 aicoreMetrics[0]=0") != std::string::npos);
+        CHECK(profilingLog.find("aicoreMetrics[9]=1281") != std::string::npos);
+        CHECK(profilingLog.find("attr[1] id=2 taskBlockMode=1") != std::string::npos);
+        CHECK(profilingLog.find("attr[0] id=1 instrMode=1") != std::string::npos);
+        CHECK(profilingLog.find("attr[0] id=1 instrMode=2") != std::string::npos);
+    } else {
+        CHECK(profilingLog.find("msprof config round=") == std::string::npos);
+    }
 
     const std::size_t starts_after_first_launch = g_start_calls;
     const std::size_t syncs_after_first_launch = g_sync_calls;
