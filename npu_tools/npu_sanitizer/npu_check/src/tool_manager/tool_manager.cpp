@@ -104,7 +104,8 @@ void PopulateDeviceCallStack(npucheck::NpuCheckMemcheckReport& report) noexcept
             stack.frames.swap(frames);
         }
         const bool hasStructuredFrames = !stack.frames.empty();
-        stack.format = hasStructuredFrames ? npucheck::ReportStackFormat::BOTH : npucheck::ReportStackFormat::RAW_TEXT;
+        stack.format =
+            hasStructuredFrames ? npucheck::ReportStackFormat::FRAMES : npucheck::ReportStackFormat::RAW_TEXT;
         if (callStack->binaryId != 0) {
             report.common.exec.binaryId = callStack->binaryId;
         }
@@ -147,7 +148,8 @@ void PopulateSyncPointCallStack(
         stack.rawText.swap(callStackText);
         stack.role = role;
         stack.frames.swap(frames);
-        stack.format = stack.frames.empty() ? npucheck::ReportStackFormat::RAW_TEXT : npucheck::ReportStackFormat::BOTH;
+        stack.format =
+            stack.frames.empty() ? npucheck::ReportStackFormat::RAW_TEXT : npucheck::ReportStackFormat::FRAMES;
         if (callStack->binaryId != 0) {
             point.exec.binaryId = callStack->binaryId;
         }

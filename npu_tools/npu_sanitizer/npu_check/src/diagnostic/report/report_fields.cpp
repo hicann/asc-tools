@@ -188,8 +188,8 @@ std::vector<ReportCallStack> ActiveCallStacks(const NpuCheckReportCommon& common
 {
     std::vector<ReportCallStack> stacks(common.stacks.begin(), common.stacks.begin() + common.stackCount);
     for (ReportCallStack& stack : stacks) {
-        if (stack.format == ReportStackFormat::BOTH && !stack.rawText.empty()) {
-            stack.format = ReportStackFormat::RAW_TEXT;
+        if (stack.format == ReportStackFormat::BOTH && !stack.frames.empty()) {
+            stack.format = ReportStackFormat::FRAMES;
         }
     }
     return stacks;
