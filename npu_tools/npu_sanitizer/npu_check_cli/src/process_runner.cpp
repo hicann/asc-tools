@@ -203,7 +203,9 @@ public:
     explicit OutputSink(const std::string& logPath) : logRequired_(!logPath.empty())
     {
         if (!logPath.empty()) {
-            log_.open(logPath, std::ios::binary | std::ios::app);
+            // 覆盖而非追加：同一路径重复跑时，上一次的报告必须被清掉，否则用户读到的是
+            // 多次运行拼在一起的内容，很容易把上一轮的诊断当成本轮结论。
+            log_.open(logPath, std::ios::binary | std::ios::trunc);
         }
     }
 
@@ -256,10 +258,15 @@ public:
             return;
         }
         std::lock_guard<std::mutex> lock(mutex_);
-        WriteFd(STDOUT_FILENO, text.data(), text.size());
-        if (text.back() != '\n') {
-            const char newline = '\n';
-            WriteFd(STDOUT_FILENO, &newline, 1);
+        // 指定了 --log-file 时报告只入文件，不再打屏（2.3.5 报告出口表）。两处都写会让
+        // 用户在终端和文件里各读到一份，重定向采集时还会重复计数。应用自身的
+        // stdout/stderr 不受影响，仍照常转发。
+        if (!log_.is_open()) {
+            WriteFd(STDOUT_FILENO, text.data(), text.size());
+            if (text.back() != '\n') {
+                const char newline = '\n';
+                WriteFd(STDOUT_FILENO, &newline, 1);
+            }
         }
         if (log_.is_open()) {
             log_.write(text.data(), static_cast<std::streamsize>(text.size()));

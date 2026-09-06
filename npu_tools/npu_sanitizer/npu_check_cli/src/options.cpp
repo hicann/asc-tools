@@ -22,6 +22,7 @@
 #include <optional>
 #include <set>
 #include <sys/stat.h>
+#include <sys/utsname.h>
 #include <unistd.h>
 
 namespace npu::sanitizer::cli {
@@ -77,6 +78,41 @@ constexpr const char* kInjectionLibraryName = "libnpu_check.so";
 // "/lib64/libnpu_check.so" 是一个宿主机上的绝对路径，查找会静默落到系统目录里去。
 constexpr const char* kAscendToolkitHomeEnv = "ASCEND_TOOLKIT_HOME";
 
+// 注入库在 CANN 安装树内的相对目录，由 asc-tools 的 run 包布局决定。
+constexpr const char* kInjectionLibraryRelativeDir = "tools/npu_tools/lib64";
+
+// 应用名能否被 execvp 解析到。含 '/' 时按路径直接查，否则沿 PATH 逐段查找 ——
+// 必须与 execvp(3) 的查找规则一致，否则这里放行的命令 exec 时仍会失败。
+bool IsExecutableCommand(const std::string& command)
+{
+    const auto executable = [](const boost::filesystem::path& path) {
+        boost::system::error_code error;
+        return boost::filesystem::is_regular_file(path, error) && access(path.c_str(), X_OK) == 0;
+    };
+    if (command.find('/') != std::string::npos) {
+        return executable(command);
+    }
+    const char* search = std::getenv("PATH");
+    if (search == nullptr || search[0] == '\0') {
+        return false;
+    }
+    const std::string path(search);
+    size_t begin = 0;
+    while (begin <= path.size()) {
+        const size_t end = path.find(':', begin);
+        const std::string item = path.substr(begin, end == std::string::npos ? std::string::npos : end - begin);
+        // PATH 里的空项按 POSIX 表示当前目录。
+        if (executable(boost::filesystem::path(item.empty() ? "." : item) / command)) {
+            return true;
+        }
+        if (end == std::string::npos) {
+            break;
+        }
+        begin = end + 1;
+    }
+    return false;
+}
+
 // 注入库会被加载进目标进程并以目标进程的权限运行。组可写或其他人可写意味着本用户
 // 之外的人能替换它的内容，等于把任意代码执行的入口交出去，因此一律拒绝而不是警告。
 bool IsSafelyOwned(const boost::filesystem::path& path, std::string& reason)
@@ -114,8 +150,12 @@ bool ParseOptions(int argc, char** argv, Options& options, std::string& error)
             break;
         }
         if (argument == "--help" || argument == "-h") {
+            // 记下之后继续扫描，不在这里返回。命令行里可能还有写错的选项，用户需要
+            // 同时知道"哪里写错了"和"正确写法是什么"；扫到 -h 就停会让它右侧的错误
+            // 被静默吞掉，例如 `-h --tool badtool` 只打帮助、退 0，用户以为写法没问题。
+            // 用户敲 -h 往往正因为不确定写法，此刻隐瞒错误代价最大。
             options.showHelp = true;
-            return true;
+            continue;
         }
         if (argument.rfind('-', 0) != 0) {
             // 第一个不以 '-' 开头的参数即应用区域起点，其后参数一律原样交给被测程序，
@@ -224,12 +264,28 @@ bool ParseOptions(int argc, char** argv, Options& options, std::string& error)
         options.tools.push_back(std::move(request));
     }
 
+    // --help / -h 只打印帮助，不启动任何东西，因此不要求提供应用。这条检查放在选项
+    // 校验之后：先把写错的选项报出来，再决定要不要因为"缺应用"而失败。
     if (applicationStart < 0 || applicationStart >= argc) {
+        if (options.showHelp) {
+            return true;
+        }
         error = "expected an application command";
         return false;
     }
     for (int i = applicationStart; i < argc; ++i) {
         options.application.emplace_back(argv[i]);
+    }
+
+    // 应用名在 fork 之前就校验，写错时报用法错误 64 而不是等 execvp 失败后退 125。
+    //
+    // 这条最常见的触发形态是把工具名多写了一遍，例如
+    //   npu-check --tool synccheck synccheck --tool memcheck memcheck ./app
+    // 多余的 "synccheck" 会成为应用区起点、被当成应用名。此时报"应用不可执行"，
+    // 比 fork 之后一句 execvp failed 更接近用户实际写错的地方。
+    if (!IsExecutableCommand(options.application.front())) {
+        error = "application '" + options.application.front() + "' is not an executable command";
+        return false;
     }
     return true;
 }
@@ -240,31 +296,26 @@ bool ResolveLibraryPath(const std::string& requested, std::string& resolved, std
     if (!requested.empty()) {
         candidates.emplace_back(requested);
     } else {
-        // 顺序即优先级，两组候选各自解决不同的部署形态。
+        // 注入库只从 CANN 安装树取，不再回退到可执行文件的相邻目录。
         //
-        // 一、CANN 安装树。打包落地后这是正常路径。
-        if (const char* toolkitHome = std::getenv(kAscendToolkitHomeEnv);
-            toolkitHome != nullptr && toolkitHome[0] != '\0') {
-            const boost::filesystem::path root(toolkitHome);
-            candidates.push_back(root / "lib64" / kInjectionLibraryName);
-            candidates.push_back(root / "lib" / kInjectionLibraryName);
+        // 这样规定是为了让"注入哪个 so"完全由当前 source 的 CANN 环境决定：相邻目录
+        // 兜底会让开发树里的构建产物在装了 CANN 的机器上照样被选中，两者版本不一致时
+        // 症状极难定位 —— 注入库和 libacl_san.so / Runtime 必须来自同一套安装（5.3）。
+        const char* toolkitHome = std::getenv(kAscendToolkitHomeEnv);
+        if (toolkitHome == nullptr || toolkitHome[0] == '\0') {
+            error = std::string(kAscendToolkitHomeEnv) + " is not set; source the CANN set_env.sh first";
+            return false;
         }
-        // 二、相对可执行文件自身。覆盖两种布局：构建产物同目录（demo 与开发树），
-        //     以及安装树的 bin/ + lib{,64}/。
-        //
-        //     这一组不是临时兜底。/proc/self/exe 已经解开符号链接，因此从 PATH 调用、
-        //     或经软链调用都能定位到真实安装位置；相比读环境变量，它不会因为用户忘了
-        //     source set_env.sh、或环境里残留着另一个版本的路径而指错地方。
-        //     在 libnpu_check.so 尚未进入 CANN 包之前，实际生效的也是这一组。
-        std::array<char, PATH_MAX + 1> executable{};
-        const ssize_t length = readlink("/proc/self/exe", executable.data(), PATH_MAX);
-        if (length > 0 && length < PATH_MAX) {
-            executable[static_cast<size_t>(length)] = '\0';
-            const auto directory = boost::filesystem::path(executable.data()).parent_path();
-            candidates.push_back(directory / kInjectionLibraryName);
-            candidates.push_back(directory / ".." / "lib64" / kInjectionLibraryName);
-            candidates.push_back(directory / ".." / "lib" / kInjectionLibraryName);
+        // 包布局由 asc-tools 的 run 包决定：<CANN>/<arch>-linux/tools/npu_tools/lib64/。
+        // 架构目录这一层必须带上 —— 版本目录下的 tools/ 是另一个真实目录，不含本包产物。
+        const boost::filesystem::path root(toolkitHome);
+        utsname system{};
+        if (uname(&system) == 0 && system.machine[0] != '\0') {
+            candidates.push_back(
+                root / (std::string(system.machine) + "-linux") / kInjectionLibraryRelativeDir / kInjectionLibraryName);
         }
+        // 兼容未来去掉架构目录层的布局，仍限定在同一个 CANN 根之下。
+        candidates.push_back(root / kInjectionLibraryRelativeDir / kInjectionLibraryName);
     }
 
     // 找到了文件但权限不合格，与"压根没找到"是两种完全不同的故障，诊断必须分开报，
@@ -290,26 +341,24 @@ bool ResolveLibraryPath(const std::string& requested, std::string& resolved, std
         error = "refusing to inject " + std::string(kInjectionLibraryName) + ": " + rejection;
         return false;
     }
-    error = "cannot locate " + std::string(kInjectionLibraryName) + "; searched " + std::string(kAscendToolkitHomeEnv) +
-            "/lib64, " + kAscendToolkitHomeEnv + "/lib and the directory of npu-check";
+    error = "cannot locate " + std::string(kInjectionLibraryName) + " under " + std::string(kAscendToolkitHomeEnv) +
+            "; expected <" + kAscendToolkitHomeEnv + ">/<arch>-linux/" + kInjectionLibraryRelativeDir;
     return false;
 }
 
 std::string Usage()
 {
     // 只列对外命令行契约：--tool、--log-file、--help/-h 以及 -- 边界规则。
-    // 内部验证选项（--handshake-timeout-ms、--error-exitcode）不对外承诺兼容性，
-    // 不得出现在这里。
-    return "Usage: npu-check [--tool <name>]... [--log-file <path>] [--work-dir <path>]\n"
+    // 内部调测选项（--work-dir、--handshake-timeout-ms、--error-exitcode）不对外承诺
+    // 兼容性，可随时变更或删除，因此不得出现在这里 —— 一旦印进帮助，用户就会按对外
+    // 契约来依赖它。它们仍然照常解析，只是不做广告。
+    return "Usage: npu-check [--tool <name>]... [--log-file <path>]\n"
            "                 [--] <application> [args...]\n"
            "Options:\n"
            "  --tool <memcheck|synccheck>  enable a checker; repeatable and idempotent.\n"
            "                               Defaults to memcheck when no --tool is given.\n"
            "  --log-file <path>            directory or file receiving the report and\n"
            "                               the application output\n"
-           "  --work-dir <path>            directory for npu_check.log and CLI session files.\n"
-           "                               Created when missing and never removed.\n"
-           "                               Defaults to a temporary directory.\n"
            "  -h, --help                   show this help and exit\n"
            "\n"
            "Pass -- before <application> when the application path or its arguments start\n"

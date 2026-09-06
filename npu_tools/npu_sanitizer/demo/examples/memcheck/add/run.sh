@@ -36,7 +36,7 @@ cmake --build build --parallel
 
 # 执行包含受控越界读的 add 示例。
 set +e
-npu-check --tool memcheck -- build/demo
+npu-check --tool memcheck build/demo
 set -e
 
 # 关注 summary：本例只有 1 个逻辑内存错误，errors 应为 1。
