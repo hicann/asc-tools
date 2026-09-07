@@ -178,9 +178,11 @@ The only source definition of `acltoolInitialize` is in
 
 ## Verification Scope
 
-- `examples/memcheck/memory_access/check_memory_access_end_to_end.sh` runs the 230
+- `examples/memcheck/memory_access/check_memory_access_end_to_end.sh` runs the 244
   supported memory_access scenarios using only customer-visible diagnostics, the
   memcheck summary, CLI result, and session completion as verdict inputs.
+- For the new same-block stride update and legal boundary cases, see
+  [NDDMA State Updates and Legal Boundaries](examples/memcheck/memory_access/NDDMA_STATE_CASES_en.md).
 
 All three examples have passed real Device end-to-end validation in the current
 CANN/Device environment. Demo and smoke-test verdicts use only customer-visible

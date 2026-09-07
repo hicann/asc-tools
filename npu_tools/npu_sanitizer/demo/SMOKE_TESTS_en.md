@@ -60,7 +60,7 @@ bash npu_tools/npu_sanitizer/demo/examples/memcheck/memory_access/run.sh
 This runner executes 18 representative dav-3510 GM transfer cases covering Vector/Cube DMA,
 Multi ND/DN2NZ, Fixpipe, NDDMA, LoadData 2DV2, and public API lowering. It validates only
 customer-visible out-of-bounds diagnostics, the memcheck summary, CLI result, and session completion.
-Run the complete supported 230-case matrix with:
+Run the complete supported 244-case matrix with:
 
 ```bash
 bash npu_tools/npu_sanitizer/demo/examples/memcheck/memory_access/check_memory_access_end_to_end.sh all

@@ -131,16 +131,30 @@ cases=(
     nddma_padding_uniform_constant_b16_oob
     nddma_padding_max_loop0_padding_b8_valid
     nddma_padding_max_loop0_padding_b8_oob
-    nddma_p0_broadcast_b8_valid
-    nddma_p0_broadcast_b8_oob
-    nddma_p0_b64_4d_padding_valid
-    nddma_p0_b64_4d_padding_oob
-    nddma_p0_b64_5d_padding_valid
-    nddma_p0_b64_5d_padding_oob
-    nddma_p0_b64_5d_singleton_valid
-    nddma_p0_b64_5d_singleton_oob
-    nddma_p0_multi_block_b8_valid
-    nddma_p0_multi_block_b8_oob
+    nddma_scenarios_broadcast_b8_valid
+    nddma_scenarios_broadcast_b8_oob
+    nddma_scenarios_b64_4d_padding_valid
+    nddma_scenarios_b64_4d_padding_oob
+    nddma_scenarios_b64_5d_padding_valid
+    nddma_scenarios_b64_5d_padding_oob
+    nddma_scenarios_b64_5d_singleton_valid
+    nddma_scenarios_b64_5d_singleton_oob
+    nddma_scenarios_multi_block_b8_valid
+    nddma_scenarios_multi_block_b8_oob
+    nddma_scenarios_state_axis0_valid
+    nddma_scenarios_state_axis0_oob
+    nddma_scenarios_state_axis1_valid
+    nddma_scenarios_state_axis1_oob
+    nddma_scenarios_state_axis2_valid
+    nddma_scenarios_state_axis2_oob
+    nddma_scenarios_state_axis3_valid
+    nddma_scenarios_state_axis3_oob
+    nddma_scenarios_state_axis4_valid
+    nddma_scenarios_state_axis4_oob
+    nddma_scenarios_singleton_max_stride_valid
+    nddma_scenarios_singleton_max_stride_oob
+    nddma_scenarios_zero_stride_5d_valid
+    nddma_scenarios_zero_stride_5d_oob
     load2dv2_mode0_valid
     load2dv2_mode0_oob
     load2dv2_negative_stride_valid
@@ -194,7 +208,7 @@ readonly smoke_cases=(
     nddma_b32_oob
     nddma_missing_active_stride
     nddma_padding_constant_nonzero_b8_oob
-    nddma_p0_b64_5d_padding_oob
+    nddma_scenarios_b64_5d_padding_oob
     load2dv2_mode0_oob
     load2dv2_negative_stride_valid
     api_datacopy_nd2nz_oob
@@ -296,6 +310,15 @@ CheckCommonOutput()
     access_name=$(ExpectedAccessName "${case_name}")
 
     CheckTraceProcessingComplete "${output}" || return 1
+    if [[ "${case_name}" == nddma_scenarios_state_axis* ||
+          "${case_name}" == nddma_scenarios_singleton_max_stride_* || "${case_name}" == nddma_scenarios_zero_stride_5d_* ]]; then
+        local expected_errors=0
+        local expected_operations=1
+        [[ "${case_name}" == *_oob ]] && expected_errors=1
+        [[ "${case_name}" == nddma_scenarios_state_axis* ]] && expected_operations=3
+        RequirePattern "^tool=memcheck .*device_operations=${expected_operations} .*errors=${expected_errors} warnings=0 " \
+            'exact NDDMA operation and error counts' "${output}" || return 1
+    fi
     if [[ "${case_name}" == *_valid ]]; then
         RequirePattern '^tool=memcheck .*device_operations=[1-9][0-9]* .*errors=0([[:space:]]|$)' \
             'nonzero device operations and zero-error summary' "${output}" || return 1

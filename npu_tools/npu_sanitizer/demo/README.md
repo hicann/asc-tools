@@ -154,8 +154,10 @@ npu-check
 
 ## 验证范围
 
-- `examples/memcheck/memory_access/check_memory_access_end_to_end.sh` 运行 230 个支持的
+- `examples/memcheck/memory_access/check_memory_access_end_to_end.sh` 运行 244 个支持的
   memory_access 场景，只校验客户可见诊断、memcheck summary、CLI 结果和会话完整性。
+- NDDMA 新增的同 block stride 覆盖和合法边界用例见
+  [NDDMA 状态与边界验证](examples/memcheck/memory_access/NDDMA_STATE_CASES.md)。
 
 当前 CANN/Device 环境中，三个示例均已通过真实 Device E2E 验证。demo 和冒烟只以客户可见的
 诊断、summary、CLI 状态、完整会话以及应用计算结果作为通过条件，不依赖内部 trace 日志。

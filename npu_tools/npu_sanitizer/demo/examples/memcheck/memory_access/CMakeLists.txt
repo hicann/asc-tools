@@ -289,18 +289,26 @@ add_nddma_padding_example(constant_nonzero_b8 8 20 19 NDDMA_PADDING_CONSTANT_VAL
 add_nddma_padding_example(uniform_constant_b16 16 40 38 NDDMA_PADDING_UNIFORM_CONFIG=1)
 add_nddma_padding_example(max_loop0_padding_b8 8 4 3 NDDMA_PADDING_MAX_LOOP0=1)
 
-function(add_nddma_p0_example name profile valid_bytes oob_bytes)
-  add_aclsan_memory_access_example("nddma_p0_${name}_valid" nddma_p0_memory_case.asc
-    NDDMA_P0_PROFILE=${profile} NDDMA_P0_SOURCE_BYTES=${valid_bytes})
-  add_aclsan_memory_access_example("nddma_p0_${name}_oob" nddma_p0_memory_case.asc
-    NDDMA_P0_PROFILE=${profile} NDDMA_P0_SOURCE_BYTES=${oob_bytes})
+function(add_nddma_scenarios_example name profile valid_bytes oob_bytes)
+  add_aclsan_memory_access_example("nddma_scenarios_${name}_valid" nddma_scenarios_memory_case.asc
+    NDDMA_SCENARIO_PROFILE=${profile} NDDMA_SCENARIO_SOURCE_BYTES=${valid_bytes})
+  add_aclsan_memory_access_example("nddma_scenarios_${name}_oob" nddma_scenarios_memory_case.asc
+    NDDMA_SCENARIO_PROFILE=${profile} NDDMA_SCENARIO_SOURCE_BYTES=${oob_bytes})
 endfunction()
 
-add_nddma_p0_example(broadcast_b8 1 16 15)
-add_nddma_p0_example(b64_4d_padding 2 688 687)
-add_nddma_p0_example(b64_5d_padding 3 2736 2735)
-add_nddma_p0_example(b64_5d_singleton 4 688 687)
-add_nddma_p0_example(multi_block_b8 5 52 51)
+add_nddma_scenarios_example(broadcast_b8 1 16 15)
+add_nddma_scenarios_example(b64_4d_padding 2 688 687)
+add_nddma_scenarios_example(b64_5d_padding 3 2736 2735)
+add_nddma_scenarios_example(b64_5d_singleton 4 688 687)
+add_nddma_scenarios_example(multi_block_b8 5 52 51)
+foreach(axis RANGE 0 4)
+  math(EXPR profile "6 + ${axis}")
+  math(EXPR valid_bytes "342 + (1 << (2 * ${axis}))")
+  math(EXPR oob_bytes "${valid_bytes} - 1")
+  add_nddma_scenarios_example(state_axis${axis} ${profile} ${valid_bytes} ${oob_bytes})
+endforeach()
+add_nddma_scenarios_example(singleton_max_stride 11 2 1)
+add_nddma_scenarios_example(zero_stride_5d 12 2 1)
 
 add_aclsan_memory_access_example(load2dv2_mode0_valid load2dv2_memory_case.asc
   LOAD2DV2_SOURCE_ALLOCATION_BYTES=6144)

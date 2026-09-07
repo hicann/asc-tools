@@ -54,7 +54,7 @@ bash npu_tools/npu_sanitizer/demo/examples/memcheck/memory_access/run.sh
 
 该 runner 执行 18 个代表性 dav-3510 GM 搬运场景，覆盖 Vector/Cube DMA、Multi ND/DN2NZ、
 Fixpipe、NDDMA、LoadData 2DV2 和公共 API lowering。它只检查客户可见的越界诊断、
-memcheck summary、CLI 结果和会话完整性。完整的 230-case 受支持矩阵使用：
+memcheck summary、CLI 结果和会话完整性。完整的 244-case 受支持矩阵使用：
 
 ```bash
 bash npu_tools/npu_sanitizer/demo/examples/memcheck/memory_access/check_memory_access_end_to_end.sh all
