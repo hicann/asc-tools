@@ -93,7 +93,7 @@ bash ./npu_tools/npu_sanitizer/demo/examples/basic_func/dual_tool_multi_launch_a
 bash ./npu_tools/npu_sanitizer/demo/examples/synccheck/multi_launch_pairs/run.sh
 ```
 
-一次执行全部 17 个基础能力和 Synccheck 用例：
+一次执行全部 18 个基础能力和 Synccheck 用例：
 
 ```bash
 bash ./npu_sanitizer/demo/run_smoke.sh
@@ -129,9 +129,8 @@ session end。预期诊断已完整校验的用例返回 0，最后打印
 `example verification passed: <分类>/<用例名>`；日志不符时返回非零。
 
 `padding_register_state` 使用单 cube block kernel 依次执行 `asc_set_l13d_padding(0x12)` 和
-`asc_set_l13d_padding(0x34)`。Device 日志证明值为 `0x12` 和 `0x34` 的两条 `SET_PADDING` raw
-record 被解码并交给同一个 register-state key；`register_state_manager_test` 通过 `Get()` 独立验证
-同一 key 只保存最新值。
+`asc_set_l13d_padding(0x34)`，并验收应用结果、零错误 summary 与完整 session。寄存器状态键和
+最新值语义由 `register_state_manager_test` 独立验证，不作为客户可见 demo 的判定条件。
 `dual_tool_multi_launch_aggregate` 在同一 stream 上先触发 GM 越界读，再留下未消费的
 `SET_FLAG`，并只同步一次，验证 Memcheck 和 Synccheck 会共同结算两个 launch。
 
@@ -156,11 +155,11 @@ npu-check
 ## 验证范围
 
 - `examples/memcheck/memory_access/check_memory_access_end_to_end.sh` 运行 230 个支持的
-  memory_access 场景，校验指令解码、SET 状态、cbdata layout、越界诊断和会话完整性。
+  memory_access 场景，只校验客户可见诊断、memcheck summary、CLI 结果和会话完整性。
 
-当前 CANN/Device 环境中，三个示例均已验证 Device probe 插桩、record 回读、
-memcheck 分析和计算结果：add、基础 matmul、融合 matmul 分别回读 24、12、36 条 record。
-这属于真实 Device E2E 证据，但不外推到下述尚未覆盖场景。
+当前 CANN/Device 环境中，三个示例均已通过真实 Device E2E 验证。demo 和冒烟只以客户可见的
+诊断、summary、CLI 状态、完整会话以及应用计算结果作为通过条件，不依赖内部 trace 日志。
+这些结果不外推到下述尚未覆盖场景。
 
 ## 当前限制与 TODO
 
@@ -169,7 +168,7 @@ memcheck 分析和计算结果：add、基础 matmul、融合 matmul 分别回�
 
 仍有以下未完成项：
 
-- 当前 probe E2E 只覆盖三个示例实际触发的 CCE 指令；若要声明更完整的指令覆盖，需要
-  增加其他 CCE 指令的用例、record 解析断言和真实 Device E2E。
+- 当前基础 E2E 只覆盖三个示例实际触发的 CCE 指令；更完整的受支持指令覆盖由 GM 搬运矩阵扩展，
+  新增通路仍需客户可见诊断断言和真实 Device E2E。
 - 尚未验证并发、callback 重入和共享库卸载安全；若这些属于产品支持范围，需要增加相应的
   生命周期与压力测试。

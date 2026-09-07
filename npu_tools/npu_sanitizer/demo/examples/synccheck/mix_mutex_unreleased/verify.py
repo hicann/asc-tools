@@ -27,7 +27,7 @@ EXPECTED_SUMMARY = {
     "unconsumed_opens": 3,
     "errors": 3,
 }
-EXPECTED_DIAGNOSTICS = ["Synchronization pairing mismatch: redundant GET_BUF."]
+EXPECTED_DIAGNOSTICS = ["Synchronization pairing mismatch: redundant GET_BUF."] * 3
 
 
 if __name__ == "__main__":

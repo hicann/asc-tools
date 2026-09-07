@@ -29,7 +29,6 @@ output="build/npu_check.log"
 exec > >(tee -a "${output}") 2>&1
 
 export ASCEND_GLOBAL_LOG_LEVEL=0
-export NPU_SAN_DEBUG=1
 
 # 配置并构建 Synccheck 用例。
 cmake -B build -DCMAKE_ASC_ARCHITECTURES=dav-3510

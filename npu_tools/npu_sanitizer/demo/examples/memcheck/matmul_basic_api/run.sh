@@ -20,15 +20,13 @@ if [[ -z "${ASCEND_HOME_PATH:-}" ]]; then
     exit 1
 fi
 
-# 准备构建目录、数据目录和完整运行日志。
+# 准备构建目录、数据目录和 npu-check 运行日志。
 rm -rf build
 mkdir -p build
 output="build/npu_check.log"
 : >"${output}"
-exec > >(tee -a "${output}") 2>&1
 
 export ASCEND_GLOBAL_LOG_LEVEL=0
-export NPU_SAN_DEBUG=1
 
 # 配置并构建示例。
 cmake -B build -DCMAKE_ASC_ARCHITECTURES=dav-3510
@@ -39,8 +37,13 @@ cmake --build build --parallel
 
 # 从数据目录运行不应报错的 memcheck 示例。
 set +e
-(cd build && npu-check --tool memcheck -- ./demo)
+(cd build && npu-check --tool memcheck -- ./demo) 2>&1 | tee "${output}"
+run_status=${PIPESTATUS[0]}
 set -e
+if [[ ${run_status} -ne 0 ]]; then
+    printf 'npu-check exited with status %d\n' "${run_status}" >&2
+    exit 1
+fi
 
 # 关注 summary：逻辑错误总数 errors 应为 0。
 if [[ $(grep -Ec '^tool=memcheck .*errors=0([[:space:]]|$)' "${output}" || true) -ne 1 ]]; then
@@ -49,15 +52,14 @@ if [[ $(grep -Ec '^tool=memcheck .*errors=0([[:space:]]|$)' "${output}" || true)
 fi
 
 # 关注命令执行结果：应转发应用且报告完整。
-if [[ $(grep -Ec '^\[CLI\] outcome=forwarded has_errors=[01] truncated=[01] child_exit=0 exit=(0|2)$' \
+if [[ $(grep -Fxc '[CLI] outcome=forwarded has_errors=0 truncated=0 child_exit=0 exit=0' \
     "${output}" || true) -ne 1 ]]; then
     printf 'unexpected npu-check result: %s\n' "${output}" >&2
     exit 1
 fi
-
-# 所有 raw trace 都必须被当前 decoder 支持。
-if grep -Fq 'unsupported raw trace' "${output}"; then
-    printf 'unexpected unsupported raw trace: %s\n' "${output}" >&2
+if [[ $(grep -Fxc 'status=complete aclsan_unsubscribe=0 dropped_messages=0 analysis_complete=true report_truncated=false' \
+    "${output}" || true) -ne 1 ]]; then
+    printf 'incomplete npu-check session: %s\n' "${output}" >&2
     exit 1
 fi
 

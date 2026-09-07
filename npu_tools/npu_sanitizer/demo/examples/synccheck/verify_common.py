@@ -14,6 +14,7 @@
 import re
 import sys
 import time
+from collections import Counter
 from pathlib import Path
 
 
@@ -81,11 +82,22 @@ def verify(case, expected_summary, expected_diagnostics):
         if actual != str(expected):
             raise ValueError(f"{case}: expected {key}={expected}, got {actual}")
 
-    for diagnostic in expected_diagnostics:
-        if diagnostic not in output:
-            raise ValueError(f"{case}: missing diagnostic: {diagnostic}")
-    if not expected_diagnostics and "npu_check: DIAGNOSTIC" in output:
-        raise ValueError(f"{case}: unexpected diagnostic")
+    current_diagnostics = re.findall(
+        r"^========= ERROR: (Synchronization pairing mismatch: .*)$", output, re.M
+    )
+    legacy_diagnostics = re.findall(
+        r"^npu_check: DIAGNOSTIC ========= ERROR: "
+        r"(Synchronization pairing mismatch: .*)$",
+        output,
+        re.M,
+    )
+    actual_diagnostics = Counter(current_diagnostics + legacy_diagnostics)
+    expected_diagnostic_counts = Counter(expected_diagnostics)
+    if actual_diagnostics != expected_diagnostic_counts:
+        raise ValueError(
+            f"{case}: expected diagnostics {dict(expected_diagnostic_counts)}, "
+            f"got {dict(actual_diagnostics)}"
+        )
 
     session = legacy_sessions[0] if legacy else current_sessions[0]
     actual_session = dict(re.findall(r"([a-z_]+)=([^ ]+)", session))

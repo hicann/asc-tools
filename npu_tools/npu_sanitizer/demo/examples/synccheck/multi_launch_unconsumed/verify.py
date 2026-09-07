@@ -27,7 +27,7 @@ EXPECTED_SUMMARY = {
     "unconsumed_opens": 2,
     "errors": 2,
 }
-EXPECTED_DIAGNOSTICS = ["Synchronization pairing mismatch: redundant SET_FLAG."]
+EXPECTED_DIAGNOSTICS = ["Synchronization pairing mismatch: redundant SET_FLAG."] * 2
 
 
 if __name__ == "__main__":

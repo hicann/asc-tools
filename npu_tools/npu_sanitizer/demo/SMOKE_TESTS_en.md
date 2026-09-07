@@ -49,7 +49,7 @@ bash npu_tools/npu_sanitizer/demo/examples/memcheck/datacopy_stride/run.sh
 ```
 
 This example intentionally triggers four 32-byte GM out-of-bounds reads. Its runner
-checks the stride parameter field, `errors=4`, and session completion.
+checks customer-visible diagnostics, `errors=4`, and session completion.
 
 ## GM Memory Access
 
@@ -58,9 +58,9 @@ bash npu_tools/npu_sanitizer/demo/examples/memcheck/memory_access/run.sh
 ```
 
 This runner executes 18 representative dav-3510 GM transfer cases covering Vector/Cube DMA,
-Multi ND/DN2NZ, Fixpipe, NDDMA, LoadData 2DV2, and public API lowering. It validates CCE instructions,
-SET state, cbdata layouts, out-of-bounds diagnostics, and session completion. Run the complete supported
-230-case matrix with:
+Multi ND/DN2NZ, Fixpipe, NDDMA, LoadData 2DV2, and public API lowering. It validates only
+customer-visible out-of-bounds diagnostics, the memcheck summary, CLI result, and session completion.
+Run the complete supported 230-case matrix with:
 
 ```bash
 bash npu_tools/npu_sanitizer/demo/examples/memcheck/memory_access/check_memory_access_end_to_end.sh all
@@ -76,9 +76,8 @@ bash npu_tools/npu_sanitizer/demo/examples/basic_func/padding_register_state/run
 bash npu_tools/npu_sanitizer/demo/examples/basic_func/dual_tool_multi_launch_aggregate/run.sh
 ```
 
-`multi_kernel` checks one 32-byte out-of-bounds read per kernel and distinct
-launch IDs. `padding_register_state` checks an error-free summary, a shared
-register-state key, and `SET_PADDING` state propagation for `0x12` and `0x34`.
+`multi_kernel` checks one 32-byte out-of-bounds read per kernel.
+`padding_register_state` checks an error-free summary, application result, and complete session.
 `dual_tool_multi_launch_aggregate` triggers a Memcheck GM out-of-bounds error and a
 Synccheck unconsumed `SET_FLAG` across two launches, then verifies both summaries after one synchronization.
 

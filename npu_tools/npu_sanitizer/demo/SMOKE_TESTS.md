@@ -44,7 +44,7 @@ bash npu_tools/npu_sanitizer/demo/examples/memcheck/add/run.sh
 bash npu_tools/npu_sanitizer/demo/examples/memcheck/datacopy_stride/run.sh
 ```
 
-该用例故意触发 4 条 32 字节 GM 越界读，并校验 stride 参数字段、summary 的 `errors=4` 和完整会话。
+该用例故意触发 4 条 32 字节 GM 越界读，并校验客户可见诊断、summary 的 `errors=4` 和完整会话。
 
 ## GM Memory Access
 
@@ -53,8 +53,8 @@ bash npu_tools/npu_sanitizer/demo/examples/memcheck/memory_access/run.sh
 ```
 
 该 runner 执行 18 个代表性 dav-3510 GM 搬运场景，覆盖 Vector/Cube DMA、Multi ND/DN2NZ、
-Fixpipe、NDDMA、LoadData 2DV2 和公共 API lowering，并同时检查 CCE instruction、SET 状态、
-cbdata layout、越界诊断与会话完整性。完整的 230-case 受支持矩阵使用：
+Fixpipe、NDDMA、LoadData 2DV2 和公共 API lowering。它只检查客户可见的越界诊断、
+memcheck summary、CLI 结果和会话完整性。完整的 230-case 受支持矩阵使用：
 
 ```bash
 bash npu_tools/npu_sanitizer/demo/examples/memcheck/memory_access/check_memory_access_end_to_end.sh all
@@ -70,9 +70,8 @@ bash npu_tools/npu_sanitizer/demo/examples/basic_func/padding_register_state/run
 bash npu_tools/npu_sanitizer/demo/examples/basic_func/dual_tool_multi_launch_aggregate/run.sh
 ```
 
-`multi_kernel` 校验两个 kernel 各一条 32 字节越界读以及不同的 launchId；
-`padding_register_state` 校验无错误 summary、同一 register-state key 和 `0x12`/`0x34` 的
-`SET_PADDING` 状态传递。
+`multi_kernel` 校验两个 kernel 各一条 32 字节越界读；
+`padding_register_state` 校验无错误 summary、应用结果和完整会话。
 `dual_tool_multi_launch_aggregate` 在两次 launch 中分别触发 Memcheck GM 越界和 Synccheck
 未消费 `SET_FLAG`，随后只同步一次并校验两套 summary 均完成结算。
 
@@ -122,7 +121,7 @@ bash npu_tools/npu_sanitizer/demo/examples/synccheck/multi_launch_pairs/run.sh
 
 ## 结果判定
 
-- runner 构建失败、应用异常退出、工具握手失败、原始状态与预期不符或会话未完整结束，均视为失败。
+- runner 构建失败、应用异常退出、客户可见诊断或 summary 与预期不符、会话未完整结束，均视为失败。
 - `add`、`datacopy_stride` 和 `multi_kernel` 是预期 memcheck 异常；每个 runner 校验其固定错误数量。
   `dual_tool_multi_launch_aggregate` 是预期双工具异常，并分别校验 Memcheck 和 Synccheck 的错误计数。
   两个 matmul 和 `padding_register_state` 的 checker summary 必须为 `errors=0`；matmul 还必须通过

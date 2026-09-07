@@ -104,7 +104,7 @@ bash ./npu_tools/npu_sanitizer/demo/examples/basic_func/dual_tool_multi_launch_a
 bash ./npu_tools/npu_sanitizer/demo/examples/synccheck/multi_launch_pairs/run.sh
 ```
 
-Run all 17 basic-capability and Synccheck cases with:
+Run all 18 basic-capability and Synccheck cases with:
 
 ```bash
 bash ./npu_sanitizer/demo/run_smoke.sh
@@ -150,10 +150,10 @@ prints `example verification passed: <category>/<case-name>`; a log mismatch ret
 nonzero.
 
 `padding_register_state` uses a single cube block to execute
-`asc_set_l13d_padding(0x12)` followed by `asc_set_l13d_padding(0x34)`. Device logs prove
-that the `0x12` and `0x34` `SET_PADDING` raw values are decoded and delivered to the
-same register-state key. `register_state_manager_test` independently calls `Get()` to
-verify that the same key retains only the latest value.
+`asc_set_l13d_padding(0x12)` followed by `asc_set_l13d_padding(0x34)`, then validates the
+application result, zero-error summary, and a complete session. Register-state key and
+latest-value semantics are covered independently by `register_state_manager_test`, not by
+the customer-visible demo verdict.
 `dual_tool_multi_launch_aggregate` first triggers a GM out-of-bounds read and then
 leaves an unconsumed `SET_FLAG` on the same stream before one synchronization, proving
 that Memcheck and Synccheck aggregate both launches together.
@@ -179,14 +179,14 @@ The only source definition of `acltoolInitialize` is in
 ## Verification Scope
 
 - `examples/memcheck/memory_access/check_memory_access_end_to_end.sh` runs the 230
-  supported memory_access scenarios and validates instruction decoding, SET state,
-  cbdata layouts, out-of-bounds diagnostics, and session completion.
+  supported memory_access scenarios using only customer-visible diagnostics, the
+  memcheck summary, CLI result, and session completion as verdict inputs.
 
-In the current CANN/Device environment, all three examples have been verified for
-Device probe instrumentation, record readback, memcheck analysis, and calculation
-results. Add, basic matmul, and fused matmul read back 24, 12, and 36 records,
-respectively. This is real Device end-to-end evidence, but it does not imply
-coverage of the scenarios listed below.
+All three examples have passed real Device end-to-end validation in the current
+CANN/Device environment. Demo and smoke-test verdicts use only customer-visible
+diagnostics, summaries, CLI status, complete-session status, and application results;
+they do not depend on internal trace logs. These results do not imply coverage of the
+scenarios listed below.
 
 ## Current Limitations and TODOs
 
@@ -197,9 +197,9 @@ configuration or binary linkage.
 
 The following items remain incomplete:
 
-- The current probe end-to-end tests cover only the CCE instructions triggered by
-  the three examples. Claiming broader instruction coverage requires additional
-  CCE instruction cases, record parsing assertions, and real Device end-to-end tests.
+- The basic end-to-end tests cover only the CCE instructions triggered by the three
+  examples. The GM transfer matrix extends supported-instruction coverage; each new
+  path still requires customer-visible diagnostic assertions and real Device validation.
 - Concurrency, callback reentrancy, and shared-library unload safety have not been
   verified. If these scenarios are within the supported product scope, additional
   lifecycle and stress tests are required.

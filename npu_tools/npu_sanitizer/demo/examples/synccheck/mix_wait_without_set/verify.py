@@ -27,7 +27,7 @@ EXPECTED_SUMMARY = {
     "unconsumed_opens": 0,
     "errors": 2,
 }
-EXPECTED_DIAGNOSTICS = ["Synchronization pairing mismatch: unmatched WAIT_FLAG."]
+EXPECTED_DIAGNOSTICS = ["Synchronization pairing mismatch: unmatched WAIT_FLAG."] * 2
 
 
 if __name__ == "__main__":
