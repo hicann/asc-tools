@@ -322,17 +322,22 @@ void RecordTraceBinaryUnload(aclrtBinHandle binary) noexcept
     DeviceBinaries().RecordBinaryUnload(reinterpret_cast<uintptr_t>(binary));
 }
 
-void RecordTraceBinaryFunctionLookup(aclrtBinHandle binary, aclrtFuncHandle function) noexcept
+void RecordTraceBinaryFunctionLookup(aclrtBinHandle binary, aclrtFuncHandle function, const char* functionName) noexcept
 {
     if (binary == nullptr || function == nullptr) {
         return;
     }
     try {
         DeviceBinaries().RecordBinaryFunctionLookup(
-            reinterpret_cast<uintptr_t>(binary), reinterpret_cast<uintptr_t>(function));
+            reinterpret_cast<uintptr_t>(binary), reinterpret_cast<uintptr_t>(function), functionName);
     } catch (...) {
         ASC_SAN_ERROR("acl_san trace: failed to record function %p for binary %p", function, binary);
     }
+}
+
+bool GetTraceFunctionName(aclrtFuncHandle function, std::string& functionName) noexcept
+{
+    return DeviceBinaries().GetFunctionName(reinterpret_cast<uintptr_t>(function), functionName);
 }
 
 void RecordTraceFunctionLookup(aclrtFuncHandle function) noexcept
@@ -353,13 +358,13 @@ aclError PrepareTraceLaunch(
 {
     try {
         prepared = {};
+        prepared.launchId = AllocateLaunchId();
         uint32_t traceArgumentOffset = 0;
         if (!DeviceBinaries().GetFunctionTraceArgumentOffset(
                 reinterpret_cast<uintptr_t>(function), traceArgumentOffset)) {
             return ACL_SUCCESS;
         }
         prepared.instrumented = true;
-        prepared.launchId = AllocateLaunchId();
         prepared.blockCount = blockCount;
         const aclError contextStatus = ResolveLaunchContext(prepared);
         if (contextStatus != ACL_SUCCESS) {
@@ -470,6 +475,10 @@ void CollectTraceStream(aclrtStream stream) noexcept
         }
     } catch (...) {
         ASC_SAN_ERROR("acl_san trace: failed to detach completed launches for stream=%p", stream);
+        return;
+    }
+
+    if (completed.empty()) {
         return;
     }
 

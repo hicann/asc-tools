@@ -15,6 +15,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <string>
 
 namespace aclsan::device_runtime {
 
@@ -30,9 +31,10 @@ public:
         uintptr_t binary, bool instrumented, uint32_t traceArgumentOffset, const void* image,
         size_t imageBytes) noexcept;
     void RecordBinaryUnload(uintptr_t binary) noexcept;
-    void RecordBinaryFunctionLookup(uintptr_t binary, uintptr_t function) noexcept;
+    void RecordBinaryFunctionLookup(uintptr_t binary, uintptr_t function, const char* functionName = nullptr) noexcept;
     void RecordLatestBinaryFunctionLookup(uintptr_t function) noexcept;
     bool GetFunctionTraceArgumentOffset(uintptr_t function, uint32_t& traceArgumentOffset) const noexcept;
+    bool GetFunctionName(uintptr_t function, std::string& functionName) const noexcept;
     void Reset() noexcept;
 
     CallStackResult ResolveCallStack(uint64_t pc) const noexcept;

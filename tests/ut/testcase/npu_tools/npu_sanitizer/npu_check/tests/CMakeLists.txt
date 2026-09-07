@@ -48,6 +48,21 @@ target_link_libraries(npu_check_unit_tests PRIVATE
   npu_check_core acl_san Threads::Threads GTest::gtest Boost::filesystem)
 add_test(NAME npu_check_unit_tests COMMAND npu_check_unit_tests)
 
+add_executable(npu_check_kernel_attributes_test
+  gtest_main.cpp
+  kernel_attributes_test.cpp
+  "${NPU_CHECK_SOURCE_DIR}/src/tool_manager/kernel_attributes.cpp"
+)
+target_compile_features(npu_check_kernel_attributes_test PRIVATE cxx_std_17)
+target_compile_definitions(npu_check_kernel_attributes_test PRIVATE _GLIBCXX_USE_CXX11_ABI=0)
+target_compile_options(npu_check_kernel_attributes_test PRIVATE -Wall -Wextra -Werror)
+target_include_directories(npu_check_kernel_attributes_test PRIVATE "${NPU_CHECK_SOURCE_DIR}/src")
+target_link_libraries(npu_check_kernel_attributes_test PRIVATE injection_headers GTest::gtest)
+add_test(NAME npu_check_kernel_attributes_test COMMAND npu_check_kernel_attributes_test)
+
+add_test(NAME npu_check_kernel_attribute_ownership
+  COMMAND bash "${CMAKE_CURRENT_LIST_DIR}/check_kernel_attribute_ownership.sh" "${CMAKE_SOURCE_DIR}")
+
 add_executable(npu_check_report_renderer_smoke
   report_renderer_smoke.cpp
   ${NPU_CHECK_TEST_REPORT_RENDERER_SOURCES}

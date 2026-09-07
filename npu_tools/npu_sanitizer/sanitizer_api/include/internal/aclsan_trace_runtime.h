@@ -14,6 +14,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <string>
 #include <vector>
 
 namespace aclsan {
@@ -48,7 +49,8 @@ void RecordTraceBinaryLoadFromData(
     aclrtBinHandle binary, bool instrumented, uint32_t traceArgumentOffset, const void* image,
     size_t imageBytes) noexcept;
 void RecordTraceBinaryUnload(aclrtBinHandle binary) noexcept;
-void RecordTraceBinaryFunctionLookup(aclrtBinHandle binary, aclrtFuncHandle function) noexcept;
+void RecordTraceBinaryFunctionLookup(
+    aclrtBinHandle binary, aclrtFuncHandle function, const char* functionName) noexcept;
 void RecordTraceFunctionLookup(aclrtFuncHandle function) noexcept;
 aclError PrepareTraceLaunch(
     aclrtFuncHandle function, uint32_t blockCount, const void* hostArgs, size_t argsSize,
@@ -57,6 +59,7 @@ void CompleteTraceLaunch(
     PreparedTraceLaunch&& prepared, aclrtFuncHandle function, aclrtStream stream, aclError launchResult) noexcept;
 void CollectTraceStream(aclrtStream stream) noexcept;
 void ResetTraceRuntimeState() noexcept;
+bool GetTraceFunctionName(aclrtFuncHandle function, std::string& functionName) noexcept;
 device_runtime::CallStackResult ResolveTraceDeviceCallStack(uint64_t pc) noexcept;
 
 } // namespace aclsan

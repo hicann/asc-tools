@@ -87,6 +87,7 @@ struct DeviceBinaryRegistry::Impl {
     uintptr_t latestBinary = 0;
     std::unordered_map<uintptr_t, BinaryEntry> binaries;
     std::unordered_map<uintptr_t, uintptr_t> functionBinaries;
+    std::unordered_map<uintptr_t, std::string> functionNames;
 
     uint64_t AllocateBinaryId() noexcept
     {
@@ -101,6 +102,7 @@ struct DeviceBinaryRegistry::Impl {
     {
         for (auto it = functionBinaries.begin(); it != functionBinaries.end();) {
             if (it->second == binary) {
+                functionNames.erase(it->first);
                 it = functionBinaries.erase(it);
             } else {
                 ++it;
@@ -108,7 +110,11 @@ struct DeviceBinaryRegistry::Impl {
         }
     }
 
-    void RemoveFunctionOwnership(uintptr_t function) noexcept { functionBinaries.erase(function); }
+    void RemoveFunctionOwnership(uintptr_t function) noexcept
+    {
+        functionBinaries.erase(function);
+        functionNames.erase(function);
+    }
 };
 
 DeviceBinaryRegistry::DeviceBinaryRegistry() : impl_(std::make_unique<Impl>()) {}
@@ -189,7 +195,8 @@ void DeviceBinaryRegistry::RecordBinaryUnload(uintptr_t binary) noexcept
     }
 }
 
-void DeviceBinaryRegistry::RecordBinaryFunctionLookup(uintptr_t binary, uintptr_t function) noexcept
+void DeviceBinaryRegistry::RecordBinaryFunctionLookup(
+    uintptr_t binary, uintptr_t function, const char* functionName) noexcept
 {
     if (binary == 0 || function == 0) {
         return;
@@ -198,8 +205,11 @@ void DeviceBinaryRegistry::RecordBinaryFunctionLookup(uintptr_t binary, uintptr_
         std::lock_guard<std::mutex> lock(impl_->mutex);
         impl_->RemoveFunctionOwnership(function);
         const auto loaded = impl_->binaries.find(binary);
-        if (loaded != impl_->binaries.end() && loaded->second.instrumented) {
+        if (loaded != impl_->binaries.end()) {
             impl_->functionBinaries[function] = binary;
+            if (functionName != nullptr) {
+                impl_->functionNames[function] = functionName;
+            }
         }
     } catch (...) {
     }
@@ -214,10 +224,28 @@ void DeviceBinaryRegistry::RecordLatestBinaryFunctionLookup(uintptr_t function) 
         std::lock_guard<std::mutex> lock(impl_->mutex);
         impl_->RemoveFunctionOwnership(function);
         const auto loaded = impl_->binaries.find(impl_->latestBinary);
-        if (loaded != impl_->binaries.end() && loaded->second.instrumented) {
+        if (loaded != impl_->binaries.end()) {
             impl_->functionBinaries[function] = impl_->latestBinary;
         }
     } catch (...) {
+    }
+}
+
+bool DeviceBinaryRegistry::GetFunctionName(uintptr_t function, std::string& functionName) const noexcept
+{
+    if (function == 0) {
+        return false;
+    }
+    try {
+        std::lock_guard<std::mutex> lock(impl_->mutex);
+        const auto found = impl_->functionNames.find(function);
+        if (found == impl_->functionNames.end()) {
+            return false;
+        }
+        functionName = found->second;
+        return true;
+    } catch (...) {
+        return false;
     }
 }
 

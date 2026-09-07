@@ -74,6 +74,17 @@ int main()
         ACLSAN_STATUS_SUCCESS);
     assert(enabled == 0);
 
+    const AclsanLaunchData launchData{};
+    assert(
+        aclsanEnableCallback(1, subscriber, ACLSAN_CB_DOMAIN_LAUNCH, ACLSAN_CBID_LAUNCH_KERNEL) ==
+        ACLSAN_STATUS_SUCCESS);
+    assert(
+        aclsanGetCallbackState(subscriber, ACLSAN_CB_DOMAIN_LAUNCH, ACLSAN_CBID_LAUNCH_KERNEL, &enabled) ==
+        ACLSAN_STATUS_SUCCESS);
+    assert(enabled == 1);
+    assert(aclsan::InvokeCallback(ACLSAN_CB_DOMAIN_LAUNCH, ACLSAN_CBID_LAUNCH_KERNEL, &launchData));
+    assert(g_callbackCalls == 2);
+
     assert(aclsanUnsubscribe(subscriber) == ACLSAN_STATUS_SUCCESS);
     return 0;
 }

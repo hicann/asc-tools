@@ -25,6 +25,7 @@
 #include <dlfcn.h>
 #include <set>
 #include <shared_mutex>
+#include <string>
 #include <utility>
 #include <variant>
 
@@ -94,6 +95,17 @@ AclsanResourceData MakeDeviceResourceData(
 AclsanSynchronizeData MakeSynchronizeData(const char* apiName, aclrtStream stream, int result) noexcept
 {
     return {MakeCallbackCommonData(apiName, result, static_cast<uint32_t>(sizeof(AclsanSynchronizeData))), stream};
+}
+
+AclsanLaunchData MakeLaunchData(
+    uint64_t launchId, aclrtFuncHandle function, aclrtStream stream, const std::string& functionName,
+    aclError launchResult) noexcept
+{
+    const char* name = functionName.empty() ? nullptr : functionName.c_str();
+    return {
+        MakeCallbackCommonData(
+            "aclrtLaunchKernelWithHostArgs", launchResult, static_cast<uint32_t>(sizeof(AclsanLaunchData))),
+        launchId, function, stream, name};
 }
 
 // ==============================================
@@ -209,11 +221,12 @@ aclError aclrtBinaryGetFunctionHook(
         ACL_RT_API_aclrtBinaryGetFunction, "aclrtBinaryGetFunction");
     const aclError result = original(binHandle, kernelName, funcHandle);
     if (result == ACL_SUCCESS && funcHandle != nullptr) {
-        aclsan::RecordTraceBinaryFunctionLookup(binHandle, *funcHandle);
+        aclsan::RecordTraceBinaryFunctionLookup(binHandle, *funcHandle, kernelName);
     }
     return result;
 }
 
+// TODO：是否没必要，因为aclrtBinaryGetFunctionByEntry是预留接口
 aclError aclrtBinaryGetFunctionByEntryHook(
     aclrtBinHandle binHandle, uint64_t functionEntry, aclrtFuncHandle* funcHandle) noexcept
 {
@@ -221,11 +234,12 @@ aclError aclrtBinaryGetFunctionByEntryHook(
         ACL_RT_API_aclrtBinaryGetFunctionByEntry, "aclrtBinaryGetFunctionByEntry");
     const aclError result = original(binHandle, functionEntry, funcHandle);
     if (result == ACL_SUCCESS && funcHandle != nullptr) {
-        aclsan::RecordTraceBinaryFunctionLookup(binHandle, *funcHandle);
+        aclsan::RecordTraceBinaryFunctionLookup(binHandle, *funcHandle, nullptr);
     }
     return result;
 }
 
+// TODO: 待确认现在<<<>>>是否会走这个函数  目前仅将返回的 funcHandle 归属到最近加载的 binary，感觉不合理
 aclError aclrtGetFuncBySymbolHook(const void* symbol, aclrtFuncHandle* funcHandle) noexcept
 {
     const auto original =
@@ -259,6 +273,10 @@ aclError aclrtLaunchKernelWithHostArgsHook(
         funcHandle, numBlocks, stream, config, launchArguments, launchArgumentBytes, launchPlaceholders,
         launchPlaceholderCount);
     aclsan::CompleteTraceLaunch(std::move(prepared), funcHandle, stream, result);
+    std::string functionName;
+    (void)aclsan::GetTraceFunctionName(funcHandle, functionName);
+    const AclsanLaunchData callbackData = MakeLaunchData(prepared.launchId, funcHandle, stream, functionName, result);
+    aclsan::AclsanCallbackDispatcher::DispatchLaunch(callbackData);
     return result;
 }
 

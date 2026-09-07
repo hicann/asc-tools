@@ -10,6 +10,7 @@
 
 #include "aclsan/aclsan_cbdata_common.h"
 #include "aclsan/aclsan_cbdata_device.h"
+#include "aclsan/aclsan_cbdata_launch.h"
 #include "aclsan/aclsan_cbdata_resource.h"
 #include "aclsan/aclsan_cbdata_synchronize.h"
 #include "aclsan/aclsan_cbdata.h"
@@ -31,11 +32,36 @@ struct HasLaunchId : std::false_type {};
 template <typename T>
 struct HasLaunchId<T, std::void_t<decltype(&T::launchId)>> : std::true_type {};
 
+template <typename T, typename = void>
+struct HasKernelType : std::false_type {};
+
+template <typename T>
+struct HasKernelType<T, std::void_t<decltype(&T::kernelType)>> : std::true_type {};
+
+template <typename T, typename = void>
+struct HasAicRatio : std::false_type {};
+
+template <typename T>
+struct HasAicRatio<T, std::void_t<decltype(&T::aicRatio)>> : std::true_type {};
+
+template <typename T, typename = void>
+struct HasAivRatio : std::false_type {};
+
+template <typename T>
+struct HasAivRatio<T, std::void_t<decltype(&T::aivRatio)>> : std::true_type {};
+
+template <typename T, typename = void>
+struct HasKernelSchedMode : std::false_type {};
+
+template <typename T>
+struct HasKernelSchedMode<T, std::void_t<decltype(&T::kernelSchedMode)>> : std::true_type {};
+
 static_assert(std::is_same_v<AclsanStatus, std::uint32_t>);
 static_assert(std::is_same_v<AclsanCallbackId, std::uint32_t>);
 static_assert(std::is_enum_v<AclsanCallbackIdResource>);
 static_assert(std::is_enum_v<AclsanCallbackIdSynchronize>);
 static_assert(std::is_enum_v<AclsanCallbackIdDeviceInstruction>);
+static_assert(std::is_enum_v<AclsanCallbackIdLaunch>);
 static_assert(std::is_same_v<decltype(ACLSAN_CBID_RESOURCE_MEMORY_ALLOC), AclsanCallbackIdResource>);
 static_assert(std::is_same_v<decltype(ACLSAN_CBID_SYNCHRONIZE_STREAM_SYNC_END), AclsanCallbackIdSynchronize>);
 static_assert(std::is_same_v<decltype(ACLSAN_CBID_DEVICE_MEMORY_ACCESS), AclsanCallbackIdDeviceInstruction>);
@@ -48,10 +74,22 @@ static_assert(static_cast<std::uint32_t>(ACLSAN_CBID_SYNCHRONIZE_INVALID) == 0x7
 static_assert(static_cast<std::uint32_t>(ACLSAN_CBID_DEVICE_MEMORY_ACCESS) == 1);
 static_assert(static_cast<std::uint32_t>(ACLSAN_CBID_DEVICE_SYNC) == 2);
 static_assert(static_cast<std::uint32_t>(ACLSAN_CBID_DEVICE_INSTRUCTION_INVALID) == 0x7fffffffU);
+static_assert(static_cast<std::uint32_t>(ACLSAN_CBID_LAUNCH_KERNEL) == 1);
+static_assert(static_cast<std::uint32_t>(ACLSAN_CBID_LAUNCH_INVALID) == 0x7fffffffU);
 static_assert(std::is_standard_layout_v<AclsanCallbackCommonData>);
 static_assert(std::is_standard_layout_v<AclsanResourceData>);
 static_assert(std::is_standard_layout_v<AclsanSynchronizeData>);
+static_assert(std::is_standard_layout_v<AclsanLaunchData>);
 static_assert(!HasLaunchId<AclsanSynchronizeData>::value);
+static_assert(HasLaunchId<AclsanLaunchData>::value);
+static_assert(std::is_same_v<decltype(AclsanLaunchData::common), AclsanCallbackCommonData>);
+static_assert(std::is_same_v<decltype(AclsanLaunchData::function), void*>);
+static_assert(std::is_same_v<decltype(AclsanLaunchData::stream), void*>);
+static_assert(std::is_same_v<decltype(AclsanLaunchData::functionName), const char*>);
+static_assert(!HasKernelType<AclsanLaunchData>::value);
+static_assert(!HasAicRatio<AclsanLaunchData>::value);
+static_assert(!HasAivRatio<AclsanLaunchData>::value);
+static_assert(!HasKernelSchedMode<AclsanLaunchData>::value);
 static_assert(std::is_standard_layout_v<AclsanDeviceMemoryAccessData>);
 static_assert(std::is_standard_layout_v<AclsanDeviceSyncData>);
 static_assert(ACLSAN_DEVICE_PIPE_INVALID == 100);

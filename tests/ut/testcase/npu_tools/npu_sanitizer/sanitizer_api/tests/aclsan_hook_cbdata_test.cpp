@@ -46,6 +46,8 @@ struct CallbackCapture {
     AclsanCallbackId callbackId{};
     AclsanResourceData resource{};
     AclsanSynchronizeData synchronize{};
+    AclsanLaunchData launch{};
+    std::string launchFunctionName;
     uint32_t calls = 0;
 };
 
@@ -60,6 +62,7 @@ void* g_lastFreedAddress = nullptr;
 int32_t g_lastSynchronizeTimeout = 0;
 bool g_mallocOriginalAvailable = true;
 bool g_freeOriginalAvailable = true;
+uint32_t g_functionAttributeQueryCalls = 0;
 int32_t g_currentDeviceId = 3;
 aclError g_getDeviceResult = ACL_SUCCESS;
 int32_t g_clearCallbackResult = 0;
@@ -79,6 +82,7 @@ void ResetCapture()
     g_getDeviceResult = ACL_SUCCESS;
     g_clearCallbackResult = 0;
     g_registerMallocResult = 0;
+    g_functionAttributeQueryCalls = 0;
 }
 
 void* Address(uintptr_t value) { return reinterpret_cast<void*>(value); }
@@ -90,22 +94,22 @@ std::optional<aclsan::DecodedInstruction> CountDecoderCalls(const aclsan::Aclsan
 }
 
 template <typename Action>
-std::string CaptureDebugLogs(Action action)
+std::string CaptureLogs(int outputFd, Action action)
 {
     assert(setenv("ASCEND_GLOBAL_LOG_LEVEL", "0", 1) == 0);
     assert(setenv("NPU_SAN_DEBUG", "1", 1) == 0);
 
     int pipeFds[2] = {-1, -1};
     assert(pipe(pipeFds) == 0);
-    const int savedStdout = dup(STDOUT_FILENO);
-    assert(savedStdout >= 0);
-    assert(dup2(pipeFds[1], STDOUT_FILENO) >= 0);
+    const int savedOutput = dup(outputFd);
+    assert(savedOutput >= 0);
+    assert(dup2(pipeFds[1], outputFd) >= 0);
     assert(close(pipeFds[1]) == 0);
 
     action();
-    assert(std::fflush(stdout) == 0);
-    assert(dup2(savedStdout, STDOUT_FILENO) >= 0);
-    assert(close(savedStdout) == 0);
+    assert(std::fflush(outputFd == STDOUT_FILENO ? stdout : stderr) == 0);
+    assert(dup2(savedOutput, outputFd) >= 0);
+    assert(close(savedOutput) == 0);
 
     std::string logs;
     char buffer[256] = {};
@@ -118,6 +122,12 @@ std::string CaptureDebugLogs(Action action)
     assert(unsetenv("ASCEND_GLOBAL_LOG_LEVEL") == 0);
     assert(unsetenv("NPU_SAN_DEBUG") == 0);
     return logs;
+}
+
+template <typename Action>
+std::string CaptureDebugLogs(Action action)
+{
+    return CaptureLogs(STDOUT_FILENO, std::move(action));
 }
 
 aclError FakeAclrtMalloc(void** deviceAddress, size_t size, aclrtMemMallocPolicy policy)
@@ -171,13 +181,32 @@ aclError FakeAclrtBinaryGetGlobal(aclrtBinHandle, const char*, void** address, s
     return ACL_SUCCESS;
 }
 
-aclError FakeAclrtGetFunctionAttribute(aclrtFuncHandle, aclrtFuncAttribute, int64_t* attrValue)
+aclError FakeAclrtGetFunctionAttribute(aclrtFuncHandle, aclrtFuncAttribute attrType, int64_t* attrValue)
 {
+    ++g_functionAttributeQueryCalls;
     if (attrValue == nullptr) {
         return ACL_ERROR_INVALID_PARAM;
     }
-    *attrValue = 0;
-    return ACL_SUCCESS;
+    switch (attrType) {
+        case ACL_FUNC_ATTR_KERNEL_TYPE:
+            *attrValue = ACL_KERNEL_TYPE_MIX;
+            return ACL_SUCCESS;
+        case ACL_FUNC_ATTR_KERNEL_RATIO:
+            *attrValue = 0x00010002;
+            return ACL_SUCCESS;
+        case ACL_FUNC_ATTR_KERNEL_SCHED_MODE:
+            *attrValue = 1;
+            return ACL_SUCCESS;
+        default:
+            return ACL_ERROR_INVALID_PARAM;
+    }
+}
+
+aclError FakeAclrtLaunchKernelWithHostArgs(
+    aclrtFuncHandle function, uint32_t, aclrtStream, aclrtLaunchKernelCfg*, void*, size_t, aclrtPlaceHolderInfo*,
+    size_t)
+{
+    return function == Address(0x12345678U) ? ACL_SUCCESS : ACL_ERROR_INVALID_PARAM;
 }
 
 const char* FakeAclrtGetSocName() { return "Ascend950PR_9589"; }
@@ -717,6 +746,27 @@ void TestDisabledCallbackIsNotInvoked()
     assert(g_callbackCapture.calls == 0);
 }
 
+void TestLaunchCallbackData()
+{
+    ResetCapture();
+    const aclrtBinHandle binary = Address(0x88770000U);
+    const aclrtFuncHandle function = Address(0x12345678U);
+    const aclrtStream stream = Address(0x45670000U);
+    aclsan::RecordTraceBinaryLoadFromData(binary, false, 0, nullptr, 0);
+    aclsan::RecordTraceBinaryFunctionLookup(binary, function, "mix_kernel");
+
+    assert(aclrtLaunchKernelWithHostArgsHook(function, 8, stream, nullptr, nullptr, 0, nullptr, 0) == ACL_SUCCESS);
+    assert(g_callbackCapture.calls == 1);
+    assert(g_callbackCapture.domain == ACLSAN_CB_DOMAIN_LAUNCH);
+    assert(g_callbackCapture.callbackId == ACLSAN_CBID_LAUNCH_KERNEL);
+    CheckCommonData(g_callbackCapture.launch.common, sizeof(AclsanLaunchData), "aclrtLaunchKernelWithHostArgs");
+    assert(g_callbackCapture.launch.launchId != 0);
+    assert(g_callbackCapture.launch.function == function);
+    assert(g_callbackCapture.launch.stream == stream);
+    assert(g_callbackCapture.launchFunctionName == "mix_kernel");
+    assert(g_functionAttributeQueryCalls == 0);
+}
+
 } // namespace
 
 namespace aclsan {
@@ -743,6 +793,10 @@ bool InvokeCallback(AclsanCallbackDomain domain, AclsanCallbackId callbackId, co
         assert(g_deviceSyncCallbackCount < g_deviceSyncCallbacks.size());
         g_deviceSyncCallbacks[g_deviceSyncCallbackCount] = *static_cast<const AclsanDeviceSyncData*>(callbackData);
         ++g_deviceSyncCallbackCount;
+    } else if (domain == ACLSAN_CB_DOMAIN_LAUNCH && callbackId == ACLSAN_CBID_LAUNCH_KERNEL) {
+        g_callbackCapture.launch = *static_cast<const AclsanLaunchData*>(callbackData);
+        g_callbackCapture.launchFunctionName =
+            g_callbackCapture.launch.functionName == nullptr ? "" : g_callbackCapture.launch.functionName;
     }
     return true;
 }
@@ -772,6 +826,8 @@ extern "C" void* acltoolGetOriginalRuntimeApi(aclrtApiId apiId)
             return reinterpret_cast<void*>(reinterpret_cast<uintptr_t>(&FakeAclrtBinaryGetGlobal));
         case ACL_RT_API_aclrtGetFunctionAttribute:
             return reinterpret_cast<void*>(reinterpret_cast<uintptr_t>(&FakeAclrtGetFunctionAttribute));
+        case ACL_RT_API_aclrtLaunchKernelWithHostArgs:
+            return reinterpret_cast<void*>(reinterpret_cast<uintptr_t>(&FakeAclrtLaunchKernelWithHostArgs));
         case ACL_RT_API_aclrtGetSocName:
             return reinterpret_cast<void*>(reinterpret_cast<uintptr_t>(&FakeAclrtGetSocName));
         case ACL_RT_API_aclrtGetDeviceInfo:
@@ -823,6 +879,7 @@ int main()
     TestUbufToGmOuterLoopStateReachesMemoryCallback();
     TestGmToL1OuterLoopStateReachesMemoryCallback();
     TestFixpipeLoop3StateReachesMemoryCallback();
+    TestLaunchCallbackData();
     TestDisabledCallbackIsNotInvoked();
     return 0;
 }

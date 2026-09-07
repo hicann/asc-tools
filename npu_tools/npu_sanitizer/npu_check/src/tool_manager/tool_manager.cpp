@@ -9,6 +9,7 @@
 #include "tool_manager/tool_manager.h"
 
 #include "diagnostic/report/report_normalizer.h"
+#include "tool_manager/kernel_attributes.h"
 
 #include <algorithm>
 #include <array>
@@ -181,9 +182,10 @@ constexpr std::array<CallbackSpec, 4> kMemcheckCallbacks{{
     {ACLSAN_CB_DOMAIN_SYNCHRONIZE, ACLSAN_CBID_SYNCHRONIZE_STREAM_SYNC_END},
 }};
 
-constexpr std::array<CallbackSpec, 2> kSynccheckCallbacks{{
+constexpr std::array<CallbackSpec, 3> kSynccheckCallbacks{{
     {ACLSAN_CB_DOMAIN_DEVICE_INSTRUCTION, ACLSAN_CBID_DEVICE_SYNC},
     {ACLSAN_CB_DOMAIN_SYNCHRONIZE, ACLSAN_CBID_SYNCHRONIZE_STREAM_SYNC_END},
+    {ACLSAN_CB_DOMAIN_LAUNCH, ACLSAN_CBID_LAUNCH_KERNEL},
 }};
 
 std::string StatusMessage(const char* operation, AclsanStatus status)
@@ -630,6 +632,40 @@ void ToolManager::OnCallback(AclsanCallbackDomain domain, AclsanCallbackId cbid,
                     message << "synchronization failed result=" << data->common.result << " stream=" << data->stream;
                     logger_.Warning(message.str());
                 }
+                break;
+            }
+            case ACLSAN_CB_DOMAIN_LAUNCH: {
+                const auto* data = ValidateCallbackData<AclsanLaunchData>(cbdata);
+                if (data == nullptr || cbid != ACLSAN_CBID_LAUNCH_KERNEL) {
+                    break;
+                }
+
+                const KernelAttributes attributes = QueryKernelAttributes(data->function);
+                const char* functionName = data->functionName == nullptr ? "<unknown>" : data->functionName;
+                std::ostringstream message;
+                message << "kernel attributes launch=" << data->launchId << " function=" << data->function
+                        << " function_name=" << functionName << " kernel_type=" << attributes.kernelType
+                        << " kernel_type_status=" << attributes.kernelTypeStatus << " aic_ratio=" << attributes.aicRatio
+                        << " aiv_ratio=" << attributes.aivRatio
+                        << " kernel_ratio_status=" << attributes.kernelRatioStatus
+                        << " kernel_sched_mode=" << attributes.kernelSchedMode
+                        << " kernel_sched_mode_status=" << attributes.kernelSchedModeStatus
+                        << " launch_result=" << data->common.result;
+                logger_.Debug(message.str());
+
+                const auto logFailure = [this, data, functionName](const char* attribute, aclError status) {
+                    if (status == ACL_SUCCESS) {
+                        return;
+                    }
+                    std::ostringstream warning;
+                    warning << "kernel attribute query failed launch=" << data->launchId
+                            << " function=" << data->function << " function_name=" << functionName
+                            << " attribute=" << attribute << " result=" << status;
+                    logger_.Warning(warning.str());
+                };
+                logFailure("ACL_FUNC_ATTR_KERNEL_TYPE", attributes.kernelTypeStatus);
+                logFailure("ACL_FUNC_ATTR_KERNEL_RATIO", attributes.kernelRatioStatus);
+                logFailure("ACL_FUNC_ATTR_KERNEL_SCHED_MODE", attributes.kernelSchedModeStatus);
                 break;
             }
             default:

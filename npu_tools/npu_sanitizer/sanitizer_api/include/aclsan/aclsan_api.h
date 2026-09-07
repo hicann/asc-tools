@@ -102,6 +102,11 @@ typedef enum AclsanCallbackIdDeviceInstruction {
     ACLSAN_CBID_DEVICE_INSTRUCTION_INVALID = 0x7fffffff
 } AclsanCallbackIdDeviceInstruction;
 
+typedef enum AclsanCallbackIdLaunch {
+    ACLSAN_CBID_LAUNCH_KERNEL = 1,
+    ACLSAN_CBID_LAUNCH_INVALID = 0x7fffffff
+} AclsanCallbackIdLaunch;
+
 // 通用 callback ABI 类型；具体含义由 AclsanCallbackDomain 和 ID 共同决定。
 typedef uint32_t AclsanCallbackId;
 

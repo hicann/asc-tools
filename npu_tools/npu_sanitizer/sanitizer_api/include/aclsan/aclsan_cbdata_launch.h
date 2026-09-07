@@ -8,13 +8,20 @@
  * See LICENSE in the root of the software repository for the full text of the License.
  */
 
-#ifndef ACLSAN_CBDATA_H
-#define ACLSAN_CBDATA_H
+#ifndef ACLSAN_CBDATA_LAUNCH_H
+#define ACLSAN_CBDATA_LAUNCH_H
 
 #include "aclsan/aclsan_cbdata_common.h"
-#include "aclsan/aclsan_cbdata_device.h"
-#include "aclsan/aclsan_cbdata_launch.h"
-#include "aclsan/aclsan_cbdata_resource.h"
-#include "aclsan/aclsan_cbdata_synchronize.h"
+
+#include <stdint.h>
+
+typedef struct AclsanLaunchData {
+    AclsanCallbackCommonData common;
+    uint64_t launchId;
+    void* function; // aclrtFuncHandle
+    void* stream;   // aclrtStream
+    // 仅在 callback 调用期间有效；未通过 aclrtBinaryGetFunction 获取时为 NULL。
+    const char* functionName;
+} AclsanLaunchData;
 
 #endif

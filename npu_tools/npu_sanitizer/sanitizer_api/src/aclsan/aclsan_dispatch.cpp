@@ -56,4 +56,9 @@ void AclsanCallbackDispatcher::DispatchDeviceSync(const AclsanDeviceSyncData& cb
     Dispatch(ACLSAN_CB_DOMAIN_DEVICE_INSTRUCTION, ACLSAN_CBID_DEVICE_SYNC, &cbdata, "DEVICE_SYNC");
 }
 
+void AclsanCallbackDispatcher::DispatchLaunch(const AclsanLaunchData& cbdata) noexcept
+{
+    Dispatch(ACLSAN_CB_DOMAIN_LAUNCH, ACLSAN_CBID_LAUNCH_KERNEL, &cbdata, cbdata.common.apiName);
+}
+
 } // namespace aclsan
