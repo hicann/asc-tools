@@ -231,19 +231,16 @@ injection 声明，其 `#include_next` 仍需要从已加载的环境中获得 C
 
 ```bash
 source /home/chenning/AscendEnv/test_profiling/cann-9.2.0/set_env.sh
-cmake -S npu_compute -B /tmp/asc_tools_npu_compute_ut \
-  -DNPU_COMPUTE_BUILD_TESTS=ON
+cmake -S . -B /tmp/asc_tools_npu_compute_ut \
+  -DENABLE_TEST=ON -DTEST_MOD=cpp
 cmake --build /tmp/asc_tools_npu_compute_ut -j2
-LD_LIBRARY_PATH=/tmp/asc_tools_npu_compute_ut/bin:${LD_LIBRARY_PATH} \
-  ctest --test-dir /tmp/asc_tools_npu_compute_ut --output-on-failure
+ctest --test-dir /tmp/asc_tools_npu_compute_ut --output-on-failure
 ```
 
 asc-tools 顶层构建提供 NPU Compute 测试开关：
 
 ```bash
-cmake -S . -B build \
-  -DASC_TOOLS_BUILD_NPU_COMPUTE=ON \
-  -DNPU_COMPUTE_BUILD_TESTS=ON
+cmake -S . -B build -DENABLE_TEST=ON -DTEST_MOD=cpp
 ```
 
 ## 安装

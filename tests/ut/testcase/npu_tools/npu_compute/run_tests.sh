@@ -1,5 +1,6 @@
+#!/usr/bin/env bash
 # ----------------------------------------------------------------------------------------------------------
-# Copyright (c) 2025 Huawei Technologies Co., Ltd.
+# Copyright (c) 2026 Huawei Technologies Co., Ltd.
 # This program is free software, you can redistribute it and/or modify it under the terms and conditions of
 # CANN Open Software License Agreement Version 2.0 (the "License").
 # Please refer to the License for details. You may not use this file except in compliance with the License.
@@ -8,23 +9,22 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 # ----------------------------------------------------------------------------------------------------------
 
-cmake_minimum_required(VERSION 3.16.0)
-project(npu_check_cli LANGUAGES CXX)
+set -euo pipefail
 
-find_package(Threads REQUIRED)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/../../../../.." && pwd -P)"
+BUILD_DIR="/tmp/asc_tools_npu_compute_integration"
 
-if(NOT TARGET npu_check_common)
-  add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/../common
-    ${CMAKE_CURRENT_BINARY_DIR}/npu_check_common)
-endif()
+cmake -S "${REPO_ROOT}" -B "${BUILD_DIR}" \
+  -DENABLE_TEST=ON \
+  -DASC_TOOLS_BUILD_NPU_COMPUTE=ON
 
-add_executable(npu_check_cli
-  src/main.cpp
-  src/options.cpp
-  src/process_runner.cpp
-  src/uds_client.cpp
-)
-target_compile_features(npu_check_cli PRIVATE cxx_std_17)
-target_link_libraries(npu_check_cli PRIVATE npu_check_common Threads::Threads Boost::filesystem)
-target_compile_options(npu_check_cli PRIVATE -Wall -Wextra -Wpedantic)
-set_target_properties(npu_check_cli PROPERTIES OUTPUT_NAME npu-check)
+cmake --build "${BUILD_DIR}" -j2
+
+ctest --test-dir "${BUILD_DIR}" --output-on-failure
+
+NPU_COMPUTE_BUILD_DIR="${BUILD_DIR}" \
+NPU_COMPUTE_TEST_BUILD_DIR="${BUILD_DIR}" \
+NPU_COMPUTE_TEST_BIN_DIR="${BUILD_DIR}/tests/ut/testcase/npu_tools/bin" \
+python3 -m pytest -q -p no:cacheprovider \
+  "${REPO_ROOT}/tests/py_ut/testcase/npu_compute"

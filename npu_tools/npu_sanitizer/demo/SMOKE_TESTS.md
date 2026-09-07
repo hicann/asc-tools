@@ -57,7 +57,7 @@ Fixpipe、NDDMA、LoadData 2DV2 和公共 API lowering，并同时检查 CCE ins
 cbdata layout、越界诊断与会话完整性。完整的 230-case 受支持矩阵使用：
 
 ```bash
-bash npu_tools/npu_sanitizer/demo/tests/check_memory_access_end_to_end.sh all
+bash npu_tools/npu_sanitizer/demo/examples/memcheck/memory_access/check_memory_access_end_to_end.sh all
 ```
 
 矩阵样例的 host 侧均直接使用 ACL API，kernel 侧使用 AscendC API，不依赖 demo runtime helper。

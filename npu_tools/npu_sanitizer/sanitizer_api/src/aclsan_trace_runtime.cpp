@@ -96,6 +96,9 @@ bool QueryPhysicalCoreCount(uint32_t deviceId, uint32_t& physicalCoreCount)
         getDeviceInfo(deviceId, ACL_DEV_ATTR_VECTOR_CORE_NUM, &vectorCoreCount) != ACL_SUCCESS) {
         return false;
     }
+    ASC_SAN_DEBUG(
+        "[trace] Device %u core count: cube=%lld vector=%lld", deviceId, static_cast<long long>(cubeCoreCount),
+        static_cast<long long>(vectorCoreCount));
     physicalCoreCount = static_cast<uint32_t>(cubeCoreCount + vectorCoreCount);
     return aclsan::IsTracePhysicalCoreTopologyValid(physicalCoreCount);
 }

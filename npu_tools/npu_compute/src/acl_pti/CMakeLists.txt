@@ -34,11 +34,6 @@ target_link_libraries(acl_pti
     acl_prof_api_backend
     Threads::Threads
 )
-if(NPU_COMPUTE_BUILD_TESTS)
-  target_compile_definitions(acl_pti PRIVATE
-    NPU_COMPUTE_ENABLE_TEST_CONTROLS=1
-  )
-endif()
 set_target_properties(acl_pti PROPERTIES
   OUTPUT_NAME acl_pti
   CXX_VISIBILITY_PRESET hidden

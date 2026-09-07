@@ -88,8 +88,3 @@ synchronization events from both launches.
   checking only for an arbitrary log substring is not sufficient.
 - `mix_wait_without_set` and `flag_set_set_wait_wait` block device instructions and must use bounded stream
   synchronization and `aclrtDestroyStreamForce` so the smoke process can terminate.
-- `demo/tests/check_synccheck_examples_layout.sh` guards the package contract,
-  shell syntax, and documentation matrix for every smoke test. After changes to
-  synchronization-event translation, the checker, renderer, or runtime path, run
-  at least the affected smoke tests and use `multi_launch_pairs` as the basic normal-path
-  smoke test.

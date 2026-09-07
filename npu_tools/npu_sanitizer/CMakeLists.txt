@@ -13,32 +13,18 @@ set(NPU_SANITIZER_INSTALL_BINDIR "${NPU_SANITIZER_INSTALL_BASE_DIR}/bin")
 # Internal directory to store lib / bin
 set(NPU_SANITIZER_INSTALL_INTERNAL_DIR "${NPU_SANITIZER_INSTALL_BASE_DIR}/tools/npu_tools")
 
-if(ENABLE_TEST AND COMMAND add_cann_third_party)
-  add_cann_third_party(gtest)
-endif()
-
 add_subdirectory(common)
 add_subdirectory(sanitizer_api)
 add_subdirectory(npu_check_cli)
 add_subdirectory(npu_check)
 
-if(DEFINED NPU_TOOLS_LIBRARY_OUTPUT_DIR AND DEFINED NPU_TOOLS_RUNTIME_OUTPUT_DIR)
-  set(NPU_SANITIZER_LIBRARY_OUTPUT_DIR "${NPU_TOOLS_LIBRARY_OUTPUT_DIR}")
-  set(NPU_SANITIZER_RUNTIME_OUTPUT_DIR "${NPU_TOOLS_RUNTIME_OUTPUT_DIR}")
-else()
-  set(NPU_SANITIZER_LIBRARY_OUTPUT_DIR "${CMAKE_CURRENT_BINARY_DIR}/lib64")
-  set(NPU_SANITIZER_RUNTIME_OUTPUT_DIR "${CMAKE_CURRENT_BINARY_DIR}/bin")
-endif()
-
 foreach(target IN ITEMS acl_san npu_check)
   set_target_properties(${target} PROPERTIES
-    ARCHIVE_OUTPUT_DIRECTORY "${NPU_SANITIZER_LIBRARY_OUTPUT_DIR}"
-    LIBRARY_OUTPUT_DIRECTORY "${NPU_SANITIZER_LIBRARY_OUTPUT_DIR}"
-    RUNTIME_OUTPUT_DIRECTORY "${NPU_SANITIZER_RUNTIME_OUTPUT_DIR}"
+    LIBRARY_OUTPUT_DIRECTORY "${NPU_TOOLS_LIBRARY_OUTPUT_DIR}"
   )
 endforeach()
 set_target_properties(npu_check_cli PROPERTIES
-  RUNTIME_OUTPUT_DIRECTORY "${NPU_SANITIZER_RUNTIME_OUTPUT_DIR}"
+  RUNTIME_OUTPUT_DIRECTORY "${NPU_TOOLS_RUNTIME_OUTPUT_DIR}"
 )
 
 # binary: npu-check                     path: tools/npu_tools/bin/npu-check

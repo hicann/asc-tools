@@ -138,36 +138,56 @@ def test_package_build_includes_npu_compute_and_sanitizer():
     assert subdirectory_positions == sorted(subdirectory_positions)
 
 
-def test_cmake_test_switches_are_owned_by_their_consumer_modules():
-    top_level_cmake = (REPO_ROOT / "CMakeLists.txt").read_text(encoding="utf-8")
-    npu_compute_cmake = (
-        REPO_ROOT / "npu_tools/npu_compute" / "CMakeLists.txt"
+def test_sanitizer_uses_shared_npu_tools_output_directories():
+    sanitizer_cmake = (REPO_ROOT / "npu_tools/npu_sanitizer/CMakeLists.txt").read_text(
+        encoding="utf-8"
+    )
+
+    assert "NPU_SANITIZER_LIBRARY_OUTPUT_DIR" not in sanitizer_cmake
+    assert "NPU_SANITIZER_RUNTIME_OUTPUT_DIR" not in sanitizer_cmake
+    assert (
+        'ARCHIVE_OUTPUT_DIRECTORY "${NPU_TOOLS_LIBRARY_OUTPUT_DIR}"' in sanitizer_cmake
+    )
+    assert (
+        'LIBRARY_OUTPUT_DIRECTORY "${NPU_TOOLS_LIBRARY_OUTPUT_DIR}"' in sanitizer_cmake
+    )
+    assert (
+        'RUNTIME_OUTPUT_DIRECTORY "${NPU_TOOLS_RUNTIME_OUTPUT_DIR}"' in sanitizer_cmake
+    )
+
+
+def test_npu_tools_cmake_is_free_of_test_ownership():
+    forbidden_markers = (
+        "ENABLE_TEST",
+        "BUILD_TEST",
+        "TEST_",
+        "add_test(",
+        "enable_testing(",
+        "acl_runtime_stub",
+        "acl_prof_api_stub",
+        "NPU_COMPUTE_ENABLE_TEST_CONTROLS",
+    )
+    product_cmake_files = sorted((REPO_ROOT / "npu_tools").rglob("CMakeLists.txt"))
+
+    assert product_cmake_files
+    for cmake_file in product_cmake_files:
+        content = cmake_file.read_text(encoding="utf-8")
+        assert not any(marker in content for marker in forbidden_markers), cmake_file
+
+
+def test_npu_compute_test_ownership_is_in_tests_directory():
+    npu_tools_tests_cmake = (
+        REPO_ROOT / "tests/ut/testcase/npu_tools/CMakeLists.txt"
     ).read_text(encoding="utf-8")
-    dbi_test_cmake = (
-        REPO_ROOT / "npu_tools/npu_sanitizer/sanitizer_api/tests/dbi" / "CMakeLists.txt"
+    npu_compute_tests_cmake = (
+        REPO_ROOT / "tests/ut/testcase/npu_tools/npu_compute/tests/CMakeLists.txt"
     ).read_text(encoding="utf-8")
 
-    npu_compute_switch = "NPU_COMPUTE_BUILD_TESTS"
-    assert f"option({npu_compute_switch}" in top_level_cmake
-    assert f"option({npu_compute_switch}" in npu_compute_cmake
-
-    dbi_options = (
-        "NPU_CHECK_ENABLE_REAL_DBI_FLOW",
-        "NPU_CHECK_ENABLE_REAL_DBI_TOOLCHAIN",
-        "NPU_CHECK_RUN_REAL_DBI_HARDWARE",
-    )
-    dbi_cache_variables = (
-        "NPU_CHECK_REAL_DBI_ARCH",
-        "NPU_CHECK_REAL_DBI_KERNEL",
-        "NPU_CHECK_REAL_DBI_TOOLCHAIN_ROOT",
-        "NPU_CHECK_REAL_DBI_DEVICE_ID",
-    )
-    for option in dbi_options:
-        assert f"option({option}" in top_level_cmake
-        assert f"option({option}" in dbi_test_cmake
-    for variable in dbi_cache_variables:
-        assert f"set({variable}" in top_level_cmake
-        assert f"set({variable}" in dbi_test_cmake
+    assert "option(NPU_COMPUTE_BUILD_REAL_HARDWARE_TESTS" in npu_tools_tests_cmake
+    assert "add_subdirectory(npu_compute/tests)" in npu_tools_tests_cmake
+    assert "add_library(acl_pti_test" in npu_compute_tests_cmake
+    assert "add_library(npu_compute_test" in npu_compute_tests_cmake
+    assert "add_library(npu_compute_launcher_core_test" in npu_compute_tests_cmake
 
 
 def test_cmake_targets_use_component_prefixes_and_merge_data_module():

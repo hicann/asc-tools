@@ -27,6 +27,6 @@ exec > >(tee -a "${output}") 2>&1
 export ASCEND_GLOBAL_LOG_LEVEL=0
 export NPU_SAN_DEBUG=1
 
-NPU_CHECK_E2E_REUSE_EXISTING_BUILD=1 bash ../../../tests/check_memory_access_end_to_end.sh smoke
+NPU_CHECK_E2E_REUSE_EXISTING_BUILD=1 bash check_memory_access_end_to_end.sh smoke
 
 printf '[PASSED] memcheck/memory_access\n'

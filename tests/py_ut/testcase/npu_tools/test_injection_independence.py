@@ -91,8 +91,57 @@ def test_top_level_build_uses_npu_tools_orchestration():
     assert "add_subdirectory(npu_sanitizer/" not in root_cmake
     assert "ASC_TOOLS_BUILD_INJECTION" not in root_cmake
     assert "ASC_TOOLS_BUILD_INJECTION" not in tools_cmake
-    assert "if(ASC_TOOLS_BUILD_NPU_COMPUTE OR BUILD_NPU_SANITIZER)" in root_cmake
-    assert "if(ASC_TOOLS_BUILD_NPU_COMPUTE OR BUILD_NPU_SANITIZER)" in tools_cmake
+    assert "BUILD_NPU_SANITIZER" not in root_cmake
+    assert "BUILD_NPU_SANITIZER" not in tools_cmake
+    assert "ASC_TOOLS_BUILD_NPU_COMPUTE" not in root_cmake
+    assert "option(ASC_TOOLS_BUILD_NPU_COMPUTE" not in tools_cmake
+    assert "if(ASC_TOOLS_BUILD_NPU_COMPUTE)" not in tools_cmake
+    assert "add_subdirectory(injection)" in tools_cmake
+    assert "add_subdirectory(npu_compute)" in tools_cmake
+    assert "add_subdirectory(npu_sanitizer)" in tools_cmake
     assert tools_cmake.index("add_subdirectory(injection)") < tools_cmake.index(
         "add_subdirectory(npu_compute)"
     )
+
+
+def test_npu_tools_test_cmake_is_owned_by_tests_tree():
+    root_cmake = (REPO_ROOT / "CMakeLists.txt").read_text(encoding="utf-8")
+    tools_cmake = (NPU_TOOLS_ROOT / "CMakeLists.txt").read_text(encoding="utf-8")
+    tests_cmake = (REPO_ROOT / "tests/ut/testcase/npu_tools/CMakeLists.txt").read_text(
+        encoding="utf-8"
+    )
+
+    assert (
+        "if(ENABLE_TEST)\n  enable_testing()\n  add_subdirectory(tests)" in root_cmake
+    )
+    assert "enable_testing(" not in tools_cmake
+    assert "add_subdirectory(injection/tests" not in tools_cmake
+    assert "add_subdirectory(npu_compute/tests" not in tools_cmake
+    assert "add_subdirectory(npu_sanitizer" in tests_cmake
+
+    product_cmake_files = (
+        NPU_TOOLS_ROOT / "injection/CMakeLists.txt",
+        NPU_TOOLS_ROOT / "npu_compute/CMakeLists.txt",
+        NPU_TOOLS_ROOT / "npu_sanitizer/sanitizer_api/CMakeLists.txt",
+        NPU_TOOLS_ROOT / "npu_sanitizer/npu_check/CMakeLists.txt",
+        NPU_TOOLS_ROOT / "npu_sanitizer/npu_check_cli/CMakeLists.txt",
+    )
+    for cmake_file in product_cmake_files:
+        cmake_text = cmake_file.read_text(encoding="utf-8")
+        assert "enable_testing(" not in cmake_text
+        assert "add_test(" not in cmake_text
+
+
+def test_enable_test_is_the_only_injection_test_switch():
+    cmake_files = (
+        REPO_ROOT / "CMakeLists.txt",
+        NPU_TOOLS_ROOT / "CMakeLists.txt",
+        INJECTION_ROOT / "CMakeLists.txt",
+        REPO_ROOT / "tests/ut/testcase/npu_tools/CMakeLists.txt",
+    )
+    cmake_text = "\n".join(path.read_text(encoding="utf-8") for path in cmake_files)
+
+    assert "INJECTION_BUILD_TESTS" not in cmake_text
+    assert "if(ENABLE_TEST)" in (
+        REPO_ROOT / "tests/ut/testcase/npu_tools/CMakeLists.txt"
+    ).read_text(encoding="utf-8")

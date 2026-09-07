@@ -63,7 +63,7 @@ SET state, cbdata layouts, out-of-bounds diagnostics, and session completion. Ru
 230-case matrix with:
 
 ```bash
-bash npu_tools/npu_sanitizer/demo/tests/check_memory_access_end_to_end.sh all
+bash npu_tools/npu_sanitizer/demo/examples/memcheck/memory_access/check_memory_access_end_to_end.sh all
 ```
 
 Every matrix example uses ACL APIs directly on the host and AscendC APIs in the kernel, without a demo runtime helper.

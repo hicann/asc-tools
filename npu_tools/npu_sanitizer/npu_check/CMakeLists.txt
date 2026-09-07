@@ -25,7 +25,6 @@ set(NPU_CHECK_REPORT_RENDERER_SOURCES
 set(NPU_CHECK_DBI_ROOT "${CMAKE_CURRENT_LIST_DIR}/../sanitizer_api")
 set(NPU_CHECK_DBI_SOURCE_DIR "${NPU_CHECK_DBI_ROOT}/src/dbi")
 set(NPU_CHECK_DBI_INCLUDE_DIR "${NPU_CHECK_DBI_ROOT}/include")
-set(NPU_CHECK_DBI_TEST_DIR "${NPU_CHECK_DBI_ROOT}/tests/dbi")
 
 if(NOT TARGET npu_check_common)
   add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/../common
@@ -93,93 +92,3 @@ set_target_properties(npu_check PROPERTIES
   SKIP_BUILD_RPATH FALSE
   SKIP_INSTALL_RPATH FALSE
 )
-
-if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR OR ENABLE_TEST)
-  enable_testing()
-  if(NOT TARGET GTest::gtest)
-    find_package(GTest REQUIRED)
-  endif()
-
-  add_executable(npu_check_unit_tests
-    tests/gtest_main.cpp
-    tests/allocation_registry_test.cpp
-    tests/logger_test.cpp
-    tests/memcheck_test.cpp
-    tests/report_buffer_test.cpp
-    tests/synccheck_test.cpp
-    tests/uds_server_test.cpp
-    tests/wire_protocol_test.cpp
-    ${NPU_CHECK_REPORT_RENDERER_SOURCES}
-  )
-  target_compile_features(npu_check_unit_tests PRIVATE cxx_std_17)
-  target_compile_definitions(npu_check_unit_tests PRIVATE _GLIBCXX_USE_CXX11_ABI=0)
-  target_include_directories(npu_check_unit_tests PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/src
-    ${CMAKE_CURRENT_LIST_DIR}/../sanitizer_api/include
-  )
-  target_link_libraries(npu_check_unit_tests PRIVATE
-    npu_check_core acl_san Threads::Threads GTest::gtest Boost::filesystem)
-  add_test(NAME npu_check_unit_tests COMMAND npu_check_unit_tests)
-
-  add_executable(npu_check_report_renderer_smoke
-    tests/report_renderer_smoke.cpp
-    ${NPU_CHECK_REPORT_RENDERER_SOURCES}
-  )
-  target_compile_features(npu_check_report_renderer_smoke PRIVATE cxx_std_17)
-  target_compile_definitions(npu_check_report_renderer_smoke PRIVATE _GLIBCXX_USE_CXX11_ABI=0)
-  target_include_directories(npu_check_report_renderer_smoke PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/src
-    ${CMAKE_CURRENT_LIST_DIR}/../sanitizer_api/include
-  )
-  target_link_libraries(npu_check_report_renderer_smoke PRIVATE GTest::gtest)
-  add_test(NAME npu_check_report_renderer_smoke COMMAND npu_check_report_renderer_smoke)
-
-  add_executable(npu_check_dbi_pipeline_tests
-    tests/gtest_main.cpp
-    ${NPU_CHECK_DBI_TEST_DIR}/dbi_pipeline_test.cpp
-    ${NPU_CHECK_DBI_SOURCE_DIR}/dbi_pipeline.cpp
-    ${NPU_CHECK_DBI_SOURCE_DIR}/tool_runner.cpp
-  )
-  target_compile_features(npu_check_dbi_pipeline_tests PRIVATE cxx_std_17)
-  target_compile_options(npu_check_dbi_pipeline_tests PRIVATE -Wall -Wextra -Werror)
-  target_compile_definitions(npu_check_dbi_pipeline_tests PRIVATE _GLIBCXX_USE_CXX11_ABI=0)
-  target_include_directories(npu_check_dbi_pipeline_tests PRIVATE ${NPU_CHECK_DBI_INCLUDE_DIR})
-  target_link_libraries(npu_check_dbi_pipeline_tests PRIVATE
-    npu_check_dbi_ctrlbin npu_check_dbi_probe_runtime GTest::gtest Boost::filesystem)
-  add_test(NAME npu_check_dbi_pipeline COMMAND npu_check_dbi_pipeline_tests)
-
-  add_executable(npu_check_dbi_integration_tests
-    tests/gtest_main.cpp
-    ${NPU_CHECK_DBI_TEST_DIR}/dbi_integration_test.cpp
-    ${NPU_CHECK_DBI_SOURCE_DIR}/dbi_pipeline.cpp
-    ${NPU_CHECK_DBI_SOURCE_DIR}/tool_runner.cpp
-  )
-  target_compile_features(npu_check_dbi_integration_tests PRIVATE cxx_std_17)
-  target_compile_options(npu_check_dbi_integration_tests PRIVATE -Wall -Wextra -Werror)
-  target_compile_definitions(npu_check_dbi_integration_tests PRIVATE _GLIBCXX_USE_CXX11_ABI=0)
-  target_include_directories(npu_check_dbi_integration_tests PRIVATE ${NPU_CHECK_DBI_INCLUDE_DIR})
-  target_link_libraries(npu_check_dbi_integration_tests PRIVATE
-    npu_check_dbi_ctrlbin npu_check_dbi_probe_runtime GTest::gtest Boost::filesystem)
-  add_test(NAME npu_check_dbi_integration COMMAND npu_check_dbi_integration_tests)
-
-  add_executable(npu_check_dbi_binary_instrumenter_tests
-    tests/gtest_main.cpp
-    ${NPU_CHECK_DBI_TEST_DIR}/binary_instrumenter_test.cpp
-  )
-  target_compile_features(npu_check_dbi_binary_instrumenter_tests PRIVATE cxx_std_17)
-  target_compile_definitions(npu_check_dbi_binary_instrumenter_tests PRIVATE _GLIBCXX_USE_CXX11_ABI=0)
-  target_include_directories(npu_check_dbi_binary_instrumenter_tests PRIVATE ${NPU_CHECK_DBI_INCLUDE_DIR})
-  target_link_libraries(npu_check_dbi_binary_instrumenter_tests PRIVATE
-    npu_check_dbi_engine GTest::gtest Boost::filesystem)
-  add_test(NAME npu_check_dbi_binary_instrumenter COMMAND npu_check_dbi_binary_instrumenter_tests)
-
-  add_executable(npu_check_probe_source_generator_tests
-    ${NPU_CHECK_DBI_TEST_DIR}/probe_source_generator_test.cpp
-  )
-  target_compile_features(npu_check_probe_source_generator_tests PRIVATE cxx_std_17)
-  target_compile_definitions(npu_check_probe_source_generator_tests PRIVATE _GLIBCXX_USE_CXX11_ABI=0)
-  target_include_directories(npu_check_probe_source_generator_tests PRIVATE ${NPU_CHECK_DBI_INCLUDE_DIR})
-  target_link_libraries(npu_check_probe_source_generator_tests PRIVATE
-    npu_check_dbi_probe_runtime npu_check_dbi_ctrlbin)
-  add_test(NAME npu_check_probe_source_generator COMMAND npu_check_probe_source_generator_tests)
-endif()

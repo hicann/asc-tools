@@ -155,15 +155,8 @@ npu-check
 
 ## 验证范围
 
-- `tests/check_product_npu_check_layout.sh` 检查产品级 target、入口符号拼写以及
-  demo 不再引用旧 launcher 或不支持的工具。
-- `tests/check_examples_layout.sh` 检查所有示例分类、runner 自校验契约和 `run_smoke.sh` 的
-  汇总行为，并确认已删除的 `examples/test` 未重新进入构建或运行链。
-- `tests/check_end_to_end.sh` 在真实 Device 上运行 add，检查 UDS 生命周期、应用退出状态、
-  `acltoolInitialize@@NPU_CHECK_1.0` 导出和关键 ELF `DT_NEEDED` 关系。
-- `tests/check_probe_device_end_to_end.sh` 检查 add 的 probe record 回读；
-  `tests/check_matmul_end_to_end.sh` 依次检查两个 matmul 的 record 数量、AIV block 覆盖和
-  计算结果。
+- `examples/memcheck/memory_access/check_memory_access_end_to_end.sh` 运行 230 个支持的
+  memory_access 场景，校验指令解码、SET 状态、cbdata layout、越界诊断和会话完整性。
 
 当前 CANN/Device 环境中，三个示例均已验证 Device probe 插桩、record 回读、
 memcheck 分析和计算结果：add、基础 matmul、融合 matmul 分别回读 24、12、36 条 record。

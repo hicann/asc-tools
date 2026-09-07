@@ -221,30 +221,25 @@ def test_cli_resolves_injection_path_without_linking_injection_library():
     assert "NpuComputeInjectionLibraryPath" not in launcher
 
 
-def test_default_cmake_uses_cann_runtime_and_profapi_for_non_test_builds():
+def test_product_cmake_uses_cann_runtime_and_profapi():
     cmake = INJECTION_CMAKE.read_text(encoding="utf-8")
+    npu_tools_tests_cmake = (
+        REPO_ROOT / "tests/ut/testcase/npu_tools/CMakeLists.txt"
+    ).read_text(encoding="utf-8")
 
-    assert "option(INJECTION_BUILD_TESTS" in cmake
+    assert "INJECTION_BUILD_TESTS" not in cmake
     backend_block = cmake.split("add_library(injection_runtime_backend INTERFACE)", 1)[
         1
     ].split("find_package(Threads REQUIRED)", 1)[0]
-    assert "if(INJECTION_BUILD_TESTS)" in backend_block
-    stub_block = backend_block.split("if(INJECTION_BUILD_TESTS)", 1)[1].split(
-        "else()", 1
-    )[0]
-    cann_block = backend_block.split("else()", 1)[1]
+    assert "add_subdirectory(injection/tests/stubs/runtime)" in npu_tools_tests_cmake
+    assert "add_subdirectory(injection/tests/stubs/prof_api)" in npu_tools_tests_cmake
 
-    assert "add_subdirectory(tests/stubs/runtime)" in stub_block
-    assert "add_subdirectory(tests/stubs/prof_api)" in stub_block
-    assert "acl_runtime_stub" in stub_block
-    assert "acl_prof_api_stub" in stub_block
-
-    assert "find_library(INJECTION_ACL_RT_LIBRARY" in cann_block
-    assert "find_library(INJECTION_PROFAPI_LIBRARY" in cann_block
-    assert "Injection::acl_rt" in cann_block
-    assert "Injection::profapi" in cann_block
-    assert "acl_runtime_stub" not in cann_block
-    assert "acl_prof_api_stub" not in cann_block
+    assert "find_library(INJECTION_ACL_RT_LIBRARY" in backend_block
+    assert "find_library(INJECTION_PROFAPI_LIBRARY" in backend_block
+    assert "Injection::acl_rt" in backend_block
+    assert "Injection::profapi" in backend_block
+    assert "acl_runtime_stub" not in backend_block
+    assert "acl_prof_api_stub" not in backend_block
 
 
 def test_compile_script_uses_current_cann_build_options():
@@ -257,11 +252,11 @@ def test_compile_script_uses_current_cann_build_options():
     assert "NPUCOMPUTE_CANN_ROOT or ASCEND_HOME_PATH must be set" in script
     assert '-DNPUCOMPUTE_CANN_ROOT="${CANN_ROOT}"' in script
     assert '-DINJECTION_CANN_ROOT="${CANN_ROOT}"' in script
-    assert "-DASC_TOOLS_BUILD_NPU_COMPUTE=ON" in script
+    assert "ASC_TOOLS_BUILD_NPU_COMPUTE" not in script
     assert 'cmake -S "${SCRIPT_DIR}/.."' in script
     assert "-U NPU_COMPUTE_BUILD_CANN_BACKEND" in script
     assert "NPU_COMPUTE_BUILD_INTEGRATION_STUBS" not in script
-    assert "-DNPU_COMPUTE_BUILD_TESTS=OFF" in script
+    assert "NPU_COMPUTE_BUILD_TESTS" not in script
     assert "-DNPU_COMPUTE_BUILD_CANN_BACKEND" not in script
     assert "-DNPU_COMPUTE_BUILD_INTEGRATION_STUBS" not in script
     assert "--target npu_compute npu_compute_cli" in script

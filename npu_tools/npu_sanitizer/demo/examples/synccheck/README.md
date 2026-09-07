@@ -73,6 +73,3 @@ bash npu_tools/npu_sanitizer/demo/examples/synccheck/flag_set_set_wait_wait/run.
 - `verify.py` 必须明确声明预期 summary 和诊断类型，不能只检查日志中是否出现某个字符串。
 - `mix_wait_without_set` 和 `flag_set_set_wait_wait`
   会使设备指令阻塞，必须使用有界 stream 同步和 `aclrtDestroyStreamForce`，保证冒烟执行能够结束。
-- `demo/tests/check_synccheck_examples_layout.sh` 看护所有冒烟包的目录契约、脚本语法和文档矩阵；
-  修改同步事件翻译、checker、renderer 或运行链后，应至少执行受影响用例，并以 `multi_launch_pairs`
-  作为基本正常链路冒烟用例。

@@ -178,19 +178,9 @@ The only source definition of `acltoolInitialize` is in
 
 ## Verification Scope
 
-- `tests/check_product_npu_check_layout.sh` checks production targets, entry-point
-  symbol spelling, and that the demo does not reference the legacy launcher or
-  unsupported tools.
-- `tests/check_examples_layout.sh` checks all example categories, runner
-  self-validation contracts, and `run_smoke.sh` aggregation behavior, and confirms
-  that the removed `examples/test` directory has not re-entered the build or runtime
-  chain.
-- `tests/check_end_to_end.sh` runs add on a real Device and checks the UDS lifecycle,
-  application exit status, the `acltoolInitialize@@NPU_CHECK_1.0` export, and key
-  ELF `DT_NEEDED` relationships.
-- `tests/check_probe_device_end_to_end.sh` checks probe record readback for add.
-  `tests/check_matmul_end_to_end.sh` checks the record count, AIV block coverage,
-  and calculation results of both matmul examples.
+- `examples/memcheck/memory_access/check_memory_access_end_to_end.sh` runs the 230
+  supported memory_access scenarios and validates instruction decoding, SET state,
+  cbdata layouts, out-of-bounds diagnostics, and session completion.
 
 In the current CANN/Device environment, all three examples have been verified for
 Device probe instrumentation, record readback, memcheck analysis, and calculation
