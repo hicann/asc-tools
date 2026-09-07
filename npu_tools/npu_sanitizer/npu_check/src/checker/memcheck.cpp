@@ -492,7 +492,7 @@ MemcheckStats Memcheck::Stats() const
 void Memcheck::Count(const std::vector<NpuCheckMemcheckReport>& reports)
 {
     for (const auto& report : reports) {
-        if (report.common.severity == ReportSeverity::ERROR || report.common.severity == ReportSeverity::FATAL) {
+        if (report.common.severity == ReportSeverity::ERROR) {
             ++stats_.errors;
         } else if (report.common.severity == ReportSeverity::WARNING) {
             ++stats_.warnings;

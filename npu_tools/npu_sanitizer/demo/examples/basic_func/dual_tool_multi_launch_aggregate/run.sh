@@ -50,8 +50,8 @@ if [[ $(grep -Ec '^tool=synccheck sync_events=1 synchronizations=1 matched_pairs
 fi
 
 for diagnostic in \
-    '========= ERROR: Invalid GM read of size 32 bytes' \
-    '========= ERROR: Synchronization pairing mismatch: redundant SET_FLAG.'; do
+    '========= ERROR:[MEMCHECK] Invalid GM read of size 32 bytes' \
+    '========= ERROR:[SYNCCHECK] Synchronization pairing mismatch: redundant SET_FLAG.'; do
     if [[ $(grep -Fxc "${diagnostic}" "${output}" || true) -ne 1 ]]; then
         printf 'unexpected diagnostic count for %s: %s\n' "${diagnostic}" "${output}" >&2
         exit 1

@@ -134,6 +134,22 @@ std::size_t CountOccurrences(const std::string& text, const std::string& needle)
     return count;
 }
 
+ReportFields MakePatternSnapshotFields(const ReportTemplate& reportTemplate)
+{
+    ReportFields fields;
+    std::size_t pos = 0;
+    while ((pos = reportTemplate.text.find("{{", pos)) != std::string::npos) {
+        const std::size_t close = reportTemplate.text.find("}}", pos + 2);
+        if (close == std::string::npos) {
+            break;
+        }
+        const std::string field = reportTemplate.text.substr(pos + 2, close - pos - 2);
+        fields.emplace(field, "<" + field + ">");
+        pos = close + 2;
+    }
+    return fields;
+}
+
 ReportRecord MakeMemcheckInvalidAccessRecord()
 {
     return ReportRecord{
@@ -332,7 +348,7 @@ ReportRecord MakeSocRecord()
 {
     return ReportRecord{
         {ReportTool::SOCCHECK, "register_mismatch"},
-        ReportSeverity::FATAL,
+        ReportSeverity::ERROR,
         {
             {"function", "soc_kernel"},
             {"offset", "4"},
@@ -402,22 +418,55 @@ TEST(ReportRendererTest, ListsAndRendersBuiltinTemplates)
     std::string rendered;
     EXPECT_EQ(
         npucheck::RenderReportRecord(MakeMemcheckInvalidAccessRecord(), {}, &rendered), ReportRenderStatus::kSuccess);
-    EXPECT_NE(rendered.find("========= ERROR: Invalid GM read of size 16 bytes"), std::string::npos);
-    EXPECT_NE(rendered.find("by aicore (3) type (AIC) block (7) pipe (MTE2)"), std::string::npos);
+    EXPECT_EQ(
+        rendered, "========= ERROR:[MEMCHECK] Invalid GM read of size 16 bytes\n"
+                  "=========     at kernel+0x10 in kernel.cpp:42\n"
+                  "=========     by aicore (3) type (AIC) block (7) pipe (MTE2) in launch (41)\n"
+                  "=========     Address 0x1000 is out of bounds\n");
 
     EXPECT_EQ(npucheck::RenderReportRecord(MakeInitcheckRecord(), {}, &rendered), ReportRenderStatus::kSuccess);
-    EXPECT_NE(rendered.find("========= ERROR: Uninitialized GM memory read of size 32 bytes"), std::string::npos);
+    EXPECT_NE(
+        rendered.find("========= ERROR:[INITCHECK] Uninitialized GM memory read of size 32 bytes"), std::string::npos);
 
     EXPECT_EQ(npucheck::RenderReportRecord(MakeRaceRecord(), {}, &rendered), ReportRenderStatus::kSuccess);
     EXPECT_NE(
-        rendered.find("========= WARNING: Potential RAW hazard detected at UB 0x2000 in block (8) :"),
+        rendered.find("========= WARNING:[RACECHECK] Potential RAW hazard detected at UB 0x2000 in block (8) :"),
         std::string::npos);
 
     EXPECT_EQ(npucheck::RenderReportRecord(MakeSyncRecord(), {}, &rendered), ReportRenderStatus::kSuccess);
     EXPECT_NE(rendered.find("Synchronization pairing mismatch: unmatched WAIT_FLAG"), std::string::npos);
 
     EXPECT_EQ(npucheck::RenderReportRecord(MakeSocRecord(), {}, &rendered), ReportRenderStatus::kSuccess);
-    EXPECT_NE(rendered.find("========= FATAL: SOC register mismatch detected."), std::string::npos);
+    EXPECT_NE(rendered.find("========= ERROR:[SOCCHECK] SOC register mismatch detected."), std::string::npos);
+}
+
+TEST(ReportRendererTest, MatchesBuiltinPatternOutputSnapshot)
+{
+    std::string actual;
+    for (const auto& [key, descriptor] : npucheck::detail::GetPatternCatalog()) {
+        ASSERT_EQ(descriptor.reportTemplate.text.rfind("========= {{Severity}}:[", 0), 0U);
+        EXPECT_EQ(descriptor.reportTemplate.text.find("{{Tool}}"), std::string::npos);
+        std::string rendered;
+        ASSERT_EQ(
+            npucheck::RenderReportRecord(
+                ReportRecord{key, ReportSeverity::ERROR, MakePatternSnapshotFields(descriptor.reportTemplate)}, {},
+                &rendered),
+            ReportRenderStatus::kSuccess);
+        if (!actual.empty()) {
+            actual.push_back('\n');
+        }
+        actual.append("===== ");
+        actual.append(npucheck::ReportToolName(key.tool));
+        actual.push_back('.');
+        actual.append(key.pattern);
+        actual.append(" =====\n");
+        actual.append(rendered);
+    }
+
+    const std::string snapshot = ReadFile(NPU_CHECK_REPORT_PATTERN_SNAPSHOT);
+    const std::size_t bodyStart = snapshot.find("\n\n");
+    ASSERT_NE(bodyStart, std::string::npos);
+    EXPECT_EQ(actual, snapshot.substr(bodyStart + 2));
 }
 
 TEST(ReportRendererTest, CatalogOwnsCompletePatternMetadata)
@@ -490,7 +539,7 @@ TEST(ReportRendererTest, AppendsStructuredCallStacks)
     EXPECT_EQ(rendered.find("Host Frame:"), std::string::npos);
 }
 
-TEST(ReportRendererTest, PrefersRawCallStackWhenTypedReportHasBothRepresentations)
+TEST(ReportRendererTest, RejectsRemovedBothCallStackFormat)
 {
     NpuCheckSynccheckReport report =
         MakePairingReport(NpuCheckSyncMismatchReason::UNCONSUMED_OPEN, NpuCheckSyncPairKind::GET_RLS_BUF);
@@ -500,19 +549,16 @@ TEST(ReportRendererTest, PrefersRawCallStackWhenTypedReportHasBothRepresentation
     report.common.stackCount = 1;
     ReportCallStack& stack = report.common.stacks[0];
     stack.role = ReportStackRole::SYNC_TRIGGER;
-    stack.format = ReportStackFormat::BOTH;
+    stack.format = static_cast<ReportStackFormat>(3);
     stack.rawText = "[CALL-STACK] pc=0x164 status=available binary_id=1\n"
                     "  #0 GetBufInternal at kernel_event.h:718:13\n";
     stack.frames.push_back(ReportFrame{0x164, 0, "GetBufInternal", "kernel_event.h", 718, 13});
 
     std::string rendered;
-    ASSERT_EQ(
+    EXPECT_EQ(
         npucheck::RenderNpuCheckReportRecord(NpuCheckReportRecord::From(report), {}, &rendered),
-        ReportRenderStatus::kSuccess);
-    EXPECT_NE(rendered.find("=========     [CALL-STACK] pc=0x164 status=available binary_id=1"), std::string::npos);
-    EXPECT_NE(rendered.find("=========       #0 GetBufInternal at kernel_event.h:718:13"), std::string::npos);
-    EXPECT_EQ(rendered.find("=========     #0 GetBufInternal"), std::string::npos);
-    EXPECT_NE(rendered.find("GetBufInternal+0x0 in kernel_event.h:718"), std::string::npos);
+        ReportRenderStatus::kInvalidArgument);
+    EXPECT_TRUE(rendered.empty());
 }
 
 TEST(ReportRendererTest, UsesOnlyDeviceOrHostCallStackHeadings)
@@ -902,6 +948,21 @@ TEST(ReportRendererTest, LoadsTemplateOverrides)
     EXPECT_EQ(npucheck::RenderReportRecord(unknownRecord, {}, &rendered), ReportRenderStatus::kUnknownTemplate);
 }
 
+TEST(ReportRendererTest, DoesNotInjectToolTemplateFields)
+{
+    const ReportTemplateKey key{ReportTool::MEMCHECK, "invalid_access"};
+    std::string rendered;
+
+    EXPECT_EQ(
+        npucheck::RenderReportRecord(
+            MakeMemcheckInvalidAccessRecord(), ReportTemplateOverrides{{key, {"{{Tool}}\n"}}}, &rendered),
+        ReportRenderStatus::kMissingField);
+    EXPECT_EQ(
+        npucheck::RenderReportRecord(
+            MakeMemcheckInvalidAccessRecord(), ReportTemplateOverrides{{key, {"{{tool}}\n"}}}, &rendered),
+        ReportRenderStatus::kMissingField);
+}
+
 TEST(ReportRendererTest, RendersBundleSummaries)
 {
     const ReportRecord leakRecord{
@@ -967,9 +1028,9 @@ TEST(ReportRendererTest, RendersBundleSummaries)
                       "=========     INITCHECK: 0 errors\n"
                       "=========     RACECHECK: 0 errors\n"
                       "=========     SYNCCHECK: 1 errors\n"
-                      "=========     SOCCHECK: 1 errors\n"
-                      "=========     FATAL: 1 fatal errors\n"),
+                      "=========     SOCCHECK: 1 errors\n"),
         std::string::npos);
+    EXPECT_EQ(rendered.find("=========     FATAL:"), std::string::npos);
 }
 
 TEST(ReportRendererTest, SummarizesOnlyToolsPresentInBundle)
@@ -1000,7 +1061,7 @@ TEST(ReportRendererTest, EmptyBundleHasOnlyGlobalSummary)
     EXPECT_EQ(rendered.find("SYNCCHECK SUMMARY"), std::string::npos);
     EXPECT_EQ(rendered.find("SOCCHECK SUMMARY"), std::string::npos);
     EXPECT_NE(rendered.find("========= ERROR SUMMARY: 0 errors\n"), std::string::npos);
-    EXPECT_NE(rendered.find("=========     FATAL: 0 fatal errors\n"), std::string::npos);
+    EXPECT_EQ(rendered.find("=========     FATAL:"), std::string::npos);
 }
 
 TEST(ReportRendererTest, RendersPairingMismatchReasonForDifferentOperationKinds)
@@ -1324,7 +1385,7 @@ TEST(ReportRendererTest, RendersStructuredReportsFromEachCheckerStruct)
     NpuCheckSoccheckReport soccheck{};
     soccheck.common.tool = ReportTool::SOCCHECK;
     soccheck.common.pattern = NpuCheckReportPattern::SOCCHECK_REGISTER_MISMATCH;
-    soccheck.common.severity = ReportSeverity::FATAL;
+    soccheck.common.severity = ReportSeverity::ERROR;
     soccheck.common.exec.function = "soc_kernel";
     soccheck.common.exec.offset = 0x4;
     soccheck.common.exec.file = "soc.cpp";
@@ -1347,14 +1408,16 @@ TEST(ReportRendererTest, RendersStructuredReportsFromEachCheckerStruct)
         EXPECT_EQ(npucheck::RenderNpuCheckReportRecord(record, {}, &rendered), ReportRenderStatus::kSuccess);
     }
     EXPECT_EQ(npucheck::RenderNpuCheckReportBundle(records, {}, &rendered), ReportRenderStatus::kSuccess);
-    EXPECT_NE(rendered.find("========= ERROR: Invalid GM read of size 16 bytes"), std::string::npos);
-    EXPECT_NE(rendered.find("========= ERROR: Uninitialized GM memory read of size 32 bytes"), std::string::npos);
+    EXPECT_NE(rendered.find("========= ERROR:[MEMCHECK] Invalid GM read of size 16 bytes"), std::string::npos);
     EXPECT_NE(
-        rendered.find("========= WARNING: Potential RAW hazard detected at UB 0x2000 in block (8) :"),
+        rendered.find("========= ERROR:[INITCHECK] Uninitialized GM memory read of size 32 bytes"), std::string::npos);
+    EXPECT_NE(
+        rendered.find("========= WARNING:[RACECHECK] Potential RAW hazard detected at UB 0x2000 in block (8) :"),
         std::string::npos);
     EXPECT_NE(
-        rendered.find("========= ERROR: Synchronization pairing mismatch: unmatched WAIT_FLAG."), std::string::npos);
-    EXPECT_NE(rendered.find("========= FATAL: SOC register mismatch detected."), std::string::npos);
+        rendered.find("========= ERROR:[SYNCCHECK] Synchronization pairing mismatch: unmatched WAIT_FLAG."),
+        std::string::npos);
+    EXPECT_NE(rendered.find("========= ERROR:[SOCCHECK] SOC register mismatch detected."), std::string::npos);
     EXPECT_NE(rendered.find("========= ERROR SUMMARY: 4 errors"), std::string::npos);
 }
 

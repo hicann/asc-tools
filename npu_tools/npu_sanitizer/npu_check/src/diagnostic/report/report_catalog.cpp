@@ -8,6 +8,8 @@
 
 #include "diagnostic/report/report_catalog.h"
 
+#include <string>
+
 namespace npucheck::detail {
 namespace {
 
@@ -27,17 +29,14 @@ const PatternCatalog& Catalog()
     static const auto* const catalog = new PatternCatalog{
         MakePattern(
             ReportTool::MEMCHECK, NpuCheckReportPattern::MEMCHECK_INVALID_ACCESS, "invalid_access",
-            "========= {{Severity}}: Invalid {{space}} {{access}} of size {{accessBytes}} bytes\n"
+            "========= {{Severity}}:[MEMCHECK] Invalid {{space}} {{access}} of size {{accessBytes}} bytes\n"
             "=========     {{location}}\n"
             "=========     by aicore ({{coreId}}) type ({{blockType}}) block ({{blockId}}) pipe ({{pipeName}}) "
             "in launch ({{launchId}})\n"
-            "=========     Address 0x{{address}} is out of bounds\n"
-            "=========     and is {{distanceBytes}} bytes {{before|after}} the nearest allocation at 0x{{base}} of "
-            "size "
-            "{{bytes}} bytes\n"),
+            "=========     Address 0x{{address}} is out of bounds\n"),
         MakePattern(
             ReportTool::MEMCHECK, NpuCheckReportPattern::MEMCHECK_MISALIGNED_ACCESS, "misaligned_access",
-            "========= {{Severity}}: Invalid {{space}} {{access}} of size {{accessBytes}} bytes\n"
+            "========= {{Severity}}:[MEMCHECK] Invalid {{space}} {{access}} of size {{accessBytes}} bytes\n"
             "=========     {{location}}\n"
             "=========     by aicore ({{coreId}}) type ({{blockType}}) block ({{blockId}}) pipe ({{pipeName}}) "
             "in launch ({{launchId}})\n"
@@ -45,7 +44,7 @@ const PatternCatalog& Catalog()
             "=========     required alignment is {{requiredAlign}} bytes\n"),
         MakePattern(
             ReportTool::MEMCHECK, NpuCheckReportPattern::MEMCHECK_USE_AFTER_FREE, "use_after_free",
-            "========= {{Severity}}: Invalid {{space}} {{access}} of size {{accessBytes}} bytes\n"
+            "========= {{Severity}}:[MEMCHECK] Invalid {{space}} {{access}} of size {{accessBytes}} bytes\n"
             "=========     {{location}}\n"
             "=========     by aicore ({{coreId}}) type ({{blockType}}) block ({{blockId}}) pipe ({{pipeName}}) "
             "in launch ({{launchId}})\n"
@@ -53,7 +52,7 @@ const PatternCatalog& Catalog()
             "=========     and belongs to allocation at 0x{{base}} of size {{bytes}} bytes\n"),
         MakePattern(
             ReportTool::MEMCHECK, NpuCheckReportPattern::MEMCHECK_USE_BEFORE_ALLOC, "use_before_alloc",
-            "========= {{Severity}}: Invalid {{space}} {{access}} of size {{accessBytes}} bytes\n"
+            "========= {{Severity}}:[MEMCHECK] Invalid {{space}} {{access}} of size {{accessBytes}} bytes\n"
             "=========     {{location}}\n"
             "=========     by aicore ({{coreId}}) type ({{blockType}}) block ({{blockId}}) pipe ({{pipeName}}) "
             "in launch ({{launchId}})\n"
@@ -61,30 +60,30 @@ const PatternCatalog& Catalog()
             "=========     allocation 0x{{base}} of size {{bytes}} bytes was created at serial {{allocSerialNo}}\n"),
         MakePattern(
             ReportTool::MEMCHECK, NpuCheckReportPattern::MEMCHECK_INVALID_FREE, "invalid_free",
-            "========= {{Severity}}: Malloc/Free error encountered : Invalid pointer to free\n"
+            "========= {{Severity}}:[MEMCHECK] Malloc/Free error encountered : Invalid pointer to free\n"
             "=========     at pc 0x{{pc}} in {{kernelName}}\n"
             "=========     by aicore ({{coreId}}) type ({{blockType}}) block ({{blockId}}) pipe ({{pipeName}}) "
             "in launch ({{launchId}})\n"
             "=========     Address 0x{{address}}\n"),
         MakePattern(
             ReportTool::MEMCHECK, NpuCheckReportPattern::MEMCHECK_DOUBLE_FREE, "double_free",
-            "========= {{Severity}}: Malloc/Free error encountered : Double free\n"
+            "========= {{Severity}}:[MEMCHECK] Malloc/Free error encountered : Double free\n"
             "=========     at pc 0x{{pc}} in {{kernelName}}\n"
             "=========     by aicore ({{coreId}}) type ({{blockType}}) block ({{blockId}}) pipe ({{pipeName}}) "
             "in launch ({{launchId}})\n"
             "=========     Address 0x{{base}}\n"),
         MakePattern(
             ReportTool::MEMCHECK, NpuCheckReportPattern::MEMCHECK_LEAK, "leak",
-            "========= {{Severity}}: Leaked {{bytes}} bytes at 0x{{base}}\n"
+            "========= {{Severity}}:[MEMCHECK] Leaked {{bytes}} bytes at 0x{{base}}\n"
             "=========     allocation id {{allocId}}, memory space {{space}}\n"),
         MakePattern(
             ReportTool::MEMCHECK, NpuCheckReportPattern::MEMCHECK_API_ERROR, "api_error",
-            "========= {{Severity}}: Program hit {{apiErrorName}} (error {{apiErrorCode}}) due to "
+            "========= {{Severity}}:[MEMCHECK] Program hit {{apiErrorName}} (error {{apiErrorCode}}) due to "
             "\"{{apiErrorMessage}}\" on ACL runtime API call to {{apiName}}.\n"),
 
         MakePattern(
             ReportTool::INITCHECK, NpuCheckReportPattern::INITCHECK_UNINITIALIZED_READ, "uninitialized_read",
-            "========= {{Severity}}: Uninitialized {{space}} memory read of size {{accessBytes}} bytes\n"
+            "========= {{Severity}}:[INITCHECK] Uninitialized {{space}} memory read of size {{accessBytes}} bytes\n"
             "=========     {{location}}\n"
             "=========     by aicore ({{coreId}}) type ({{blockType}}) block ({{blockId}}) pipe ({{pipeName}}) "
             "in launch ({{launchId}})\n"
@@ -92,7 +91,8 @@ const PatternCatalog& Catalog()
         MakePattern(
             ReportTool::INITCHECK, NpuCheckReportPattern::INITCHECK_PARTIAL_UNINITIALIZED_READ,
             "partial_uninitialized_read",
-            "========= {{Severity}}: Partially uninitialized {{space}} memory read of size {{accessBytes}} bytes\n"
+            "========= {{Severity}}:[INITCHECK] Partially uninitialized {{space}} memory read of size "
+            "{{accessBytes}} bytes\n"
             "=========     {{location}}\n"
             "=========     by aicore ({{coreId}}) type ({{blockType}}) block ({{blockId}}) pipe ({{pipeName}}) "
             "in launch ({{launchId}})\n"
@@ -100,24 +100,27 @@ const PatternCatalog& Catalog()
             "uninitialized\n"),
         MakePattern(
             ReportTool::INITCHECK, NpuCheckReportPattern::INITCHECK_UNUSED_MEMORY, "unused_memory",
-            "========= {{Severity}}: Unused {{space}} memory in allocation 0x{{base}} of size {{bytes}} bytes\n"
+            "========= {{Severity}}:[INITCHECK] Unused {{space}} memory in allocation 0x{{base}} of size "
+            "{{bytes}} bytes\n"
             "=========     Not written {{unusedBytes}} bytes at offset 0x{{firstUninitOffset}} "
             "(0x{{firstUninitAddress}})\n"
             "=========     {{unusedPercent}}% of allocation were unused.\n"),
         MakePattern(
             ReportTool::INITCHECK, NpuCheckReportPattern::INITCHECK_API_READ_UNINITIALIZED, "api_read_uninitialized",
-            "========= {{Severity}}: Uninitialized {{space}} memory read by ACL runtime API\n"
+            "========= {{Severity}}:[INITCHECK] Uninitialized {{space}} memory read by ACL runtime API\n"
             "=========     Address 0x{{address}}, size {{accessBytes}} bytes\n"),
 
         MakePattern(
             ReportTool::RACECHECK, NpuCheckReportPattern::RACECHECK_ANALYSIS, "analysis",
-            "========= {{Severity}}: Race reported between {{firstAccess}} access in launch ({{firstLaunchId}}) at "
+            "========= {{Severity}}:[RACECHECK] Race reported between {{firstAccess}} access in launch "
+            "({{firstLaunchId}}) at "
             "{{firstLocation}}\n"
             "=========     and {{secondAccess}} access in launch ({{secondLaunchId}}) at {{secondLocation}} "
             "[{{hazardCount}} hazards]\n"),
         MakePattern(
             ReportTool::RACECHECK, NpuCheckReportPattern::RACECHECK_HAZARD_RAW, "hazard_raw",
-            "========= {{Severity}}: Potential RAW hazard detected at {{space}} 0x{{address}} in block ({{blockId}}) "
+            "========= {{Severity}}:[RACECHECK] Potential RAW hazard detected at {{space}} 0x{{address}} in block "
+            "({{blockId}}) "
             ":\n"
             "=========     Write AICore ({{firstCoreId}}) pipe ({{firstPipe}}) in launch ({{firstLaunchId}}) at "
             "{{firstLocation}}\n"
@@ -126,7 +129,8 @@ const PatternCatalog& Catalog()
             "=========     Current Value : {{currentValue}}\n"),
         MakePattern(
             ReportTool::RACECHECK, NpuCheckReportPattern::RACECHECK_HAZARD_WAR, "hazard_war",
-            "========= {{Severity}}: Potential WAR hazard detected at {{space}} 0x{{address}} in block ({{blockId}}) "
+            "========= {{Severity}}:[RACECHECK] Potential WAR hazard detected at {{space}} 0x{{address}} in block "
+            "({{blockId}}) "
             ":\n"
             "=========     Read AICore ({{firstCoreId}}) pipe ({{firstPipe}}) in launch ({{firstLaunchId}}) at "
             "{{firstLocation}}\n"
@@ -135,7 +139,8 @@ const PatternCatalog& Catalog()
             "=========     Incoming Value : {{incomingValue}}\n"),
         MakePattern(
             ReportTool::RACECHECK, NpuCheckReportPattern::RACECHECK_HAZARD_WAW, "hazard_waw",
-            "========= {{Severity}}: Potential WAW hazard detected at {{space}} 0x{{address}} in block ({{blockId}}) "
+            "========= {{Severity}}:[RACECHECK] Potential WAW hazard detected at {{space}} 0x{{address}} in block "
+            "({{blockId}}) "
             ":\n"
             "=========     Write AICore ({{firstCoreId}}) pipe ({{firstPipe}}) in launch ({{firstLaunchId}}) at "
             "{{firstLocation}}\n"
@@ -144,20 +149,20 @@ const PatternCatalog& Catalog()
             "=========     Current Value : {{currentValue}}, Incoming Value : {{incomingValue}}\n"),
         MakePattern(
             ReportTool::RACECHECK, NpuCheckReportPattern::RACECHECK_ATOMIC_RACE, "atomic_race",
-            "========= {{Severity}}: Potential atomic race detected at {{space}} 0x{{address}}\n"
+            "========= {{Severity}}:[RACECHECK] Potential atomic race detected at {{space}} 0x{{address}}\n"
             "=========     First access in launch ({{firstLaunchId}}) at {{firstLocation}}\n"
             "=========     Second access in launch ({{secondLaunchId}}) at {{secondLocation}}\n"
             "=========     Race scope {{scope}}\n"),
         MakePattern(
             ReportTool::RACECHECK, NpuCheckReportPattern::RACECHECK_CROSS_PIPE_RACE, "cross_pipe_race",
-            "========= {{Severity}}: Potential cross-pipe race detected at {{space}} 0x{{address}}\n"
+            "========= {{Severity}}:[RACECHECK] Potential cross-pipe race detected at {{space}} 0x{{address}}\n"
             "=========     First access by aicore ({{coreId}}) pipe ({{firstPipe}}) in launch "
             "({{firstLaunchId}}) at {{firstLocation}}\n"
             "=========     Second access by aicore ({{coreId}}) pipe ({{secondPipe}}) in launch "
             "({{secondLaunchId}}) at {{secondLocation}}\n"),
         MakePattern(
             ReportTool::RACECHECK, NpuCheckReportPattern::RACECHECK_INTER_CORE_RACE, "inter_core_race",
-            "========= {{Severity}}: Potential inter-core race detected at {{space}} 0x{{address}}\n"
+            "========= {{Severity}}:[RACECHECK] Potential inter-core race detected at {{space}} 0x{{address}}\n"
             "=========     First access by aicore ({{firstCoreId}}) type ({{firstType}}) block ({{firstBlock}}) "
             "pipe ({{firstPipe}}) in launch ({{firstLaunchId}})\n"
             "=========     Second access by aicore ({{secondCoreId}}) type ({{secondType}}) block ({{secondBlock}}) "
@@ -165,7 +170,8 @@ const PatternCatalog& Catalog()
             "=========     {{hazardCount}} hazards are associated with this address range\n"),
         MakePattern(
             ReportTool::RACECHECK, NpuCheckReportPattern::RACECHECK_INVALID_REMOTE_ACCESS, "invalid_remote_access",
-            "========= {{Severity}}: Potential invalid {{space}} {{access}} of size {{accessBytes}} bytes\n"
+            "========= {{Severity}}:[RACECHECK] Potential invalid {{space}} {{access}} of size {{accessBytes}} "
+            "bytes\n"
             "=========     {{location}}\n"
             "=========     by aicore ({{coreId}}) type ({{blockType}}) block ({{blockId}}) pipe ({{pipeName}}) "
             "in launch ({{launchId}})\n"
@@ -173,7 +179,7 @@ const PatternCatalog& Catalog()
 
         MakePattern(
             ReportTool::SYNCCHECK, NpuCheckReportPattern::SYNCCHECK_INTRA_CORE_DIVERGENT, "intra_core_divergent",
-            "========= {{Severity}}: Barrier error detected. {{reason}}.\n"
+            "========= {{Severity}}:[SYNCCHECK] Barrier error detected. {{reason}}.\n"
             "=========     trigger point: {{triggerOperation}} at {{triggerLocation}}\n"
             "=========     by aicore ({{triggerCoreId}}) type ({{triggerType}}) block ({{triggerBlock}}) "
             "pipe ({{triggerPipe}}) in launch ({{triggerLaunchId}})\n"
@@ -181,7 +187,7 @@ const PatternCatalog& Catalog()
             "{{objectLine}}"),
         MakePattern(
             ReportTool::SYNCCHECK, NpuCheckReportPattern::SYNCCHECK_INTER_CORE_DIVERGENT, "inter_core_divergent",
-            "========= {{Severity}}: Barrier error detected. {{reason}}.\n"
+            "========= {{Severity}}:[SYNCCHECK] Barrier error detected. {{reason}}.\n"
             "=========     trigger point: {{triggerOperation}} by aicore ({{triggerCoreId}}) type ({{triggerType}}) "
             "block ({{triggerBlock}}) in launch ({{triggerLaunchId}}) "
             "at "
@@ -191,14 +197,15 @@ const PatternCatalog& Catalog()
             "{{objectLine}}"),
         MakePattern(
             ReportTool::SYNCCHECK, NpuCheckReportPattern::SYNCCHECK_INVALID_ARGUMENT, "invalid_argument",
-            "========= {{Severity}}: Synchronization error detected. {{reason}}.\n"
+            "========= {{Severity}}:[SYNCCHECK] Synchronization error detected. {{reason}}.\n"
             "=========     trigger point: {{triggerOperation}} by aicore ({{triggerCoreId}}) type ({{triggerType}}) "
             "block ({{triggerBlock}}) "
             "pipe ({{triggerPipe}}) in launch ({{triggerLaunchId}}) at {{triggerLocation}}\n"
             "{{objectLine}}"),
         MakePattern(
             ReportTool::SYNCCHECK, NpuCheckReportPattern::SYNCCHECK_PAIRING_MISMATCH, "pairing_mismatch",
-            "========= {{Severity}}: Synchronization pairing mismatch: {{reasonText}} {{triggerOperation}}.\n"
+            "========= {{Severity}}:[SYNCCHECK] Synchronization pairing mismatch: {{reasonText}} "
+            "{{triggerOperation}}.\n"
             "=========     trigger point: {{triggerOperation}} by aicore ({{triggerCoreId}}) type ({{triggerType}}) "
             "block ({{triggerBlock}}) "
             "pipe ({{triggerPipe}}) in launch ({{triggerLaunchId}}) at {{triggerLocation}}\n"
@@ -207,7 +214,7 @@ const PatternCatalog& Catalog()
             "=========     pair kind {{pairKind}}, key ({{pairKey}})\n"),
         MakePattern(
             ReportTool::SYNCCHECK, NpuCheckReportPattern::SYNCCHECK_PARTICIPANT_MISMATCH, "participant_mismatch",
-            "========= {{Severity}}: Synchronization error detected. {{reason}}.\n"
+            "========= {{Severity}}:[SYNCCHECK] Synchronization error detected. {{reason}}.\n"
             "=========     trigger point: {{triggerOperation}} by aicore ({{triggerCoreId}}) type ({{triggerType}}) "
             "block ({{triggerBlock}}) "
             "pipe ({{triggerPipe}}) in launch ({{triggerLaunchId}}) at {{triggerLocation}}\n"
@@ -216,7 +223,7 @@ const PatternCatalog& Catalog()
             "{{objectLine}}"),
         MakePattern(
             ReportTool::SYNCCHECK, NpuCheckReportPattern::SYNCCHECK_DEADLOCK, "deadlock",
-            "========= {{Severity}}: Deadlock detected. {{reason}}.\n"
+            "========= {{Severity}}:[SYNCCHECK] Deadlock detected. {{reason}}.\n"
             "=========     trigger point: {{triggerOperation}} by aicore ({{triggerCoreId}}) type ({{triggerType}}) "
             "block ({{triggerBlock}}) "
             "pipe ({{triggerPipe}}) in launch ({{triggerLaunchId}}) at {{triggerLocation}}\n"
@@ -225,7 +232,7 @@ const PatternCatalog& Catalog()
             "{{objectLine}}"),
         MakePattern(
             ReportTool::SYNCCHECK, NpuCheckReportPattern::SYNCCHECK_OBJECT_NOT_INITIALIZED, "object_not_initialized",
-            "========= {{Severity}}: Synchronization error detected. {{reason}}.\n"
+            "========= {{Severity}}:[SYNCCHECK] Synchronization error detected. {{reason}}.\n"
             "=========     trigger point: {{triggerOperation}} by aicore ({{triggerCoreId}}) type ({{triggerType}}) "
             "block ({{triggerBlock}}) "
             "pipe ({{triggerPipe}}) in launch ({{triggerLaunchId}}) at {{triggerLocation}}\n"
@@ -234,7 +241,7 @@ const PatternCatalog& Catalog()
         MakePattern(
             ReportTool::SYNCCHECK, NpuCheckReportPattern::SYNCCHECK_INSTRUCTION_SEQUENCE_MISMATCH,
             "instruction_sequence_mismatch",
-            "========= {{Severity}}: Synchronization instruction sequence error detected. {{reason}}.\n"
+            "========= {{Severity}}:[SYNCCHECK] Synchronization instruction sequence error detected. {{reason}}.\n"
             "=========     trigger point: {{triggerOperation}} by aicore ({{triggerCoreId}}) type ({{triggerType}}) "
             "block ({{triggerBlock}}) "
             "pipe ({{triggerPipe}}) in launch ({{triggerLaunchId}}) at {{triggerLocation}}\n"
@@ -243,35 +250,35 @@ const PatternCatalog& Catalog()
 
         MakePattern(
             ReportTool::SOCCHECK, NpuCheckReportPattern::SOCCHECK_UNINITIALIZED_STATE_READ, "uninitialized_state_read",
-            "========= {{Severity}}: SOC state error detected. Uninitialized state read.\n"
+            "========= {{Severity}}:[SOCCHECK] SOC state error detected. Uninitialized state read.\n"
             "=========     {{location}}\n"
             "=========     by aicore ({{coreId}}) type ({{blockType}}) block ({{blockId}}) pipe ({{pipeName}}) "
             "in launch ({{launchId}})\n"
             "=========     state kind {{stateKind}}, state id {{stateId}}, observed value 0x{{observedValue}}\n"),
         MakePattern(
             ReportTool::SOCCHECK, NpuCheckReportPattern::SOCCHECK_REGISTER_MISMATCH, "register_mismatch",
-            "========= {{Severity}}: SOC register mismatch detected.\n"
+            "========= {{Severity}}:[SOCCHECK] SOC register mismatch detected.\n"
             "=========     {{location}}\n"
             "=========     by aicore ({{coreId}}) type ({{blockType}}) block ({{blockId}}) pipe ({{pipeName}}) "
             "in launch ({{launchId}})\n"
             "=========     register {{registerId}}, expected 0x{{expectedValue}}, observed 0x{{observedValue}}\n"),
         MakePattern(
             ReportTool::SOCCHECK, NpuCheckReportPattern::SOCCHECK_ILLEGAL_STATE_TRANSITION, "illegal_state_transition",
-            "========= {{Severity}}: SOC state error detected. Illegal state transition.\n"
+            "========= {{Severity}}:[SOCCHECK] SOC state error detected. Illegal state transition.\n"
             "=========     {{location}}\n"
             "=========     by aicore ({{coreId}}) type ({{blockType}}) block ({{blockId}}) pipe ({{pipeName}}) "
             "in launch ({{launchId}})\n"
             "=========     state id {{stateId}}, old value 0x{{oldValue}}, new value 0x{{newValue}}\n"),
         MakePattern(
             ReportTool::SOCCHECK, NpuCheckReportPattern::SOCCHECK_STATE_NOT_RESTORED, "state_not_restored",
-            "========= {{Severity}}: SOC state error detected. State was not restored.\n"
+            "========= {{Severity}}:[SOCCHECK] SOC state error detected. State was not restored.\n"
             "=========     at kernel exit for {{kernelName}} in launch ({{launchId}})\n"
             "=========     owner aicore ({{ownerCoreId}}), state id {{stateId}}\n"
             "=========     expected 0x{{expectedValue}}, observed 0x{{observedValue}}\n"),
         MakePattern(
             ReportTool::SOCCHECK, NpuCheckReportPattern::SOCCHECK_CROSS_CORE_STATE_INCONSISTENT,
             "cross_core_state_inconsistent",
-            "========= {{Severity}}: SOC state error detected. Cross-core state is inconsistent.\n"
+            "========= {{Severity}}:[SOCCHECK] SOC state error detected. Cross-core state is inconsistent.\n"
             "=========     consumer aicore ({{consumerCoreId}}) in launch ({{consumerLaunchId}}) observed "
             "0x{{observedValue}}\n"
             "=========     producer aicore ({{producerCoreId}}) in launch ({{producerLaunchId}}) expected "
@@ -279,7 +286,7 @@ const PatternCatalog& Catalog()
             "=========     state id {{stateId}}, scope {{scope}}\n"),
         MakePattern(
             ReportTool::SOCCHECK, NpuCheckReportPattern::SOCCHECK_SCOPE_VIOLATION, "scope_violation",
-            "========= {{Severity}}: SOC state error detected. State scope violation.\n"
+            "========= {{Severity}}:[SOCCHECK] SOC state error detected. State scope violation.\n"
             "=========     {{location}}\n"
             "=========     by aicore ({{coreId}}) type ({{blockType}}) block ({{blockId}}) pipe ({{pipeName}}) "
             "in launch ({{launchId}})\n"
@@ -396,8 +403,6 @@ const char* ReportSeverityName(ReportSeverity severity)
             return "WARNING";
         case ReportSeverity::ERROR:
             return "ERROR";
-        case ReportSeverity::FATAL:
-            return "FATAL";
     }
     return "ERROR";
 }

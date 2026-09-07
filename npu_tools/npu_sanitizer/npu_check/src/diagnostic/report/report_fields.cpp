@@ -186,13 +186,7 @@ void PutDefaultHostFields(ReportFields* fields)
 
 std::vector<ReportCallStack> ActiveCallStacks(const NpuCheckReportCommon& common)
 {
-    std::vector<ReportCallStack> stacks(common.stacks.begin(), common.stacks.begin() + common.stackCount);
-    for (ReportCallStack& stack : stacks) {
-        if (stack.format == ReportStackFormat::BOTH && !stack.frames.empty()) {
-            stack.format = ReportStackFormat::FRAMES;
-        }
-    }
-    return stacks;
+    return {common.stacks.begin(), common.stacks.begin() + common.stackCount};
 }
 
 const ReportCallStack* FindStackByRole(const NpuCheckReportCommon& common, ReportStackRole role)
@@ -208,7 +202,7 @@ const ReportCallStack* FindStackByRole(const NpuCheckReportCommon& common, Repor
 const ReportFrame* FirstStructuredFrame(const NpuCheckReportCommon& common, ReportStackRole role)
 {
     const ReportCallStack* stack = FindStackByRole(common, role);
-    if (stack == nullptr || (stack->format != ReportStackFormat::FRAMES && stack->format != ReportStackFormat::BOTH)) {
+    if (stack == nullptr || stack->format != ReportStackFormat::FRAMES) {
         return nullptr;
     }
     for (const ReportFrame& frame : stack->frames) {

@@ -318,7 +318,7 @@ NpuCheckSoccheckReport MakeSoccheckReport()
     report.common.groupId = 9005;
     report.common.timestampNs = 1786759200123457300ULL;
     report.common.tool = ReportTool::SOCCHECK;
-    report.common.severity = ReportSeverity::FATAL;
+    report.common.severity = ReportSeverity::ERROR;
     report.common.pattern = NpuCheckReportPattern::SOCCHECK_REGISTER_MISMATCH;
     report.common.exec.function = "RestoreControlState";
     report.common.exec.offset = 0x18;

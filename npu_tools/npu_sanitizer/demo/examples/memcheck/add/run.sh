@@ -53,7 +53,7 @@ if [[ $(grep -Ec '^\[CLI\] outcome=forwarded has_errors=[01] truncated=[01] chil
 fi
 
 # 关注访问大小和日志数量：ReportBundle 中应出现 1 条 8256-byte GM 越界读标题。
-if [[ $(grep -Fxc '========= ERROR: Invalid GM read of size 8256 bytes' "${output}" || true) -ne 1 ]]; then
+if [[ $(grep -Fxc '========= ERROR:[MEMCHECK] Invalid GM read of size 8256 bytes' "${output}" || true) -ne 1 ]]; then
     printf 'unexpected Invalid GM read diagnostic count: %s\n' "${output}" >&2
     exit 1
 fi

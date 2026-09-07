@@ -54,6 +54,8 @@ add_executable(npu_check_report_renderer_smoke
 )
 target_compile_features(npu_check_report_renderer_smoke PRIVATE cxx_std_17)
 target_compile_definitions(npu_check_report_renderer_smoke PRIVATE _GLIBCXX_USE_CXX11_ABI=0)
+target_compile_definitions(npu_check_report_renderer_smoke PRIVATE
+  NPU_CHECK_REPORT_PATTERN_SNAPSHOT="${CMAKE_CURRENT_SOURCE_DIR}/report_renderer_patterns.golden")
 target_include_directories(npu_check_report_renderer_smoke PRIVATE
   "${NPU_CHECK_SOURCE_DIR}/src"
   "${NPU_CHECK_DBI_INCLUDE_DIR}"

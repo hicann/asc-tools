@@ -1,0 +1,195 @@
+# Copyright (c) 2025 Huawei Technologies Co., Ltd.
+# This program is free software, you can redistribute it and/or modify it under the terms and conditions of
+# CANN Open Software License Agreement Version 2.0 (the "License").
+# Please refer to the License for details. You may not use this file except in compliance with the License.
+# THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
+# INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
+# See LICENSE in the root of the software repository for the full text of the License.
+
+===== memcheck.api_error =====
+========= ERROR:[MEMCHECK] Program hit <apiErrorName> (error <apiErrorCode>) due to "<apiErrorMessage>" on ACL runtime API call to <apiName>.
+
+===== memcheck.double_free =====
+========= ERROR:[MEMCHECK] Malloc/Free error encountered : Double free
+=========     at pc 0x<pc> in <kernelName>
+=========     by aicore (<coreId>) type (<blockType>) block (<blockId>) pipe (<pipeName>) in launch (<launchId>)
+=========     Address 0x<base>
+
+===== memcheck.invalid_access =====
+========= ERROR:[MEMCHECK] Invalid <space> <access> of size <accessBytes> bytes
+=========     <location>
+=========     by aicore (<coreId>) type (<blockType>) block (<blockId>) pipe (<pipeName>) in launch (<launchId>)
+=========     Address 0x<address> is out of bounds
+
+===== memcheck.invalid_free =====
+========= ERROR:[MEMCHECK] Malloc/Free error encountered : Invalid pointer to free
+=========     at pc 0x<pc> in <kernelName>
+=========     by aicore (<coreId>) type (<blockType>) block (<blockId>) pipe (<pipeName>) in launch (<launchId>)
+=========     Address 0x<address>
+
+===== memcheck.leak =====
+========= ERROR:[MEMCHECK] Leaked <bytes> bytes at 0x<base>
+=========     allocation id <allocId>, memory space <space>
+
+===== memcheck.misaligned_access =====
+========= ERROR:[MEMCHECK] Invalid <space> <access> of size <accessBytes> bytes
+=========     <location>
+=========     by aicore (<coreId>) type (<blockType>) block (<blockId>) pipe (<pipeName>) in launch (<launchId>)
+=========     Address 0x<address> is misaligned
+=========     required alignment is <requiredAlign> bytes
+
+===== memcheck.use_after_free =====
+========= ERROR:[MEMCHECK] Invalid <space> <access> of size <accessBytes> bytes
+=========     <location>
+=========     by aicore (<coreId>) type (<blockType>) block (<blockId>) pipe (<pipeName>) in launch (<launchId>)
+=========     Address 0x<address> is used after free
+=========     and belongs to allocation at 0x<base> of size <bytes> bytes
+
+===== memcheck.use_before_alloc =====
+========= ERROR:[MEMCHECK] Invalid <space> <access> of size <accessBytes> bytes
+=========     <location>
+=========     by aicore (<coreId>) type (<blockType>) block (<blockId>) pipe (<pipeName>) in launch (<launchId>)
+=========     Address 0x<address> is used before allocation is available
+=========     allocation 0x<base> of size <bytes> bytes was created at serial <allocSerialNo>
+
+===== initcheck.api_read_uninitialized =====
+========= ERROR:[INITCHECK] Uninitialized <space> memory read by ACL runtime API
+=========     Address 0x<address>, size <accessBytes> bytes
+
+===== initcheck.partial_uninitialized_read =====
+========= ERROR:[INITCHECK] Partially uninitialized <space> memory read of size <accessBytes> bytes
+=========     <location>
+=========     by aicore (<coreId>) type (<blockType>) block (<blockId>) pipe (<pipeName>) in launch (<launchId>)
+=========     First uninitialized byte at 0x<firstUninitAddress>, <uninitBytes> bytes are uninitialized
+
+===== initcheck.uninitialized_read =====
+========= ERROR:[INITCHECK] Uninitialized <space> memory read of size <accessBytes> bytes
+=========     <location>
+=========     by aicore (<coreId>) type (<blockType>) block (<blockId>) pipe (<pipeName>) in launch (<launchId>)
+=========     Address 0x<address>
+
+===== initcheck.unused_memory =====
+========= ERROR:[INITCHECK] Unused <space> memory in allocation 0x<base> of size <bytes> bytes
+=========     Not written <unusedBytes> bytes at offset 0x<firstUninitOffset> (0x<firstUninitAddress>)
+=========     <unusedPercent>% of allocation were unused.
+
+===== racecheck.analysis =====
+========= ERROR:[RACECHECK] Race reported between <firstAccess> access in launch (<firstLaunchId>) at <firstLocation>
+=========     and <secondAccess> access in launch (<secondLaunchId>) at <secondLocation> [<hazardCount> hazards]
+
+===== racecheck.atomic_race =====
+========= ERROR:[RACECHECK] Potential atomic race detected at <space> 0x<address>
+=========     First access in launch (<firstLaunchId>) at <firstLocation>
+=========     Second access in launch (<secondLaunchId>) at <secondLocation>
+=========     Race scope <scope>
+
+===== racecheck.cross_pipe_race =====
+========= ERROR:[RACECHECK] Potential cross-pipe race detected at <space> 0x<address>
+=========     First access by aicore (<coreId>) pipe (<firstPipe>) in launch (<firstLaunchId>) at <firstLocation>
+=========     Second access by aicore (<coreId>) pipe (<secondPipe>) in launch (<secondLaunchId>) at <secondLocation>
+
+===== racecheck.hazard_raw =====
+========= ERROR:[RACECHECK] Potential RAW hazard detected at <space> 0x<address> in block (<blockId>) :
+=========     Write AICore (<firstCoreId>) pipe (<firstPipe>) in launch (<firstLaunchId>) at <firstLocation>
+=========     Read AICore (<secondCoreId>) pipe (<secondPipe>) in launch (<secondLaunchId>) at <secondLocation>
+=========     Current Value : <currentValue>
+
+===== racecheck.hazard_war =====
+========= ERROR:[RACECHECK] Potential WAR hazard detected at <space> 0x<address> in block (<blockId>) :
+=========     Read AICore (<firstCoreId>) pipe (<firstPipe>) in launch (<firstLaunchId>) at <firstLocation>
+=========     Write AICore (<secondCoreId>) pipe (<secondPipe>) in launch (<secondLaunchId>) at <secondLocation>
+=========     Incoming Value : <incomingValue>
+
+===== racecheck.hazard_waw =====
+========= ERROR:[RACECHECK] Potential WAW hazard detected at <space> 0x<address> in block (<blockId>) :
+=========     Write AICore (<firstCoreId>) pipe (<firstPipe>) in launch (<firstLaunchId>) at <firstLocation>
+=========     Write AICore (<secondCoreId>) pipe (<secondPipe>) in launch (<secondLaunchId>) at <secondLocation>
+=========     Current Value : <currentValue>, Incoming Value : <incomingValue>
+
+===== racecheck.inter_core_race =====
+========= ERROR:[RACECHECK] Potential inter-core race detected at <space> 0x<address>
+=========     First access by aicore (<firstCoreId>) type (<firstType>) block (<firstBlock>) pipe (<firstPipe>) in launch (<firstLaunchId>)
+=========     Second access by aicore (<secondCoreId>) type (<secondType>) block (<secondBlock>) pipe (<secondPipe>) in launch (<secondLaunchId>)
+=========     <hazardCount> hazards are associated with this address range
+
+===== racecheck.invalid_remote_access =====
+========= ERROR:[RACECHECK] Potential invalid <space> <access> of size <accessBytes> bytes
+=========     <location>
+=========     by aicore (<coreId>) type (<blockType>) block (<blockId>) pipe (<pipeName>) in launch (<launchId>)
+=========     Address 0x<address> is located in a remote execution entity that <remoteState>
+
+===== synccheck.deadlock =====
+========= ERROR:[SYNCCHECK] Deadlock detected. <reason>.
+=========     trigger point: <triggerOperation> by aicore (<triggerCoreId>) type (<triggerType>) block (<triggerBlock>) pipe (<triggerPipe>) in launch (<triggerLaunchId>) at <triggerLocation>
+<relatedPointLine>=========     waiting mask 0x<waitingMask>, timeout <timeoutNs> ns
+<objectLine>
+===== synccheck.instruction_sequence_mismatch =====
+========= ERROR:[SYNCCHECK] Synchronization instruction sequence error detected. <reason>.
+=========     trigger point: <triggerOperation> by aicore (<triggerCoreId>) type (<triggerType>) block (<triggerBlock>) pipe (<triggerPipe>) in launch (<triggerLaunchId>) at <triggerLocation>
+<relatedPointLine>=========     sequence index <sequenceIndex>, active mask 0x<activeMask>
+
+===== synccheck.inter_core_divergent =====
+========= ERROR:[SYNCCHECK] Barrier error detected. <reason>.
+=========     trigger point: <triggerOperation> by aicore (<triggerCoreId>) type (<triggerType>) block (<triggerBlock>) in launch (<triggerLaunchId>) at <triggerLocation>
+<relatedPointLine>=========     scope <scope>, active mask 0x<activeMask>, expected mask 0x<expectedMask>
+<objectLine>
+===== synccheck.intra_core_divergent =====
+========= ERROR:[SYNCCHECK] Barrier error detected. <reason>.
+=========     trigger point: <triggerOperation> at <triggerLocation>
+=========     by aicore (<triggerCoreId>) type (<triggerType>) block (<triggerBlock>) pipe (<triggerPipe>) in launch (<triggerLaunchId>)
+=========     scope <scope>, active mask 0x<activeMask>, expected mask 0x<expectedMask>
+<objectLine>
+===== synccheck.invalid_argument =====
+========= ERROR:[SYNCCHECK] Synchronization error detected. <reason>.
+=========     trigger point: <triggerOperation> by aicore (<triggerCoreId>) type (<triggerType>) block (<triggerBlock>) pipe (<triggerPipe>) in launch (<triggerLaunchId>) at <triggerLocation>
+<objectLine>
+===== synccheck.object_not_initialized =====
+========= ERROR:[SYNCCHECK] Synchronization error detected. <reason>.
+=========     trigger point: <triggerOperation> by aicore (<triggerCoreId>) type (<triggerType>) block (<triggerBlock>) pipe (<triggerPipe>) in launch (<triggerLaunchId>) at <triggerLocation>
+=========     primitive <primitiveKind>
+<objectLine>
+===== synccheck.pairing_mismatch =====
+========= ERROR:[SYNCCHECK] Synchronization pairing mismatch: <reasonText> <triggerOperation>.
+=========     trigger point: <triggerOperation> by aicore (<triggerCoreId>) type (<triggerType>) block (<triggerBlock>) pipe (<triggerPipe>) in launch (<triggerLaunchId>) at <triggerLocation>
+<relatedPointLine><expectedOperationLine>=========     pair kind <pairKind>, key (<pairKey>)
+
+===== synccheck.participant_mismatch =====
+========= ERROR:[SYNCCHECK] Synchronization error detected. <reason>.
+=========     trigger point: <triggerOperation> by aicore (<triggerCoreId>) type (<triggerType>) block (<triggerBlock>) pipe (<triggerPipe>) in launch (<triggerLaunchId>) at <triggerLocation>
+<relatedPointLine>=========     scope <scope>, active mask 0x<activeMask>, expected mask 0x<expectedMask>
+<objectLine>
+===== soccheck.cross_core_state_inconsistent =====
+========= ERROR:[SOCCHECK] SOC state error detected. Cross-core state is inconsistent.
+=========     consumer aicore (<consumerCoreId>) in launch (<consumerLaunchId>) observed 0x<observedValue>
+=========     producer aicore (<producerCoreId>) in launch (<producerLaunchId>) expected 0x<expectedValue>
+=========     state id <stateId>, scope <scope>
+
+===== soccheck.illegal_state_transition =====
+========= ERROR:[SOCCHECK] SOC state error detected. Illegal state transition.
+=========     <location>
+=========     by aicore (<coreId>) type (<blockType>) block (<blockId>) pipe (<pipeName>) in launch (<launchId>)
+=========     state id <stateId>, old value 0x<oldValue>, new value 0x<newValue>
+
+===== soccheck.register_mismatch =====
+========= ERROR:[SOCCHECK] SOC register mismatch detected.
+=========     <location>
+=========     by aicore (<coreId>) type (<blockType>) block (<blockId>) pipe (<pipeName>) in launch (<launchId>)
+=========     register <registerId>, expected 0x<expectedValue>, observed 0x<observedValue>
+
+===== soccheck.scope_violation =====
+========= ERROR:[SOCCHECK] SOC state error detected. State scope violation.
+=========     <location>
+=========     by aicore (<coreId>) type (<blockType>) block (<blockId>) pipe (<pipeName>) in launch (<launchId>)
+=========     state id <stateId>, invalid scope <scope>
+
+===== soccheck.state_not_restored =====
+========= ERROR:[SOCCHECK] SOC state error detected. State was not restored.
+=========     at kernel exit for <kernelName> in launch (<launchId>)
+=========     owner aicore (<ownerCoreId>), state id <stateId>
+=========     expected 0x<expectedValue>, observed 0x<observedValue>
+
+===== soccheck.uninitialized_state_read =====
+========= ERROR:[SOCCHECK] SOC state error detected. Uninitialized state read.
+=========     <location>
+=========     by aicore (<coreId>) type (<blockType>) block (<blockId>) pipe (<pipeName>) in launch (<launchId>)
+=========     state kind <stateKind>, state id <stateId>, observed value 0x<observedValue>

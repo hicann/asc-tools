@@ -57,18 +57,15 @@ void IncrementPatternMetric(const ReportTemplateKey& key, ToolSummary* summary)
     }
 }
 
-void AccumulateSummary(const ReportRecord& record, Summaries* summaries, std::uint64_t* fatalCount)
+void AccumulateSummary(const ReportRecord& record, Summaries* summaries)
 {
     ToolSummary& summary = (*summaries)[record.key.tool];
-    if (record.severity == ReportSeverity::ERROR || record.severity == ReportSeverity::FATAL) {
+    if (record.severity == ReportSeverity::ERROR) {
         ++summary.errors;
     } else if (record.severity == ReportSeverity::WARNING) {
         ++summary.warnings;
     } else if (record.severity == ReportSeverity::INFO) {
         ++summary.infos;
-    }
-    if (record.severity == ReportSeverity::FATAL) {
-        ++*fatalCount;
     }
     IncrementPatternMetric(record.key, &summary);
 }
@@ -132,7 +129,7 @@ void AppendToolSummaries(const Summaries& summaries, std::string* out)
     }
 }
 
-void AppendGlobalSummary(const Summaries& summaries, std::uint64_t fatalCount, std::string* out)
+void AppendGlobalSummary(const Summaries& summaries, std::string* out)
 {
     std::uint64_t totalErrorCount = 0;
     for (const auto& entry : summaries) {
@@ -156,9 +153,6 @@ void AppendGlobalSummary(const Summaries& summaries, std::uint64_t fatalCount, s
         out->append(std::to_string(found->second.errors));
         out->append(" errors\n");
     }
-    out->append("=========     FATAL: ");
-    out->append(std::to_string(fatalCount));
-    out->append(" fatal errors\n");
 }
 
 } // namespace
@@ -166,12 +160,11 @@ void AppendGlobalSummary(const Summaries& summaries, std::uint64_t fatalCount, s
 void AppendReportSummaries(const std::vector<ReportRecord>& records, std::string* out)
 {
     Summaries summaries;
-    std::uint64_t fatalCount = 0;
     for (const ReportRecord& record : records) {
-        AccumulateSummary(record, &summaries, &fatalCount);
+        AccumulateSummary(record, &summaries);
     }
     AppendToolSummaries(summaries, out);
-    AppendGlobalSummary(summaries, fatalCount, out);
+    AppendGlobalSummary(summaries, out);
 }
 
 } // namespace npucheck::detail

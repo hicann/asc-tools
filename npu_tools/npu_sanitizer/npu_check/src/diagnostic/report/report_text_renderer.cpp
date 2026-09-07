@@ -155,16 +155,6 @@ void PutDerivedLocations(ReportFields* fields)
     PutDerivedLocation("second", "secondLocation", false, fields);
 }
 
-bool HasRawStack(ReportStackFormat format)
-{
-    return format == ReportStackFormat::RAW_TEXT || format == ReportStackFormat::BOTH;
-}
-
-bool HasFrameStack(ReportStackFormat format)
-{
-    return format == ReportStackFormat::FRAMES || format == ReportStackFormat::BOTH;
-}
-
 void EnsureTrailingNewline(std::string* out)
 {
     if (!out->empty() && out->back() != '\n') {
@@ -215,8 +205,8 @@ void AppendFrame(const ReportFrame& frame, std::size_t frameIndex, std::string* 
 void AppendCallStacks(const std::vector<ReportCallStack>& stacks, std::string* out)
 {
     for (const ReportCallStack& stack : stacks) {
-        const bool renderRaw = HasRawStack(stack.format) && !stack.rawText.empty();
-        const bool renderFrames = HasFrameStack(stack.format) && !stack.frames.empty();
+        const bool renderRaw = stack.format == ReportStackFormat::RAW_TEXT && !stack.rawText.empty();
+        const bool renderFrames = stack.format == ReportStackFormat::FRAMES && !stack.frames.empty();
         if (!renderRaw && !renderFrames) {
             continue;
         }
@@ -262,7 +252,6 @@ ReportRenderStatus RenderReportRecord(
     ReportFields fields = record.fields;
     PutDerivedLocations(&fields);
     fields["Severity"] = ReportSeverityName(record.severity);
-    fields["tool"] = ReportToolName(record.key.tool);
     fields["pattern"] = record.key.pattern;
     const ReportRenderStatus status = RenderReportText(*tpl, fields, out);
     if (status != ReportRenderStatus::kSuccess) {

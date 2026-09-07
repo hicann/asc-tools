@@ -34,7 +34,6 @@ enum class ReportSeverity {
     INFO = 1,
     WARNING = 2,
     ERROR = 3,
-    FATAL = 4,
 };
 
 enum class ReportStackRole {
@@ -59,7 +58,6 @@ enum class ReportStackFormat {
     NONE = 0,
     RAW_TEXT = 1,
     FRAMES = 2,
-    BOTH = 3,
 };
 
 struct ReportFrame {

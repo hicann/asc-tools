@@ -17,21 +17,6 @@
 namespace npucheck::detail {
 namespace {
 
-const char* DistanceDirectionName(NpuCheckReportDistanceKind kind)
-{
-    switch (kind) {
-        case NpuCheckReportDistanceKind::BEFORE:
-            return "before";
-        case NpuCheckReportDistanceKind::AFTER:
-            return "after";
-        case NpuCheckReportDistanceKind::INSIDE:
-            return "inside";
-        case NpuCheckReportDistanceKind::UNKNOWN:
-            return "from";
-    }
-    return "from";
-}
-
 const char* MemcheckPatternName(NpuCheckReportPattern pattern) { return PatternName(ReportTool::MEMCHECK, pattern); }
 
 const char* InitcheckPatternName(NpuCheckReportPattern pattern) { return PatternName(ReportTool::INITCHECK, pattern); }
@@ -53,7 +38,8 @@ bool ValidateReportCommon(
         const int format = static_cast<int>(common.stacks[i].format);
         if (role < static_cast<int>(ReportStackRole::FAULT_DEVICE) ||
             role > static_cast<int>(ReportStackRole::HOST_API_CALL) ||
-            format < static_cast<int>(ReportStackFormat::NONE) || format > static_cast<int>(ReportStackFormat::BOTH) ||
+            format < static_cast<int>(ReportStackFormat::NONE) ||
+            format > static_cast<int>(ReportStackFormat::FRAMES) ||
             common.stacks[i].frames.size() > kNpuCheckReportFrameMax) {
             return false;
         }
@@ -74,16 +60,11 @@ ReportRecord ToReportRecord(const NpuCheckMemcheckReport& report)
     PutAccessFields(report.access, &fields);
     PutAllocationFields(report.allocation, &fields);
     PutDefaultHostFields(&fields);
-    fields["distanceBytes"] = std::to_string(report.distanceBytes);
-    fields["before|after"] = DistanceDirectionName(report.distanceKind);
     fields["apiName"] = report.apiName;
     fields["apiErrorName"] = report.apiErrorName;
     fields["apiErrorCode"] = std::to_string(report.apiErrorCode);
     fields["apiErrorMessage"] = report.apiErrorMessage;
-    if (report.common.pattern == NpuCheckReportPattern::MEMCHECK_INVALID_ACCESS) {
-        fields["base"] = Hex(report.nearestAllocation.base);
-        fields["bytes"] = std::to_string(report.nearestAllocation.bytes);
-    } else if (report.common.pattern == NpuCheckReportPattern::MEMCHECK_LEAK) {
+    if (report.common.pattern == NpuCheckReportPattern::MEMCHECK_LEAK) {
         fields["space"] = MemorySpaceName(report.allocation.memorySpace);
     }
     return ReportRecord{
