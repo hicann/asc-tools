@@ -617,7 +617,8 @@ void ToolManager::OnCallback(AclsanCallbackDomain domain, AclsanCallbackId cbid,
                 const char* functionName = data->functionName == nullptr ? "<unknown>" : data->functionName;
                 std::ostringstream message;
                 message << "kernel attributes launch=" << data->launchId << " function=" << data->function
-                        << " function_name=" << functionName << " kernel_type=" << attributes.kernelType
+                        << " function_name=" << functionName << " num_blocks=" << data->numBlocks
+                        << " kernel_type=" << attributes.kernelType
                         << " kernel_type_status=" << attributes.kernelTypeStatus << " aic_ratio=" << attributes.aicRatio
                         << " aiv_ratio=" << attributes.aivRatio
                         << " kernel_ratio_status=" << attributes.kernelRatioStatus

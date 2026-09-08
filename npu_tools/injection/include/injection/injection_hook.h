@@ -60,6 +60,9 @@ typedef aclError (*aclrtGetFunctionAttributeFunc)(
     aclrtFuncHandle funcHandle, aclrtFuncAttribute attrType, int64_t* attrValue);
 typedef const char* (*aclrtGetSocNameFunc)(void);
 typedef aclError (*aclrtGetDeviceInfoFunc)(uint32_t deviceId, aclrtDevAttr attr, int64_t* value);
+typedef aclError (*aclrtFunctionGetParamCountFunc)(const void* func, size_t* paramCount);
+typedef aclError (*aclrtFunctionGetParamInfoFunc)(
+    const void* func, size_t paramIndex, size_t* paramOffset, size_t* paramSize);
 
 typedef enum {
     ACL_RT_API_aclrtLaunchKernelWithHostArgs = 0,
@@ -88,6 +91,8 @@ typedef enum {
     ACL_RT_API_aclrtLaunchKernelWithArgsArray = 23,
     ACL_RT_API_aclrtLaunchSIMTKernelWithArgsArray = 24,
     ACL_RT_API_aclrtMallocAlign32 = 25,
+    ACL_RT_API_aclrtFunctionGetParamCount = 26,
+    ACL_RT_API_aclrtFunctionGetParamInfo = 27,
     ACL_RT_API_MAX
 } aclrtApiId;
 
@@ -125,6 +130,8 @@ ACL_TOOL_INJECTION_DECLARE_REGISTRATION(AclrtBinaryGetGlobal, aclrtBinaryGetGlob
 ACL_TOOL_INJECTION_DECLARE_REGISTRATION(AclrtGetFunctionAttribute, aclrtGetFunctionAttribute);
 ACL_TOOL_INJECTION_DECLARE_REGISTRATION(AclrtGetSocName, aclrtGetSocName);
 ACL_TOOL_INJECTION_DECLARE_REGISTRATION(AclrtGetDeviceInfo, aclrtGetDeviceInfo);
+ACL_TOOL_INJECTION_DECLARE_REGISTRATION(AclrtFunctionGetParamCount, aclrtFunctionGetParamCount);
+ACL_TOOL_INJECTION_DECLARE_REGISTRATION(AclrtFunctionGetParamInfo, aclrtFunctionGetParamInfo);
 
 #undef ACL_TOOL_INJECTION_DECLARE_REGISTRATION
 

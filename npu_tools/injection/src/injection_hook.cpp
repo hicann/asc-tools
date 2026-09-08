@@ -54,6 +54,8 @@ constexpr const char* kRuntimeApiNames[ACL_RT_API_MAX] = {
     "aclrtLaunchKernelWithArgsArray",
     "aclrtLaunchSIMTKernelWithArgsArray",
     "aclrtMallocAlign32",
+    "aclrtFunctionGetParamCount",
+    "aclrtFunctionGetParamInfo",
 };
 
 std::mutex g_initMutex;
@@ -492,6 +494,33 @@ extern "C" aclError aclrtGetFunctionAttributeHook(
     return result;
 }
 
+extern "C" aclError aclrtFunctionGetParamCountHook(const void* func, size_t* paramCount)
+{
+    constexpr aclrtApiId id = ACL_RT_API_aclrtFunctionGetParamCount;
+    const auto callback = GetDispatchTarget<aclrtFunctionGetParamCountFunc>(id);
+    if (callback == nullptr) {
+        LogMissingCallback("aclrtFunctionGetParamCount", id);
+        return ACL_ERROR_UNINITIALIZE;
+    }
+    const aclError result = callback(func, paramCount);
+    LogHookResult("aclrtFunctionGetParamCount", id, result);
+    return result;
+}
+
+extern "C" aclError aclrtFunctionGetParamInfoHook(
+    const void* func, size_t paramIndex, size_t* paramOffset, size_t* paramSize)
+{
+    constexpr aclrtApiId id = ACL_RT_API_aclrtFunctionGetParamInfo;
+    const auto callback = GetDispatchTarget<aclrtFunctionGetParamInfoFunc>(id);
+    if (callback == nullptr) {
+        LogMissingCallback("aclrtFunctionGetParamInfo", id);
+        return ACL_ERROR_UNINITIALIZE;
+    }
+    const aclError result = callback(func, paramIndex, paramOffset, paramSize);
+    LogHookResult("aclrtFunctionGetParamInfo", id, result);
+    return result;
+}
+
 extern "C" const char* aclrtGetSocNameHook()
 {
     constexpr aclrtApiId id = ACL_RT_API_aclrtGetSocName;
@@ -548,6 +577,8 @@ aclApiTable g_aclApiTable = {
         FunctionToAddress(&aclrtLaunchKernelWithArgsArrayHook),
         FunctionToAddress(&aclrtLaunchSIMTKernelWithArgsArrayHook),
         FunctionToAddress(&aclrtMallocAlign32Hook),
+        FunctionToAddress(&aclrtFunctionGetParamCountHook),
+        FunctionToAddress(&aclrtFunctionGetParamInfoHook),
     },
     {},
     {},
@@ -800,4 +831,16 @@ extern "C" ACL_TOOL_INJECTION_EXPORT int32_t acltoolRegisterAclrtGetSocNameCallb
 extern "C" ACL_TOOL_INJECTION_EXPORT int32_t acltoolRegisterAclrtGetDeviceInfoCallbacks(aclrtGetDeviceInfoFunc callback)
 {
     return RegisterCallback(ACL_RT_API_aclrtGetDeviceInfo, FunctionToAddress(callback));
+}
+
+extern "C" ACL_TOOL_INJECTION_EXPORT int32_t
+acltoolRegisterAclrtFunctionGetParamCountCallbacks(aclrtFunctionGetParamCountFunc callback)
+{
+    return RegisterCallback(ACL_RT_API_aclrtFunctionGetParamCount, FunctionToAddress(callback));
+}
+
+extern "C" ACL_TOOL_INJECTION_EXPORT int32_t
+acltoolRegisterAclrtFunctionGetParamInfoCallbacks(aclrtFunctionGetParamInfoFunc callback)
+{
+    return RegisterCallback(ACL_RT_API_aclrtFunctionGetParamInfo, FunctionToAddress(callback));
 }

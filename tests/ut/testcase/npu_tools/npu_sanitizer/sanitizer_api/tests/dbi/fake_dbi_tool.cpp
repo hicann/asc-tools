@@ -93,6 +93,15 @@ int main(int argc, char** argv)
         return 2;
     }
     std::ofstream artifact(output, std::ios::binary | std::ios::trunc);
+    // 链接和插桩阶段保留输入 ELF，使后续元数据校验使用真实 ELF 布局。
+    for (const std::string& input : inputs) {
+        std::ifstream source(input, std::ios::binary);
+        const std::string contents{std::istreambuf_iterator<char>(source), std::istreambuf_iterator<char>()};
+        if ((tool == "ld.lld" || tool == "bisheng-tune") && contents.compare(0, 4, "\177ELF") == 0) {
+            artifact << contents;
+            return artifact.good() ? 0 : 2;
+        }
+    }
     artifact << "fake-" << tool << '\n';
     for (const std::string& input : inputs) {
         std::ifstream source(input, std::ios::binary);

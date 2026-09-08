@@ -22,6 +22,7 @@ typedef struct AclsanLaunchData {
     void* stream;   // aclrtStream
     // 仅在 callback 调用期间有效；未通过 aclrtBinaryGetFunction 获取时为 NULL。
     const char* functionName;
+    uint32_t numBlocks; // launch API 传入的原始 block 数量。
 } AclsanLaunchData;
 
 #endif

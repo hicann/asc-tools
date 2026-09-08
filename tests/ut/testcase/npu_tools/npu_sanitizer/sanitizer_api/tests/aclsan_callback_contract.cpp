@@ -86,6 +86,7 @@ static_assert(std::is_same_v<decltype(AclsanLaunchData::common), AclsanCallbackC
 static_assert(std::is_same_v<decltype(AclsanLaunchData::function), void*>);
 static_assert(std::is_same_v<decltype(AclsanLaunchData::stream), void*>);
 static_assert(std::is_same_v<decltype(AclsanLaunchData::functionName), const char*>);
+static_assert(std::is_same_v<decltype(AclsanLaunchData::numBlocks), uint32_t>);
 static_assert(!HasKernelType<AclsanLaunchData>::value);
 static_assert(!HasAicRatio<AclsanLaunchData>::value);
 static_assert(!HasAivRatio<AclsanLaunchData>::value);

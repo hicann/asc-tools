@@ -83,6 +83,7 @@ add_executable(npu_check_dbi_pipeline_tests
   gtest_main.cpp
   "${NPU_CHECK_DBI_TEST_DIR}/dbi_pipeline_test.cpp"
   "${NPU_CHECK_DBI_SOURCE_DIR}/dbi_pipeline.cpp"
+  "${NPU_CHECK_DBI_SOURCE_DIR}/kernel_param_metadata.cpp"
   "${NPU_CHECK_DBI_SOURCE_DIR}/tool_runner.cpp"
 )
 target_compile_features(npu_check_dbi_pipeline_tests PRIVATE cxx_std_17)
@@ -97,6 +98,7 @@ add_executable(npu_check_dbi_integration_tests
   gtest_main.cpp
   "${NPU_CHECK_DBI_TEST_DIR}/dbi_integration_test.cpp"
   "${NPU_CHECK_DBI_SOURCE_DIR}/dbi_pipeline.cpp"
+  "${NPU_CHECK_DBI_SOURCE_DIR}/kernel_param_metadata.cpp"
   "${NPU_CHECK_DBI_SOURCE_DIR}/tool_runner.cpp"
 )
 target_compile_features(npu_check_dbi_integration_tests PRIVATE cxx_std_17)

@@ -24,6 +24,28 @@ namespace {
         }                                                                                 \
     } while (false)
 
+aclError OriginalGetParamCount(const void* func, size_t* count)
+{
+    if (func != count) {
+        return ACL_ERROR_INVALID_PARAM;
+    }
+    *count = 3;
+    return 81;
+}
+
+aclError OriginalGetParamInfo(const void* func, size_t index, size_t* offset, size_t* size)
+{
+    if (func != offset || index != 2) {
+        return ACL_ERROR_INVALID_PARAM;
+    }
+    *offset = 16;
+    *size = 8;
+    return 82;
+}
+
+aclError ReplacementGetParamCount(const void*, size_t*) { return 83; }
+aclError ReplacementGetParamInfo(const void*, size_t, size_t*, size_t*) { return 84; }
+
 int gOriginalMallocCalls = 0;
 int gReplacementMallocCalls = 0;
 int gOriginalMallocAlign32Calls = 0;
@@ -202,7 +224,11 @@ int main()
     static_assert(ACL_RT_API_aclrtLaunchKernelWithArgsArray == 23);
     static_assert(ACL_RT_API_aclrtLaunchSIMTKernelWithArgsArray == 24);
     static_assert(ACL_RT_API_aclrtMallocAlign32 == 25);
-    static_assert(ACL_RT_API_MAX == 26);
+    static_assert(ACL_RT_API_aclrtFunctionGetParamCount == 26);
+    static_assert(ACL_RT_API_aclrtFunctionGetParamInfo == 27);
+    static_assert(ACL_RT_API_MAX == 28);
+    CHECK(RuntimeStubSetOriginFunction("aclrtFunctionGetParamCount", &OriginalGetParamCount) == 0);
+    CHECK(RuntimeStubSetOriginFunction("aclrtFunctionGetParamInfo", &OriginalGetParamInfo) == 0);
 
     CHECK(RuntimeStubSetOriginFunction("aclrtMalloc", &OriginalMalloc) == 0);
     CHECK(RuntimeStubSetOriginFunction("aclrtMallocAlign32", &OriginalMallocAlign32) == 0);
@@ -239,6 +265,27 @@ int main()
 
     CHECK(acltoolHookInit() == 0);
     CHECK(acltoolHookInit() == 0);
+
+    const auto getCount = reinterpret_cast<aclrtFunctionGetParamCountFunc>(
+        acltoolGetOriginalRuntimeApi(ACL_RT_API_aclrtFunctionGetParamCount));
+    const auto getInfo = reinterpret_cast<aclrtFunctionGetParamInfoFunc>(
+        acltoolGetOriginalRuntimeApi(ACL_RT_API_aclrtFunctionGetParamInfo));
+    CHECK(getCount == &OriginalGetParamCount && getInfo == &OriginalGetParamInfo);
+    size_t count = 0;
+    size_t offset = 0;
+    size_t size = 0;
+    CHECK(aclrtFunctionGetParamCount(&count, &count) == 81 && count == 3);
+    CHECK(aclrtFunctionGetParamInfo(&offset, 2, &offset, &size) == 82 && offset == 16 && size == 8);
+    CHECK(acltoolRegisterAclrtFunctionGetParamCountCallbacks(&ReplacementGetParamCount) == 0);
+    CHECK(acltoolRegisterAclrtFunctionGetParamInfoCallbacks(&ReplacementGetParamInfo) == 0);
+    CHECK(aclrtFunctionGetParamCount(&count, &count) == 83);
+    CHECK(aclrtFunctionGetParamInfo(&offset, 2, &offset, &size) == 84);
+    CHECK(getCount(&count, &count) == 81);
+    CHECK(getInfo(&offset, 2, &offset, &size) == 82);
+    CHECK(acltoolClearCallback(ACL_RT_API_aclrtFunctionGetParamCount) == 0);
+    CHECK(acltoolRegisterAclrtFunctionGetParamInfoCallbacks(nullptr) == 0);
+    CHECK(aclrtFunctionGetParamCount(&count, &count) == 81);
+    CHECK(aclrtFunctionGetParamInfo(&offset, 2, &offset, &size) == 82);
 
     void* pointer = nullptr;
     CHECK(aclrtMalloc(&pointer, 1, ACL_MEM_MALLOC_HUGE_FIRST) == 17);

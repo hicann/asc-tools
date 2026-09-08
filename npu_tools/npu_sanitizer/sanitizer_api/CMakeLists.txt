@@ -166,6 +166,7 @@ set_target_properties(npu_check_dbi_ctrlbin PROPERTIES
 add_library(npu_check_dbi_engine STATIC
   src/dbi/binary_instrumenter.cpp
   src/dbi/dbi_pipeline.cpp
+  src/dbi/kernel_param_metadata.cpp
   src/dbi/tool_runner.cpp
 )
 target_compile_features(npu_check_dbi_engine PUBLIC cxx_std_17)

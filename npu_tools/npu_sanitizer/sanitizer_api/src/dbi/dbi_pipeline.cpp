@@ -10,6 +10,7 @@
 
 #include "dbi/ctrlbin_generator.h"
 #include "dbi/embedded_probe_resources.h"
+#include "dbi/kernel_param_metadata.h"
 #include "dbi/probe_source_generator.h"
 #include "dbi/tool_runner.h"
 #include "plog_sink.h"
@@ -267,16 +268,15 @@ bool EnsurePrivateDirectory(const boost::filesystem::path& path, std::string& di
     return true;
 }
 
-bool WriteExclusiveFile(const boost::filesystem::path& path, const void* data, std::size_t size)
+bool WriteExclusiveFile(const boost::filesystem::path& path, const std::string& content)
 {
     const int descriptor = open(path.c_str(), O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC | O_NOFOLLOW, 0600);
     if (descriptor < 0) {
         return false;
     }
-    const auto* bytes = static_cast<const unsigned char*>(data);
     std::size_t written = 0;
-    while (written < size) {
-        const ssize_t count = write(descriptor, bytes + written, size - written);
+    while (written < content.size()) {
+        const ssize_t count = write(descriptor, content.data() + written, content.size() - written);
         if (count < 0 && errno == EINTR) {
             continue;
         }
@@ -287,11 +287,6 @@ bool WriteExclusiveFile(const boost::filesystem::path& path, const void* data, s
         written += static_cast<std::size_t>(count);
     }
     return close(descriptor) == 0;
-}
-
-bool WriteExclusiveFile(const boost::filesystem::path& path, const std::string& content)
-{
-    return WriteExclusiveFile(path, content.data(), content.size());
 }
 
 bool WriteReplaceFile(const boost::filesystem::path& path, const std::string& content)
@@ -924,6 +919,23 @@ DbiResult RunDbiPipeline(const DbiRequest& request)
             result.diagnostic = "bisheng-tune did not create " + stagedOutput.string();
         }
         return result;
+    }
+    // 调用ArgsArray场景会传入--append-hbmout-paraminfo参数。
+    // 此时还需要额外修改插桩后.o的meta段使得与DBI的统一偏移保持一致
+    if (std::find(request.extraTuneArgs.begin(), request.extraTuneArgs.end(), "--append-hbmout-paraminfo") !=
+        request.extraTuneArgs.end()) {
+        result.stage = "kernel-param-metadata";
+        std::string patched = ReadFile(stagedOutput);
+        std::string kernelBeforePatch = ReadFile(request.inputKernel);
+        // 获取 整改插桩.o的meta段后的内容
+        if (!ModifyKernelParamMetadata(kernelBeforePatch, patched, request.traceArgumentOffset, result.diagnostic)) {
+            result.diagnostic = "cannot modify kernel ELF metadata: " + result.diagnostic;
+            return result;
+        }
+        if (!WriteReplaceFile(stagedOutput, patched)) {
+            result.diagnostic = "cannot replace patched kernel with modified metadata";
+            return result;
+        }
     }
     // 插桩成功后原子发布最终内核，并填写流水线成功结果。
     boost::filesystem::rename(stagedOutput, request.outputKernel, error);

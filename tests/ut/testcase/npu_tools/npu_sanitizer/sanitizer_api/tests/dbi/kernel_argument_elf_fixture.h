@@ -21,21 +21,24 @@ namespace aclsan::test {
 
 inline std::vector<uint8_t> MakeKernelArgumentSizeElf(uint32_t argumentSize)
 {
-    constexpr char kSectionNames[] = "\0.shstrtab\0__CCE_KernelArgSize";
+    constexpr char kSectionNames[] = "\0.shstrtab\0__CCE_KernelArgSize\0.ascend.meta.FullFlowKernel";
     const std::string sectionNames(kSectionNames, sizeof(kSectionNames));
     const size_t sectionHeadersOffset = sizeof(Elf64_Ehdr);
-    const size_t sectionNamesOffset = sectionHeadersOffset + 3 * sizeof(Elf64_Shdr);
+    const size_t sectionNamesOffset = sectionHeadersOffset + 4 * sizeof(Elf64_Shdr);
     const size_t argumentSizeOffset = sectionNamesOffset + sectionNames.size();
-    std::vector<uint8_t> image(argumentSizeOffset + sizeof(argumentSize), 0);
+    const size_t metadataOffset = argumentSizeOffset + sizeof(argumentSize);
+    std::vector<uint8_t> image(metadataOffset + 16, 0);
 
     Elf64_Ehdr header{};
     std::memcpy(header.e_ident, ELFMAG, SELFMAG);
     header.e_ident[EI_CLASS] = ELFCLASS64;
     header.e_ident[EI_DATA] = ELFDATA2LSB;
     header.e_ident[EI_VERSION] = EV_CURRENT;
+    header.e_version = EV_CURRENT;
+    header.e_ehsize = sizeof(Elf64_Ehdr);
     header.e_shoff = sectionHeadersOffset;
     header.e_shentsize = sizeof(Elf64_Shdr);
-    header.e_shnum = 3;
+    header.e_shnum = 4;
     header.e_shstrndx = 1;
     std::memcpy(image.data(), &header, sizeof(header));
 
@@ -56,6 +59,15 @@ inline std::vector<uint8_t> MakeKernelArgumentSizeElf(uint32_t argumentSize)
         image.data() + sectionHeadersOffset + 2 * sizeof(Elf64_Shdr), &argumentSizeHeader, sizeof(argumentSizeHeader));
     std::memcpy(image.data() + sectionNamesOffset, sectionNames.data(), sectionNames.size());
     std::memcpy(image.data() + argumentSizeOffset, &argumentSize, sizeof(argumentSize));
+    Elf64_Shdr metadataHeader{};
+    metadataHeader.sh_name = 31;
+    metadataHeader.sh_type = SHT_NOTE;
+    metadataHeader.sh_offset = metadataOffset;
+    metadataHeader.sh_size = 16;
+    std::memcpy(image.data() + sectionHeadersOffset + 3 * sizeof(Elf64_Shdr), &metadataHeader, sizeof(metadataHeader));
+    // 零参数 ParamSummary；fake DBI 保留该节，生产元数据修正负责追加隐藏指针。
+    image[metadataOffset] = 16;
+    image[metadataOffset + 2] = 12;
     return image;
 }
 

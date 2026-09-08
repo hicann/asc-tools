@@ -105,6 +105,7 @@ TEST(DefaultBinaryInstrumentationConfigTest, BuildsRuntimeConfigWithoutDbiEnviro
         EXPECT_EQ(config.probeGroups, (std::vector<ProbeGroup>{ProbeGroup::Mte2, ProbeGroup::Scalar}));
         EXPECT_TRUE(config.strict);
         EXPECT_FALSE(config.keepTemp);
+        EXPECT_EQ(config.tuneArgs, (std::vector<std::string>{"--append-hbmout-paraminfo"}));
         const std::string root = "/tmp/npu-check-" + std::to_string(static_cast<unsigned long long>(geteuid()));
         EXPECT_EQ(config.workDirectory, root + "/requests");
         EXPECT_EQ(config.cacheDirectory, root + "/cache");

@@ -735,7 +735,10 @@ void TestLaunchCallbackData()
     assert(g_callbackCapture.launch.launchId != 0);
     assert(g_callbackCapture.launch.function == function);
     assert(g_callbackCapture.launch.stream == stream);
+    assert(g_callbackCapture.launch.numBlocks == 8);
     assert(g_callbackCapture.launchFunctionName == "mix_kernel");
+    assert(aclrtLaunchKernelWithHostArgsHook(function, 17, stream, nullptr, nullptr, 0, nullptr, 0) == ACL_SUCCESS);
+    assert(g_callbackCapture.launch.numBlocks == 17);
     assert(g_functionAttributeQueryCalls == 0);
 }
 
@@ -840,6 +843,11 @@ extern "C" int32_t acltoolRegisterAclrtBinaryGetFunctionByEntryCallbacks(aclrtBi
     return 0;
 }
 extern "C" int32_t acltoolRegisterAclrtLaunchKernelWithHostArgsCallbacks(aclrtLaunchKernelWithHostArgsFunc)
+{
+    return 0;
+}
+
+extern "C" int32_t acltoolRegisterAclrtLaunchKernelWithArgsArrayCallbacks(aclrtLaunchKernelWithArgsArrayFunc)
 {
     return 0;
 }

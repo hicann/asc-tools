@@ -46,11 +46,29 @@ namespace {
 
 struct CallbackState {
     size_t records = 0;
+    size_t launchCallbacks = 0;
     bool valid = true;
     std::set<uint64_t> launchIds;
 };
 
 CallbackState g_callbacks;
+
+void PrintParameterMetadata(aclrtFuncHandle function, const char* name)
+{
+    size_t count = 0;
+    const aclError result = aclrtFunctionGetParamCount(function, &count);
+    std::printf("[metadata] kernel=%s count=%zu result=%d\n", name, count, result);
+    if (result != ACL_SUCCESS) {
+        return;
+    }
+    for (size_t index = 0; index < count; ++index) {
+        size_t offset = 0;
+        size_t size = 0;
+        const aclError infoResult = aclrtFunctionGetParamInfo(function, index, &offset, &size);
+        std::printf(
+            "[metadata] kernel=%s index=%zu offset=%zu size=%zu result=%d\n", name, index, offset, size, infoResult);
+    }
+}
 
 bool HasValidBlockIdentity(const AclsanDeviceEventHeader& header)
 {
@@ -65,6 +83,13 @@ bool HasValidBlockIdentity(const AclsanDeviceEventHeader& header)
 
 void Callback(void*, AclsanCallbackDomain domain, AclsanCallbackId id, const void* data)
 {
+    if (data != nullptr && domain == ACLSAN_CB_DOMAIN_LAUNCH && id == ACLSAN_CBID_LAUNCH_KERNEL) {
+        const auto* launch = static_cast<const AclsanLaunchData*>(data);
+        ++g_callbacks.launchCallbacks;
+        g_callbacks.valid = g_callbacks.valid && launch->common.size == sizeof(AclsanLaunchData) &&
+                            launch->common.result == ACL_SUCCESS && launch->numBlocks == 2;
+        return;
+    }
     if (domain != ACLSAN_CB_DOMAIN_DEVICE_INSTRUCTION || data == nullptr) {
         return;
     }
@@ -148,9 +173,12 @@ struct RuntimeResources {
 
 int main(int argc, char** argv)
 {
-    CHECK(argc == 4);
+    CHECK(argc == 5);
+    const bool useArgsArray = std::strcmp(argv[4], "args-array") == 0;
+    CHECK(useArgsArray || std::strcmp(argv[4], "host-args") == 0);
     const bool zeroOnly = std::strcmp(argv[2], "zero") == 0;
-    CHECK(zeroOnly || std::strcmp(argv[2], "multi") == 0);
+    const bool threeOnly = std::strcmp(argv[2], "three") == 0;
+    CHECK(zeroOnly || threeOnly || std::strcmp(argv[2], "multi") == 0);
     int32_t deviceId = 0;
     CHECK(ParseDeviceId(argv[3], deviceId));
 
@@ -171,6 +199,10 @@ int main(int argc, char** argv)
         aclsanEnableCallback(1, resources.subscriber, ACLSAN_CB_DOMAIN_DEVICE_INSTRUCTION, ACLSAN_CBID_DEVICE_SYNC) ==
         ACLSAN_STATUS_SUCCESS);
 
+    CHECK(
+        aclsanEnableCallback(1, resources.subscriber, ACLSAN_CB_DOMAIN_LAUNCH, ACLSAN_CBID_LAUNCH_KERNEL) ==
+        ACLSAN_STATUS_SUCCESS);
+
     std::puts("[intercept] binary_load");
     std::ifstream binaryInput(argv[1], std::ios::binary);
     const std::vector<uint8_t> binaryImage{
@@ -185,15 +217,21 @@ int main(int argc, char** argv)
 
     aclrtFuncHandle zeroArgumentFunction = nullptr;
     CHECK_ACL(aclrtBinaryGetFunction(resources.binary, "ZeroArgumentKernel", &zeroArgumentFunction));
+    PrintParameterMetadata(zeroArgumentFunction, "ZeroArgumentKernel");
     if (zeroOnly) {
-        CHECK_ACL(
-            aclrtLaunchKernelWithHostArgs(zeroArgumentFunction, 2, resources.stream, nullptr, nullptr, 0, nullptr, 0));
+        if (useArgsArray) {
+            CHECK_ACL(aclrtLaunchKernelWithArgsArray(zeroArgumentFunction, 2, resources.stream, nullptr, nullptr));
+        } else {
+            CHECK_ACL(aclrtLaunchKernelWithHostArgs(
+                zeroArgumentFunction, 2, resources.stream, nullptr, nullptr, 0, nullptr, 0));
+        }
         std::puts("[hook] function instrumented=yes");
         std::puts("[hook] launch trace_buffer_injected=yes");
         CHECK_ACL(aclrtSynchronizeStream(resources.stream));
         CHECK(g_callbacks.records > 0);
         CHECK(g_callbacks.valid);
         CHECK(g_callbacks.launchIds.size() == 1);
+        CHECK(g_callbacks.launchCallbacks == 1);
         std::printf("[device] records=%zu\n", g_callbacks.records);
         std::puts("[d2h] copies=0");
         std::printf("[callback] records=%zu launches=%zu\n", g_callbacks.records, g_callbacks.launchIds.size());
@@ -207,6 +245,8 @@ int main(int argc, char** argv)
     aclrtFuncHandle threeArgumentFunction = nullptr;
     CHECK_ACL(aclrtBinaryGetFunction(resources.binary, "OneArgumentKernel", &oneArgumentFunction));
     CHECK_ACL(aclrtBinaryGetFunction(resources.binary, "FullFlowKernel", &threeArgumentFunction));
+    PrintParameterMetadata(oneArgumentFunction, "OneArgumentKernel");
+    PrintParameterMetadata(threeArgumentFunction, "FullFlowKernel");
 
     constexpr size_t kValues = 8;
     constexpr size_t kBytes = kValues * sizeof(uint32_t);
@@ -223,11 +263,21 @@ int main(int argc, char** argv)
         void* input;
     } oneArgument{resources.input};
     static_assert(sizeof(oneArgument) == 8);
-    CHECK_ACL(aclrtLaunchKernelWithHostArgs(
-        oneArgumentFunction, 2, resources.stream, nullptr, &oneArgument, sizeof(oneArgument), nullptr, 0));
-
-    CHECK_ACL(
-        aclrtLaunchKernelWithHostArgs(zeroArgumentFunction, 2, resources.stream, nullptr, nullptr, 0, nullptr, 0));
+    if (!threeOnly) {
+        if (useArgsArray) {
+            void* args[] = {&oneArgument.input};
+            CHECK_ACL(aclrtLaunchKernelWithArgsArray(oneArgumentFunction, 2, resources.stream, nullptr, args));
+        } else {
+            CHECK_ACL(aclrtLaunchKernelWithHostArgs(
+                oneArgumentFunction, 2, resources.stream, nullptr, &oneArgument, sizeof(oneArgument), nullptr, 0));
+        }
+        if (useArgsArray) {
+            CHECK_ACL(aclrtLaunchKernelWithArgsArray(zeroArgumentFunction, 2, resources.stream, nullptr, nullptr));
+        } else {
+            CHECK_ACL(aclrtLaunchKernelWithHostArgs(
+                zeroArgumentFunction, 2, resources.stream, nullptr, nullptr, 0, nullptr, 0));
+        }
+    }
 
     struct HostArgs {
         void* input;
@@ -235,8 +285,13 @@ int main(int argc, char** argv)
         void* workspace;
     } arguments{resources.input, resources.output, resources.workspace};
     static_assert(sizeof(arguments) == 24);
-    CHECK_ACL(aclrtLaunchKernelWithHostArgs(
-        threeArgumentFunction, 2, resources.stream, nullptr, &arguments, sizeof(arguments), nullptr, 0));
+    if (useArgsArray) {
+        void* args[] = {&arguments.input, &arguments.output, &arguments.workspace};
+        CHECK_ACL(aclrtLaunchKernelWithArgsArray(threeArgumentFunction, 2, resources.stream, nullptr, args));
+    } else {
+        CHECK_ACL(aclrtLaunchKernelWithHostArgs(
+            threeArgumentFunction, 2, resources.stream, nullptr, &arguments, sizeof(arguments), nullptr, 0));
+    }
     std::puts("[hook] function instrumented=yes");
     std::puts("[hook] launch trace_buffer_injected=yes");
     CHECK_ACL(aclrtSynchronizeStream(resources.stream));
@@ -251,7 +306,8 @@ int main(int argc, char** argv)
     CHECK(outputHost == inputHost);
     CHECK(g_callbacks.records > 0);
     CHECK(g_callbacks.valid);
-    CHECK(g_callbacks.launchIds.size() == 3);
+    CHECK(g_callbacks.launchIds.size() == (threeOnly ? 1U : 3U));
+    CHECK(g_callbacks.launchCallbacks == (threeOnly ? 1U : 3U));
 
     std::printf("[device] records=%zu\n", g_callbacks.records);
     std::puts("[d2h] copies=1");

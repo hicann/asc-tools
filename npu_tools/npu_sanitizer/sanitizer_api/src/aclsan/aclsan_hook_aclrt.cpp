@@ -21,13 +21,14 @@
 
 #include <array>
 #include <cstdint>
-#include <cstdlib>
 #include <dlfcn.h>
+#include <new>
 #include <set>
 #include <shared_mutex>
 #include <string>
 #include <utility>
 #include <variant>
+#include <vector>
 
 namespace aclsan {
 namespace {
@@ -45,6 +46,55 @@ namespace {
 
 using aclsan::AbortHookFailure;
 using aclsan::GetOriginalRuntimeFunction;
+
+// TODO: 中间要加上异常报错 / 中止机制
+// 基于originalArgs更新增加参数隐藏trace指针的存储地址，最终aclrtLaunchKernelWithArgsArray使用的是args
+// 将原有的args复制一份后，增加一个trace指针
+aclError BuildInstrumentedArgsArray(
+    const void* function, std::vector<uint8_t>& traceArguments, void* const* originalArgs, std::vector<void*>& args)
+{
+    args.clear();
+    if (function == nullptr || traceArguments.size() < sizeof(void*)) {
+        return ACL_ERROR_INVALID_PARAM;
+    }
+    const auto getCount = GetOriginalRuntimeFunction<aclrtFunctionGetParamCountFunc>(
+        ACL_RT_API_aclrtFunctionGetParamCount, "aclrtFunctionGetParamCount");
+    const auto getInfo = GetOriginalRuntimeFunction<aclrtFunctionGetParamInfoFunc>(
+        ACL_RT_API_aclrtFunctionGetParamInfo, "aclrtFunctionGetParamInfo");
+    size_t count = 0;
+    const aclError status = getCount(function, &count);
+    if (status != ACL_SUCCESS) {
+        return status;
+    }
+    // 因为插桩的kernel已经增加隐藏trace参数，所以不可能为0
+    if (count == 0) {
+        return ACL_ERROR_FEATURE_UNSUPPORTED;
+    }
+
+    // 校验funcHandle对应paramInfo符号预期  参数个数和偏移都得符合预期
+    const size_t originalCount = count - 1;
+    size_t offset = 0;
+    size_t size = 0;
+    const aclError infoStatus = getInfo(function, originalCount, &offset, &size);
+    if (infoStatus != ACL_SUCCESS) {
+        return infoStatus;
+    }
+    // 只校验 sanitizer 追加的隐藏 GM 指针，业务参数地址由调用者直接提供。
+    if (size != sizeof(void*) || offset != traceArguments.size() - sizeof(void*)) {
+        return ACL_ERROR_FEATURE_UNSUPPORTED;
+    }
+    if (originalCount != 0 && originalArgs == nullptr) { // 仅有0参数场景才可能originalArgs为nullptr
+        return ACL_ERROR_INVALID_PARAM;
+    }
+    for (size_t index = 0; index < originalCount; ++index) {
+        if (originalArgs[index] == nullptr) {
+            return ACL_ERROR_INVALID_PARAM;
+        }
+        args.push_back(originalArgs[index]);
+    }
+    args.push_back(traceArguments.data() + offset); // 隐藏参数的地址
+    return ACL_SUCCESS;
+}
 
 thread_local bool g_binaryLoadInProgress = false;
 
@@ -99,13 +149,16 @@ AclsanSynchronizeData MakeSynchronizeData(const char* apiName, aclrtStream strea
 
 AclsanLaunchData MakeLaunchData(
     uint64_t launchId, aclrtFuncHandle function, aclrtStream stream, const std::string& functionName,
-    aclError launchResult) noexcept
+    uint32_t numBlocks, aclError launchResult, const char* apiName) noexcept
 {
     const char* name = functionName.empty() ? nullptr : functionName.c_str();
     return {
-        MakeCallbackCommonData(
-            "aclrtLaunchKernelWithHostArgs", launchResult, static_cast<uint32_t>(sizeof(AclsanLaunchData))),
-        launchId, function, stream, name};
+        MakeCallbackCommonData(apiName, launchResult, static_cast<uint32_t>(sizeof(AclsanLaunchData))),
+        launchId,
+        function,
+        stream,
+        name,
+        numBlocks};
 }
 
 // ==============================================
@@ -278,7 +331,47 @@ aclError aclrtLaunchKernelWithHostArgsHook(
     aclsan::CompleteTraceLaunch(std::move(prepared), funcHandle, stream, result);
     std::string functionName;
     (void)aclsan::GetTraceFunctionName(funcHandle, functionName);
-    const AclsanLaunchData callbackData = MakeLaunchData(prepared.launchId, funcHandle, stream, functionName, result);
+    const AclsanLaunchData callbackData = MakeLaunchData(
+        prepared.launchId, funcHandle, stream, functionName, numBlocks, result, "aclrtLaunchKernelWithHostArgs");
+    aclsan::AclsanCallbackDispatcher::DispatchLaunch(callbackData);
+    return result;
+}
+
+aclError aclrtLaunchKernelWithArgsArrayHook(
+    void* func, uint32_t numBlocks, aclrtStream stream, aclrtLaunchKernelCfg* config, void** args) noexcept
+{
+    aclsan::PreparedTraceLaunch prepared;
+    // 原始参数由 ArgsArray 直接传递，这里只准备隐藏参数及其所属的 trace buffer。
+    const aclError prepareResult = aclsan::PrepareTraceLaunch(func, numBlocks, nullptr, 0, nullptr, 0, prepared);
+    if (prepareResult != ACL_SUCCESS) {
+        return prepareResult;
+    }
+
+    aclError result = ACL_SUCCESS;
+    try {
+        std::vector<void*> launchArgs;
+        if (prepared.instrumented) {
+            result = BuildInstrumentedArgsArray(func, prepared.arguments, args, launchArgs);
+            if (result != ACL_SUCCESS) {
+                ASC_SAN_ERROR("[launch-v2] incompatible ArgsArray parameters: result=%d", result);
+            }
+        }
+        if (result == ACL_SUCCESS) {
+            const auto original = GetOriginalRuntimeFunction<aclrtLaunchKernelWithArgsArrayFunc>(
+                ACL_RT_API_aclrtLaunchKernelWithArgsArray, "aclrtLaunchKernelWithArgsArray");
+            result = original(func, numBlocks, stream, config, prepared.instrumented ? launchArgs.data() : args);
+        }
+    } catch (const std::bad_alloc&) {
+        result = ACL_ERROR_BAD_ALLOC;
+    } catch (...) {
+        result = ACL_ERROR_FAILURE;
+    }
+    const uint64_t launchId = prepared.launchId;
+    aclsan::CompleteTraceLaunch(std::move(prepared), func, stream, result);
+    std::string functionName;
+    (void)aclsan::GetTraceFunctionName(func, functionName);
+    const AclsanLaunchData callbackData =
+        MakeLaunchData(launchId, func, stream, functionName, numBlocks, result, "aclrtLaunchKernelWithArgsArray");
     aclsan::AclsanCallbackDispatcher::DispatchLaunch(callbackData);
     return result;
 }
@@ -351,10 +444,13 @@ constexpr RuntimeHookBinding MakeRuntimeHookBinding(const char* hookName) noexce
 }
 
 // aclrtApiId + acl_tool_inject提供的注册aclrt的函数 + 我们实现的hook函数
-const std::array<RuntimeHookBinding, 11> g_runtimeHookBindings = {{
+const std::array<RuntimeHookBinding, 12> g_runtimeHookBindings = {{
     MakeRuntimeHookBinding<
         ACL_RT_API_aclrtLaunchKernelWithHostArgs, acltoolRegisterAclrtLaunchKernelWithHostArgsCallbacks,
         aclrtLaunchKernelWithHostArgsHook>("aclrtLaunchKernelWithHostArgs"),
+    MakeRuntimeHookBinding<
+        ACL_RT_API_aclrtLaunchKernelWithArgsArray, acltoolRegisterAclrtLaunchKernelWithArgsArrayCallbacks,
+        aclrtLaunchKernelWithArgsArrayHook>("aclrtLaunchKernelWithArgsArray"),
     MakeRuntimeHookBinding<
         ACL_RT_API_aclrtBinaryLoadFromData, acltoolRegisterAclrtBinaryLoadFromDataCallbacks,
         aclrtBinaryLoadFromDataHook>("aclrtBinaryLoadFromData"),

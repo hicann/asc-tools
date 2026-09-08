@@ -23,7 +23,7 @@
 
 namespace {
 
-constexpr std::size_t kRuntimeApiCount = 26;
+constexpr std::size_t kRuntimeApiCount = 28;
 constexpr std::size_t kSocNameCapacity = 64;
 
 struct KernelArgs {
@@ -222,6 +222,17 @@ aclError RealAclrtGetFunctionAttribute(aclrtFuncHandle, aclrtFuncAttribute, std:
     return ACL_SUCCESS;
 }
 
+aclError RealAclrtFunctionGetParamCount(const void*, size_t* count)
+{
+    if (count == nullptr) {
+        return ACL_ERROR_INVALID_PARAM;
+    }
+    *count = 0;
+    return ACL_SUCCESS;
+}
+
+aclError RealAclrtFunctionGetParamInfo(const void*, size_t, size_t*, size_t*) { return ACL_ERROR_INVALID_PARAM; }
+
 const char* RealAclrtGetSocName() { return g_socName.data(); }
 
 template <typename Function>
@@ -275,6 +286,10 @@ std::array<RuntimeEntry, kRuntimeApiCount> g_runtimeEntries = {{
     {"aclrtLaunchSIMTKernelWithArgsArray", ToGenericFunction(&RealAclrtLaunchSIMTKernelWithArgsArray),
      ToGenericFunction(&RealAclrtLaunchSIMTKernelWithArgsArray)},
     {"aclrtMallocAlign32", ToGenericFunction(&RealAclrtMalloc), ToGenericFunction(&RealAclrtMalloc)},
+    {"aclrtFunctionGetParamCount", ToGenericFunction(&RealAclrtFunctionGetParamCount),
+     ToGenericFunction(&RealAclrtFunctionGetParamCount)},
+    {"aclrtFunctionGetParamInfo", ToGenericFunction(&RealAclrtFunctionGetParamInfo),
+     ToGenericFunction(&RealAclrtFunctionGetParamInfo)},
 }};
 
 std::mutex g_runtimeMutex;
@@ -576,4 +591,15 @@ extern "C" aclError aclrtLaunchKernel(
         "aclrtLaunchKernel", funcHandle, numBlocks, argsData, argsSize, stream);
     EmitTestCallbackEvent(kRuntimeCallbackLaunchKernel, kCallbackExit, result);
     return result;
+}
+
+extern "C" aclError aclrtFunctionGetParamCount(const void* func, size_t* count)
+{
+    return CallCurrent<aclError (*)(const void*, size_t*)>("aclrtFunctionGetParamCount", func, count);
+}
+
+extern "C" aclError aclrtFunctionGetParamInfo(const void* func, size_t index, size_t* offset, size_t* size)
+{
+    return CallCurrent<aclError (*)(const void*, size_t, size_t*, size_t*)>(
+        "aclrtFunctionGetParamInfo", func, index, offset, size);
 }

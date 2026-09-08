@@ -207,6 +207,7 @@ bool BuildRuntimeInstrumentationConfig(
     }
     config.strict = true;
     config.keepTemp = false;
+    config.tuneArgs.emplace_back("--append-hbmout-paraminfo");
     return true;
 }
 

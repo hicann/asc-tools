@@ -164,7 +164,7 @@ if(NPU_CHECK_ENABLE_REAL_DBI_FLOW)
   add_executable(aclsan_full_flow_real_sample full_flow_real_sample.cpp)
   target_compile_features(aclsan_full_flow_real_sample PRIVATE cxx_std_17)
   target_link_libraries(aclsan_full_flow_real_sample
-    PRIVATE acl_san acl_tool_injection acl_runtime_backend)
+    PRIVATE acl_san acl_tool_injection injection_runtime_backend)
   if(TARGET aclsan_full_flow_real_kernel)
     add_dependencies(aclsan_full_flow_real_sample aclsan_full_flow_real_kernel)
   endif()
@@ -180,5 +180,35 @@ if(NPU_CHECK_ENABLE_REAL_DBI_FLOW)
         -P ${CMAKE_CURRENT_SOURCE_DIR}/run_full_flow_real_sample.cmake)
     set_tests_properties(aclsan.full_flow_real_sample PROPERTIES
       LABELS hardware RESOURCE_LOCK npu_device)
+    add_test(NAME aclsan.full_flow_real_sample_args_array
+      COMMAND ${CMAKE_COMMAND}
+        -DSAMPLE=$<TARGET_FILE:aclsan_full_flow_real_sample>
+        -DKERNEL=${NPU_CHECK_REAL_DBI_KERNEL}
+        -DDEVICE_ID=${NPU_CHECK_REAL_DBI_DEVICE_ID}
+        -DARCH=${NPU_CHECK_REAL_DBI_ARCH}
+        -DTOOLCHAIN_ROOT=${NPU_CHECK_REAL_DBI_TOOLCHAIN_ROOT}
+        -DTEST_ROOT=${CMAKE_CURRENT_BINARY_DIR}/full-flow-real-args-array
+        -DMODE=three -DARGS_ARRAY=ON
+        -P ${CMAKE_CURRENT_SOURCE_DIR}/run_full_flow_real_sample.cmake)
+    set_tests_properties(aclsan.full_flow_real_sample_args_array PROPERTIES
+      LABELS hardware RESOURCE_LOCK npu_device)
+    foreach(mode IN ITEMS multi zero)
+      set(args_array_kernel "${NPU_CHECK_REAL_DBI_KERNEL}")
+      if(mode STREQUAL "zero")
+        set(args_array_kernel "${NPU_CHECK_REAL_DBI_ZERO_KERNEL}")
+      endif()
+      add_test(NAME aclsan.full_flow_real_sample_args_array_${mode}
+        COMMAND ${CMAKE_COMMAND}
+          -DSAMPLE=$<TARGET_FILE:aclsan_full_flow_real_sample>
+          -DKERNEL=${args_array_kernel}
+          -DDEVICE_ID=${NPU_CHECK_REAL_DBI_DEVICE_ID}
+          -DARCH=${NPU_CHECK_REAL_DBI_ARCH}
+          -DTOOLCHAIN_ROOT=${NPU_CHECK_REAL_DBI_TOOLCHAIN_ROOT}
+          -DTEST_ROOT=${CMAKE_CURRENT_BINARY_DIR}/full-flow-real-args-array-${mode}
+          -DMODE=${mode} -DARGS_ARRAY=ON
+          -P ${CMAKE_CURRENT_SOURCE_DIR}/run_full_flow_real_sample.cmake)
+      set_tests_properties(aclsan.full_flow_real_sample_args_array_${mode} PROPERTIES
+        LABELS hardware RESOURCE_LOCK npu_device)
+    endforeach()
   endif()
 endif()

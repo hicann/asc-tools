@@ -331,6 +331,52 @@ void Callback(void*, AclsanCallbackDomain domain, AclsanCallbackId id, const voi
 
 } // namespace
 
+aclError g_arrayCountStatus = ACL_SUCCESS;
+bool g_zeroMetadataCount = false;
+bool g_badHiddenSize = false;
+size_t g_arrayInfoCalls = 0;
+
+aclError OriginalGetParamCount(const void* function, size_t* count)
+{
+    *count =
+        g_zeroMetadataCount ? 0 : (function == kZeroArgumentFunction ? 1 : (function == kOneArgumentFunction ? 2 : 4));
+    return g_arrayCountStatus;
+}
+
+aclError g_arrayMetadataStatus = ACL_SUCCESS;
+bool g_badHiddenOffset = false;
+size_t g_arrayOriginalCalls = 0;
+
+aclError OriginalGetParamInfo(const void* function, size_t index, size_t* offset, size_t* size)
+{
+    size_t count = 0;
+    OriginalGetParamCount(function, &count);
+    ++g_arrayInfoCalls;
+    if (count == 0 || index != count - 1) {
+        return ACL_ERROR_INVALID_PARAM;
+    }
+    *offset = g_badHiddenOffset ? 16 : 24;
+    *size = g_badHiddenSize ? 4 : sizeof(uint64_t);
+    return g_arrayMetadataStatus;
+}
+
+aclError OriginalArrayLaunch(
+    void* function, uint32_t blocks, aclrtStream stream, aclrtLaunchKernelCfg* config, void** args)
+{
+    ++g_arrayOriginalCalls;
+    size_t count = 0;
+    OriginalGetParamCount(function, &count);
+    uint64_t packed[4]{};
+    for (size_t index = 0; index + 1 < count; ++index) {
+        std::memcpy(&packed[index], args[index], sizeof(uint64_t));
+        if (packed[index] != (count == 2 ? 0x1234 : index + 1)) {
+            return ACL_ERROR_INVALID_PARAM;
+        }
+    }
+    std::memcpy(&packed[3], args[count - 1], sizeof(void*));
+    return OriginalLaunch(function, blocks, stream, config, packed, sizeof(packed), nullptr, 0);
+}
+
 int main()
 {
     setenv("NPU_CHECK_TRACE_RECORDS_PER_BLOCK", "2", 1);
@@ -344,6 +390,9 @@ int main()
     CHECK(RuntimeStubSetOriginFunction("aclrtGetDeviceInfo", &OriginalGetDeviceInfo) == ACL_SUCCESS);
     CHECK(RuntimeStubSetOriginFunction("aclrtBinaryLoadFromData", &OriginalBinaryLoad) == ACL_SUCCESS);
     CHECK(RuntimeStubSetOriginFunction("aclrtBinaryGetFunction", &OriginalBinaryGetFunction) == ACL_SUCCESS);
+    CHECK(RuntimeStubSetOriginFunction("aclrtLaunchKernelWithArgsArray", &OriginalArrayLaunch) == ACL_SUCCESS);
+    CHECK(RuntimeStubSetOriginFunction("aclrtFunctionGetParamCount", &OriginalGetParamCount) == ACL_SUCCESS);
+    CHECK(RuntimeStubSetOriginFunction("aclrtFunctionGetParamInfo", &OriginalGetParamInfo) == ACL_SUCCESS);
     CHECK(acltoolHookInit() == ACL_SUCCESS);
 
     AclsanSubscriberHandle subscriber = nullptr;
@@ -507,6 +556,59 @@ int main()
         aclrtLaunchKernelWithHostArgs(
             ordinaryFunction, 2, stream1, nullptr, ordinaryArgs, sizeof(arguments), &placeholder, 1) ==
         ACL_ERROR_INVALID_PARAM);
+    CHECK(g_mallocCalls == g_freeCalls);
+
+    void* oneArray[] = {&oneArgument};
+    void* threeArray[] = {&threeArguments[0], &threeArguments[1], &threeArguments[2]};
+    const size_t infoCallsBeforeArray = g_arrayInfoCalls;
+    const size_t recordsBeforeArray = g_records.size();
+    const size_t freesBeforeArray = g_freeCalls;
+    g_writeRecord = true;
+    CHECK(aclrtLaunchKernelWithArgsArray(oneArgumentFunction, 2, stream1, nullptr, oneArray) == ACL_SUCCESS);
+    CHECK(aclrtLaunchKernelWithArgsArray(zeroArgumentFunction, 2, stream1, nullptr, nullptr) == ACL_SUCCESS);
+    CHECK(aclrtLaunchKernelWithArgsArray(threeArgumentFunction, 2, stream1, nullptr, threeArray) == ACL_SUCCESS);
+    CHECK(oneArray[0] == &oneArgument && oneArgument == 0x1234);
+    CHECK(threeArray[0] == &threeArguments[0] && threeArray[2] == &threeArguments[2]);
+    CHECK(g_freeCalls == freesBeforeArray);
+    CHECK(aclrtSynchronizeStream(stream1) == ACL_SUCCESS);
+    CHECK(g_records.size() == recordsBeforeArray + 6);
+    CHECK(g_freeCalls == freesBeforeArray + 3);
+    CHECK(g_arrayOriginalCalls == 3);
+    CHECK(g_arrayInfoCalls == infoCallsBeforeArray + 3);
+
+    g_failLaunch = true;
+    CHECK(aclrtLaunchKernelWithArgsArray(oneArgumentFunction, 2, stream1, nullptr, oneArray) == ACL_ERROR_FAILURE);
+    g_failLaunch = false;
+    CHECK(g_arrayOriginalCalls == 4);
+    CHECK(g_mallocCalls == g_freeCalls);
+    const size_t infoCallsBeforeFailure = g_arrayInfoCalls;
+    g_arrayCountStatus = 73;
+    CHECK(aclrtLaunchKernelWithArgsArray(oneArgumentFunction, 2, stream1, nullptr, oneArray) == 73);
+    g_arrayCountStatus = ACL_SUCCESS;
+    g_zeroMetadataCount = true;
+    CHECK(
+        aclrtLaunchKernelWithArgsArray(oneArgumentFunction, 2, stream1, nullptr, oneArray) ==
+        ACL_ERROR_FEATURE_UNSUPPORTED);
+    g_zeroMetadataCount = false;
+    CHECK(g_arrayInfoCalls == infoCallsBeforeFailure);
+    g_badHiddenSize = true;
+    CHECK(
+        aclrtLaunchKernelWithArgsArray(oneArgumentFunction, 2, stream1, nullptr, oneArray) ==
+        ACL_ERROR_FEATURE_UNSUPPORTED);
+    g_badHiddenSize = false;
+    g_arrayMetadataStatus = 74;
+    CHECK(aclrtLaunchKernelWithArgsArray(oneArgumentFunction, 2, stream1, nullptr, oneArray) == 74);
+    g_arrayMetadataStatus = ACL_SUCCESS;
+    g_badHiddenOffset = true;
+    CHECK(
+        aclrtLaunchKernelWithArgsArray(oneArgumentFunction, 2, stream1, nullptr, oneArray) ==
+        ACL_ERROR_FEATURE_UNSUPPORTED);
+    g_badHiddenOffset = false;
+    CHECK(aclrtLaunchKernelWithArgsArray(oneArgumentFunction, 2, stream1, nullptr, nullptr) == ACL_ERROR_INVALID_PARAM);
+    void* nullArray[] = {nullptr};
+    CHECK(
+        aclrtLaunchKernelWithArgsArray(oneArgumentFunction, 2, stream1, nullptr, nullArray) == ACL_ERROR_INVALID_PARAM);
+    CHECK(g_arrayOriginalCalls == 4);
     CHECK(g_mallocCalls == g_freeCalls);
 
     CHECK(aclsanUnsubscribe(subscriber) == ACLSAN_STATUS_SUCCESS);
