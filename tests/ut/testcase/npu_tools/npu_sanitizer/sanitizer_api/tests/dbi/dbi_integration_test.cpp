@@ -7,6 +7,7 @@
 // See LICENSE in the root of the software repository for the full text of the License.
 
 #include "dbi/dbi_pipeline.h"
+#include "../../../common/tests/plog_capture.h"
 
 #include <cstdlib>
 #include <boost/filesystem.hpp>
@@ -62,6 +63,12 @@ for arg in "$@"; do
   previous="$arg"
 done
 if [ -n "$output" ] && [ "$name" != "$DBI_FAKE_SKIP_OUTPUT" ]; then printf 'fake-%s\n' "$name" > "$output"; fi
+if [ "$name" = bisheng-tune ]; then
+  printf 'first line\n\n'
+  printf '%01200d\n' 0
+  printf 'last line\n'
+  printf 'warning one\nwarning two\n' >&2
+fi
 if [ "$name" = "$DBI_FAKE_FAIL" ]; then exit 7; fi
 )SH");
     ASSERT_EQ(chmod(path.c_str(), 0755), 0);
@@ -79,6 +86,7 @@ std::size_t CountOccurrences(const std::string& text, const std::string& needle)
 
 TEST(DbiIntegrationTest, CompilesLinksAndPatchesSelectedProbeSet)
 {
+    PlogCapture capture;
     const auto root = boost::filesystem::temp_directory_path() / "dbi_pipeline_integration";
     boost::filesystem::remove_all(root);
     const auto toolBin = root / "toolchain/tools/bisheng_compiler/bin";
@@ -104,6 +112,19 @@ TEST(DbiIntegrationTest, CompilesLinksAndPatchesSelectedProbeSet)
     EXPECT_TRUE(result.success) << result.stage << ": " << result.diagnostic;
     EXPECT_EQ(result.patchedPath, request.outputKernel);
     EXPECT_TRUE(boost::filesystem::is_regular_file(request.outputKernel));
+
+    const std::string logs = capture.Text();
+    EXPECT_NE(logs.find("DBI stage=bisheng-tune output=stdout line=1 part=1 text=first line"), std::string::npos);
+    EXPECT_NE(logs.find("DBI stage=bisheng-tune output=stdout line=2 part=1 text=\n"), std::string::npos);
+    EXPECT_NE(logs.find("DBI stage=bisheng-tune output=stdout line=3 part=3 text="), std::string::npos);
+    EXPECT_NE(logs.find("DBI stage=bisheng-tune output=stdout line=4 part=1 text=last line"), std::string::npos);
+    EXPECT_NE(logs.find("DBI stage=bisheng-tune output=stderr line=2 part=1 text=warning two"), std::string::npos);
+    std::istringstream records(logs);
+    std::string record;
+    while (std::getline(records, record)) {
+        EXPECT_LT(record.size(), 1024U);
+        EXPECT_NE(record.find("DBI stage="), std::string::npos) << record;
+    }
 
     request.outputKernel = (root / "second-patched.o").string();
     request.workDirectory = (root / "second-work").string();

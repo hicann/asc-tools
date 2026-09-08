@@ -38,6 +38,7 @@ if(ENABLE_TEST)
   target_link_libraries(acl_san_test PRIVATE
     acl_tool_injection_test
     npu_check_dbi_engine
+    npu_sanitizer_plog
     ${CMAKE_DL_LIBS}
     Threads::Threads
     Boost::filesystem
@@ -60,7 +61,9 @@ if(ENABLE_TEST)
   add_executable(aclsan_log_test ${SANITIZER_API_TEST_DIR}/aclsan_log_test.cpp)
   target_compile_features(aclsan_log_test PRIVATE cxx_std_17)
   target_compile_options(aclsan_log_test PRIVATE -Wall -Wextra -Werror)
+  target_link_libraries(aclsan_log_test PRIVATE plog_test_library)
   target_include_directories(aclsan_log_test PRIVATE ${SANITIZER_API_SOURCE_DIR}/include)
+  target_link_libraries(aclsan_log_test PRIVATE npu_sanitizer_plog)
   add_test(NAME aclsan_log_test COMMAND aclsan_log_test)
 
   add_executable(aclsan_callback_invoke_test
@@ -75,7 +78,7 @@ if(ENABLE_TEST)
     ${SANITIZER_API_SOURCE_DIR}/src
     ${SANITIZER_API_SOURCE_DIR}/include
     ${SANITIZER_API_SOURCE_DIR}/include)
-  target_link_libraries(aclsan_callback_invoke_test PRIVATE injection_headers)
+  target_link_libraries(aclsan_callback_invoke_test PRIVATE injection_headers npu_sanitizer_plog)
   add_test(NAME aclsan_callback_invoke_test COMMAND aclsan_callback_invoke_test)
 
   add_executable(aclsan_probe_plan_callback_test
@@ -91,6 +94,7 @@ if(ENABLE_TEST)
     ${SANITIZER_API_SOURCE_DIR}/include)
   target_link_libraries(aclsan_probe_plan_callback_test PRIVATE
     injection_headers
+    npu_sanitizer_plog
     npu_check_dbi_engine
     Threads::Threads)
   add_test(NAME aclsan_probe_plan_callback_test COMMAND aclsan_probe_plan_callback_test)
@@ -118,6 +122,7 @@ if(ENABLE_TEST)
     ${SANITIZER_API_SOURCE_DIR}/include)
   target_link_libraries(aclsan_hook_cbdata_test PRIVATE
     injection_headers
+    npu_sanitizer_plog
     npu_check_dbi_engine
     ${CMAKE_DL_LIBS}
     Threads::Threads
@@ -180,7 +185,7 @@ if(ENABLE_TEST)
   target_include_directories(aclsan_translate_device_data_test PRIVATE
     ${SANITIZER_API_SOURCE_DIR}/include
     ${SANITIZER_API_SOURCE_DIR}/include)
-  target_link_libraries(aclsan_translate_device_data_test PRIVATE injection_headers)
+  target_link_libraries(aclsan_translate_device_data_test PRIVATE injection_headers npu_sanitizer_plog)
   add_test(NAME aclsan_translate_device_data_test COMMAND aclsan_translate_device_data_test)
 
   add_executable(cce_instr_header_contract_test ${SANITIZER_API_TEST_DIR}/cce_instr_header_contract_test.cpp)
@@ -189,6 +194,7 @@ if(ENABLE_TEST)
   target_include_directories(cce_instr_header_contract_test PRIVATE
     ${SANITIZER_API_SOURCE_DIR}/include
     ${SANITIZER_API_SOURCE_DIR}/include)
+  target_link_libraries(cce_instr_header_contract_test PRIVATE npu_sanitizer_plog plog_test_library)
   add_test(NAME cce_instr_header_contract_test COMMAND cce_instr_header_contract_test)
 
   add_executable(cce_instruction_pipeline_test
@@ -204,6 +210,7 @@ if(ENABLE_TEST)
   target_include_directories(cce_instruction_pipeline_test PRIVATE
     ${SANITIZER_API_SOURCE_DIR}/include
     ${SANITIZER_API_SOURCE_DIR}/include)
+  target_link_libraries(cce_instruction_pipeline_test PRIVATE npu_sanitizer_plog)
   add_test(NAME cce_instruction_pipeline_test COMMAND cce_instruction_pipeline_test)
 
   add_executable(device_instr_decoder_test
@@ -216,6 +223,7 @@ if(ENABLE_TEST)
   target_include_directories(device_instr_decoder_test PRIVATE
     ${SANITIZER_API_SOURCE_DIR}/include
     ${SANITIZER_API_SOURCE_DIR}/include)
+  target_link_libraries(device_instr_decoder_test PRIVATE npu_sanitizer_plog)
   add_test(NAME device_instr_decoder_test COMMAND device_instr_decoder_test)
 
   add_executable(register_state_manager_test
@@ -227,6 +235,10 @@ if(ENABLE_TEST)
   target_include_directories(register_state_manager_test PRIVATE
     ${SANITIZER_API_SOURCE_DIR}/include
     ${SANITIZER_API_SOURCE_DIR}/include)
+  target_link_libraries(register_state_manager_test PRIVATE npu_sanitizer_plog)
+  foreach(target IN ITEMS aclsan_hook_cbdata_test aclsan_translate_device_data_test register_state_manager_test)
+    target_link_libraries(${target} PRIVATE plog_test_library)
+  endforeach()
   add_test(NAME register_state_manager_test COMMAND register_state_manager_test)
 
   add_executable(aclsan_lifecycle_api_removed ${SANITIZER_API_TEST_DIR}/aclsan_lifecycle_api_removed.cpp)

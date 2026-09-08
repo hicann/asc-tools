@@ -14,12 +14,11 @@
 #include "uds_transport.h"
 
 #include <cstdint>
-#include <functional>
 #include <string>
 #include <sys/types.h>
 #include <vector>
 
-namespace npu::sanitizer::cli {
+namespace aclsan::cli {
 
 class UdsClient {
 public:
@@ -43,25 +42,11 @@ public:
     // 与对端协商出的 minor，取双方较小值。V1 恒为 0，供维测日志记录。
     uint16_t NegotiatedMinor() const { return negotiatedMinor_; }
 
-    // 结构化维测日志出口（6.1）。未设置时不产生任何日志。
-    using LogSink = std::function<void(const std::string&)>;
-    void SetLogSink(LogSink sink) { logSink_ = std::move(sink); }
-
 private:
     bool ConnectWithRetry(const std::string& udsName, ipc::DeadlineMs deadline, pid_t childPid, std::string& error);
     bool CheckServerIdentity(uint32_t childPid, ipc::DeadlineMs deadline, std::string& error);
     bool Send(ipc::MessageType type, const std::vector<uint8_t>& payload, ipc::DeadlineMs deadline, std::string& error);
 
-    // 是否真的输出由 sink 决定（见 process_runner 的 OutputSink::Structured）。
-    // 这里不判环境变量：开关属于 CLI 的输出策略，不该渗进协议客户端。
-    void Log(const std::string& line) const
-    {
-        if (logSink_) {
-            logSink_(line);
-        }
-    }
-
-    LogSink logSink_;
     int fd_ = -1;
     uint16_t negotiatedMinor_ = ipc::kProtocolMinor;
     uint64_t sessionId_ = 0;
@@ -69,6 +54,6 @@ private:
     uint64_t receiveSequence_ = 1;
 };
 
-} // namespace npu::sanitizer::cli
+} // namespace aclsan::cli
 
 #endif

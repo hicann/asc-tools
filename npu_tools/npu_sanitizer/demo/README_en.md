@@ -205,3 +205,5 @@ The following items remain incomplete:
 - Concurrency, callback reentrancy, and shared-library unload safety have not been
   verified. If these scenarios are within the supported product scope, additional
   lifecycle and stress tests are required.
+
+Internal API, CLI and DBI diagnostics use CANN Host plog, controlled by `ASCEND_GLOBAL_LOG_LEVEL` (`0` for DEBUG). Set `ASCEND_SLOG_PRINT_TO_STDOUT=0` to keep internal records off the console. The custom internal file logger and switches have been removed. Sample `build/npu_check.log` files capture check/application output, not internal logs.

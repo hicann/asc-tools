@@ -272,6 +272,9 @@ aclError aclrtLaunchKernelWithHostArgsHook(
     const aclError result = original(
         funcHandle, numBlocks, stream, config, launchArguments, launchArgumentBytes, launchPlaceholders,
         launchPlaceholderCount);
+    ASC_SAN_DEBUG(
+        "aclrtLaunchKernelWithHostArgs: function=%p blocks=%u stream=%p instrumented=%u result=%d", funcHandle,
+        numBlocks, stream, static_cast<unsigned>(prepared.instrumented), result);
     aclsan::CompleteTraceLaunch(std::move(prepared), funcHandle, stream, result);
     std::string functionName;
     (void)aclsan::GetTraceFunctionName(funcHandle, functionName);

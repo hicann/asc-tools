@@ -30,7 +30,6 @@ endif()
 add_executable(npu_check_unit_tests
   gtest_main.cpp
   allocation_registry_test.cpp
-  logger_test.cpp
   memcheck_test.cpp
   report_buffer_test.cpp
   synccheck_test.cpp
@@ -39,13 +38,15 @@ add_executable(npu_check_unit_tests
   ${NPU_CHECK_TEST_REPORT_RENDERER_SOURCES}
 )
 target_compile_features(npu_check_unit_tests PRIVATE cxx_std_17)
-target_compile_definitions(npu_check_unit_tests PRIVATE _GLIBCXX_USE_CXX11_ABI=0)
+target_compile_definitions(npu_check_unit_tests PRIVATE
+  _GLIBCXX_USE_CXX11_ABI=0
+)
 target_include_directories(npu_check_unit_tests PRIVATE
   "${NPU_CHECK_SOURCE_DIR}/src"
   "${NPU_CHECK_DBI_INCLUDE_DIR}"
 )
 target_link_libraries(npu_check_unit_tests PRIVATE
-  npu_check_core acl_san Threads::Threads GTest::gtest Boost::filesystem)
+  npu_check_core acl_san npu_sanitizer_plog Threads::Threads GTest::gtest Boost::filesystem)
 add_test(NAME npu_check_unit_tests COMMAND npu_check_unit_tests)
 
 add_executable(npu_check_kernel_attributes_test
@@ -89,7 +90,7 @@ target_compile_options(npu_check_dbi_pipeline_tests PRIVATE -Wall -Wextra -Werro
 target_compile_definitions(npu_check_dbi_pipeline_tests PRIVATE _GLIBCXX_USE_CXX11_ABI=0)
 target_include_directories(npu_check_dbi_pipeline_tests PRIVATE "${NPU_CHECK_DBI_INCLUDE_DIR}")
 target_link_libraries(npu_check_dbi_pipeline_tests PRIVATE
-  npu_check_dbi_ctrlbin npu_check_dbi_probe_runtime GTest::gtest Boost::filesystem)
+  npu_check_dbi_ctrlbin npu_check_dbi_probe_runtime npu_sanitizer_plog GTest::gtest Boost::filesystem)
 add_test(NAME npu_check_dbi_pipeline COMMAND npu_check_dbi_pipeline_tests)
 
 add_executable(npu_check_dbi_integration_tests
@@ -102,8 +103,8 @@ target_compile_features(npu_check_dbi_integration_tests PRIVATE cxx_std_17)
 target_compile_options(npu_check_dbi_integration_tests PRIVATE -Wall -Wextra -Werror)
 target_compile_definitions(npu_check_dbi_integration_tests PRIVATE _GLIBCXX_USE_CXX11_ABI=0)
 target_include_directories(npu_check_dbi_integration_tests PRIVATE "${NPU_CHECK_DBI_INCLUDE_DIR}")
-target_link_libraries(npu_check_dbi_integration_tests PRIVATE
-  npu_check_dbi_ctrlbin npu_check_dbi_probe_runtime GTest::gtest Boost::filesystem)
+target_link_libraries(npu_check_dbi_integration_tests PRIVATE plog_test_library
+  npu_check_dbi_ctrlbin npu_check_dbi_probe_runtime npu_sanitizer_plog GTest::gtest Boost::filesystem)
 add_test(NAME npu_check_dbi_integration COMMAND npu_check_dbi_integration_tests)
 
 add_executable(npu_check_dbi_binary_instrumenter_tests
@@ -111,10 +112,11 @@ add_executable(npu_check_dbi_binary_instrumenter_tests
   "${NPU_CHECK_DBI_TEST_DIR}/binary_instrumenter_test.cpp"
 )
 target_compile_features(npu_check_dbi_binary_instrumenter_tests PRIVATE cxx_std_17)
-target_compile_definitions(npu_check_dbi_binary_instrumenter_tests PRIVATE _GLIBCXX_USE_CXX11_ABI=0)
+target_compile_definitions(npu_check_dbi_binary_instrumenter_tests PRIVATE
+  _GLIBCXX_USE_CXX11_ABI=0)
 target_include_directories(npu_check_dbi_binary_instrumenter_tests PRIVATE "${NPU_CHECK_DBI_INCLUDE_DIR}")
-target_link_libraries(npu_check_dbi_binary_instrumenter_tests PRIVATE
-  npu_check_dbi_engine GTest::gtest Boost::filesystem)
+target_link_libraries(npu_check_dbi_binary_instrumenter_tests PRIVATE plog_test_library
+  npu_check_dbi_engine npu_sanitizer_plog GTest::gtest Boost::filesystem)
 add_test(NAME npu_check_dbi_binary_instrumenter COMMAND npu_check_dbi_binary_instrumenter_tests)
 
 add_executable(npu_check_probe_source_generator_tests

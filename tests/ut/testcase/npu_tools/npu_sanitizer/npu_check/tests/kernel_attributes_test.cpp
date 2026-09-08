@@ -27,7 +27,7 @@ extern "C" void* acltoolGetOriginalRuntimeApi(aclrtApiId apiId)
     return reinterpret_cast<void*>(g_originalFunctionAttributeGetter);
 }
 
-namespace npu::sanitizer {
+namespace aclsan {
 namespace {
 
 aclError GetAllAttributes(aclrtFuncHandle function, aclrtFuncAttribute attribute, int64_t* value)
@@ -126,4 +126,4 @@ TEST(KernelAttributesTest, ReportsMissingOriginalApiWithoutQuerying)
 }
 
 } // namespace
-} // namespace npu::sanitizer
+} // namespace aclsan

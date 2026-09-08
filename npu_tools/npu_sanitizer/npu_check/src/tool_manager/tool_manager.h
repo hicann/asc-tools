@@ -15,7 +15,6 @@
 #include "diagnostic/report_renderer.h"
 #include "diagnostic/report_buffer.h"
 #include "ipc/uds_server.h"
-#include "logging/logger.h"
 #include "wire_protocol.h"
 
 #include <atomic>
@@ -26,7 +25,7 @@
 #include <string>
 #include <vector>
 
-namespace npu::sanitizer {
+namespace aclsan {
 
 class ToolManager {
 public:
@@ -68,7 +67,6 @@ private:
     bool NormalizeAndStoreReportRecord(
         const npucheck::NpuCheckReportRecord& report, uint64_t reportId, const char* what);
     void PublishMalformed(AclsanCallbackDomain domain, AclsanCallbackId cbid, const char* reason);
-    bool InitializeLogger(std::string& error);
     void LogCallback(AclsanCallbackDomain domain, AclsanCallbackId cbid, const void* cbdata);
     std::string BuildReadyMessage() const;
     std::string BuildSummaryMessage() const;
@@ -111,7 +109,7 @@ private:
 
     // 本次会话启用的工具及其子选项，按 toolId 升序。多个工具可以同时启用。
     ipc::ConfigureRequest configure_{};
-    // 工作目录：npu_check.log 与 probe 缓存的落点，由环境变量传入（Configure 只承载
+    // 工作目录：probe 缓存的落点，由环境变量传入（Configure 只承载
     // 工具与子选项，不承载路径）。
     std::string workDir_;
     ipc::UdsServer server_{};
@@ -122,12 +120,11 @@ private:
     AclsanSubscriberHandle subscriber_ = nullptr;
     std::unique_ptr<Memcheck> memcheck_;
     std::unique_ptr<npucheck::Synccheck> synccheck_;
-    logging::Logger logger_{};
     std::atomic<uint64_t> callbackCount_{0};
     uint64_t malformedCallbacks_ = 0;
     uint64_t frameworkErrors_ = 0;
 };
 
-} // namespace npu::sanitizer
+} // namespace aclsan
 
 #endif

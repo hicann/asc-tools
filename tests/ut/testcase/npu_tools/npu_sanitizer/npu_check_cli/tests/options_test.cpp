@@ -19,7 +19,7 @@
 #include <utility>
 #include <vector>
 
-namespace npu::sanitizer::cli {
+namespace aclsan::cli {
 namespace {
 
 struct ParseResult {
@@ -450,4 +450,4 @@ TEST(OptionsTest, UsageListsOnlyPublicOptions)
 }
 
 } // namespace
-} // namespace npu::sanitizer::cli
+} // namespace aclsan::cli

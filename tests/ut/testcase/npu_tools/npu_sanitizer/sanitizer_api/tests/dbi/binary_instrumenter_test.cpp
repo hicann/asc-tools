@@ -6,6 +6,7 @@
 // INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 // See LICENSE in the root of the software repository for the full text of the License.
 #include "dbi/binary_instrumenter.h"
+#include "../../../common/tests/plog_capture.h"
 #include "device_instr/soc_version.h"
 
 #include <gtest/gtest.h>
@@ -320,6 +321,19 @@ TEST_F(BinaryInstrumenterTest, RuntimeFacadeConsumesPatchedBytesAcrossAnAbiStabl
     EXPECT_EQ(result.consumerStatus, 73);
     EXPECT_EQ(result.traceArgumentOffset, 8U);
     EXPECT_EQ(std::string(consumed.begin(), consumed.end()), "patched");
+}
+
+TEST_F(BinaryInstrumenterTest, RuntimeFailureWritesDetailsOnlyToPlog)
+{
+    PlogCapture capture;
+    testing::internal::CaptureStderr();
+    const auto result =
+        InstrumentRuntimeBinary(nullptr, 0, PROBE_GROUP_MTE2, "unsupported", "/missing/libacl_rt.so", nullptr, nullptr);
+    const std::string console = testing::internal::GetCapturedStderr();
+    EXPECT_EQ(result.status, BinaryInstrumentationStatus::Failed);
+    EXPECT_TRUE(console.empty());
+    EXPECT_NE(capture.Text().find("[binary_instrumenter.cpp:"), std::string::npos);
+    EXPECT_NE(capture.Text().find("DBI patch failed at runtime-context: unsupported Runtime SoC"), std::string::npos);
 }
 
 } // namespace

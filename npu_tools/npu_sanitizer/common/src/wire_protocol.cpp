@@ -15,7 +15,7 @@
 #include <limits>
 #include <utility>
 
-namespace npu::sanitizer::ipc {
+namespace aclsan::ipc {
 namespace {
 
 class Encoder {
@@ -574,4 +574,4 @@ bool IsKnownTool(uint16_t toolId)
     return false;
 }
 
-} // namespace npu::sanitizer::ipc
+} // namespace aclsan::ipc

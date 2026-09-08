@@ -22,7 +22,7 @@
 #include <sys/un.h>
 #include <unistd.h>
 
-namespace npu::sanitizer::ipc {
+namespace aclsan::ipc {
 namespace {
 
 std::optional<uint64_t> ParseUnsigned(const char* text, uint64_t maximum)
@@ -458,4 +458,4 @@ bool UdsServer::TransportComplete() const
     return transportComplete_;
 }
 
-} // namespace npu::sanitizer::ipc
+} // namespace aclsan::ipc

@@ -14,7 +14,7 @@
 #include <string>
 #include <vector>
 
-namespace npu::sanitizer::ipc {
+namespace aclsan::ipc {
 namespace {
 
 // 构造一个双工具、每个工具带一个子选项的规范化请求。
@@ -400,4 +400,4 @@ TEST(WireProtocolTest, AppliesMustIgnoreRuleToUnknownTypes)
 }
 
 } // namespace
-} // namespace npu::sanitizer::ipc
+} // namespace aclsan::ipc

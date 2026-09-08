@@ -16,6 +16,7 @@
 | `examples/basic_func/padding_register_state` | `padding_register_state.asc` | `demo` | `SET_PADDING` register manager 基础能力示例。 |
 | `examples/basic_func/dual_tool_multi_launch_aggregate` | `dual_tool_multi_launch_aggregate.asc` | `demo` | 同时启用 Memcheck 和 Synccheck 的双 launch 聚合示例。 |
 | `examples/synccheck` | 每个场景一个独立目录 | `demo` | 同步指令配对的正常与异常样例。 |
+| `examples/plog_check` | `plog_check.asc` | `plog_check` | 验证 npu-check 内部 INFO 日志写入 CANN Host plog。 |
 
 `examples/synccheck` 中每个用例目录都包含独立的 `.asc`、CMake、runner 和结果验证器，
 `verify_common.py` 提供公共校验能力；每个用例的 `run.sh` 在自身的 `build/` 中构建并运行
@@ -87,6 +88,7 @@ bash ./npu_sanitizer/demo/build.sh
 
 ```bash
 bash ./npu_tools/npu_sanitizer/demo/examples/memcheck/add/run.sh
+bash ./npu_tools/npu_sanitizer/demo/examples/plog_check/run.sh
 bash ./npu_tools/npu_sanitizer/demo/examples/memcheck/matmul_basic_api/run.sh
 bash ./npu_tools/npu_sanitizer/demo/examples/basic_func/padding_register_state/run.sh
 bash ./npu_tools/npu_sanitizer/demo/examples/basic_func/dual_tool_multi_launch_aggregate/run.sh
@@ -174,3 +176,5 @@ npu-check
   新增通路仍需客户可见诊断断言和真实 Device E2E。
 - 尚未验证并发、callback 重入和共享库卸载安全；若这些属于产品支持范围，需要增加相应的
   生命周期与压力测试。
+
+内部 API、CLI 维测及 DBI 诊断统一写入 CANN Host plog，由 `ASCEND_GLOBAL_LOG_LEVEL` 控制等级；需要详细信息时设为 `0`。设置 `ASCEND_SLOG_PRINT_TO_STDOUT=0` 可避免 CANN 将内部日志打印到终端。自定义内部文件 Logger 和日志开关已移除。样例的 `build/npu_check.log` 是脚本保存的 check／应用输出，不是内部日志。

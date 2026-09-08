@@ -42,7 +42,6 @@ add_library(npu_check_core STATIC
   src/checker/synccheck.cpp
   src/diagnostic/report_buffer.cpp
   src/ipc/uds_server.cpp
-  src/logging/logger.cpp
   src/tool_manager/kernel_attributes.cpp
   src/tool_manager/tool_manager.cpp
 )
@@ -54,7 +53,7 @@ target_include_directories(npu_check_core
 )
 target_link_libraries(npu_check_core
   PUBLIC npu_check_common
-  PRIVATE acl_san acl_tool_injection Threads::Threads Boost::filesystem
+  PRIVATE acl_san acl_tool_injection npu_sanitizer_plog Threads::Threads Boost::filesystem
 )
 set_target_properties(npu_check_core PROPERTIES
   POSITION_INDEPENDENT_CODE ON

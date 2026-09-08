@@ -25,7 +25,7 @@
 #include <sys/utsname.h>
 #include <unistd.h>
 
-namespace npu::sanitizer::cli {
+namespace aclsan::cli {
 namespace {
 
 bool NeedValue(int argc, char** argv, int& index, std::string& value, std::string& error)
@@ -365,4 +365,4 @@ std::string Usage()
            "with '-'.\n";
 }
 
-} // namespace npu::sanitizer::cli
+} // namespace aclsan::cli

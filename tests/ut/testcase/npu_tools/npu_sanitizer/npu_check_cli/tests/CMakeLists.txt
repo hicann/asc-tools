@@ -17,10 +17,13 @@ endif()
 add_executable(npu_check_cli_unit_tests
   gtest_main.cpp
   options_test.cpp
+  process_runner_test.cpp
+  "${NPU_CHECK_CLI_SOURCE_DIR}/src/process_runner.cpp"
+  "${NPU_CHECK_CLI_SOURCE_DIR}/src/uds_client.cpp"
   "${NPU_CHECK_CLI_SOURCE_DIR}/src/options.cpp"
 )
 target_compile_features(npu_check_cli_unit_tests PRIVATE cxx_std_17)
 target_compile_definitions(npu_check_cli_unit_tests PRIVATE _GLIBCXX_USE_CXX11_ABI=0)
 target_include_directories(npu_check_cli_unit_tests PRIVATE "${NPU_CHECK_CLI_SOURCE_DIR}/src")
-target_link_libraries(npu_check_cli_unit_tests PRIVATE npu_check_common GTest::gtest Boost::filesystem)
+target_link_libraries(npu_check_cli_unit_tests PRIVATE plog_test_library npu_check_common npu_sanitizer_plog GTest::gtest Boost::filesystem)
 add_test(NAME npu_check_cli_unit_tests COMMAND npu_check_cli_unit_tests)

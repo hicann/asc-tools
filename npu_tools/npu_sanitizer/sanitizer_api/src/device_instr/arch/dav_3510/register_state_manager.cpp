@@ -103,9 +103,10 @@ void Dav3510RegisterStateManager::Update(const Dav3510CoreKey& key, const DmaLoo
     states_[key].dmaLoopSizes[direction] = params;
     ASC_SAN_DEBUG(
         "[register] action=update register=dma_loop_size launchId=%llu blockType=%u blockId=%u "
-        "direction=%u loop1Size=%u loop2Size=%u",
+        "direction=%u loop1Size=%u loop2Size=%llu",
         static_cast<unsigned long long>(launchId_), key.blockType, key.blockId,
-        static_cast<unsigned int>(params.direction), params.loop1Size, params.loop2Size);
+        static_cast<unsigned int>(params.direction), params.loop1Size,
+        static_cast<unsigned long long>(params.loop2Size));
 }
 
 void Dav3510RegisterStateManager::Update(const Dav3510CoreKey& key, const DmaLoopStrideParamField& params) noexcept

@@ -173,7 +173,7 @@ target_include_directories(npu_check_dbi_engine PUBLIC ${CMAKE_CURRENT_SOURCE_DI
 target_compile_options(npu_check_dbi_engine PRIVATE -Wall -Wextra -Werror)
 target_link_libraries(npu_check_dbi_engine
   PUBLIC npu_check_dbi_ctrlbin
-  PRIVATE npu_check_dbi_probe_runtime ${CMAKE_DL_LIBS} Threads::Threads Boost::filesystem
+  PRIVATE npu_check_dbi_probe_runtime npu_sanitizer_plog ${CMAKE_DL_LIBS} Threads::Threads Boost::filesystem
 )
 set_target_properties(npu_check_dbi_engine PROPERTIES
   POSITION_INDEPENDENT_CODE ON
@@ -216,6 +216,7 @@ target_link_libraries(acl_san
   PRIVATE
     acl_tool_injection
     npu_check_dbi_engine
+    npu_sanitizer_plog
     dl
     pthread
     Boost::filesystem

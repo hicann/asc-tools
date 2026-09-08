@@ -10,14 +10,37 @@
 
 #include "aclsan/aclsan_api.h"
 #include "internal/aclsan_log.h"
+#include "plog_sink.h"
+#include "plog_test_library.h"
 
 #include <array>
 #include <cassert>
+#include <cstdarg>
 #include <cstdio>
+#include <cstring>
 #include <string>
 #include <unistd.h>
 
 namespace {
+
+int32_t g_plogRecordCount = 0;
+int32_t g_plogLevel = -1;
+char g_plogMessage[256] = {};
+
+int32_t CheckLogLevelStub(int32_t, int32_t) { return 1; }
+
+void DlogRecordStub(int32_t, int32_t level, const char* format, ...)
+{
+    ++g_plogRecordCount;
+    g_plogLevel = level;
+    va_list arguments;
+    va_start(arguments, format);
+    const char* message = va_arg(arguments, const char*);
+    va_end(arguments);
+    assert(std::strcmp(format, "%s") == 0);
+    assert(message != nullptr);
+    (void)std::strncpy(g_plogMessage, message, sizeof(g_plogMessage) - 1U);
+}
 
 AclsanStatus ValidatePointer(const void* value)
 {
@@ -49,10 +72,21 @@ std::string CaptureNullPointerLog()
 
 int main()
 {
+    plog_test::SetApi({CheckLogLevelStub, DlogRecordStub});
     int value = 0;
     assert(ValidatePointer(&value) == ACLSAN_STATUS_SUCCESS);
 
     const std::string logs = CaptureNullPointerLog();
-    assert(logs.find("[ASC_SAN][ERROR] TestApi: value is nullptr") != std::string::npos);
+    assert(logs.empty()); // Internal errors belong to plog, not the check/console channel.
+    assert(g_plogRecordCount == 1);
+    assert(g_plogLevel == DLOG_ERROR);
+    assert(std::strstr(g_plogMessage, "[aclsan_log_test.cpp:") != nullptr);
+    assert(std::strstr(g_plogMessage, "TestApi: value is nullptr") != nullptr);
+    assert(std::strstr(g_plogMessage, " ValidatePointer: TestApi: value is nullptr") != nullptr);
+    const std::string longMessage = std::string(4096, 'x') + "\napi-error-tail";
+    ASC_SAN_ERROR("%s", longMessage.c_str());
+    assert(g_plogRecordCount > 2);
+    assert(std::strstr(g_plogMessage, "api-error-tail") != nullptr);
+    plog_test::ResetApi();
     return 0;
 }

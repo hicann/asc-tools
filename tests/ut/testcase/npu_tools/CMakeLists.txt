@@ -72,6 +72,7 @@ add_subdirectory(npu_compute/stubs/acl_pti_callback)
 add_subdirectory(npu_compute/stubs/hardware_api)
 add_subdirectory(npu_compute/tests)
 
+add_subdirectory(npu_sanitizer/common/tests)
 add_subdirectory(npu_sanitizer/sanitizer_api/tests)
 add_subdirectory(npu_sanitizer/npu_check_cli/tests)
 add_subdirectory(npu_sanitizer/npu_check/tests)

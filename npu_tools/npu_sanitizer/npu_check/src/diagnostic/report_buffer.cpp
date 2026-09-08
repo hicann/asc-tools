@@ -8,7 +8,7 @@
 
 #include "diagnostic/report_buffer.h"
 
-namespace npu::sanitizer::diagnostic {
+namespace aclsan::diagnostic {
 
 bool ReportBuffer::Append(const std::string& text) noexcept
 {
@@ -85,4 +85,4 @@ size_t ReportBuffer::Size() const noexcept
     }
 }
 
-} // namespace npu::sanitizer::diagnostic
+} // namespace aclsan::diagnostic

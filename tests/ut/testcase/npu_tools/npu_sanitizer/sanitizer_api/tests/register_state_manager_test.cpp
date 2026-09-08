@@ -8,6 +8,7 @@
  * See LICENSE in the root of the software repository for the full text of the License.
  */
 
+#include "../../common/tests/plog_capture.h"
 #include "device_instr/arch/dav_3510/register_state_manager.h"
 
 #include <cassert>
@@ -36,32 +37,9 @@ constexpr size_t DirectionIndex(DmaLoopDirection direction) noexcept { return st
 template <typename Action>
 std::string CaptureDebugLogs(Action action)
 {
-    assert(setenv("ASCEND_GLOBAL_LOG_LEVEL", "0", 1) == 0);
-    assert(setenv("NPU_SAN_DEBUG", "1", 1) == 0);
-
-    int pipeFds[2] = {-1, -1};
-    assert(pipe(pipeFds) == 0);
-    const int savedStdout = dup(STDOUT_FILENO);
-    assert(savedStdout >= 0);
-    assert(dup2(pipeFds[1], STDOUT_FILENO) >= 0);
-    assert(close(pipeFds[1]) == 0);
-
+    PlogCapture capture;
     action();
-    assert(std::fflush(stdout) == 0);
-    assert(dup2(savedStdout, STDOUT_FILENO) >= 0);
-    assert(close(savedStdout) == 0);
-
-    std::string logs;
-    char buffer[256] = {};
-    ssize_t bytesRead = 0;
-    while ((bytesRead = read(pipeFds[0], buffer, sizeof(buffer))) > 0) {
-        logs.append(buffer, static_cast<size_t>(bytesRead));
-    }
-    assert(bytesRead == 0);
-    assert(close(pipeFds[0]) == 0);
-    assert(unsetenv("ASCEND_GLOBAL_LOG_LEVEL") == 0);
-    assert(unsetenv("NPU_SAN_DEBUG") == 0);
-    return logs;
+    return capture.Text();
 }
 
 size_t CountOccurrences(const std::string& text, const std::string& needle)

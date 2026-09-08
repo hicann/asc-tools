@@ -15,7 +15,7 @@
 #include <mutex>
 #include <string>
 
-namespace npu::sanitizer::diagnostic {
+namespace aclsan::diagnostic {
 
 // 本次会话的报告聚合器。
 //
@@ -51,6 +51,6 @@ private:
     bool failed_ = false;
 };
 
-} // namespace npu::sanitizer::diagnostic
+} // namespace aclsan::diagnostic
 
 #endif

@@ -17,7 +17,7 @@
 namespace {
 
 std::mutex g_serviceMutex;
-std::unique_ptr<npu::sanitizer::ToolManager> g_service;
+std::unique_ptr<aclsan::ToolManager> g_service;
 
 void FinalizeService() noexcept
 {
@@ -39,7 +39,7 @@ extern "C" NPU_CHECK_API int acltoolInitialize(void)
         if (g_service) {
             return g_service->IsInitialized() ? 0 : 1;
         }
-        auto service = std::make_unique<npu::sanitizer::ToolManager>();
+        auto service = std::make_unique<aclsan::ToolManager>();
         const int result = service->Initialize();
         if (result != 0) {
             return result;

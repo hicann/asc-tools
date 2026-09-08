@@ -15,7 +15,7 @@
 
 #include <cstdint>
 
-namespace npu::sanitizer {
+namespace aclsan {
 
 struct KernelAttributes {
     int64_t kernelType = 0;
@@ -29,6 +29,6 @@ struct KernelAttributes {
 
 KernelAttributes QueryKernelAttributes(aclrtFuncHandle function) noexcept;
 
-} // namespace npu::sanitizer
+} // namespace aclsan
 
 #endif

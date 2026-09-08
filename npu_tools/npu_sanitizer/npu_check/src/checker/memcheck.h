@@ -18,7 +18,7 @@
 #include <cstdint>
 #include <vector>
 
-namespace npu::sanitizer {
+namespace aclsan {
 
 struct MemcheckStats {
     uint64_t allocations = 0;
@@ -58,6 +58,6 @@ private:
     static constexpr size_t kMaxPendingDeviceOperations = 1u << 20u;
 };
 
-} // namespace npu::sanitizer
+} // namespace aclsan
 
 #endif

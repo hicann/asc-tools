@@ -30,3 +30,20 @@ set_target_properties(npu_check_common PROPERTIES
   CXX_VISIBILITY_PRESET hidden
   VISIBILITY_INLINES_HIDDEN YES
 )
+
+add_library(npu_sanitizer_plog STATIC plog_sink.cpp)
+target_compile_features(npu_sanitizer_plog PUBLIC cxx_std_17)
+target_include_directories(npu_sanitizer_plog PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
+)
+target_link_libraries(npu_sanitizer_plog PUBLIC
+  slog_headers
+)
+target_link_libraries(npu_sanitizer_plog PRIVATE
+  ${CMAKE_DL_LIBS}
+)
+set_target_properties(npu_sanitizer_plog PROPERTIES
+  POSITION_INDEPENDENT_CODE ON
+  CXX_VISIBILITY_PRESET hidden
+  VISIBILITY_INLINES_HIDDEN YES
+)

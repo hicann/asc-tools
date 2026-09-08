@@ -12,6 +12,7 @@
 #include "dbi/embedded_probe_resources.h"
 #include "dbi/probe_source_generator.h"
 #include "dbi/tool_runner.h"
+#include "plog_sink.h"
 
 #include <algorithm>
 #include <atomic>
@@ -394,11 +395,43 @@ std::string ToolFailure(const std::vector<std::string>& arguments, const ToolRes
     return output.str();
 }
 
+// Keep stage and stream context on every line, including chunks of long tool output.
+void LogToolOutput(const std::string& stage, const char* stream, const std::string& output)
+{
+    size_t offset = 0;
+    size_t line = 1;
+    while (offset < output.size()) {
+        const size_t newline = output.find('\n', offset);
+        const size_t end = newline == std::string::npos ? output.size() : newline;
+        size_t part = 1;
+        do {
+            const size_t bytes = std::min(size_t{512}, end - offset);
+            WritePlog(
+                PlogLevel::kDebug, "DBI stage=" + stage + " output=" + stream + " line=" + std::to_string(line) +
+                                       " part=" + std::to_string(part++) + " text=" + output.substr(offset, bytes));
+            offset += bytes;
+        } while (offset < end);
+        if (newline == std::string::npos) {
+            break;
+        }
+        offset = newline + 1;
+        ++line;
+    }
+}
+
 bool RunChecked(
     const std::string& stage, const std::vector<std::string>& arguments, DbiResult& result,
     std::string* standardOutput = nullptr)
 {
+    std::ostringstream command;
+    for (const auto& argument : arguments) {
+        command << std::quoted(argument) << ' ';
+    }
+    LogToolOutput(stage, "command", command.str());
     const ToolResult toolResult = RunTool(arguments);
+    aclsan::WritePlog(aclsan::PlogLevel::kDebug, "DBI stage=" + stage + " exit=" + std::to_string(toolResult.exitCode));
+    LogToolOutput(stage, "stdout", toolResult.standardOutput);
+    LogToolOutput(stage, "stderr", toolResult.standardError);
     if (standardOutput != nullptr) {
         *standardOutput = toolResult.standardOutput;
     }

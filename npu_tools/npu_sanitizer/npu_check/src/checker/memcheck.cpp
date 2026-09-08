@@ -18,7 +18,7 @@
 #include <tuple>
 #include <utility>
 
-namespace npu::sanitizer {
+namespace aclsan {
 namespace {
 
 using npucheck::NpuCheckMemcheckReport;
@@ -500,4 +500,4 @@ void Memcheck::Count(const std::vector<NpuCheckMemcheckReport>& reports)
     }
 }
 
-} // namespace npu::sanitizer
+} // namespace aclsan

@@ -21,7 +21,7 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 
-namespace npu::sanitizer::ipc {
+namespace aclsan::ipc {
 
 enum class IoStatus : uint8_t {
     OK,
@@ -69,6 +69,6 @@ IoStatus WaitFor(int fd, short events, DeadlineMs deadline, std::string& error);
 IoStatus SendFrame(int fd, const Frame& frame, DeadlineMs deadline, std::string& error);
 IoStatus ReceiveFrame(int fd, Frame& frame, DeadlineMs deadline, std::string& error);
 
-} // namespace npu::sanitizer::ipc
+} // namespace aclsan::ipc
 
 #endif

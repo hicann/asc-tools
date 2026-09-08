@@ -15,7 +15,7 @@
 #include <limits>
 #include <string>
 
-namespace npu::sanitizer {
+namespace aclsan {
 namespace {
 
 using npucheck::NpuCheckReportAccessMode;
@@ -552,4 +552,4 @@ TEST(MemcheckTest, GroupsDerivedDataByCompleteInstructionIdentity)
 }
 
 } // namespace
-} // namespace npu::sanitizer
+} // namespace aclsan

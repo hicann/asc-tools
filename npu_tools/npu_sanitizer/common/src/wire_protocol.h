@@ -16,7 +16,7 @@
 #include <string>
 #include <vector>
 
-namespace npu::sanitizer::ipc {
+namespace aclsan::ipc {
 
 constexpr uint32_t kProtocolMagic = 0x4e53414eu;
 constexpr uint16_t kProtocolMajor = 1;
@@ -49,7 +49,7 @@ constexpr const char* kUdsNameEnv = "NPU_CHECK_UDS_NAME";
 constexpr const char* kSessionIdEnv = "NPU_CHECK_SESSION_ID";
 constexpr const char* kCliPidEnv = "NPU_CHECK_CLI_PID";
 constexpr const char* kHandshakeTimeoutEnv = "NPU_CHECK_HANDSHAKE_TIMEOUT_MS";
-// 工作目录：注入库的 npu_check.log 与 probe 缓存落在这里。改用注册表编码之后，
+// 工作目录：probe 缓存落在这里。改用注册表编码之后，
 // Configure 只承载工具与子选项，不再承载路径，因此这类字段改由环境变量传递。
 constexpr const char* kWorkDirEnv = "NPU_CHECK_WORK_DIR";
 
@@ -122,7 +122,7 @@ namespace error_code {
 // ErrorDomain::kInjection
 constexpr uint16_t kEnvironmentInvalid = 1;
 constexpr uint16_t kListenFailed = 2;
-constexpr uint16_t kLoggerOpenFailed = 3;
+// Code 3 is reserved (removed file-logger initialization failure).
 // ErrorDomain::kConfiguration
 constexpr uint16_t kToolInitializationFailed = 1;
 constexpr uint16_t kConfigureMalformed = 2;
@@ -228,6 +228,6 @@ bool DecodeText(const std::vector<uint8_t>& payload, std::string& text, std::str
 
 const char* MessageTypeName(MessageType type);
 
-} // namespace npu::sanitizer::ipc
+} // namespace aclsan::ipc
 
 #endif

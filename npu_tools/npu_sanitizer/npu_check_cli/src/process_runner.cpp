@@ -11,6 +11,7 @@
 #include "process_runner.h"
 
 #include "uds_client.h"
+#include "plog_sink.h"
 
 #include <array>
 #include <atomic>
@@ -35,22 +36,10 @@
 #include <utility>
 #include <unistd.h>
 
-namespace npu::sanitizer::cli {
+namespace aclsan::cli {
 namespace {
 
 volatile sig_atomic_t g_childProcessGroup = -1;
-
-// 结构化维测日志的开关变量。
-constexpr const char* kCliDebugEnv = "NPU_CHECK_CLI_DEBUG";
-
-// 取值必须严格等于 "1"。宽松匹配（例如只看首字符）会让 "0"、"false"、"1x" 这类取值
-// 意外打开日志，用户很难意识到是自己写的值被曲解了。这与注入库侧
-// AclsanIsStdoutLogEnabled() 读 NPU_SAN_DEBUG 的判定保持一致。
-bool IsCliDebugEnabled() noexcept
-{
-    const char* value = std::getenv(kCliDebugEnv);
-    return value != nullptr && value[0] == '1' && value[1] == '\0';
-}
 
 class UniqueFd {
 public:
@@ -218,34 +207,6 @@ public:
         WriteFd(STDOUT_FILENO, data, size);
         if (log_.is_open()) {
             log_.write(data, static_cast<std::streamsize>(size));
-            log_.flush();
-        }
-    }
-
-    // 结构化维测日志（6.1 的 [CLI] / [UDS] / [INJECTION] 三类）：默认不输出，
-    // 由 NPU_CHECK_CLI_DEBUG=1 打开；开启后去 stderr，指定了 --log-file 时另存一份。
-    //
-    // 去 stderr 而不是 stdout，是为了不污染被脚本采集的应用输出与检查报告。
-    //
-    // 默认关闭的理由：这些是逐阶段的过程记录（注入库定位、会话标识、connect 重试次数、
-    // 握手凭据比对、Configure 长度、Result 帧数……），排障时才有价值，平时只会把用户
-    // 真正要看的检查报告淹掉。
-    //
-    // 注意 2.3.5 的结果摘要行 [CLI] outcome=... 不走这里 —— 它是 V1 唯一的对外结果
-    // 信号（5.4），任何路径下都必须输出，绝不能被调试开关吞掉。
-    void Structured(const std::string& line)
-    {
-        if (!IsCliDebugEnabled()) {
-            return;
-        }
-        std::string text = line;
-        if (text.empty() || text.back() != '\n') {
-            text.push_back('\n');
-        }
-        std::lock_guard<std::mutex> lock(mutex_);
-        WriteFd(STDERR_FILENO, text.data(), text.size());
-        if (log_.is_open()) {
-            log_.write(text.data(), static_cast<std::streamsize>(text.size()));
             log_.flush();
         }
     }
@@ -556,7 +517,7 @@ int RunApplication(const Options& options, const std::string& libraryPath)
         toolNames += (toolNames.empty() ? "" : ",");
         toolNames += ipc::ToolName(tool.toolId);
     }
-    output.Structured("[INJECTION] library=" + libraryPath + " result=resolved");
+    aclsan::WritePlog(aclsan::PlogLevel::kDebug, "[INJECTION] library=" + libraryPath + " result=resolved");
 
     int consolePipe[2] = {-1, -1};
     if (pipe2(consolePipe, O_CLOEXEC) != 0) {
@@ -638,9 +599,9 @@ int RunApplication(const Options& options, const std::string& libraryPath)
         return summary.exit = 125;
     }
 
-    output.Structured(
-        "[CLI] session=" + std::to_string(sessionId) + " tools=" + toolNames + " app_pid=" + std::to_string(child) +
-        " app_pgid=" + std::to_string(child));
+    aclsan::WritePlog(
+        aclsan::PlogLevel::kDebug, "[CLI] session=" + std::to_string(sessionId) + " tools=" + toolNames +
+                                       " app_pid=" + std::to_string(child) + " app_pgid=" + std::to_string(child));
     std::atomic<bool> childExited{false};
     std::thread consoleReader([&output, &childExited, fd = std::move(consoleRead)] {
         std::array<char, 8192> buffer{};
@@ -680,7 +641,6 @@ int RunApplication(const Options& options, const std::string& libraryPath)
     });
 
     UdsClient client;
-    client.SetLogSink([&output](const std::string& line) { output.Structured(line); });
     const bool handshake = client.ConnectAndConfigure(
         udsName, sessionId, static_cast<uint32_t>(child), handshakeDeadline, configure, error);
     // Result 分片的拼接缓冲。只有 receiver 线程写，join 之后主线程才读。
@@ -749,9 +709,10 @@ int RunApplication(const Options& options, const std::string& libraryPath)
                     }
                     // domain/code 是稳定取值进结构化日志，message 只原样转述给人看，
                     // 不参与任何判定。
-                    output.Structured(
+                    aclsan::WritePlog(
+                        aclsan::PlogLevel::kDebug,
                         "[UDS] phase=error domain=" + std::to_string(static_cast<unsigned>(failure.domain)) +
-                        " code=" + std::to_string(failure.code));
+                            " code=" + std::to_string(failure.code));
                     output.Sanitizer("ERROR " + failure.message, true);
                     break;
                 }
@@ -767,7 +728,7 @@ int RunApplication(const Options& options, const std::string& libraryPath)
         });
     } else {
         protocolComplete = false;
-        output.Structured("[UDS] phase=handshake result=failed");
+        aclsan::WritePlog(aclsan::PlogLevel::kDebug, "[UDS] phase=handshake result=failed");
         output.Sanitizer("handshake=missing reason=\"" + error + "\"", true);
     }
 
@@ -788,10 +749,11 @@ int RunApplication(const Options& options, const std::string& libraryPath)
     // 判定顺序是固定的：先看有没有收到 MORE=0 的末帧，再看是不是被 Error 打断，
     // 最后才是"连接断了但报告没收全"。
     if (resultComplete) {
-        output.Structured(
-            "[UDS] phase=result frames=" + std::to_string(resultFrames.load()) +
-            " bytes=" + std::to_string(result.size()) + " truncated=" + (resultTruncated ? "1" : "0") +
-            " has_errors=" + (resultHasErrors ? "1" : "0"));
+        aclsan::WritePlog(
+            aclsan::PlogLevel::kDebug, "[UDS] phase=result frames=" + std::to_string(resultFrames.load()) +
+                                           " bytes=" + std::to_string(result.size()) +
+                                           " truncated=" + (resultTruncated ? "1" : "0") +
+                                           " has_errors=" + (resultHasErrors ? "1" : "0"));
         output.Report(result);
         if (resultTruncated) {
             output.Sanitizer("report truncated: the diagnostic buffer reached its size limit", true);
@@ -799,9 +761,9 @@ int RunApplication(const Options& options, const std::string& libraryPath)
     } else if (handshake) {
         // 报告缺失或截断：已经收到的分片一律丢弃。半份报告看上去和完整报告没有区别，
         // 输出它等于让用户把"没查到问题"和"没查完"混为一谈。
-        output.Structured(
-            "[UDS] phase=result frames=" + std::to_string(resultFrames.load()) +
-            " bytes=" + std::to_string(result.size()) + " truncated=unknown has_errors=unknown");
+        aclsan::WritePlog(
+            aclsan::PlogLevel::kDebug, "[UDS] phase=result frames=" + std::to_string(resultFrames.load()) + " bytes=" +
+                                           std::to_string(result.size()) + " truncated=unknown has_errors=unknown");
         output.Sanitizer("result missing or truncated; the partial report was discarded", true);
     }
 
@@ -827,11 +789,11 @@ int RunApplication(const Options& options, const std::string& libraryPath)
     summary.exit = exitCode;
 
     // 只删自己 mkdtemp 出来的会话目录。--work-dir 指定的目录是用户的，即便本次的
-    // npu_check.log 和 probe 缓存就落在里面，也一律不碰 —— 递归删一个用户给的路径
+    // probe 缓存就落在里面，也一律不碰 —— 递归删一个用户给的路径
     // 是不可逆的，代价远大于留下几个文件。
     boost::system::error_code cleanupError;
     boost::filesystem::remove_all(sessionDirectory, cleanupError);
     return exitCode;
 }
 
-} // namespace npu::sanitizer::cli
+} // namespace aclsan::cli

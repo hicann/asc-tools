@@ -15,7 +15,7 @@
 #include <optional>
 #include <unordered_map>
 
-namespace npu::sanitizer {
+namespace aclsan {
 
 struct Allocation {
     uint64_t resourceId = 0;
@@ -77,6 +77,6 @@ private:
     static constexpr size_t kMaxTombstones = 4096;
 };
 
-} // namespace npu::sanitizer
+} // namespace aclsan
 
 #endif

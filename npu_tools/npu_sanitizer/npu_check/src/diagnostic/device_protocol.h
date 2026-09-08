@@ -11,7 +11,7 @@
 
 #include <cstdint>
 
-namespace npu::sanitizer {
+namespace aclsan {
 
 enum class DeviceSourceKind : uint32_t {
     MTE2 = 1,
@@ -23,6 +23,6 @@ enum class DeviceSourceKind : uint32_t {
 
 constexpr uint32_t kDeviceEventFlagPredicated = 1u << 3u;
 
-} // namespace npu::sanitizer
+} // namespace aclsan
 
 #endif

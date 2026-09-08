@@ -20,7 +20,7 @@
 #include <string>
 #include <unistd.h>
 
-namespace npu::sanitizer::ipc {
+namespace aclsan::ipc {
 namespace {
 
 std::string ErrnoMessage(const char* operation) { return std::string(operation) + ": " + std::strerror(errno); }
@@ -237,4 +237,4 @@ IoStatus ReceiveFrame(int fd, Frame& frame, DeadlineMs deadline, std::string& er
     }
 }
 
-} // namespace npu::sanitizer::ipc
+} // namespace aclsan::ipc

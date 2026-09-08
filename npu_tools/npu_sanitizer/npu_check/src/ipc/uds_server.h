@@ -20,7 +20,7 @@
 #include <thread>
 #include <vector>
 
-namespace npu::sanitizer::ipc {
+namespace aclsan::ipc {
 
 class UdsServer {
 public:
@@ -107,6 +107,6 @@ private:
     static constexpr int kResultSendTimeoutMs = 30000;
 };
 
-} // namespace npu::sanitizer::ipc
+} // namespace aclsan::ipc
 
 #endif

@@ -12,7 +12,7 @@
 #include <limits>
 #include <vector>
 
-namespace npu::sanitizer {
+namespace aclsan {
 
 std::optional<uint64_t> AllocationRegistry::RangeEnd(uint64_t base, uint64_t bytes)
 {
@@ -318,4 +318,4 @@ void AllocationRegistry::TrimTombstones()
     }
 }
 
-} // namespace npu::sanitizer
+} // namespace aclsan

@@ -14,13 +14,13 @@
 #include <algorithm>
 #include <array>
 #include <exception>
-#include <boost/filesystem.hpp>
-#include <boost/system/error_code.hpp>
+#include <cstdlib>
+#include "plog_sink.h"
 #include <iomanip>
 #include <memory>
 #include <sstream>
 
-namespace npu::sanitizer {
+namespace aclsan {
 namespace {
 
 std::string StatusReason(AclsanStatus status) { return "api_status_" + std::to_string(static_cast<uint32_t>(status)); }
@@ -222,15 +222,12 @@ int ToolManager::Initialize()
         server_.Shutdown();
         return 1;
     }
-    if (!InitializeLogger(error)) {
-        server_.SendInitializationError(ipc::ErrorDomain::kInjection, ipc::error_code::kLoggerOpenFailed, error);
-        server_.Shutdown();
-        return 1;
-    }
+    const char* workDir = std::getenv(ipc::kWorkDirEnv);
+    workDir_ = workDir != nullptr ? workDir : "";
     std::ostringstream handshakeMessage;
     handshakeMessage << "UDS handshake completed session=" << server_.SessionId()
                      << " negotiated_minor=" << server_.NegotiatedMinor();
-    logger_.Info(handshakeMessage.str());
+    aclsan::WritePlog(aclsan::PlogLevel::kInfo, handshakeMessage.str());
     std::ostringstream configMessage;
     configMessage << "tool configuration work_dir=" << workDir_ << " tool_count=" << configure_.tools.size();
     for (const auto& tool : configure_.tools) {
@@ -239,59 +236,35 @@ int ToolManager::Initialize()
             configMessage << " option_id=0x" << std::hex << static_cast<unsigned>(option.optionId) << std::dec;
         }
     }
-    logger_.Info(configMessage.str());
+    aclsan::WritePlog(aclsan::PlogLevel::kInfo, configMessage.str());
     if (!ConfigureSanitizer(error)) {
-        logger_.Error(error);
+        aclsan::WritePlog(aclsan::PlogLevel::kError, error);
         server_.SendInitializationError(
             ipc::ErrorDomain::kConfiguration, ipc::error_code::kToolInitializationFailed, error);
         RollbackSanitizer();
         server_.Shutdown();
         return 1;
     }
-    // Ready 不带 payload，会话细节只写本地日志。
-    logger_.Info(BuildReadyMessage());
+    // Ready 不带 payload，会话细节只写 plog。
+    aclsan::WritePlog(aclsan::PlogLevel::kInfo, BuildReadyMessage());
     if (!server_.SendReady(error)) {
-        logger_.Error(error);
+        aclsan::WritePlog(aclsan::PlogLevel::kError, error);
         RollbackSanitizer();
         server_.Shutdown();
         return 1;
     }
-    // 这里曾经把 logger 的错误接到 UDS 的 Error 帧上。新协议里 Error 表示"基础设施失败、
-    // 本次检查结论不可用"，CLI 收到即退 125；一次日志写盘失败显然够不上这个级别，却会
-    // 让整次检查作废。日志错误只留在本地 npu_check.log 里，不再上线路。
     initialized_ = true;
-    logger_.Info("npu_check initialization completed");
+    aclsan::WritePlog(aclsan::PlogLevel::kInfo, "npu_check initialization completed");
     return 0;
 }
 
 void ToolManager::LogHandshakeFailure(const std::string& reason) noexcept
 {
     try {
-        std::string ignored;
-        const boost::filesystem::path path = boost::filesystem::current_path() / "npu_check.log";
-        if (logger_.Path().empty() && !logger_.Open(path.string(), logging::Logger::ConfiguredLevel(), ignored)) {
-            return;
-        }
-        logger_.Error("UDS handshake failed: " + reason);
-        logger_.Flush();
+        aclsan::WritePlog(aclsan::PlogLevel::kError, "UDS handshake failed: " + reason);
     } catch (...) {
         return;
     }
-}
-
-bool ToolManager::InitializeLogger(std::string& error)
-{
-    // 工作目录经环境变量传入。Configure 改用注册表编码后只承载工具与子选项，路径这类
-    // 与协议无关的部署信息不再占线路。未设置时退回当前目录。
-    const char* workDir = std::getenv(ipc::kWorkDirEnv);
-    workDir_ = workDir != nullptr ? workDir : "";
-    const boost::filesystem::path directory =
-        workDir_.empty() ? boost::filesystem::current_path() : boost::filesystem::path(workDir_);
-    const std::string path = (directory / "npu_check.log").string();
-    if (!logger_.Open(path, logging::Logger::ConfiguredLevel(), error)) {
-        return false;
-    }
-    return true;
 }
 
 bool ToolManager::IsToolEnabled(ipc::ToolId toolId) const
@@ -316,11 +289,11 @@ bool ToolManager::ConfigureSanitizer(std::string& error)
         switch (tool.toolId) {
             case ipc::ToolId::kMemcheck:
                 memcheck_ = std::make_unique<Memcheck>(true);
-                logger_.Debug("memcheck instance created");
+                aclsan::WritePlog(aclsan::PlogLevel::kDebug, "memcheck instance created");
                 break;
             case ipc::ToolId::kSynccheck:
                 synccheck_ = std::make_unique<npucheck::Synccheck>();
-                logger_.Debug("synccheck instance created");
+                aclsan::WritePlog(aclsan::PlogLevel::kDebug, "synccheck instance created");
                 break;
             default:
                 error = std::string("unsupported tool '") + ipc::ToolName(tool.toolId) + "'";
@@ -333,7 +306,7 @@ bool ToolManager::ConfigureSanitizer(std::string& error)
         return false;
     }
     subscribed_ = true;
-    logger_.Info("sanitizer callback subscriber registered");
+    aclsan::WritePlog(aclsan::PlogLevel::kInfo, "sanitizer callback subscriber registered");
     return EnableCallbacks(error);
 }
 
@@ -370,7 +343,7 @@ bool ToolManager::EnableCallbacks(std::string& error)
         std::ostringstream message;
         message << "callback enabled domain=" << static_cast<uint32_t>(callback.domain)
                 << " cbid=" << static_cast<uint32_t>(callback.cbid);
-        logger_.Debug(message.str());
+        aclsan::WritePlog(aclsan::PlogLevel::kDebug, message.str());
     }
     return true;
 }
@@ -432,14 +405,15 @@ void ToolManager::Finalize()
             std::lock_guard<std::mutex> stateLock(stateMutex_);
             ++frameworkErrors_;
         }
-        logger_.Error(
+        aclsan::WritePlog(
+            aclsan::PlogLevel::kError,
             "failed to render the session report bundle status=" + std::to_string(static_cast<int>(renderStatus)));
     } else if (!report_.Append(renderedReport) && !report_.Truncated()) {
-        logger_.Error("failed to record the rendered session report bundle");
+        aclsan::WritePlog(aclsan::PlogLevel::kError, "failed to record the rendered session report bundle");
     }
 
     const std::string summary = BuildSummaryMessage();
-    logger_.Info(summary);
+    aclsan::WritePlog(aclsan::PlogLevel::kInfo, summary);
     // 多工具时取"全部工具都分析完整"，任一工具留有在途或被丢弃的事件，整份报告就
     // 不能声称完整 —— 这里必须是与，不是二选一。
     bool analysisComplete = true;
@@ -483,12 +457,11 @@ void ToolManager::Finalize()
         const std::string reportText = report_.Take();
         std::string sendError;
         if (!server_.SendResult(reportText, hasErrors, truncated, sendError)) {
-            logger_.Error("failed to deliver the session report: " + sendError);
+            aclsan::WritePlog(aclsan::PlogLevel::kError, "failed to deliver the session report: " + sendError);
         }
     }
     server_.Shutdown();
-    logger_.Info(sessionEnd.str());
-    logger_.Flush();
+    aclsan::WritePlog(aclsan::PlogLevel::kInfo, sessionEnd.str());
     memcheck_.reset();
     synccheck_.reset();
     initialized_ = false;
@@ -576,13 +549,13 @@ void ToolManager::OnCallback(AclsanCallbackDomain domain, AclsanCallbackId cbid,
                     message << "memory alloc resource=" << data->resourceId << " device=" << data->deviceId
                             << " address=" << data->ptr << " bytes=" << data->bytes
                             << " result=" << data->common.result;
-                    logger_.Info(message.str());
+                    aclsan::WritePlog(aclsan::PlogLevel::kInfo, message.str());
                 } else if (data != nullptr && memcheck_ != nullptr && cbid == ACLSAN_CBID_RESOURCE_MEMORY_FREE) {
                     memcheck_->OnFree(*data);
                     std::ostringstream message;
                     message << "memory free resource=" << data->resourceId << " device=" << data->deviceId
                             << " address=" << data->ptr << " result=" << data->common.result;
-                    logger_.Info(message.str());
+                    aclsan::WritePlog(aclsan::PlogLevel::kInfo, message.str());
                 }
                 break;
             }
@@ -596,7 +569,7 @@ void ToolManager::OnCallback(AclsanCallbackDomain domain, AclsanCallbackId cbid,
                                 << data->header.pc << std::dec << " device=" << data->header.deviceId
                                 << " core=" << data->header.phyCoreId << " address=0x" << std::hex << data->address
                                 << std::dec << " access_mode=" << data->accessMode << " layout=" << data->layoutKind;
-                        logger_.Debug(message.str());
+                        aclsan::WritePlog(aclsan::PlogLevel::kDebug, message.str());
                     } else {
                         malformed = true;
                     }
@@ -617,7 +590,7 @@ void ToolManager::OnCallback(AclsanCallbackDomain domain, AclsanCallbackId cbid,
                     reports = memcheck_->OnSynchronization();
                     std::ostringstream message;
                     message << "synchronization completed reports=" << reports.size() << " stream=" << data->stream;
-                    logger_.Info(message.str());
+                    aclsan::WritePlog(aclsan::PlogLevel::kInfo, message.str());
                 }
                 if (data != nullptr && synccheck_ != nullptr) {
                     syncReports = synccheck_->OnSynchronization(); // TODO: 换个名字 finalizeCbdataAndReport
@@ -625,12 +598,12 @@ void ToolManager::OnCallback(AclsanCallbackDomain domain, AclsanCallbackId cbid,
                     std::ostringstream message;
                     message << "synchronization observed reports=" << syncReports.size() << " stream=" << data->stream
                             << " result=" << data->common.result;
-                    logger_.Info(message.str());
+                    aclsan::WritePlog(aclsan::PlogLevel::kInfo, message.str());
                 }
                 if (data != nullptr && data->common.result != 0) {
                     std::ostringstream message;
                     message << "synchronization failed result=" << data->common.result << " stream=" << data->stream;
-                    logger_.Warning(message.str());
+                    aclsan::WritePlog(aclsan::PlogLevel::kWarning, message.str());
                 }
                 break;
             }
@@ -651,9 +624,9 @@ void ToolManager::OnCallback(AclsanCallbackDomain domain, AclsanCallbackId cbid,
                         << " kernel_sched_mode=" << attributes.kernelSchedMode
                         << " kernel_sched_mode_status=" << attributes.kernelSchedModeStatus
                         << " launch_result=" << data->common.result;
-                logger_.Debug(message.str());
+                aclsan::WritePlog(aclsan::PlogLevel::kDebug, message.str());
 
-                const auto logFailure = [this, data, functionName](const char* attribute, aclError status) {
+                const auto logFailure = [data, functionName](const char* attribute, aclError status) {
                     if (status == ACL_SUCCESS) {
                         return;
                     }
@@ -661,7 +634,7 @@ void ToolManager::OnCallback(AclsanCallbackDomain domain, AclsanCallbackId cbid,
                     warning << "kernel attribute query failed launch=" << data->launchId
                             << " function=" << data->function << " function_name=" << functionName
                             << " attribute=" << attribute << " result=" << status;
-                    logger_.Warning(warning.str());
+                    aclsan::WritePlog(aclsan::PlogLevel::kWarning, warning.str());
                 };
                 logFailure("ACL_FUNC_ATTR_KERNEL_TYPE", attributes.kernelTypeStatus);
                 logFailure("ACL_FUNC_ATTR_KERNEL_RATIO", attributes.kernelRatioStatus);
@@ -695,7 +668,7 @@ void ToolManager::OnCallbackException(const char* reason) noexcept
         }
         std::string message = "npu_check callback failed: ";
         message += reason != nullptr ? reason : "unspecified exception";
-        logger_.Error(message);
+        aclsan::WritePlog(aclsan::PlogLevel::kError, message);
     } catch (...) {
         // Error reporting is best effort inside a noexcept runtime callback.
         return;
@@ -710,7 +683,8 @@ void ToolManager::StoreDiagnostics(std::vector<npucheck::NpuCheckMemcheckReport>
         if (!NormalizeAndStoreReportRecord(reportRecord, report.common.reportId, "report")) {
             continue;
         }
-        logger_.Info("diagnostic report stored report_id=" + std::to_string(report.common.reportId));
+        aclsan::WritePlog(
+            aclsan::PlogLevel::kInfo, "diagnostic report stored report_id=" + std::to_string(report.common.reportId));
     }
 }
 
@@ -722,7 +696,9 @@ void ToolManager::StoreSynccheckReports(std::vector<npucheck::NpuCheckSynccheckR
         if (!NormalizeAndStoreReportRecord(reportRecord, report.common.reportId, "synccheck report")) {
             continue;
         }
-        logger_.Info("synccheck diagnostic report stored report_id=" + std::to_string(report.common.reportId));
+        aclsan::WritePlog(
+            aclsan::PlogLevel::kInfo,
+            "synccheck diagnostic report stored report_id=" + std::to_string(report.common.reportId));
     }
 }
 
@@ -738,7 +714,7 @@ bool ToolManager::NormalizeAndStoreReportRecord(
             std::lock_guard<std::mutex> stateLock(stateMutex_);
             ++frameworkErrors_;
         }
-        logger_.Error(message.str());
+        aclsan::WritePlog(aclsan::PlogLevel::kError, message.str());
         return false;
     }
     {
@@ -753,7 +729,7 @@ void ToolManager::PublishMalformed(AclsanCallbackDomain domain, AclsanCallbackId
     std::ostringstream output;
     output << "[NPU-CHECK-MALFORMED-CALLBACK] domain=" << static_cast<uint32_t>(domain) << " cbid=" << cbid
            << " reason=" << reason;
-    logger_.Error(output.str());
+    aclsan::WritePlog(aclsan::PlogLevel::kError, output.str());
 }
 
 void ToolManager::LogCallback(AclsanCallbackDomain domain, AclsanCallbackId cbid, const void* cbdata)
@@ -762,7 +738,7 @@ void ToolManager::LogCallback(AclsanCallbackDomain domain, AclsanCallbackId cbid
     std::ostringstream message;
     message << "cbdata received count=" << count << " domain=" << static_cast<uint32_t>(domain)
             << " cbid=" << static_cast<uint32_t>(cbid) << " address=" << cbdata;
-    logger_.Debug(message.str());
+    aclsan::WritePlog(aclsan::PlogLevel::kDebug, message.str());
 }
 
 std::string ToolManager::BuildReadyMessage() const
@@ -804,4 +780,4 @@ std::string ToolManager::BuildSummaryMessage() const
     return output.str();
 }
 
-} // namespace npu::sanitizer
+} // namespace aclsan

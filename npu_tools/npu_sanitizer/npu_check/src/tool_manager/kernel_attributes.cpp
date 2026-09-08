@@ -12,7 +12,7 @@
 
 #include "injection/injection_hook.h"
 
-namespace npu::sanitizer {
+namespace aclsan {
 
 KernelAttributes QueryKernelAttributes(aclrtFuncHandle function) noexcept
 {
@@ -47,4 +47,4 @@ KernelAttributes QueryKernelAttributes(aclrtFuncHandle function) noexcept
     return attributes;
 }
 
-} // namespace npu::sanitizer
+} // namespace aclsan

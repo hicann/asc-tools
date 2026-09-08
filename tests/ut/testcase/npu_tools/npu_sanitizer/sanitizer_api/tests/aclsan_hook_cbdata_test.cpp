@@ -8,6 +8,7 @@
  * See LICENSE in the root of the software repository for the full text of the License.
  */
 
+#include "../../common/tests/plog_capture.h"
 #include <cassert>
 #include <array>
 #include <csignal>
@@ -94,40 +95,11 @@ std::optional<aclsan::DecodedInstruction> CountDecoderCalls(const aclsan::Aclsan
 }
 
 template <typename Action>
-std::string CaptureLogs(int outputFd, Action action)
-{
-    assert(setenv("ASCEND_GLOBAL_LOG_LEVEL", "0", 1) == 0);
-    assert(setenv("NPU_SAN_DEBUG", "1", 1) == 0);
-
-    int pipeFds[2] = {-1, -1};
-    assert(pipe(pipeFds) == 0);
-    const int savedOutput = dup(outputFd);
-    assert(savedOutput >= 0);
-    assert(dup2(pipeFds[1], outputFd) >= 0);
-    assert(close(pipeFds[1]) == 0);
-
-    action();
-    assert(std::fflush(outputFd == STDOUT_FILENO ? stdout : stderr) == 0);
-    assert(dup2(savedOutput, outputFd) >= 0);
-    assert(close(savedOutput) == 0);
-
-    std::string logs;
-    char buffer[256] = {};
-    ssize_t bytesRead = 0;
-    while ((bytesRead = read(pipeFds[0], buffer, sizeof(buffer))) > 0) {
-        logs.append(buffer, static_cast<size_t>(bytesRead));
-    }
-    assert(bytesRead == 0);
-    assert(close(pipeFds[0]) == 0);
-    assert(unsetenv("ASCEND_GLOBAL_LOG_LEVEL") == 0);
-    assert(unsetenv("NPU_SAN_DEBUG") == 0);
-    return logs;
-}
-
-template <typename Action>
 std::string CaptureDebugLogs(Action action)
 {
-    return CaptureLogs(STDOUT_FILENO, std::move(action));
+    PlogCapture capture;
+    action();
+    return capture.Text();
 }
 
 aclError FakeAclrtMalloc(void** deviceAddress, size_t size, aclrtMemMallocPolicy policy)
@@ -803,6 +775,17 @@ bool InvokeCallback(AclsanCallbackDomain domain, AclsanCallbackId callbackId, co
 
 } // namespace aclsan
 
+namespace {
+aclError FakeAclrtMemcpy(void* destination, size_t capacity, const void* source, size_t bytes, aclrtMemcpyKind)
+{
+    assert(bytes <= capacity);
+    if (bytes != 0) {
+        std::memcpy(destination, source, bytes);
+    }
+    return ACL_SUCCESS;
+}
+} // namespace
+
 extern "C" void* acltoolGetOriginalRuntimeApi(aclrtApiId apiId)
 {
     switch (apiId) {
@@ -820,6 +803,8 @@ extern "C" void* acltoolGetOriginalRuntimeApi(aclrtApiId apiId)
             return reinterpret_cast<void*>(reinterpret_cast<uintptr_t>(&FakeAclrtSynchronizeStream));
         case ACL_RT_API_aclrtSynchronizeStreamWithTimeout:
             return reinterpret_cast<void*>(reinterpret_cast<uintptr_t>(&FakeAclrtSynchronizeStreamWithTimeout));
+        case ACL_RT_API_aclrtMemcpy:
+            return reinterpret_cast<void*>(reinterpret_cast<uintptr_t>(&FakeAclrtMemcpy));
         case ACL_RT_API_aclrtGetDevice:
             return reinterpret_cast<void*>(reinterpret_cast<uintptr_t>(&FakeAclrtGetDevice));
         case ACL_RT_API_aclrtBinaryGetGlobal:

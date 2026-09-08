@@ -8,6 +8,7 @@
  * See LICENSE in the root of the software repository for the full text of the License.
  */
 
+#include "../../common/tests/plog_capture.h"
 #include "device_instr/common/device_instr_struct_register.h"
 #include "device_instr/common/instruction_id.h"
 #include "device_instr/arch/dav_3510/register_state_manager.h"
@@ -17,12 +18,10 @@
 #include "device_instr/common/device_instr_types.h"
 
 #include <cassert>
-#include <cstdio>
 #include <cstdint>
 #include <limits>
 #include <string>
 #include <type_traits>
-#include <unistd.h>
 
 namespace {
 
@@ -86,27 +85,9 @@ static_assert(std::is_same_v<decltype(aclsan::FixL0cToOutParamField{}.dataBits),
 template <typename Action>
 std::string CaptureErrorLogs(Action action)
 {
-    int pipeFds[2] = {-1, -1};
-    assert(pipe(pipeFds) == 0);
-    const int savedStderr = dup(STDERR_FILENO);
-    assert(savedStderr >= 0);
-    assert(dup2(pipeFds[1], STDERR_FILENO) >= 0);
-    assert(close(pipeFds[1]) == 0);
-
+    PlogCapture capture;
     action();
-    assert(std::fflush(stderr) == 0);
-    assert(dup2(savedStderr, STDERR_FILENO) >= 0);
-    assert(close(savedStderr) == 0);
-
-    std::string logs;
-    char buffer[256] = {};
-    ssize_t bytesRead = 0;
-    while ((bytesRead = read(pipeFds[0], buffer, sizeof(buffer))) > 0) {
-        logs.append(buffer, static_cast<size_t>(bytesRead));
-    }
-    assert(bytesRead == 0);
-    assert(close(pipeFds[0]) == 0);
-    return logs;
+    return capture.Text();
 }
 
 void TestExtractBitRangeLogsInvalidRange()

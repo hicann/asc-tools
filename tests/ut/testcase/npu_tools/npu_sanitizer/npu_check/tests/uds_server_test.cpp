@@ -23,7 +23,7 @@
 #include <unistd.h>
 #include <vector>
 
-namespace npu::sanitizer::ipc {
+namespace aclsan::ipc {
 namespace {
 
 class ScopedEnvironmentVariable {
@@ -374,4 +374,4 @@ TEST(UdsServerTest, SkipsMustIgnoreFramesWithoutBreakingSequence)
 }
 
 } // namespace
-} // namespace npu::sanitizer::ipc
+} // namespace aclsan::ipc

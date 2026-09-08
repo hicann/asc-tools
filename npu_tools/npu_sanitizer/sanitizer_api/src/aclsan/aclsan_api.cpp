@@ -203,15 +203,15 @@ bool AclsanSubscriber::IsActive(AclsanSubscriberHandle subscriber) const noexcep
 void AclsanSubscriber::LogConfigurationState(const char* operation, const char* stage) const noexcept
 {
     ASC_SAN_DEBUG(
-        "%s: callback state stage=%s enabledCallbacks_ size=%zu requiredHooks_ size=%zu", operation, stage,
-        enabledCallbacks_.size(), requiredHooks_.size());
+        "operation=%s stage=%s enabled_callbacks=%zu required_hooks=%zu", operation, stage, enabledCallbacks_.size(),
+        requiredHooks_.size());
     for (const CallbackKey& key : enabledCallbacks_) {
         ASC_SAN_DEBUG(
-            "%s: enabledCallbacks_ domain=%u id=%u", operation, static_cast<uint32_t>(key.domain),
+            "operation=%s callback_domain=%u callback_id=%u", operation, static_cast<uint32_t>(key.domain),
             static_cast<uint32_t>(key.id));
     }
     for (aclrtApiId apiId : requiredHooks_) {
-        ASC_SAN_DEBUG("%s: requiredHooks_ apiId=%u", operation, static_cast<uint32_t>(apiId));
+        ASC_SAN_DEBUG("operation=%s required_hook_api_id=%u", operation, static_cast<uint32_t>(apiId));
     }
 }
 
@@ -268,7 +268,7 @@ AclsanStatus AclsanSubscriber::Subscribe(
     callback_ = callback;
     userdata_ = userdata;
     *subscriber = activeHandle_;
-    ASC_SAN_DEBUG("aclsanSubscribe succeed");
+    ASC_SAN_INFO("aclsanSubscribe succeed");
     return ACLSAN_STATUS_SUCCESS;
 }
 
@@ -303,6 +303,7 @@ AclsanStatus AclsanSubscriber::Unsubscribe(AclsanSubscriberHandle subscriber) no
     requiredHooks_.clear();
     aclsan::CommitActiveProbePlan(0);
     LogConfigurationState("aclsanUnsubscribe", "after-reset");
+    ASC_SAN_INFO("aclsanUnsubscribe succeed");
     return ACLSAN_STATUS_SUCCESS;
 }
 

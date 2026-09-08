@@ -16,7 +16,7 @@
 #include <thread>
 #include <vector>
 
-namespace npu::sanitizer::diagnostic {
+namespace aclsan::diagnostic {
 namespace {
 
 TEST(ReportBufferTest, AppendsInOrderAndTakeClears)
@@ -91,4 +91,4 @@ TEST(ReportBufferTest, ConcurrentAppendsKeepEveryByte)
 }
 
 } // namespace
-} // namespace npu::sanitizer::diagnostic
+} // namespace aclsan::diagnostic

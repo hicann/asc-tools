@@ -8,6 +8,7 @@
  * See LICENSE in the root of the software repository for the full text of the License.
  */
 
+#include "../../common/tests/plog_capture.h"
 #include <cassert>
 #include <cstdio>
 #include <cstdlib>
@@ -472,63 +473,17 @@ void TestTranslateMultiAndFixpipeToGmCbdata()
 std::string CaptureTranslateDebugLogs(
     const aclsan::AclsanRawTraceRecord& record, const aclsan::ParsedTraceRecord& parsed)
 {
-    assert(setenv("ASCEND_GLOBAL_LOG_LEVEL", "0", 1) == 0);
-    assert(setenv("NPU_SAN_DEBUG", "1", 1) == 0);
-
-    int pipeFds[2] = {-1, -1};
-    assert(pipe(pipeFds) == 0);
-    const int savedStdout = dup(STDOUT_FILENO);
-    assert(savedStdout >= 0);
-    assert(dup2(pipeFds[1], STDOUT_FILENO) >= 0);
-    assert(close(pipeFds[1]) == 0);
-
+    PlogCapture capture;
     const auto translated = TranslateRecordToCallbackData(record, parsed);
     assert(translated.has_value());
-    assert(std::fflush(stdout) == 0);
-    assert(dup2(savedStdout, STDOUT_FILENO) >= 0);
-    assert(close(savedStdout) == 0);
-
-    std::string logs;
-    char buffer[256] = {};
-    ssize_t bytesRead = 0;
-    while ((bytesRead = read(pipeFds[0], buffer, sizeof(buffer))) > 0) {
-        logs.append(buffer, static_cast<size_t>(bytesRead));
-    }
-    assert(bytesRead == 0);
-    assert(close(pipeFds[0]) == 0);
-    assert(unsetenv("ASCEND_GLOBAL_LOG_LEVEL") == 0);
-    assert(unsetenv("NPU_SAN_DEBUG") == 0);
-    return logs;
+    return capture.Text();
 }
 
 std::string CaptureCallbackDataDebugLogs(const aclsan::DeviceCallbackData& callbackData)
 {
-    assert(setenv("ASCEND_GLOBAL_LOG_LEVEL", "0", 1) == 0);
-    assert(setenv("NPU_SAN_DEBUG", "1", 1) == 0);
-
-    int pipeFds[2] = {-1, -1};
-    assert(pipe(pipeFds) == 0);
-    const int savedStdout = dup(STDOUT_FILENO);
-    assert(savedStdout >= 0);
-    assert(dup2(pipeFds[1], STDOUT_FILENO) >= 0);
-    assert(close(pipeFds[1]) == 0);
-
+    PlogCapture capture;
     aclsan::LogCallbackData(callbackData);
-    assert(std::fflush(stdout) == 0);
-    assert(dup2(savedStdout, STDOUT_FILENO) >= 0);
-    assert(close(savedStdout) == 0);
-
-    std::string logs;
-    char buffer[256] = {};
-    ssize_t bytesRead = 0;
-    while ((bytesRead = read(pipeFds[0], buffer, sizeof(buffer))) > 0) {
-        logs.append(buffer, static_cast<size_t>(bytesRead));
-    }
-    assert(bytesRead == 0);
-    assert(close(pipeFds[0]) == 0);
-    assert(unsetenv("ASCEND_GLOBAL_LOG_LEVEL") == 0);
-    assert(unsetenv("NPU_SAN_DEBUG") == 0);
-    return logs;
+    return capture.Text();
 }
 
 void TestLogsEveryMemoryAccessInVariableLengthList()
@@ -548,10 +503,9 @@ void TestLogsEveryMemoryAccessInVariableLengthList()
 
     const std::string logs = CaptureCallbackDataDebugLogs(aclsan::DeviceCallbackData{accesses});
 
-    if (logs.find("[cbdata] deviceId=2 phyCoreId=1 blockId=3 blockType=AICORE  instrExecId=4 launchId=5  "
-                  "type=AclsanDeviceMemoryAccessData index=0") == std::string::npos) {
-        std::abort();
-    }
+    assert(logs.find("[cbdata] type=AclsanDeviceMemoryAccessData index=0") != std::string::npos);
+    assert(
+        logs.find("deviceId=2 phyCoreId=1 blockId=3 blockType=AICORE instrExecId=4 launchId=5") != std::string::npos);
     assert(logs.find("index=0 address=0x1000") != std::string::npos);
     assert(logs.find("index=1 address=0x1001") != std::string::npos);
     assert(logs.find("index=2 address=0x1002") != std::string::npos);
@@ -645,11 +599,8 @@ void TestTranslateDebugLogsShowUbufToGmConversion()
         std::string::npos);
     assert(logs.find("[param] type=CopyUbufToGmAlignV2ParamField") != std::string::npos);
     assert(logs.find("burstNum=2 burstLen=64") != std::string::npos);
-    if (logs.find("[cbdata] deviceId=3 phyCoreId=5 blockId=3 blockType=AIV  instrExecId=11 launchId=13  "
-                  "type=AclsanDeviceMemoryAccessData index=0 address=0x3000 memorySpace=1 accessMode=2") ==
-        std::string::npos) {
-        std::abort();
-    }
+    assert(logs.find("[cbdata] type=AclsanDeviceMemoryAccessData index=0") != std::string::npos);
+    assert(logs.find("deviceId=3 phyCoreId=5 blockId=3 blockType=AIV instrExecId=11 launchId=13") != std::string::npos);
 }
 
 void TestTranslateCopyGmToCbufV2ToCallbackData()

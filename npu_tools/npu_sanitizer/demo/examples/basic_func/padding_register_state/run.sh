@@ -27,6 +27,8 @@ output="build/npu_check.log"
 : >"${output}"
 
 export ASCEND_GLOBAL_LOG_LEVEL=0
+export ASCEND_SLOG_PRINT_TO_STDOUT=0
+export ASCEND_PROCESS_LOG_PATH="$(pwd)/build/plog"
 
 # 配置并构建示例。
 cmake -B build -DCMAKE_ASC_ARCHITECTURES=dav-3510
@@ -60,12 +62,50 @@ if [[ $(grep -Fxc 'status=complete aclsan_unsubscribe=0 dropped_messages=0 analy
     exit 1
 fi
 
-# 应用侧结果和客户可见的完整会话均应正常。
-for expected_text in 'padding register state demo pass!'; do
-    if ! grep -Fq "${expected_text}" "${output}"; then
-        printf 'missing expected output in %s: %s\n' "${output}" "${expected_text}" >&2
+# 内部解码和寄存器状态只在 plog 中，应用结果仍在 check/console 输出中。
+if ! grep -Fq 'padding register state demo pass!' "${output}"; then
+    printf 'missing application success message\n' >&2
+    exit 1
+fi
+shopt -s nullglob
+deadline=$((SECONDS + ${PLOG_FLUSH_TIMEOUT:-10}))
+while true; do
+    plog_files=("${ASCEND_PROCESS_LOG_PATH}"/{debug,run}/plog/plog-*.log)
+    if ((${#plog_files[@]} > 0)); then
+        first_update=$(grep -h -m 1 -E \
+            '\[register\] action=update register=set_padding .*value=0x12' "${plog_files[@]}" | head -1 || true)
+        second_update=$(grep -h -m 1 -E \
+            '\[register\] action=update register=set_padding .*value=0x34' "${plog_files[@]}" | head -1 || true)
+        if [[ -n "${first_update}" && -n "${second_update}" ]]; then
+            break
+        fi
+    fi
+    if ((SECONDS >= deadline)); then
+        printf 'missing SET_PADDING register-state plog records\n' >&2
+        exit 1
+    fi
+    sleep 0.2
+done
+for expected_text in \
+    '[param] type=SetPaddingParamField value=0x12' \
+    '[param] type=SetPaddingParamField value=0x34'; do
+    if ! grep -F -- "${expected_text}" "${plog_files[@]}" >/dev/null; then
+        printf 'missing expected plog record: %s\n' "${expected_text}" >&2
         exit 1
     fi
 done
+if grep -F 'unsupported raw trace instrId=392' "${plog_files[@]}" >/dev/null; then
+    printf 'unexpected unsupported SET_PADDING trace\n' >&2
+    exit 1
+fi
 
+# 两次更新必须属于同一 launchId、blockType 和 blockId。
+first_key=$(sed -E 's/.*launchId=([0-9]+) blockType=([0-9]+) blockId=([0-9]+).*/\1 \2 \3/' \
+    <<<"${first_update}")
+second_key=$(sed -E 's/.*launchId=([0-9]+) blockType=([0-9]+) blockId=([0-9]+).*/\1 \2 \3/' \
+    <<<"${second_update}")
+if [[ "${first_key}" != "${second_key}" ]]; then
+    printf 'padding updates used different register-state keys: %s != %s\n' "${first_key}" "${second_key}" >&2
+    exit 1
+fi
 printf '[PASSED] basic_func/padding_register_state\n'
