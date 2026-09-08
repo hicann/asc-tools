@@ -25,6 +25,7 @@
 #include <boost/system/error_code.hpp>
 #include <fstream>
 #include <iterator>
+#include <memory>
 #include <mutex>
 #include <string>
 #include <thread>
@@ -39,10 +40,11 @@ namespace {
 constexpr char kSections[] = "PipeUtilization,Memory";
 constexpr char kHardwareInfoFile[] = "HardwareInfo.jsonl";
 constexpr char kDeviceCountFile[] = "device_count.calls";
-constexpr std::array<aclptiCallbackId, 3> kHardwareInfoTriggerCbids = {
+constexpr std::array<aclptiCallbackId, 4> kHardwareInfoTriggerCbids = {
     ACLPTI_RUNTIME_CBID_aclrtLaunchKernel,
     ACLPTI_RUNTIME_CBID_aclrtLaunchKernelWithHostArgs,
     ACLPTI_RUNTIME_CBID_aclrtLaunchSIMTKernelWithHostArgs,
+    ACLPTI_RUNTIME_CBID_aclrtLaunchKernelWithArgsArray,
 };
 using namespace std::chrono_literals;
 
@@ -51,6 +53,7 @@ std::condition_variable g_deviceCountCondition;
 bool g_blockDeviceCount = false;
 bool g_deviceCountStarted = false;
 bool g_releaseDeviceCount = false;
+aclptiProfilingDataCallback g_profilingDataCallback;
 
 #define CHECK(expression)                                                                 \
     do {                                                                                  \
@@ -193,6 +196,74 @@ void InvokeCallbackDirectly(aclptiCallbackDomain domain, aclptiCallbackId cbid, 
 
 std::size_t CountLines(const boost::filesystem::path& path);
 
+std::vector<std::string> SplitCsvLine(const std::string& line)
+{
+    std::vector<std::string> values;
+    std::size_t begin = 0;
+    while (begin <= line.size()) {
+        const std::size_t end = line.find(',', begin);
+        values.push_back(line.substr(begin, end == std::string::npos ? end : end - begin));
+        if (end == std::string::npos) {
+            break;
+        }
+        begin = end + 1;
+    }
+    return values;
+}
+
+std::string CsvValue(const boost::filesystem::path& path, const std::string& rowName, const std::string& columnName)
+{
+    std::ifstream input(path.string());
+    std::string line;
+    if (!std::getline(input, line)) {
+        return {};
+    }
+    const std::vector<std::string> header = SplitCsvLine(line);
+    const auto column = std::find(header.begin(), header.end(), columnName);
+    if (column == header.end()) {
+        return {};
+    }
+    const std::size_t columnIndex = static_cast<std::size_t>(std::distance(header.begin(), column));
+    while (std::getline(input, line)) {
+        const std::vector<std::string> row = SplitCsvLine(line);
+        if (row.size() > columnIndex && row.size() > 1 && row[1] == rowName) {
+            return row[columnIndex];
+        }
+    }
+    return {};
+}
+
+bool RunCsvSocNameChild(const boost::filesystem::path& output)
+{
+    CHECK(SetScenarioEnvironment(output));
+    CHECK(::setenv("NPU_COMPUTE_FREQUENCY_MHZ", "1000", 1) == 0);
+    npu_compute::test::ResetAclPtiCallbackStub();
+    CHECK(acltoolInitialize() == ACLPTI_SUCCESS);
+    CHECK(g_profilingDataCallback != nullptr);
+
+    auto result = std::make_shared<aclptiProfilingDataResult>();
+    aclptiPmuDataRow row{};
+    row.blockId = 0;
+    row.subBlockId = 0;
+    row.coreType = ACLPTI_CORE_TYPE_AIV;
+    row.coreId = 0;
+    aclptiPmuDataRow::CoreData core{};
+    core.coreType = ACLPTI_CORE_TYPE_AIV;
+    core.coreId = 0;
+    core.sampleCount = 1;
+    core.totalCycles = 1000.0;
+    core.values = {{0x422U, 100.0}, {0x57fU, 10.0}, {0x580U, 10.0}};
+    core.valueCounts = {{0x422U, 1}, {0x57fU, 1}, {0x580U, 1}};
+    row.coreData.push_back(std::move(core));
+    result->pmuLogs.emplace(aclptiBlockKey{0, 0, ACLPTI_CORE_TYPE_AIV, 0}, std::move(row));
+
+    CHECK(g_profilingDataCallback(result) == ACLPTI_SUCCESS);
+    npu_compute::NpuComputeRuntime::Instance().Stop();
+    CHECK(npu_compute::NpuComputeRuntime::Instance().ShutdownAfterPtiDrain() == 0);
+    CHECK(CsvValue(output / "Memory.csv", "vector0", "GM_to_UB_bw_usage_rate(%)") == "5.358925");
+    return true;
+}
+
 bool RunSuccessChild(const std::string& scenario, const boost::filesystem::path& output)
 {
     CHECK(SetScenarioEnvironment(output));
@@ -224,6 +295,14 @@ bool RunSuccessChild(const std::string& scenario, const boost::filesystem::path&
         CHECK(CountLines(output / kHardwareInfoFile) == 5);
         return true;
     }
+    if (scenario == "success-args-array") {
+        CHECK(npu_compute::test::InvokeAclPtiCallback(
+            ACLPTI_CB_DOMAIN_RUNTIME_API, ACLPTI_RUNTIME_CBID_aclrtLaunchKernelWithArgsArray, ACLPTI_API_EXIT,
+            ACL_SUCCESS, nullptr));
+        CHECK(boost::filesystem::is_regular_file(output / kHardwareInfoFile));
+        CHECK(CountLines(output / kHardwareInfoFile) == 5);
+        return true;
+    }
     if (scenario == "success-repeated") {
         CHECK(npu_compute::test::InvokeAclPtiCallback(
             ACLPTI_CB_DOMAIN_RUNTIME_API, ACLPTI_RUNTIME_CBID_aclrtLaunchKernel, ACLPTI_API_EXIT, ACL_SUCCESS,
@@ -235,6 +314,9 @@ bool RunSuccessChild(const std::string& scenario, const boost::filesystem::path&
             ACL_SUCCESS, nullptr));
         CHECK(npu_compute::test::InvokeAclPtiCallback(
             ACLPTI_CB_DOMAIN_RUNTIME_API, ACLPTI_RUNTIME_CBID_aclrtLaunchSIMTKernelWithHostArgs, ACLPTI_API_EXIT,
+            ACL_SUCCESS, nullptr));
+        CHECK(npu_compute::test::InvokeAclPtiCallback(
+            ACLPTI_CB_DOMAIN_RUNTIME_API, ACLPTI_RUNTIME_CBID_aclrtLaunchKernelWithArgsArray, ACLPTI_API_EXIT,
             ACL_SUCCESS, nullptr));
         CHECK(npu_compute::test::InvokeAclPtiCallback(
             ACLPTI_CB_DOMAIN_RUNTIME_API, ACLPTI_RUNTIME_CBID_aclrtLaunchKernel, ACLPTI_API_EXIT, ACL_SUCCESS,
@@ -503,6 +585,9 @@ bool RunChildScenario(const std::string& scenario, const boost::filesystem::path
     if (scenario == "enable-failure-simt-host-args") {
         return RunEnableFailureChild(output, ACLPTI_RUNTIME_CBID_aclrtLaunchSIMTKernelWithHostArgs);
     }
+    if (scenario == "enable-failure-args-array") {
+        return RunEnableFailureChild(output, ACLPTI_RUNTIME_CBID_aclrtLaunchKernelWithArgsArray);
+    }
     if (scenario == "config-failure") {
         return RunConfigFailureChild(output);
     }
@@ -514,6 +599,9 @@ bool RunChildScenario(const std::string& scenario, const boost::filesystem::path
     }
     if (scenario == "stop-during-collection") {
         return RunStopDuringCollectionChild(output);
+    }
+    if (scenario == "csv-soc-device-api") {
+        return RunCsvSocNameChild(output);
     }
     std::fprintf(stderr, "unknown child scenario: %s\n", scenario.c_str());
     return false;
@@ -549,11 +637,8 @@ std::size_t CountLines(const boost::filesystem::path& path)
 
 bool TestSuccessAndNormalExit(const char* executable)
 {
-    constexpr std::array<const char*, 4> scenarios = {
-        "success-launch",
-        "success-host-args",
-        "success-simt-host-args",
-        "success-repeated",
+    constexpr std::array<const char*, 5> scenarios = {
+        "success-launch", "success-host-args", "success-simt-host-args", "success-args-array", "success-repeated",
     };
     for (const char* scenario : scenarios) {
         TempDirectory temporary;
@@ -584,9 +669,11 @@ bool TestIgnoredEvents(const char* executable)
 
 bool TestInitializationFailures(const char* executable)
 {
-    constexpr std::array<const char*, 6> scenarios = {
-        "subscribe-failure", "enable-failure-launch", "enable-failure-host-args", "enable-failure-simt-host-args",
-        "config-failure",    "pmu-level-failure",
+    constexpr std::array<const char*, 7> scenarios = {
+        "subscribe-failure",         "enable-failure-launch",
+        "enable-failure-host-args",  "enable-failure-simt-host-args",
+        "enable-failure-args-array", "config-failure",
+        "pmu-level-failure",
     };
     for (const char* scenario : scenarios) {
         TempDirectory temporary;
@@ -612,6 +699,14 @@ bool TestStopDuringCollectionDoesNotHoldRuntimeMutex(const char* executable)
     TempDirectory temporary;
     CHECK(!temporary.Path().empty());
     CHECK(LaunchChild(executable, "stop-during-collection", temporary.Path()));
+    return true;
+}
+
+bool TestCsvSocNameSelection(const char* executable)
+{
+    TempDirectory temporary;
+    CHECK(!temporary.Path().empty());
+    CHECK(LaunchChild(executable, "csv-soc-device-api", temporary.Path()));
     return true;
 }
 
@@ -646,6 +741,17 @@ extern "C" aclError aclrtGetDeviceCount(uint32_t* count)
     return written ? ACL_SUCCESS : ACL_ERROR_FAILURE;
 }
 
+extern "C" const char* aclrtGetSocName() { return "Ascend950PR_9599"; }
+
+aclptiResult aclptiRegisterProfilingDataCallback(aclptiProfilingDataCallback callback)
+{
+    if (!callback || g_profilingDataCallback) {
+        return callback ? ACLPTI_ERROR_INVALID_STATE : ACLPTI_ERROR_INVALID_PARAMETER;
+    }
+    g_profilingDataCallback = std::move(callback);
+    return ACLPTI_SUCCESS;
+}
+
 int main(int argc, char** argv)
 {
     if (argc == 4 && std::string(argv[1]) == "--child") {
@@ -657,7 +763,7 @@ int main(int argc, char** argv)
     }
     return TestPmuLevelEnvironment() && TestSuccessAndNormalExit(argv[0]) && TestIgnoredEvents(argv[0]) &&
                    TestInitializationFailures(argv[0]) && TestNormalStop(argv[0]) &&
-                   TestStopDuringCollectionDoesNotHoldRuntimeMutex(argv[0]) ?
+                   TestStopDuringCollectionDoesNotHoldRuntimeMutex(argv[0]) && TestCsvSocNameSelection(argv[0]) ?
                0 :
                1;
 }

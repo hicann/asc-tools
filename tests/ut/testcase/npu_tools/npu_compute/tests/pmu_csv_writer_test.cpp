@@ -647,6 +647,70 @@ int main()
         boost::filesystem::remove_all(s4Dir);
     }
 
+    // Pure AIV kernels use each block's PMU cycles even when task logs are available.
+    {
+        const auto pureAivDir = boost::filesystem::temp_directory_path() /
+                                ("npu_compute_csv_pure_aiv_duration_" +
+                                 std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+        aclptiProfilingDataResult pureAivResult;
+        for (uint16_t blockId = 0; blockId < 2; ++blockId) {
+            aclptiPmuDataRow row{};
+            row.blockId = blockId;
+            row.subBlockId = blockId;
+            row.coreType = ACLPTI_CORE_TYPE_AIV;
+            row.coreId = static_cast<uint8_t>(blockId);
+            row.coreData.push_back(Core(
+                ACLPTI_CORE_TYPE_AIV, static_cast<uint8_t>(blockId), 1000.0 * static_cast<double>(blockId + 1),
+                {{0x422U, 100.0}, {0x571U, 4.0}, {0x57fU, 0.0}, {0x580U, 0.0}}));
+            pureAivResult.pmuLogs.emplace(
+                aclptiBlockKey{blockId, blockId, ACLPTI_CORE_TYPE_AIV, static_cast<uint8_t>(blockId)}, row);
+        }
+        pureAivResult.taskLogs.emplace(
+            1, std::vector<aclptiTaskLogRow>{{1, 0x00U, 1, 2, 1000}, {1, 0x01U, 1, 2, 5000}});
+
+        npu_compute::PmuCsvConfig config;
+        config.outputDirectory = pureAivDir.string();
+        config.frequencyMhz = 1000.0;
+        CHECK(npu_compute::PmuCsvWriter::Write(pureAivResult, {"Memory", "MemoryUB"}, config) == ACLPTI_SUCCESS);
+        CHECK(CsvValue(pureAivDir / "Memory.csv", "vector0", "aiv_gm_to_ub_bw(GB/s)") == "11.920929");
+        CHECK(CsvValue(pureAivDir / "Memory.csv", "vector1", "aiv_gm_to_ub_bw(GB/s)") == "5.960464");
+        CHECK(CsvValue(pureAivDir / "MemoryUB.csv", "vector0", "aiv_ub_read_bw_vector(GB/s)") == "0.953674");
+        CHECK(CsvValue(pureAivDir / "MemoryUB.csv", "vector1", "aiv_ub_read_bw_vector(GB/s)") == "0.476837");
+        boost::filesystem::remove_all(pureAivDir);
+    }
+
+    // Pure AIC kernels use each block's PMU cycles even when task logs are available.
+    {
+        const auto pureAicDir = boost::filesystem::temp_directory_path() /
+                                ("npu_compute_csv_pure_aic_duration_" +
+                                 std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+        aclptiProfilingDataResult pureAicResult;
+        for (uint16_t blockId = 0; blockId < 2; ++blockId) {
+            aclptiPmuDataRow row{};
+            row.blockId = blockId;
+            row.subBlockId = blockId;
+            row.coreType = ACLPTI_CORE_TYPE_AIC;
+            row.coreId = static_cast<uint8_t>(blockId);
+            row.coreData.push_back(Core(
+                ACLPTI_CORE_TYPE_AIC, static_cast<uint8_t>(blockId), 1000.0 * static_cast<double>(blockId + 1),
+                {{0x304U, 16.0}, {0x707U, 4.0}}));
+            pureAicResult.pmuLogs.emplace(
+                aclptiBlockKey{blockId, blockId, ACLPTI_CORE_TYPE_AIC, static_cast<uint8_t>(blockId)}, row);
+        }
+        pureAicResult.taskLogs.emplace(
+            1, std::vector<aclptiTaskLogRow>{{1, 0x00U, 1, 2, 1000}, {1, 0x01U, 1, 2, 5000}});
+
+        npu_compute::PmuCsvConfig config;
+        config.outputDirectory = pureAicDir.string();
+        config.frequencyMhz = 1000.0;
+        CHECK(npu_compute::PmuCsvWriter::Write(pureAicResult, {"Memory", "MemoryL0"}, config) == ACLPTI_SUCCESS);
+        CHECK(CsvValue(pureAicDir / "Memory.csv", "cube0", "aic_l1_read_bw(GB/s)") == "0.953674");
+        CHECK(CsvValue(pureAicDir / "Memory.csv", "cube1", "aic_l1_read_bw(GB/s)") == "0.476837");
+        CHECK(CsvValue(pureAicDir / "MemoryL0.csv", "cube0", "aic_l0a_read_bw(GB/s)") == "0.953674");
+        CHECK(CsvValue(pureAicDir / "MemoryL0.csv", "cube1", "aic_l0a_read_bw(GB/s)") == "0.476837");
+        boost::filesystem::remove_all(pureAicDir);
+    }
+
     // Atlas 350 deterministic formulas and formatting across all five supported sections.
     {
         const auto formulaDir = boost::filesystem::temp_directory_path() /
@@ -713,6 +777,36 @@ int main()
         CHECK(CsvValue(formulaDir / "Memory.csv", "vector7", "aiv_gm_to_ub_bw(GB/s)") == "4.172325");
         CHECK(CsvValue(formulaDir / "Memory.csv", "vector7", "GM_to_UB_datas(KB)") == "8.750000");
         CHECK(CsvValue(formulaDir / "Memory.csv", "vector7", "UB_to_GM_datas(KB)") == "NA");
+
+        const boost::filesystem::path formula959Dir = formulaDir.string() + "_9599";
+        formulaConfig.outputDirectory = formula959Dir.string();
+        formulaConfig.socName = "Ascend950PR_9599";
+        CHECK(npu_compute::PmuCsvWriter::Write(formulaResult, {"Memory"}, formulaConfig) == ACLPTI_SUCCESS);
+        for (const auto& [row, column] : std::array<std::pair<const char*, const char*>, 8>{
+                 std::pair{"cube7", "read_main_memory_datas(KB)"},
+                 std::pair{"cube7", "aic_main_mem_read_bw(GB/s)"},
+                 std::pair{"cube7", "GM_to_L1_datas(KB)"},
+                 std::pair{"cube7", "L0C_to_L1_datas(KB)"},
+                 std::pair{"cube7", "L0C_to_GM_datas(KB)"},
+                 std::pair{"vector7", "read_main_memory_datas(KB)"},
+                 std::pair{"vector7", "aiv_main_mem_read_bw(GB/s)"},
+                 std::pair{"vector7", "GM_to_UB_datas(KB)"},
+             }) {
+            CHECK(
+                CsvValue(formula959Dir / "Memory.csv", row, column) ==
+                CsvValue(formulaDir / "Memory.csv", row, column));
+        }
+        CHECK(CsvValue(formulaDir / "Memory.csv", "cube7", "GM_to_L1_bw_usage_rate(%)") == "0.292952");
+        CHECK(CsvValue(formula959Dir / "Memory.csv", "cube7", "GM_to_L1_bw_usage_rate(%)") == "0.268535");
+        CHECK(CsvValue(formulaDir / "Memory.csv", "cube7", "L0C_to_L1_bw_usage_rate(%)") == "0.063107");
+        CHECK(CsvValue(formula959Dir / "Memory.csv", "cube7", "L0C_to_L1_bw_usage_rate(%)") == "0.057848");
+        CHECK(CsvValue(formulaDir / "Memory.csv", "cube7", "L0C_to_GM_bw_usage_rate(%)") == "0.274655");
+        CHECK(CsvValue(formula959Dir / "Memory.csv", "cube7", "L0C_to_GM_bw_usage_rate(%)") == "0.251762");
+        CHECK(CsvValue(formulaDir / "Memory.csv", "vector7", "GM_to_UB_bw_usage_rate(%)") == "2.557669");
+        CHECK(CsvValue(formula959Dir / "Memory.csv", "vector7", "GM_to_UB_bw_usage_rate(%)") == "2.344530");
+        boost::filesystem::remove_all(formula959Dir);
+        formulaConfig.outputDirectory = formulaDir.string();
+        formulaConfig.socName = "950X";
 
         CHECK(CsvValue(formulaDir / "MemoryL0.csv", "cube7", "aic_l0a_read_bw(GB/s)") == "0.059605");
         CHECK(CsvValue(formulaDir / "MemoryL0.csv", "cube7", "aic_l0c_write_bw_cube(GB/s)") == "0.953674");

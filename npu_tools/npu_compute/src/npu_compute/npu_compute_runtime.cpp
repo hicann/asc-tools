@@ -11,7 +11,6 @@
 
 #include "common/debug_log.h"
 #include "hardware_device_api.h"
-#include "hardware_info_json.h"
 
 #include <algorithm>
 #include <array>
@@ -21,7 +20,6 @@
 #include <cstdlib>
 #include <boost/filesystem.hpp>
 #include <boost/system/error_code.hpp>
-#include <fstream>
 #include <memory>
 #include <string>
 #include <string_view>
@@ -32,10 +30,11 @@
 namespace npu_compute {
 namespace {
 
-constexpr std::array<aclptiCallbackId, 3> kHardwareInfoTriggerCallbackIds = {
+constexpr std::array<aclptiCallbackId, 4> kHardwareInfoTriggerCallbackIds = {
     ACLPTI_RUNTIME_CBID_aclrtLaunchKernel,
     ACLPTI_RUNTIME_CBID_aclrtLaunchKernelWithHostArgs,
     ACLPTI_RUNTIME_CBID_aclrtLaunchSIMTKernelWithHostArgs,
+    ACLPTI_RUNTIME_CBID_aclrtLaunchKernelWithArgsArray,
 };
 constexpr double kMsopprofA5FallbackFrequencyMhz = 1650.0;
 
@@ -108,34 +107,6 @@ bool ParsePositiveDouble(std::string_view text, double* result)
     return true;
 }
 
-void LoadCsvSocNameFromHardwareInfo(PmuCsvConfig* config)
-{
-    if (config == nullptr) {
-        return;
-    }
-
-    const boost::filesystem::path path = boost::filesystem::path(config->outputDirectory) / "HardwareInfo.jsonl";
-    std::ifstream input(path.string());
-    if (!input.is_open()) {
-        npu_compute::detail::DebugLog(
-            "npu-compute", "CSV hardware config: HardwareInfo SoC unavailable path=%s fallback=%s", path.c_str(),
-            config->socName.c_str());
-        return;
-    }
-    const std::string jsonl((std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>());
-    std::string socName;
-    std::string socError;
-    if (ParseHardwareInfoSocNameJsonl(jsonl, &socName, &socError)) {
-        config->socName = std::move(socName);
-        npu_compute::detail::DebugLog(
-            "npu-compute", "CSV hardware config: source=HardwareInfo socName=%s", config->socName.c_str());
-    } else {
-        npu_compute::detail::DebugLog(
-            "npu-compute", "CSV hardware config: HardwareInfo SoC unavailable fallback=%s reason=%s",
-            config->socName.c_str(), socError.c_str());
-    }
-}
-
 void LoadCsvDeviceInfo(PmuCsvConfig* config, bool loadFrequencies)
 {
     if (config == nullptr) {
@@ -148,6 +119,10 @@ void LoadCsvDeviceInfo(PmuCsvConfig* config, bool loadFrequencies)
             "npu-compute", "CSV hardware config diagnostic: %.*s", static_cast<int>(message.size()), message.data());
     };
 
+    std::string detectedSoc;
+    if (api.GetSocName(&detectedSoc) && !detectedSoc.empty()) {
+        config->socName = std::move(detectedSoc);
+    }
     if (loadFrequencies) {
         std::uint32_t aiCubeFrequencyMhz = 0;
         std::uint32_t aiVectorFrequencyMhz = 0;
@@ -161,9 +136,9 @@ void LoadCsvDeviceInfo(PmuCsvConfig* config, bool loadFrequencies)
     }
     npu_compute::detail::DebugLog(
         "npu-compute",
-        "CSV hardware config: source=DeviceApi fallbackFrequency=%f aicFrequency=%f "
+        "CSV hardware config: source=DeviceApi socName=%s fallbackFrequency=%f aicFrequency=%f "
         "aivFrequency=%f",
-        config->frequencyMhz, config->aicFrequencyMhz, config->aivFrequencyMhz);
+        config->socName.c_str(), config->frequencyMhz, config->aicFrequencyMhz, config->aivFrequencyMhz);
 }
 
 } // namespace
@@ -236,7 +211,6 @@ int NpuComputeRuntime::Initialize()
     }
     csv_frequency_override_ = false;
     csv_device_info_loaded_ = false;
-    csv_hardware_metadata_loaded_ = false;
     csv_config_.frequencyMhz = kMsopprofA5FallbackFrequencyMhz;
     csv_config_.aicFrequencyMhz = 0.0;
     csv_config_.aivFrequencyMhz = 0.0;
@@ -384,14 +358,10 @@ aclptiResult NpuComputeRuntime::ProcessPmuData(std::shared_ptr<const aclptiProfi
         }
     }
     PmuCsvConfig csvConfig;
-    // Kernel EXIT arrives after replay PMU data, so publish HardwareInfo before reading CSV metadata.
+    // Kernel EXIT arrives after replay PMU data, so publish HardwareInfo before processing CSV output.
     hardware_info_collector_.CollectOnKernelLaunch();
     {
         std::lock_guard<std::mutex> lock(mutex_);
-        if (!csv_hardware_metadata_loaded_) {
-            LoadCsvSocNameFromHardwareInfo(&csv_config_);
-            csv_hardware_metadata_loaded_ = true;
-        }
         if (!csv_device_info_loaded_) {
             LoadCsvDeviceInfo(&csv_config_, !csv_frequency_override_);
             csv_device_info_loaded_ = true;

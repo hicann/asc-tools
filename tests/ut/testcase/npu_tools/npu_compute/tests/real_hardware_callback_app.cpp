@@ -123,6 +123,10 @@ bool ParseCallbackId(const char* argument, aclptiCallbackId* cbid)
         *cbid = ACLPTI_RUNTIME_CBID_aclrtLaunchSIMTKernelWithHostArgs;
         return true;
     }
+    if (std::strcmp(argument, "17") == 0) {
+        *cbid = ACLPTI_RUNTIME_CBID_aclrtLaunchKernelWithArgsArray;
+        return true;
+    }
     return false;
 }
 
@@ -155,7 +159,8 @@ bool HardwareInfoIsComplete(const boost::filesystem::path& outputDirectory)
 int main(int argc, char** argv)
 {
     if (argc != 4) {
-        std::fprintf(stderr, "usage: %s <test-libnpu-compute.so> <output-directory> <callback-id: 13|0|16>\n", argv[0]);
+        std::fprintf(
+            stderr, "usage: %s <test-libnpu-compute.so> <output-directory> <callback-id: 13|0|16|17>\n", argv[0]);
         return 2;
     }
 

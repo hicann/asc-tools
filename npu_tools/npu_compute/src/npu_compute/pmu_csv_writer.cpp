@@ -1198,10 +1198,18 @@ aclptiResult PmuCsvWriter::Write(
             config.frequencyMhz, config.aicFrequencyMhz, config.aivFrequencyMhz);
         return ACLPTI_ERROR_INVALID_PARAMETER;
     }
-    const Metric taskLogDurationUs = TaskLogDurationUs(result);
+    bool hasAic = false;
+    bool hasAiv = false;
+    for (const auto& [key, _] : pmuLogs) {
+        hasAic = hasAic || key.coreType == ACLPTI_CORE_TYPE_AIC;
+        hasAiv = hasAiv || key.coreType == ACLPTI_CORE_TYPE_AIV;
+    }
+    const bool isMixedKernel = hasAic && hasAiv;
+    const Metric operationDurationUs = isMixedKernel ? TaskLogDurationUs(result) : std::nullopt;
+    const char* kernelType = isMixedKernel ? "mix" : (hasAic ? "aic" : "aiv");
     npu_compute::detail::DebugLog(
-        "npu-compute", "CSV task-log duration: valueUs=%f source=%s", taskLogDurationUs.value_or(0.0),
-        taskLogDurationUs.has_value() ? "median" : "pmu-cycles-fallback");
+        "npu-compute", "CSV operation duration: kernelType=%s valueUs=%f source=%s", kernelType,
+        operationDurationUs.value_or(0.0), operationDurationUs.has_value() ? "task-log-median" : "pmu-cycles");
     try {
         const boost::filesystem::path rootDirectory(outputDirectory);
         const aclptiResult outputDirectoryStatus = EnsureCsvOutputDirectory(rootDirectory);
@@ -1238,7 +1246,7 @@ aclptiResult PmuCsvWriter::Write(
             CsvSectionStats stats;
             WriteCsvLine(output, header);
             for (const auto& [key, row] : pmuLogs) {
-                const CsvRow values = writer->row(MakeRowMetrics(key, row), config, taskLogDurationUs);
+                const CsvRow values = writer->row(MakeRowMetrics(key, row), config, operationDurationUs);
                 UpdateMissingStats(header, values, &stats);
                 WriteCsvLine(output, values);
             }
