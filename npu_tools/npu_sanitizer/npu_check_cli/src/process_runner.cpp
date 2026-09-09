@@ -36,7 +36,7 @@
 #include <utility>
 #include <unistd.h>
 
-namespace aclsan::cli {
+namespace npucheck {
 namespace {
 
 volatile sig_atomic_t g_childProcessGroup = -1;
@@ -423,9 +423,9 @@ bool ResolveLogPath(const std::string& requested, uint64_t sessionId, std::strin
 
 // 把 Options 里的工具集合转成线路上的 Configure 请求。解析阶段已经保证了排序与去重，
 // 这里只做搬运，不再重新规范化 —— 若两处各做一遍，规则一旦分叉就很难发现。
-ipc::ConfigureRequest BuildConfigureRequest(const Options& options)
+npucheck::ipc::ConfigureRequest BuildConfigureRequest(const Options& options)
 {
-    ipc::ConfigureRequest request;
+    npucheck::ipc::ConfigureRequest request;
     request.globalFlags = 0;
     request.tools = options.tools;
     return request;
@@ -515,9 +515,9 @@ int RunApplication(const Options& options, const std::string& libraryPath)
     std::string toolNames;
     for (const auto& tool : options.tools) {
         toolNames += (toolNames.empty() ? "" : ",");
-        toolNames += ipc::ToolName(tool.toolId);
+        toolNames += npucheck::ipc::ToolName(tool.toolId);
     }
-    aclsan::WritePlog(aclsan::PlogLevel::kDebug, "[INJECTION] library=" + libraryPath + " result=resolved");
+    npucheck::WritePlog(npucheck::PlogLevel::kDebug, "[INJECTION] library=" + libraryPath + " result=resolved");
 
     int consolePipe[2] = {-1, -1};
     if (pipe2(consolePipe, O_CLOEXEC) != 0) {
@@ -537,7 +537,7 @@ int RunApplication(const Options& options, const std::string& libraryPath)
     // 用户感知的是"从敲回车到应用真正开跑"这一整段，其中最不可控的恰恰是 exec 与
     // CANN 动态库加载。若把起点挪到 fork 之后、甚至 connect 成功之后，这段耗时就不
     // 占预算，用户设定的超时形同虚设。
-    const ipc::DeadlineMs handshakeDeadline = ipc::DeadlineAfterMs(options.handshakeTimeoutMs);
+    const npucheck::ipc::DeadlineMs handshakeDeadline = npucheck::ipc::DeadlineAfterMs(options.handshakeTimeoutMs);
 
     const pid_t child = fork();
     if (child < 0) {
@@ -562,13 +562,13 @@ int RunApplication(const Options& options, const std::string& libraryPath)
         const std::string parentText = std::to_string(getppid());
         const std::string timeoutText = std::to_string(options.handshakeTimeoutMs);
         (void)setenv("ACL_API_INJECTION", libraryPath.c_str(), 1);
-        (void)setenv(ipc::kUdsNameEnv, udsName.c_str(), 1);
-        (void)setenv(ipc::kSessionIdEnv, sessionText.c_str(), 1);
-        (void)setenv(ipc::kCliPidEnv, parentText.c_str(), 1);
-        (void)setenv(ipc::kHandshakeTimeoutEnv, timeoutText.c_str(), 1);
+        (void)setenv(npucheck::ipc::kUdsNameEnv, udsName.c_str(), 1);
+        (void)setenv(npucheck::ipc::kSessionIdEnv, sessionText.c_str(), 1);
+        (void)setenv(npucheck::ipc::kCliPidEnv, parentText.c_str(), 1);
+        (void)setenv(npucheck::ipc::kHandshakeTimeoutEnv, timeoutText.c_str(), 1);
         // 工作目录经环境变量下发：Configure 改用注册表编码后只承载工具与子选项，
         // 路径这类与协议无关的部署信息不再占线路。
-        (void)setenv(ipc::kWorkDirEnv, workDir.c_str(), 1);
+        (void)setenv(npucheck::ipc::kWorkDirEnv, workDir.c_str(), 1);
         auto argv = BuildArgv(options.application);
         execvp(argv[0], argv.data());
         dprintf(STDERR_FILENO, "npu_check: execvp failed: %s\n", std::strerror(errno));
@@ -599,9 +599,9 @@ int RunApplication(const Options& options, const std::string& libraryPath)
         return summary.exit = 125;
     }
 
-    aclsan::WritePlog(
-        aclsan::PlogLevel::kDebug, "[CLI] session=" + std::to_string(sessionId) + " tools=" + toolNames +
-                                       " app_pid=" + std::to_string(child) + " app_pgid=" + std::to_string(child));
+    npucheck::WritePlog(
+        npucheck::PlogLevel::kDebug, "[CLI] session=" + std::to_string(sessionId) + " tools=" + toolNames +
+                                         " app_pid=" + std::to_string(child) + " app_pgid=" + std::to_string(child));
     std::atomic<bool> childExited{false};
     std::thread consoleReader([&output, &childExited, fd = std::move(consoleRead)] {
         std::array<char, 8192> buffer{};
@@ -640,7 +640,7 @@ int RunApplication(const Options& options, const std::string& libraryPath)
         }
     });
 
-    UdsClient client;
+    ipc::UdsClient client;
     const bool handshake = client.ConnectAndConfigure(
         udsName, sessionId, static_cast<uint32_t>(child), handshakeDeadline, configure, error);
     // Result 分片的拼接缓冲。只有 receiver 线程写，join 之后主线程才读。
@@ -654,63 +654,63 @@ int RunApplication(const Options& options, const std::string& libraryPath)
     if (handshake) {
         receiver = std::thread([&] {
             while (true) {
-                ipc::Frame frame{};
+                npucheck::ipc::Frame frame{};
                 std::string receiveError;
                 // 采集阶段不设超时：应用可能跑数小时，任何固定值都是错的。终止由
                 // 对端关闭连接（CLOSED）或子进程退出驱动，见下面的分支。
-                const ipc::IoStatus status = client.Receive(frame, ipc::kNoDeadline, receiveError);
-                if (status == ipc::IoStatus::CLOSED) {
+                const npucheck::ipc::IoStatus status = client.Receive(frame, npucheck::ipc::kNoDeadline, receiveError);
+                if (status == npucheck::ipc::IoStatus::CLOSED) {
                     break;
                 }
-                if (status == ipc::IoStatus::TIMEOUT) {
+                if (status == npucheck::ipc::IoStatus::TIMEOUT) {
                     if (childExited) {
                         break;
                     }
                     continue;
                 }
-                if (status != ipc::IoStatus::OK) {
+                if (status != npucheck::ipc::IoStatus::OK) {
                     protocolComplete = false;
                     output.Sanitizer("UDS receive failed: " + receiveError, true);
                     break;
                 }
-                if (frame.type == ipc::MessageType::RESULT) {
+                if (frame.type == npucheck::ipc::MessageType::RESULT) {
                     std::string message;
-                    if (!ipc::DecodeText(frame.payload, message, receiveError)) {
+                    if (!npucheck::ipc::DecodeText(frame.payload, message, receiveError)) {
                         protocolComplete = false;
                         output.Sanitizer("UDS payload failed: " + receiveError, true);
                         break;
                     }
                     // 上限与注入库侧共用同一个常量：对端异常时不能让 CLI 一直吃内存。
-                    if (result.size() + message.size() > ipc::kMaxResultBytes) {
+                    if (result.size() + message.size() > npucheck::ipc::kMaxResultBytes) {
                         protocolComplete = false;
                         output.Sanitizer("result exceeds the maximum report size", true);
                         break;
                     }
                     result.append(message);
                     ++resultFrames;
-                    if ((frame.flags & ipc::kFlagMore) != 0) {
+                    if ((frame.flags & npucheck::ipc::kFlagMore) != 0) {
                         continue;
                     }
                     // MORE=0 的末帧到达即报告完整；结论位只在这一帧上有效，前面的分片
                     // 不带任何结论，所以这里必须读末帧的 flags 而不是任意一帧的。
-                    resultHasErrors = (frame.flags & ipc::kFlagHasErrors) != 0;
-                    resultTruncated = (frame.flags & ipc::kFlagTruncated) != 0;
+                    resultHasErrors = (frame.flags & npucheck::ipc::kFlagHasErrors) != 0;
+                    resultTruncated = (frame.flags & npucheck::ipc::kFlagTruncated) != 0;
                     resultComplete = true;
                     break;
                 }
-                if (frame.type == ipc::MessageType::ERROR) {
+                if (frame.type == npucheck::ipc::MessageType::ERROR) {
                     // Error 表示注入库侧基础设施失败，本次检查没有可信结论，不再等 Result。
                     protocolComplete = false;
-                    ipc::ErrorPayload failure{};
+                    npucheck::ipc::ErrorPayload failure{};
                     std::string decodeError;
-                    if (!ipc::DecodeError(frame.payload, failure, decodeError)) {
+                    if (!npucheck::ipc::DecodeError(frame.payload, failure, decodeError)) {
                         output.Sanitizer("ERROR malformed error payload: " + decodeError, true);
                         break;
                     }
                     // domain/code 是稳定取值进结构化日志，message 只原样转述给人看，
                     // 不参与任何判定。
-                    aclsan::WritePlog(
-                        aclsan::PlogLevel::kDebug,
+                    npucheck::WritePlog(
+                        npucheck::PlogLevel::kDebug,
                         "[UDS] phase=error domain=" + std::to_string(static_cast<unsigned>(failure.domain)) +
                             " code=" + std::to_string(failure.code));
                     output.Sanitizer("ERROR " + failure.message, true);
@@ -718,17 +718,17 @@ int RunApplication(const Options& options, const std::string& libraryPath)
                 }
                 // 其余都是 must-ignore 的实时诊断，收到即打印，不进拼接缓冲。
                 std::string message;
-                if (!ipc::DecodeText(frame.payload, message, receiveError)) {
+                if (!npucheck::ipc::DecodeText(frame.payload, message, receiveError)) {
                     protocolComplete = false;
                     output.Sanitizer("UDS payload failed: " + receiveError, true);
                     break;
                 }
-                output.Sanitizer(std::string(ipc::MessageTypeName(frame.type)) + " " + message, true);
+                output.Sanitizer(std::string(npucheck::ipc::MessageTypeName(frame.type)) + " " + message, true);
             }
         });
     } else {
         protocolComplete = false;
-        aclsan::WritePlog(aclsan::PlogLevel::kDebug, "[UDS] phase=handshake result=failed");
+        npucheck::WritePlog(npucheck::PlogLevel::kDebug, "[UDS] phase=handshake result=failed");
         output.Sanitizer("handshake=missing reason=\"" + error + "\"", true);
     }
 
@@ -749,11 +749,11 @@ int RunApplication(const Options& options, const std::string& libraryPath)
     // 判定顺序是固定的：先看有没有收到 MORE=0 的末帧，再看是不是被 Error 打断，
     // 最后才是"连接断了但报告没收全"。
     if (resultComplete) {
-        aclsan::WritePlog(
-            aclsan::PlogLevel::kDebug, "[UDS] phase=result frames=" + std::to_string(resultFrames.load()) +
-                                           " bytes=" + std::to_string(result.size()) +
-                                           " truncated=" + (resultTruncated ? "1" : "0") +
-                                           " has_errors=" + (resultHasErrors ? "1" : "0"));
+        npucheck::WritePlog(
+            npucheck::PlogLevel::kDebug, "[UDS] phase=result frames=" + std::to_string(resultFrames.load()) +
+                                             " bytes=" + std::to_string(result.size()) +
+                                             " truncated=" + (resultTruncated ? "1" : "0") +
+                                             " has_errors=" + (resultHasErrors ? "1" : "0"));
         output.Report(result);
         if (resultTruncated) {
             output.Sanitizer("report truncated: the diagnostic buffer reached its size limit", true);
@@ -761,9 +761,10 @@ int RunApplication(const Options& options, const std::string& libraryPath)
     } else if (handshake) {
         // 报告缺失或截断：已经收到的分片一律丢弃。半份报告看上去和完整报告没有区别，
         // 输出它等于让用户把"没查到问题"和"没查完"混为一谈。
-        aclsan::WritePlog(
-            aclsan::PlogLevel::kDebug, "[UDS] phase=result frames=" + std::to_string(resultFrames.load()) + " bytes=" +
-                                           std::to_string(result.size()) + " truncated=unknown has_errors=unknown");
+        npucheck::WritePlog(
+            npucheck::PlogLevel::kDebug, "[UDS] phase=result frames=" + std::to_string(resultFrames.load()) +
+                                             " bytes=" + std::to_string(result.size()) +
+                                             " truncated=unknown has_errors=unknown");
         output.Sanitizer("result missing or truncated; the partial report was discarded", true);
     }
 
@@ -796,4 +797,4 @@ int RunApplication(const Options& options, const std::string& libraryPath)
     return exitCode;
 }
 
-} // namespace aclsan::cli
+} // namespace npucheck

@@ -6,23 +6,12 @@
 // INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 // See LICENSE in the root of the software repository for the full text of the License.
 
-#ifndef NPU_CHECK_DIAGNOSTIC_DEVICE_PROTOCOL_H
-#define NPU_CHECK_DIAGNOSTIC_DEVICE_PROTOCOL_H
-
-#include <cstdint>
+#pragma once
+#include "aclsan/aclsan_api.h"
+#include "diagnostic/report_message.h"
 
 namespace npucheck {
-
-enum class DeviceSourceKind : uint32_t {
-    MTE2 = 1,
-    MTE3 = 2,
-    FIXPIPE = 3,
-    SET_WAIT_FLAG = 4,
-    GET_RLS_BUF = 5,
-};
-
-constexpr uint32_t kDeviceEventFlagPredicated = 1u << 3u;
-
+std::string FormatCallStackReport(AclsanStatus status, const AclsanDeviceCallStack& callStack);
+void PopulateDeviceCallStack(NpuCheckMemcheckReport& report) noexcept;
+void PopulateDeviceCallStack(NpuCheckSynccheckReport& report) noexcept;
 } // namespace npucheck
-
-#endif

@@ -16,12 +16,12 @@
 #include <string>
 #include <vector>
 
-namespace aclsan::cli {
+namespace npucheck {
 
 // 命令行解析结果。ToolId / OptionValue / ToolRequest 的唯一定义见 common/wire_protocol.h。
 struct Options {
-    std::vector<ipc::ToolRequest> tools; // 本次启用的工具及各自子选项，已按注册表规则规范化排序
-    std::string logFile;                 // 用户指定的日志目录或文件；空表示写 stdout
+    std::vector<npucheck::ipc::ToolRequest> tools; // 本次启用的工具及各自子选项，已按注册表规则规范化排序
+    std::string logFile;                           // 用户指定的日志目录或文件；空表示写 stdout
     // 工作目录：DBI 运行期产物落在这里。空表示用 CLI 自建的
     // 临时会话目录。两者的差别不只是路径 —— 临时目录由 CLI 创建也由 CLI 删除，用户
     // 指定的目录只创建。
@@ -36,6 +36,6 @@ bool ParseOptions(int argc, char** argv, Options& options, std::string& error);
 bool ResolveLibraryPath(const std::string& requested, std::string& resolved, std::string& error);
 std::string Usage();
 
-} // namespace aclsan::cli
+} // namespace npucheck
 
 #endif

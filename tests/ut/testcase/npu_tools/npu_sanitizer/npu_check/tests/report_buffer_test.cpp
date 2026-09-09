@@ -16,7 +16,7 @@
 #include <thread>
 #include <vector>
 
-namespace aclsan::diagnostic {
+namespace npucheck::diagnostic {
 namespace {
 
 TEST(ReportBufferTest, AppendsInOrderAndTakeClears)
@@ -50,17 +50,17 @@ TEST(ReportBufferTest, TruncatesAtTheSizeLimitAndKeepsWhatFits)
     size_t written = 0;
     while (buffer.Append(block)) {
         written += block.size();
-        ASSERT_LE(written, ipc::kMaxResultBytes);
+        ASSERT_LE(written, npucheck::ipc::kMaxResultBytes);
     }
 
     EXPECT_TRUE(buffer.Truncated());
     EXPECT_FALSE(buffer.Failed());
     // 恰好停在上限上：既没有越界，也没有因为最后一段放不下就整段丢弃。
-    EXPECT_EQ(buffer.Size(), ipc::kMaxResultBytes);
+    EXPECT_EQ(buffer.Size(), npucheck::ipc::kMaxResultBytes);
 
     // 已经截断之后继续追加只会被拒绝，不改变已有内容。
     EXPECT_FALSE(buffer.Append("tail"));
-    EXPECT_EQ(buffer.Size(), ipc::kMaxResultBytes);
+    EXPECT_EQ(buffer.Size(), npucheck::ipc::kMaxResultBytes);
 }
 
 // 诊断在多个 callback 线程上产生，追加必须是线程安全的。
@@ -91,4 +91,4 @@ TEST(ReportBufferTest, ConcurrentAppendsKeepEveryByte)
 }
 
 } // namespace
-} // namespace aclsan::diagnostic
+} // namespace npucheck::diagnostic

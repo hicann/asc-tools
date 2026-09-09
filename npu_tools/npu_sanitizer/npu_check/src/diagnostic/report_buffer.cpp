@@ -8,7 +8,7 @@
 
 #include "diagnostic/report_buffer.h"
 
-namespace aclsan::diagnostic {
+namespace npucheck::diagnostic {
 
 bool ReportBuffer::Append(const std::string& text) noexcept
 {
@@ -17,13 +17,13 @@ bool ReportBuffer::Append(const std::string& text) noexcept
         if (failed_ || text.empty()) {
             return !failed_;
         }
-        if (buffer_.size() >= ipc::kMaxResultBytes) {
+        if (buffer_.size() >= npucheck::ipc::kMaxResultBytes) {
             truncated_ = true;
             return false;
         }
         // 触及上限时截到边界为止而不是整段丢弃：报告本来就是给人读的，半条记录也比
         // 突然消失更容易定位问题，何况 truncated 标志已经把不完整这件事讲清楚了。
-        const size_t room = ipc::kMaxResultBytes - buffer_.size();
+        const size_t room = npucheck::ipc::kMaxResultBytes - buffer_.size();
         if (text.size() > room) {
             buffer_.append(text, 0, room);
             truncated_ = true;
@@ -85,4 +85,4 @@ size_t ReportBuffer::Size() const noexcept
     }
 }
 
-} // namespace aclsan::diagnostic
+} // namespace npucheck::diagnostic

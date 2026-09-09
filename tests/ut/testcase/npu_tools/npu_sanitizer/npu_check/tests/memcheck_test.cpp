@@ -15,7 +15,7 @@
 #include <limits>
 #include <string>
 
-namespace aclsan {
+namespace npucheck {
 namespace {
 
 using npucheck::NpuCheckReportAccessMode;
@@ -104,7 +104,8 @@ TEST(MemcheckTest, ReportsOutOfBoundsReadAtSynchronization)
     EXPECT_NE(rendered.find("Invalid GM read of size 64 bytes"), std::string::npos);
     EXPECT_NE(rendered.find("by aicore (75) type (AIC) block (7) pipe (MTE2)"), std::string::npos);
     EXPECT_NE(rendered.find("Address 0x100ff0 is out of bounds"), std::string::npos);
-    EXPECT_NE(rendered.find("48 bytes after the nearest allocation"), std::string::npos);
+    // The public template omits allocation-distance details; structured fields are checked above.
+    EXPECT_EQ(rendered.find("nearest allocation"), std::string::npos);
     EXPECT_EQ(checker.Stats().pendingDeviceOperations, 0U);
     EXPECT_EQ(checker.Stats().errors, 1U);
     EXPECT_TRUE(checker.OnSynchronization().empty());
@@ -552,4 +553,4 @@ TEST(MemcheckTest, GroupsDerivedDataByCompleteInstructionIdentity)
 }
 
 } // namespace
-} // namespace aclsan
+} // namespace npucheck

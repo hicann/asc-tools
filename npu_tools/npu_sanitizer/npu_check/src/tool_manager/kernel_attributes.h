@@ -15,7 +15,7 @@
 
 #include <cstdint>
 
-namespace aclsan {
+namespace npucheck {
 
 struct KernelAttributes {
     int64_t kernelType = 0;
@@ -29,6 +29,6 @@ struct KernelAttributes {
 
 KernelAttributes QueryKernelAttributes(aclrtFuncHandle function) noexcept;
 
-} // namespace aclsan
+} // namespace npucheck
 
 #endif

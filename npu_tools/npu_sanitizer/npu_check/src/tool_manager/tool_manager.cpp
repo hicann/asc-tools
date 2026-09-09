@@ -9,184 +9,17 @@
 #include "tool_manager/tool_manager.h"
 
 #include "diagnostic/report/report_normalizer.h"
-#include "tool_manager/kernel_attributes.h"
+#include "diagnostic/report/device_call_stack.h"
 
 #include <algorithm>
-#include <array>
 #include <exception>
 #include <cstdlib>
 #include "plog_sink.h"
-#include <iomanip>
 #include <memory>
 #include <sstream>
 
-namespace aclsan {
+namespace npucheck {
 namespace {
-
-std::string StatusReason(AclsanStatus status) { return "api_status_" + std::to_string(static_cast<uint32_t>(status)); }
-
-bool HasCallStackFrames(AclsanStatus status)
-{
-    return status == ACLSAN_STATUS_SUCCESS || status == ACLSAN_STATUS_ERROR_MAX_LIMIT_REACHED;
-}
-
-std::string FormatCallStackReport(AclsanStatus status, const AclsanDeviceCallStack& callStack)
-{
-    std::ostringstream output;
-    output << "[CALL-STACK] pc=0x" << std::hex << callStack.pc << std::dec;
-    if (!HasCallStackFrames(status) || callStack.depth == 0) {
-        output << " status=unavailable reason=" << StatusReason(status) << '\n';
-        return output.str();
-    }
-    output << " status=available binary_id=" << callStack.binaryId;
-    if ((callStack.flags & ACLSAN_CALL_STACK_FLAG_TRUNCATED) != 0) {
-        output << " truncated=true";
-    }
-    output << '\n';
-    for (uint32_t index = 0; index < callStack.depth; ++index) {
-        const AclsanDeviceCallStackFrame& frame = callStack.frames[index];
-        output << "  #" << index << ' ' << frame.functionName << " at " << frame.fileName << ':' << frame.line << ':'
-               << frame.column << '\n';
-    }
-    return output.str();
-}
-
-std::vector<npucheck::ReportFrame> MakeReportFrames(const AclsanDeviceCallStack& callStack)
-{
-    const uint32_t depth = std::min(callStack.depth, static_cast<uint32_t>(ACLSAN_CALL_STACK_MAX_DEPTH));
-    std::vector<npucheck::ReportFrame> frames;
-    frames.reserve(depth);
-    for (uint32_t index = 0; index < depth; ++index) {
-        const AclsanDeviceCallStackFrame& source = callStack.frames[index];
-        npucheck::ReportFrame frame;
-        frame.pc = callStack.pc;
-        frame.function = source.functionName;
-        frame.file = source.fileName;
-        frame.line = source.line;
-        frame.column = source.column;
-        frame.inlineDepth = source.inlineDepth;
-        frames.push_back(std::move(frame));
-    }
-    return frames;
-}
-
-void PopulateDeviceCallStack(npucheck::NpuCheckMemcheckReport& report) noexcept
-{
-    if (report.common.exec.pc == 0 || report.common.stackCount > npucheck::kNpuCheckReportStackMax) {
-        return;
-    }
-
-    std::uint32_t stackIndex = report.common.stackCount;
-    for (std::uint32_t index = 0; index < report.common.stackCount && index < npucheck::kNpuCheckReportStackMax;
-         ++index) {
-        if (report.common.stacks[index].role == npucheck::ReportStackRole::FAULT_DEVICE) {
-            stackIndex = index;
-            break;
-        }
-    }
-
-    if (stackIndex == report.common.stackCount && report.common.stackCount >= npucheck::kNpuCheckReportStackMax) {
-        return;
-    }
-
-    try {
-        auto callStack = std::make_unique<AclsanDeviceCallStack>();
-        const AclsanStatus status = aclsanGetDeviceCallStack(report.common.exec.pc, callStack.get());
-        std::string callStackText = FormatCallStackReport(status, *callStack);
-        std::vector<npucheck::ReportFrame> frames;
-        if (HasCallStackFrames(status)) {
-            frames = MakeReportFrames(*callStack);
-        }
-
-        auto& stack = report.common.stacks[stackIndex];
-        stack.rawText.swap(callStackText);
-        stack.role = npucheck::ReportStackRole::FAULT_DEVICE;
-        if (!frames.empty()) {
-            stack.frames.swap(frames);
-        }
-        const bool hasStructuredFrames = !stack.frames.empty();
-        stack.format =
-            hasStructuredFrames ? npucheck::ReportStackFormat::FRAMES : npucheck::ReportStackFormat::RAW_TEXT;
-        if (callStack->binaryId != 0) {
-            report.common.exec.binaryId = callStack->binaryId;
-        }
-        if (stackIndex == report.common.stackCount) {
-            ++report.common.stackCount;
-        }
-    } catch (...) {
-        return;
-    }
-}
-
-void PopulateSyncPointCallStack(
-    npucheck::NpuCheckReportCommon& common, npucheck::NpuCheckSyncPoint& point, npucheck::ReportStackRole role) noexcept
-{
-    if (!point.hasExecContext || point.exec.pc == 0 || common.stackCount > npucheck::kNpuCheckReportStackMax) {
-        return;
-    }
-
-    std::uint32_t stackIndex = common.stackCount;
-    for (std::uint32_t index = 0; index < common.stackCount && index < npucheck::kNpuCheckReportStackMax; ++index) {
-        if (common.stacks[index].role == role) {
-            stackIndex = index;
-            break;
-        }
-    }
-    if (stackIndex == common.stackCount && common.stackCount >= npucheck::kNpuCheckReportStackMax) {
-        return;
-    }
-
-    try {
-        auto callStack = std::make_unique<AclsanDeviceCallStack>();
-        const AclsanStatus status = aclsanGetDeviceCallStack(point.exec.pc, callStack.get());
-        std::string callStackText = FormatCallStackReport(status, *callStack);
-        std::vector<npucheck::ReportFrame> frames;
-        if (HasCallStackFrames(status)) {
-            frames = MakeReportFrames(*callStack);
-        }
-
-        auto& stack = common.stacks[stackIndex];
-        stack.rawText.swap(callStackText);
-        stack.role = role;
-        stack.frames.swap(frames);
-        stack.format =
-            stack.frames.empty() ? npucheck::ReportStackFormat::RAW_TEXT : npucheck::ReportStackFormat::FRAMES;
-        if (callStack->binaryId != 0) {
-            point.exec.binaryId = callStack->binaryId;
-        }
-        point.stackRole = role;
-        if (stackIndex == common.stackCount) {
-            ++common.stackCount;
-        }
-    } catch (...) {
-        return;
-    }
-}
-
-void PopulateDeviceCallStack(npucheck::NpuCheckSynccheckReport& report) noexcept
-{
-    PopulateSyncPointCallStack(report.common, report.triggerPoint, npucheck::ReportStackRole::SYNC_TRIGGER);
-    report.common.exec = report.triggerPoint.exec;
-    PopulateSyncPointCallStack(report.common, report.relatedPoint, npucheck::ReportStackRole::SYNC_RELATED);
-}
-
-struct CallbackSpec {
-    AclsanCallbackDomain domain;
-    AclsanCallbackId cbid;
-};
-
-constexpr std::array<CallbackSpec, 4> kMemcheckCallbacks{{
-    {ACLSAN_CB_DOMAIN_RESOURCE, ACLSAN_CBID_RESOURCE_MEMORY_ALLOC},
-    {ACLSAN_CB_DOMAIN_RESOURCE, ACLSAN_CBID_RESOURCE_MEMORY_FREE},
-    {ACLSAN_CB_DOMAIN_DEVICE_INSTRUCTION, ACLSAN_CBID_DEVICE_MEMORY_ACCESS},
-    {ACLSAN_CB_DOMAIN_SYNCHRONIZE, ACLSAN_CBID_SYNCHRONIZE_STREAM_SYNC_END},
-}};
-
-constexpr std::array<CallbackSpec, 3> kSynccheckCallbacks{{
-    {ACLSAN_CB_DOMAIN_DEVICE_INSTRUCTION, ACLSAN_CBID_DEVICE_SYNC},
-    {ACLSAN_CB_DOMAIN_SYNCHRONIZE, ACLSAN_CBID_SYNCHRONIZE_STREAM_SYNC_END},
-    {ACLSAN_CB_DOMAIN_LAUNCH, ACLSAN_CBID_LAUNCH_KERNEL},
-}};
 
 std::string StatusMessage(const char* operation, AclsanStatus status)
 {
@@ -222,59 +55,49 @@ int ToolManager::Initialize()
         server_.Shutdown();
         return 1;
     }
-    const char* workDir = std::getenv(ipc::kWorkDirEnv);
+    const char* workDir = std::getenv(npucheck::ipc::kWorkDirEnv);
     workDir_ = workDir != nullptr ? workDir : "";
     std::ostringstream handshakeMessage;
     handshakeMessage << "UDS handshake completed session=" << server_.SessionId()
                      << " negotiated_minor=" << server_.NegotiatedMinor();
-    aclsan::WritePlog(aclsan::PlogLevel::kInfo, handshakeMessage.str());
+    npucheck::WritePlog(npucheck::PlogLevel::kInfo, handshakeMessage.str());
     std::ostringstream configMessage;
     configMessage << "tool configuration work_dir=" << workDir_ << " tool_count=" << configure_.tools.size();
     for (const auto& tool : configure_.tools) {
-        configMessage << " tool=" << ipc::ToolName(tool.toolId) << " option_count=" << tool.options.size();
+        configMessage << " tool=" << npucheck::ipc::ToolName(tool.toolId) << " option_count=" << tool.options.size();
         for (const auto& option : tool.options) {
             configMessage << " option_id=0x" << std::hex << static_cast<unsigned>(option.optionId) << std::dec;
         }
     }
-    aclsan::WritePlog(aclsan::PlogLevel::kInfo, configMessage.str());
+    npucheck::WritePlog(npucheck::PlogLevel::kInfo, configMessage.str());
     if (!ConfigureSanitizer(error)) {
-        aclsan::WritePlog(aclsan::PlogLevel::kError, error);
+        npucheck::WritePlog(npucheck::PlogLevel::kError, error);
         server_.SendInitializationError(
-            ipc::ErrorDomain::kConfiguration, ipc::error_code::kToolInitializationFailed, error);
+            npucheck::ipc::ErrorDomain::kConfiguration, npucheck::ipc::error_code::kToolInitializationFailed, error);
         RollbackSanitizer();
         server_.Shutdown();
         return 1;
     }
     // Ready 不带 payload，会话细节只写 plog。
-    aclsan::WritePlog(aclsan::PlogLevel::kInfo, BuildReadyMessage());
+    npucheck::WritePlog(npucheck::PlogLevel::kInfo, BuildReadyMessage());
     if (!server_.SendReady(error)) {
-        aclsan::WritePlog(aclsan::PlogLevel::kError, error);
+        npucheck::WritePlog(npucheck::PlogLevel::kError, error);
         RollbackSanitizer();
         server_.Shutdown();
         return 1;
     }
     initialized_ = true;
-    aclsan::WritePlog(aclsan::PlogLevel::kInfo, "npu_check initialization completed");
+    npucheck::WritePlog(npucheck::PlogLevel::kInfo, "npu_check initialization completed");
     return 0;
 }
 
 void ToolManager::LogHandshakeFailure(const std::string& reason) noexcept
 {
     try {
-        aclsan::WritePlog(aclsan::PlogLevel::kError, "UDS handshake failed: " + reason);
+        npucheck::WritePlog(npucheck::PlogLevel::kError, "UDS handshake failed: " + reason);
     } catch (...) {
         return;
     }
-}
-
-bool ToolManager::IsToolEnabled(ipc::ToolId toolId) const
-{
-    for (const auto& tool : configure_.tools) {
-        if (tool.toolId == toolId) {
-            return true;
-        }
-    }
-    return false;
 }
 
 bool ToolManager::ConfigureSanitizer(std::string& error)
@@ -283,22 +106,13 @@ bool ToolManager::ConfigureSanitizer(std::string& error)
         error = "configure enabled no tool";
         return false;
     }
-    // 按 toolId 升序逐个构造 checker。工具之间没有互斥关系，memcheck 与 synccheck
-    // 可以在同一次运行中同时启用；任一构造失败即整体失败，不发 Ready。
     for (const auto& tool : configure_.tools) {
-        switch (tool.toolId) {
-            case ipc::ToolId::kMemcheck:
-                memcheck_ = std::make_unique<Memcheck>(true);
-                aclsan::WritePlog(aclsan::PlogLevel::kDebug, "memcheck instance created");
-                break;
-            case ipc::ToolId::kSynccheck:
-                synccheck_ = std::make_unique<npucheck::Synccheck>();
-                aclsan::WritePlog(aclsan::PlogLevel::kDebug, "synccheck instance created");
-                break;
-            default:
-                error = std::string("unsupported tool '") + ipc::ToolName(tool.toolId) + "'";
-                return false;
+        auto checker = CreateChecker(tool.toolId);
+        if (!checker) {
+            error = std::string("unsupported tool '") + npucheck::ipc::ToolName(tool.toolId) + "'";
+            return false;
         }
+        checkers_.push_back(std::move(checker));
     }
     AclsanStatus status = aclsanSubscribe(&subscriber_, &ToolManager::Callback, this);
     if (status != ACLSAN_STATUS_SUCCESS) {
@@ -306,33 +120,13 @@ bool ToolManager::ConfigureSanitizer(std::string& error)
         return false;
     }
     subscribed_ = true;
-    aclsan::WritePlog(aclsan::PlogLevel::kInfo, "sanitizer callback subscriber registered");
+    npucheck::WritePlog(npucheck::PlogLevel::kInfo, "sanitizer callback subscriber registered");
     return EnableCallbacks(error);
 }
 
 bool ToolManager::EnableCallbacks(std::string& error)
 {
-    // 需要使能的回调是各 checker 声明集合的并集，去重后一次性使能。
-    //
-    // 去重不是优化：SYNCHRONIZE/STREAM_SYNC_END 被 memcheck 与 synccheck 共用，两个
-    // 工具同时启用时若各使能一次，同一事件会被投递两次，配对与统计逻辑都会出错。
-    std::vector<CallbackSpec> required;
-    const auto collect = [&required](const auto& callbacks) {
-        for (const auto& callback : callbacks) {
-            const bool duplicate = std::any_of(required.begin(), required.end(), [&callback](const CallbackSpec& spec) {
-                return spec.domain == callback.domain && spec.cbid == callback.cbid;
-            });
-            if (!duplicate) {
-                required.push_back(callback);
-            }
-        }
-    };
-    if (memcheck_ != nullptr) {
-        collect(kMemcheckCallbacks);
-    }
-    if (synccheck_ != nullptr) {
-        collect(kSynccheckCallbacks);
-    }
+    const auto required = RequiredCallbacks(checkers_);
 
     for (const auto& callback : required) {
         const AclsanStatus status = aclsanEnableCallback(1, subscriber_, callback.domain, callback.cbid);
@@ -343,7 +137,7 @@ bool ToolManager::EnableCallbacks(std::string& error)
         std::ostringstream message;
         message << "callback enabled domain=" << static_cast<uint32_t>(callback.domain)
                 << " cbid=" << static_cast<uint32_t>(callback.cbid);
-        aclsan::WritePlog(aclsan::PlogLevel::kDebug, message.str());
+        npucheck::WritePlog(npucheck::PlogLevel::kDebug, message.str());
     }
     return true;
 }
@@ -363,8 +157,7 @@ void ToolManager::RollbackSanitizer()
         std::unique_lock<std::mutex> callbackLock(callbackMutex_);
         callbacksDrained_.wait(callbackLock, [this] { return activeCallbacks_ == 0; });
     }
-    memcheck_.reset();
-    synccheck_.reset();
+    checkers_.clear();
 }
 
 void ToolManager::Finalize()
@@ -405,29 +198,22 @@ void ToolManager::Finalize()
             std::lock_guard<std::mutex> stateLock(stateMutex_);
             ++frameworkErrors_;
         }
-        aclsan::WritePlog(
-            aclsan::PlogLevel::kError,
+        npucheck::WritePlog(
+            npucheck::PlogLevel::kError,
             "failed to render the session report bundle status=" + std::to_string(static_cast<int>(renderStatus)));
     } else if (!report_.Append(renderedReport) && !report_.Truncated()) {
-        aclsan::WritePlog(aclsan::PlogLevel::kError, "failed to record the rendered session report bundle");
+        npucheck::WritePlog(npucheck::PlogLevel::kError, "failed to record the rendered session report bundle");
     }
 
     const std::string summary = BuildSummaryMessage();
-    aclsan::WritePlog(aclsan::PlogLevel::kInfo, summary);
+    npucheck::WritePlog(npucheck::PlogLevel::kInfo, summary);
     // 多工具时取"全部工具都分析完整"，任一工具留有在途或被丢弃的事件，整份报告就
     // 不能声称完整 —— 这里必须是与，不是二选一。
     bool analysisComplete = true;
     {
         std::lock_guard<std::mutex> stateLock(stateMutex_);
-        if (memcheck_ != nullptr) {
-            const MemcheckStats stats = memcheck_->Stats();
-            analysisComplete =
-                analysisComplete && stats.pendingDeviceOperations == 0 && stats.droppedDeviceOperations == 0;
-        }
-        if (synccheck_ != nullptr) {
-            const npucheck::SynccheckStats stats = synccheck_->Stats();
-            analysisComplete = analysisComplete && stats.pendingOpens == 0;
-        }
+        analysisComplete = std::all_of(
+            checkers_.begin(), checkers_.end(), [](const auto& checker) { return checker->AnalysisComplete(); });
         analysisComplete = analysisComplete && malformedCallbacks_ == 0 && frameworkErrors_ == 0;
     }
     const bool truncated = report_.Truncated();
@@ -451,36 +237,25 @@ void ToolManager::Finalize()
     if (!reportBundleAvailable || report_.Failed()) {
         // 报告本身没能拼出来，此时宁可什么都不给，也不能把残缺的正文当成结论发出去。
         server_.SendError(
-            ipc::ErrorDomain::kInternal, ipc::error_code::kReportUnavailable,
+            npucheck::ipc::ErrorDomain::kInternal, npucheck::ipc::error_code::kReportUnavailable,
             "npu_check cannot produce the session report");
     } else {
         const std::string reportText = report_.Take();
         std::string sendError;
         if (!server_.SendResult(reportText, hasErrors, truncated, sendError)) {
-            aclsan::WritePlog(aclsan::PlogLevel::kError, "failed to deliver the session report: " + sendError);
+            npucheck::WritePlog(npucheck::PlogLevel::kError, "failed to deliver the session report: " + sendError);
         }
     }
     server_.Shutdown();
-    aclsan::WritePlog(aclsan::PlogLevel::kInfo, sessionEnd.str());
-    memcheck_.reset();
-    synccheck_.reset();
+    npucheck::WritePlog(npucheck::PlogLevel::kInfo, sessionEnd.str());
+    checkers_.clear();
     initialized_ = false;
 }
 
 bool ToolManager::HasDetectedErrors() const
 {
-    // 多工具时任一工具检出即为真。
     std::lock_guard<std::mutex> stateLock(stateMutex_);
-    if (memcheck_ != nullptr && memcheck_->Stats().errors != 0) {
-        return true;
-    }
-    if (synccheck_ != nullptr) {
-        const npucheck::SynccheckStats stats = synccheck_->Stats();
-        if (stats.duplicateOpens + stats.unmatchedCloses + stats.unconsumedOpens != 0) {
-            return true;
-        }
-    }
-    return false;
+    return std::any_of(checkers_.begin(), checkers_.end(), [](const auto& checker) { return checker->HasErrors(); });
 }
 
 bool ToolManager::IsInitialized() const
@@ -533,131 +308,34 @@ void ToolManager::LeaveCallback()
 void ToolManager::OnCallback(AclsanCallbackDomain domain, AclsanCallbackId cbid, const void* cbdata)
 {
     LogCallback(domain, cbid, cbdata);
-    std::vector<npucheck::NpuCheckMemcheckReport> reports;
-    std::vector<npucheck::NpuCheckSynccheckReport> syncReports;
-    bool hasSynccheckReports = false;
+    CheckerReports reports;
     bool malformed = false;
     {
         std::lock_guard<std::mutex> stateLock(stateMutex_);
-        switch (domain) {
-            case ACLSAN_CB_DOMAIN_RESOURCE: {
-                const auto* data = ValidateCallbackData<AclsanResourceData>(cbdata);
-                malformed = data == nullptr;
-                if (data != nullptr && memcheck_ != nullptr && cbid == ACLSAN_CBID_RESOURCE_MEMORY_ALLOC) {
-                    memcheck_->OnAllocation(*data);
-                    std::ostringstream message;
-                    message << "memory alloc resource=" << data->resourceId << " device=" << data->deviceId
-                            << " address=" << data->ptr << " bytes=" << data->bytes
-                            << " result=" << data->common.result;
-                    aclsan::WritePlog(aclsan::PlogLevel::kInfo, message.str());
-                } else if (data != nullptr && memcheck_ != nullptr && cbid == ACLSAN_CBID_RESOURCE_MEMORY_FREE) {
-                    memcheck_->OnFree(*data);
-                    std::ostringstream message;
-                    message << "memory free resource=" << data->resourceId << " device=" << data->deviceId
-                            << " address=" << data->ptr << " result=" << data->common.result;
-                    aclsan::WritePlog(aclsan::PlogLevel::kInfo, message.str());
-                }
-                break;
+        for (const auto& checker : checkers_) {
+            if (!checker->Accepts(domain, cbid)) {
+                continue;
             }
-            case ACLSAN_CB_DOMAIN_DEVICE_INSTRUCTION: {
-                if (cbid == ACLSAN_CBID_DEVICE_MEMORY_ACCESS) {
-                    const auto* data = ValidateDeviceMemoryAccessData(cbdata);
-                    if (data != nullptr && memcheck_ != nullptr) {
-                        memcheck_->QueueDeviceMemoryAccess(*data);
-                        std::ostringstream message;
-                        message << "device memory access launch=" << data->header.launchId << " pc=0x" << std::hex
-                                << data->header.pc << std::dec << " device=" << data->header.deviceId
-                                << " core=" << data->header.phyCoreId << " address=0x" << std::hex << data->address
-                                << std::dec << " access_mode=" << data->accessMode << " layout=" << data->layoutKind;
-                        aclsan::WritePlog(aclsan::PlogLevel::kDebug, message.str());
-                    } else {
-                        malformed = true;
-                    }
-                } else if (cbid == ACLSAN_CBID_DEVICE_SYNC) {
-                    const auto* data = static_cast<const AclsanDeviceSyncData*>(cbdata);
-                    if (data != nullptr && synccheck_ != nullptr) {
-                        synccheck_->OnDeviceSync(*data);
-                    } else {
-                        malformed = true;
-                    }
+            try {
+                if (!checker->OnCallback(domain, cbid, cbdata, reports)) {
+                    malformed = true;
                 }
-                break;
+            } catch (const std::exception& error) {
+                ++frameworkErrors_;
+                npucheck::WritePlog(
+                    npucheck::PlogLevel::kError, std::string("checker callback failed: ") + error.what());
+            } catch (...) {
+                ++frameworkErrors_;
+                npucheck::WritePlog(npucheck::PlogLevel::kError, "checker callback failed");
             }
-            case ACLSAN_CB_DOMAIN_SYNCHRONIZE: {
-                const auto* data = ValidateCallbackData<AclsanSynchronizeData>(cbdata);
-                malformed = data == nullptr;
-                if (data != nullptr && memcheck_ != nullptr && data->common.result == 0) {
-                    reports = memcheck_->OnSynchronization();
-                    std::ostringstream message;
-                    message << "synchronization completed reports=" << reports.size() << " stream=" << data->stream;
-                    aclsan::WritePlog(aclsan::PlogLevel::kInfo, message.str());
-                }
-                if (data != nullptr && synccheck_ != nullptr) {
-                    syncReports = synccheck_->OnSynchronization(); // TODO: 换个名字 finalizeCbdataAndReport
-                    hasSynccheckReports = true;
-                    std::ostringstream message;
-                    message << "synchronization observed reports=" << syncReports.size() << " stream=" << data->stream
-                            << " result=" << data->common.result;
-                    aclsan::WritePlog(aclsan::PlogLevel::kInfo, message.str());
-                }
-                if (data != nullptr && data->common.result != 0) {
-                    std::ostringstream message;
-                    message << "synchronization failed result=" << data->common.result << " stream=" << data->stream;
-                    aclsan::WritePlog(aclsan::PlogLevel::kWarning, message.str());
-                }
-                break;
-            }
-            case ACLSAN_CB_DOMAIN_LAUNCH: {
-                const auto* data = ValidateCallbackData<AclsanLaunchData>(cbdata);
-                if (data == nullptr || cbid != ACLSAN_CBID_LAUNCH_KERNEL) {
-                    break;
-                }
-
-                const KernelAttributes attributes = QueryKernelAttributes(data->function);
-                const char* functionName = data->functionName == nullptr ? "<unknown>" : data->functionName;
-                std::ostringstream message;
-                message << "kernel attributes launch=" << data->launchId << " function=" << data->function
-                        << " function_name=" << functionName << " num_blocks=" << data->numBlocks
-                        << " kernel_type=" << attributes.kernelType
-                        << " kernel_type_status=" << attributes.kernelTypeStatus << " aic_ratio=" << attributes.aicRatio
-                        << " aiv_ratio=" << attributes.aivRatio
-                        << " kernel_ratio_status=" << attributes.kernelRatioStatus
-                        << " kernel_sched_mode=" << attributes.kernelSchedMode
-                        << " kernel_sched_mode_status=" << attributes.kernelSchedModeStatus
-                        << " launch_result=" << data->common.result;
-                aclsan::WritePlog(aclsan::PlogLevel::kDebug, message.str());
-
-                const auto logFailure = [data, functionName](const char* attribute, aclError status) {
-                    if (status == ACL_SUCCESS) {
-                        return;
-                    }
-                    std::ostringstream warning;
-                    warning << "kernel attribute query failed launch=" << data->launchId
-                            << " function=" << data->function << " function_name=" << functionName
-                            << " attribute=" << attribute << " result=" << status;
-                    aclsan::WritePlog(aclsan::PlogLevel::kWarning, warning.str());
-                };
-                logFailure("ACL_FUNC_ATTR_KERNEL_TYPE", attributes.kernelTypeStatus);
-                logFailure("ACL_FUNC_ATTR_KERNEL_RATIO", attributes.kernelRatioStatus);
-                logFailure("ACL_FUNC_ATTR_KERNEL_SCHED_MODE", attributes.kernelSchedModeStatus);
-                break;
-            }
-            default:
-                break;
         }
+        if (malformed)
+            ++malformedCallbacks_;
     }
     if (malformed) {
-        {
-            std::lock_guard<std::mutex> stateLock(stateMutex_);
-            ++malformedCallbacks_;
-        }
         PublishMalformed(domain, cbid, "null, truncated, or incompatible callback data");
-    } else {
-        StoreDiagnostics(std::move(reports));
-        if (hasSynccheckReports) {
-            StoreSynccheckReports(std::move(syncReports));
-        }
     }
+    StoreReports(std::move(reports));
 }
 
 void ToolManager::OnCallbackException(const char* reason) noexcept
@@ -669,37 +347,23 @@ void ToolManager::OnCallbackException(const char* reason) noexcept
         }
         std::string message = "npu_check callback failed: ";
         message += reason != nullptr ? reason : "unspecified exception";
-        aclsan::WritePlog(aclsan::PlogLevel::kError, message);
+        npucheck::WritePlog(npucheck::PlogLevel::kError, message);
     } catch (...) {
         // Error reporting is best effort inside a noexcept runtime callback.
         return;
     }
 }
 
-void ToolManager::StoreDiagnostics(std::vector<npucheck::NpuCheckMemcheckReport> reports)
+void ToolManager::StoreReports(CheckerReports reports)
 {
     for (auto& report : reports) {
-        PopulateDeviceCallStack(report);
-        const npucheck::NpuCheckReportRecord reportRecord = npucheck::NpuCheckReportRecord::From(report);
-        if (!NormalizeAndStoreReportRecord(reportRecord, report.common.reportId, "report")) {
-            continue;
-        }
-        aclsan::WritePlog(
-            aclsan::PlogLevel::kInfo, "diagnostic report stored report_id=" + std::to_string(report.common.reportId));
-    }
-}
-
-void ToolManager::StoreSynccheckReports(std::vector<npucheck::NpuCheckSynccheckReport> reports)
-{
-    for (auto& report : reports) {
-        PopulateDeviceCallStack(report);
-        const npucheck::NpuCheckReportRecord reportRecord = npucheck::NpuCheckReportRecord::From(report);
-        if (!NormalizeAndStoreReportRecord(reportRecord, report.common.reportId, "synccheck report")) {
-            continue;
-        }
-        aclsan::WritePlog(
-            aclsan::PlogLevel::kInfo,
-            "synccheck diagnostic report stored report_id=" + std::to_string(report.common.reportId));
+        std::visit(
+            [this](auto& typed) {
+                npucheck::PopulateDeviceCallStack(typed);
+                NormalizeAndStoreReportRecord(
+                    npucheck::NpuCheckReportRecord::From(typed), typed.common.reportId, "checker report");
+            },
+            report);
     }
 }
 
@@ -715,7 +379,7 @@ bool ToolManager::NormalizeAndStoreReportRecord(
             std::lock_guard<std::mutex> stateLock(stateMutex_);
             ++frameworkErrors_;
         }
-        aclsan::WritePlog(aclsan::PlogLevel::kError, message.str());
+        npucheck::WritePlog(npucheck::PlogLevel::kError, message.str());
         return false;
     }
     {
@@ -730,7 +394,7 @@ void ToolManager::PublishMalformed(AclsanCallbackDomain domain, AclsanCallbackId
     std::ostringstream output;
     output << "[NPU-CHECK-MALFORMED-CALLBACK] domain=" << static_cast<uint32_t>(domain) << " cbid=" << cbid
            << " reason=" << reason;
-    aclsan::WritePlog(aclsan::PlogLevel::kError, output.str());
+    npucheck::WritePlog(npucheck::PlogLevel::kError, output.str());
 }
 
 void ToolManager::LogCallback(AclsanCallbackDomain domain, AclsanCallbackId cbid, const void* cbdata)
@@ -739,7 +403,7 @@ void ToolManager::LogCallback(AclsanCallbackDomain domain, AclsanCallbackId cbid
     std::ostringstream message;
     message << "cbdata received count=" << count << " domain=" << static_cast<uint32_t>(domain)
             << " cbid=" << static_cast<uint32_t>(cbid) << " address=" << cbdata;
-    aclsan::WritePlog(aclsan::PlogLevel::kDebug, message.str());
+    npucheck::WritePlog(npucheck::PlogLevel::kDebug, message.str());
 }
 
 std::string ToolManager::BuildReadyMessage() const
@@ -747,7 +411,7 @@ std::string ToolManager::BuildReadyMessage() const
     std::ostringstream output;
     output << "session=" << server_.SessionId() << " api_version=" << ACLSAN_API_VERSION << " tools=";
     for (size_t index = 0; index < configure_.tools.size(); ++index) {
-        output << (index == 0 ? "" : ",") << ipc::ToolName(configure_.tools[index].toolId);
+        output << (index == 0 ? "" : ",") << npucheck::ipc::ToolName(configure_.tools[index].toolId);
     }
     output << " work_dir=" << workDir_;
     return output.str();
@@ -756,29 +420,13 @@ std::string ToolManager::BuildReadyMessage() const
 std::string ToolManager::BuildSummaryMessage() const
 {
     std::lock_guard<std::mutex> stateLock(stateMutex_);
-    // 每个启用的工具一行，按 toolId 升序。多工具时不能再用 if/else 二选一 ——
-    // 那样第二个工具的统计会整段消失，而报告看上去仍然完整。
     std::ostringstream output;
-    if (memcheck_ != nullptr) {
-        const MemcheckStats stats = memcheck_->Stats();
-        output << "tool=memcheck allocations=" << stats.allocations << " frees=" << stats.frees
-               << " device_operations=" << stats.deviceOperations << " synchronizations=" << stats.synchronizationEvents
-               << " errors=" << stats.errors << " warnings=" << stats.warnings
-               << " pending_device_operations=" << stats.pendingDeviceOperations
-               << " dropped_device_operations=" << stats.droppedDeviceOperations << '\n';
-    }
-    if (synccheck_ != nullptr) {
-        const npucheck::SynccheckStats stats = synccheck_->Stats();
-        const uint64_t errors = stats.duplicateOpens + stats.unmatchedCloses + stats.unconsumedOpens;
-        output << "tool=synccheck sync_events=" << stats.syncEvents
-               << " synchronizations=" << stats.synchronizationEvents << " matched_pairs=" << stats.matchedPairs
-               << " duplicate_opens=" << stats.duplicateOpens << " unmatched_closes=" << stats.unmatchedCloses
-               << " unconsumed_opens=" << stats.unconsumedOpens << " pending_opens=" << stats.pendingOpens
-               << " errors=" << errors << " warnings=0" << '\n';
+    for (const auto& checker : checkers_) {
+        output << checker->Summary() << '\n';
     }
     output << "callbacks=" << callbackCount_.load() << " malformed_callbacks=" << malformedCallbacks_
            << " framework_errors=" << frameworkErrors_ << " dropped_messages=" << server_.DroppedMessages();
     return output.str();
 }
 
-} // namespace aclsan
+} // namespace npucheck

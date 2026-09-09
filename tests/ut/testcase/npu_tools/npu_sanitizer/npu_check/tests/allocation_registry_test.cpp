@@ -13,7 +13,7 @@
 #include <cstdint>
 #include <limits>
 
-namespace aclsan {
+namespace npucheck {
 namespace {
 
 TEST(AllocationRegistryTest, RejectsInvalidAndOverlappingRanges)
@@ -106,4 +106,4 @@ TEST(AllocationRegistryTest, FindsNearestLiveAllocationOnRequestedDevice)
 }
 
 } // namespace
-} // namespace aclsan
+} // namespace npucheck

@@ -25,7 +25,7 @@
 #include <sys/utsname.h>
 #include <unistd.h>
 
-namespace aclsan::cli {
+namespace npucheck {
 namespace {
 
 bool NeedValue(int argc, char** argv, int& index, std::string& value, std::string& error)
@@ -137,10 +137,10 @@ bool ParseOptions(int argc, char** argv, Options& options, std::string& error)
 
     // --tool 显式指定的集合。std::set 天然去重（重复指定同一工具即幂等）且按 toolId
     // 升序，正好是下发前要求的规范化顺序，不必再单独排序去重。
-    std::set<ipc::ToolId> explicitTools;
+    std::set<npucheck::ipc::ToolId> explicitTools;
     // 已出现的工具子选项。std::map 按 optionId 升序，同样直接满足规范化要求；
     // 同一子选项重复出现按幂等处理。
-    std::map<ipc::OptionId, const ipc::OptionRegistryEntry*> seenOptions;
+    std::map<npucheck::ipc::OptionId, const npucheck::ipc::OptionRegistryEntry*> seenOptions;
     int applicationStart = -1;
 
     for (int i = 1; i < argc; ++i) {
@@ -165,12 +165,12 @@ bool ParseOptions(int argc, char** argv, Options& options, std::string& error)
         }
 
         std::string value;
-        if (argument == "--tool") {
+        if (argument == "--tools" || argument == "--tool") {
             if (!NeedValue(argc, argv, i, value, error)) {
                 return false;
             }
-            ipc::ToolId toolId{};
-            if (!ipc::LookupTool(value, toolId)) {
+            npucheck::ipc::ToolId toolId{};
+            if (!npucheck::ipc::LookupTool(value, toolId)) {
                 error = "unknown tool '" + value + "'; supported tools are memcheck and synccheck";
                 return false;
             }
@@ -220,7 +220,7 @@ bool ParseOptions(int argc, char** argv, Options& options, std::string& error)
         // 工具子选项：名称在 CLI 中全局唯一，归属由共享注册表决定，因此可以出现在
         // 所属 --tool 之前或之后，这里不依赖"当前工具"状态，也不按参数相邻关系推断。
         if (argument.rfind("--", 0) == 0 && argument.size() > 2) {
-            if (const auto* entry = ipc::LookupOption(argument.substr(2)); entry != nullptr) {
+            if (const auto* entry = npucheck::ipc::LookupOption(argument.substr(2)); entry != nullptr) {
                 seenOptions[entry->optionId] = entry;
                 continue;
             }
@@ -231,9 +231,9 @@ bool ParseOptions(int argc, char** argv, Options& options, std::string& error)
 
     // 完全没有出现 --tool 时工具集合取默认值 {memcheck}；只要出现过任意一个 --tool，
     // 默认值即不生效，不与显式指定的工具做并集 —— 否则用户没法把默认工具关掉。
-    std::set<ipc::ToolId> enabledTools = explicitTools;
+    std::set<npucheck::ipc::ToolId> enabledTools = explicitTools;
     if (enabledTools.empty()) {
-        enabledTools.insert(ipc::ToolId::kMemcheck);
+        enabledTools.insert(npucheck::ipc::ToolId::kMemcheck);
     }
 
     // 子选项的依赖校验必须在默认值生效之后进行：否则只写 --check-cache-control 而不写
@@ -241,21 +241,21 @@ bool ParseOptions(int argc, char** argv, Options& options, std::string& error)
     for (const auto& [optionId, entry] : seenOptions) {
         (void)optionId;
         if (enabledTools.count(entry->toolId) == 0) {
-            error = std::string("--") + entry->name + " belongs to tool '" + ipc::ToolName(entry->toolId) +
+            error = std::string("--") + entry->name + " belongs to tool '" + npucheck::ipc::ToolName(entry->toolId) +
                     "', which is not enabled";
             return false;
         }
     }
 
     // 规范化编码唯一：tools 按 toolId 升序，每个工具内 options 按 optionId 升序，均不重复。
-    for (const ipc::ToolId toolId : enabledTools) {
-        ipc::ToolRequest request;
+    for (const npucheck::ipc::ToolId toolId : enabledTools) {
+        npucheck::ipc::ToolRequest request;
         request.toolId = toolId;
         for (const auto& [optionId, entry] : seenOptions) {
             if (entry->toolId != toolId) {
                 continue;
             }
-            ipc::OptionValue optionValue;
+            npucheck::ipc::OptionValue optionValue;
             optionValue.optionId = optionId;
             // 布尔类子选项是"出现即为真"的开关，缺省时不发送 OptionValue。
             optionValue.value.assign(entry->valueSize, entry->presentValue);
@@ -352,17 +352,20 @@ std::string Usage()
     // 内部调测选项（--work-dir、--handshake-timeout-ms、--error-exitcode）不对外承诺
     // 兼容性，可随时变更或删除，因此不得出现在这里 —— 一旦印进帮助，用户就会按对外
     // 契约来依赖它。它们仍然照常解析，只是不做广告。
-    return "Usage: npu-check [--tool <name>]... [--log-file <path>]\n"
+    return "Usage: npu-check [--tools <name>]... [--log-file <path>]\n"
            "                 [--] <application> [args...]\n"
            "Options:\n"
-           "  --tool <memcheck|synccheck>  enable a checker; repeatable and idempotent.\n"
-           "                               Defaults to memcheck when no --tool is given.\n"
+           "  --tools <memcheck|synccheck> enable a checker; repeatable and idempotent.\n"
+           "                               Defaults to memcheck when no tool is given.\n"
+           "  --tool <name>               alias for --tools\n"
            "  --log-file <path>            directory or file receiving the report and\n"
            "                               the application output\n"
            "  -h, --help                   show this help and exit\n"
+           "\n"
+           "Example: npu-check --tools memcheck --tools synccheck ./app\n"
            "\n"
            "Pass -- before <application> when the application path or its arguments start\n"
            "with '-'.\n";
 }
 
-} // namespace aclsan::cli
+} // namespace npucheck

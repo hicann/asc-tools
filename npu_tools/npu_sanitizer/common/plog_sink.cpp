@@ -19,7 +19,7 @@
 #include <sys/syscall.h>
 #include <unistd.h>
 
-namespace aclsan {
+namespace npucheck {
 namespace {
 
 // TODO: Switch to ASCTOOL once the supported CANN package provides it.
@@ -166,4 +166,4 @@ void WritePlogFormat(
     va_end(arguments);
 }
 
-} // namespace aclsan
+} // namespace npucheck

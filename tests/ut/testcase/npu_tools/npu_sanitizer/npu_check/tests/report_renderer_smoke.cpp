@@ -532,8 +532,8 @@ TEST(ReportRendererTest, AppendsStructuredCallStacks)
         std::string::npos);
     EXPECT_NE(
         rendered.find("=========  Device Frames:\n"
-                      "=========     #0 kernel [0x100] in kernel.cpp:42\n"
-                      "=========     #1 launch_kernel [0x80] in launch.cpp:18\n"),
+                      "=========     #0 kernel in kernel.cpp:42\n"
+                      "=========     #1 launch_kernel in launch.cpp:18\n"),
         std::string::npos);
     EXPECT_EQ(rendered.find("Device Frame:"), std::string::npos);
     EXPECT_EQ(rendered.find("Host Frame:"), std::string::npos);

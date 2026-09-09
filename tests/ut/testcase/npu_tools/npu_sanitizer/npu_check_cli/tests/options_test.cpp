@@ -19,7 +19,7 @@
 #include <utility>
 #include <vector>
 
-namespace aclsan::cli {
+namespace npucheck {
 namespace {
 
 struct ParseResult {
@@ -137,11 +137,11 @@ std::vector<std::pair<uint16_t, std::vector<uint16_t>>> ToolShape(const Options&
     return shape;
 }
 
-constexpr uint16_t kMemcheck = static_cast<uint16_t>(ipc::ToolId::kMemcheck);
-constexpr uint16_t kSynccheck = static_cast<uint16_t>(ipc::ToolId::kSynccheck);
-constexpr uint16_t kCheckCacheControl = static_cast<uint16_t>(ipc::OptionId::kMemcheckCheckCacheControl);
+constexpr uint16_t kMemcheck = static_cast<uint16_t>(npucheck::ipc::ToolId::kMemcheck);
+constexpr uint16_t kSynccheck = static_cast<uint16_t>(npucheck::ipc::ToolId::kSynccheck);
+constexpr uint16_t kCheckCacheControl = static_cast<uint16_t>(npucheck::ipc::OptionId::kMemcheckCheckCacheControl);
 constexpr uint16_t kMissingBarrierInitIsFatal =
-    static_cast<uint16_t>(ipc::OptionId::kSynccheckMissingBarrierInitIsFatal);
+    static_cast<uint16_t>(npucheck::ipc::OptionId::kSynccheckMissingBarrierInitIsFatal);
 
 // 完全没有 --tool 时工具集合取默认值 {memcheck}。
 TEST(OptionsTest, DefaultsToMemcheckWhenNoToolGiven)
@@ -213,11 +213,11 @@ TEST(OptionsTest, SuboptionOwnershipIsIndependentOfPosition)
 
     // 光比对解析结果不够：规范化只做了一半时，解析结果可能相同而编码不同。
     // 编码字节逐一相等才是"位置无关"的真正断言。
-    ipc::ConfigureRequest beforeRequest;
+    npucheck::ipc::ConfigureRequest beforeRequest;
     beforeRequest.tools = before.options.tools;
-    ipc::ConfigureRequest afterRequest;
+    npucheck::ipc::ConfigureRequest afterRequest;
     afterRequest.tools = after.options.tools;
-    EXPECT_EQ(ipc::EncodeConfigure(beforeRequest), ipc::EncodeConfigure(afterRequest));
+    EXPECT_EQ(npucheck::ipc::EncodeConfigure(beforeRequest), npucheck::ipc::EncodeConfigure(afterRequest));
 }
 
 // 依赖校验在默认值生效之后进行：默认集合含 memcheck，故该子选项合法。
@@ -449,5 +449,25 @@ TEST(OptionsTest, UsageListsOnlyPublicOptions)
     EXPECT_EQ(usage.find("--missing-barrier-init-is-fatal"), std::string::npos);
 }
 
+TEST(OptionsTest, RepeatedToolsAndLegacyAliasAreEquivalent)
+{
+    const auto combined =
+        Parse({"npu-check", "--tools", "synccheck", "--tools", "memcheck", "--tool", "memcheck", kSampleApp});
+    ASSERT_TRUE(combined.ok) << combined.error;
+    ASSERT_EQ(combined.options.tools.size(), 2U);
+    EXPECT_EQ(combined.options.tools[0].toolId, npucheck::ipc::ToolId::kMemcheck);
+    EXPECT_EQ(combined.options.tools[1].toolId, npucheck::ipc::ToolId::kSynccheck);
+    const auto single = Parse({"npu-check", "--tools", "synccheck", kSampleApp});
+    ASSERT_TRUE(single.ok) << single.error;
+    ASSERT_EQ(single.options.tools.size(), 1U);
+    EXPECT_EQ(single.options.tools[0].toolId, npucheck::ipc::ToolId::kSynccheck);
+    EXPECT_FALSE(Parse({"npu-check", "--tools"}).ok);
+    EXPECT_FALSE(Parse({"npu-check", "--tools", "invalid", kSampleApp}).ok);
+    const auto forwarded = Parse({"npu-check", "--tools", "memcheck", "--", kSampleApp, "--tools", "synccheck"});
+    ASSERT_TRUE(forwarded.ok);
+    EXPECT_EQ(forwarded.options.application, (std::vector<std::string>{kSampleApp, "--tools", "synccheck"}));
+    EXPECT_EQ(forwarded.options.tools.size(), 1U);
+}
+
 } // namespace
-} // namespace aclsan::cli
+} // namespace npucheck

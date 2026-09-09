@@ -16,7 +16,7 @@
 #include <string>
 #include <vector>
 
-namespace aclsan::ipc {
+namespace npucheck::ipc {
 
 constexpr uint32_t kProtocolMagic = 0x4e53414eu;
 constexpr uint16_t kProtocolMajor = 1;
@@ -228,6 +228,6 @@ bool DecodeText(const std::vector<uint8_t>& payload, std::string& text, std::str
 
 const char* MessageTypeName(MessageType type);
 
-} // namespace aclsan::ipc
+} // namespace npucheck::ipc
 
 #endif

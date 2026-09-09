@@ -14,7 +14,7 @@
 
 #include "dlog_pub.h"
 
-namespace aclsan {
+namespace npucheck {
 
 enum class PlogLevel : uint8_t {
     kDebug = 0U,
@@ -31,6 +31,13 @@ void WritePlogFormat(
     PlogLevel level, const char* file, uint32_t line, const char* function, const char* format, ...) noexcept
     __attribute__((format(printf, 5, 6)));
 
+} // namespace npucheck
+
+// Compatibility imports for sanitizer_api, whose source namespace is unchanged.
+namespace aclsan {
+using npucheck::PlogLevel;
+using npucheck::WritePlog;
+using npucheck::WritePlogFormat;
 } // namespace aclsan
 
 // Format adapters only: levels and output are owned by the common CANN plog sink.

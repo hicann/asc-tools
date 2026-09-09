@@ -22,7 +22,7 @@
 #include <sys/un.h>
 #include <unistd.h>
 
-namespace aclsan::ipc {
+namespace npucheck::ipc {
 namespace {
 
 std::optional<uint64_t> ParseUnsigned(const char* text, uint64_t maximum)
@@ -47,9 +47,9 @@ UdsServer::~UdsServer() { Shutdown(); }
 
 bool UdsServer::LoadEnvironment(std::string& error)
 {
-    const char* udsName = std::getenv(kUdsNameEnv);
-    const char* session = std::getenv(kSessionIdEnv);
-    const char* cliPid = std::getenv(kCliPidEnv);
+    const char* udsName = std::getenv(npucheck::ipc::kUdsNameEnv);
+    const char* session = std::getenv(npucheck::ipc::kSessionIdEnv);
+    const char* cliPid = std::getenv(npucheck::ipc::kCliPidEnv);
     if (udsName == nullptr || udsName[0] == '\0') {
         error = "missing UDS address environment";
         return false;
@@ -64,7 +64,7 @@ bool UdsServer::LoadEnvironment(std::string& error)
     sessionId_ = *parsedSession;
     expectedCliPid_ = static_cast<uint32_t>(*parsedPid);
 
-    const char* timeout = std::getenv(kHandshakeTimeoutEnv);
+    const char* timeout = std::getenv(npucheck::ipc::kHandshakeTimeoutEnv);
     if (timeout != nullptr) {
         const auto parsedTimeout = ParseUnsigned(timeout, 120000);
         if (!parsedTimeout || *parsedTimeout < 100) {
@@ -80,10 +80,10 @@ bool UdsServer::CreateListener(std::string& error)
 {
     sockaddr_un address{};
     socklen_t addrLen = 0;
-    if (!BuildAbstractAddress(udsName_, address, addrLen, error)) {
+    if (!npucheck::ipc::BuildAbstractAddress(udsName_, address, addrLen, error)) {
         return false;
     }
-    listenFd_ = CreateSeqpacketSocket(error);
+    listenFd_ = npucheck::ipc::CreateSeqpacketSocket(error);
     if (listenFd_ < 0) {
         return false;
     }
@@ -110,16 +110,16 @@ bool UdsServer::AcceptClient(std::string& error)
 {
     // 握手阶段的绝对截止时刻。注意这个 deadline 从这里一直用到 Ready 发出为止，
     // 而不是每一步各给一份完整超时。
-    const DeadlineMs deadline = DeadlineAfterMs(handshakeTimeoutMs_);
+    const npucheck::ipc::DeadlineMs deadline = npucheck::ipc::DeadlineAfterMs(handshakeTimeoutMs_);
 
     // 去掉文件系统这一层之后，SO_PEERCRED 是唯一的身份闸门，因此必须能容忍并丢弃
     // 无关连接：任何 UID 都可以连上来，但只有 pid/uid 都对得上的那个才是本次会话的
     // CLI。取到不合格的连接就关掉继续 accept，不能就此判定会话失败 —— 否则外部进程
     // 随便连一下就能让检查失败。
     while (true) {
-        const IoStatus waited = WaitFor(listenFd_, POLLIN, deadline, error);
-        if (waited != IoStatus::OK) {
-            if (waited == IoStatus::TIMEOUT) {
+        const npucheck::ipc::IoStatus waited = npucheck::ipc::WaitFor(listenFd_, POLLIN, deadline, error);
+        if (waited != npucheck::ipc::IoStatus::OK) {
+            if (waited == npucheck::ipc::IoStatus::TIMEOUT) {
                 error = "timed out waiting for the npu_check client";
             }
             return false;
@@ -163,10 +163,12 @@ bool UdsServer::AcceptClient(std::string& error)
     }
 }
 
-bool UdsServer::ReceiveChecked(Frame& frame, MessageType expected, DeadlineMs deadline, std::string& error)
+bool UdsServer::ReceiveChecked(
+    npucheck::ipc::Frame& frame, npucheck::ipc::MessageType expected, npucheck::ipc::DeadlineMs deadline,
+    std::string& error)
 {
     while (true) {
-        if (ReceiveFrame(clientFd_, frame, deadline, error) != IoStatus::OK) {
+        if (npucheck::ipc::ReceiveFrame(clientFd_, frame, deadline, error) != npucheck::ipc::IoStatus::OK) {
             return false;
         }
         if (frame.sessionId != sessionId_) {
@@ -186,7 +188,7 @@ bool UdsServer::ReceiveChecked(Frame& frame, MessageType expected, DeadlineMs de
         ++receiveSequence_;
         // must-ignore 类型（最高位为 1）必须跳过并继续等，不能当成协议错误。握手阶段
         // 本不该收到这类帧，但规则要一致，否则将来 CLI 侧新增可选消息就会打挂握手。
-        if (IsMustIgnoreType(static_cast<uint16_t>(frame.type))) {
+        if (npucheck::ipc::IsMustIgnoreType(static_cast<uint16_t>(frame.type))) {
             continue;
         }
         if (frame.type != expected) {
@@ -197,20 +199,20 @@ bool UdsServer::ReceiveChecked(Frame& frame, MessageType expected, DeadlineMs de
     }
 }
 
-bool UdsServer::ExchangeHandshake(ConfigureRequest& configure, std::string& error)
+bool UdsServer::ExchangeHandshake(npucheck::ipc::ConfigureRequest& configure, std::string& error)
 {
     // 握手的每一步都复用 AcceptClient 算出的同一个绝对 deadline。
-    Frame helloFrame{};
-    if (!ReceiveChecked(helloFrame, MessageType::CLIENT_HELLO, handshakeDeadline_, error)) {
+    npucheck::ipc::Frame helloFrame{};
+    if (!ReceiveChecked(helloFrame, npucheck::ipc::MessageType::CLIENT_HELLO, handshakeDeadline_, error)) {
         return false;
     }
-    HelloPayload hello{};
-    if (!DecodeHello(helloFrame.payload, hello, error)) {
+    npucheck::ipc::HelloPayload hello{};
+    if (!npucheck::ipc::DecodeHello(helloFrame.payload, hello, error)) {
         return false;
     }
     // 对端 minor 取自 Hello 的帧头，与本实现取较小值。收到更高的 minor 不是错误，
-    // 详见 NegotiateMinor 的说明。
-    negotiatedMinor_ = NegotiateMinor(helloFrame.minor);
+    // 详见 npucheck::ipc::NegotiateMinor 的说明。
+    negotiatedMinor_ = npucheck::ipc::NegotiateMinor(helloFrame.minor);
     // Hello 携带的 pid/uid 与 accept 时读到的 SO_PEERCRED 交叉比对。后者来自内核、
     // 无法伪造，是权威来源；前者只是对端的自我声明，两者必须一致。
     if (hello.pid != expectedCliPid_ || hello.uid != getuid()) {
@@ -218,26 +220,28 @@ bool UdsServer::ExchangeHandshake(ConfigureRequest& configure, std::string& erro
         return false;
     }
 
-    HelloPayload serverHello{};
+    npucheck::ipc::HelloPayload serverHello{};
     serverHello.pid = static_cast<uint32_t>(getpid());
     serverHello.uid = static_cast<uint32_t>(getuid());
-    if (!SendSynchronous(MessageType::SERVER_HELLO, EncodeHello(serverHello), 0, handshakeDeadline_, error)) {
+    if (!SendSynchronous(
+            npucheck::ipc::MessageType::SERVER_HELLO, npucheck::ipc::EncodeHello(serverHello), 0, handshakeDeadline_,
+            error)) {
         return false;
     }
 
-    Frame configFrame{};
-    if (!ReceiveChecked(configFrame, MessageType::CONFIGURE, handshakeDeadline_, error)) {
+    npucheck::ipc::Frame configFrame{};
+    if (!ReceiveChecked(configFrame, npucheck::ipc::MessageType::CONFIGURE, handshakeDeadline_, error)) {
         return false;
     }
-    if (!DecodeConfigure(configFrame.payload, configure, error)) {
+    if (!npucheck::ipc::DecodeConfigure(configFrame.payload, configure, error)) {
         return false;
     }
     // 解码只保证结构合法；能不能理解这些选项还取决于协商出的 minor。不能假设对端
     // 守规矩地只发它该发的东西。
-    return ValidateConfigureMinor(configure, negotiatedMinor_, error);
+    return npucheck::ipc::ValidateConfigureMinor(configure, negotiatedMinor_, error);
 }
 
-bool UdsServer::StartAndHandshake(ConfigureRequest& configure, std::string& error)
+bool UdsServer::StartAndHandshake(npucheck::ipc::ConfigureRequest& configure, std::string& error)
 {
     if (!LoadEnvironment(error) || !CreateListener(error) || !AcceptClient(error) ||
         !ExchangeHandshake(configure, error)) {
@@ -247,16 +251,17 @@ bool UdsServer::StartAndHandshake(ConfigureRequest& configure, std::string& erro
 }
 
 bool UdsServer::SendSynchronous(
-    MessageType type, const std::vector<uint8_t>& payload, uint16_t flags, DeadlineMs deadline, std::string& error)
+    npucheck::ipc::MessageType type, const std::vector<uint8_t>& payload, uint16_t flags,
+    npucheck::ipc::DeadlineMs deadline, std::string& error)
 {
     std::lock_guard<std::mutex> sendLock(sendMutex_);
-    Frame frame{};
+    npucheck::ipc::Frame frame{};
     frame.type = type;
     frame.flags = flags;
     frame.sessionId = sessionId_;
     frame.sequence = sendSequence_++;
     frame.payload = payload;
-    if (SendFrame(clientFd_, frame, deadline, error) != IoStatus::OK) {
+    if (npucheck::ipc::SendFrame(clientFd_, frame, deadline, error) != npucheck::ipc::IoStatus::OK) {
         std::lock_guard<std::mutex> lock(queueMutex_);
         transportComplete_ = false;
         return false;
@@ -267,7 +272,7 @@ bool UdsServer::SendSynchronous(
 bool UdsServer::SendReady(std::string& error)
 {
     // payload 恒为空：Ready 只表达"会话就绪"。
-    if (!SendSynchronous(MessageType::READY, {}, 0, handshakeDeadline_, error)) {
+    if (!SendSynchronous(npucheck::ipc::MessageType::READY, {}, 0, handshakeDeadline_, error)) {
         return false;
     }
     // Ready 已发出，握手 deadline 到此结束；后续结果发送改用独立的上限。
@@ -285,9 +290,9 @@ void UdsServer::StartPublisher()
     publisher_ = std::thread(&UdsServer::PublisherLoop, this);
 }
 
-bool UdsServer::Publish(MessageType type, const std::string& message)
+bool UdsServer::Publish(npucheck::ipc::MessageType type, const std::string& message)
 {
-    auto payload = EncodeText(message);
+    auto payload = npucheck::ipc::EncodeText(message);
     if (payload.empty() && !message.empty()) {
         std::lock_guard<std::mutex> lock(queueMutex_);
         ++droppedMessages_;
@@ -321,7 +326,8 @@ void UdsServer::PublisherLoop()
         std::string error;
         // 结果发送用独立上限，不复用握手 deadline，也不能不设上限：CLI 已死或长时间不读时
         // sendmsg 会一直 EAGAIN，无限等待会把目标应用卡在退出路径上。
-        if (!SendSynchronous(message.type, message.payload, 0, DeadlineAfterMs(kResultSendTimeoutMs), error)) {
+        if (!SendSynchronous(
+                message.type, message.payload, 0, npucheck::ipc::DeadlineAfterMs(kResultSendTimeoutMs), error)) {
             std::lock_guard<std::mutex> lock(queueMutex_);
             droppedMessages_ += queue_.size();
             queue_.clear();
@@ -331,16 +337,18 @@ void UdsServer::PublisherLoop()
     }
 }
 
-void UdsServer::SendInitializationError(ErrorDomain domain, uint16_t code, const std::string& message)
+void UdsServer::SendInitializationError(npucheck::ipc::ErrorDomain domain, uint16_t code, const std::string& message)
 {
     if (clientFd_ < 0) {
         return;
     }
     std::string ignored;
-    (void)SendSynchronous(MessageType::ERROR, EncodeError({domain, code, message}), 0, handshakeDeadline_, ignored);
+    (void)SendSynchronous(
+        npucheck::ipc::MessageType::ERROR, npucheck::ipc::EncodeError({domain, code, message}), 0, handshakeDeadline_,
+        ignored);
 }
 
-void UdsServer::SendError(ErrorDomain domain, uint16_t code, const std::string& message) noexcept
+void UdsServer::SendError(npucheck::ipc::ErrorDomain domain, uint16_t code, const std::string& message) noexcept
 {
     try {
         if (clientFd_ < 0) {
@@ -351,8 +359,8 @@ void UdsServer::SendError(ErrorDomain domain, uint16_t code, const std::string& 
         StopPublisher();
         std::string ignored;
         (void)SendSynchronous(
-            MessageType::ERROR, EncodeError({domain, code, message}), 0, DeadlineAfterMs(kResultSendTimeoutMs),
-            ignored);
+            npucheck::ipc::MessageType::ERROR, npucheck::ipc::EncodeError({domain, code, message}), 0,
+            npucheck::ipc::DeadlineAfterMs(kResultSendTimeoutMs), ignored);
     } catch (...) {
         return;
     }
@@ -369,32 +377,32 @@ bool UdsServer::SendResult(const std::string& report, bool hasErrors, bool trunc
         error = "no client connection for the result";
         return false;
     }
-    if (report.size() > kMaxResultBytes) {
+    if (report.size() > npucheck::ipc::kMaxResultBytes) {
         error = "result exceeds the maximum report size";
         return false;
     }
     // 整个分片序列共用一个绝对 deadline。分片数取决于报告长度，若每片各给一份完整超时，
     // 最坏会把上限放大到分片数倍，把目标应用长时间钉在退出路径上、NPU 资源不释放。
-    const DeadlineMs deadline = DeadlineAfterMs(kResultSendTimeoutMs);
+    const npucheck::ipc::DeadlineMs deadline = npucheck::ipc::DeadlineAfterMs(kResultSendTimeoutMs);
     size_t offset = 0;
     while (true) {
-        const size_t chunk = std::min(kMaxPayloadSize, report.size() - offset);
+        const size_t chunk = std::min(npucheck::ipc::kMaxPayloadSize, report.size() - offset);
         const bool isLast = offset + chunk >= report.size();
         uint16_t flags = 0;
         if (!isLast) {
-            flags |= kFlagMore;
+            flags |= npucheck::ipc::kFlagMore;
         } else {
             // 结论位只在末帧上有效：接收端在收到 MORE=0 之前不该对本次检查下任何结论。
             if (hasErrors) {
-                flags |= kFlagHasErrors;
+                flags |= npucheck::ipc::kFlagHasErrors;
             }
             if (truncated) {
-                flags |= kFlagTruncated;
+                flags |= npucheck::ipc::kFlagTruncated;
             }
         }
         const auto begin = report.begin() + static_cast<std::ptrdiff_t>(offset);
         const std::vector<uint8_t> payload(begin, begin + static_cast<std::ptrdiff_t>(chunk));
-        if (!SendSynchronous(MessageType::RESULT, payload, flags, deadline, error)) {
+        if (!SendSynchronous(npucheck::ipc::MessageType::RESULT, payload, flags, deadline, error)) {
             return false;
         }
         if (isLast) {
@@ -458,4 +466,4 @@ bool UdsServer::TransportComplete() const
     return transportComplete_;
 }
 
-} // namespace aclsan::ipc
+} // namespace npucheck::ipc

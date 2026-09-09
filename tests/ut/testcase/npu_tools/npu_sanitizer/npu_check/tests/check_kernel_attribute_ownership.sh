@@ -17,6 +17,8 @@ sanitizer_hook="${repo_root}/npu_tools/npu_sanitizer/sanitizer_api/src/aclsan/ac
 attribute_source="${repo_root}/npu_tools/npu_sanitizer/npu_check/src/tool_manager/kernel_attributes.cpp"
 attribute_header="${repo_root}/npu_tools/npu_sanitizer/npu_check/src/tool_manager/kernel_attributes.h"
 tool_manager="${repo_root}/npu_tools/npu_sanitizer/npu_check/src/tool_manager/tool_manager.cpp"
+sync_checker="${repo_root}/npu_tools/npu_sanitizer/npu_check/src/checker/synccheck_callbacks.cpp"
+mem_checker="${repo_root}/npu_tools/npu_sanitizer/npu_check/src/checker/memcheck_callbacks.cpp"
 
 Fail()
 {
@@ -49,17 +51,17 @@ if rg -q 'kCommonCallbacks' "${tool_manager}"; then
     Fail "launch callback must not be common to all tools"
 fi
 
-synccheck_callbacks=$(sed -n '/kSynccheckCallbacks/,/}};/p' "${tool_manager}")
+synccheck_callbacks=$(sed -n '/Synccheck::Callbacks/,/return callbacks/p' "${sync_checker}")
 if ! rg -q 'ACLSAN_CB_DOMAIN_LAUNCH.*ACLSAN_CBID_LAUNCH_KERNEL' <<< "${synccheck_callbacks}"; then
     Fail "Synccheck callbacks do not subscribe to the launch callback"
 fi
 
-memcheck_callbacks=$(sed -n '/kMemcheckCallbacks/,/}};/p' "${tool_manager}")
+memcheck_callbacks=$(sed -n '/Memcheck::Callbacks/,/return callbacks/p' "${mem_checker}")
 if rg -q 'ACLSAN_CB_DOMAIN_LAUNCH.*ACLSAN_CBID_LAUNCH_KERNEL' <<< "${memcheck_callbacks}"; then
     Fail "Memcheck callbacks must not subscribe to the launch callback"
 fi
 
-rg -q 'QueryKernelAttributes' "${tool_manager}" || Fail "ToolManager does not query kernel attributes"
+rg -q 'QueryKernelAttributes' "${sync_checker}" || Fail "Synccheck does not query kernel attributes"
 
 callback_body=$(sed -n '/^void ToolManager::OnCallback(/,/^void ToolManager::OnCallbackException/p' "${tool_manager}")
 if rg -q 'std::unique_lock<std::mutex> stateLock\(stateMutex_\)' <<< "${callback_body}"; then

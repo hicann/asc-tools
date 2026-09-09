@@ -11,6 +11,7 @@
 
 #include "aclsan/aclsan_cbdata_device.h"
 #include "diagnostic/report_renderer.h"
+#include "checker/checker.h"
 
 #include <cstdint>
 #include <unordered_map>
@@ -30,8 +31,15 @@ struct SynccheckStats {
 };
 // TODO: 放进log中
 
-class Synccheck {
+class Synccheck final : public npucheck::Checker {
 public:
+    const std::vector<npucheck::CallbackSpec>& Callbacks() const override;
+    bool OnCallback(
+        AclsanCallbackDomain domain, AclsanCallbackId cbid, const void* data,
+        npucheck::CheckerReports& reports) override;
+    std::string Summary() const override;
+    bool HasErrors() const override;
+    bool AnalysisComplete() const override;
     void OnDeviceSync(const AclsanDeviceSyncData& data);
     std::vector<npucheck::NpuCheckSynccheckReport> OnSynchronization();
     SynccheckStats Stats() const;

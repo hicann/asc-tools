@@ -22,7 +22,7 @@
 #include <thread>
 #include <unistd.h>
 
-namespace aclsan::cli {
+namespace npucheck::ipc {
 
 UdsClient::~UdsClient() { Close(); }
 
@@ -47,20 +47,20 @@ bool IsRetryableConnectErrno(int value)
 } // namespace
 
 bool UdsClient::ConnectWithRetry(
-    const std::string& udsName, ipc::DeadlineMs deadline, pid_t childPid, std::string& error)
+    const std::string& udsName, npucheck::ipc::DeadlineMs deadline, pid_t childPid, std::string& error)
 {
     sockaddr_un address{};
     socklen_t addrLen = 0;
-    if (!ipc::BuildAbstractAddress(udsName, address, addrLen, error)) {
+    if (!npucheck::ipc::BuildAbstractAddress(udsName, address, addrLen, error)) {
         return false;
     }
 
-    const ipc::DeadlineMs start = ipc::MonotonicNowMs();
+    const npucheck::ipc::DeadlineMs start = npucheck::ipc::MonotonicNowMs();
     int backoffMs = kInitialBackoffMs;
     int lastError = ECONNREFUSED;
     uint64_t attempt = 1;
     while (true) {
-        if (ipc::MonotonicNowMs() >= deadline) {
+        if (npucheck::ipc::MonotonicNowMs() >= deadline) {
             error = std::string("connect timed out: ") + std::strerror(lastError);
             return false;
         }
@@ -81,14 +81,15 @@ bool UdsClient::ConnectWithRetry(
         }
 
         // 每次尝试都用全新的 fd：connect 失败后 socket 的状态是未定义的，复用不可移植。
-        fd_ = ipc::CreateSeqpacketSocket(error);
+        fd_ = npucheck::ipc::CreateSeqpacketSocket(error);
         if (fd_ < 0) {
             return false;
         }
         if (connect(fd_, reinterpret_cast<const sockaddr*>(&address), addrLen) == 0) {
-            aclsan::WritePlog(
-                aclsan::PlogLevel::kDebug, "[UDS] phase=connect attempt=" + std::to_string(attempt) +
-                                               " errno=0 elapsed_ms=" + std::to_string(ipc::MonotonicNowMs() - start));
+            npucheck::WritePlog(
+                npucheck::PlogLevel::kDebug,
+                "[UDS] phase=connect attempt=" + std::to_string(attempt) +
+                    " errno=0 elapsed_ms=" + std::to_string(npucheck::ipc::MonotonicNowMs() - start));
             return true;
         }
         lastError = errno;
@@ -99,7 +100,7 @@ bool UdsClient::ConnectWithRetry(
         }
 
         // 退避同样受同一个 deadline 约束，不能睡过头。
-        const int64_t remain = deadline - ipc::MonotonicNowMs();
+        const int64_t remain = deadline - npucheck::ipc::MonotonicNowMs();
         if (remain <= 0) {
             error = std::string("connect timed out: ") + std::strerror(lastError);
             return false;
@@ -112,17 +113,18 @@ bool UdsClient::ConnectWithRetry(
 }
 
 bool UdsClient::Send(
-    ipc::MessageType type, const std::vector<uint8_t>& payload, ipc::DeadlineMs deadline, std::string& error)
+    npucheck::ipc::MessageType type, const std::vector<uint8_t>& payload, npucheck::ipc::DeadlineMs deadline,
+    std::string& error)
 {
-    ipc::Frame frame{};
+    npucheck::ipc::Frame frame{};
     frame.type = type;
     frame.sessionId = sessionId_;
     frame.sequence = sendSequence_++;
     frame.payload = payload;
-    return ipc::SendFrame(fd_, frame, deadline, error) == ipc::IoStatus::OK;
+    return npucheck::ipc::SendFrame(fd_, frame, deadline, error) == npucheck::ipc::IoStatus::OK;
 }
 
-bool UdsClient::CheckServerIdentity(uint32_t childPid, ipc::DeadlineMs deadline, std::string& error)
+bool UdsClient::CheckServerIdentity(uint32_t childPid, npucheck::ipc::DeadlineMs deadline, std::string& error)
 {
     ucred peer{};
     socklen_t peerSize = sizeof(peer);
@@ -134,20 +136,20 @@ bool UdsClient::CheckServerIdentity(uint32_t childPid, ipc::DeadlineMs deadline,
         error = "UDS server credentials do not match the child process";
         return false;
     }
-    ipc::Frame response{};
-    if (Receive(response, deadline, error) != ipc::IoStatus::OK) {
+    npucheck::ipc::Frame response{};
+    if (Receive(response, deadline, error) != npucheck::ipc::IoStatus::OK) {
         return false;
     }
-    if (response.type != ipc::MessageType::SERVER_HELLO) {
+    if (response.type != npucheck::ipc::MessageType::SERVER_HELLO) {
         error = "invalid server hello frame";
         return false;
     }
-    ipc::HelloPayload hello{};
-    if (!ipc::DecodeHello(response.payload, hello, error)) {
+    npucheck::ipc::HelloPayload hello{};
+    if (!npucheck::ipc::DecodeHello(response.payload, hello, error)) {
         return false;
     }
     // 对端 minor 取自 ServerHello 的帧头，与本实现取较小值。收到更高的 minor 不是错误。
-    negotiatedMinor_ = ipc::NegotiateMinor(response.minor);
+    negotiatedMinor_ = npucheck::ipc::NegotiateMinor(response.minor);
     // Hello 里的 pid/uid 必须与 SO_PEERCRED 的结果交叉比对：前者是对端自行声明的，
     // 后者由内核填写。两者不一致说明对端实现有问题或存在冒充，按协议错误断连。
     if (hello.pid != childPid || hello.uid != getuid()) {
@@ -158,8 +160,8 @@ bool UdsClient::CheckServerIdentity(uint32_t childPid, ipc::DeadlineMs deadline,
 }
 
 bool UdsClient::ConnectAndConfigure(
-    const std::string& udsName, uint64_t sessionId, uint32_t childPid, ipc::DeadlineMs deadline,
-    const ipc::ConfigureRequest& configure, std::string& error)
+    const std::string& udsName, uint64_t sessionId, uint32_t childPid, npucheck::ipc::DeadlineMs deadline,
+    const npucheck::ipc::ConfigureRequest& configure, std::string& error)
 {
     sessionId_ = sessionId;
     sendSequence_ = 1;
@@ -168,29 +170,29 @@ bool UdsClient::ConnectAndConfigure(
     // deadline 是调用方在 fork 之前算好的绝对时刻，覆盖 connect 重试、Hello 往返、
     // Configure 发送、Ready 接收的全过程，而不是每步各算一次 —— 后者最坏会把用户
     // 设定的超时放大到步数倍，破坏该值"总时长"的语义。
-    const ipc::DeadlineMs start = ipc::MonotonicNowMs();
+    const npucheck::ipc::DeadlineMs start = npucheck::ipc::MonotonicNowMs();
     if (!ConnectWithRetry(udsName, deadline, static_cast<pid_t>(childPid), error)) {
         return false;
     }
-    ipc::HelloPayload hello{};
+    npucheck::ipc::HelloPayload hello{};
     hello.pid = static_cast<uint32_t>(getpid());
     hello.uid = static_cast<uint32_t>(getuid());
-    if (!Send(ipc::MessageType::CLIENT_HELLO, ipc::EncodeHello(hello), deadline, error) ||
+    if (!Send(npucheck::ipc::MessageType::CLIENT_HELLO, npucheck::ipc::EncodeHello(hello), deadline, error) ||
         !CheckServerIdentity(childPid, deadline, error)) {
-        aclsan::WritePlog(aclsan::PlogLevel::kDebug, "[UDS] phase=handshake result=failed");
+        npucheck::WritePlog(npucheck::PlogLevel::kDebug, "[UDS] phase=handshake result=failed");
         return false;
     }
-    aclsan::WritePlog(
-        aclsan::PlogLevel::kDebug,
+    npucheck::WritePlog(
+        npucheck::PlogLevel::kDebug,
         "[UDS] phase=handshake peer_pid=" + std::to_string(childPid) + " peer_uid=" + std::to_string(getuid()) +
             " cred_match=1 negotiated_minor=" + std::to_string(negotiatedMinor_) + " result=ok");
 
     // 在发送之前查：用户请求了当前协商版本不支持的选项时，直接报"版本不支持"，
     // 而不是把对端无法理解的配置送上线路再等它回 Error。
-    if (!ipc::ValidateConfigureMinor(configure, negotiatedMinor_, error)) {
+    if (!npucheck::ipc::ValidateConfigureMinor(configure, negotiatedMinor_, error)) {
         return false;
     }
-    const auto encodedConfig = ipc::EncodeConfigure(configure);
+    const auto encodedConfig = npucheck::ipc::EncodeConfigure(configure);
     // 空编码只可能来自超限；Configure 本身允许为空工具集合以外的任何合法组合。
     if (encodedConfig.empty() && !configure.tools.empty()) {
         error = "cannot encode tool configuration";
@@ -200,22 +202,22 @@ bool UdsClient::ConnectAndConfigure(
     for (const auto& tool : configure.tools) {
         optionCount += tool.options.size();
     }
-    aclsan::WritePlog(
-        aclsan::PlogLevel::kDebug, "[UDS] phase=configure tool_count=" + std::to_string(configure.tools.size()) +
-                                       " option_count=" + std::to_string(optionCount) +
-                                       " length=" + std::to_string(ipc::kWireHeaderSize + encodedConfig.size()) +
-                                       " payload_size=" + std::to_string(encodedConfig.size()));
-    if (!Send(ipc::MessageType::CONFIGURE, encodedConfig, deadline, error)) {
+    npucheck::WritePlog(
+        npucheck::PlogLevel::kDebug, "[UDS] phase=configure tool_count=" + std::to_string(configure.tools.size()) +
+                                         " option_count=" + std::to_string(optionCount) + " length=" +
+                                         std::to_string(npucheck::ipc::kWireHeaderSize + encodedConfig.size()) +
+                                         " payload_size=" + std::to_string(encodedConfig.size()));
+    if (!Send(npucheck::ipc::MessageType::CONFIGURE, encodedConfig, deadline, error)) {
         return false;
     }
-    ipc::Frame response{};
-    if (Receive(response, deadline, error) != ipc::IoStatus::OK) {
+    npucheck::ipc::Frame response{};
+    if (Receive(response, deadline, error) != npucheck::ipc::IoStatus::OK) {
         return false;
     }
-    if (response.type == ipc::MessageType::ERROR) {
-        ipc::ErrorPayload failure{};
+    if (response.type == npucheck::ipc::MessageType::ERROR) {
+        npucheck::ipc::ErrorPayload failure{};
         std::string decodeError;
-        if (!ipc::DecodeError(response.payload, failure, decodeError)) {
+        if (!npucheck::ipc::DecodeError(response.payload, failure, decodeError)) {
             error = "injected library returned a malformed initialization error: " + decodeError;
             return false;
         }
@@ -225,7 +227,7 @@ bool UdsClient::ConnectAndConfigure(
             " code=" + std::to_string(failure.code) + "): " + failure.message;
         return false;
     }
-    if (response.type != ipc::MessageType::READY) {
+    if (response.type != npucheck::ipc::MessageType::READY) {
         error = "expected READY frame";
         return false;
     }
@@ -234,29 +236,30 @@ bool UdsClient::ConnectAndConfigure(
         error = "READY frame carries an unexpected payload";
         return false;
     }
-    aclsan::WritePlog(
-        aclsan::PlogLevel::kDebug,
-        "[UDS] phase=wait_ready elapsed_ms=" + std::to_string(ipc::MonotonicNowMs() - start) + " result=ready");
+    npucheck::WritePlog(
+        npucheck::PlogLevel::kDebug, "[UDS] phase=wait_ready elapsed_ms=" +
+                                         std::to_string(npucheck::ipc::MonotonicNowMs() - start) + " result=ready");
     // 握手到此结束，deadline 使命完成。之后进入采集阶段，等待由调用方按 kNoDeadline 驱动。
     return true;
 }
 
-ipc::IoStatus UdsClient::Receive(ipc::Frame& frame, ipc::DeadlineMs deadline, std::string& error)
+npucheck::ipc::IoStatus UdsClient::Receive(
+    npucheck::ipc::Frame& frame, npucheck::ipc::DeadlineMs deadline, std::string& error)
 {
-    ipc::IoStatus status = ipc::ReceiveFrame(fd_, frame, deadline, error);
-    if (status != ipc::IoStatus::OK) {
+    npucheck::ipc::IoStatus status = npucheck::ipc::ReceiveFrame(fd_, frame, deadline, error);
+    if (status != npucheck::ipc::IoStatus::OK) {
         return status;
     }
     if (frame.sessionId != sessionId_) {
         error = "received frame for another session";
-        return ipc::IoStatus::PROTOCOL_ERROR;
+        return npucheck::ipc::IoStatus::PROTOCOL_ERROR;
     }
     if (frame.sequence != receiveSequence_) {
         error = "non-contiguous server sequence";
-        return ipc::IoStatus::PROTOCOL_ERROR;
+        return npucheck::ipc::IoStatus::PROTOCOL_ERROR;
     }
     ++receiveSequence_;
-    return ipc::IoStatus::OK;
+    return npucheck::ipc::IoStatus::OK;
 }
 
 void UdsClient::Close()
@@ -267,4 +270,4 @@ void UdsClient::Close()
     }
 }
 
-} // namespace aclsan::cli
+} // namespace npucheck::ipc

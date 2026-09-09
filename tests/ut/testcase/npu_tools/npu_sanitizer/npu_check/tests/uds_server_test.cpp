@@ -23,7 +23,7 @@
 #include <unistd.h>
 #include <vector>
 
-namespace aclsan::ipc {
+namespace npucheck::ipc {
 namespace {
 
 class ScopedEnvironmentVariable {
@@ -226,7 +226,7 @@ TEST(UdsServerTest, FragmentsResultAcrossFramesAndFlagsOnlyTheLastOne)
     ResultClientResult clientResult{};
     std::thread client(RunResultClient, udsName, kSessionId, std::ref(clientResult));
 
-    UdsServer server;
+    npucheck::ipc::UdsServer server;
     ConfigureRequest config{};
     std::string serverError;
     const bool handshakeSucceeded = server.StartAndHandshake(config, serverError);
@@ -272,7 +272,7 @@ TEST(UdsServerTest, SendsOneEmptyFrameForAnEmptyResult)
     ResultClientResult clientResult{};
     std::thread client(RunResultClient, udsName, kSessionId, std::ref(clientResult));
 
-    UdsServer server;
+    npucheck::ipc::UdsServer server;
     ConfigureRequest config{};
     std::string serverError;
     const bool handshakeSucceeded = server.StartAndHandshake(config, serverError);
@@ -306,7 +306,7 @@ TEST(UdsServerTest, SendsFlowErrorSynchronouslyAfterReady)
     ClientResult clientResult{};
     std::thread client(RunClient, udsName, kSessionId, std::ref(clientResult), false);
 
-    UdsServer server;
+    npucheck::ipc::UdsServer server;
     ConfigureRequest config{};
     std::string serverError;
     const bool handshakeSucceeded = server.StartAndHandshake(config, serverError);
@@ -353,7 +353,7 @@ TEST(UdsServerTest, SkipsMustIgnoreFramesWithoutBreakingSequence)
     ClientResult clientResult{};
     std::thread client(RunClient, udsName, kSessionId, std::ref(clientResult), true);
 
-    UdsServer server;
+    npucheck::ipc::UdsServer server;
     ConfigureRequest config{};
     std::string serverError;
     const bool handshakeSucceeded = server.StartAndHandshake(config, serverError);
@@ -374,4 +374,4 @@ TEST(UdsServerTest, SkipsMustIgnoreFramesWithoutBreakingSequence)
 }
 
 } // namespace
-} // namespace aclsan::ipc
+} // namespace npucheck::ipc

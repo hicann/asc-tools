@@ -18,7 +18,7 @@
 #include <sys/types.h>
 #include <vector>
 
-namespace aclsan::cli {
+namespace npucheck::ipc {
 
 class UdsClient {
 public:
@@ -33,27 +33,31 @@ public:
     // 起点必须在 fork 之前：exec 与 CANN 动态库加载是整段里最不可控的部分，把它排除
     // 在预算之外，用户设定的超时就形同虚设。因此这里收的是绝对时刻，不是时长。
     bool ConnectAndConfigure(
-        const std::string& udsName, uint64_t sessionId, uint32_t childPid, ipc::DeadlineMs deadline,
-        const ipc::ConfigureRequest& configure, std::string& error);
-    // 采集阶段读取后续帧。deadline 传 ipc::kNoDeadline 表示不设超时 —— 应用可能跑数小时。
-    ipc::IoStatus Receive(ipc::Frame& frame, ipc::DeadlineMs deadline, std::string& error);
+        const std::string& udsName, uint64_t sessionId, uint32_t childPid, npucheck::ipc::DeadlineMs deadline,
+        const npucheck::ipc::ConfigureRequest& configure, std::string& error);
+    // 采集阶段读取后续帧。deadline 传 npucheck::ipc::kNoDeadline 表示不设超时 —— 应用可能跑数小时。
+    npucheck::ipc::IoStatus Receive(
+        npucheck::ipc::Frame& frame, npucheck::ipc::DeadlineMs deadline, std::string& error);
     void Close();
 
     // 与对端协商出的 minor，取双方较小值。V1 恒为 0，供维测日志记录。
     uint16_t NegotiatedMinor() const { return negotiatedMinor_; }
 
 private:
-    bool ConnectWithRetry(const std::string& udsName, ipc::DeadlineMs deadline, pid_t childPid, std::string& error);
-    bool CheckServerIdentity(uint32_t childPid, ipc::DeadlineMs deadline, std::string& error);
-    bool Send(ipc::MessageType type, const std::vector<uint8_t>& payload, ipc::DeadlineMs deadline, std::string& error);
+    bool ConnectWithRetry(
+        const std::string& udsName, npucheck::ipc::DeadlineMs deadline, pid_t childPid, std::string& error);
+    bool CheckServerIdentity(uint32_t childPid, npucheck::ipc::DeadlineMs deadline, std::string& error);
+    bool Send(
+        npucheck::ipc::MessageType type, const std::vector<uint8_t>& payload, npucheck::ipc::DeadlineMs deadline,
+        std::string& error);
 
     int fd_ = -1;
-    uint16_t negotiatedMinor_ = ipc::kProtocolMinor;
+    uint16_t negotiatedMinor_ = npucheck::ipc::kProtocolMinor;
     uint64_t sessionId_ = 0;
     uint64_t sendSequence_ = 1;
     uint64_t receiveSequence_ = 1;
 };
 
-} // namespace aclsan::cli
+} // namespace npucheck::ipc
 
 #endif

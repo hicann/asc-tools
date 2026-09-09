@@ -14,7 +14,7 @@
 #include <string>
 #include <vector>
 
-namespace aclsan::ipc {
+namespace npucheck::ipc {
 namespace {
 
 // 构造一个双工具、每个工具带一个子选项的规范化请求。
@@ -400,4 +400,4 @@ TEST(WireProtocolTest, AppliesMustIgnoreRuleToUnknownTypes)
 }
 
 } // namespace
-} // namespace aclsan::ipc
+} // namespace npucheck::ipc

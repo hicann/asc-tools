@@ -37,6 +37,10 @@ if(NOT TARGET acl_san)
 endif()
 
 add_library(npu_check_core STATIC
+  src/checker/checker.cpp
+  src/checker/memcheck_callbacks.cpp
+  src/checker/synccheck_callbacks.cpp
+  src/diagnostic/report/device_call_stack.cpp
   src/checker/allocation_registry.cpp
   src/checker/memcheck.cpp
   src/checker/synccheck.cpp

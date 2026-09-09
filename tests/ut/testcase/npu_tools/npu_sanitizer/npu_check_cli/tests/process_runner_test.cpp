@@ -13,7 +13,7 @@
 #include <fstream>
 #include <sstream>
 
-namespace aclsan::cli {
+namespace npucheck {
 TEST(ProcessRunnerTest, InternalDiagnosticsUsePlogWithoutContaminatingCheckOutput)
 {
     const auto directory =
@@ -43,4 +43,4 @@ TEST(ProcessRunnerTest, InternalDiagnosticsUsePlogWithoutContaminatingCheckOutpu
     EXPECT_FALSE(boost::filesystem::exists(directory / "npu_check.log"));
     boost::filesystem::remove_all(directory);
 }
-} // namespace aclsan::cli
+} // namespace npucheck

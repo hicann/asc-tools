@@ -63,7 +63,7 @@ void ResetCapture()
 
 int main()
 {
-    using namespace aclsan;
+    using namespace npucheck;
 
     // The test library starts with logging disabled.
     plog_test::ResetApi();

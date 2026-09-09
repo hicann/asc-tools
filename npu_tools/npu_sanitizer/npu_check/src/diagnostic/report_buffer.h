@@ -15,12 +15,12 @@
 #include <mutex>
 #include <string>
 
-namespace aclsan::diagnostic {
+namespace npucheck::diagnostic {
 
 // 本次会话的报告聚合器。
 //
 // 诊断在 callback 线程上产生，退出路径上由 Finalize 一次性取走并发出，因此追加必须是
-// 线程安全的。总长受 ipc::kMaxResultBytes 约束：触及上限后停止追加并置 truncated，
+// 线程安全的。总长受 npucheck::ipc::kMaxResultBytes 约束：触及上限后停止追加并置 truncated，
 // 而不是丢弃整份报告 —— 已经查出来的问题仍然要交付给用户，只是标明它不完整。
 class ReportBuffer {
 public:
@@ -51,6 +51,6 @@ private:
     bool failed_ = false;
 };
 
-} // namespace aclsan::diagnostic
+} // namespace npucheck::diagnostic
 
 #endif

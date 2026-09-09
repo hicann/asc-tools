@@ -15,7 +15,7 @@
 #include <limits>
 #include <utility>
 
-namespace aclsan::ipc {
+namespace npucheck::ipc {
 namespace {
 
 class Encoder {
@@ -574,4 +574,4 @@ bool IsKnownTool(uint16_t toolId)
     return false;
 }
 
-} // namespace aclsan::ipc
+} // namespace npucheck::ipc

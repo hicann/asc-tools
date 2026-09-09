@@ -15,7 +15,7 @@
 
 #include <string>
 
-namespace aclsan::cli {
+namespace npucheck {
 
 // 三类结果。退出码空间无法完全消歧 —— 应用自身完全可能返回 64、125 或 127 —— 因此
 // 脚本必须靠结果摘要行来区分，而不是靠退出码。
@@ -38,6 +38,6 @@ std::string FormatResultSummary(const ResultSummary& summary);
 
 int RunApplication(const Options& options, const std::string& libraryPath);
 
-} // namespace aclsan::cli
+} // namespace npucheck
 
 #endif

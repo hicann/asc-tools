@@ -14,10 +14,11 @@
 #include <memory>
 #include <mutex>
 
+namespace npucheck {
 namespace {
 
 std::mutex g_serviceMutex;
-std::unique_ptr<aclsan::ToolManager> g_service;
+std::unique_ptr<npucheck::ToolManager> g_service;
 
 void FinalizeService() noexcept
 {
@@ -39,7 +40,7 @@ extern "C" NPU_CHECK_API int acltoolInitialize(void)
         if (g_service) {
             return g_service->IsInitialized() ? 0 : 1;
         }
-        auto service = std::make_unique<aclsan::ToolManager>();
+        auto service = std::make_unique<npucheck::ToolManager>();
         const int result = service->Initialize();
         if (result != 0) {
             return result;
@@ -53,3 +54,4 @@ extern "C" NPU_CHECK_API int acltoolInitialize(void)
         return 1;
     }
 }
+} // namespace npucheck

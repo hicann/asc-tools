@@ -31,6 +31,7 @@ add_executable(npu_check_unit_tests
   gtest_main.cpp
   allocation_registry_test.cpp
   memcheck_test.cpp
+  checker_test.cpp
   report_buffer_test.cpp
   synccheck_test.cpp
   uds_server_test.cpp
@@ -48,6 +49,25 @@ target_include_directories(npu_check_unit_tests PRIVATE
 target_link_libraries(npu_check_unit_tests PRIVATE
   npu_check_core acl_san npu_sanitizer_plog Threads::Threads GTest::gtest Boost::filesystem)
 add_test(NAME npu_check_unit_tests COMMAND npu_check_unit_tests)
+
+add_executable(npu_check_tool_manager_test
+  gtest_main.cpp
+  tool_manager_test.cpp
+  "${NPU_CHECK_SOURCE_DIR}/../npu_check_cli/src/options.cpp"
+  "${NPU_CHECK_SOURCE_DIR}/../npu_check_cli/src/uds_client.cpp"
+  ${NPU_CHECK_TEST_REPORT_RENDERER_SOURCES}
+)
+target_compile_features(npu_check_tool_manager_test PRIVATE cxx_std_17)
+target_compile_definitions(npu_check_tool_manager_test PRIVATE _GLIBCXX_USE_CXX11_ABI=0)
+target_include_directories(npu_check_tool_manager_test PRIVATE
+  "${NPU_CHECK_SOURCE_DIR}/src"
+  "${NPU_CHECK_SOURCE_DIR}/../npu_check_cli/src"
+  "${NPU_CHECK_DBI_INCLUDE_DIR}"
+)
+target_link_libraries(npu_check_tool_manager_test PRIVATE
+  npu_check_core acl_san npu_sanitizer_plog Threads::Threads GTest::gtest Boost::filesystem)
+add_test(NAME npu_check_tool_manager_test COMMAND npu_check_tool_manager_test)
+set_tests_properties(npu_check_tool_manager_test PROPERTIES TIMEOUT 45)
 
 add_executable(npu_check_kernel_attributes_test
   gtest_main.cpp

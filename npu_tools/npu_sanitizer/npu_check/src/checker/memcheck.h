@@ -12,13 +12,14 @@
 #include "aclsan/aclsan_api.h"
 #include "aclsan/aclsan_cbdata.h"
 #include "checker/allocation_registry.h"
+#include "checker/checker.h"
 #include "diagnostic/device_protocol.h"
 #include "diagnostic/report_renderer.h"
 
 #include <cstdint>
 #include <vector>
 
-namespace aclsan {
+namespace npucheck {
 
 struct MemcheckStats {
     uint64_t allocations = 0;
@@ -31,9 +32,15 @@ struct MemcheckStats {
     uint64_t droppedDeviceOperations = 0;
 };
 
-class Memcheck {
+class Memcheck final : public Checker {
 public:
     explicit Memcheck(bool strictUnknown);
+    const std::vector<CallbackSpec>& Callbacks() const override;
+    bool OnCallback(
+        AclsanCallbackDomain domain, AclsanCallbackId cbid, const void* data, CheckerReports& reports) override;
+    std::string Summary() const override;
+    bool HasErrors() const override;
+    bool AnalysisComplete() const override;
 
     void OnAllocation(const AclsanResourceData& data);
     void OnFree(const AclsanResourceData& data);
@@ -58,6 +65,6 @@ private:
     static constexpr size_t kMaxPendingDeviceOperations = 1u << 20u;
 };
 
-} // namespace aclsan
+} // namespace npucheck
 
 #endif

@@ -184,9 +184,6 @@ void AppendFrame(const ReportFrame& frame, std::size_t frameIndex, std::string* 
     out->append(std::to_string(frameIndex));
     out->append(" ");
     out->append(frame.function.empty() ? "<unknown>" : frame.function);
-    out->append(" [0x");
-    out->append(detail::Hex(frame.pc));
-    out->append("]");
     if (!frame.file.empty()) {
         out->append(" in ");
         out->append(frame.file);
@@ -194,7 +191,7 @@ void AppendFrame(const ReportFrame& frame, std::size_t frameIndex, std::string* 
             out->append(":");
             out->append(std::to_string(frame.line));
         }
-        if (frame.column != 0) {
+        if (frame.line != 0 && frame.column != 0) {
             out->append(":");
             out->append(std::to_string(frame.column));
         }

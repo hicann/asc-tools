@@ -10,8 +10,7 @@
 #define NPU_CHECK_TOOL_MANAGER_TOOL_MANAGER_H
 
 #include "aclsan/aclsan_api.h"
-#include "checker/memcheck.h"
-#include "checker/synccheck.h"
+#include "checker/checker.h"
 #include "diagnostic/report_renderer.h"
 #include "diagnostic/report_buffer.h"
 #include "ipc/uds_server.h"
@@ -25,7 +24,7 @@
 #include <string>
 #include <vector>
 
-namespace aclsan {
+namespace npucheck {
 
 class ToolManager {
 public:
@@ -58,12 +57,9 @@ private:
     void LeaveCallback();
     bool ConfigureSanitizer(std::string& error);
     bool EnableCallbacks(std::string& error);
-    // 本次是否启用了某个工具。
-    bool IsToolEnabled(ipc::ToolId toolId) const;
     void RollbackSanitizer();
     void LogHandshakeFailure(const std::string& reason) noexcept;
-    void StoreDiagnostics(std::vector<npucheck::NpuCheckMemcheckReport> reports);
-    void StoreSynccheckReports(std::vector<npucheck::NpuCheckSynccheckReport> reports);
+    void StoreReports(CheckerReports reports);
     bool NormalizeAndStoreReportRecord(
         const npucheck::NpuCheckReportRecord& report, uint64_t reportId, const char* what);
     void PublishMalformed(AclsanCallbackDomain domain, AclsanCallbackId cbid, const char* reason);
@@ -72,31 +68,6 @@ private:
     std::string BuildSummaryMessage() const;
     // 本次检查是否检出问题，对应 Result 末帧的 kFlagHasErrors。
     bool HasDetectedErrors() const;
-
-    template <typename T>
-    static const T* ValidateCallbackData(const void* cbdata)
-    {
-        if (cbdata == nullptr) {
-            return nullptr;
-        }
-        const auto* typed = static_cast<const T*>(cbdata);
-        if (typed->common.version != ACLSAN_API_VERSION || typed->common.size < sizeof(T)) {
-            return nullptr;
-        }
-        return typed;
-    }
-
-    static const AclsanDeviceMemoryAccessData* ValidateDeviceMemoryAccessData(const void* cbdata)
-    {
-        if (cbdata == nullptr) {
-            return nullptr;
-        }
-        const auto* typed = static_cast<const AclsanDeviceMemoryAccessData*>(cbdata);
-        if (typed->header.version != ACLSAN_API_VERSION || typed->header.size < sizeof(AclsanDeviceMemoryAccessData)) {
-            return nullptr;
-        }
-        return typed;
-    }
 
     mutable std::mutex lifecycleMutex_;
     std::mutex callbackMutex_;
@@ -108,7 +79,7 @@ private:
     bool subscribed_ = false;
 
     // 本次会话启用的工具及其子选项，按 toolId 升序。多个工具可以同时启用。
-    ipc::ConfigureRequest configure_{};
+    npucheck::ipc::ConfigureRequest configure_{};
     // 工作目录：probe 缓存的落点，由环境变量传入（Configure 只承载
     // 工具与子选项，不承载路径）。
     std::string workDir_;
@@ -118,13 +89,12 @@ private:
     // callback 线程即时标准化的拥有型记录；Finalize 渲染它们以及工具级汇总。
     std::vector<npucheck::ReportRecord> reportRecords_;
     AclsanSubscriberHandle subscriber_ = nullptr;
-    std::unique_ptr<Memcheck> memcheck_;
-    std::unique_ptr<npucheck::Synccheck> synccheck_;
+    std::vector<std::unique_ptr<Checker>> checkers_;
     std::atomic<uint64_t> callbackCount_{0};
     uint64_t malformedCallbacks_ = 0;
     uint64_t frameworkErrors_ = 0;
 };
 
-} // namespace aclsan
+} // namespace npucheck
 
 #endif
