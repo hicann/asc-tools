@@ -7,8 +7,8 @@
  * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
  * See LICENSE in the root of the software repository for the full text of the License.
  */
-#ifndef NPU_COMPUTE_ACLPTI_DATA_MODULE_H_
-#define NPU_COMPUTE_ACLPTI_DATA_MODULE_H_
+#ifndef NPU_TOOLS_NPU_COMPUTE_SRC_ACL_PTI_DATA_MODULE_H
+#define NPU_TOOLS_NPU_COMPUTE_SRC_ACL_PTI_DATA_MODULE_H
 
 #include "aclpti/aclpti_data.h"
 #include "npu_compute/common.h"
@@ -19,7 +19,7 @@
 #include <cstdint>
 #include <memory>
 
-namespace npu_compute::aclpti::data {
+namespace aclpti::data {
 
 inline constexpr std::size_t kMaxPmuSlots = 10;
 inline constexpr uint32_t kInvalidPmuEvent = 0xffffffffU;
@@ -93,6 +93,6 @@ private:
 aclptiResult RegisterProfilingDataCallback(aclptiProfilingDataCallback callback);
 aclptiResult RegisterShutdownCallback(aclptiDataModuleShutdownCallback callback, void* userData);
 
-} // namespace npu_compute::aclpti::data
+} // namespace aclpti::data
 
-#endif // NPU_COMPUTE_ACLPTI_DATA_MODULE_H_
+#endif // NPU_TOOLS_NPU_COMPUTE_SRC_ACL_PTI_DATA_MODULE_H

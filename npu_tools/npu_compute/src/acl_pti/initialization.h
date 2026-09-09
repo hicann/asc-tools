@@ -11,16 +11,16 @@
  * @file initialization.h
  * @brief Coordinates one-time initialization of shared ACL PTI dependencies.
  */
-#ifndef NPU_COMPUTE_ACLPTI_INITIALIZATION_H_
-#define NPU_COMPUTE_ACLPTI_INITIALIZATION_H_
+#ifndef NPU_TOOLS_NPU_COMPUTE_SRC_ACL_PTI_INITIALIZATION_H
+#define NPU_TOOLS_NPU_COMPUTE_SRC_ACL_PTI_INITIALIZATION_H
 
 #include "aclpti/aclpti_types.h"
 
-namespace npu_compute::aclpti::initialization {
+namespace aclpti::initialization {
 
-/// Initializes runtime hooks, replacements, and profiling dependencies once.
+/// Initializes runtime hooks, handlers, and profiling dependencies once.
 aclptiResult InitializeDependencies();
 
-} // namespace npu_compute::aclpti::initialization
+} // namespace aclpti::initialization
 
-#endif // NPU_COMPUTE_ACLPTI_INITIALIZATION_H_
+#endif // NPU_TOOLS_NPU_COMPUTE_SRC_ACL_PTI_INITIALIZATION_H

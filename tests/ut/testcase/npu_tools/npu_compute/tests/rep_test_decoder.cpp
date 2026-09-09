@@ -14,7 +14,7 @@
 #include <limits>
 #include <string_view>
 
-namespace npu_compute::compute_launcher::test {
+namespace npucompute::cli::test {
 namespace {
 
 void SetError(std::string* error, const std::string& message)
@@ -112,4 +112,4 @@ bool DecodeRep(const std::vector<uint8_t>& encoded, DecodedRep* decoded, std::st
     return true;
 }
 
-} // namespace npu_compute::compute_launcher::test
+} // namespace npucompute::cli::test

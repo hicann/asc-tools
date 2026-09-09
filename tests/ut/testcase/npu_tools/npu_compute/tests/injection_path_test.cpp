@@ -7,7 +7,7 @@
  * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
  * See LICENSE in the root of the software repository for the full text of the License.
  */
-#include "injection_path.h"
+#include "launch/injection_path.h"
 
 #include <cstdio>
 #include <fstream>
@@ -50,7 +50,7 @@ bool WritePlaceholder(const boost::filesystem::path& path)
 
 int main()
 {
-    using npu_compute::compute_launcher::ResolveInjectionLibraryPath;
+    using npucompute::cli::ResolveInjectionLibraryPath;
 
     boost::system::error_code error;
     const boost::filesystem::path executable = boost::filesystem::canonical("/proc/self/exe", error);

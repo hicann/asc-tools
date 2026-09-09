@@ -11,8 +11,8 @@
  * @file replay_memory.h
  * @brief Mirrors device memory operations and restores captured state before kernel replay.
  */
-#ifndef NPU_COMPUTE_ACLPTI_PROFILING_REPLAY_MEMORY_H_
-#define NPU_COMPUTE_ACLPTI_PROFILING_REPLAY_MEMORY_H_
+#ifndef NPU_TOOLS_NPU_COMPUTE_SRC_ACL_PTI_PROFILING_REPLAY_MEMORY_H
+#define NPU_TOOLS_NPU_COMPUTE_SRC_ACL_PTI_PROFILING_REPLAY_MEMORY_H
 
 #include "aclpti/aclpti_types.h"
 #include "injection/injection_hook.h"
@@ -21,7 +21,7 @@
 #include <cstdint>
 #include <map>
 
-namespace npu_compute::aclpti::profiling {
+namespace aclpti::profiling {
 
 class ReplayMemory {
 public:
@@ -57,6 +57,6 @@ private:
     std::map<std::uintptr_t, ShadowBuffer> shadowBuffers_;
 };
 
-} // namespace npu_compute::aclpti::profiling
+} // namespace aclpti::profiling
 
-#endif // NPU_COMPUTE_ACLPTI_PROFILING_REPLAY_MEMORY_H_
+#endif // NPU_TOOLS_NPU_COMPUTE_SRC_ACL_PTI_PROFILING_REPLAY_MEMORY_H

@@ -11,13 +11,13 @@
  * @file control.h
  * @brief Validates subscriber activity requests and updates activity collection state.
  */
-#ifndef NPU_COMPUTE_ACLPTI_ACTIVITY_CONTROL_H_
-#define NPU_COMPUTE_ACLPTI_ACTIVITY_CONTROL_H_
+#ifndef NPU_TOOLS_NPU_COMPUTE_SRC_ACL_PTI_ACTIVITY_CONTROL_H
+#define NPU_TOOLS_NPU_COMPUTE_SRC_ACL_PTI_ACTIVITY_CONTROL_H
 
 #include "aclpti/aclpti_activity.h"
 #include "aclpti/aclpti_types.h"
 
-namespace npu_compute::aclpti::activity {
+namespace aclpti::activity {
 
 /// Validates and enables activity collection for a subscriber.
 aclptiResult Enable(aclptiSubscribeHandle subscriber, aclptiActivityKind kind, const aclptiActivityConfig* config);
@@ -25,6 +25,6 @@ aclptiResult Enable(aclptiSubscribeHandle subscriber, aclptiActivityKind kind, c
 /// Validates and disables activity collection for a subscriber.
 aclptiResult Disable(aclptiSubscribeHandle subscriber, aclptiActivityKind kind, const aclptiActivityConfig* config);
 
-} // namespace npu_compute::aclpti::activity
+} // namespace aclpti::activity
 
-#endif // NPU_COMPUTE_ACLPTI_ACTIVITY_CONTROL_H_
+#endif // NPU_TOOLS_NPU_COMPUTE_SRC_ACL_PTI_ACTIVITY_CONTROL_H

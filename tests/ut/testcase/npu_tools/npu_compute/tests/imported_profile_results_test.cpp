@@ -7,7 +7,7 @@
  * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
  * See LICENSE in the root of the software repository for the full text of the License.
  */
-#include "imported_profile_results.h"
+#include "import/imported_profile_results.h"
 
 #include <sys/wait.h>
 #include <unistd.h>
@@ -25,8 +25,8 @@
 #include <string_view>
 #include <vector>
 
-#include "rep_directory_packer.h"
-#include "rep_encoder.h"
+#include "report/rep_directory_packer.h"
+#include "report/rep_encoder.h"
 
 namespace {
 
@@ -45,12 +45,12 @@ int Check(bool condition, const char* expression, int line)
             return 1;                                   \
     } while (false)
 
-using npu_compute::compute_launcher::EncodeRep;
-using npu_compute::compute_launcher::ImportedProfileEntry;
-using npu_compute::compute_launcher::NpuRepFileType;
-using npu_compute::compute_launcher::PackDirectoryToRep;
-using npu_compute::compute_launcher::ReadImportedProfileResults;
-using npu_compute::compute_launcher::UnpackImportedProfileResults;
+using npucompute::cli::EncodeRep;
+using npucompute::cli::ImportedProfileEntry;
+using npucompute::cli::NpuRepFileType;
+using npucompute::cli::PackDirectoryToRep;
+using npucompute::cli::ReadImportedProfileResults;
+using npucompute::cli::UnpackImportedProfileResults;
 
 class TempDirectory {
 public:

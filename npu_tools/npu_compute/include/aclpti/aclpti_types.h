@@ -7,8 +7,8 @@
  * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
  * See LICENSE in the root of the software repository for the full text of the License.
  */
-#ifndef ACLPTI_TYPES_H_
-#define ACLPTI_TYPES_H_
+#ifndef NPU_TOOLS_NPU_COMPUTE_INCLUDE_ACLPTI_ACLPTI_TYPES_H
+#define NPU_TOOLS_NPU_COMPUTE_INCLUDE_ACLPTI_ACLPTI_TYPES_H
 
 #include "aclpti/aclpti_export.h"
 
@@ -44,4 +44,4 @@ typedef struct aclptiSubscribeParams {
     uint64_t reserved;
 } aclptiSubscribeParams;
 
-#endif // ACLPTI_TYPES_H_
+#endif // NPU_TOOLS_NPU_COMPUTE_INCLUDE_ACLPTI_ACLPTI_TYPES_H

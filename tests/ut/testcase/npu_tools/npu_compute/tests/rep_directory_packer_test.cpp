@@ -7,7 +7,7 @@
  * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
  * See LICENSE in the root of the software repository for the full text of the License.
  */
-#include "rep_directory_packer.h"
+#include "report/rep_directory_packer.h"
 #include "rep_test_decoder.h"
 
 #include <cstdio>
@@ -39,12 +39,12 @@ int Check(bool condition, const char* expression, int line)
             return 1;                                   \
     } while (false)
 
-using npu_compute::compute_launcher::kNpuRepFileInfoSize;
-using npu_compute::compute_launcher::kNpuRepHeadSize;
-using npu_compute::compute_launcher::NpuRepFileType;
-using npu_compute::compute_launcher::PackDirectoryToRep;
-using npu_compute::compute_launcher::test::DecodedRep;
-using npu_compute::compute_launcher::test::DecodeRep;
+using npucompute::cli::kNpuRepFileInfoSize;
+using npucompute::cli::kNpuRepHeadSize;
+using npucompute::cli::NpuRepFileType;
+using npucompute::cli::PackDirectoryToRep;
+using npucompute::cli::test::DecodedRep;
+using npucompute::cli::test::DecodeRep;
 
 class TempDirectory {
 public:

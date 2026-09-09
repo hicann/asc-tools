@@ -7,8 +7,8 @@
  * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
  * See LICENSE in the root of the software repository for the full text of the License.
  */
-#ifndef NPU_COMPUTE_SRC_COMMON_DEBUG_LOG_H_
-#define NPU_COMPUTE_SRC_COMMON_DEBUG_LOG_H_
+#ifndef NPU_TOOLS_NPU_COMPUTE_SRC_COMMON_DEBUG_LOG_H
+#define NPU_TOOLS_NPU_COMPUTE_SRC_COMMON_DEBUG_LOG_H
 
 #include <cstdarg>
 #include <cstdio>
@@ -23,7 +23,7 @@
 #define NPU_COMPUTE_PRINTF_FORMAT(formatIndex, firstArgument)
 #endif
 
-namespace npu_compute::detail {
+namespace npucompute::detail {
 
 inline bool DebugEnabled()
 {
@@ -50,8 +50,8 @@ inline void DebugLog(const char* component, const char* format, ...)
     std::fputc('\n', stderr);
 }
 
-} // namespace npu_compute::detail
+} // namespace npucompute::detail
 
 #undef NPU_COMPUTE_PRINTF_FORMAT
 
-#endif // NPU_COMPUTE_SRC_COMMON_DEBUG_LOG_H_
+#endif // NPU_TOOLS_NPU_COMPUTE_SRC_COMMON_DEBUG_LOG_H

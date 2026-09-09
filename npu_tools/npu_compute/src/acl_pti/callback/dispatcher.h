@@ -11,8 +11,8 @@
  * @file dispatcher.h
  * @brief Stores subscriber state and dispatches enabled runtime API callbacks.
  */
-#ifndef NPU_COMPUTE_ACLPTI_CALLBACK_DISPATCHER_H_
-#define NPU_COMPUTE_ACLPTI_CALLBACK_DISPATCHER_H_
+#ifndef NPU_TOOLS_NPU_COMPUTE_SRC_ACL_PTI_CALLBACK_DISPATCHER_H
+#define NPU_TOOLS_NPU_COMPUTE_SRC_ACL_PTI_CALLBACK_DISPATCHER_H
 
 #include "aclpti/aclpti_callback.h"
 
@@ -29,7 +29,7 @@ struct aclptiSubscriber_st {
     std::mutex callbackMutex;
 };
 
-namespace npu_compute::aclpti::callback {
+namespace aclpti::callback {
 
 class Dispatcher {
 public:
@@ -67,6 +67,6 @@ private:
 /// Returns the process-wide callback dispatcher.
 Dispatcher& GetDispatcher();
 
-} // namespace npu_compute::aclpti::callback
+} // namespace aclpti::callback
 
-#endif // NPU_COMPUTE_ACLPTI_CALLBACK_DISPATCHER_H_
+#endif // NPU_TOOLS_NPU_COMPUTE_SRC_ACL_PTI_CALLBACK_DISPATCHER_H

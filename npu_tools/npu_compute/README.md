@@ -31,7 +31,7 @@ npu-compute
 | NPU Compute 库 | `libnpu-compute.so` | 导出 `acltoolInitialize`/`acltoolShutdown`、配置 ACLPTI、采集 HardwareInfo 并写入性能分析 CSV 文件 |
 | ACLPTI | `libacl_pti.so` | 将 Section 展开为 PMU 事件、维护影子内存并重放 Kernel |
 | CANN Prof API | `libprofapi.so` | 注册 Runtime 表、加载注入库并接收 profiling 数据 |
-| Injection Hook | `libacl_tool_injection.so` | 注册 API replacement 并提供原始 Runtime 函数 |
+| Injection Hook | `libacl_tool_injection.so` | 注册 API handler 并提供原始 Runtime 函数 |
 | PTI 数据模块 | 编译到 `libacl_pti.so` | 解码性能分析数据块、聚合 Task/PMU 数据行，并在数据排空后通知已注册的关闭处理函数 |
 | CANN Runtime | `libacl_rt.so`、`libruntime.so` | 提供 Runtime API 和 API injection 分发 |
 
@@ -40,9 +40,39 @@ npu-compute
 NPU Compute 通过该库使用此实现。
 
 ACLPTI 的私有 C++ 实现位于
-`npu_compute::aclpti::{callback,activity,data,profiling,replacement}`
-命名空间下。只有跨域的初始化模块保留在 `npu_compute::aclpti` 中。
+`aclpti::{callback,activity,data,profiling,handler}`
+命名空间下。只有跨域的初始化模块保留在 `aclpti` 中。
 公共 `aclptiXxx` API 保持在全局命名空间中，文件内辅助函数保持在匿名命名空间中。
+
+## 源码目录
+
+`src/cli` 负责命令行和报告管理，`src/compute` 负责目标进程内的采集与结果处理：
+
+```text
+src/
+├── cli/
+│   ├── main.cpp、npu_compute.sh  # 命令行入口与安装启动脚本
+│   ├── config/                  # 参数解析和选项校验
+│   ├── launch/                  # 采集编排、进程管理、注入路径和采集目录
+│   ├── report/                  # 文件校验、REP 编解码、打包和报告发布
+│   └── import/                  # 报告导入、解包和导入目录发布
+├── compute/
+│   ├── npu_compute.cpp          # 注入库生命周期入口
+│   ├── libnpu_compute.map       # 对外符号清单
+│   ├── runtime/                 # 初始化、回调编排和 Section 配置
+│   ├── hardware/                # 硬件查询、单次采集、JSONL 和原子发布
+│   └── pmu/                     # 异步数据消费、指标计算和 CSV 输出
+├── acl_pti/                     # Hook、重放、数据解码和聚合
+└── common/                      # 共享辅助代码
+```
+
+CLI 和 compute 的 `CMakeLists.txt` 分别集中维护各自模块的源文件；内部头文件
+使用相对各自根目录的模块路径，例如 `launch/launcher.h` 和
+`hardware/hardware_info_collector.h`。公共头文件仍位于 `include/`，构建产物仍为
+`npu-compute`、`libnpu-compute.so` 和 `libacl_pti.so`。
+
+Compute 内部实现使用 `npucompute` 命名空间，CLI 使用 `npucompute::cli`，
+共享日志辅助函数使用 `npucompute::detail`。内部命名空间按职责划分，不逐级映射目录。
 
 ## 支持的 Section
 

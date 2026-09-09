@@ -7,7 +7,7 @@
  * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
  * See LICENSE in the root of the software repository for the full text of the License.
  */
-#include "report_name.h"
+#include "report/report_name.h"
 
 #include <array>
 #include <cstdint>
@@ -39,10 +39,10 @@ int Check(bool condition, const char* expression, int line)
             return 1;                                   \
     } while (false)
 
-using npu_compute::compute_launcher::ReportNameSources;
-using npu_compute::compute_launcher::ReportTarget;
-using npu_compute::compute_launcher::ResolveReportTarget;
-using npu_compute::compute_launcher::ResolveReportTargetWithSources;
+using npucompute::cli::ReportNameSources;
+using npucompute::cli::ReportTarget;
+using npucompute::cli::ResolveReportTarget;
+using npucompute::cli::ResolveReportTargetWithSources;
 
 class TempDirectory {
 public:

@@ -98,8 +98,8 @@ def test_prof_api_constants_are_private_to_the_stub():
     assert "size_t numAttrs;\n    const struct MsprofConfigAttr* attrs;" in prof_common
     assert "COMPUTE_INVALID_AICORE_METRIC_EVENT" not in prof_common
     assert "MSPROF_AICOREMETRICS" not in prof_common
-    assert "npu_compute::prof" not in prof_common
-    assert "npu_compute::prof" not in prof_stub
+    assert "npucompute::prof" not in prof_common
+    assert "npucompute::prof" not in prof_stub
 
 
 def test_runtime_registers_and_runs_through_connected_backends():

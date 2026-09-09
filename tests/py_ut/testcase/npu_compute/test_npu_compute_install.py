@@ -112,11 +112,9 @@ def test_default_component_installs_the_declared_layout(install_root):
         "callback",
         "data",
         "profiling",
-        "replacement",
+        "handler",
     ):
-        assert (
-            f"npu_compute::aclpti::{internal_namespace}::" not in aclpti_symbols.stdout
-        )
+        assert f"aclpti::{internal_namespace}::" not in aclpti_symbols.stdout
 
 
 def test_public_cli_symlink_uses_the_architecture_injection_library(

@@ -359,14 +359,11 @@ def test_npu_compute_install_rules_are_owned_by_product_cmake():
     assert (
         'RUNTIME DESTINATION "${NPU_COMPUTE_INSTALL_INTERNAL_BINDIR}"' in product_cmake
     )
-    assert (
-        '"${CMAKE_CURRENT_SOURCE_DIR}/src/compute_launcher/npu_compute.sh"'
-        in product_cmake
-    )
+    assert '"${CMAKE_CURRENT_SOURCE_DIR}/src/cli/npu_compute.sh"' in product_cmake
     assert 'DESTINATION "${NPU_COMPUTE_INSTALL_BINDIR}"' in product_cmake
     assert "RENAME npu-compute" in product_cmake
 
-    for subdirectory in ("acl_pti", "npu_compute", "compute_launcher"):
+    for subdirectory in ("acl_pti", "compute", "cli"):
         submodule_cmake = (
             product_root / "src" / subdirectory / "CMakeLists.txt"
         ).read_text(encoding="utf-8")
@@ -400,9 +397,7 @@ def test_npu_compute_package_manifest_registers_runtime_files_only():
 
 def test_npu_compute_wrapper_executes_real_binary(tmp_path):
     repo_root = Path(__file__).parents[4]
-    wrapper_source = (
-        repo_root / "npu_tools/npu_compute/src/compute_launcher/npu_compute.sh"
-    )
+    wrapper_source = repo_root / "npu_tools/npu_compute/src/cli/npu_compute.sh"
     install_root = tmp_path / "cann"
     arch_bin = install_root / ARCH_ROOT / "bin"
     wrapper = arch_bin / "npu-compute"

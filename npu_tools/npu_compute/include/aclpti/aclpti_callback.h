@@ -7,8 +7,8 @@
  * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
  * See LICENSE in the root of the software repository for the full text of the License.
  */
-#ifndef ACLPTI_CALLBACK_H_
-#define ACLPTI_CALLBACK_H_
+#ifndef NPU_TOOLS_NPU_COMPUTE_INCLUDE_ACLPTI_ACLPTI_CALLBACK_H
+#define NPU_TOOLS_NPU_COMPUTE_INCLUDE_ACLPTI_ACLPTI_CALLBACK_H
 
 #include "aclpti/aclpti_types.h"
 
@@ -25,7 +25,7 @@ extern "C" {
 typedef enum aclptiCallbackDomain {
     ACLPTI_CB_DOMAIN_INVALID = 0,
     ACLPTI_CB_DOMAIN_RUNTIME_API = 1,
-    ACLPTI_CB_DOMAIN_SIZE,
+    ACLPTI_CB_DOMAIN_SIZE = 2,
 } aclptiCallbackDomain;
 
 typedef enum aclptiCallbackSite {
@@ -58,4 +58,4 @@ ACLPTI_EXPORT aclptiResult aclptiSupportedDomains(size_t* domainCount, aclptiCal
 }
 #endif
 
-#endif // ACLPTI_CALLBACK_H_
+#endif // NPU_TOOLS_NPU_COMPUTE_INCLUDE_ACLPTI_ACLPTI_CALLBACK_H

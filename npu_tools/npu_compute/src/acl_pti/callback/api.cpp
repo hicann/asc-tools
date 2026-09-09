@@ -22,13 +22,13 @@ extern "C" ACLPTI_EXPORT aclptiResult aclptiSubscribe(
     }
 
     *subscriber = nullptr;
-    const aclptiResult result = npu_compute::aclpti::initialization::InitializeDependencies();
+    const aclptiResult result = aclpti::initialization::InitializeDependencies();
     if (result == ACLPTI_SUCCESS) {
-        auto& dispatcher = npu_compute::aclpti::callback::GetDispatcher();
+        auto& dispatcher = aclpti::callback::GetDispatcher();
         dispatcher.Configure(callback, userData);
         *subscriber = dispatcher.SubscriberHandle();
     }
-    npu_compute::detail::DebugLog(
+    npucompute::detail::DebugLog(
         "aclpti", "subscribe result=%d handle=%p", static_cast<int>(result), static_cast<void*>(*subscriber));
     return result;
 }
@@ -36,9 +36,9 @@ extern "C" ACLPTI_EXPORT aclptiResult aclptiSubscribe(
 extern "C" ACLPTI_EXPORT aclptiResult
 aclptiEnableCallback(bool enable, aclptiSubscribeHandle subscriber, aclptiCallbackDomain domain, aclptiCallbackId cbid)
 {
-    auto& dispatcher = npu_compute::aclpti::callback::GetDispatcher();
+    auto& dispatcher = aclpti::callback::GetDispatcher();
     const aclptiResult result = dispatcher.Enable(enable, subscriber, domain, cbid);
-    npu_compute::detail::DebugLog(
+    npucompute::detail::DebugLog(
         "aclpti", "callback enable=%d domain=%d cbid=%u result=%d", static_cast<int>(enable), static_cast<int>(domain),
         static_cast<unsigned int>(cbid), static_cast<int>(result));
     return result;
@@ -46,9 +46,8 @@ aclptiEnableCallback(bool enable, aclptiSubscribeHandle subscriber, aclptiCallba
 
 extern "C" ACLPTI_EXPORT aclptiResult aclptiSupportedDomains(std::size_t* domainCount, aclptiCallbackDomain* domains)
 {
-    const aclptiResult supportedResult =
-        npu_compute::aclpti::callback::GetDispatcher().SupportedDomains(domainCount, domains);
-    npu_compute::detail::DebugLog(
+    const aclptiResult supportedResult = aclpti::callback::GetDispatcher().SupportedDomains(domainCount, domains);
+    npucompute::detail::DebugLog(
         "aclpti", "supported domains result=%d count=%zu", static_cast<int>(supportedResult),
         domainCount == nullptr ? 0U : *domainCount);
     return supportedResult;

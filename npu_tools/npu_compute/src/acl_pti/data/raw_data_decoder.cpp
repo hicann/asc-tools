@@ -11,7 +11,7 @@
 
 #include <map>
 
-namespace npu_compute::aclpti::data::detail {
+namespace aclpti::data::detail {
 namespace {
 
 constexpr std::size_t kTaskLogSize = 32;
@@ -115,4 +115,4 @@ ResultOr<DecodedRecord> DecodeRawRecord(
     return ResultOr<DecodedRecord>(DecodedRecord{recordIndex, record});
 }
 
-} // namespace npu_compute::aclpti::data::detail
+} // namespace aclpti::data::detail

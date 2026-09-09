@@ -38,8 +38,8 @@
         }                                                                                        \
     } while (false)
 
-namespace data = npu_compute::aclpti::data;
-namespace data_detail = npu_compute::aclpti::data::detail;
+namespace data = aclpti::data;
+namespace data_detail = aclpti::data::detail;
 
 void StoreWord(std::byte* data, std::size_t index, uint32_t value)
 {

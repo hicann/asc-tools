@@ -7,7 +7,7 @@
  * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
  * See LICENSE in the root of the software repository for the full text of the License.
  */
-#include "hardware_device_api.h"
+#include "hardware/hardware_device_api.h"
 
 #include <algorithm>
 #include <cstdint>
@@ -167,7 +167,7 @@ void* Symbol(Function function)
     return reinterpret_cast<void*>(function);
 }
 
-class FakeDynamicSymbolResolver final : public npu_compute::DynamicSymbolResolver {
+class FakeDynamicSymbolResolver final : public npucompute::DynamicSymbolResolver {
 public:
     struct Library {
         std::string name;
@@ -281,7 +281,7 @@ bool TestLoadedSymbolsAndExactArguments()
     resolver->AddLoadedAclSymbols();
     resolver->AddDriverLibraries();
     {
-        npu_compute::DynamicHardwareDeviceApi api(resolver);
+        npucompute::DynamicHardwareDeviceApi api(resolver);
         std::int32_t count = 0;
         std::string text;
         std::int64_t attributeValue = 0;
@@ -293,9 +293,9 @@ bool TestLoadedSymbolsAndExactArguments()
         CHECK(count == 2);
         CHECK(api.GetSocName(&text));
         CHECK(text == "Ascend950PR_9599");
-        CHECK(api.GetDeviceAttribute(0, npu_compute::kDeviceAttributeNpuArch, &attributeValue));
+        CHECK(api.GetDeviceAttribute(0, npucompute::kDeviceAttributeNpuArch, &attributeValue));
         CHECK(attributeValue == 3510);
-        CHECK(api.GetPlatformValue(npu_compute::kPlatformCubeFrequency, &text));
+        CHECK(api.GetPlatformValue(npucompute::kPlatformCubeFrequency, &text));
         CHECK(text == "1800");
         CHECK(api.GetControlCpuCount(0, &unsignedValue));
         CHECK(unsignedValue == 1);
@@ -315,8 +315,8 @@ bool TestLoadedSymbolsAndExactArguments()
         CHECK(unsignedValue == 3200);
 
         CHECK(g_calls.deviceInfoDeviceIds == std::vector<uint32_t>{0});
-        CHECK(g_calls.deviceAttributes == std::vector<std::int32_t>{npu_compute::kDeviceAttributeNpuArch});
-        CHECK(g_calls.platformTypes == std::vector<std::int32_t>{npu_compute::kPlatformCubeFrequency});
+        CHECK(g_calls.deviceAttributes == std::vector<std::int32_t>{npucompute::kDeviceAttributeNpuArch});
+        CHECK(g_calls.platformTypes == std::vector<std::int32_t>{npucompute::kPlatformCubeFrequency});
         CHECK(g_calls.setDeviceIds == std::vector<std::int32_t>{0});
         CHECK(g_calls.memoryAttributes == std::vector<std::int32_t>{kAclHbmMem});
         CHECK((g_calls.halDeviceIds == std::vector<uint32_t>{0, 0, 0, 0, 0}));
@@ -356,7 +356,7 @@ bool TestSonameFallbackAndHandleLifetime()
     auto resolver = std::make_shared<FakeDynamicSymbolResolver>();
     resolver->AddAclFallbackLibraries();
     {
-        npu_compute::DynamicHardwareDeviceApi api(resolver);
+        npucompute::DynamicHardwareDeviceApi api(resolver);
         std::int32_t count = 0;
         std::string value;
         std::int64_t attributeValue = 0;
@@ -364,8 +364,8 @@ bool TestSonameFallbackAndHandleLifetime()
         uint64_t totalBytes = 0;
         CHECK(api.GetDeviceCount(&count));
         CHECK(api.GetSocName(&value));
-        CHECK(api.GetDeviceAttribute(0, npu_compute::kDeviceAttributeNpuArch, &attributeValue));
-        CHECK(api.GetPlatformValue(npu_compute::kPlatformMemorySize, &value));
+        CHECK(api.GetDeviceAttribute(0, npucompute::kDeviceAttributeNpuArch, &attributeValue));
+        CHECK(api.GetPlatformValue(npucompute::kPlatformMemorySize, &value));
         CHECK(api.GetHbmUsage(0, &freeBytes, &totalBytes));
         CHECK(std::count(resolver->openedLibraries.begin(), resolver->openedLibraries.end(), "libascendcl.so") == 1);
         CHECK(std::count(resolver->openedLibraries.begin(), resolver->openedLibraries.end(), "libplatform.so") == 1);
@@ -381,7 +381,7 @@ bool TestMissingDriverLibrariesAreIndependent()
     ResetCalls();
     auto resolver = std::make_shared<FakeDynamicSymbolResolver>();
     resolver->AddLoadedAclSymbols();
-    npu_compute::DynamicHardwareDeviceApi api(resolver);
+    npucompute::DynamicHardwareDeviceApi api(resolver);
     uint32_t value = 0;
     std::string text;
     std::int32_t count = 0;
@@ -406,23 +406,23 @@ bool TestMissingSingleAndAllSymbols()
     partialResolver->librarySymbols["libascendcl.so"] = {
         {"aclrtGetDeviceCount", Symbol(&StubAclrtGetDeviceCount)},
     };
-    npu_compute::DynamicHardwareDeviceApi partialApi(partialResolver);
+    npucompute::DynamicHardwareDeviceApi partialApi(partialResolver);
     std::int32_t count = 0;
     std::int64_t attributeValue = 0;
     CHECK(partialApi.GetDeviceCount(&count));
-    CHECK(!partialApi.GetDeviceAttribute(0, npu_compute::kDeviceAttributeNpuArch, &attributeValue));
+    CHECK(!partialApi.GetDeviceAttribute(0, npucompute::kDeviceAttributeNpuArch, &attributeValue));
     CHECK(partialApi.GetDeviceCount(&count));
 
     auto emptyResolver = std::make_shared<FakeDynamicSymbolResolver>();
-    npu_compute::DynamicHardwareDeviceApi emptyApi(emptyResolver);
+    npucompute::DynamicHardwareDeviceApi emptyApi(emptyResolver);
     std::string text;
     uint32_t value = 0;
     uint64_t freeBytes = 0;
     uint64_t totalBytes = 0;
     CHECK(!emptyApi.GetDeviceCount(&count));
     CHECK(!emptyApi.GetSocName(&text));
-    CHECK(!emptyApi.GetDeviceAttribute(0, npu_compute::kDeviceAttributeNpuArch, &attributeValue));
-    CHECK(!emptyApi.GetPlatformValue(npu_compute::kPlatformMemorySize, &text));
+    CHECK(!emptyApi.GetDeviceAttribute(0, npucompute::kDeviceAttributeNpuArch, &attributeValue));
+    CHECK(!emptyApi.GetPlatformValue(npucompute::kPlatformMemorySize, &text));
     CHECK(!emptyApi.GetControlCpuCount(0, &value));
     CHECK(!emptyApi.GetAiCoreFrequencies(0, &value, &value));
     CHECK(!emptyApi.GetAiCpuFrequency(0, &value));

@@ -13,21 +13,21 @@
 
 #include <new>
 
-namespace npu_compute::aclpti::profiling {
+namespace aclpti::profiling {
 
 aclptiResult ReplayRuntime::Initialize()
 {
     if (initialized_) {
-        npu_compute::detail::DebugLog("aclpti", "replay runtime already initialized");
+        npucompute::detail::DebugLog("aclpti", "replay runtime already initialized");
         return ACLPTI_SUCCESS;
     }
     const aclptiResult result = rangeProfiler_.Initialize();
     if (result != ACLPTI_SUCCESS) {
-        npu_compute::detail::DebugLog("aclpti", "replay runtime initialization failed");
+        npucompute::detail::DebugLog("aclpti", "replay runtime initialization failed");
         return result;
     }
     initialized_ = true;
-    npu_compute::detail::DebugLog("aclpti", "replay runtime initialized");
+    npucompute::detail::DebugLog("aclpti", "replay runtime initialized");
     return ACLPTI_SUCCESS;
 }
 
@@ -102,7 +102,7 @@ aclptiResult ReplayRuntime::StopProfiling()
     try {
         return rangeProfiler_.Shutdown();
     } catch (const std::bad_alloc&) {
-        npu_compute::detail::DebugLog(
+        npucompute::detail::DebugLog(
             "aclpti", "error operation=profiling_shutdown status=%d", ACLPTI_ERROR_OUT_OF_MEMORY);
         return ACLPTI_ERROR_OUT_OF_MEMORY;
     }
@@ -114,4 +114,4 @@ ReplayRuntime& GetReplayRuntime()
     return runtime;
 }
 
-} // namespace npu_compute::aclpti::profiling
+} // namespace aclpti::profiling

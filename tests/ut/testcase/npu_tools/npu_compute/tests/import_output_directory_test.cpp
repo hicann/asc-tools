@@ -7,7 +7,7 @@
  * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
  * See LICENSE in the root of the software repository for the full text of the License.
  */
-#include "import_output_directory.h"
+#include "import/import_output_directory.h"
 
 #include <unistd.h>
 
@@ -110,10 +110,10 @@ int TestDefaultOutputDirectory()
     CurrentDirectory currentDirectory(temporary.Path());
     CHECK(currentDirectory.Active());
 
-    npu_compute::compute_launcher::ImportOutputDirectory directory;
+    npucompute::cli::ImportOutputDirectory directory;
     std::string error;
-    CHECK(npu_compute::compute_launcher::ImportOutputDirectory::Create(
-        "/input/report_demo.npu-rep", std::nullopt, &directory, &error));
+    CHECK(
+        npucompute::cli::ImportOutputDirectory::Create("/input/report_demo.npu-rep", std::nullopt, &directory, &error));
     CHECK(error.empty());
     CHECK(directory.FinalPath().parent_path() == temporary.Path());
     CHECK(directory.TemporaryPath().parent_path() == temporary.Path());
@@ -147,9 +147,9 @@ int TestExistingOutputRootAndPublish()
     CHECK(boost::filesystem::create_directory(outputRoot));
     CHECK(WriteFile(outputRoot / "keep.txt", "keep"));
 
-    npu_compute::compute_launcher::ImportOutputDirectory directory;
+    npucompute::cli::ImportOutputDirectory directory;
     std::string error;
-    CHECK(npu_compute::compute_launcher::ImportOutputDirectory::Create(
+    CHECK(npucompute::cli::ImportOutputDirectory::Create(
         "/input/report_demo.npu-rep", std::optional<std::string>("custom-output"), &directory, &error));
     CHECK(error.empty());
     CHECK(directory.FinalPath().parent_path() == outputRoot);
@@ -173,13 +173,13 @@ int TestCreatesUniqueDirectoriesUnderOneRoot()
     const boost::filesystem::path outputRoot = temporary.Path() / "output";
     CHECK(boost::filesystem::create_directory(outputRoot));
 
-    npu_compute::compute_launcher::ImportOutputDirectory first;
-    npu_compute::compute_launcher::ImportOutputDirectory second;
+    npucompute::cli::ImportOutputDirectory first;
+    npucompute::cli::ImportOutputDirectory second;
     std::string error;
-    CHECK(npu_compute::compute_launcher::ImportOutputDirectory::Create(
+    CHECK(npucompute::cli::ImportOutputDirectory::Create(
         temporary.Path() / "input.npu-rep", std::optional<std::string>(outputRoot.string()), &first, &error));
     CHECK(error.empty());
-    CHECK(npu_compute::compute_launcher::ImportOutputDirectory::Create(
+    CHECK(npucompute::cli::ImportOutputDirectory::Create(
         temporary.Path() / "input.npu-rep", std::optional<std::string>(outputRoot.string()), &second, &error));
     CHECK(error.empty());
     CHECK(first.FinalPath().parent_path() == outputRoot);
@@ -197,18 +197,18 @@ int TestTemporaryCleanupAndPublishFailure()
     CHECK(boost::filesystem::create_directory(outputRoot));
     boost::filesystem::path abandoned;
     {
-        npu_compute::compute_launcher::ImportOutputDirectory directory;
+        npucompute::cli::ImportOutputDirectory directory;
         std::string error;
-        CHECK(npu_compute::compute_launcher::ImportOutputDirectory::Create(
+        CHECK(npucompute::cli::ImportOutputDirectory::Create(
             temporary.Path() / "input.npu-rep", std::optional<std::string>(outputRoot.string()), &directory, &error));
         abandoned = directory.TemporaryPath();
         CHECK(boost::filesystem::is_directory(abandoned));
     }
     CHECK(!boost::filesystem::exists(abandoned));
 
-    npu_compute::compute_launcher::ImportOutputDirectory directory;
+    npucompute::cli::ImportOutputDirectory directory;
     std::string error;
-    CHECK(npu_compute::compute_launcher::ImportOutputDirectory::Create(
+    CHECK(npucompute::cli::ImportOutputDirectory::Create(
         temporary.Path() / "input.npu-rep", std::optional<std::string>(outputRoot.string()), &directory, &error));
     const boost::filesystem::path temporaryPath = directory.TemporaryPath();
     const boost::filesystem::path finalPath = directory.FinalPath();
@@ -227,26 +227,24 @@ int TestInvalidTargets()
     CHECK(!temporary.Path().empty());
     CurrentDirectory currentDirectory(temporary.Path());
     CHECK(currentDirectory.Active());
-    npu_compute::compute_launcher::ImportOutputDirectory directory;
+    npucompute::cli::ImportOutputDirectory directory;
     std::string error;
 
-    CHECK(!npu_compute::compute_launcher::ImportOutputDirectory::Create(
-        "/input/report.unknown", std::nullopt, &directory, &error));
+    CHECK(!npucompute::cli::ImportOutputDirectory::Create("/input/report.unknown", std::nullopt, &directory, &error));
     CHECK(error.find("must end") != std::string::npos);
-    CHECK(!npu_compute::compute_launcher::ImportOutputDirectory::Create(
+    CHECK(!npucompute::cli::ImportOutputDirectory::Create(
         "/input/report.npu-rep", std::optional<std::string>("missing-output-root"), &directory, &error));
     CHECK(error.find("does not exist") != std::string::npos);
     const boost::filesystem::path regularFile = temporary.Path() / "regular-file";
     CHECK(WriteFile(regularFile, "keep"));
-    CHECK(!npu_compute::compute_launcher::ImportOutputDirectory::Create(
+    CHECK(!npucompute::cli::ImportOutputDirectory::Create(
         "/input/report.npu-rep", std::optional<std::string>(regularFile.string()), &directory, &error));
     CHECK(error.find("not a directory") != std::string::npos);
     CHECK(ReadFile(regularFile) == "keep");
-    CHECK(!npu_compute::compute_launcher::ImportOutputDirectory::Create(
+    CHECK(!npucompute::cli::ImportOutputDirectory::Create(
         "/input/report.npu-rep", std::optional<std::string>("/proc"), &directory, &error));
     CHECK(error.find("create import temporary directory") != std::string::npos);
-    CHECK(!npu_compute::compute_launcher::ImportOutputDirectory::Create(
-        "/input/report.npu-rep", std::nullopt, nullptr, &error));
+    CHECK(!npucompute::cli::ImportOutputDirectory::Create("/input/report.npu-rep", std::nullopt, nullptr, &error));
     CHECK(error.find("null") != std::string::npos);
     return 0;
 }

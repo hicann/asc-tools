@@ -7,7 +7,7 @@
  * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
  * See LICENSE in the root of the software repository for the full text of the License.
  */
-#include "rep_encoder.h"
+#include "report/rep_encoder.h"
 #include "rep_test_decoder.h"
 
 #include <cstdint>
@@ -32,14 +32,14 @@ int Check(bool condition, const char* expression, int line)
             return 1;                                   \
     } while (false)
 
-using npu_compute::compute_launcher::EncodeRep;
-using npu_compute::compute_launcher::kNpuRepHeadSize;
-using npu_compute::compute_launcher::kNpuRepOrigin;
-using npu_compute::compute_launcher::kNpuRepVersion;
-using npu_compute::compute_launcher::NpuRepFileType;
-using npu_compute::compute_launcher::RepEntry;
-using npu_compute::compute_launcher::test::DecodedRep;
-using npu_compute::compute_launcher::test::DecodeRep;
+using npucompute::cli::EncodeRep;
+using npucompute::cli::kNpuRepHeadSize;
+using npucompute::cli::kNpuRepOrigin;
+using npucompute::cli::kNpuRepVersion;
+using npucompute::cli::NpuRepFileType;
+using npucompute::cli::RepEntry;
+using npucompute::cli::test::DecodedRep;
+using npucompute::cli::test::DecodeRep;
 
 int TestEmptyRep()
 {

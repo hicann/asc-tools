@@ -7,7 +7,7 @@
  * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
  * See LICENSE in the root of the software repository for the full text of the License.
  */
-#include "staging_directory.h"
+#include "launch/staging_directory.h"
 
 #include <cstdio>
 #include <cstdlib>
@@ -35,7 +35,7 @@ int Check(bool condition, const char* expression, int line)
             return 1;                                   \
     } while (false)
 
-using npu_compute::compute_launcher::StagingDirectory;
+using npucompute::cli::StagingDirectory;
 
 class TestDirectory {
 public:

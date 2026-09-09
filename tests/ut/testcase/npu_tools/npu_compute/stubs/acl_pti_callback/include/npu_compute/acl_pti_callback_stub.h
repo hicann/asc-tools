@@ -17,7 +17,7 @@
 #include <string>
 #include <vector>
 
-namespace npu_compute::test {
+namespace npucompute::test {
 
 struct AclPtiEnableCall {
     std::size_t sequence;
@@ -50,7 +50,7 @@ bool InvokeAclPtiCallback(
     aclptiCallbackDomain domain, aclptiCallbackId cbid, aclptiCallbackSite site, aclError retval, void* functionParams);
 bool InvokeAclPtiRuntimeReady();
 
-} // namespace npu_compute::test
+} // namespace npucompute::test
 
 extern "C" int AclPtiCallbackStubEmitRuntimeEvent(uint32_t cbid, uint32_t site, std::int32_t retval);
 

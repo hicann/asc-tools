@@ -82,8 +82,8 @@ target_link_libraries(acl_prof_api_backend INTERFACE injection_prof_api_backend)
 
 add_subdirectory(src/acl_pti)
 
-add_subdirectory(src/npu_compute)
-add_subdirectory(src/compute_launcher)
+add_subdirectory(src/compute)
+add_subdirectory(src/cli)
 
 install(TARGETS acl_pti npu_compute
   LIBRARY DESTINATION "${NPU_COMPUTE_INSTALL_LIBDIR}"
@@ -95,7 +95,7 @@ install(TARGETS npu_compute_cli
   COMPONENT asc-tools
 )
 
-install(PROGRAMS "${CMAKE_CURRENT_SOURCE_DIR}/src/compute_launcher/npu_compute.sh"
+install(PROGRAMS "${CMAKE_CURRENT_SOURCE_DIR}/src/cli/npu_compute.sh"
   DESTINATION "${NPU_COMPUTE_INSTALL_BINDIR}"
   PERMISSIONS OWNER_READ OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE
   RENAME npu-compute

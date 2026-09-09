@@ -28,7 +28,7 @@ add_library(acl_pti_test SHARED
   ${NPU_COMPUTE_SOURCE_DIR}/src/acl_pti/profiling/range_profiler.cpp
   ${NPU_COMPUTE_SOURCE_DIR}/src/acl_pti/profiling/replay_memory.cpp
   ${NPU_COMPUTE_SOURCE_DIR}/src/acl_pti/profiling/replay_runtime.cpp
-  ${NPU_COMPUTE_SOURCE_DIR}/src/acl_pti/replacement/runtime_api_replacements.cpp
+  ${NPU_COMPUTE_SOURCE_DIR}/src/acl_pti/handler/runtime_api_handlers.cpp
 )
 target_compile_definitions(acl_pti_test PRIVATE NPU_COMPUTE_ENABLE_TEST_CONTROLS=1)
 target_include_directories(acl_pti_test PRIVATE "${NPU_COMPUTE_SOURCE_DIR}/src")
@@ -44,26 +44,29 @@ set_target_properties(acl_pti_test PROPERTIES
 npu_compute_set_test_output(acl_pti_test)
 
 set(NPU_COMPUTE_TEST_RUNTIME_SOURCES
-  ${NPU_COMPUTE_SOURCE_DIR}/src/npu_compute/hardware_device_api.cpp
-  ${NPU_COMPUTE_SOURCE_DIR}/src/npu_compute/hardware_info_collector.cpp
-  ${NPU_COMPUTE_SOURCE_DIR}/src/npu_compute/hardware_info_device.cpp
-  ${NPU_COMPUTE_SOURCE_DIR}/src/npu_compute/hardware_info_host.cpp
-  ${NPU_COMPUTE_SOURCE_DIR}/src/npu_compute/hardware_info_json.cpp
-  ${NPU_COMPUTE_SOURCE_DIR}/src/npu_compute/hardware_info_writer.cpp
-  ${NPU_COMPUTE_SOURCE_DIR}/src/npu_compute/npu_compute.cpp
-  ${NPU_COMPUTE_SOURCE_DIR}/src/npu_compute/npu_compute_runtime.cpp
-  ${NPU_COMPUTE_SOURCE_DIR}/src/npu_compute/pmu_data_consumer.cpp
-  ${NPU_COMPUTE_SOURCE_DIR}/src/npu_compute/pmu_csv_writer.cpp
-  ${NPU_COMPUTE_SOURCE_DIR}/src/npu_compute/section_config.cpp
+  ${NPU_COMPUTE_SOURCE_DIR}/src/compute/hardware/hardware_device_api.cpp
+  ${NPU_COMPUTE_SOURCE_DIR}/src/compute/hardware/hardware_info_collector.cpp
+  ${NPU_COMPUTE_SOURCE_DIR}/src/compute/hardware/hardware_info_device.cpp
+  ${NPU_COMPUTE_SOURCE_DIR}/src/compute/hardware/hardware_info_host.cpp
+  ${NPU_COMPUTE_SOURCE_DIR}/src/compute/hardware/hardware_info_json.cpp
+  ${NPU_COMPUTE_SOURCE_DIR}/src/compute/hardware/hardware_info_writer.cpp
+  ${NPU_COMPUTE_SOURCE_DIR}/src/compute/npu_compute.cpp
+  ${NPU_COMPUTE_SOURCE_DIR}/src/compute/runtime/npu_compute_runtime.cpp
+  ${NPU_COMPUTE_SOURCE_DIR}/src/compute/pmu/pmu_data_consumer.cpp
+  ${NPU_COMPUTE_SOURCE_DIR}/src/compute/pmu/pmu_csv_writer.cpp
+  ${NPU_COMPUTE_SOURCE_DIR}/src/compute/runtime/section_config.cpp
 )
 add_library(npu_compute_test SHARED ${NPU_COMPUTE_TEST_RUNTIME_SOURCES})
-target_include_directories(npu_compute_test PRIVATE "${NPU_COMPUTE_SOURCE_DIR}/src")
+target_include_directories(npu_compute_test PRIVATE
+  "${NPU_COMPUTE_SOURCE_DIR}/src"
+  "${NPU_COMPUTE_SOURCE_DIR}/src/compute"
+)
 target_link_libraries(npu_compute_test
   PUBLIC npu_compute_test_headers
   PRIVATE acl_pti_test ${CMAKE_DL_LIBS} Threads::Threads Boost::filesystem
 )
 set(NPU_COMPUTE_TEST_VERSION_SCRIPT
-  "${NPU_COMPUTE_SOURCE_DIR}/src/npu_compute/libnpu_compute.map")
+  "${NPU_COMPUTE_SOURCE_DIR}/src/compute/libnpu_compute.map")
 target_link_options(npu_compute_test PRIVATE
   "LINKER:--version-script=${NPU_COMPUTE_TEST_VERSION_SCRIPT}")
 set_target_properties(npu_compute_test PROPERTIES
@@ -75,27 +78,27 @@ set_target_properties(npu_compute_test PROPERTIES
 npu_compute_set_test_output(npu_compute_test)
 
 add_library(npu_compute_launcher_core_test STATIC
-  ${NPU_COMPUTE_SOURCE_DIR}/src/compute_launcher/collection_file_validator.cpp
-  ${NPU_COMPUTE_SOURCE_DIR}/src/compute_launcher/config.cpp
-  ${NPU_COMPUTE_SOURCE_DIR}/src/compute_launcher/import_output_directory.cpp
-  ${NPU_COMPUTE_SOURCE_DIR}/src/compute_launcher/imported_profile_results.cpp
-  ${NPU_COMPUTE_SOURCE_DIR}/src/compute_launcher/injection_path.cpp
-  ${NPU_COMPUTE_SOURCE_DIR}/src/compute_launcher/launcher.cpp
-  ${NPU_COMPUTE_SOURCE_DIR}/src/compute_launcher/process_launcher.cpp
-  ${NPU_COMPUTE_SOURCE_DIR}/src/compute_launcher/rep_decoder.cpp
-  ${NPU_COMPUTE_SOURCE_DIR}/src/compute_launcher/rep_directory_packer.cpp
-  ${NPU_COMPUTE_SOURCE_DIR}/src/compute_launcher/rep_encoder.cpp
-  ${NPU_COMPUTE_SOURCE_DIR}/src/compute_launcher/rep_report_writer.cpp
-  ${NPU_COMPUTE_SOURCE_DIR}/src/compute_launcher/report_name.cpp
-  ${NPU_COMPUTE_SOURCE_DIR}/src/compute_launcher/staging_directory.cpp
+  ${NPU_COMPUTE_SOURCE_DIR}/src/cli/report/collection_file_validator.cpp
+  ${NPU_COMPUTE_SOURCE_DIR}/src/cli/config/config.cpp
+  ${NPU_COMPUTE_SOURCE_DIR}/src/cli/import/import_output_directory.cpp
+  ${NPU_COMPUTE_SOURCE_DIR}/src/cli/import/imported_profile_results.cpp
+  ${NPU_COMPUTE_SOURCE_DIR}/src/cli/launch/injection_path.cpp
+  ${NPU_COMPUTE_SOURCE_DIR}/src/cli/launch/launcher.cpp
+  ${NPU_COMPUTE_SOURCE_DIR}/src/cli/launch/process_launcher.cpp
+  ${NPU_COMPUTE_SOURCE_DIR}/src/cli/report/rep_decoder.cpp
+  ${NPU_COMPUTE_SOURCE_DIR}/src/cli/report/rep_directory_packer.cpp
+  ${NPU_COMPUTE_SOURCE_DIR}/src/cli/report/rep_encoder.cpp
+  ${NPU_COMPUTE_SOURCE_DIR}/src/cli/report/rep_report_writer.cpp
+  ${NPU_COMPUTE_SOURCE_DIR}/src/cli/report/report_name.cpp
+  ${NPU_COMPUTE_SOURCE_DIR}/src/cli/launch/staging_directory.cpp
 )
 target_include_directories(npu_compute_launcher_core_test PUBLIC
-  "${NPU_COMPUTE_SOURCE_DIR}/src/compute_launcher")
+  "${NPU_COMPUTE_SOURCE_DIR}/src/cli")
 target_link_libraries(npu_compute_launcher_core_test
   PUBLIC npu_compute_test_headers Boost::filesystem)
 
 add_executable(npu_compute_cli_test_bin
-  ${NPU_COMPUTE_SOURCE_DIR}/src/compute_launcher/main.cpp
+  ${NPU_COMPUTE_SOURCE_DIR}/src/cli/main.cpp
 )
 target_link_libraries(npu_compute_cli_test_bin PRIVATE npu_compute_launcher_core_test)
 set_target_properties(npu_compute_cli_test_bin PROPERTIES OUTPUT_NAME npu-compute)
@@ -146,10 +149,10 @@ add_test(NAME npu_compute.cli COMMAND npu_compute_cli_test)
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/injection_path_test.cpp")
   add_executable(npu_compute_injection_path_test
     injection_path_test.cpp
-    ${NPU_COMPUTE_SOURCE_DIR}/src/compute_launcher/injection_path.cpp
+    ${NPU_COMPUTE_SOURCE_DIR}/src/cli/launch/injection_path.cpp
   )
   target_include_directories(npu_compute_injection_path_test PRIVATE
-    ${NPU_COMPUTE_SOURCE_DIR}/src/compute_launcher
+    ${NPU_COMPUTE_SOURCE_DIR}/src/cli
   )
   target_link_libraries(npu_compute_injection_path_test PRIVATE Boost::filesystem)
   set_target_properties(npu_compute_injection_path_test PROPERTIES
@@ -352,13 +355,13 @@ add_test(NAME npu_compute.acl_pti_data_module
 add_executable(npu_compute_pmu_data_consumer_test pmu_data_consumer_test.cpp)
 target_include_directories(npu_compute_pmu_data_consumer_test PRIVATE
   ${NPU_COMPUTE_SOURCE_DIR}/src
-  ${NPU_COMPUTE_SOURCE_DIR}/src/npu_compute
+  ${NPU_COMPUTE_SOURCE_DIR}/src/compute
 )
 target_link_libraries(npu_compute_pmu_data_consumer_test
   PRIVATE acl_pti_test Threads::Threads
 )
 target_sources(npu_compute_pmu_data_consumer_test PRIVATE
-  ${NPU_COMPUTE_SOURCE_DIR}/src/npu_compute/pmu_data_consumer.cpp
+  ${NPU_COMPUTE_SOURCE_DIR}/src/compute/pmu/pmu_data_consumer.cpp
 )
 add_test(NAME npu_compute.pmu_data_consumer
   COMMAND npu_compute_pmu_data_consumer_test
@@ -367,13 +370,13 @@ add_test(NAME npu_compute.pmu_data_consumer
 add_executable(npu_compute_pmu_csv_writer_test pmu_csv_writer_test.cpp)
 target_include_directories(npu_compute_pmu_csv_writer_test PRIVATE
   ${NPU_COMPUTE_SOURCE_DIR}/src
-  ${NPU_COMPUTE_SOURCE_DIR}/src/npu_compute
+  ${NPU_COMPUTE_SOURCE_DIR}/src/compute
 )
 target_link_libraries(npu_compute_pmu_csv_writer_test
   PRIVATE acl_pti_test Boost::filesystem
 )
 target_sources(npu_compute_pmu_csv_writer_test PRIVATE
-  ${NPU_COMPUTE_SOURCE_DIR}/src/npu_compute/pmu_csv_writer.cpp
+  ${NPU_COMPUTE_SOURCE_DIR}/src/compute/pmu/pmu_csv_writer.cpp
 )
 add_test(NAME npu_compute.pmu_csv_writer
   COMMAND npu_compute_pmu_csv_writer_test
@@ -387,10 +390,10 @@ add_test(NAME npu_compute.debug_log COMMAND npu_compute_debug_log_test)
 
 add_executable(npu_compute_hardware_info_json_test
   hardware_info_json_test.cpp
-  ${NPU_COMPUTE_SOURCE_DIR}/src/npu_compute/hardware_info_json.cpp
+  ${NPU_COMPUTE_SOURCE_DIR}/src/compute/hardware/hardware_info_json.cpp
 )
 target_include_directories(npu_compute_hardware_info_json_test PRIVATE
-  ${NPU_COMPUTE_SOURCE_DIR}/src/npu_compute
+  ${NPU_COMPUTE_SOURCE_DIR}/src/compute
 )
 add_test(NAME npu_compute.hardware_info_json
   COMMAND npu_compute_hardware_info_json_test
@@ -398,10 +401,10 @@ add_test(NAME npu_compute.hardware_info_json
 
 add_executable(npu_compute_hardware_info_host_test
   hardware_info_host_test.cpp
-  ${NPU_COMPUTE_SOURCE_DIR}/src/npu_compute/hardware_info_host.cpp
+  ${NPU_COMPUTE_SOURCE_DIR}/src/compute/hardware/hardware_info_host.cpp
 )
 target_include_directories(npu_compute_hardware_info_host_test PRIVATE
-  ${NPU_COMPUTE_SOURCE_DIR}/src/npu_compute
+  ${NPU_COMPUTE_SOURCE_DIR}/src/compute
 )
 target_link_libraries(npu_compute_hardware_info_host_test PRIVATE Boost::filesystem)
 add_test(NAME npu_compute.hardware_info_host
@@ -410,10 +413,10 @@ add_test(NAME npu_compute.hardware_info_host
 
 add_executable(npu_compute_hardware_info_device_test
   hardware_info_device_test.cpp
-  ${NPU_COMPUTE_SOURCE_DIR}/src/npu_compute/hardware_info_device.cpp
+  ${NPU_COMPUTE_SOURCE_DIR}/src/compute/hardware/hardware_info_device.cpp
 )
 target_include_directories(npu_compute_hardware_info_device_test PRIVATE
-  ${NPU_COMPUTE_SOURCE_DIR}/src/npu_compute
+  ${NPU_COMPUTE_SOURCE_DIR}/src/compute
 )
 add_test(NAME npu_compute.hardware_info_device
   COMMAND npu_compute_hardware_info_device_test
@@ -421,10 +424,10 @@ add_test(NAME npu_compute.hardware_info_device
 
 add_executable(npu_compute_hardware_device_api_test
   hardware_device_api_test.cpp
-  ${NPU_COMPUTE_SOURCE_DIR}/src/npu_compute/hardware_device_api.cpp
+  ${NPU_COMPUTE_SOURCE_DIR}/src/compute/hardware/hardware_device_api.cpp
 )
 target_include_directories(npu_compute_hardware_device_api_test PRIVATE
-  ${NPU_COMPUTE_SOURCE_DIR}/src/npu_compute
+  ${NPU_COMPUTE_SOURCE_DIR}/src/compute
 )
 target_link_libraries(npu_compute_hardware_device_api_test PRIVATE
   npu_compute_test_headers
@@ -436,10 +439,10 @@ add_test(NAME npu_compute.hardware_device_api
 
 add_executable(npu_compute_hardware_info_writer_test
   hardware_info_writer_test.cpp
-  ${NPU_COMPUTE_SOURCE_DIR}/src/npu_compute/hardware_info_writer.cpp
+  ${NPU_COMPUTE_SOURCE_DIR}/src/compute/hardware/hardware_info_writer.cpp
 )
 target_include_directories(npu_compute_hardware_info_writer_test PRIVATE
-  ${NPU_COMPUTE_SOURCE_DIR}/src/npu_compute
+  ${NPU_COMPUTE_SOURCE_DIR}/src/compute
 )
 target_link_libraries(npu_compute_hardware_info_writer_test PRIVATE Boost::filesystem)
 add_test(NAME npu_compute.hardware_info_writer
@@ -448,15 +451,15 @@ add_test(NAME npu_compute.hardware_info_writer
 
 add_executable(npu_compute_hardware_info_collector_test
   hardware_info_collector_test.cpp
-  ${NPU_COMPUTE_SOURCE_DIR}/src/npu_compute/hardware_info_collector.cpp
-  ${NPU_COMPUTE_SOURCE_DIR}/src/npu_compute/hardware_device_api.cpp
-  ${NPU_COMPUTE_SOURCE_DIR}/src/npu_compute/hardware_info_device.cpp
-  ${NPU_COMPUTE_SOURCE_DIR}/src/npu_compute/hardware_info_host.cpp
-  ${NPU_COMPUTE_SOURCE_DIR}/src/npu_compute/hardware_info_json.cpp
-  ${NPU_COMPUTE_SOURCE_DIR}/src/npu_compute/hardware_info_writer.cpp
+  ${NPU_COMPUTE_SOURCE_DIR}/src/compute/hardware/hardware_info_collector.cpp
+  ${NPU_COMPUTE_SOURCE_DIR}/src/compute/hardware/hardware_device_api.cpp
+  ${NPU_COMPUTE_SOURCE_DIR}/src/compute/hardware/hardware_info_device.cpp
+  ${NPU_COMPUTE_SOURCE_DIR}/src/compute/hardware/hardware_info_host.cpp
+  ${NPU_COMPUTE_SOURCE_DIR}/src/compute/hardware/hardware_info_json.cpp
+  ${NPU_COMPUTE_SOURCE_DIR}/src/compute/hardware/hardware_info_writer.cpp
 )
 target_include_directories(npu_compute_hardware_info_collector_test PRIVATE
-  ${NPU_COMPUTE_SOURCE_DIR}/src/npu_compute
+  ${NPU_COMPUTE_SOURCE_DIR}/src/compute
 )
 target_link_libraries(npu_compute_hardware_info_collector_test PRIVATE
   npu_compute_test_headers
@@ -479,17 +482,17 @@ add_test(NAME npu_compute.acl_pti_callback_stub
 )
 
 set(NPU_COMPUTE_RUNTIME_IMPLEMENTATION_SOURCES
-  ${NPU_COMPUTE_SOURCE_DIR}/src/npu_compute/hardware_device_api.cpp
-  ${NPU_COMPUTE_SOURCE_DIR}/src/npu_compute/hardware_info_collector.cpp
-  ${NPU_COMPUTE_SOURCE_DIR}/src/npu_compute/hardware_info_device.cpp
-  ${NPU_COMPUTE_SOURCE_DIR}/src/npu_compute/hardware_info_host.cpp
-  ${NPU_COMPUTE_SOURCE_DIR}/src/npu_compute/hardware_info_json.cpp
-  ${NPU_COMPUTE_SOURCE_DIR}/src/npu_compute/hardware_info_writer.cpp
-  ${NPU_COMPUTE_SOURCE_DIR}/src/npu_compute/npu_compute.cpp
-  ${NPU_COMPUTE_SOURCE_DIR}/src/npu_compute/npu_compute_runtime.cpp
-  ${NPU_COMPUTE_SOURCE_DIR}/src/npu_compute/pmu_data_consumer.cpp
-  ${NPU_COMPUTE_SOURCE_DIR}/src/npu_compute/pmu_csv_writer.cpp
-  ${NPU_COMPUTE_SOURCE_DIR}/src/npu_compute/section_config.cpp
+  ${NPU_COMPUTE_SOURCE_DIR}/src/compute/hardware/hardware_device_api.cpp
+  ${NPU_COMPUTE_SOURCE_DIR}/src/compute/hardware/hardware_info_collector.cpp
+  ${NPU_COMPUTE_SOURCE_DIR}/src/compute/hardware/hardware_info_device.cpp
+  ${NPU_COMPUTE_SOURCE_DIR}/src/compute/hardware/hardware_info_host.cpp
+  ${NPU_COMPUTE_SOURCE_DIR}/src/compute/hardware/hardware_info_json.cpp
+  ${NPU_COMPUTE_SOURCE_DIR}/src/compute/hardware/hardware_info_writer.cpp
+  ${NPU_COMPUTE_SOURCE_DIR}/src/compute/npu_compute.cpp
+  ${NPU_COMPUTE_SOURCE_DIR}/src/compute/runtime/npu_compute_runtime.cpp
+  ${NPU_COMPUTE_SOURCE_DIR}/src/compute/pmu/pmu_data_consumer.cpp
+  ${NPU_COMPUTE_SOURCE_DIR}/src/compute/pmu/pmu_csv_writer.cpp
+  ${NPU_COMPUTE_SOURCE_DIR}/src/compute/runtime/section_config.cpp
 )
 
 add_executable(npu_compute_runtime_callback_test
@@ -498,7 +501,7 @@ add_executable(npu_compute_runtime_callback_test
 )
 target_include_directories(npu_compute_runtime_callback_test PRIVATE
   ${NPU_COMPUTE_SOURCE_DIR}/src
-  ${NPU_COMPUTE_SOURCE_DIR}/src/npu_compute
+  ${NPU_COMPUTE_SOURCE_DIR}/src/compute
 )
 target_link_libraries(npu_compute_runtime_callback_test PRIVATE
   acl_pti_callback_stub
@@ -525,7 +528,7 @@ if(NPU_COMPUTE_BUILD_REAL_HARDWARE_TESTS)
   target_include_directories(
     npu_compute_real_hardware_test_library PRIVATE
     ${NPU_COMPUTE_SOURCE_DIR}/src
-    ${NPU_COMPUTE_SOURCE_DIR}/src/npu_compute
+    ${NPU_COMPUTE_SOURCE_DIR}/src/compute
   )
   target_link_libraries(npu_compute_real_hardware_test_library PRIVATE
     acl_pti_callback_stub
@@ -536,7 +539,7 @@ if(NPU_COMPUTE_BUILD_REAL_HARDWARE_TESTS)
     Boost::filesystem
   )
   set(NPU_COMPUTE_REAL_HARDWARE_VERSION_SCRIPT
-    "${NPU_COMPUTE_SOURCE_DIR}/src/npu_compute/libnpu_compute.map"
+    "${NPU_COMPUTE_SOURCE_DIR}/src/compute/libnpu_compute.map"
   )
   target_link_options(npu_compute_real_hardware_test_library PRIVATE
     "LINKER:--version-script=${NPU_COMPUTE_REAL_HARDWARE_VERSION_SCRIPT}"

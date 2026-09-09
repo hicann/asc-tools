@@ -31,7 +31,7 @@ npu-compute
 | NPU Compute library | `libnpu-compute.so` | Export `acltoolInitialize`/`acltoolShutdown`, configure ACLPTI, collect HardwareInfo, and write profiling CSV files |
 | ACLPTI | `libacl_pti.so` | Expand sections to PMU events, maintain shadow memory, and replay kernel launches |
 | CANN Prof API | `libprofapi.so` | Register the Runtime table, load the injection library, and receive profiling data |
-| Injection Hook | `libacl_tool_injection.so` | Register API replacements and expose original Runtime functions |
+| Injection Hook | `libacl_tool_injection.so` | Register API handlers and expose original Runtime functions |
 | PTI data module | compiled into `libacl_pti.so` | Decode profiler chunks, aggregate task/PMU rows, and notify the registered shutdown handler after draining |
 | CANN Runtime | `libacl_rt.so`, `libruntime.so` | Provide Runtime APIs and API injection dispatch |
 
@@ -41,10 +41,43 @@ for unit tests only. The PTI replay-data implementation is compiled into
 `libacl_pti.so`, and NPU Compute uses the implementation through that library.
 
 ACLPTI's private C++ implementation is organized under
-`npu_compute::aclpti::{callback,activity,data,profiling,replacement}`.
-Only the cross-domain initialization module remains in `npu_compute::aclpti`. Public
+`aclpti::{callback,activity,data,profiling,handler}`.
+Only the cross-domain initialization module remains in `aclpti`. Public
 `aclptiXxx` APIs stay in the global namespace, and file-local helpers stay in
 anonymous namespaces.
+
+## Source layout
+
+`src/cli` owns command-line and report management; `src/compute` owns collection
+and result processing inside the target process:
+
+```text
+src/
+├── cli/
+│   ├── main.cpp, npu_compute.sh  # CLI entry point and installed launcher script
+│   ├── config/                  # Argument parsing and option validation
+│   ├── launch/                  # Collection orchestration, processes, injection and data directories
+│   ├── report/                  # File validation, REP codec, packing and report publication
+│   └── import/                  # Report import, unpacking and output directory publication
+├── compute/
+│   ├── npu_compute.cpp          # Injection library lifecycle entry points
+│   ├── libnpu_compute.map       # Exported symbol allowlist
+│   ├── runtime/                 # Initialization, callbacks and section configuration
+│   ├── hardware/                # Hardware queries, single collection, JSONL and atomic publication
+│   └── pmu/                     # Asynchronous consumption, metrics and CSV output
+├── acl_pti/                     # Hooks, replay, data decoding and aggregation
+└── common/                      # Shared helpers
+```
+
+The CLI and compute each maintain their module sources in their root
+`CMakeLists.txt`. Internal headers use module paths relative to that root, such as
+`launch/launcher.h` and `hardware/hardware_info_collector.h`. Public headers remain
+under `include/`; build artifacts remain `npu-compute`, `libnpu-compute.so` and
+`libacl_pti.so`.
+
+Compute internals use `npucompute`, the CLI uses `npucompute::cli`, and shared
+logging helpers use `npucompute::detail`. Namespaces follow responsibilities
+rather than mapping every directory level.
 
 ## Supported Sections
 
@@ -323,8 +356,8 @@ ACLPTI mirrors each successful device allocation with a same-sized shadow
 allocation. Hooked H2D/D2D memcpy and memset operations update the shadow. A
 free releases both allocations.
 
-ACLPTI registers complete replacement functions for malloc, free, memcpy,
-memset, and kernel launch. Each replacement calls the original Runtime function
+ACLPTI registers complete handler functions for malloc, free, memcpy,
+memset, and kernel launch. Each handler calls the original Runtime function
 through `acltoolGetOriginalRuntimeApi`; ACLPTI updates shadow state or starts
 replay only after that original call succeeds.
 

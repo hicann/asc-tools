@@ -9,7 +9,7 @@
  */
 #include "npu_compute/acl_pti_callback_stub.h"
 #include "npu_compute/npu_compute.h"
-#include "npu_compute_runtime.h"
+#include "runtime/npu_compute_runtime.h"
 
 #include <acl/acl.h>
 
@@ -101,29 +101,29 @@ bool TestPmuLevelEnvironment()
     const char* previous = std::getenv("NPU_COMPUTE_PMU_LEVEL");
     const bool hadPrevious = previous != nullptr;
     const std::string previousValue = hadPrevious ? previous : "";
-    npu_compute::PmuDataLevel level = npu_compute::PmuDataLevel::Task;
+    npucompute::PmuDataLevel level = npucompute::PmuDataLevel::Task;
     std::string error;
 
     CHECK(::unsetenv("NPU_COMPUTE_PMU_LEVEL") == 0);
-    CHECK(npu_compute::detail::LoadPmuDataLevelFromEnvironment("NPU_COMPUTE_PMU_LEVEL", &level, &error));
-    CHECK(level == npu_compute::PmuDataLevel::Block);
+    CHECK(npucompute::detail::LoadPmuDataLevelFromEnvironment("NPU_COMPUTE_PMU_LEVEL", &level, &error));
+    CHECK(level == npucompute::PmuDataLevel::Block);
 
     CHECK(::setenv("NPU_COMPUTE_PMU_LEVEL", "", 1) == 0);
-    level = npu_compute::PmuDataLevel::Task;
-    CHECK(npu_compute::detail::LoadPmuDataLevelFromEnvironment("NPU_COMPUTE_PMU_LEVEL", &level, &error));
-    CHECK(level == npu_compute::PmuDataLevel::Block);
+    level = npucompute::PmuDataLevel::Task;
+    CHECK(npucompute::detail::LoadPmuDataLevelFromEnvironment("NPU_COMPUTE_PMU_LEVEL", &level, &error));
+    CHECK(level == npucompute::PmuDataLevel::Block);
 
     CHECK(::setenv("NPU_COMPUTE_PMU_LEVEL", "block", 1) == 0);
-    CHECK(npu_compute::detail::LoadPmuDataLevelFromEnvironment("NPU_COMPUTE_PMU_LEVEL", &level, &error));
-    CHECK(level == npu_compute::PmuDataLevel::Block);
+    CHECK(npucompute::detail::LoadPmuDataLevelFromEnvironment("NPU_COMPUTE_PMU_LEVEL", &level, &error));
+    CHECK(level == npucompute::PmuDataLevel::Block);
 
     CHECK(::setenv("NPU_COMPUTE_PMU_LEVEL", "task", 1) == 0);
-    CHECK(npu_compute::detail::LoadPmuDataLevelFromEnvironment("NPU_COMPUTE_PMU_LEVEL", &level, &error));
-    CHECK(level == npu_compute::PmuDataLevel::Task);
+    CHECK(npucompute::detail::LoadPmuDataLevelFromEnvironment("NPU_COMPUTE_PMU_LEVEL", &level, &error));
+    CHECK(level == npucompute::PmuDataLevel::Task);
 
     CHECK(::setenv("NPU_COMPUTE_PMU_LEVEL", "TASK", 1) == 0);
     error.clear();
-    CHECK(!npu_compute::detail::LoadPmuDataLevelFromEnvironment("NPU_COMPUTE_PMU_LEVEL", &level, &error));
+    CHECK(!npucompute::detail::LoadPmuDataLevelFromEnvironment("NPU_COMPUTE_PMU_LEVEL", &level, &error));
     CHECK(error.find("NPU_COMPUTE_PMU_LEVEL") != std::string::npos);
     CHECK(error.find("TASK") != std::string::npos);
     CHECK(error.find("block") != std::string::npos);
@@ -135,19 +135,18 @@ bool TestPmuLevelEnvironment()
 
 bool CheckSubscribeAndEnableContract()
 {
-    using npu_compute::test::AclPtiEnableCall;
+    using npucompute::test::AclPtiEnableCall;
 
-    CHECK(npu_compute::test::AclPtiSubscribeCount() == 1);
-    CHECK(npu_compute::test::CapturedAclPtiCallback() != nullptr);
-    CHECK(npu_compute::test::CapturedAclPtiUserData() != nullptr);
-    CHECK(
-        npu_compute::test::CapturedAclPtiUserData() != static_cast<void*>(&npu_compute::NpuComputeRuntime::Instance()));
-    const aclptiSubscribeHandle subscriber = npu_compute::test::CapturedAclPtiSubscriber();
+    CHECK(npucompute::test::AclPtiSubscribeCount() == 1);
+    CHECK(npucompute::test::CapturedAclPtiCallback() != nullptr);
+    CHECK(npucompute::test::CapturedAclPtiUserData() != nullptr);
+    CHECK(npucompute::test::CapturedAclPtiUserData() != static_cast<void*>(&npucompute::NpuComputeRuntime::Instance()));
+    const aclptiSubscribeHandle subscriber = npucompute::test::CapturedAclPtiSubscriber();
     CHECK(subscriber != nullptr);
 
-    const std::vector<AclPtiEnableCall> enableCalls = npu_compute::test::CapturedAclPtiEnableCalls();
+    const std::vector<AclPtiEnableCall> enableCalls = npucompute::test::CapturedAclPtiEnableCalls();
     CHECK(enableCalls.size() == kHardwareInfoTriggerCbids.size());
-    std::size_t previousSequence = npu_compute::test::AclPtiSubscribeSequence();
+    std::size_t previousSequence = npucompute::test::AclPtiSubscribeSequence();
     CHECK(previousSequence > 0);
     for (std::size_t index = 0; index < enableCalls.size(); ++index) {
         const AclPtiEnableCall& call = enableCalls[index];
@@ -160,21 +159,21 @@ bool CheckSubscribeAndEnableContract()
         previousSequence = call.sequence;
     }
 
-    CHECK(npu_compute::test::AclPtiRangeConfigCount() == 1);
-    CHECK(npu_compute::test::AclPtiRangeConfigSequence() > previousSequence);
-    const std::vector<std::string> sections = npu_compute::test::CapturedAclPtiSections();
+    CHECK(npucompute::test::AclPtiRangeConfigCount() == 1);
+    CHECK(npucompute::test::AclPtiRangeConfigSequence() > previousSequence);
+    const std::vector<std::string> sections = npucompute::test::CapturedAclPtiSections();
     CHECK(sections == std::vector<std::string>({"PipeUtilization", "Memory"}));
-    CHECK(npu_compute::test::CapturedAclPtiBlockResult() == ACLPTI_BLOCK_RESULT_ALL);
-    CHECK(!npu_compute::test::CapturedAclPtiCollectPipeline());
-    CHECK(!npu_compute::test::CapturedAclPtiCollectPcSampling());
+    CHECK(npucompute::test::CapturedAclPtiBlockResult() == ACLPTI_BLOCK_RESULT_ALL);
+    CHECK(!npucompute::test::CapturedAclPtiCollectPipeline());
+    CHECK(!npucompute::test::CapturedAclPtiCollectPcSampling());
     return true;
 }
 
 bool CheckDisableContract()
 {
-    using npu_compute::test::AclPtiEnableCall;
+    using npucompute::test::AclPtiEnableCall;
 
-    const std::vector<AclPtiEnableCall> calls = npu_compute::test::CapturedAclPtiEnableCalls();
+    const std::vector<AclPtiEnableCall> calls = npucompute::test::CapturedAclPtiEnableCalls();
     CHECK(calls.size() == kHardwareInfoTriggerCbids.size() * 2);
     for (std::size_t index = 0; index < kHardwareInfoTriggerCbids.size(); ++index) {
         const AclPtiEnableCall& call = calls[kHardwareInfoTriggerCbids.size() + index];
@@ -188,9 +187,9 @@ bool CheckDisableContract()
 
 void InvokeCallbackDirectly(aclptiCallbackDomain domain, aclptiCallbackId cbid, const aclptiCallbackData& callbackData)
 {
-    const aclptiCallbackFunc callback = npu_compute::test::CapturedAclPtiCallback();
+    const aclptiCallbackFunc callback = npucompute::test::CapturedAclPtiCallback();
     if (callback != nullptr) {
-        callback(npu_compute::test::CapturedAclPtiUserData(), domain, cbid, &callbackData);
+        callback(npucompute::test::CapturedAclPtiUserData(), domain, cbid, &callbackData);
     }
 }
 
@@ -237,7 +236,7 @@ bool RunCsvSocNameChild(const boost::filesystem::path& output)
 {
     CHECK(SetScenarioEnvironment(output));
     CHECK(::setenv("NPU_COMPUTE_FREQUENCY_MHZ", "1000", 1) == 0);
-    npu_compute::test::ResetAclPtiCallbackStub();
+    npucompute::test::ResetAclPtiCallbackStub();
     CHECK(acltoolInitialize() == ACLPTI_SUCCESS);
     CHECK(g_profilingDataCallback != nullptr);
 
@@ -258,8 +257,8 @@ bool RunCsvSocNameChild(const boost::filesystem::path& output)
     result->pmuLogs.emplace(aclptiBlockKey{0, 0, ACLPTI_CORE_TYPE_AIV, 0}, std::move(row));
 
     CHECK(g_profilingDataCallback(result) == ACLPTI_SUCCESS);
-    npu_compute::NpuComputeRuntime::Instance().Stop();
-    CHECK(npu_compute::NpuComputeRuntime::Instance().ShutdownAfterPtiDrain() == 0);
+    npucompute::NpuComputeRuntime::Instance().Stop();
+    CHECK(npucompute::NpuComputeRuntime::Instance().ShutdownAfterPtiDrain() == 0);
     CHECK(CsvValue(output / "Memory.csv", "vector0", "GM_to_UB_bw_usage_rate(%)") == "5.358925");
     return true;
 }
@@ -267,12 +266,12 @@ bool RunCsvSocNameChild(const boost::filesystem::path& output)
 bool RunSuccessChild(const std::string& scenario, const boost::filesystem::path& output)
 {
     CHECK(SetScenarioEnvironment(output));
-    npu_compute::test::ResetAclPtiCallbackStub();
+    npucompute::test::ResetAclPtiCallbackStub();
     CHECK(acltoolInitialize() == ACLPTI_SUCCESS);
     CHECK(CheckSubscribeAndEnableContract());
 
     if (scenario == "success-launch") {
-        CHECK(npu_compute::test::InvokeAclPtiCallback(
+        CHECK(npucompute::test::InvokeAclPtiCallback(
             ACLPTI_CB_DOMAIN_RUNTIME_API, ACLPTI_RUNTIME_CBID_aclrtLaunchKernel, ACLPTI_API_EXIT, ACL_SUCCESS,
             nullptr));
         CHECK(boost::filesystem::is_regular_file(output / kHardwareInfoFile));
@@ -280,7 +279,7 @@ bool RunSuccessChild(const std::string& scenario, const boost::filesystem::path&
         return true;
     }
     if (scenario == "success-host-args") {
-        CHECK(npu_compute::test::InvokeAclPtiCallback(
+        CHECK(npucompute::test::InvokeAclPtiCallback(
             ACLPTI_CB_DOMAIN_RUNTIME_API, ACLPTI_RUNTIME_CBID_aclrtLaunchKernelWithHostArgs, ACLPTI_API_EXIT,
             ACL_SUCCESS, nullptr));
         CHECK(boost::filesystem::is_regular_file(output / kHardwareInfoFile));
@@ -288,7 +287,7 @@ bool RunSuccessChild(const std::string& scenario, const boost::filesystem::path&
         return true;
     }
     if (scenario == "success-simt-host-args") {
-        CHECK(npu_compute::test::InvokeAclPtiCallback(
+        CHECK(npucompute::test::InvokeAclPtiCallback(
             ACLPTI_CB_DOMAIN_RUNTIME_API, ACLPTI_RUNTIME_CBID_aclrtLaunchSIMTKernelWithHostArgs, ACLPTI_API_EXIT,
             ACL_SUCCESS, nullptr));
         CHECK(boost::filesystem::is_regular_file(output / kHardwareInfoFile));
@@ -296,7 +295,7 @@ bool RunSuccessChild(const std::string& scenario, const boost::filesystem::path&
         return true;
     }
     if (scenario == "success-args-array") {
-        CHECK(npu_compute::test::InvokeAclPtiCallback(
+        CHECK(npucompute::test::InvokeAclPtiCallback(
             ACLPTI_CB_DOMAIN_RUNTIME_API, ACLPTI_RUNTIME_CBID_aclrtLaunchKernelWithArgsArray, ACLPTI_API_EXIT,
             ACL_SUCCESS, nullptr));
         CHECK(boost::filesystem::is_regular_file(output / kHardwareInfoFile));
@@ -304,21 +303,21 @@ bool RunSuccessChild(const std::string& scenario, const boost::filesystem::path&
         return true;
     }
     if (scenario == "success-repeated") {
-        CHECK(npu_compute::test::InvokeAclPtiCallback(
+        CHECK(npucompute::test::InvokeAclPtiCallback(
             ACLPTI_CB_DOMAIN_RUNTIME_API, ACLPTI_RUNTIME_CBID_aclrtLaunchKernel, ACLPTI_API_EXIT, ACL_SUCCESS,
             nullptr));
         CHECK(boost::filesystem::is_regular_file(output / kHardwareInfoFile));
         CHECK(CountLines(output / kHardwareInfoFile) == 5);
-        CHECK(npu_compute::test::InvokeAclPtiCallback(
+        CHECK(npucompute::test::InvokeAclPtiCallback(
             ACLPTI_CB_DOMAIN_RUNTIME_API, ACLPTI_RUNTIME_CBID_aclrtLaunchKernelWithHostArgs, ACLPTI_API_EXIT,
             ACL_SUCCESS, nullptr));
-        CHECK(npu_compute::test::InvokeAclPtiCallback(
+        CHECK(npucompute::test::InvokeAclPtiCallback(
             ACLPTI_CB_DOMAIN_RUNTIME_API, ACLPTI_RUNTIME_CBID_aclrtLaunchSIMTKernelWithHostArgs, ACLPTI_API_EXIT,
             ACL_SUCCESS, nullptr));
-        CHECK(npu_compute::test::InvokeAclPtiCallback(
+        CHECK(npucompute::test::InvokeAclPtiCallback(
             ACLPTI_CB_DOMAIN_RUNTIME_API, ACLPTI_RUNTIME_CBID_aclrtLaunchKernelWithArgsArray, ACLPTI_API_EXIT,
             ACL_SUCCESS, nullptr));
-        CHECK(npu_compute::test::InvokeAclPtiCallback(
+        CHECK(npucompute::test::InvokeAclPtiCallback(
             ACLPTI_CB_DOMAIN_RUNTIME_API, ACLPTI_RUNTIME_CBID_aclrtLaunchKernel, ACLPTI_API_EXIT, ACL_SUCCESS,
             nullptr));
         return true;
@@ -335,13 +334,13 @@ void InvokeSuccessfulExitDirectly(aclptiCallbackId cbid)
 bool RunNormalStopChild(const boost::filesystem::path& output)
 {
     CHECK(SetScenarioEnvironment(output));
-    npu_compute::test::ResetAclPtiCallbackStub();
+    npucompute::test::ResetAclPtiCallbackStub();
     CHECK(acltoolInitialize() == ACLPTI_SUCCESS);
     CHECK(CheckSubscribeAndEnableContract());
-    npu_compute::NpuComputeRuntime::Instance().Stop();
+    npucompute::NpuComputeRuntime::Instance().Stop();
     CHECK(CheckDisableContract());
     for (aclptiCallbackId cbid : kHardwareInfoTriggerCbids) {
-        CHECK(!npu_compute::test::InvokeAclPtiCallback(
+        CHECK(!npucompute::test::InvokeAclPtiCallback(
             ACLPTI_CB_DOMAIN_RUNTIME_API, cbid, ACLPTI_API_EXIT, ACL_SUCCESS, nullptr));
     }
     return true;
@@ -350,7 +349,7 @@ bool RunNormalStopChild(const boost::filesystem::path& output)
 bool RunStopDuringCollectionChild(const boost::filesystem::path& output)
 {
     CHECK(SetScenarioEnvironment(output));
-    npu_compute::test::ResetAclPtiCallbackStub();
+    npucompute::test::ResetAclPtiCallbackStub();
     {
         std::lock_guard<std::mutex> lock(g_deviceCountMutex);
         g_blockDeviceCount = true;
@@ -363,7 +362,7 @@ bool RunStopDuringCollectionChild(const boost::filesystem::path& output)
     std::atomic<bool> callbackReturned{false};
     std::atomic<bool> callbackDispatched{false};
     std::thread callbackThread([&callbackReturned, &callbackDispatched] {
-        callbackDispatched = npu_compute::test::InvokeAclPtiCallback(
+        callbackDispatched = npucompute::test::InvokeAclPtiCallback(
             ACLPTI_CB_DOMAIN_RUNTIME_API, ACLPTI_RUNTIME_CBID_aclrtLaunchKernel, ACLPTI_API_EXIT, ACL_SUCCESS, nullptr);
         callbackReturned = true;
     });
@@ -376,7 +375,7 @@ bool RunStopDuringCollectionChild(const boost::filesystem::path& output)
 
     std::atomic<bool> stopReturned{false};
     std::thread stopThread([&stopReturned] {
-        npu_compute::NpuComputeRuntime::Instance().Stop();
+        npucompute::NpuComputeRuntime::Instance().Stop();
         stopReturned = true;
     });
 
@@ -384,7 +383,7 @@ bool RunStopDuringCollectionChild(const boost::filesystem::path& output)
     if (deviceCountStarted) {
         const auto deadline = std::chrono::steady_clock::now() + 10s;
         while (std::chrono::steady_clock::now() < deadline) {
-            if (npu_compute::test::CapturedAclPtiEnableCalls().size() == kHardwareInfoTriggerCbids.size() * 2) {
+            if (npucompute::test::CapturedAclPtiEnableCalls().size() == kHardwareInfoTriggerCbids.size() * 2) {
                 callbacksDisabled = true;
                 break;
             }
@@ -393,9 +392,9 @@ bool RunStopDuringCollectionChild(const boost::filesystem::path& output)
     }
 
     std::atomic<bool> drainReturned{false};
-    std::atomic<int> drainStatus{npu_compute::kInitializeFailed};
+    std::atomic<int> drainStatus{npucompute::kInitializeFailed};
     std::thread drainThread([&drainReturned, &drainStatus] {
-        drainStatus = npu_compute::NpuComputeRuntime::Instance().ShutdownAfterPtiDrain();
+        drainStatus = npucompute::NpuComputeRuntime::Instance().ShutdownAfterPtiDrain();
         drainReturned = true;
     });
     const auto drainDeadline = std::chrono::steady_clock::now() + 500ms;
@@ -431,24 +430,24 @@ bool RunStopDuringCollectionChild(const boost::filesystem::path& output)
 bool RunIgnoredEventChild(const std::string& scenario, const boost::filesystem::path& output)
 {
     CHECK(SetScenarioEnvironment(output));
-    npu_compute::test::ResetAclPtiCallbackStub();
+    npucompute::test::ResetAclPtiCallbackStub();
     CHECK(acltoolInitialize() == ACLPTI_SUCCESS);
     CHECK(CheckSubscribeAndEnableContract());
 
     if (scenario == "ignore-enter") {
-        CHECK(npu_compute::test::InvokeAclPtiCallback(
+        CHECK(npucompute::test::InvokeAclPtiCallback(
             ACLPTI_CB_DOMAIN_RUNTIME_API, ACLPTI_RUNTIME_CBID_aclrtLaunchKernel, ACLPTI_API_ENTER, ACL_SUCCESS,
             nullptr));
         return true;
     }
     if (scenario == "ignore-failed-exit") {
-        CHECK(npu_compute::test::InvokeAclPtiCallback(
+        CHECK(npucompute::test::InvokeAclPtiCallback(
             ACLPTI_CB_DOMAIN_RUNTIME_API, ACLPTI_RUNTIME_CBID_aclrtLaunchKernelWithHostArgs, ACLPTI_API_EXIT,
             ACL_ERROR_INVALID_PARAM, nullptr));
         return true;
     }
     if (scenario == "ignore-simt-failed-exit") {
-        CHECK(npu_compute::test::InvokeAclPtiCallback(
+        CHECK(npucompute::test::InvokeAclPtiCallback(
             ACLPTI_CB_DOMAIN_RUNTIME_API, ACLPTI_RUNTIME_CBID_aclrtLaunchSIMTKernelWithHostArgs, ACLPTI_API_EXIT,
             ACL_ERROR_INVALID_PARAM, nullptr));
         return true;
@@ -486,33 +485,33 @@ bool RunIgnoredEventChild(const std::string& scenario, const boost::filesystem::
 bool RunSubscribeFailureChild(const boost::filesystem::path& output)
 {
     CHECK(SetScenarioEnvironment(output));
-    npu_compute::test::ResetAclPtiCallbackStub();
-    npu_compute::test::SetAclPtiSubscribeResult(ACLPTI_ERROR_INITIALIZATION_FAILED);
+    npucompute::test::ResetAclPtiCallbackStub();
+    npucompute::test::SetAclPtiSubscribeResult(ACLPTI_ERROR_INITIALIZATION_FAILED);
     CHECK(acltoolInitialize() == ACLPTI_ERROR_INITIALIZATION_FAILED);
-    CHECK(npu_compute::test::AclPtiSubscribeCount() == 1);
-    CHECK(npu_compute::test::AclPtiEnableCount() == 0);
-    CHECK(npu_compute::test::AclPtiRangeConfigCount() == 0);
-    CHECK(npu_compute::test::CapturedAclPtiCallback() == nullptr);
-    CHECK(npu_compute::test::CapturedAclPtiUserData() == nullptr);
-    CHECK(npu_compute::test::CapturedAclPtiSubscriber() == nullptr);
+    CHECK(npucompute::test::AclPtiSubscribeCount() == 1);
+    CHECK(npucompute::test::AclPtiEnableCount() == 0);
+    CHECK(npucompute::test::AclPtiRangeConfigCount() == 0);
+    CHECK(npucompute::test::CapturedAclPtiCallback() == nullptr);
+    CHECK(npucompute::test::CapturedAclPtiUserData() == nullptr);
+    CHECK(npucompute::test::CapturedAclPtiSubscriber() == nullptr);
     return true;
 }
 
 bool RunEnableFailureChild(const boost::filesystem::path& output, aclptiCallbackId failedCbid)
 {
     CHECK(SetScenarioEnvironment(output));
-    npu_compute::test::ResetAclPtiCallbackStub();
-    npu_compute::test::SetAclPtiEnableResult(failedCbid, ACLPTI_ERROR_NOT_SUPPORTED);
+    npucompute::test::ResetAclPtiCallbackStub();
+    npucompute::test::SetAclPtiEnableResult(failedCbid, ACLPTI_ERROR_NOT_SUPPORTED);
     CHECK(acltoolInitialize() == ACLPTI_ERROR_NOT_SUPPORTED);
-    CHECK(npu_compute::test::AclPtiSubscribeCount() == 1);
-    CHECK(npu_compute::test::AclPtiRangeConfigCount() == 0);
+    CHECK(npucompute::test::AclPtiSubscribeCount() == 1);
+    CHECK(npucompute::test::AclPtiRangeConfigCount() == 0);
 
     const auto failurePosition =
         std::find(kHardwareInfoTriggerCbids.begin(), kHardwareInfoTriggerCbids.end(), failedCbid);
     CHECK(failurePosition != kHardwareInfoTriggerCbids.end());
     const std::size_t successfulEnableCount =
         static_cast<std::size_t>(std::distance(kHardwareInfoTriggerCbids.begin(), failurePosition));
-    const std::vector<npu_compute::test::AclPtiEnableCall> calls = npu_compute::test::CapturedAclPtiEnableCalls();
+    const std::vector<npucompute::test::AclPtiEnableCall> calls = npucompute::test::CapturedAclPtiEnableCalls();
     CHECK(calls.size() == successfulEnableCount * 2 + 1);
 
     for (std::size_t index = 0; index <= successfulEnableCount; ++index) {
@@ -531,7 +530,7 @@ bool RunEnableFailureChild(const boost::filesystem::path& output, aclptiCallback
             }
         }
         CHECK(disableCount == 1);
-        CHECK(!npu_compute::test::InvokeAclPtiCallback(
+        CHECK(!npucompute::test::InvokeAclPtiCallback(
             ACLPTI_CB_DOMAIN_RUNTIME_API, enabledCbid, ACLPTI_API_EXIT, ACL_SUCCESS, nullptr));
     }
     return true;
@@ -540,14 +539,14 @@ bool RunEnableFailureChild(const boost::filesystem::path& output, aclptiCallback
 bool RunConfigFailureChild(const boost::filesystem::path& output)
 {
     CHECK(SetScenarioEnvironment(output));
-    npu_compute::test::ResetAclPtiCallbackStub();
-    npu_compute::test::SetAclPtiRangeConfigResult(ACLPTI_ERROR_PROFILING_FAILED);
+    npucompute::test::ResetAclPtiCallbackStub();
+    npucompute::test::SetAclPtiRangeConfigResult(ACLPTI_ERROR_PROFILING_FAILED);
     CHECK(acltoolInitialize() == ACLPTI_ERROR_PROFILING_FAILED);
-    CHECK(npu_compute::test::AclPtiSubscribeCount() == 1);
-    CHECK(npu_compute::test::AclPtiRangeConfigCount() == 1);
+    CHECK(npucompute::test::AclPtiSubscribeCount() == 1);
+    CHECK(npucompute::test::AclPtiRangeConfigCount() == 1);
     CHECK(CheckDisableContract());
     for (aclptiCallbackId cbid : kHardwareInfoTriggerCbids) {
-        CHECK(!npu_compute::test::InvokeAclPtiCallback(
+        CHECK(!npucompute::test::InvokeAclPtiCallback(
             ACLPTI_CB_DOMAIN_RUNTIME_API, cbid, ACLPTI_API_EXIT, ACL_SUCCESS, nullptr));
     }
     return true;
@@ -557,11 +556,11 @@ bool RunPmuLevelFailureChild(const boost::filesystem::path& output)
 {
     CHECK(SetScenarioEnvironment(output));
     CHECK(::setenv("NPU_COMPUTE_PMU_LEVEL", "invalid-level", 1) == 0);
-    npu_compute::test::ResetAclPtiCallbackStub();
-    CHECK(acltoolInitialize() == npu_compute::kInitializeFailed);
-    CHECK(npu_compute::test::AclPtiSubscribeCount() == 0);
-    CHECK(npu_compute::test::AclPtiEnableCount() == 0);
-    CHECK(npu_compute::test::AclPtiRangeConfigCount() == 0);
+    npucompute::test::ResetAclPtiCallbackStub();
+    CHECK(acltoolInitialize() == npucompute::kInitializeFailed);
+    CHECK(npucompute::test::AclPtiSubscribeCount() == 0);
+    CHECK(npucompute::test::AclPtiEnableCount() == 0);
+    CHECK(npucompute::test::AclPtiRangeConfigCount() == 0);
     return true;
 }
 

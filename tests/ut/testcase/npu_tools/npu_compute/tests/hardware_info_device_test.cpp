@@ -7,7 +7,7 @@
  * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
  * See LICENSE in the root of the software repository for the full text of the License.
  */
-#include "hardware_info_device.h"
+#include "hardware/hardware_info_device.h"
 
 #include <algorithm>
 #include <cstdint>
@@ -29,7 +29,7 @@ namespace {
         }                                                                                 \
     } while (false)
 
-class FakeHardwareDeviceApi final : public npu_compute::HardwareDeviceApi {
+class FakeHardwareDeviceApi final : public npucompute::HardwareDeviceApi {
 public:
     bool GetDeviceCount(std::int32_t* value) override
     {
@@ -159,14 +159,14 @@ public:
     uint64_t hbmTotalBytes = 16ULL * 1024ULL * 1024ULL;
     uint32_t hbmFrequency = 3200;
     std::map<std::int32_t, std::int64_t> deviceAttributeValues = {
-        {npu_compute::kDeviceAttributeNpuArch, 3510},       {npu_compute::kDeviceAttributeAiCpuCoreCount, 6},
-        {npu_compute::kDeviceAttributeAiCoreCount, 36},     {npu_compute::kDeviceAttributeCubeCoreCount, 36},
-        {npu_compute::kDeviceAttributeVectorCoreCount, 72},
+        {npucompute::kDeviceAttributeNpuArch, 3510},       {npucompute::kDeviceAttributeAiCpuCoreCount, 6},
+        {npucompute::kDeviceAttributeAiCoreCount, 36},     {npucompute::kDeviceAttributeCubeCoreCount, 36},
+        {npucompute::kDeviceAttributeVectorCoreCount, 72},
     };
     std::map<std::int32_t, std::string> platformValues = {
-        {npu_compute::kPlatformMemorySize, "137438953472"},
-        {npu_compute::kPlatformCubeFrequency, "1800"},
-        {npu_compute::kPlatformVectorFrequency, "1700"},
+        {npucompute::kPlatformMemorySize, "137438953472"},
+        {npucompute::kPlatformCubeFrequency, "1800"},
+        {npucompute::kPlatformVectorFrequency, "1700"},
     };
 
     bool failDeviceCount = false;
@@ -197,14 +197,14 @@ bool Contains(const std::vector<std::string>& diagnostics, std::string_view text
 bool TestCompleteMapping()
 {
     FakeHardwareDeviceApi api;
-    npu_compute::DeviceInfo device;
-    npu_compute::CpuInfo cpu;
-    npu_compute::AiCoreInfo aiCore;
-    npu_compute::MemoryInfo memory;
+    npucompute::DeviceInfo device;
+    npucompute::CpuInfo cpu;
+    npucompute::AiCoreInfo aiCore;
+    npucompute::MemoryInfo memory;
     std::vector<std::string> diagnostics;
-    npu_compute::DiagnosticSink sink = [&diagnostics](std::string_view value) { diagnostics.emplace_back(value); };
+    npucompute::DiagnosticSink sink = [&diagnostics](std::string_view value) { diagnostics.emplace_back(value); };
 
-    CHECK(npu_compute::CollectDevice0Info(api, &device, &cpu, &aiCore, &memory, &sink));
+    CHECK(npucompute::CollectDevice0Info(api, &device, &cpu, &aiCore, &memory, &sink));
     CHECK(device.npuCount == 1);
     CHECK(device.chipInfo == "Ascend950PR_9599 V100");
     CHECK(device.archInfo == "3510");
@@ -222,11 +222,11 @@ bool TestCompleteMapping()
     CHECK(diagnostics.empty());
 
     const std::vector<std::int32_t> expectedAttributes = {
-        npu_compute::kDeviceAttributeNpuArch,         npu_compute::kDeviceAttributeAiCpuCoreCount,
-        npu_compute::kDeviceAttributeAiCoreCount,     npu_compute::kDeviceAttributeCubeCoreCount,
-        npu_compute::kDeviceAttributeVectorCoreCount,
+        npucompute::kDeviceAttributeNpuArch,         npucompute::kDeviceAttributeAiCpuCoreCount,
+        npucompute::kDeviceAttributeAiCoreCount,     npucompute::kDeviceAttributeCubeCoreCount,
+        npucompute::kDeviceAttributeVectorCoreCount,
     };
-    const std::vector<std::int32_t> expectedPlatformTypes = {npu_compute::kPlatformMemorySize};
+    const std::vector<std::int32_t> expectedPlatformTypes = {npucompute::kPlatformMemorySize};
     CHECK(api.deviceAttributes == expectedAttributes);
     CHECK(api.platformTypes == expectedPlatformTypes);
     CHECK(!api.deviceIds.empty());
@@ -240,14 +240,14 @@ bool TestCollectAiCoreCountsOnlyReadsCountAttributes()
     std::uint32_t cubeCount = 0;
     std::uint32_t vectorCount = 0;
     std::vector<std::string> diagnostics;
-    npu_compute::DiagnosticSink sink = [&diagnostics](std::string_view value) { diagnostics.emplace_back(value); };
+    npucompute::DiagnosticSink sink = [&diagnostics](std::string_view value) { diagnostics.emplace_back(value); };
 
-    CHECK(npu_compute::CollectAiCoreCounts(api, &cubeCount, &vectorCount, &sink));
+    CHECK(npucompute::CollectAiCoreCounts(api, &cubeCount, &vectorCount, &sink));
     CHECK(cubeCount == 36);
     CHECK(vectorCount == 72);
     const std::vector<std::int32_t> expectedAttributes = {
-        npu_compute::kDeviceAttributeCubeCoreCount,
-        npu_compute::kDeviceAttributeVectorCoreCount,
+        npucompute::kDeviceAttributeCubeCoreCount,
+        npucompute::kDeviceAttributeVectorCoreCount,
     };
     CHECK(api.deviceAttributes == expectedAttributes);
     const std::vector<std::int32_t> expectedDeviceIds = {0, 0};
@@ -265,9 +265,9 @@ bool TestCollectAiCoreFrequencies()
     std::uint32_t cubeFrequency = 99;
     std::uint32_t vectorFrequency = 99;
     std::vector<std::string> diagnostics;
-    npu_compute::DiagnosticSink sink = [&diagnostics](std::string_view value) { diagnostics.emplace_back(value); };
+    npucompute::DiagnosticSink sink = [&diagnostics](std::string_view value) { diagnostics.emplace_back(value); };
 
-    CHECK(npu_compute::CollectAiCoreFrequencies(api, &cubeFrequency, &vectorFrequency, &sink));
+    CHECK(npucompute::CollectAiCoreFrequencies(api, &cubeFrequency, &vectorFrequency, &sink));
     CHECK(cubeFrequency == 1650);
     CHECK(vectorFrequency == 1650);
     CHECK(api.deviceCountCalls == 0);
@@ -281,14 +281,14 @@ bool TestCollectAiCoreFrequencies()
     cubeFrequency = 99;
     vectorFrequency = 99;
     api.failAiCoreFrequencies = true;
-    CHECK(!npu_compute::CollectAiCoreFrequencies(api, &cubeFrequency, &vectorFrequency, &sink));
+    CHECK(!npucompute::CollectAiCoreFrequencies(api, &cubeFrequency, &vectorFrequency, &sink));
     CHECK(cubeFrequency == 1650);
     CHECK(vectorFrequency == 1650);
     CHECK(Contains(diagnostics, "GetAiCoreFrequencies"));
 
     api = FakeHardwareDeviceApi{};
     diagnostics.clear();
-    CHECK(!npu_compute::CollectAiCoreFrequencies(api, nullptr, &vectorFrequency, &sink));
+    CHECK(!npucompute::CollectAiCoreFrequencies(api, nullptr, &vectorFrequency, &sink));
     CHECK(api.platformTypes.empty());
     CHECK(Contains(diagnostics, "output is null"));
     return true;
@@ -298,22 +298,22 @@ bool TestPartialFailuresAndInvalidValues()
 {
     FakeHardwareDeviceApi api;
     api.failSocName = true;
-    api.failedDeviceAttributes.insert(npu_compute::kDeviceAttributeAiCoreCount);
-    api.deviceAttributeValues[npu_compute::kDeviceAttributeAiCpuCoreCount] = -1;
+    api.failedDeviceAttributes.insert(npucompute::kDeviceAttributeAiCoreCount);
+    api.deviceAttributeValues[npucompute::kDeviceAttributeAiCpuCoreCount] = -1;
     api.failAiCoreFrequencies = true;
-    api.platformValues[npu_compute::kPlatformMemorySize] = "not-bytes";
+    api.platformValues[npucompute::kPlatformMemorySize] = "not-bytes";
     api.hbmFreeBytes = 20;
     api.hbmTotalBytes = 10;
     api.failHbmFrequency = true;
 
-    npu_compute::DeviceInfo device;
-    npu_compute::CpuInfo cpu;
-    npu_compute::AiCoreInfo aiCore;
-    npu_compute::MemoryInfo memory;
+    npucompute::DeviceInfo device;
+    npucompute::CpuInfo cpu;
+    npucompute::AiCoreInfo aiCore;
+    npucompute::MemoryInfo memory;
     std::vector<std::string> diagnostics;
-    npu_compute::DiagnosticSink sink = [&diagnostics](std::string_view value) { diagnostics.emplace_back(value); };
+    npucompute::DiagnosticSink sink = [&diagnostics](std::string_view value) { diagnostics.emplace_back(value); };
 
-    CHECK(npu_compute::CollectDevice0Info(api, &device, &cpu, &aiCore, &memory, &sink));
+    CHECK(npucompute::CollectDevice0Info(api, &device, &cpu, &aiCore, &memory, &sink));
     CHECK(device.npuCount == 1);
     CHECK(device.chipInfo.empty());
     CHECK(device.archInfo == "3510");
@@ -342,12 +342,12 @@ bool TestNoVisibleDeviceSkipsDeviceQueries()
 {
     FakeHardwareDeviceApi api;
     api.deviceCount = 0;
-    npu_compute::DeviceInfo device;
-    npu_compute::CpuInfo cpu;
-    npu_compute::AiCoreInfo aiCore;
-    npu_compute::MemoryInfo memory;
+    npucompute::DeviceInfo device;
+    npucompute::CpuInfo cpu;
+    npucompute::AiCoreInfo aiCore;
+    npucompute::MemoryInfo memory;
 
-    CHECK(npu_compute::CollectDevice0Info(api, &device, &cpu, &aiCore, &memory, nullptr));
+    CHECK(npucompute::CollectDevice0Info(api, &device, &cpu, &aiCore, &memory, nullptr));
     CHECK(api.deviceCountCalls == 1);
     CHECK(api.SpecializedCallCount() == 0);
     CHECK(device.npuCount == 0);
@@ -358,21 +358,21 @@ bool TestInvalidDeviceCountAndOutputPointers()
 {
     FakeHardwareDeviceApi api;
     api.deviceCount = -1;
-    npu_compute::DeviceInfo device;
-    npu_compute::CpuInfo cpu;
-    npu_compute::AiCoreInfo aiCore;
-    npu_compute::MemoryInfo memory;
+    npucompute::DeviceInfo device;
+    npucompute::CpuInfo cpu;
+    npucompute::AiCoreInfo aiCore;
+    npucompute::MemoryInfo memory;
     std::vector<std::string> diagnostics;
-    npu_compute::DiagnosticSink sink = [&diagnostics](std::string_view value) { diagnostics.emplace_back(value); };
+    npucompute::DiagnosticSink sink = [&diagnostics](std::string_view value) { diagnostics.emplace_back(value); };
 
-    CHECK(npu_compute::CollectDevice0Info(api, &device, &cpu, &aiCore, &memory, &sink));
+    CHECK(npucompute::CollectDevice0Info(api, &device, &cpu, &aiCore, &memory, &sink));
     CHECK(device.npuCount == 0);
     CHECK(api.SpecializedCallCount() == 0);
     CHECK(Contains(diagnostics, "device count"));
 
     FakeHardwareDeviceApi nullApi;
     diagnostics.clear();
-    CHECK(!npu_compute::CollectDevice0Info(nullApi, nullptr, &cpu, &aiCore, &memory, &sink));
+    CHECK(!npucompute::CollectDevice0Info(nullApi, nullptr, &cpu, &aiCore, &memory, &sink));
     CHECK(nullApi.deviceCountCalls == 0);
     CHECK(Contains(diagnostics, "output is null"));
     return true;

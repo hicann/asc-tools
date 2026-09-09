@@ -11,8 +11,8 @@
  * @file range_profiler.h
  * @brief Configures PMU sections and coordinates profiled kernel replay rounds.
  */
-#ifndef NPU_COMPUTE_ACLPTI_PROFILING_RANGE_PROFILER_H_
-#define NPU_COMPUTE_ACLPTI_PROFILING_RANGE_PROFILER_H_
+#ifndef NPU_TOOLS_NPU_COMPUTE_SRC_ACL_PTI_PROFILING_RANGE_PROFILER_H
+#define NPU_TOOLS_NPU_COMPUTE_SRC_ACL_PTI_PROFILING_RANGE_PROFILER_H
 
 #include "aclpti/aclpti_range_profiler.h"
 #include "acl_pti/data/module.h"
@@ -27,7 +27,7 @@
 struct MsprofConfig;
 struct MsprofConfigAttr;
 
-namespace npu_compute::aclpti::profiling {
+namespace aclpti::profiling {
 
 using ReplayLaunchFunction = std::function<aclError()>;
 
@@ -83,6 +83,6 @@ private:
     data::Module dataModule_;
 };
 
-} // namespace npu_compute::aclpti::profiling
+} // namespace aclpti::profiling
 
-#endif // NPU_COMPUTE_ACLPTI_PROFILING_RANGE_PROFILER_H_
+#endif // NPU_TOOLS_NPU_COMPUTE_SRC_ACL_PTI_PROFILING_RANGE_PROFILER_H

@@ -8,7 +8,7 @@
  * See LICENSE in the root of the software repository for the full text of the License.
  */
 #include "aclpti/aclpti_data.h"
-#include "pmu_data_consumer.h"
+#include "pmu/pmu_data_consumer.h"
 
 #include <atomic>
 #include <chrono>
@@ -47,7 +47,7 @@ int main()
     const std::thread::id submitThread = std::this_thread::get_id();
     std::atomic<bool> usedSubmitThread{false};
 
-    auto consumer = npu_compute::PmuDataConsumer::Create([&](std::shared_ptr<const aclptiProfilingDataResult> result) {
+    auto consumer = npucompute::PmuDataConsumer::Create([&](std::shared_ptr<const aclptiProfilingDataResult> result) {
         if (std::this_thread::get_id() == submitThread) {
             usedSubmitThread = true;
         }

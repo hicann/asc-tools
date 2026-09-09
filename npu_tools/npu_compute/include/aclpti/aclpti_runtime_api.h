@@ -7,8 +7,8 @@
  * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
  * See LICENSE in the root of the software repository for the full text of the License.
  */
-#ifndef ACLPTI_RUNTIME_API_H_
-#define ACLPTI_RUNTIME_API_H_
+#ifndef NPU_TOOLS_NPU_COMPUTE_INCLUDE_ACLPTI_ACLPTI_RUNTIME_API_H
+#define NPU_TOOLS_NPU_COMPUTE_INCLUDE_ACLPTI_ACLPTI_RUNTIME_API_H
 
 #include "aclpti/aclpti_callback.h"
 
@@ -178,4 +178,4 @@ typedef struct aclptiAclrtBinaryUnLoadParams {
 }
 #endif
 
-#endif // ACLPTI_RUNTIME_API_H_
+#endif // NPU_TOOLS_NPU_COMPUTE_INCLUDE_ACLPTI_ACLPTI_RUNTIME_API_H

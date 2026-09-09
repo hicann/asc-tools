@@ -15,8 +15,8 @@
 extern "C" ACLPTI_EXPORT aclptiResult
 aclptiActivityEnable(aclptiSubscribeHandle subscriber, aclptiActivityKind kind, aclptiActivityConfig* pActivityConfig)
 {
-    const aclptiResult result = npu_compute::aclpti::activity::Enable(subscriber, kind, pActivityConfig);
-    npu_compute::detail::DebugLog(
+    const aclptiResult result = aclpti::activity::Enable(subscriber, kind, pActivityConfig);
+    npucompute::detail::DebugLog(
         "aclpti", "activity enable kind=%d result=%d", static_cast<int>(kind), static_cast<int>(result));
     return result;
 }
@@ -24,8 +24,8 @@ aclptiActivityEnable(aclptiSubscribeHandle subscriber, aclptiActivityKind kind, 
 extern "C" ACLPTI_EXPORT aclptiResult
 aclptiActivityDisable(aclptiSubscribeHandle subscriber, aclptiActivityKind kind, aclptiActivityConfig* pActivityConfig)
 {
-    const aclptiResult result = npu_compute::aclpti::activity::Disable(subscriber, kind, pActivityConfig);
-    npu_compute::detail::DebugLog(
+    const aclptiResult result = aclpti::activity::Disable(subscriber, kind, pActivityConfig);
+    npucompute::detail::DebugLog(
         "aclpti", "activity disable kind=%d result=%d", static_cast<int>(kind), static_cast<int>(result));
     return result;
 }

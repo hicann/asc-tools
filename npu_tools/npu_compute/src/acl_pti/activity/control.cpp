@@ -11,7 +11,7 @@
 
 #include "acl_pti/callback/dispatcher.h"
 
-namespace npu_compute::aclpti::activity {
+namespace aclpti::activity {
 namespace {
 
 aclptiResult Validate(aclptiSubscribeHandle subscriber, aclptiActivityKind kind, const aclptiActivityConfig* config)
@@ -48,4 +48,4 @@ aclptiResult Disable(aclptiSubscribeHandle subscriber, aclptiActivityKind kind, 
     return SetEnabled(subscriber, kind, config, false);
 }
 
-} // namespace npu_compute::aclpti::activity
+} // namespace aclpti::activity

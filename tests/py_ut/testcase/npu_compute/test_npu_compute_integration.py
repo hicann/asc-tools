@@ -205,11 +205,11 @@ def test_collection_runs_the_connected_replay_chain():
     assert "[demo] argv[1]=--app-value" in result.stderr
     assert "[demo] argv[2]=value-from-user" in result.stderr
     assert result.stderr.count("[aclpti] subscribe result=0") == 1
-    completion_marker = "[aclpti] runtime replacement registration complete"
+    completion_marker = "[aclpti] runtime handler registration complete"
     initialization_log, marker, _ = result.stderr.partition(completion_marker)
     assert marker, f"missing completion marker: {completion_marker}"
     for api_id in range(16):
-        expected_log = f"[aclpti] register runtime replacement apiId={api_id} result=0"
+        expected_log = f"[aclpti] register runtime handler apiId={api_id} result=0"
         assert expected_log in initialization_log, (
             f"missing eager registration before completion: {expected_log}"
         )
@@ -217,7 +217,7 @@ def test_collection_runs_the_connected_replay_chain():
     assert_markers_in_order(
         result.stderr,
         [
-            "[aclpti] runtime replacement registration complete",
+            "[aclpti] runtime handler registration complete",
             "[aclpti] subscribe result=0",
             "[libnpu-compute] subscriber initialized",
             "[aclpti] selected section name=PipeUtilization",

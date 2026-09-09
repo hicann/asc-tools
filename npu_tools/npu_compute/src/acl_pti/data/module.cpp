@@ -31,7 +31,7 @@
 #include <utility>
 #include <variant>
 
-namespace npu_compute::aclpti::data {
+namespace aclpti::data {
 using detail::BoundedQueue;
 using detail::DecodedRecord;
 using detail::DecodeRawRecord;
@@ -181,7 +181,7 @@ std::size_t CountConfiguredPmuEvents(const PmuSlots& events)
 
 void LogCallbackStats(const char* action, uint64_t replayId, const CallbackStats& stats, aclptiResult status)
 {
-    npu_compute::detail::DebugLog(
+    npucompute::detail::DebugLog(
         "aclpti-data", "%s: replay=%llu status=%d copiedRecords=%llu copiedBytes=%llu receivedBytes=%llu",
         action == nullptr ? "callback stats" : action, static_cast<unsigned long long>(replayId),
         static_cast<int>(status), static_cast<unsigned long long>(stats.copiedRecordCount),
@@ -223,7 +223,7 @@ void LogRawPayloadLine(uint64_t replayId, const MsprofRawData& rawData, std::siz
             ascii[index] = ' ';
         }
     }
-    npu_compute::detail::DebugLog(
+    npucompute::detail::DebugLog(
         "aclpti-data", "[DEBUG-rawdata] payload replay=%llu offset=%zu absoluteOffset=%zu bytes=%s ascii=%s",
         static_cast<unsigned long long>(replayId), offset, rawData.offset + offset, hex, ascii);
 }
@@ -241,7 +241,7 @@ void LogDecodedCandidate(
     const auto streamId = static_cast<uint16_t>(word1);
     const auto decoded =
         DecodeRawRecord(reinterpret_cast<const std::byte*>(data + offset), size, offset / size, info.pmuEventIds);
-    npu_compute::detail::DebugLog(
+    npucompute::detail::DebugLog(
         "aclpti-data",
         "[DEBUG-rawdata] candidate replay=%llu kind=%s offset=%zu size=%zu status=%d word0=0x%08x magic=0x%04x "
         "function=0x%02x word1=0x%08x task=%u stream=%u word2=0x%08x word3=0x%08x",
@@ -252,7 +252,7 @@ void LogDecodedCandidate(
     }
     const auto& payload = decoded.Value().payload;
     if (const auto* log = std::get_if<TaskLog32>(&payload)) {
-        npu_compute::detail::DebugLog(
+        npucompute::detail::DebugLog(
             "aclpti-data",
             "[DEBUG-rawdata] candidate matched task-log replay=%llu offset=%zu func=0x%02x task=%u stream=%u "
             "counter=%llu block=%u subBlock=%u coreType=%d coreTypeId=%u",
@@ -262,7 +262,7 @@ void LogDecodedCandidate(
         return;
     }
     const auto& pmu = std::get<PmuRecord128>(payload);
-    npu_compute::detail::DebugLog(
+    npucompute::detail::DebugLog(
         "aclpti-data",
         "[DEBUG-rawdata] candidate matched pmu replay=%llu offset=%zu task=%u stream=%u totalCycles=%llu "
         "startCounter=%llu endCounter=%llu overflow=%d coreType=%d coreId=%u block=%u subBlock=%u values=%zu",
@@ -274,12 +274,12 @@ void LogDecodedCandidate(
 
 void LogRawDataDiagnostics(const ReplaySession& session, const MsprofRawData& rawData)
 {
-    if (!npu_compute::detail::DebugEnabled()) {
+    if (!npucompute::detail::DebugEnabled()) {
         return;
     }
 
     const uint64_t replayId = session.info.replayId;
-    npu_compute::detail::DebugLog(
+    npucompute::detail::DebugLog(
         "aclpti-data",
         "[DEBUG-rawdata] struct replay=%llu raw=%p isLastChunk=%d offset=%zu chunkModule=%d deviceId=%d type=%d(%s) "
         "chunkSize=%zu chunkCapacity=%zu chunk=%p",
@@ -296,7 +296,7 @@ void LogRawDataDiagnostics(const ReplaySession& session, const MsprofRawData& ra
                 replayId, session.info, "task-log-32", rawData.chunk, rawData.chunkSize, offset, kLogRecordSize);
         }
     } else {
-        npu_compute::detail::DebugLog(
+        npucompute::detail::DebugLog(
             "aclpti-data", "[DEBUG-rawdata] candidate skip replay=%llu kind=task-log-32 chunkSize=%zu",
             static_cast<unsigned long long>(replayId), rawData.chunkSize);
     }
@@ -306,7 +306,7 @@ void LogRawDataDiagnostics(const ReplaySession& session, const MsprofRawData& ra
                 replayId, session.info, "pmu-128", rawData.chunk, rawData.chunkSize, offset, kPmuRecordSize);
         }
     } else {
-        npu_compute::detail::DebugLog(
+        npucompute::detail::DebugLog(
             "aclpti-data", "[DEBUG-rawdata] candidate skip replay=%llu kind=pmu-128 chunkSize=%zu",
             static_cast<unsigned long long>(replayId), rawData.chunkSize);
     }
@@ -573,25 +573,25 @@ public:
 #if defined(NPU_COMPUTE_ENABLE_TEST_CONTROLS)
         const char* initializeFailure = std::getenv("NPU_COMPUTE_TEST_PTI_INITIALIZE_FAILURE");
         if (initializeFailure != nullptr && initializeFailure[0] != '\0') {
-            npu_compute::detail::DebugLog("aclpti-data", "initialize forced to fail by test control");
+            npucompute::detail::DebugLog("aclpti-data", "initialize forced to fail by test control");
             return ACLPTI_ERROR_INTERNAL;
         }
 #endif
         std::lock_guard<std::mutex> routerLock(routerMutex_);
         std::lock_guard<std::mutex> lock(mutex_);
-        npu_compute::detail::DebugLog(
+        npucompute::detail::DebugLog(
             "aclpti-data", "initialize requested: state=%s router=%p active=%d callback=%d", ModuleStateName(state_),
             static_cast<void*>(router_), active_ ? 1 : 0, callback_ ? 1 : 0);
         if (state_ == ModuleState::Running) {
-            npu_compute::detail::DebugLog("aclpti-data", "initialize skipped: already running");
+            npucompute::detail::DebugLog("aclpti-data", "initialize skipped: already running");
             return ACLPTI_SUCCESS;
         }
         if (state_ != ModuleState::Created) {
-            npu_compute::detail::DebugLog("aclpti-data", "initialize rejected: state=%s", ModuleStateName(state_));
+            npucompute::detail::DebugLog("aclpti-data", "initialize rejected: state=%s", ModuleStateName(state_));
             return ACLPTI_ERROR_INVALID_STATE;
         }
         if (router_ != nullptr) {
-            npu_compute::detail::DebugLog(
+            npucompute::detail::DebugLog(
                 "aclpti-data", "initialize rejected: another router is active router=%p", static_cast<void*>(router_));
             return ACLPTI_ERROR_REPLAY_ACTIVE;
         }
@@ -603,7 +603,7 @@ public:
             // ACLPTI can be used without an NPU Compute result consumer. Keep
             // collection and replay lifecycle functional while dropping the
             // final aggregate in that standalone mode.
-            npu_compute::detail::DebugLog("aclpti-data", "initialize using default drop-result callback");
+            npucompute::detail::DebugLog("aclpti-data", "initialize using default drop-result callback");
             callback_ = [](std::shared_ptr<const aclptiProfilingDataResult>) { return ACLPTI_SUCCESS; };
         }
         router_ = this;
@@ -612,7 +612,7 @@ public:
             assembler_ = std::thread(&AssembleThread, static_cast<void*>(this));
             decoder_ = std::thread(&DecodeThread, static_cast<void*>(this));
         } catch (...) {
-            npu_compute::detail::DebugLog("aclpti-data", "initialize failed: worker thread creation failed");
+            npucompute::detail::DebugLog("aclpti-data", "initialize failed: worker thread creation failed");
             router_ = nullptr;
             state_ = ModuleState::Stopped;
             rawQueue_.Close();
@@ -625,7 +625,7 @@ public:
             }
             return ACLPTI_ERROR_INTERNAL;
         }
-        npu_compute::detail::DebugLog("aclpti-data", "initialize complete: decoder=1 assembler=1");
+        npucompute::detail::DebugLog("aclpti-data", "initialize complete: decoder=1 assembler=1");
         return ACLPTI_SUCCESS;
     }
 
@@ -633,7 +633,7 @@ public:
     {
         std::lock_guard<std::mutex> lock(mutex_);
         MsprofRawDataCallback callback = state_ == ModuleState::Running ? &RawDataThunk : nullptr;
-        npu_compute::detail::DebugLog(
+        npucompute::detail::DebugLog(
             "aclpti-data", "get raw data callback: state=%s callback=%p", ModuleStateName(state_),
             reinterpret_cast<void*>(callback));
         return callback;
@@ -642,7 +642,7 @@ public:
     aclptiResult PrepareReplay(const ReplayPrepareInfo& info)
     {
         if (!IsValidReplayInfo(info)) {
-            npu_compute::detail::DebugLog(
+            npucompute::detail::DebugLog(
                 "aclpti-data", "prepare replay rejected: replay=%llu kind=%d events=%zu",
                 static_cast<unsigned long long>(info.replayId), static_cast<int>(info.kind),
                 CountConfiguredPmuEvents(info.pmuEventIds));
@@ -650,18 +650,18 @@ public:
         }
 
         std::lock_guard<std::mutex> lock(mutex_);
-        npu_compute::detail::DebugLog(
+        npucompute::detail::DebugLog(
             "aclpti-data", "prepare replay requested: replay=%llu kind=%d events=%zu state=%s active=%d",
             static_cast<unsigned long long>(info.replayId), static_cast<int>(info.kind),
             CountConfiguredPmuEvents(info.pmuEventIds), ModuleStateName(state_), active_ ? 1 : 0);
         if (state_ != ModuleState::Running) {
-            npu_compute::detail::DebugLog(
+            npucompute::detail::DebugLog(
                 "aclpti-data", "prepare replay rejected: replay=%llu state=%s",
                 static_cast<unsigned long long>(info.replayId), ModuleStateName(state_));
             return ACLPTI_ERROR_NOT_INITIALIZED;
         }
         if (active_) {
-            npu_compute::detail::DebugLog(
+            npucompute::detail::DebugLog(
                 "aclpti-data", "prepare replay rejected: replay=%llu activeReplay=%llu",
                 static_cast<unsigned long long>(info.replayId),
                 static_cast<unsigned long long>(active_->info.replayId));
@@ -669,7 +669,7 @@ public:
         }
         try {
             if (!replayIds_.insert(info.replayId).second) {
-                npu_compute::detail::DebugLog(
+                npucompute::detail::DebugLog(
                     "aclpti-data", "prepare replay rejected: duplicate replay=%llu",
                     static_cast<unsigned long long>(info.replayId));
                 return ACLPTI_ERROR_INVALID_PARAMETER;
@@ -679,12 +679,12 @@ public:
             active_ = std::move(session);
         } catch (const std::bad_alloc&) {
             replayIds_.erase(info.replayId);
-            npu_compute::detail::DebugLog(
+            npucompute::detail::DebugLog(
                 "aclpti-data", "prepare replay failed: replay=%llu out of memory",
                 static_cast<unsigned long long>(info.replayId));
             return ACLPTI_ERROR_OUT_OF_MEMORY;
         }
-        npu_compute::detail::DebugLog(
+        npucompute::detail::DebugLog(
             "aclpti-data", "prepare replay accepted: replay=%llu sessions=%zu",
             static_cast<unsigned long long>(info.replayId), sessions_.size());
         return ACLPTI_SUCCESS;
@@ -693,28 +693,28 @@ public:
     ReplayResult RecordReplayStatus(const ReplayStopInfo& info)
     {
         std::lock_guard<std::mutex> lock(mutex_);
-        npu_compute::detail::DebugLog(
+        npucompute::detail::DebugLog(
             "aclpti-data", "record replay status requested: replay=%llu stopStatus=%d state=%s active=%d",
             static_cast<unsigned long long>(info.replayId), static_cast<int>(info.stopStatus), ModuleStateName(state_),
             active_ ? 1 : 0);
         ReplayResult result{info.replayId, ACLPTI_SUCCESS, {0, 0, 0, 0, 0, 0, 0}};
         if (state_ != ModuleState::Running) {
             result.status = ACLPTI_ERROR_NOT_INITIALIZED;
-            npu_compute::detail::DebugLog(
+            npucompute::detail::DebugLog(
                 "aclpti-data", "record replay status rejected: replay=%llu state=%s",
                 static_cast<unsigned long long>(info.replayId), ModuleStateName(state_));
             return result;
         }
         if (!active_) {
             result.status = ACLPTI_ERROR_NO_ACTIVE_REPLAY;
-            npu_compute::detail::DebugLog(
+            npucompute::detail::DebugLog(
                 "aclpti-data", "record replay status rejected: replay=%llu no active replay",
                 static_cast<unsigned long long>(info.replayId));
             return result;
         }
         if (active_->info.replayId != info.replayId) {
             result.status = ACLPTI_ERROR_REPLAY_NOT_FOUND;
-            npu_compute::detail::DebugLog(
+            npucompute::detail::DebugLog(
                 "aclpti-data", "record replay status rejected: replay=%llu activeReplay=%llu",
                 static_cast<unsigned long long>(info.replayId),
                 static_cast<unsigned long long>(active_->info.replayId));
@@ -725,7 +725,7 @@ public:
         result.callbackStats = active_->stats;
         if (active_->state != ReplayState::Accepting) {
             result.status = ACLPTI_ERROR_INVALID_STATE;
-            npu_compute::detail::DebugLog(
+            npucompute::detail::DebugLog(
                 "aclpti-data", "record replay status rejected: replay=%llu replayState=%s",
                 static_cast<unsigned long long>(info.replayId), ReplayStateName(active_->state));
             return result;
@@ -739,7 +739,7 @@ public:
         active_->resultStatus = result.status;
         active_->stopStatus = result.status;
         LogCallbackStats("record replay status complete", info.replayId, result.callbackStats, result.status);
-        npu_compute::detail::DebugLog(
+        npucompute::detail::DebugLog(
             "aclpti-data", "record replay diagnostics: replay=%llu failedRecords=%llu",
             static_cast<unsigned long long>(info.replayId),
             static_cast<unsigned long long>(active_->failedRecordCount.load()));
@@ -749,23 +749,23 @@ public:
     aclptiResult ReleaseReplay(uint64_t replayId)
     {
         std::lock_guard<std::mutex> lock(mutex_);
-        npu_compute::detail::DebugLog(
+        npucompute::detail::DebugLog(
             "aclpti-data", "release replay requested: replay=%llu state=%s active=%d",
             static_cast<unsigned long long>(replayId), ModuleStateName(state_), active_ ? 1 : 0);
         if (state_ != ModuleState::Running) {
-            npu_compute::detail::DebugLog(
+            npucompute::detail::DebugLog(
                 "aclpti-data", "release replay rejected: replay=%llu state=%s",
                 static_cast<unsigned long long>(replayId), ModuleStateName(state_));
             return ACLPTI_ERROR_NOT_INITIALIZED;
         }
         if (!active_) {
-            npu_compute::detail::DebugLog(
+            npucompute::detail::DebugLog(
                 "aclpti-data", "release replay rejected: replay=%llu no active replay",
                 static_cast<unsigned long long>(replayId));
             return ACLPTI_ERROR_NO_ACTIVE_REPLAY;
         }
         if (active_->info.replayId != replayId) {
-            npu_compute::detail::DebugLog(
+            npucompute::detail::DebugLog(
                 "aclpti-data", "release replay rejected: replay=%llu activeReplay=%llu",
                 static_cast<unsigned long long>(replayId), static_cast<unsigned long long>(active_->info.replayId));
             return ACLPTI_ERROR_REPLAY_NOT_FOUND;
@@ -773,7 +773,7 @@ public:
         {
             std::lock_guard<std::mutex> sessionLock(active_->mutex);
             if (active_->state != ReplayState::Closed) {
-                npu_compute::detail::DebugLog(
+                npucompute::detail::DebugLog(
                     "aclpti-data", "release replay rejected: replay=%llu replayState=%s",
                     static_cast<unsigned long long>(replayId), ReplayStateName(active_->state));
                 return ACLPTI_ERROR_INVALID_STATE;
@@ -782,13 +782,13 @@ public:
             try {
                 pushed = rawQueue_.Push(ReplayEnd{active_});
             } catch (const std::bad_alloc&) {
-                npu_compute::detail::DebugLog(
+                npucompute::detail::DebugLog(
                     "aclpti-data", "release replay failed: replay=%llu out of memory",
                     static_cast<unsigned long long>(replayId));
                 return ACLPTI_ERROR_OUT_OF_MEMORY;
             }
             if (!pushed) {
-                npu_compute::detail::DebugLog(
+                npucompute::detail::DebugLog(
                     "aclpti-data", "release replay rejected: replay=%llu raw queue is closed",
                     static_cast<unsigned long long>(replayId));
                 return ACLPTI_ERROR_INVALID_STATE;
@@ -796,7 +796,7 @@ public:
             active_->state = ReplayState::Released;
         }
         active_.reset();
-        npu_compute::detail::DebugLog(
+        npucompute::detail::DebugLog(
             "aclpti-data", "release replay complete: replay=%llu", static_cast<unsigned long long>(replayId));
         return ACLPTI_SUCCESS;
     }
@@ -806,17 +806,17 @@ public:
         std::lock_guard<std::mutex> routerLock(routerMutex_);
         {
             std::lock_guard<std::mutex> lock(mutex_);
-            npu_compute::detail::DebugLog(
+            npucompute::detail::DebugLog(
                 "aclpti-data", "shutdown requested: state=%s active=%d sessions=%zu", ModuleStateName(state_),
                 active_ ? 1 : 0, sessions_.size());
             if (state_ == ModuleState::Created || state_ == ModuleState::Stopped) {
-                npu_compute::detail::DebugLog(
+                npucompute::detail::DebugLog(
                     "aclpti-data", "shutdown skipped: state=%s status=%d", ModuleStateName(state_),
                     static_cast<int>(shutdownStatus_));
                 return shutdownStatus_;
             }
             if (active_) {
-                npu_compute::detail::DebugLog(
+                npucompute::detail::DebugLog(
                     "aclpti-data", "shutdown rejected: active replay=%llu",
                     static_cast<unsigned long long>(active_->info.replayId));
                 return ACLPTI_ERROR_REPLAY_ACTIVE;
@@ -827,14 +827,14 @@ public:
             router_ = nullptr;
         }
         rawQueue_.Close();
-        npu_compute::detail::DebugLog("aclpti-data", "shutdown: raw queue closed");
+        npucompute::detail::DebugLog("aclpti-data", "shutdown: raw queue closed");
         if (decoder_.joinable()) {
             decoder_.join();
-            npu_compute::detail::DebugLog("aclpti-data", "shutdown: decoder joined");
+            npucompute::detail::DebugLog("aclpti-data", "shutdown: decoder joined");
         }
         if (assembler_.joinable()) {
             assembler_.join();
-            npu_compute::detail::DebugLog("aclpti-data", "shutdown: assembler joined");
+            npucompute::detail::DebugLog("aclpti-data", "shutdown: assembler joined");
         }
         {
             std::lock_guard<std::mutex> lock(mutex_);
@@ -842,7 +842,7 @@ public:
         }
         const std::size_t sessionCount = sessions_.size();
         auto result = std::make_shared<aclptiProfilingDataResult>(aggregate_.Snapshot(sessions_));
-        npu_compute::detail::DebugLog(
+        npucompute::detail::DebugLog(
             "aclpti-data",
             "shutdown aggregate: status=%d sessions=%zu tasks=%zu blocks=%zu pmuBlocks=%zu pmuTasks=%zu "
             "failedRecords=%llu",
@@ -856,10 +856,10 @@ public:
             } catch (...) {
                 callbackStatus = ACLPTI_ERROR_CALLBACK;
             }
-            npu_compute::detail::DebugLog(
+            npucompute::detail::DebugLog(
                 "aclpti-data", "shutdown result consumer callback status=%d", static_cast<int>(callbackStatus));
         } else {
-            npu_compute::detail::DebugLog("aclpti-data", "shutdown result consumer callback skipped: empty aggregate");
+            npucompute::detail::DebugLog("aclpti-data", "shutdown result consumer callback skipped: empty aggregate");
         }
         aclptiDataModuleShutdownCallback shutdownCallback = nullptr;
         void* shutdownUserData = nullptr;
@@ -870,7 +870,7 @@ public:
         }
         if (shutdownCallback == nullptr) {
             shutdownStatus_ = ACLPTI_SUCCESS;
-            npu_compute::detail::DebugLog("aclpti-data", "shutdown complete: no external shutdown callback");
+            npucompute::detail::DebugLog("aclpti-data", "shutdown complete: no external shutdown callback");
             return shutdownStatus_;
         }
         try {
@@ -878,7 +878,7 @@ public:
         } catch (...) {
             shutdownStatus_ = ACLPTI_ERROR_INTERNAL;
         }
-        npu_compute::detail::DebugLog(
+        npucompute::detail::DebugLog(
             "aclpti-data", "shutdown complete: external callback status=%d", static_cast<int>(shutdownStatus_));
         return shutdownStatus_;
     }
@@ -895,7 +895,7 @@ public:
                 std::lock_guard<std::mutex> sessionLock(session->mutex);
                 session->state = ReplayState::Released;
                 active_.reset();
-                npu_compute::detail::DebugLog(
+                npucompute::detail::DebugLog(
                     "aclpti-data", "force shutdown releasing active replay=%llu",
                     static_cast<unsigned long long>(session->info.replayId));
             }
@@ -910,7 +910,7 @@ public:
             }
             if (releaseStatus != ACLPTI_SUCCESS) {
                 session->failedRecordCount.fetch_add(1);
-                npu_compute::detail::DebugLog(
+                npucompute::detail::DebugLog(
                     "aclpti-data", "force shutdown replay end failed: replay=%llu status=%d",
                     static_cast<unsigned long long>(session->info.replayId), static_cast<int>(releaseStatus));
             }
@@ -928,7 +928,7 @@ private:
     {
         std::lock_guard<std::mutex> lock(routerMutex_);
         if (router_ == nullptr) {
-            npu_compute::detail::DebugLog("aclpti-data", "raw callback rejected: router is null");
+            npucompute::detail::DebugLog("aclpti-data", "raw callback rejected: router is null");
             return static_cast<std::int32_t>(ACLPTI_ERROR_NOT_INITIALIZED);
         }
         return router_->OnRawData(rawData);
@@ -938,21 +938,21 @@ private:
     {
         std::lock_guard<std::mutex> lock(mutex_);
         if (state_ != ModuleState::Running || !active_) {
-            npu_compute::detail::DebugLog(
+            npucompute::detail::DebugLog(
                 "aclpti-data", "raw callback rejected: state=%s active=%d raw=%p", ModuleStateName(state_),
                 active_ ? 1 : 0, static_cast<void*>(rawData));
             return static_cast<std::int32_t>(ACLPTI_ERROR_NO_ACTIVE_REPLAY);
         }
 
         if (active_->state != ReplayState::Accepting) {
-            npu_compute::detail::DebugLog(
+            npucompute::detail::DebugLog(
                 "aclpti-data", "raw callback rejected: replay=%llu replayState=%s",
                 static_cast<unsigned long long>(active_->info.replayId), ReplayStateName(active_->state));
             return static_cast<std::int32_t>(ACLPTI_ERROR_INVALID_STATE);
         }
         const auto fail = [this](aclptiResult status) {
             const uint64_t failedRecordCount = active_->failedRecordCount.fetch_add(1) + 1;
-            npu_compute::detail::DebugLog(
+            npucompute::detail::DebugLog(
                 "aclpti-data", "raw callback failed: replay=%llu status=%d failedRecords=%llu",
                 static_cast<unsigned long long>(active_->info.replayId), static_cast<int>(status),
                 static_cast<unsigned long long>(failedRecordCount));
@@ -963,14 +963,14 @@ private:
         }
         const RawDataType expectedPrimaryType = PrimaryRawDataType(active_->info.kind);
         if (rawData->type != expectedPrimaryType && rawData->type != static_cast<RawDataType>(kLogDataType)) {
-            npu_compute::detail::DebugLog(
+            npucompute::detail::DebugLog(
                 "aclpti-data", "raw callback type mismatch: replay=%llu expected=%d(%s) actual=%d(%s)",
                 static_cast<unsigned long long>(active_->info.replayId), static_cast<int>(expectedPrimaryType),
                 RawDataTypeName(expectedPrimaryType), static_cast<int>(rawData->type), RawDataTypeName(rawData->type));
             return fail(ACLPTI_ERROR_INVALID_RAW_DATA);
         }
         if (rawData->chunkSize == 0 || rawData->chunkSize > sizeof(rawData->chunk)) {
-            npu_compute::detail::DebugLog(
+            npucompute::detail::DebugLog(
                 "aclpti-data",
                 "raw callback invalid chunk: replay=%llu type=%d(%s) device=%d chunkSize=%zu offset=%zu isLast=%d",
                 static_cast<unsigned long long>(active_->info.replayId), static_cast<int>(rawData->type),
@@ -981,7 +981,7 @@ private:
         if (rawData->type == BIU_PERF_DATA_TYPE || rawData->type == PC_SAMPLING_DATA_TYPE) {
             if (active_->opaqueLastSeen || rawData->offset != active_->nextOpaqueOffset ||
                 rawData->offset > std::numeric_limits<std::size_t>::max() - rawData->chunkSize) {
-                npu_compute::detail::DebugLog(
+                npucompute::detail::DebugLog(
                     "aclpti-data",
                     "opaque chunk sequence rejected: replay=%llu expectedOffset=%zu actualOffset=%zu "
                     "lastSeen=%d",
@@ -1014,7 +1014,7 @@ private:
                                        rawData->type == static_cast<RawDataType>(kLogDataType) ? kLogRecordSize :
                                                                                                  0;
         if (recordSize == 0 || rawData->chunkSize % recordSize != 0) {
-            npu_compute::detail::DebugLog(
+            npucompute::detail::DebugLog(
                 "aclpti-data",
                 "raw callback invalid chunk: replay=%llu type=%d(%s) device=%d chunkSize=%zu recordSize=%zu "
                 "offset=%zu isLast=%d",
@@ -1025,7 +1025,7 @@ private:
         }
         LogRawDataDiagnostics(*active_, *rawData);
         const std::size_t recordCount = rawData->chunkSize / recordSize;
-        npu_compute::detail::DebugLog(
+        npucompute::detail::DebugLog(
             "aclpti-data",
             "raw callback accepted: replay=%llu type=%d(%s) device=%d chunkSize=%zu recordSize=%zu records=%zu "
             "offset=%zu isLast=%d",
@@ -1044,21 +1044,21 @@ private:
             try {
                 pushed = rawQueue_.Push(std::move(record));
             } catch (const std::bad_alloc&) {
-                npu_compute::detail::DebugLog(
+                npucompute::detail::DebugLog(
                     "aclpti-data", "raw callback queue allocation failed: replay=%llu recordIndex=%llu",
                     static_cast<unsigned long long>(active_->info.replayId),
                     static_cast<unsigned long long>(recordIndex));
                 return fail(ACLPTI_ERROR_OUT_OF_MEMORY);
             }
             if (!pushed) {
-                npu_compute::detail::DebugLog(
+                npucompute::detail::DebugLog(
                     "aclpti-data", "raw callback queue closed: replay=%llu recordIndex=%llu",
                     static_cast<unsigned long long>(active_->info.replayId),
                     static_cast<unsigned long long>(recordIndex));
                 return fail(ACLPTI_ERROR_INVALID_STATE);
             }
             ++active_->stats.copiedRecordCount;
-            npu_compute::detail::DebugLog(
+            npucompute::detail::DebugLog(
                 "aclpti-data", "raw record queued: replay=%llu recordIndex=%llu size=%zu",
                 static_cast<unsigned long long>(active_->info.replayId),
                 static_cast<unsigned long long>(active_->nextRecordIndex - 1), recordSize);
@@ -1078,13 +1078,13 @@ private:
                 throw std::bad_alloc();
             }
 #endif
-            npu_compute::detail::DebugLog(
+            npucompute::detail::DebugLog(
                 "aclpti-data", "decode raw record: replay=%llu recordIndex=%llu size=%zu",
                 static_cast<unsigned long long>(raw.session->info.replayId),
                 static_cast<unsigned long long>(raw.recordIndex), raw.size);
             auto decoded = DecodeRawRecord(raw.bytes.data(), raw.size, raw.recordIndex, raw.session->info.pmuEventIds);
             if (!decoded.Ok()) {
-                npu_compute::detail::DebugLog(
+                npucompute::detail::DebugLog(
                     "aclpti-data", "decode raw record failed: replay=%llu recordIndex=%llu status=%d",
                     static_cast<unsigned long long>(raw.session->info.replayId),
                     static_cast<unsigned long long>(raw.recordIndex), static_cast<int>(decoded.Status()));
@@ -1093,7 +1093,7 @@ private:
                 return;
             }
             if (!decodedQueue_.Push(DecodedRecordItem{raw.session, decoded.Value()})) {
-                npu_compute::detail::DebugLog(
+                npucompute::detail::DebugLog(
                     "aclpti-data", "decode queue push failed: replay=%llu recordIndex=%llu",
                     static_cast<unsigned long long>(raw.session->info.replayId),
                     static_cast<unsigned long long>(raw.recordIndex));
@@ -1101,14 +1101,14 @@ private:
                 MarkCompleted(raw.session);
                 return;
             }
-            npu_compute::detail::DebugLog(
+            npucompute::detail::DebugLog(
                 "aclpti-data", "decode raw record complete: replay=%llu recordIndex=%llu",
                 static_cast<unsigned long long>(raw.session->info.replayId),
                 static_cast<unsigned long long>(raw.recordIndex));
         } catch (const std::bad_alloc&) {
             raw.session->failedRecordCount.fetch_add(1);
             MarkCompleted(raw.session);
-            npu_compute::detail::DebugLog(
+            npucompute::detail::DebugLog(
                 "aclpti-data", "decode raw record allocation failed: replay=%llu recordIndex=%llu",
                 static_cast<unsigned long long>(raw.session->info.replayId),
                 static_cast<unsigned long long>(raw.recordIndex));
@@ -1117,7 +1117,7 @@ private:
 
     void DecodeLoop()
     {
-        npu_compute::detail::DebugLog("aclpti-data", "decode thread started");
+        npucompute::detail::DebugLog("aclpti-data", "decode thread started");
         RawItem item;
         while (rawQueue_.Pop(item)) {
             if (auto* raw = std::get_if<RawRecord>(&item)) {
@@ -1129,12 +1129,12 @@ private:
                 try {
                     pushed = decodedQueue_.Push(std::move(*opaque));
                 } catch (const std::bad_alloc&) {
-                    npu_compute::detail::DebugLog(
+                    npucompute::detail::DebugLog(
                         "aclpti-data", "opaque queue allocation failed: replay=%llu offset=%zu",
                         static_cast<unsigned long long>(session->info.replayId), offset);
                 }
                 if (!pushed) {
-                    npu_compute::detail::DebugLog(
+                    npucompute::detail::DebugLog(
                         "aclpti-data", "opaque chunk queue push failed: replay=%llu offset=%zu",
                         static_cast<unsigned long long>(session->info.replayId), offset);
                     session->failedRecordCount.fetch_add(1);
@@ -1146,42 +1146,42 @@ private:
                 try {
                     pushed = decodedQueue_.Push(std::get<ReplayEnd>(item));
                 } catch (const std::bad_alloc&) {
-                    npu_compute::detail::DebugLog(
+                    npucompute::detail::DebugLog(
                         "aclpti-data", "decode replay end allocation failed: replay=%llu",
                         static_cast<unsigned long long>(session->info.replayId));
                 }
                 if (!pushed) {
-                    npu_compute::detail::DebugLog(
+                    npucompute::detail::DebugLog(
                         "aclpti-data", "decode replay end push failed: replay=%llu",
                         static_cast<unsigned long long>(session->info.replayId));
                     session->failedRecordCount.fetch_add(1);
                 } else {
-                    npu_compute::detail::DebugLog(
+                    npucompute::detail::DebugLog(
                         "aclpti-data", "decode replay end queued: replay=%llu",
                         static_cast<unsigned long long>(session->info.replayId));
                 }
             }
         }
         decodedQueue_.Close();
-        npu_compute::detail::DebugLog("aclpti-data", "decode thread stopped");
+        npucompute::detail::DebugLog("aclpti-data", "decode thread stopped");
     }
 
     void AssembleLoop()
     {
-        npu_compute::detail::DebugLog("aclpti-data", "assemble thread started");
+        npucompute::detail::DebugLog("aclpti-data", "assemble thread started");
         DecodedItem item;
         while (decodedQueue_.Pop(item)) {
             if (auto* decoded = std::get_if<DecodedRecordItem>(&item)) {
                 const std::shared_ptr<ReplaySession> session = decoded->session;
                 try {
                     aggregate_.Add(*decoded);
-                    npu_compute::detail::DebugLog(
+                    npucompute::detail::DebugLog(
                         "aclpti-data", "assemble decoded record: replay=%llu recordIndex=%llu",
                         static_cast<unsigned long long>(session->info.replayId),
                         static_cast<unsigned long long>(decoded->record.recordIndex));
                 } catch (const std::bad_alloc&) {
                     session->failedRecordCount.fetch_add(1);
-                    npu_compute::detail::DebugLog(
+                    npucompute::detail::DebugLog(
                         "aclpti-data", "assemble decoded record allocation failed: replay=%llu recordIndex=%llu",
                         static_cast<unsigned long long>(session->info.replayId),
                         static_cast<unsigned long long>(decoded->record.recordIndex));
@@ -1192,23 +1192,23 @@ private:
                 const std::size_t offset = opaque->chunk.offset;
                 try {
                     aggregate_.Add(std::move(*opaque));
-                    npu_compute::detail::DebugLog(
+                    npucompute::detail::DebugLog(
                         "aclpti-data", "assemble opaque chunk: replay=%llu offset=%zu",
                         static_cast<unsigned long long>(session->info.replayId), offset);
                 } catch (const std::bad_alloc&) {
                     session->failedRecordCount.fetch_add(1);
-                    npu_compute::detail::DebugLog(
+                    npucompute::detail::DebugLog(
                         "aclpti-data", "assemble opaque chunk allocation failed: replay=%llu offset=%zu",
                         static_cast<unsigned long long>(session->info.replayId), offset);
                 }
                 MarkCompleted(session);
             } else {
-                npu_compute::detail::DebugLog(
+                npucompute::detail::DebugLog(
                     "aclpti-data", "assemble replay end: replay=%llu",
                     static_cast<unsigned long long>(std::get<ReplayEnd>(item).session->info.replayId));
             }
         }
-        npu_compute::detail::DebugLog("aclpti-data", "assemble thread stopped");
+        npucompute::detail::DebugLog("aclpti-data", "assemble thread stopped");
     }
 
     aclptiProfilingDataCallback callback_;
@@ -1272,4 +1272,4 @@ aclptiResult Module::ReleaseReplay(uint64_t replayId) { return impl_->ReleaseRep
 aclptiResult Module::Shutdown() { return impl_->Shutdown(); }
 aclptiResult Module::ForceShutdown() { return impl_->ForceShutdown(); }
 
-} // namespace npu_compute::aclpti::data
+} // namespace aclpti::data

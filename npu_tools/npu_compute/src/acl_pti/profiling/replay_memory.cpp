@@ -13,12 +13,12 @@
 
 #include <new>
 
-namespace npu_compute::aclpti::profiling {
+namespace aclpti::profiling {
 
 aclptiResult ReplayMemory::MirrorMalloc(void** devPtr, std::size_t size, aclrtMemMallocPolicy policy)
 {
     if (devPtr == nullptr || *devPtr == nullptr || size == 0) {
-        npu_compute::detail::DebugLog(
+        npucompute::detail::DebugLog(
             "aclpti", "error operation=shadow_malloc status=%d reason=invalid_parameter",
             ACLPTI_ERROR_INVALID_PARAMETER);
         return ACLPTI_ERROR_INVALID_PARAMETER;
@@ -26,7 +26,7 @@ aclptiResult ReplayMemory::MirrorMalloc(void** devPtr, std::size_t size, aclrtMe
     const auto mallocFunction = reinterpret_cast<aclrtMallocFunc>(acltoolGetOriginalRuntimeApi(ACL_RT_API_aclrtMalloc));
     const auto freeFunction = reinterpret_cast<aclrtFreeFunc>(acltoolGetOriginalRuntimeApi(ACL_RT_API_aclrtFree));
     if (mallocFunction == nullptr || freeFunction == nullptr) {
-        npu_compute::detail::DebugLog(
+        npucompute::detail::DebugLog(
             "aclpti", "error operation=shadow_malloc_lookup status=%d malloc_available=%d free_available=%d",
             ACLPTI_ERROR_PROFILING_FAILED, static_cast<int>(mallocFunction != nullptr),
             static_cast<int>(freeFunction != nullptr));
@@ -36,11 +36,11 @@ aclptiResult ReplayMemory::MirrorMalloc(void** devPtr, std::size_t size, aclrtMe
     void* shadow = nullptr;
     const aclError result = mallocFunction(&shadow, size, policy);
     if (result != ACL_SUCCESS) {
-        npu_compute::detail::DebugLog("aclpti", "error operation=shadow_malloc status=%d api=aclrtMalloc", result);
+        npucompute::detail::DebugLog("aclpti", "error operation=shadow_malloc status=%d api=aclrtMalloc", result);
         return ACLPTI_ERROR_PROFILING_FAILED;
     }
     if (shadow == nullptr) {
-        npu_compute::detail::DebugLog(
+        npucompute::detail::DebugLog(
             "aclpti", "error operation=shadow_malloc status=%d reason=null_shadow", ACLPTI_ERROR_PROFILING_FAILED);
         return ACLPTI_ERROR_PROFILING_FAILED;
     }
@@ -48,19 +48,18 @@ aclptiResult ReplayMemory::MirrorMalloc(void** devPtr, std::size_t size, aclrtMe
     try {
         const auto inserted = shadowBuffers_.emplace(origin, ShadowBuffer{shadow, size, false});
         if (inserted.second) {
-            npu_compute::detail::DebugLog(
-                "aclpti", "shadow malloc origin=%p shadow=%p size=%zu", *devPtr, shadow, size);
+            npucompute::detail::DebugLog("aclpti", "shadow malloc origin=%p shadow=%p size=%zu", *devPtr, shadow, size);
             return ACLPTI_SUCCESS;
         }
         const aclError freeResult = freeFunction(shadow);
         if (freeResult != ACL_SUCCESS) {
-            npu_compute::detail::DebugLog(
+            npucompute::detail::DebugLog(
                 "aclpti", "error operation=shadow_duplicate_cleanup status=%d shadow=%p", freeResult, shadow);
         }
         return ACLPTI_ERROR_PROFILING_FAILED;
     } catch (const std::bad_alloc&) {
         const aclError freeStatus = freeFunction(shadow);
-        npu_compute::detail::DebugLog(
+        npucompute::detail::DebugLog(
             "aclpti", "error operation=shadow_metadata_alloc status=%d cleanup_status=%d", ACLPTI_ERROR_OUT_OF_MEMORY,
             freeStatus);
         return ACLPTI_ERROR_OUT_OF_MEMORY;
@@ -71,7 +70,7 @@ aclptiResult ReplayMemory::MirrorFree(void* devPtr)
 {
     const auto freeFunction = reinterpret_cast<aclrtFreeFunc>(acltoolGetOriginalRuntimeApi(ACL_RT_API_aclrtFree));
     if (freeFunction == nullptr) {
-        npu_compute::detail::DebugLog(
+        npucompute::detail::DebugLog(
             "aclpti", "error operation=shadow_free_lookup status=%d api=aclrtFree", ACLPTI_ERROR_PROFILING_FAILED);
         return ACLPTI_ERROR_PROFILING_FAILED;
     }
@@ -84,11 +83,11 @@ aclptiResult ReplayMemory::MirrorFree(void* devPtr)
     if (iterator->second.orphaned) {
         return orphanFailure;
     }
-    npu_compute::detail::DebugLog("aclpti", "shadow free origin=%p shadow=%p", devPtr, iterator->second.shadow);
+    npucompute::detail::DebugLog("aclpti", "shadow free origin=%p shadow=%p", devPtr, iterator->second.shadow);
     const aclError result = freeFunction(iterator->second.shadow);
     if (result != ACL_SUCCESS) {
         iterator->second.orphaned = true;
-        npu_compute::detail::DebugLog(
+        npucompute::detail::DebugLog(
             "aclpti", "error operation=shadow_free status=%d shadow=%p", result, iterator->second.shadow);
         return ACLPTI_ERROR_PROFILING_FAILED;
     }
@@ -110,7 +109,7 @@ aclptiResult ReplayMemory::RetryOrphanedShadows(aclrtFreeFunc freeFunction)
             iterator = shadowBuffers_.erase(iterator);
             continue;
         }
-        npu_compute::detail::DebugLog(
+        npucompute::detail::DebugLog(
             "aclpti", "error operation=shadow_orphan_cleanup status=%d shadow=%p", result, iterator->second.shadow);
         status = ACLPTI_ERROR_PROFILING_FAILED;
         ++iterator;
@@ -131,14 +130,14 @@ aclptiResult ReplayMemory::MirrorMemcpy(
     ShadowBuffer destinationBuffer{};
     std::size_t destinationOffset = 0;
     if (!FindShadowBuffer(destination, count, &destinationBuffer, &destinationOffset)) {
-        npu_compute::detail::DebugLog(
+        npucompute::detail::DebugLog(
             "aclpti", "error operation=shadow_memcpy status=%d reason=shadow_not_found destination=%p count=%zu",
             ACLPTI_ERROR_PROFILING_FAILED, destination, count);
         return ACLPTI_ERROR_PROFILING_FAILED;
     }
     const auto memcpyFunction = reinterpret_cast<aclrtMemcpyFunc>(acltoolGetOriginalRuntimeApi(ACL_RT_API_aclrtMemcpy));
     if (memcpyFunction == nullptr) {
-        npu_compute::detail::DebugLog(
+        npucompute::detail::DebugLog(
             "aclpti", "error operation=shadow_memcpy_lookup status=%d api=aclrtMemcpy", ACLPTI_ERROR_PROFILING_FAILED);
         return ACLPTI_ERROR_PROFILING_FAILED;
     }
@@ -146,11 +145,11 @@ aclptiResult ReplayMemory::MirrorMemcpy(
     void* shadowDestination = static_cast<std::uint8_t*>(destinationBuffer.shadow) + destinationOffset;
     const int result =
         memcpyFunction(shadowDestination, destinationBuffer.size - destinationOffset, source, count, kind);
-    npu_compute::detail::DebugLog(
+    npucompute::detail::DebugLog(
         "aclpti", "mirror memcpy kind=%d destination=%p shadow=%p count=%zu result=%d", kind, destination,
         shadowDestination, count, result);
     if (result != ACL_SUCCESS) {
-        npu_compute::detail::DebugLog("aclpti", "error operation=shadow_memcpy status=%d api=aclrtMemcpy", result);
+        npucompute::detail::DebugLog("aclpti", "error operation=shadow_memcpy status=%d api=aclrtMemcpy", result);
         return ACLPTI_ERROR_PROFILING_FAILED;
     }
     return ACLPTI_SUCCESS;
@@ -168,24 +167,24 @@ aclptiResult ReplayMemory::MirrorMemset(void* devPtr, std::size_t maxCount, std:
     ShadowBuffer buffer{};
     std::size_t offset = 0;
     if (!FindShadowBuffer(devPtr, count, &buffer, &offset)) {
-        npu_compute::detail::DebugLog(
+        npucompute::detail::DebugLog(
             "aclpti", "error operation=shadow_memset status=%d reason=shadow_not_found origin=%p count=%zu",
             ACLPTI_ERROR_PROFILING_FAILED, devPtr, count);
         return ACLPTI_ERROR_PROFILING_FAILED;
     }
     const auto memsetFunction = reinterpret_cast<aclrtMemsetFunc>(acltoolGetOriginalRuntimeApi(ACL_RT_API_aclrtMemset));
     if (memsetFunction == nullptr) {
-        npu_compute::detail::DebugLog(
+        npucompute::detail::DebugLog(
             "aclpti", "error operation=shadow_memset_lookup status=%d api=aclrtMemset", ACLPTI_ERROR_PROFILING_FAILED);
         return ACLPTI_ERROR_PROFILING_FAILED;
     }
     void* shadow = static_cast<std::uint8_t*>(buffer.shadow) + offset;
     const int result = memsetFunction(shadow, buffer.size - offset, value, count);
-    npu_compute::detail::DebugLog(
+    npucompute::detail::DebugLog(
         "aclpti", "mirror memset origin=%p shadow=%p value=%d count=%zu result=%d", devPtr, shadow, value, count,
         result);
     if (result != ACL_SUCCESS) {
-        npu_compute::detail::DebugLog("aclpti", "error operation=shadow_memset status=%d api=aclrtMemset", result);
+        npucompute::detail::DebugLog("aclpti", "error operation=shadow_memset status=%d api=aclrtMemset", result);
         return ACLPTI_ERROR_PROFILING_FAILED;
     }
     return ACLPTI_SUCCESS;
@@ -195,7 +194,7 @@ aclptiResult ReplayMemory::Restore() const
 {
     const auto memcpyFunction = reinterpret_cast<aclrtMemcpyFunc>(acltoolGetOriginalRuntimeApi(ACL_RT_API_aclrtMemcpy));
     if (memcpyFunction == nullptr) {
-        npu_compute::detail::DebugLog(
+        npucompute::detail::DebugLog(
             "aclpti", "error operation=replay_restore_lookup status=%d api=aclrtMemcpy", ACLPTI_ERROR_PROFILING_FAILED);
         return ACLPTI_ERROR_PROFILING_FAILED;
     }
@@ -207,12 +206,12 @@ aclptiResult ReplayMemory::Restore() const
         const aclError result = memcpyFunction(
             origin, entry.second.size, entry.second.shadow, entry.second.size, ACL_MEMCPY_DEVICE_TO_DEVICE);
         if (result != ACL_SUCCESS) {
-            npu_compute::detail::DebugLog(
+            npucompute::detail::DebugLog(
                 "aclpti", "error operation=replay_restore status=%d origin=%p shadow=%p size=%zu", result, origin,
                 entry.second.shadow, entry.second.size);
             return ACLPTI_ERROR_RESULT_UNRELIABLE;
         }
-        npu_compute::detail::DebugLog(
+        npucompute::detail::DebugLog(
             "aclpti", "restore origin=%p shadow=%p size=%zu", origin, entry.second.shadow, entry.second.size);
     }
     return ACLPTI_SUCCESS;
@@ -241,4 +240,4 @@ bool ReplayMemory::FindShadowBuffer(
     return true;
 }
 
-} // namespace npu_compute::aclpti::profiling
+} // namespace aclpti::profiling

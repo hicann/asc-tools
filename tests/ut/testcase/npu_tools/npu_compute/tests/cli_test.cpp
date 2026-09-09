@@ -7,8 +7,8 @@
  * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
  * See LICENSE in the root of the software repository for the full text of the License.
  */
-#include "config.h"
-#include "launcher.h"
+#include "config/config.h"
+#include "launch/launcher.h"
 
 #include <cstdio>
 #include <string>
@@ -31,9 +31,9 @@ int Check(bool condition, const char* expression, int line)
             return 1;                                   \
     } while (false)
 
-using npu_compute::compute_launcher::CliConfig;
-using npu_compute::compute_launcher::ParseCli;
-using npu_compute::compute_launcher::PrintUsage;
+using npucompute::cli::CliConfig;
+using npucompute::cli::ParseCli;
+using npucompute::cli::PrintUsage;
 
 bool Parse(const std::vector<std::string>& arguments, CliConfig* config, std::vector<std::string>* errors)
 {
@@ -76,10 +76,10 @@ int TestCollectionExport()
 
 int TestBusinessExitCodes()
 {
-    CHECK(npu_compute::compute_launcher::kUsageErrorExitCode == 2);
-    CHECK(npu_compute::compute_launcher::kCollectionErrorExitCode == 3);
-    CHECK(npu_compute::compute_launcher::kReportErrorExitCode == 4);
-    CHECK(npu_compute::compute_launcher::kInternalErrorExitCode == 5);
+    CHECK(npucompute::cli::kUsageErrorExitCode == 2);
+    CHECK(npucompute::cli::kCollectionErrorExitCode == 3);
+    CHECK(npucompute::cli::kReportErrorExitCode == 4);
+    CHECK(npucompute::cli::kInternalErrorExitCode == 5);
     return 0;
 }
 

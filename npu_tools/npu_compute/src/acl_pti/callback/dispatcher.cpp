@@ -11,7 +11,7 @@
 
 #include "aclpti/aclpti_runtime_api.h"
 
-namespace npu_compute::aclpti::callback {
+namespace aclpti::callback {
 
 aclptiSubscribeHandle Dispatcher::SubscriberHandle() { return &subscriber_; }
 
@@ -109,6 +109,4 @@ Dispatcher& GetDispatcher()
     return dispatcher;
 }
 
-} // namespace npu_compute::aclpti::callback
-
-// 为每个文件添加注释说明其功能
+} // namespace aclpti::callback

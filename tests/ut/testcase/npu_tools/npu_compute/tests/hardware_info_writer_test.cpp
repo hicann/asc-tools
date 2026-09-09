@@ -7,7 +7,7 @@
  * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
  * See LICENSE in the root of the software repository for the full text of the License.
  */
-#include "hardware_info_writer.h"
+#include "hardware/hardware_info_writer.h"
 
 #include <cstdio>
 #include <boost/filesystem.hpp>
@@ -92,8 +92,8 @@ bool TestPublishesCompleteFileAndKeepsStableLock()
     std::string error = "old error";
 
     CHECK(
-        npu_compute::PublishHardwareInfoJsonl(temporary.Path(), content, &error) ==
-        npu_compute::PublishResult::Published);
+        npucompute::PublishHardwareInfoJsonl(temporary.Path(), content, &error) ==
+        npucompute::PublishResult::Published);
     CHECK(error.empty());
     const boost::filesystem::path finalPath = temporary.Path() / kFinalFileName;
     CHECK(boost::filesystem::is_regular_file(finalPath));
@@ -112,11 +112,11 @@ bool TestExistingFileIsNotOverwritten()
     const std::string original = "original\n";
     std::string error;
     CHECK(
-        npu_compute::PublishHardwareInfoJsonl(temporary.Path(), original, &error) ==
-        npu_compute::PublishResult::Published);
+        npucompute::PublishHardwareInfoJsonl(temporary.Path(), original, &error) ==
+        npucompute::PublishResult::Published);
     CHECK(
-        npu_compute::PublishHardwareInfoJsonl(temporary.Path(), "replacement\n", &error) ==
-        npu_compute::PublishResult::AlreadyPublished);
+        npucompute::PublishHardwareInfoJsonl(temporary.Path(), "replacement\n", &error) ==
+        npucompute::PublishResult::AlreadyPublished);
     CHECK(error.empty());
     std::string actual;
     CHECK(ReadFile(temporary.Path() / kFinalFileName, &actual));
@@ -131,8 +131,7 @@ bool TestFailuresDoNotCreateFinalFile()
     CHECK(!temporary.Path().empty());
     std::string error;
     const boost::filesystem::path missingDirectory = temporary.Path() / "missing";
-    CHECK(
-        npu_compute::PublishHardwareInfoJsonl(missingDirectory, "data", &error) == npu_compute::PublishResult::Failed);
+    CHECK(npucompute::PublishHardwareInfoJsonl(missingDirectory, "data", &error) == npucompute::PublishResult::Failed);
     CHECK(!error.empty());
     CHECK(!boost::filesystem::exists(missingDirectory / kFinalFileName));
 
@@ -141,8 +140,8 @@ bool TestFailuresDoNotCreateFinalFile()
     CHECK(boost::filesystem::create_directory(invalidFinalDirectory));
     CHECK(boost::filesystem::create_directory(invalidFinalDirectory / kFinalFileName));
     CHECK(
-        npu_compute::PublishHardwareInfoJsonl(invalidFinalDirectory, "data", &error) ==
-        npu_compute::PublishResult::Failed);
+        npucompute::PublishHardwareInfoJsonl(invalidFinalDirectory, "data", &error) ==
+        npucompute::PublishResult::Failed);
     CHECK(!error.empty());
     CHECK(boost::filesystem::is_directory(invalidFinalDirectory / kFinalFileName));
     CHECK(!HasTemporaryFile(invalidFinalDirectory));
@@ -154,8 +153,8 @@ bool TestFailuresDoNotCreateFinalFile()
         blockedTemporaryDirectory / (std::string(kTemporaryPrefix) + std::to_string(::getpid()));
     CHECK(boost::filesystem::create_directory(blockedTemporaryPath));
     CHECK(
-        npu_compute::PublishHardwareInfoJsonl(blockedTemporaryDirectory, "data", &error) ==
-        npu_compute::PublishResult::Failed);
+        npucompute::PublishHardwareInfoJsonl(blockedTemporaryDirectory, "data", &error) ==
+        npucompute::PublishResult::Failed);
     CHECK(!error.empty());
     CHECK(!boost::filesystem::exists(blockedTemporaryDirectory / kFinalFileName));
     CHECK(boost::filesystem::is_directory(blockedTemporaryPath));
@@ -172,21 +171,21 @@ bool TestTwoProcessesPublishOnlyOneCompleteFile()
     const pid_t first = ::fork();
     CHECK(first >= 0);
     if (first == 0) {
-        const auto result = npu_compute::PublishHardwareInfoJsonl(temporary.Path(), firstContent, nullptr);
+        const auto result = npucompute::PublishHardwareInfoJsonl(temporary.Path(), firstContent, nullptr);
         ::_exit(
-            result == npu_compute::PublishResult::Published        ? 10 :
-            result == npu_compute::PublishResult::AlreadyPublished ? 11 :
-                                                                     12);
+            result == npucompute::PublishResult::Published        ? 10 :
+            result == npucompute::PublishResult::AlreadyPublished ? 11 :
+                                                                    12);
     }
 
     const pid_t second = ::fork();
     CHECK(second >= 0);
     if (second == 0) {
-        const auto result = npu_compute::PublishHardwareInfoJsonl(temporary.Path(), secondContent, nullptr);
+        const auto result = npucompute::PublishHardwareInfoJsonl(temporary.Path(), secondContent, nullptr);
         ::_exit(
-            result == npu_compute::PublishResult::Published        ? 10 :
-            result == npu_compute::PublishResult::AlreadyPublished ? 11 :
-                                                                     12);
+            result == npucompute::PublishResult::Published        ? 10 :
+            result == npucompute::PublishResult::AlreadyPublished ? 11 :
+                                                                    12);
     }
 
     int firstStatus = 0;

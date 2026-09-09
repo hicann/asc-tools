@@ -7,7 +7,7 @@
  * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
  * See LICENSE in the root of the software repository for the full text of the License.
  */
-#include "hardware_info_host.h"
+#include "hardware/hardware_info_host.h"
 
 #include <cstdio>
 #include <boost/filesystem.hpp>
@@ -95,14 +95,14 @@ int main()
     CHECK(WriteFile(cpuRoot / "cpu11/topology/physical_package_id", "invalid\n"));
 
     std::vector<std::string> diagnostics;
-    npu_compute::DiagnosticSink diagnosticSink = [&diagnostics](std::string_view message) {
+    npucompute::DiagnosticSink diagnosticSink = [&diagnostics](std::string_view message) {
         diagnostics.emplace_back(message);
     };
-    npu_compute::HostInfoCollectionOptions options;
+    npucompute::HostInfoCollectionOptions options;
     options.cpuTopologyRoot = cpuRoot;
 
-    npu_compute::HostInfo host;
-    CHECK(npu_compute::CollectHostInfo(outputDirectory, &host, &diagnosticSink, options));
+    npucompute::HostInfo host;
+    CHECK(npucompute::CollectHostInfo(outputDirectory, &host, &diagnosticSink, options));
     CHECK(host.cpuPhysicalCount == 3);
     CHECK(host.cpuLogicalCount > 0);
     CHECK(host.memoryTotalSizeMb > 0);
@@ -111,10 +111,10 @@ int main()
     CHECK(Contains(diagnostics, "cpu11"));
 
     diagnostics.clear();
-    npu_compute::HostInfoCollectionOptions missingCpuOptions;
+    npucompute::HostInfoCollectionOptions missingCpuOptions;
     missingCpuOptions.cpuTopologyRoot = temporary.Path() / "missing-cpu";
     host = {};
-    CHECK(npu_compute::CollectHostInfo(outputDirectory, &host, &diagnosticSink, missingCpuOptions));
+    CHECK(npucompute::CollectHostInfo(outputDirectory, &host, &diagnosticSink, missingCpuOptions));
     CHECK(host.cpuPhysicalCount == 0);
     CHECK(host.cpuLogicalCount > 0);
     CHECK(host.memoryTotalSizeMb > 0);
@@ -123,12 +123,12 @@ int main()
 
     diagnostics.clear();
     host = {};
-    CHECK(npu_compute::CollectHostInfo(temporary.Path() / "missing-output", &host, &diagnosticSink, options));
+    CHECK(npucompute::CollectHostInfo(temporary.Path() / "missing-output", &host, &diagnosticSink, options));
     CHECK(host.diskTotalSizeGb == 0);
     CHECK(Contains(diagnostics, "statvfs"));
 
     diagnostics.clear();
-    CHECK(!npu_compute::CollectHostInfo(outputDirectory, nullptr, &diagnosticSink, options));
+    CHECK(!npucompute::CollectHostInfo(outputDirectory, nullptr, &diagnosticSink, options));
     CHECK(Contains(diagnostics, "result is null"));
     return 0;
 }

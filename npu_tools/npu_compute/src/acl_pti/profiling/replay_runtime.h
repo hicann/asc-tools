@@ -9,17 +9,17 @@
  */
 /**
  * @file replay_runtime.h
- * @brief Owns replay memory and range-profiling state used by runtime API replacements.
+ * @brief Owns replay memory and range-profiling state used by runtime API handlers.
  */
-#ifndef NPU_COMPUTE_ACLPTI_PROFILING_REPLAY_RUNTIME_H_
-#define NPU_COMPUTE_ACLPTI_PROFILING_REPLAY_RUNTIME_H_
+#ifndef NPU_TOOLS_NPU_COMPUTE_SRC_ACL_PTI_PROFILING_REPLAY_RUNTIME_H
+#define NPU_TOOLS_NPU_COMPUTE_SRC_ACL_PTI_PROFILING_REPLAY_RUNTIME_H
 
 #include "range_profiler.h"
 #include "replay_memory.h"
 
 #include <atomic>
 
-namespace npu_compute::aclpti::profiling {
+namespace aclpti::profiling {
 
 class ReplayRuntime {
 public:
@@ -64,6 +64,6 @@ private:
 /// Returns the process-wide replay runtime.
 ReplayRuntime& GetReplayRuntime();
 
-} // namespace npu_compute::aclpti::profiling
+} // namespace aclpti::profiling
 
-#endif // NPU_COMPUTE_ACLPTI_PROFILING_REPLAY_RUNTIME_H_
+#endif // NPU_TOOLS_NPU_COMPUTE_SRC_ACL_PTI_PROFILING_REPLAY_RUNTIME_H

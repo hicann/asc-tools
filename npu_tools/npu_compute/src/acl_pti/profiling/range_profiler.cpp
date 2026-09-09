@@ -20,7 +20,7 @@
 #include <unordered_set>
 #include <utility>
 
-namespace npu_compute::aclpti::profiling {
+namespace aclpti::profiling {
 namespace {
 
 struct SectionDefinition {
@@ -78,7 +78,7 @@ void LogMsprofConfig(const MsprofConfig& config, std::size_t roundId)
 {
     const std::size_t dumpPathLength = ::strnlen(config.dumpPath, sizeof(config.dumpPath));
     const std::size_t sampleConfigLength = ::strnlen(config.sampleConfig, sizeof(config.sampleConfig));
-    npu_compute::detail::DebugLog(
+    npucompute::detail::DebugLog(
         "aclpti",
         "msprof config round=%zu collectionType=%u profSwitch=0x%llx devNums=%u devId[0]=%u "
         "dumpPath=\"%.*s\" dumpPathLength=%zu sampleConfig=\"%.*s\" sampleConfigLength=%zu "
@@ -95,20 +95,20 @@ void LogMsprofConfig(const MsprofConfig& config, std::size_t roundId)
         const MsprofConfigAttr& attr = config.configInfo.attrs[attrIndex];
         if (attr.id == PROF_CONFIG_ATTR_AICORE_METRICS) {
             for (std::size_t slot = 0; slot < COMPUTE_AICORE_METRICS_NUM; ++slot) {
-                npu_compute::detail::DebugLog(
+                npucompute::detail::DebugLog(
                     "aclpti", "msprof config round=%zu attr[%zu] id=%u aicoreMetrics[%zu]=%u", roundId, attrIndex,
                     attr.id, slot, attr.value.aicoreMetrics[slot]);
             }
         } else if (attr.id == PROF_CONFIG_ATTR_INSTR) {
-            npu_compute::detail::DebugLog(
+            npucompute::detail::DebugLog(
                 "aclpti", "msprof config round=%zu attr[%zu] id=%u instrMode=%u", roundId, attrIndex, attr.id,
                 attr.value.instrMode);
         } else if (attr.id == PROF_CONFIG_ATTR_TASK_BLOCK) {
-            npu_compute::detail::DebugLog(
+            npucompute::detail::DebugLog(
                 "aclpti", "msprof config round=%zu attr[%zu] id=%u taskBlockMode=%u", roundId, attrIndex, attr.id,
                 attr.value.taskBlockMode);
         } else {
-            npu_compute::detail::DebugLog(
+            npucompute::detail::DebugLog(
                 "aclpti", "msprof config round=%zu attr[%zu] id=%u", roundId, attrIndex, attr.id);
         }
     }
@@ -117,22 +117,22 @@ void LogMsprofConfig(const MsprofConfig& config, std::size_t roundId)
 aclptiResult RangeProfiler::Initialize()
 {
     const aclptiResult initializeStatus = dataModule_.Initialize();
-    npu_compute::detail::DebugLog(
+    npucompute::detail::DebugLog(
         "aclpti", "RangeProfiler data module init result=%d", static_cast<std::int32_t>(initializeStatus));
     if (initializeStatus != ACLPTI_SUCCESS) {
-        npu_compute::detail::DebugLog("aclpti", "RangeProfiler data module initialization failed");
+        npucompute::detail::DebugLog("aclpti", "RangeProfiler data module initialization failed");
         return initializeStatus;
     }
     MsprofRawDataCallback callback = dataModule_.GetRawDataCallback();
     if (callback == nullptr) {
-        npu_compute::detail::DebugLog("aclpti", "RangeProfiler callback registration missing callback");
+        npucompute::detail::DebugLog("aclpti", "RangeProfiler callback registration missing callback");
         Shutdown();
         return ACLPTI_ERROR_INITIALIZATION_FAILED;
     }
     const int callbackResult = acltoolUploaderInit(callback);
-    npu_compute::detail::DebugLog("aclpti", "RangeProfiler callback registration result=%d", callbackResult);
+    npucompute::detail::DebugLog("aclpti", "RangeProfiler callback registration result=%d", callbackResult);
     if (callbackResult == 0) {
-        npu_compute::detail::DebugLog("aclpti", "RangeProfiler initialized");
+        npucompute::detail::DebugLog("aclpti", "RangeProfiler initialized");
         return ACLPTI_SUCCESS;
     }
     Shutdown();
@@ -142,10 +142,10 @@ aclptiResult RangeProfiler::Initialize()
 aclptiResult RangeProfiler::Shutdown()
 {
     const aclptiResult status = dataModule_.ForceShutdown();
-    npu_compute::detail::DebugLog(
+    npucompute::detail::DebugLog(
         "aclpti", "RangeProfiler data module shutdown result=%d", static_cast<std::int32_t>(status));
     if (status != ACLPTI_SUCCESS) {
-        npu_compute::detail::DebugLog("aclpti", "error operation=data_shutdown status=%d", static_cast<int>(status));
+        npucompute::detail::DebugLog("aclpti", "error operation=data_shutdown status=%d", static_cast<int>(status));
     }
     return status;
 }
@@ -157,7 +157,7 @@ aclptiResult RangeProfiler::SetConfig(const aclptiRangeProfilerSetConfigParams* 
         (params->blockResult != ACLPTI_BLOCK_RESULT_DISABLED && params->blockResult != ACLPTI_BLOCK_RESULT_ALL &&
          params->blockResult != ACLPTI_BLOCK_RESULT_SHRINK) ||
         (params->numSections == 0 && !params->collectPipeline && !params->collectPcSampling)) {
-        npu_compute::detail::DebugLog("aclpti", "profiling configuration rejected: invalid parameters");
+        npucompute::detail::DebugLog("aclpti", "profiling configuration rejected: invalid parameters");
         return ACLPTI_ERROR_INVALID_PARAMETER;
     }
 
@@ -167,25 +167,24 @@ aclptiResult RangeProfiler::SetConfig(const aclptiRangeProfilerSetConfigParams* 
         for (std::size_t index = 0; index < params->numSections; ++index) {
             const char* name = params->sections[index];
             if (name == nullptr) {
-                npu_compute::detail::DebugLog(
-                    "aclpti", "section configuration rejected: null section index=%zu", index);
+                npucompute::detail::DebugLog("aclpti", "section configuration rejected: null section index=%zu", index);
                 return ACLPTI_ERROR_INVALID_PARAMETER;
             }
             const std::size_t length = ::strnlen(name, ACLPTI_MAX_SECTION_NAME_LENGTH + 1);
             if (length == 0 || length > ACLPTI_MAX_SECTION_NAME_LENGTH) {
-                npu_compute::detail::DebugLog(
+                npucompute::detail::DebugLog(
                     "aclpti", "section configuration rejected: invalid section index=%zu", index);
                 return ACLPTI_ERROR_INVALID_PARAMETER;
             }
 
             const SectionDefinition* section = FindSection(std::string_view(name, length));
             if (section == nullptr) {
-                npu_compute::detail::DebugLog(
+                npucompute::detail::DebugLog(
                     "aclpti", "section configuration rejected: unsupported section=%.*s", static_cast<int>(length),
                     name);
                 return ACLPTI_ERROR_NOT_SUPPORTED;
             }
-            npu_compute::detail::DebugLog("aclpti", "selected section name=%.*s", static_cast<int>(length), name);
+            npucompute::detail::DebugLog("aclpti", "selected section name=%.*s", static_cast<int>(length), name);
             for (std::size_t eventIndex = 0; eventIndex < section->eventCount; ++eventIndex) {
                 const uint32_t event = section->events[eventIndex];
                 if (seen.insert(event).second) {
@@ -197,12 +196,12 @@ aclptiResult RangeProfiler::SetConfig(const aclptiRangeProfilerSetConfigParams* 
         blockResult_ = params->blockResult;
         collectPipeline_ = params->collectPipeline;
         collectPcSampling_ = params->collectPcSampling;
-        npu_compute::detail::DebugLog(
+        npucompute::detail::DebugLog(
             "aclpti", "requested sections=%zu events=%zu block=%d pipeline=%d pcSampling=%d", params->numSections,
             pmuEvents_.size(), static_cast<int>(blockResult_), collectPipeline_ ? 1 : 0, collectPcSampling_ ? 1 : 0);
         return ACLPTI_SUCCESS;
     } catch (const std::bad_alloc&) {
-        npu_compute::detail::DebugLog("aclpti", "section configuration failed: out of memory");
+        npucompute::detail::DebugLog("aclpti", "section configuration failed: out of memory");
         return ACLPTI_ERROR_OUT_OF_MEMORY;
     }
 }
@@ -212,26 +211,26 @@ aclptiResult RangeProfiler::PrepareReplayEnvironment(
     aclrtSynchronizeStreamFunc* synchronizeFunction) const
 {
     const aclError deviceResult = aclrtGetDevice(deviceId);
-    npu_compute::detail::DebugLog("aclpti", "get current device result=%d device=%d", deviceResult, *deviceId);
+    npucompute::detail::DebugLog("aclpti", "get current device result=%d device=%d", deviceResult, *deviceId);
     if (deviceResult != ACL_SUCCESS) {
-        npu_compute::detail::DebugLog("aclpti", "error operation=replay_get_device status=%d", deviceResult);
+        npucompute::detail::DebugLog("aclpti", "error operation=replay_get_device status=%d", deviceResult);
         return ACLPTI_ERROR_PROFILING_FAILED;
     }
 
     *synchronizeFunction =
         reinterpret_cast<aclrtSynchronizeStreamFunc>(acltoolGetOriginalRuntimeApi(ACL_RT_API_aclrtSynchronizeStream));
     if (!launchFunction || *synchronizeFunction == nullptr) {
-        npu_compute::detail::DebugLog(
+        npucompute::detail::DebugLog(
             "aclpti", "error operation=original_lookup status=%d launch_available=%d synchronize_available=%d",
             ACLPTI_ERROR_PROFILING_FAILED, static_cast<int>(static_cast<bool>(launchFunction)),
             static_cast<int>(*synchronizeFunction != nullptr));
         return ACLPTI_ERROR_PROFILING_FAILED;
     }
-    npu_compute::detail::DebugLog("aclpti", "synchronize stream before replay");
+    npucompute::detail::DebugLog("aclpti", "synchronize stream before replay");
     const int initialSyncResult = (*synchronizeFunction)(stream);
-    npu_compute::detail::DebugLog("aclpti", "initial replay synchronization result=%d", initialSyncResult);
+    npucompute::detail::DebugLog("aclpti", "initial replay synchronization result=%d", initialSyncResult);
     if (initialSyncResult != ACL_SUCCESS) {
-        npu_compute::detail::DebugLog("aclpti", "error operation=replay_initial_sync status=%d", initialSyncResult);
+        npucompute::detail::DebugLog("aclpti", "error operation=replay_initial_sync status=%d", initialSyncResult);
         return ACLPTI_ERROR_RESULT_UNRELIABLE;
     }
 
@@ -300,11 +299,11 @@ void RangeProfiler::ConfigureProfilingRound(
     config->msprof.configInfo.attrs = config->attrs.data();
     config->msprof.configInfo.numAttrs = attrCount;
 
-    npu_compute::detail::DebugLog(
+    npucompute::detail::DebugLog(
         "aclpti", "prepare replay round=%zu kind=%d pmuCount=%zu attrs=%zu", roundId, static_cast<int>(round.kind),
         round.pmuEventCount, attrCount);
     for (std::size_t index = 0; index < round.pmuEventCount; ++index) {
-        npu_compute::detail::DebugLog(
+        npucompute::detail::DebugLog(
             "aclpti", "replay pmu round=%zu slot=%zu value=%u", roundId, index, config->prepareInfo.pmuEventIds[index]);
     }
 }
@@ -314,31 +313,31 @@ aclptiResult RangeProfiler::ResolveProfilingRoundStatus(
     const data::ReplayResult& replayResult, aclptiResult releaseStatus) const
 {
     if (launchStatus != ACL_SUCCESS) {
-        npu_compute::detail::DebugLog(
+        npucompute::detail::DebugLog(
             "aclpti", "error operation=replay_launch status=%d replay=%llu round=%zu", launchStatus,
             static_cast<unsigned long long>(round), round);
         return ACLPTI_ERROR_RESULT_UNRELIABLE;
     }
     if (synchronizeStatus != ACL_SUCCESS) {
-        npu_compute::detail::DebugLog(
+        npucompute::detail::DebugLog(
             "aclpti", "error operation=replay_sync status=%d replay=%llu round=%zu", synchronizeStatus,
             static_cast<unsigned long long>(round), round);
         return ACLPTI_ERROR_RESULT_UNRELIABLE;
     }
     if (stopStatus != 0) {
-        npu_compute::detail::DebugLog(
+        npucompute::detail::DebugLog(
             "aclpti", "error operation=prof_stop status=%d replay=%llu round=%zu", stopStatus,
             static_cast<unsigned long long>(round), round);
         return ACLPTI_ERROR_PROFILING_FAILED;
     }
     if (replayResult.status != ACLPTI_SUCCESS) {
-        npu_compute::detail::DebugLog(
+        npucompute::detail::DebugLog(
             "aclpti", "error operation=replay_record status=%d replay=%llu round=%zu",
             static_cast<int>(replayResult.status), static_cast<unsigned long long>(round), round);
         return ACLPTI_ERROR_PROFILING_FAILED;
     }
     if (releaseStatus != ACLPTI_SUCCESS) {
-        npu_compute::detail::DebugLog(
+        npucompute::detail::DebugLog(
             "aclpti", "error operation=replay_release status=%d replay=%llu round=%zu", static_cast<int>(releaseStatus),
             static_cast<unsigned long long>(round), round);
         return ACLPTI_ERROR_PROFILING_FAILED;
@@ -353,20 +352,20 @@ aclptiResult RangeProfiler::StartProfilingRound(
 
     const aclptiResult prepareStatus = dataModule_.PrepareReplay(config->prepareInfo);
     if (prepareStatus != ACLPTI_SUCCESS) {
-        npu_compute::detail::DebugLog(
+        npucompute::detail::DebugLog(
             "aclpti", "error operation=replay_prepare status=%d replay=%llu round=%zu", static_cast<int>(prepareStatus),
             static_cast<unsigned long long>(roundId), roundId);
         return ACLPTI_ERROR_RESULT_UNRELIABLE;
     }
 
-    npu_compute::detail::DebugLog(
+    npucompute::detail::DebugLog(
         "aclpti", "start profiling replay round=%zu device=%d pmuCount=%zu", roundId, deviceId, round.pmuEventCount);
     LogMsprofConfig(config->msprof, roundId);
     const int startResult = MsprofStart(kMsprofCollectionType, &config->msprof, sizeof(config->msprof));
     if (startResult != 0) {
         dataModule_.RecordReplayStatus({roundId, ACLPTI_ERROR_RESULT_UNRELIABLE});
         dataModule_.ReleaseReplay(roundId);
-        npu_compute::detail::DebugLog(
+        npucompute::detail::DebugLog(
             "aclpti", "error operation=prof_start status=%d replay=%llu round=%zu", startResult,
             static_cast<unsigned long long>(roundId), roundId);
         return ACLPTI_ERROR_RESULT_UNRELIABLE;
@@ -378,34 +377,34 @@ aclptiResult RangeProfiler::FinishProfilingRound(
     std::size_t round, const ProfilingRoundConfig& config, aclError launchStatus,
     aclrtSynchronizeStreamFunc synchronizeFunction, aclrtStream stream)
 {
-    npu_compute::detail::DebugLog("aclpti", "synchronize replay kernel round=%zu", round);
+    npucompute::detail::DebugLog("aclpti", "synchronize replay kernel round=%zu", round);
     const aclError syncResult = synchronizeFunction(stream);
-    npu_compute::detail::DebugLog("aclpti", "synchronize replay kernel result round=%zu result=%d", round, syncResult);
-    npu_compute::detail::DebugLog("aclpti", "stop profiling replay round=%zu", round);
+    npucompute::detail::DebugLog("aclpti", "synchronize replay kernel result round=%zu result=%d", round, syncResult);
+    npucompute::detail::DebugLog("aclpti", "stop profiling replay round=%zu", round);
     const int stopResult = MsprofStop(kMsprofCollectionType, &config.msprof, sizeof(config.msprof));
-    npu_compute::detail::DebugLog("aclpti", "stop profiling replay result round=%zu result=%d", round, stopResult);
+    npucompute::detail::DebugLog("aclpti", "stop profiling replay result round=%zu result=%d", round, stopResult);
 
     const aclptiResult roundStatus = launchStatus != ACL_SUCCESS || syncResult != ACL_SUCCESS ?
                                          ACLPTI_ERROR_RESULT_UNRELIABLE :
                                      stopResult != 0 ? ACLPTI_ERROR_PROFILING_FAILED :
                                                        ACLPTI_SUCCESS;
     const data::ReplayStopInfo stopInfo{round, roundStatus};
-    npu_compute::detail::DebugLog("aclpti", "record replay status round=%zu", round);
+    npucompute::detail::DebugLog("aclpti", "record replay status round=%zu", round);
     const data::ReplayResult replayResult = dataModule_.RecordReplayStatus(stopInfo);
-    npu_compute::detail::DebugLog(
+    npucompute::detail::DebugLog(
         "aclpti", "record replay status result round=%zu result=%d copiedRecords=%llu copiedBytes=%llu", round,
         static_cast<int>(replayResult.status),
         static_cast<unsigned long long>(replayResult.callbackStats.copiedRecordCount),
         static_cast<unsigned long long>(replayResult.callbackStats.copiedBytes));
-    npu_compute::detail::DebugLog("aclpti", "release replay round=%zu", round);
+    npucompute::detail::DebugLog("aclpti", "release replay round=%zu", round);
     const aclptiResult releaseStatus = dataModule_.ReleaseReplay(round);
-    npu_compute::detail::DebugLog(
+    npucompute::detail::DebugLog(
         "aclpti", "release replay result round=%zu result=%d", round, static_cast<int>(releaseStatus));
 
     const aclptiResult status =
         ResolveProfilingRoundStatus(round, launchStatus, syncResult, stopResult, replayResult, releaseStatus);
     if (status == ACLPTI_SUCCESS) {
-        npu_compute::detail::DebugLog("aclpti", "replay round=%zu complete", round);
+        npucompute::detail::DebugLog("aclpti", "replay round=%zu complete", round);
     }
     return status;
 }
@@ -422,12 +421,12 @@ aclptiResult RangeProfiler::ReplayKernel(
         }
 
         const std::vector<ReplayRound> rounds = BuildReplayRounds();
-        npu_compute::detail::DebugLog("aclpti", "replay rounds=%zu events=%zu", rounds.size(), pmuEvents_.size());
+        npucompute::detail::DebugLog("aclpti", "replay rounds=%zu events=%zu", rounds.size(), pmuEvents_.size());
 
         for (std::size_t round = 0; round < rounds.size(); ++round) {
             status = replayMemory.Restore();
             if (status != ACLPTI_SUCCESS) {
-                npu_compute::detail::DebugLog(
+                npucompute::detail::DebugLog(
                     "aclpti", "error operation=replay_restore_result status=%d round=%zu", static_cast<int>(status),
                     round);
                 return status;
@@ -438,9 +437,9 @@ aclptiResult RangeProfiler::ReplayKernel(
                 return status;
             }
 
-            npu_compute::detail::DebugLog("aclpti", "launch replay kernel round=%zu", round);
+            npucompute::detail::DebugLog("aclpti", "launch replay kernel round=%zu", round);
             const aclError launchStatus = launchFunction();
-            npu_compute::detail::DebugLog(
+            npucompute::detail::DebugLog(
                 "aclpti", "launch replay kernel result round=%zu result=%d", round, launchStatus);
             status = FinishProfilingRound(round, config, launchStatus, synchronizeFunction, stream);
             if (status != ACLPTI_SUCCESS) {
@@ -450,10 +449,10 @@ aclptiResult RangeProfiler::ReplayKernel(
 
         return ACLPTI_SUCCESS;
     } catch (const std::bad_alloc&) {
-        npu_compute::detail::DebugLog(
+        npucompute::detail::DebugLog(
             "aclpti", "error operation=replay_metadata_alloc status=%d", ACLPTI_ERROR_OUT_OF_MEMORY);
         return ACLPTI_ERROR_OUT_OF_MEMORY;
     }
 }
 
-} // namespace npu_compute::aclpti::profiling
+} // namespace aclpti::profiling

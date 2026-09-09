@@ -7,8 +7,8 @@
  * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
  * See LICENSE in the root of the software repository for the full text of the License.
  */
-#ifndef ACLPTI_ACTIVITY_H_
-#define ACLPTI_ACTIVITY_H_
+#ifndef NPU_TOOLS_NPU_COMPUTE_INCLUDE_ACLPTI_ACLPTI_ACTIVITY_H
+#define NPU_TOOLS_NPU_COMPUTE_INCLUDE_ACLPTI_ACLPTI_ACTIVITY_H
 
 #include "aclpti/aclpti_types.h"
 
@@ -37,4 +37,4 @@ aclptiActivityDisable(aclptiSubscribeHandle subscriber, aclptiActivityKind kind,
 }
 #endif
 
-#endif // ACLPTI_ACTIVITY_H_
+#endif // NPU_TOOLS_NPU_COMPUTE_INCLUDE_ACLPTI_ACLPTI_ACTIVITY_H

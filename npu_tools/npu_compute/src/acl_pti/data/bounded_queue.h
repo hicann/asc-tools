@@ -7,8 +7,8 @@
  * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
  * See LICENSE in the root of the software repository for the full text of the License.
  */
-#ifndef NPU_COMPUTE_SRC_ACL_PTI_DATA_BOUNDED_QUEUE_H_
-#define NPU_COMPUTE_SRC_ACL_PTI_DATA_BOUNDED_QUEUE_H_
+#ifndef NPU_TOOLS_NPU_COMPUTE_SRC_ACL_PTI_DATA_BOUNDED_QUEUE_H
+#define NPU_TOOLS_NPU_COMPUTE_SRC_ACL_PTI_DATA_BOUNDED_QUEUE_H
 
 #include <condition_variable>
 #include <cstddef>
@@ -16,7 +16,7 @@
 #include <mutex>
 #include <utility>
 
-namespace npu_compute::aclpti::data::detail {
+namespace aclpti::data::detail {
 
 template <typename T>
 class BoundedQueue {
@@ -76,6 +76,6 @@ private:
     bool closed_ = false;
 };
 
-} // namespace npu_compute::aclpti::data::detail
+} // namespace aclpti::data::detail
 
-#endif // NPU_COMPUTE_SRC_ACL_PTI_DATA_BOUNDED_QUEUE_H_
+#endif // NPU_TOOLS_NPU_COMPUTE_SRC_ACL_PTI_DATA_BOUNDED_QUEUE_H

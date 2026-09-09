@@ -22,7 +22,7 @@ add_library(acl_pti SHARED
   profiling/range_profiler.cpp
   profiling/replay_memory.cpp
   profiling/replay_runtime.cpp
-  replacement/runtime_api_replacements.cpp
+  handler/runtime_api_handlers.cpp
 )
 target_include_directories(acl_pti PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}/..

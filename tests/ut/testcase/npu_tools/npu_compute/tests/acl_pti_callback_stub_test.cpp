@@ -49,7 +49,7 @@ void CaptureCallback(
 
 int main()
 {
-    npu_compute::test::ResetAclPtiCallbackStub();
+    npucompute::test::ResetAclPtiCallbackStub();
 
     CallbackState state;
     aclptiSubscribeHandle subscriber = nullptr;
@@ -57,29 +57,29 @@ int main()
     CHECK(subscriber != nullptr);
 
     int functionParams = 7;
-    CHECK(!npu_compute::test::InvokeAclPtiCallback(
+    CHECK(!npucompute::test::InvokeAclPtiCallback(
         ACLPTI_CB_DOMAIN_RUNTIME_API, ACLPTI_RUNTIME_CBID_aclrtMalloc, ACLPTI_API_ENTER, ACL_SUCCESS, &functionParams));
     CHECK(state.events.empty());
 
     CHECK(
         aclptiEnableCallback(true, subscriber, ACLPTI_CB_DOMAIN_RUNTIME_API, ACLPTI_RUNTIME_CBID_aclrtMalloc) ==
         ACLPTI_SUCCESS);
-    CHECK(npu_compute::test::AclPtiEnableCount() == 1);
+    CHECK(npucompute::test::AclPtiEnableCount() == 1);
 
-    const std::vector<npu_compute::test::AclPtiEnableCall> enableCalls = npu_compute::test::CapturedAclPtiEnableCalls();
+    const std::vector<npucompute::test::AclPtiEnableCall> enableCalls = npucompute::test::CapturedAclPtiEnableCalls();
     CHECK(enableCalls.size() == 1);
-    CHECK(enableCalls[0].sequence > npu_compute::test::AclPtiSubscribeSequence());
+    CHECK(enableCalls[0].sequence > npucompute::test::AclPtiSubscribeSequence());
     CHECK(enableCalls[0].enable);
     CHECK(enableCalls[0].subscriber == subscriber);
     CHECK(enableCalls[0].domain == ACLPTI_CB_DOMAIN_RUNTIME_API);
     CHECK(enableCalls[0].cbid == ACLPTI_RUNTIME_CBID_aclrtMalloc);
 
-    CHECK(npu_compute::test::InvokeAclPtiCallback(
+    CHECK(npucompute::test::InvokeAclPtiCallback(
         ACLPTI_CB_DOMAIN_RUNTIME_API, ACLPTI_RUNTIME_CBID_aclrtMalloc, ACLPTI_API_ENTER, ACL_SUCCESS, &functionParams));
-    CHECK(npu_compute::test::InvokeAclPtiCallback(
+    CHECK(npucompute::test::InvokeAclPtiCallback(
         ACLPTI_CB_DOMAIN_RUNTIME_API, ACLPTI_RUNTIME_CBID_aclrtMalloc, ACLPTI_API_EXIT, ACL_ERROR_INVALID_PARAM,
         &functionParams));
-    CHECK(npu_compute::test::InvokeAclPtiCallback(
+    CHECK(npucompute::test::InvokeAclPtiCallback(
         ACLPTI_CB_DOMAIN_RUNTIME_API, ACLPTI_RUNTIME_CBID_aclrtMalloc, ACLPTI_API_EXIT, ACL_SUCCESS, &functionParams));
     CHECK(state.events.size() == 3);
     CHECK(state.events[0].domain == ACLPTI_CB_DOMAIN_RUNTIME_API);
@@ -91,14 +91,14 @@ int main()
     CHECK(state.events[2].site == ACLPTI_API_EXIT);
     CHECK(state.events[2].retval == ACL_SUCCESS);
 
-    CHECK(!npu_compute::test::InvokeAclPtiCallback(
+    CHECK(!npucompute::test::InvokeAclPtiCallback(
         ACLPTI_CB_DOMAIN_RUNTIME_API, ACLPTI_RUNTIME_CBID_aclrtSetDevice, ACLPTI_API_EXIT, ACL_SUCCESS, nullptr));
     CHECK(state.events.size() == 3);
 
     CHECK(
         aclptiEnableCallback(false, subscriber, ACLPTI_CB_DOMAIN_RUNTIME_API, ACLPTI_RUNTIME_CBID_aclrtMalloc) ==
         ACLPTI_SUCCESS);
-    CHECK(!npu_compute::test::InvokeAclPtiCallback(
+    CHECK(!npucompute::test::InvokeAclPtiCallback(
         ACLPTI_CB_DOMAIN_RUNTIME_API, ACLPTI_RUNTIME_CBID_aclrtMalloc, ACLPTI_API_EXIT, ACL_SUCCESS, nullptr));
     CHECK(state.events.size() == 3);
 

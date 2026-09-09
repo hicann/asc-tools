@@ -7,7 +7,7 @@
  * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
  * See LICENSE in the root of the software repository for the full text of the License.
  */
-#include "rep_decoder.h"
+#include "report/rep_decoder.h"
 
 #include <algorithm>
 #include <cstdint>
@@ -16,7 +16,7 @@
 #include <string_view>
 #include <vector>
 
-#include "rep_encoder.h"
+#include "report/rep_encoder.h"
 
 namespace {
 
@@ -35,11 +35,11 @@ int Check(bool condition, const char* expression, int line)
             return 1;                                   \
     } while (false)
 
-using npu_compute::compute_launcher::DecodedRep;
-using npu_compute::compute_launcher::DecodeRep;
-using npu_compute::compute_launcher::EncodeRep;
-using npu_compute::compute_launcher::NpuRepFileType;
-using npu_compute::compute_launcher::RepEntry;
+using npucompute::cli::DecodedRep;
+using npucompute::cli::DecodeRep;
+using npucompute::cli::EncodeRep;
+using npucompute::cli::NpuRepFileType;
+using npucompute::cli::RepEntry;
 
 std::vector<uint8_t> Bytes(std::string_view value) { return {value.begin(), value.end()}; }
 

@@ -60,20 +60,16 @@ def test_npu_compute_build_and_log_names_are_consistent():
         encoding="utf-8"
     )
     library_cmake = (
-        REPO_ROOT / "npu_tools/npu_compute" / "src" / "npu_compute" / "CMakeLists.txt"
+        REPO_ROOT / "npu_tools/npu_compute" / "src" / "compute" / "CMakeLists.txt"
     ).read_text(encoding="utf-8")
     cli_cmake = (
-        REPO_ROOT
-        / "npu_tools/npu_compute"
-        / "src"
-        / "compute_launcher"
-        / "CMakeLists.txt"
+        REPO_ROOT / "npu_tools/npu_compute" / "src" / "cli" / "CMakeLists.txt"
     ).read_text(encoding="utf-8")
     cli_main = (
-        REPO_ROOT / "npu_tools/npu_compute" / "src" / "compute_launcher" / "main.cpp"
+        REPO_ROOT / "npu_tools/npu_compute" / "src" / "cli" / "main.cpp"
     ).read_text(encoding="utf-8")
     library_source = (
-        REPO_ROOT / "npu_tools/npu_compute" / "src" / "npu_compute" / "npu_compute.cpp"
+        REPO_ROOT / "npu_tools/npu_compute" / "src" / "compute" / "npu_compute.cpp"
     ).read_text(encoding="utf-8")
 
     assert "project(npu_compute LANGUAGES CXX)" in product_cmake
@@ -196,17 +192,21 @@ def test_cmake_targets_use_component_prefixes_and_merge_data_module():
     assert "NPU_COMPUTE_BUILD_DEMO" not in product_cmake
     assert "add_subdirectory(demo)" not in product_cmake
 
-    cmake_files = list(product_root.rglob("CMakeLists.txt"))
+    # Standalone smoke examples define their own demo targets outside the product build.
+    cmake_files = [product_root / "CMakeLists.txt"] + sorted(
+        (product_root / "src").rglob("CMakeLists.txt")
+    )
     cmake_content = "\n".join(path.read_text(encoding="utf-8") for path in cmake_files)
     targets = TARGET_DECLARATION.findall(cmake_content)
     local_targets = [target for target in targets if "::" not in target]
 
     assert local_targets
-    assert all(
-        target.startswith(("acl_", "acl_pti_", "npu_compute"))
-        or target in {"acl_pti", "npu_compute"}
+    invalid_targets = [
+        target
         for target in local_targets
-    )
+        if not (target.startswith(("acl_", "npu_compute_")) or target == "npu_compute")
+    ]
+    assert not invalid_targets, f"Unexpected product target names: {invalid_targets}"
     assert "asc_cc_" not in cmake_content
 
     acl_pti_cmake = (product_root / "src" / "acl_pti" / "CMakeLists.txt").read_text(
@@ -220,22 +220,23 @@ def test_cmake_targets_use_component_prefixes_and_merge_data_module():
     assert "OUTPUT_NAME pti_data_module_impl" not in cmake_content
 
 
-def test_runtime_replacements_use_specific_flat_names():
+def test_runtime_handlers_use_specific_flat_names():
     acl_pti_source = REPO_ROOT / "npu_tools/npu_compute" / "src" / "acl_pti"
-    replacement_source = acl_pti_source / "replacement"
-    header = replacement_source / "runtime_api_replacements.h"
-    source = replacement_source / "runtime_api_replacements.cpp"
+    handler_source = acl_pti_source / "handler"
+    header = handler_source / "runtime_api_handlers.h"
+    source = handler_source / "runtime_api_handlers.cpp"
     replay_runtime_header = acl_pti_source / "profiling" / "replay_runtime.h"
 
     assert not (acl_pti_source / "runtime_replacement").exists()
+    assert not (acl_pti_source / "replacement").exists()
     assert header.is_file()
     assert source.is_file()
     assert replay_runtime_header.is_file()
 
     header_content = header.read_text(encoding="utf-8")
-    assert "namespace npu_compute::aclpti::replacement" in header_content
-    assert "class RuntimeApiReplacements" not in header_content
-    assert "bool RegisterRuntimeApiReplacements();" in header_content
+    assert "namespace aclpti::handler" in header_content
+    assert "class RuntimeApiHandlers" not in header_content
+    assert "bool RegisterRuntimeApiHandlers();" in header_content
     assert "ReplayMemory*" not in header_content
     assert "RangeProfiler*" not in header_content
 

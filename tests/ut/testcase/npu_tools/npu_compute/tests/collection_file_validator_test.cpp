@@ -7,7 +7,7 @@
  * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
  * See LICENSE in the root of the software repository for the full text of the License.
  */
-#include "collection_file_validator.h"
+#include "report/collection_file_validator.h"
 
 #include <cstdio>
 #include <boost/filesystem.hpp>
@@ -36,9 +36,9 @@ int Check(bool condition, const char* expression, int line)
             return 1;                                   \
     } while (false)
 
-using npu_compute::compute_launcher::NpuRepFileType;
-using npu_compute::compute_launcher::ResolveCollectionFileType;
-using npu_compute::compute_launcher::ValidateCollectionFile;
+using npucompute::cli::NpuRepFileType;
+using npucompute::cli::ResolveCollectionFileType;
+using npucompute::cli::ValidateCollectionFile;
 
 class TempDirectory {
 public:

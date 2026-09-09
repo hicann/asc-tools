@@ -10,13 +10,13 @@
 #ifndef NPU_COMPUTE_TESTS_REP_TEST_DECODER_H_
 #define NPU_COMPUTE_TESTS_REP_TEST_DECODER_H_
 
-#include "rep_format.h"
+#include "report/rep_format.h"
 
 #include <cstdint>
 #include <string>
 #include <vector>
 
-namespace npu_compute::compute_launcher::test {
+namespace npucompute::cli::test {
 
 struct DecodedRepEntry {
     std::string file_name;
@@ -38,6 +38,6 @@ struct DecodedRep {
 
 bool DecodeRep(const std::vector<uint8_t>& encoded, DecodedRep* decoded, std::string* error);
 
-} // namespace npu_compute::compute_launcher::test
+} // namespace npucompute::cli::test
 
 #endif // NPU_COMPUTE_TESTS_REP_TEST_DECODER_H_

@@ -15,11 +15,11 @@
 
 aclptiResult aclptiRegisterProfilingDataCallback(aclptiProfilingDataCallback callback)
 {
-    return npu_compute::aclpti::data::RegisterProfilingDataCallback(std::move(callback));
+    return aclpti::data::RegisterProfilingDataCallback(std::move(callback));
 }
 
 extern "C" aclptiResult aclptiRegisterDataModuleShutdownCallback(
     aclptiDataModuleShutdownCallback callback, void* userData)
 {
-    return npu_compute::aclpti::data::RegisterShutdownCallback(callback, userData);
+    return aclpti::data::RegisterShutdownCallback(callback, userData);
 }

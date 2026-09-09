@@ -10,13 +10,13 @@
 #include "initialization.h"
 
 #include "acl_pti/profiling/replay_runtime.h"
-#include "acl_pti/replacement/runtime_api_replacements.h"
+#include "acl_pti/handler/runtime_api_handlers.h"
 #include "common/debug_log.h"
 #include "injection/injection_hook.h"
 
 #include <mutex>
 
-namespace npu_compute::aclpti::initialization {
+namespace aclpti::initialization {
 
 aclptiResult InitializeDependencies()
 {
@@ -25,29 +25,29 @@ aclptiResult InitializeDependencies()
 
     std::lock_guard<std::mutex> lock(initializationMutex);
     if (initialized) {
-        npu_compute::detail::DebugLog("aclpti", "dependencies already initialized");
+        npucompute::detail::DebugLog("aclpti", "dependencies already initialized");
         return ACLPTI_SUCCESS;
     }
 
-    npu_compute::detail::DebugLog("aclpti", "initialize dependencies");
+    npucompute::detail::DebugLog("aclpti", "initialize dependencies");
     const int hookResult = acltoolHookInit();
-    npu_compute::detail::DebugLog("aclpti", "hook install result=%d", hookResult);
+    npucompute::detail::DebugLog("aclpti", "hook install result=%d", hookResult);
     if (hookResult != 0) {
         return ACLPTI_ERROR_INITIALIZATION_FAILED;
     }
 
     const aclptiResult replayResult = profiling::GetReplayRuntime().Initialize();
     if (replayResult != ACLPTI_SUCCESS) {
-        npu_compute::detail::DebugLog("aclpti", "replay runtime initialization failed");
+        npucompute::detail::DebugLog("aclpti", "replay runtime initialization failed");
         return replayResult;
     }
-    if (!replacement::RegisterRuntimeApiReplacements()) {
-        npu_compute::detail::DebugLog("aclpti", "runtime replacement registration failed");
+    if (!handler::RegisterRuntimeApiHandlers()) {
+        npucompute::detail::DebugLog("aclpti", "runtime handler registration failed");
         return ACLPTI_ERROR_INITIALIZATION_FAILED;
     }
     initialized = true;
-    npu_compute::detail::DebugLog("aclpti", "dependencies initialized");
+    npucompute::detail::DebugLog("aclpti", "dependencies initialized");
     return ACLPTI_SUCCESS;
 }
 
-} // namespace npu_compute::aclpti::initialization
+} // namespace aclpti::initialization

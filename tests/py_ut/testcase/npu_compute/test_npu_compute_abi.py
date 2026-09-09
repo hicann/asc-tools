@@ -21,8 +21,7 @@ ACLPTI_RUNTIME_API_HEADER = (
 ACLPTI_RUNTIME_API_USERS = (
     REPO_ROOT / "npu_tools/npu_compute/src/acl_pti/profiling/replay_memory.cpp",
     REPO_ROOT / "npu_tools/npu_compute/src/acl_pti/profiling/range_profiler.cpp",
-    REPO_ROOT
-    / "npu_tools/npu_compute/src/acl_pti/replacement/runtime_api_replacements.cpp",
+    REPO_ROOT / "npu_tools/npu_compute/src/acl_pti/handler/runtime_api_handlers.cpp",
 )
 ACLPTI_SOURCE = REPO_ROOT / "npu_tools/npu_compute/src/acl_pti"
 ACLPTI_MANAGER_HEADER = ACLPTI_SOURCE / "manager.h"
@@ -35,8 +34,8 @@ ACLPTI_PROFILING_API_SOURCE = ACLPTI_SOURCE / "profiling/api.cpp"
 REPLAY_RUNTIME_HEADER = ACLPTI_SOURCE / "profiling/replay_runtime.h"
 PRODUCT_CMAKE = REPO_ROOT / "npu_tools/npu_compute/CMakeLists.txt"
 COMPILE_SCRIPT = REPO_ROOT / "npu_tools/npu_compute/compile.sh"
-LIBRARY_SOURCE = REPO_ROOT / "npu_tools/npu_compute/src/npu_compute/npu_compute.cpp"
-LIBRARY_CMAKE = REPO_ROOT / "npu_tools/npu_compute/src/npu_compute/CMakeLists.txt"
+LIBRARY_SOURCE = REPO_ROOT / "npu_tools/npu_compute/src/compute/npu_compute.cpp"
+LIBRARY_CMAKE = REPO_ROOT / "npu_tools/npu_compute/src/compute/CMakeLists.txt"
 INJECTION_CMAKE = REPO_ROOT / "npu_tools/injection/CMakeLists.txt"
 RANGE_PROFILER_SOURCE = (
     REPO_ROOT / "npu_tools/npu_compute/src/acl_pti/profiling/range_profiler.cpp"
@@ -47,24 +46,23 @@ REPLAY_MEMORY_HEADER = (
 REPLAY_MEMORY_SOURCE = (
     REPO_ROOT / "npu_tools/npu_compute/src/acl_pti/profiling/replay_memory.cpp"
 )
-RUNTIME_REPLACEMENTS_SOURCE = (
-    REPO_ROOT
-    / "npu_tools/npu_compute/src/acl_pti/replacement/runtime_api_replacements.cpp"
+RUNTIME_HANDLERS_SOURCE = (
+    REPO_ROOT / "npu_tools/npu_compute/src/acl_pti/handler/runtime_api_handlers.cpp"
 )
 SECTION_CONFIG_HEADER = (
-    REPO_ROOT / "npu_tools/npu_compute/src/npu_compute/section_config.h"
+    REPO_ROOT / "npu_tools/npu_compute/src/compute/runtime/section_config.h"
 )
 SECTION_CONFIG_SOURCE = (
-    REPO_ROOT / "npu_tools/npu_compute/src/npu_compute/section_config.cpp"
+    REPO_ROOT / "npu_tools/npu_compute/src/compute/runtime/section_config.cpp"
 )
-VERSION_SCRIPT = REPO_ROOT / "npu_tools/npu_compute/src/npu_compute/libnpu_compute.map"
-CLI_CMAKE = REPO_ROOT / "npu_tools/npu_compute/src/compute_launcher/CMakeLists.txt"
-CLI_LAUNCHER = REPO_ROOT / "npu_tools/npu_compute/src/compute_launcher/launcher.cpp"
+VERSION_SCRIPT = REPO_ROOT / "npu_tools/npu_compute/src/compute/libnpu_compute.map"
+CLI_CMAKE = REPO_ROOT / "npu_tools/npu_compute/src/cli/CMakeLists.txt"
+CLI_LAUNCHER = REPO_ROOT / "npu_tools/npu_compute/src/cli/launch/launcher.cpp"
 INJECTION_PATH_HEADER = (
-    REPO_ROOT / "npu_tools/npu_compute/src/compute_launcher/injection_path.h"
+    REPO_ROOT / "npu_tools/npu_compute/src/cli/launch/injection_path.h"
 )
 INJECTION_PATH_SOURCE = (
-    REPO_ROOT / "npu_tools/npu_compute/src/compute_launcher/injection_path.cpp"
+    REPO_ROOT / "npu_tools/npu_compute/src/cli/launch/injection_path.cpp"
 )
 
 
@@ -72,9 +70,9 @@ def test_injection_library_declares_lifecycle_exports():
     header = PUBLIC_HEADER.read_text(encoding="utf-8")
     source = LIBRARY_SOURCE.read_text(encoding="utf-8")
 
-    assert header.count('extern "C"') == 2
-    assert 'extern "C" NPU_COMPUTE_EXPORT int acltoolInitialize();' in header
-    assert 'extern "C" NPU_COMPUTE_EXPORT int acltoolShutdown();' in header
+    assert '#ifdef __cplusplus\nextern "C" {' in header
+    assert "NPU_COMPUTE_EXPORT int acltoolInitialize();" in header
+    assert "NPU_COMPUTE_EXPORT int acltoolShutdown();" in header
 
     obsolete_exports = (
         "NpuComputeInit",
@@ -99,10 +97,10 @@ def test_aclpti_uses_original_runtime_c_api_directly():
 
 
 def test_range_profiler_resolves_the_device_it_uses():
-    replacements = RUNTIME_REPLACEMENTS_SOURCE.read_text(encoding="utf-8")
+    handlers = RUNTIME_HANDLERS_SOURCE.read_text(encoding="utf-8")
     range_profiler = RANGE_PROFILER_SOURCE.read_text(encoding="utf-8")
 
-    assert "aclrtGetDevice" not in replacements
+    assert "aclrtGetDevice" not in handlers
     assert "aclrtGetDevice" in range_profiler
 
 
@@ -132,7 +130,7 @@ def test_aclpti_uses_a_focused_initialization_module():
     replay_runtime_header = REPLAY_RUNTIME_HEADER.read_text(encoding="utf-8")
     cmake = ACLPTI_CMAKE.read_text(encoding="utf-8")
 
-    assert "namespace npu_compute::aclpti::initialization" in initialization_header
+    assert "namespace aclpti::initialization" in initialization_header
     assert "aclptiResult InitializeDependencies();" in initialization_header
     assert "static std::mutex initializationMutex" in initialization_source
     assert "static bool initialized = false" in initialization_source
@@ -156,7 +154,7 @@ def test_replay_runtime_owns_the_profiling_health_policy():
     source = (ACLPTI_SOURCE / "profiling/replay_runtime.cpp").read_text(
         encoding="utf-8"
     )
-    replacements = RUNTIME_REPLACEMENTS_SOURCE.read_text(encoding="utf-8")
+    handlers = RUNTIME_HANDLERS_SOURCE.read_text(encoding="utf-8")
     public_interface = header.split("public:", 1)[1].split("private:", 1)[0]
     private_implementation = header.split("private:", 1)[1]
 
@@ -164,9 +162,9 @@ def test_replay_runtime_owns_the_profiling_health_policy():
     assert "StopProfiling" not in public_interface
     assert "ProfilingAvailable" in private_implementation
     assert "StopProfiling" in private_implementation
-    assert ".ProfilingAvailable()" not in replacements
-    assert ".StopProfiling()" not in replacements
-    assert "MapProfilingResult(profiling::ReplayRuntime&" not in replacements
+    assert ".ProfilingAvailable()" not in handlers
+    assert ".StopProfiling()" not in handlers
+    assert "MapProfilingResult(profiling::ReplayRuntime&" not in handlers
     assert "ProfilingAvailable()" in source
     assert "StopProfiling()" in source
 
@@ -175,7 +173,7 @@ def test_unavailable_replay_runtime_reports_profiling_failure_to_acl_callers():
     source = (ACLPTI_SOURCE / "profiling/replay_runtime.cpp").read_text(
         encoding="utf-8"
     )
-    replacements = RUNTIME_REPLACEMENTS_SOURCE.read_text(encoding="utf-8")
+    handlers = RUNTIME_HANDLERS_SOURCE.read_text(encoding="utf-8")
 
     for method, next_method in (
         ("MirrorMalloc", "MirrorFree"),
@@ -193,7 +191,7 @@ def test_unavailable_replay_runtime_reports_profiling_failure_to_acl_callers():
 
     assert (
         "status == ACLPTI_ERROR_RESULT_UNRELIABLE ? ACL_ERROR_INTERNAL_ERROR : ACL_ERROR_PROFILING_FAILURE"
-        in replacements
+        in handlers
     )
 
 
@@ -216,7 +214,7 @@ def test_cli_resolves_injection_path_without_linking_injection_library():
     assert INJECTION_PATH_SOURCE.is_file()
     assert "injection_path.cpp" in cmake
     assert "PRIVATE npu_compute_headers npu_compute" not in cmake
-    assert 'include "injection_path.h"' in launcher
+    assert 'include "launch/injection_path.h"' in launcher
     assert "ResolveInjectionLibraryPath" in launcher
     assert "NpuComputeInjectionLibraryPath" not in launcher
 

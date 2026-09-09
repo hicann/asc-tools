@@ -31,7 +31,7 @@ std::size_t g_subscribeCount = 0;
 aclptiCallbackFunc g_callback = nullptr;
 void* g_userData = nullptr;
 aclptiSubscribeHandle g_capturedSubscriber = nullptr;
-std::vector<npu_compute::test::AclPtiEnableCall> g_enableCalls;
+std::vector<npucompute::test::AclPtiEnableCall> g_enableCalls;
 std::unordered_map<aclptiCallbackId, aclptiResult> g_enableResults;
 std::unordered_set<uint64_t> g_enabledCallbacks;
 std::size_t g_callSequence = 0;
@@ -50,7 +50,7 @@ uint64_t CallbackKey(aclptiCallbackDomain domain, aclptiCallbackId cbid)
 
 } // namespace
 
-namespace npu_compute::test {
+namespace npucompute::test {
 
 void ResetAclPtiCallbackStub()
 {
@@ -197,14 +197,14 @@ bool InvokeAclPtiRuntimeReady()
         ACLPTI_CB_DOMAIN_RUNTIME_API, ACLPTI_RUNTIME_CBID_aclrtLaunchKernel, ACLPTI_API_EXIT, ACL_SUCCESS, nullptr);
 }
 
-} // namespace npu_compute::test
+} // namespace npucompute::test
 
 extern "C" int AclPtiCallbackStubEmitRuntimeEvent(uint32_t cbid, uint32_t site, std::int32_t retval)
 {
     if (cbid >= ACLPTI_RUNTIME_CBID_SIZE || site > ACLPTI_API_EXIT) {
         return 0;
     }
-    const bool dispatched = npu_compute::test::InvokeAclPtiCallback(
+    const bool dispatched = npucompute::test::InvokeAclPtiCallback(
         ACLPTI_CB_DOMAIN_RUNTIME_API, cbid, static_cast<aclptiCallbackSite>(site), static_cast<aclError>(retval),
         nullptr);
     std::fprintf(

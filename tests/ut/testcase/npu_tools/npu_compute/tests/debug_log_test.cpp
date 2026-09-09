@@ -66,29 +66,29 @@ bool CaptureStderr(Function function, std::string* output)
 int main()
 {
     unsetenv("NPU_COMPUTE_DEBUG");
-    CHECK(!npu_compute::detail::DebugEnabled());
+    CHECK(!npucompute::detail::DebugEnabled());
     std::string output;
-    CHECK(CaptureStderr([] { npu_compute::detail::DebugLog("debug_log_test", "disabled"); }, &output));
+    CHECK(CaptureStderr([] { npucompute::detail::DebugLog("debug_log_test", "disabled"); }, &output));
     CHECK(output.empty());
 
     CHECK(setenv("NPU_COMPUTE_DEBUG", "0", 1) == 0);
-    CHECK(!npu_compute::detail::DebugEnabled());
+    CHECK(!npucompute::detail::DebugEnabled());
     output.clear();
-    CHECK(CaptureStderr([] { npu_compute::detail::DebugLog("debug_log_test", "disabled"); }, &output));
+    CHECK(CaptureStderr([] { npucompute::detail::DebugLog("debug_log_test", "disabled"); }, &output));
     CHECK(output.empty());
 
     CHECK(setenv("NPU_COMPUTE_DEBUG", "1", 1) == 0);
-    CHECK(npu_compute::detail::DebugEnabled());
+    CHECK(npucompute::detail::DebugEnabled());
     output.clear();
-    CHECK(CaptureStderr([] { npu_compute::detail::DebugLog("debug_log_test", "enabled value=%d", 1); }, &output));
+    CHECK(CaptureStderr([] { npucompute::detail::DebugLog("debug_log_test", "enabled value=%d", 1); }, &output));
     CHECK(output == "[debug_log_test] enabled value=1\n");
 
     output.clear();
-    CHECK(CaptureStderr([] { npu_compute::detail::DebugLog(nullptr, "value=%d", 2); }, &output));
+    CHECK(CaptureStderr([] { npucompute::detail::DebugLog(nullptr, "value=%d", 2); }, &output));
     CHECK(output == "[unknown] value=2\n");
 
     output.clear();
-    CHECK(CaptureStderr([] { npu_compute::detail::DebugLog("debug_log_test", nullptr); }, &output));
+    CHECK(CaptureStderr([] { npucompute::detail::DebugLog("debug_log_test", nullptr); }, &output));
     CHECK(output == "[debug_log_test] \n");
 
     return 0;
