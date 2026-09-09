@@ -9,7 +9,7 @@
  */
 
 #include "internal/aclsan_device_data_log.h"
-#include "internal/aclsan_log.h"
+#include "plog_sink.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -58,12 +58,12 @@ const char* BlockTypeName(uint32_t blockType) noexcept
 
 void LogParamField(const aclsan::SetPaddingParamField& value) noexcept
 {
-    ASC_SAN_DEBUG("[param] type=SetPaddingParamField value=0x%llx", static_cast<unsigned long long>(value.value));
+    ACL_SAN_DEBUG("[param] type=SetPaddingParamField value=0x%llx", static_cast<unsigned long long>(value.value));
 }
 
 void LogParamField(const aclsan::NdDmaPadCountParamField& value) noexcept
 {
-    ASC_SAN_DEBUG(
+    ACL_SAN_DEBUG(
         "[param] type=NdDmaPadCountParamField left=[%u,%u,%u,%u] right=[%u,%u,%u,%u]", value.leftPaddingCounts[0],
         value.leftPaddingCounts[1], value.leftPaddingCounts[2], value.leftPaddingCounts[3], value.rightPaddingCounts[0],
         value.rightPaddingCounts[1], value.rightPaddingCounts[2], value.rightPaddingCounts[3]);
@@ -71,40 +71,40 @@ void LogParamField(const aclsan::NdDmaPadCountParamField& value) noexcept
 
 void LogParamField(const aclsan::Mte2SourceParamField& value) noexcept
 {
-    ASC_SAN_DEBUG("[param] type=Mte2SourceParamField srcStride=%lld", static_cast<long long>(value.srcStride));
+    ACL_SAN_DEBUG("[param] type=Mte2SourceParamField srcStride=%lld", static_cast<long long>(value.srcStride));
 }
 
 void LogParamField(const aclsan::NdDmaLoopStrideParamField& value) noexcept
 {
-    ASC_SAN_DEBUG(
+    ACL_SAN_DEBUG(
         "[param] type=NdDmaLoopStrideParamField loopIndex=%u srcStride=%llu", value.loopIndex,
         static_cast<unsigned long long>(value.srcStride));
 }
 
 void LogParamField(const aclsan::Mte2NzParamField& value) noexcept
 {
-    ASC_SAN_DEBUG(
+    ACL_SAN_DEBUG(
         "[param] type=Mte2NzParamField matrixNum=%u loop2DstStride=%u loop3DstStride=%u loop4DstStride=%u",
         value.matrixNum, value.loop2DstStride, value.loop3DstStride, value.loop4DstStride);
 }
 
 void LogParamField(const aclsan::Loop3ParamField& value) noexcept
 {
-    ASC_SAN_DEBUG(
+    ACL_SAN_DEBUG(
         "[param] type=Loop3ParamField loopCount=%u srcStride=%u dstStride=%u", value.loopCount, value.srcStride,
         value.dstStride);
 }
 
 void LogParamField(const aclsan::DmaLoopSizeParamField& value) noexcept
 {
-    ASC_SAN_DEBUG(
+    ACL_SAN_DEBUG(
         "[param] type=DmaLoopSizeParamField direction=%u loop1Size=%u loop2Size=%llu",
         static_cast<unsigned int>(value.direction), value.loop1Size, static_cast<unsigned long long>(value.loop2Size));
 }
 
 void LogParamField(const aclsan::DmaLoopStrideParamField& value) noexcept
 {
-    ASC_SAN_DEBUG(
+    ACL_SAN_DEBUG(
         "[param] type=DmaLoopStrideParamField direction=%u loopIndex=%u srcStride=%llu dstStride=%llu",
         static_cast<unsigned int>(value.direction), value.loopIndex, static_cast<unsigned long long>(value.srcStride),
         static_cast<unsigned long long>(value.dstStride));
@@ -112,7 +112,7 @@ void LogParamField(const aclsan::DmaLoopStrideParamField& value) noexcept
 
 void LogParamField(const aclsan::CopyGmToUbufAlignV2ParamField& value) noexcept
 {
-    ASC_SAN_DEBUG(
+    ACL_SAN_DEBUG(
         "[param] type=CopyGmToUbufAlignV2ParamField instrId=%u dstAddr=0x%llx srcAddr=0x%llx "
         "sid=%u burstNum=%u burstLen=%u leftPaddingCount=%u rightPaddingCount=%u dataSelectBit=%u l2CacheControl=%u "
         "burstSrcStride=%llu burstDstStride=%u",
@@ -124,7 +124,7 @@ void LogParamField(const aclsan::CopyGmToUbufAlignV2ParamField& value) noexcept
 
 void LogParamField(const aclsan::CopyGmToCbufAlignV2ParamField& value) noexcept
 {
-    ASC_SAN_DEBUG(
+    ACL_SAN_DEBUG(
         "[param] type=CopyGmToCbufAlignV2ParamField instrId=%u dstAddr=0x%llx srcAddr=0x%llx "
         "sid=%u burstNum=%u burstLen=%u leftPaddingCount=%u rightPaddingCount=%u dataSelectBit=%u l2CacheControl=%u "
         "burstSrcStride=%llu burstDstStride=%u",
@@ -136,7 +136,7 @@ void LogParamField(const aclsan::CopyGmToCbufAlignV2ParamField& value) noexcept
 
 void LogParamField(const aclsan::CopyUbufToGmAlignV2ParamField& value) noexcept
 {
-    ASC_SAN_DEBUG(
+    ACL_SAN_DEBUG(
         "[param] type=CopyUbufToGmAlignV2ParamField instrId=%u dstAddr=0x%llx srcAddr=0x%llx "
         "sid=%u burstNum=%u burstLen=%u l2CacheControl=%u dstStride=%llu srcStride=%u",
         value.instrId, static_cast<unsigned long long>(value.dstAddr), static_cast<unsigned long long>(value.srcAddr),
@@ -146,7 +146,7 @@ void LogParamField(const aclsan::CopyUbufToGmAlignV2ParamField& value) noexcept
 
 void LogParamField(const aclsan::CopyGmToCbufV2ParamField& value) noexcept
 {
-    ASC_SAN_DEBUG(
+    ACL_SAN_DEBUG(
         "[param] type=CopyGmToCbufV2ParamField instrId=%u dstAddr=0x%llx srcAddr=0x%llx sid=%u "
         "burstNum=%u burstLen=%u padFunctionMode=%u l2CacheControl=%u srcStride=%llu dstStride=%u",
         value.instrId, static_cast<unsigned long long>(value.dstAddr), static_cast<unsigned long long>(value.srcAddr),
@@ -156,7 +156,7 @@ void LogParamField(const aclsan::CopyGmToCbufV2ParamField& value) noexcept
 
 void LogParamField(const aclsan::LoadGmToCbuf2DV2ParamField& value) noexcept
 {
-    ASC_SAN_DEBUG(
+    ACL_SAN_DEBUG(
         "[param] type=LoadGmToCbuf2DV2ParamField instrId=%u dstAddr=0x%llx srcAddr=0x%llx "
         "mStartPosition=%u kStartPosition=%u dstStride=%u mStep=%u kStep=%u sid=%u decompMode=%u "
         "l2CacheControl=%u",
@@ -167,7 +167,7 @@ void LogParamField(const aclsan::LoadGmToCbuf2DV2ParamField& value) noexcept
 
 void LogParamField(const aclsan::NdDmaParamField& value) noexcept
 {
-    ASC_SAN_DEBUG(
+    ACL_SAN_DEBUG(
         "[param] type=NdDmaParamField instrId=%u dataBits=%u dstAddr=0x%llx srcAddr=0x%llx sid=%u "
         "loopSizes=[%u,%u,%u,%u,%u] loop0LeftPaddingCount=%u loop0RightPaddingCount=%u "
         "paddingMode=%u l2CacheControl=%u",
@@ -179,7 +179,7 @@ void LogParamField(const aclsan::NdDmaParamField& value) noexcept
 
 void LogParamField(const aclsan::FixL0cToOutParamField& value) noexcept
 {
-    ASC_SAN_DEBUG(
+    ACL_SAN_DEBUG(
         "[param] type=FixL0cToOutParamField instrId=%u dataBits=%u dstAddr=0x%llx srcAddr=0x%llx sid=%u "
         "nSize=%u mSize=%u loopDstStride=%u loopSrtStride=%u l2CacheControl=%u clipReluPre=%u unitFlag=%u "
         "quantPre=%u reluPre=%u splitEnable=%u nz2ndEnable=%u quantPost=%u reluPost=%u clipReluPost=%u "
@@ -195,7 +195,7 @@ void LogParamField(const aclsan::FixL0cToOutParamField& value) noexcept
 
 void LogParamField(const aclsan::LocalMemoryTransferParamField& value) noexcept
 {
-    ASC_SAN_DEBUG(
+    ACL_SAN_DEBUG(
         "[param] type=LocalMemoryTransferParamField instrId=%u dstAddr=0x%llx srcAddr=0x%llx "
         "config0=0x%llx config1=0x%llx kind=%u localOnly=1",
         value.instrId, static_cast<unsigned long long>(value.dstAddr), static_cast<unsigned long long>(value.srcAddr),
@@ -205,14 +205,14 @@ void LogParamField(const aclsan::LocalMemoryTransferParamField& value) noexcept
 
 void LogParamField(const aclsan::FlagParamField& value) noexcept
 {
-    ASC_SAN_DEBUG(
+    ACL_SAN_DEBUG(
         "[param] type=FlagParamField instrId=%u srcPipe=%u dstPipe=%u eventId=%llu", value.instrId, value.srcPipe,
         value.dstPipe, static_cast<unsigned long long>(value.eventId));
 }
 
 void LogParamField(const aclsan::SyncBufParamField& value) noexcept
 {
-    ASC_SAN_DEBUG(
+    ACL_SAN_DEBUG(
         "[param] type=SyncBufParamField instrId=%u pipe=%u bufId=0x%llx mode=%u", value.instrId, value.pipe,
         static_cast<unsigned long long>(value.bufId), static_cast<uint32_t>(value.mode));
 }
@@ -220,7 +220,7 @@ void LogParamField(const aclsan::SyncBufParamField& value) noexcept
 void LogMemoryAccessData(const AclsanDeviceMemoryAccessData& value, uint32_t index) noexcept
 {
     const uint64_t rangeBytes = value.layoutKind == ACLSAN_MEM_LAYOUT_RANGE ? value.layout.range.bytes : 0;
-    ASC_SAN_DEBUG(
+    ACL_SAN_DEBUG(
         "[cbdata] type=AclsanDeviceMemoryAccessData index=%u address=0x%llx memorySpace=%u accessMode=%u "
         "accessIndex=%u accessCount=%u dataBits=%u bytes=%llu layoutKind=%u pc=0x%llx siteId=%u "
         "deviceId=%u phyCoreId=%u blockId=%u blockType=%s instrExecId=%llu launchId=%llu serialNo=%llu pipeline=%u",
@@ -233,9 +233,9 @@ void LogMemoryAccessData(const AclsanDeviceMemoryAccessData& value, uint32_t ind
         value.header.pipeline);
 
     if (value.layoutKind == ACLSAN_MEM_LAYOUT_RANGE) {
-        ASC_SAN_DEBUG("[cbdata] layout=range bytes=%llu", static_cast<unsigned long long>(value.layout.range.bytes));
+        ACL_SAN_DEBUG("[cbdata] layout=range bytes=%llu", static_cast<unsigned long long>(value.layout.range.bytes));
     } else if (value.layoutKind == ACLSAN_MEM_LAYOUT_BLOCK_REPEAT) {
-        ASC_SAN_DEBUG(
+        ACL_SAN_DEBUG(
             "[cbdata] layout=block_repeat blockNum=%u blockSize=%u blockStride=%lld repeatTimes=%u "
             "repeatStride=%lld",
             value.layout.blockRepeat.blockNum, value.layout.blockRepeat.blockSize,
@@ -253,7 +253,7 @@ void LogCallbackData(const DeviceMemoryAccessDataList& memory) noexcept
 
 void LogCallbackData(const AclsanDeviceSyncData& sync) noexcept
 {
-    ASC_SAN_DEBUG(
+    ACL_SAN_DEBUG(
         "[cbdata] deviceId=%u phyCoreId=%u blockId=%u blockType=%s  instrExecId=%llu launchId=%llu  "
         "type=AclsanDeviceSyncData pc=0x%llx serialNo=%llu syncKind=%u action=%u scope=%u srcPipe=%u "
         "dstPipe=%u mode=%u objectId=%llu",
@@ -269,7 +269,7 @@ void LogCallbackData(const AclsanDeviceSyncData& sync) noexcept
 void LogRawRecord(const ParsedTraceRecord& parsed) noexcept
 {
     const AclsanRawTraceRecord& record = parsed.record;
-    ASC_SAN_DEBUG(
+    ACL_SAN_DEBUG(
         "[raw] deviceId=%u phyCoreId=%u blockId=%u blockType=%s  instrExecId=%llu launchId=%llu  "
         "type=AclsanRawTraceRecord pc=0x%llx instrId=%u siteId=%u category=%u pipeline=%u "
         "args=[0x%llx,0x%llx,0x%llx,0x%llx,0x%llx]",

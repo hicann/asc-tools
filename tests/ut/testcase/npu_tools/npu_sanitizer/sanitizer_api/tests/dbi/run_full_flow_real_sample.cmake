@@ -22,7 +22,6 @@ if(ARGS_ARRAY)
 endif()
 execute_process(
   COMMAND "${CMAKE_COMMAND}" -E env
-    "NPU_CHECK_TRACE_RECORDS_PER_BLOCK=16"
     "${SAMPLE}" "${KERNEL}" "${MODE}" "${DEVICE_ID}" "${launch_api}"
   RESULT_VARIABLE sample_result
   OUTPUT_VARIABLE sample_stdout

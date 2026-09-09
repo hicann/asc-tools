@@ -742,6 +742,69 @@ void TestLaunchCallbackData()
     assert(g_functionAttributeQueryCalls == 0);
 }
 
+aclError FakeGetParamCount(const void*, size_t* count)
+{
+    *count = 2;
+    return ACL_SUCCESS;
+}
+
+aclError FakeGetParamInfo(const void*, size_t index, size_t* offset, size_t* size)
+{
+    assert(index == 1);
+    *offset = 24;
+    *size = sizeof(void*);
+    return ACL_SUCCESS;
+}
+
+void TestArgsArrayUsesCallerPointerStorage()
+{
+    void* deviceBuffer = Address(0x1000);
+    uint64_t value = 42;
+    void* originalArgs[] = {&value};
+    std::vector<void*> launchArgs;
+    assert(BuildInstrumentedArgsArray(Address(0x12345678), deviceBuffer, 24, originalArgs, launchArgs) == ACL_SUCCESS);
+    assert(launchArgs.size() == 2 && launchArgs[0] == &value);
+    assert(originalArgs[0] == &value && value == 42);
+    assert(launchArgs[1] == &deviceBuffer);
+    deviceBuffer = Address(0x2000);
+    void* hiddenPointer = nullptr;
+    std::memcpy(&hiddenPointer, launchArgs[1], sizeof(hiddenPointer));
+    assert(hiddenPointer == deviceBuffer);
+    assert(
+        BuildInstrumentedArgsArray(Address(0x12345678), deviceBuffer, 16, originalArgs, launchArgs) ==
+        ACL_ERROR_FEATURE_UNSUPPORTED);
+}
+
+void TestTraceArgumentModes()
+{
+    ResetCapture();
+    const auto binary = Address(0x88770001);
+    const auto function = Address(0x12345679);
+    const std::array<uint8_t, 8> image{0x7f, 'E', 'L', 'F', 1, 2, 3, 4};
+    aclsan::RecordTraceBinaryLoadFromData(binary, true, 24, image.data(), image.size());
+    aclsan::RecordTraceBinaryFunctionLookup(binary, function, "argument_modes");
+    aclsan::PreparedTraceLaunch prepared;
+    assert(
+        aclsan::PrepareTraceLaunch(
+            function, 1, nullptr, 0, nullptr, 0, aclsan::TraceArgumentMode::kArgsArray, prepared) == ACL_SUCCESS);
+    assert(prepared.instrumented && prepared.traceArgumentOffset == 24);
+    assert(prepared.arguments.empty() && prepared.placeholders.empty());
+    assert(prepared.deviceBuffer != nullptr);
+    aclsan::CompleteTraceLaunch(std::move(prepared), function, nullptr, ACL_ERROR_FAILURE);
+    assert(g_lastFreedAddress == prepared.deviceBuffer);
+
+    // 零参数 HostArgs 仍需生成带对齐填充及隐藏指针的连续参数区。
+    assert(
+        aclsan::PrepareTraceLaunch(
+            function, 1, nullptr, 0, nullptr, 0, aclsan::TraceArgumentMode::kHostArgs, prepared) == ACL_SUCCESS);
+    assert(prepared.arguments.size() == 24 + sizeof(void*));
+    void* hiddenPointer = nullptr;
+    std::memcpy(&hiddenPointer, prepared.arguments.data() + 24, sizeof(hiddenPointer));
+    assert(hiddenPointer == prepared.deviceBuffer);
+    aclsan::CompleteTraceLaunch(std::move(prepared), function, nullptr, ACL_ERROR_FAILURE);
+    aclsan::RecordTraceBinaryUnload(binary);
+}
+
 } // namespace
 
 namespace aclsan {
@@ -782,6 +845,9 @@ namespace {
 aclError FakeAclrtMemcpy(void* destination, size_t capacity, const void* source, size_t bytes, aclrtMemcpyKind)
 {
     assert(bytes <= capacity);
+    if (destination == Address(0x12340000U)) {
+        return ACL_SUCCESS;
+    }
     if (bytes != 0) {
         std::memcpy(destination, source, bytes);
     }
@@ -820,6 +886,10 @@ extern "C" void* acltoolGetOriginalRuntimeApi(aclrtApiId apiId)
             return reinterpret_cast<void*>(reinterpret_cast<uintptr_t>(&FakeAclrtGetSocName));
         case ACL_RT_API_aclrtGetDeviceInfo:
             return reinterpret_cast<void*>(reinterpret_cast<uintptr_t>(&FakeAclrtGetDeviceInfo));
+        case ACL_RT_API_aclrtFunctionGetParamCount:
+            return reinterpret_cast<void*>(reinterpret_cast<uintptr_t>(&FakeGetParamCount));
+        case ACL_RT_API_aclrtFunctionGetParamInfo:
+            return reinterpret_cast<void*>(reinterpret_cast<uintptr_t>(&FakeGetParamInfo));
         default:
             return nullptr;
     }
@@ -873,6 +943,8 @@ int main()
     TestGmToL1OuterLoopStateReachesMemoryCallback();
     TestFixpipeLoop3StateReachesMemoryCallback();
     TestLaunchCallbackData();
+    TestArgsArrayUsesCallerPointerStorage();
+    TestTraceArgumentModes();
     TestDisabledCallbackIsNotInvoked();
     return 0;
 }

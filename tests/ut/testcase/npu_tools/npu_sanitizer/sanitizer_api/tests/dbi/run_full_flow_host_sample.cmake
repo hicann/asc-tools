@@ -30,7 +30,6 @@ file(WRITE "${TEST_ROOT}/commands.log" "")
 execute_process(
   COMMAND "${CMAKE_COMMAND}" -E env
     "DBI_FAKE_LOG=${TEST_ROOT}/commands.log"
-    "NPU_CHECK_TRACE_RECORDS_PER_BLOCK=2"
     "${SAMPLE}"
   RESULT_VARIABLE sample_result
   OUTPUT_VARIABLE sample_stdout

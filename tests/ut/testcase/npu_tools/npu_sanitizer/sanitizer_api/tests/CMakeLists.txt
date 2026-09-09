@@ -2,6 +2,10 @@ set(SANITIZER_API_SOURCE_DIR "${CMAKE_SOURCE_DIR}/npu_tools/npu_sanitizer/saniti
 set(SANITIZER_API_TEST_DIR "${CMAKE_CURRENT_SOURCE_DIR}")
 
 if(ENABLE_TEST)
+  add_test(NAME aclsan.public_headers
+    COMMAND bash "${SANITIZER_API_TEST_DIR}/check_public_headers.sh"
+      "${SANITIZER_API_SOURCE_DIR}/include"
+      "${CMAKE_C_COMPILER}" "${CMAKE_CXX_COMPILER}")
   add_executable(aclsan_kernel_param_metadata_test dbi/kernel_param_metadata_test.cpp)
   target_compile_features(aclsan_kernel_param_metadata_test PRIVATE cxx_std_17)
   target_compile_options(aclsan_kernel_param_metadata_test PRIVATE -Wall -Wextra -Werror -UNDEBUG)
@@ -68,7 +72,7 @@ if(ENABLE_TEST)
   target_compile_options(aclsan_log_test PRIVATE -Wall -Wextra -Werror)
   target_link_libraries(aclsan_log_test PRIVATE plog_test_library)
   target_include_directories(aclsan_log_test PRIVATE ${SANITIZER_API_SOURCE_DIR}/include)
-  target_link_libraries(aclsan_log_test PRIVATE npu_sanitizer_plog)
+  target_link_libraries(aclsan_log_test PRIVATE npu_sanitizer_plog acl_rt_headers)
   add_test(NAME aclsan_log_test COMMAND aclsan_log_test)
 
   add_executable(aclsan_callback_invoke_test

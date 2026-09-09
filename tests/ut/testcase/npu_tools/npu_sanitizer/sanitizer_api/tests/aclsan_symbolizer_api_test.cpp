@@ -66,16 +66,19 @@ int main()
     assert(result->frames[0].line == 0);
 
     const fs::path work = fs::temp_directory_path() / "aclsan-symbolizer-api-test";
-    const fs::path symbolizer = work / "fake-symbolizer";
+    const fs::path symbolizer = work / "tools/mssanitizer/bin/llvm-symbolizer";
     fs::remove_all(work);
-    fs::create_directories(work);
+    fs::create_directories(symbolizer.parent_path());
     {
         std::ofstream script(symbolizer.string());
         script << "#!/bin/sh\n"
                << "printf 'CopyIn\\n/src/kernel.asc:46:5\\nAddKernel\\n/src/kernel.asc:58:1\\n'\n";
     }
     fs::permissions(symbolizer, fs::perms::owner_read | fs::perms::owner_write | fs::perms::owner_exe);
-    assert(setenv("ACLSAN_SYMBOLIZER", symbolizer.c_str(), 1) == 0);
+    const char* ascendHome = std::getenv("ASCEND_HOME_PATH");
+    const bool hadAscendHome = ascendHome != nullptr;
+    const std::string savedAscendHome = hadAscendHome ? ascendHome : "";
+    assert(setenv("ASCEND_HOME_PATH", work.c_str(), 1) == 0);
 
     assert(RuntimeStubSetOriginFunction("aclrtBinaryLoadFromData", &OriginalBinaryLoad) == ACL_SUCCESS);
     assert(RuntimeStubSetOriginFunction("aclrtResetDevice", &OriginalResetDevice) == ACL_SUCCESS);
@@ -103,6 +106,10 @@ int main()
     assert(aclsanGetDeviceCallStack(0x170, result.get()) == ACLSAN_STATUS_ERROR_INVALID_STATE);
     assert(aclsanUnsubscribe(subscriber) == ACLSAN_STATUS_SUCCESS);
     fs::remove_all(work);
-    unsetenv("ACLSAN_SYMBOLIZER");
+    if (hadAscendHome) {
+        assert(setenv("ASCEND_HOME_PATH", savedAscendHome.c_str(), 1) == 0);
+    } else {
+        assert(unsetenv("ASCEND_HOME_PATH") == 0);
+    }
     return 0;
 }

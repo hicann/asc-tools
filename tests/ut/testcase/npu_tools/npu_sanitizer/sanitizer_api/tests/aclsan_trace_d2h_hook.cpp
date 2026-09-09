@@ -368,6 +368,9 @@ aclError OriginalArrayLaunch(
     OriginalGetParamCount(function, &count);
     uint64_t packed[4]{};
     for (size_t index = 0; index + 1 < count; ++index) {
+        if (args[index] == nullptr) {
+            return 75;
+        }
         std::memcpy(&packed[index], args[index], sizeof(uint64_t));
         if (packed[index] != (count == 2 ? 0x1234 : index + 1)) {
             return ACL_ERROR_INVALID_PARAM;
@@ -379,7 +382,6 @@ aclError OriginalArrayLaunch(
 
 int main()
 {
-    setenv("NPU_CHECK_TRACE_RECORDS_PER_BLOCK", "2", 1);
     CHECK(RuntimeStubSetSocName("Ascend950PR_9589") == ACL_SUCCESS);
     CHECK(RuntimeStubSetOriginFunction("aclrtMalloc", &OriginalMalloc) == ACL_SUCCESS);
     CHECK(RuntimeStubSetOriginFunction("aclrtFree", &OriginalFree) == ACL_SUCCESS);
@@ -606,12 +608,10 @@ int main()
     g_badHiddenOffset = false;
     CHECK(aclrtLaunchKernelWithArgsArray(oneArgumentFunction, 2, stream1, nullptr, nullptr) == ACL_ERROR_INVALID_PARAM);
     void* nullArray[] = {nullptr};
-    CHECK(
-        aclrtLaunchKernelWithArgsArray(oneArgumentFunction, 2, stream1, nullptr, nullArray) == ACL_ERROR_INVALID_PARAM);
-    CHECK(g_arrayOriginalCalls == 4);
+    CHECK(aclrtLaunchKernelWithArgsArray(oneArgumentFunction, 2, stream1, nullptr, nullArray) == 75);
+    CHECK(g_arrayOriginalCalls == 5);
     CHECK(g_mallocCalls == g_freeCalls);
 
     CHECK(aclsanUnsubscribe(subscriber) == ACLSAN_STATUS_SUCCESS);
-    unsetenv("NPU_CHECK_TRACE_RECORDS_PER_BLOCK");
     return 0;
 }

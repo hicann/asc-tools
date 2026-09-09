@@ -20,7 +20,9 @@
 #define ACLSAN_FUNCTION_NAME_MAX_BYTES 4096U
 #define ACLSAN_FILE_NAME_MAX_BYTES 4096U
 
+#ifdef __cplusplus
 extern "C" {
+#endif
 
 typedef uint32_t AclsanStatus;
 typedef enum AclsanStatusValue {
@@ -134,6 +136,8 @@ ACLSAN_EXPORT AclsanStatus aclsanGetCallbackState(
 // 返回 ACLSAN_STATUS_ERROR_MAX_LIMIT_REACHED 时，result 中保留截断后的有效帧并设置 TRUNCATED 标志。
 ACLSAN_EXPORT AclsanStatus aclsanGetDeviceCallStack(uint64_t pc, AclsanDeviceCallStack* result);
 // TODO: 多.o场景的接口后面再加一个
+#ifdef __cplusplus
 }
+#endif
 
 #endif

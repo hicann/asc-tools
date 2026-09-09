@@ -9,9 +9,9 @@
  */
 
 #include "aclsan/aclsan_api.h"
-#include "internal/aclsan_log.h"
 #include "plog_sink.h"
 #include "plog_test_library.h"
+#include "acl/acl_base.h"
 
 #include <array>
 #include <cassert>
@@ -46,6 +46,33 @@ AclsanStatus ValidatePointer(const void* value)
 {
     ACLSAN_CHECK_NULLPTR("TestApi", value);
     return ACLSAN_STATUS_SUCCESS;
+}
+
+aclError CheckAclResult(aclError status, int& calls, int& messages, bool& continued)
+{
+    ACLSAN_RETURN_IF_ACL_ERROR((++calls, status), (++messages, "Parameter query 100% failed"));
+    continued = true;
+    return ACL_SUCCESS;
+}
+
+void TestAclErrorReturn()
+{
+    int calls = 0;
+    int messages = 0;
+    bool continued = false;
+    const int32_t initialRecords = g_plogRecordCount;
+    assert(CheckAclResult(ACL_SUCCESS, calls, messages, continued) == ACL_SUCCESS);
+    assert(calls == 1 && messages == 0 && continued);
+    assert(g_plogRecordCount == initialRecords);
+
+    continued = false;
+    assert(CheckAclResult(ACL_ERROR_INVALID_PARAM, calls, messages, continued) == ACL_ERROR_INVALID_PARAM);
+    assert(calls == 2 && messages == 1 && !continued);
+    assert(g_plogRecordCount == initialRecords + 1);
+    assert(g_plogLevel == DLOG_ERROR);
+    const std::string expected = "Parameter query 100% failed: result=" + std::to_string(ACL_ERROR_INVALID_PARAM);
+    assert(std::strstr(g_plogMessage, expected.c_str()) != nullptr);
+    assert(std::strstr(g_plogMessage, " CheckAclResult:") != nullptr);
 }
 
 std::string CaptureNullPointerLog()
@@ -84,9 +111,10 @@ int main()
     assert(std::strstr(g_plogMessage, "TestApi: value is nullptr") != nullptr);
     assert(std::strstr(g_plogMessage, " ValidatePointer: TestApi: value is nullptr") != nullptr);
     const std::string longMessage = std::string(4096, 'x') + "\napi-error-tail";
-    ASC_SAN_ERROR("%s", longMessage.c_str());
+    ACL_SAN_ERROR("%s", longMessage.c_str());
     assert(g_plogRecordCount > 2);
     assert(std::strstr(g_plogMessage, "api-error-tail") != nullptr);
+    TestAclErrorReturn();
     plog_test::ResetApi();
     return 0;
 }

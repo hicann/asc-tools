@@ -10,7 +10,7 @@
 
 #include "internal/aclsan_device_data.h"
 #include "internal/aclsan_device_data_log.h"
-#include "internal/aclsan_log.h"
+#include "plog_sink.h"
 #include "internal/aclsan_memory_cbdata.h"
 
 #include <cstdint>
@@ -75,7 +75,7 @@ public:
                 if constexpr (IsMemoryAccessParamField<ParamField>()) {
                     return MakeDeviceMemoryAccessCallbackData(parsed, pipeline, value, registerState);
                 } else if constexpr (std::is_same_v<ParamField, aclsan::LocalMemoryTransferParamField>) {
-                    ASC_SAN_DEBUG(
+                    ACL_SAN_DEBUG(
                         "[cbdata] no GM access for local-only memory instruction instrId=%u kind=%u", value.instrId,
                         static_cast<unsigned int>(value.kind));
                     return DeviceCallbackData{DeviceMemoryAccessDataList{}};
@@ -130,7 +130,7 @@ private:
         if (result.status == MemoryCbdataStatus::SUCCESS || result.status == MemoryCbdataStatus::NO_ACCESS) {
             return DeviceCallbackData{std::move(result.data)};
         }
-        ASC_SAN_ERROR(
+        ACL_SAN_ERROR(
             "acl_san trace: cannot resolve GM memory access status=%s instrId=%llu pc=0x%llx blockType=%u "
             "blockId=%u requiredSetInstrId=%llu",
             MemoryCbdataStatusName(result.status), static_cast<unsigned long long>(parsed.record.instrId),
@@ -185,7 +185,7 @@ std::optional<DeviceCallbackData> TranslateDecodedTraceToCallbackData(
     LogRawRecord(parsed);
     // 判断是否找到对应的paramfield  raw data -> param field
     if (std::holds_alternative<std::monostate>(decoded.params)) {
-        ASC_SAN_DEBUG("[param] rawData -> paramField translation failed instrId=%u", parsed.record.instrId);
+        ACL_SAN_DEBUG("[param] rawData -> paramField translation failed instrId=%u", parsed.record.instrId);
         return std::nullopt;
     }
     LogParamField(decoded.params);
@@ -193,7 +193,7 @@ std::optional<DeviceCallbackData> TranslateDecodedTraceToCallbackData(
     std::optional<DeviceCallbackData> cbdata = Translator::TranslateToCallbackData(parsed, decoded, registerState);
     // 判断 param field -> cbdata 的转换是否成功
     if (cbdata == std::nullopt) {
-        ASC_SAN_DEBUG("[cbdata] paramField -> cbdata translation failed instrId=%u", parsed.record.instrId);
+        ACL_SAN_DEBUG("[cbdata] paramField -> cbdata translation failed instrId=%u", parsed.record.instrId);
         return std::nullopt;
     }
     LogCallbackData(*cbdata);

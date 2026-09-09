@@ -29,9 +29,6 @@ namespace fs = boost::filesystem;
 
 std::string SymbolizerPath()
 {
-    if (const char* configured = std::getenv("ACLSAN_SYMBOLIZER"); configured != nullptr && configured[0] != '\0') {
-        return configured;
-    }
     if (const char* ascendHome = std::getenv("ASCEND_HOME_PATH"); ascendHome != nullptr && ascendHome[0] != '\0') {
         const fs::path root(ascendHome);
         const std::vector<fs::path> candidates{

@@ -12,7 +12,7 @@
 #define ACLSAN_RUNTIME_HOOK_H
 
 #include "aclsan/aclsan_api.h"
-#include "internal/aclsan_log.h"
+#include "plog_sink.h"
 #include "injection/injection_hook.h"
 
 #include <cstdlib>
@@ -22,7 +22,7 @@ namespace aclsan {
 
 [[noreturn]] inline void AbortHookFailure(const char* hookName, const char* stage, const char* reason) noexcept
 {
-    ASC_SAN_ERROR("[FATAL] npu-check internal failure: hook=%s stage=%s reason=%s", hookName, stage, reason);
+    ACL_SAN_ERROR("[FATAL] npu-check internal failure: hook=%s stage=%s reason=%s", hookName, stage, reason);
     std::abort();
 }
 

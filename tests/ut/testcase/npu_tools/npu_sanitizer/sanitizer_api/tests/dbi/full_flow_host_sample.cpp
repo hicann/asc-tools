@@ -153,7 +153,7 @@ aclError OriginalLaunch(
     auto* header = reinterpret_cast<aclsan::AclsanTraceBufferHeader*>(bytes);
     size_t sliceBytes = 0;
     if (header->magic != aclsan::ASCSAN_TRACE_BUFFER_MAGIC || header->blockCount != blocks ||
-        header->recordsPerCore != 2 || header->physicalCoreCount != 108U ||
+        header->recordsPerCore != aclsan::ASCSAN_TRACE_RECORDS_PER_CORE_DEFAULT || header->physicalCoreCount != 108U ||
         !aclsan::TraceSliceBytes(header->recordsPerCore, &sliceBytes)) {
         return ACL_ERROR_INVALID_PARAM;
     }
@@ -242,9 +242,6 @@ struct Cleanup {
         }
         if (subscriber != nullptr) {
             (void)aclsanUnsubscribe(subscriber);
-        }
-        for (const char* name : {"NPU_CHECK_TRACE_RECORDS_PER_BLOCK"}) {
-            unsetenv(name);
         }
     }
 };

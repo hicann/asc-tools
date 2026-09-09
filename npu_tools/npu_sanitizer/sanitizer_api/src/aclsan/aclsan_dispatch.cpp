@@ -9,7 +9,7 @@
  */
 
 #include "internal/aclsan_dispatch.h"
-#include "internal/aclsan_log.h"
+#include "plog_sink.h"
 
 #include <cstdint>
 
@@ -25,7 +25,7 @@ void AclsanCallbackDispatcher::Dispatch(
     AclsanCallbackDomain domain, AclsanCallbackId cbid, const void* cbdata, const char* eventName) noexcept
 {
     if (!InvokeCallback(domain, cbid, cbdata)) {
-        ASC_SAN_ERROR(
+        ACL_SAN_ERROR(
             "InvokeCallback in AclsanCallbackDispatcher Dispatch failed: event=%s domain=%u id=%u", eventName,
             static_cast<uint32_t>(domain), static_cast<uint32_t>(cbid));
     }
@@ -34,7 +34,7 @@ void AclsanCallbackDispatcher::Dispatch(
 void AclsanCallbackDispatcher::DispatchResource(AclsanCallbackId cbid, const AclsanResourceData& cbdata) noexcept
 {
     if (!IsSupportedResourceCallback(cbid)) {
-        ASC_SAN_ERROR(
+        ACL_SAN_ERROR(
             "AclsanCallbackDispatcher DispatchResource failed due to invalid cbid=%u", static_cast<uint32_t>(cbid));
         return;
     }

@@ -28,6 +28,11 @@ namespace device_runtime {
 struct CallStackResult;
 }
 
+enum class TraceArgumentMode {
+    kHostArgs,
+    kArgsArray,
+};
+
 struct PreparedTraceLaunch {
     bool instrumented = false;
     uint64_t launchId = 0;
@@ -35,9 +40,17 @@ struct PreparedTraceLaunch {
     uint32_t recordsPerCore = 0;
     uint32_t physicalCoreCount = 0;
     uint32_t deviceId = 0;
+    // 隐藏参数 memInfo 在 kernel 连续参数布局中的字节偏移 例如[0~23为原始参数,24~31为memInfo的地址值]
+    uint32_t traceArgumentOffset = 0;
     void* deviceBuffer = nullptr;
     const aclsan::DeviceInstructionDecoder* decoder = nullptr;
     std::vector<uint8_t> hostBuffer;
+    // 仅 HostArgs 使用的连续参数区，ArgsArray 模式下为空。
+    // 布局：[原始参数前缀][补零至 traceArgumentOffset][deviceBuffer 指针值][原始尾部数据（若有）]。
+    // 隐藏指针占 sizeof(void*) 字节，保存 Device 地址，不包含 Device trace buffer 的内容。
+    // 有 placeholder 时，插入点后的原始数据移至隐藏指针之后，并同步调整 placeholder.dataOffset。
+    // 假设为Add(float* x, float* y, float* z);  一个指针参数对应8字节
+    // 因此arguments[0~7]为x的地址值，arguments[8~15]为y的地址值，以此类推。arguments[24~31]为memInfo的地址值
     std::vector<uint8_t> arguments;
     std::vector<aclrtPlaceHolderInfo> placeholders;
 };
@@ -54,7 +67,8 @@ void RecordTraceBinaryFunctionLookup(
 void RecordTraceFunctionLookup(aclrtFuncHandle function) noexcept;
 aclError PrepareTraceLaunch(
     aclrtFuncHandle function, uint32_t blockCount, const void* hostArgs, size_t argsSize,
-    const aclrtPlaceHolderInfo* placeholders, size_t placeholderCount, PreparedTraceLaunch& prepared) noexcept;
+    const aclrtPlaceHolderInfo* placeholders, size_t placeholderCount, TraceArgumentMode argumentMode,
+    PreparedTraceLaunch& prepared) noexcept;
 void CompleteTraceLaunch(
     PreparedTraceLaunch&& prepared, aclrtFuncHandle function, aclrtStream stream, aclError launchResult) noexcept;
 void CollectTraceStream(aclrtStream stream) noexcept;

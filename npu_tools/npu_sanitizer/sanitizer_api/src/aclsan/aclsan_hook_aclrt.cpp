@@ -14,7 +14,7 @@
 #include "internal/aclsan_active_probe_plan.h"
 #include "internal/aclsan_dispatch.h"
 #include "internal/aclsan_device_data.h"
-#include "internal/aclsan_log.h"
+#include "plog_sink.h"
 #include "internal/aclsan_runtime_hook.h"
 #include "internal/aclsan_trace_runtime.h"
 #include "injection/injection_hook.h"
@@ -48,13 +48,14 @@ using aclsan::AbortHookFailure;
 using aclsan::GetOriginalRuntimeFunction;
 
 // TODO: 中间要加上异常报错 / 中止机制
+// 复制业务参数地址，再追加调用方保存的隐藏指针的地址；其存储需保持有效直到 launch 返回。
 // 基于originalArgs更新增加参数隐藏trace指针的存储地址，最终aclrtLaunchKernelWithArgsArray使用的是args
 // 将原有的args复制一份后，增加一个trace指针
 aclError BuildInstrumentedArgsArray(
-    const void* function, std::vector<uint8_t>& traceArguments, void* const* originalArgs, std::vector<void*>& args)
+    const void* function, void*& deviceBuffer, size_t traceArgumentOffset, void* const* originalArgs,
+    std::vector<void*>& args)
 {
-    args.clear();
-    if (function == nullptr || traceArguments.size() < sizeof(void*)) {
+    if (function == nullptr) {
         return ACL_ERROR_INVALID_PARAM;
     }
     const auto getCount = GetOriginalRuntimeFunction<aclrtFunctionGetParamCountFunc>(
@@ -62,11 +63,8 @@ aclError BuildInstrumentedArgsArray(
     const auto getInfo = GetOriginalRuntimeFunction<aclrtFunctionGetParamInfoFunc>(
         ACL_RT_API_aclrtFunctionGetParamInfo, "aclrtFunctionGetParamInfo");
     size_t count = 0;
-    const aclError status = getCount(function, &count);
-    if (status != ACL_SUCCESS) {
-        return status;
-    }
-    // 因为插桩的kernel已经增加隐藏trace参数，所以不可能为0
+    ACLSAN_RETURN_IF_ACL_ERROR(getCount(function, &count), "Failed to get kernel parameter count");
+    // 因为插桩的kernel已经增加隐藏trace参数，所以不应该为0
     if (count == 0) {
         return ACL_ERROR_FEATURE_UNSUPPORTED;
     }
@@ -75,24 +73,19 @@ aclError BuildInstrumentedArgsArray(
     const size_t originalCount = count - 1;
     size_t offset = 0;
     size_t size = 0;
-    const aclError infoStatus = getInfo(function, originalCount, &offset, &size);
-    if (infoStatus != ACL_SUCCESS) {
-        return infoStatus;
-    }
+    ACLSAN_RETURN_IF_ACL_ERROR(
+        getInfo(function, originalCount, &offset, &size), "Failed to get hidden trace parameter info");
     // 只校验 sanitizer 追加的隐藏 GM 指针，业务参数地址由调用者直接提供。
-    if (size != sizeof(void*) || offset != traceArguments.size() - sizeof(void*)) {
+    if (size != sizeof(void*) || offset != traceArgumentOffset) {
         return ACL_ERROR_FEATURE_UNSUPPORTED;
     }
     if (originalCount != 0 && originalArgs == nullptr) { // 仅有0参数场景才可能originalArgs为nullptr
         return ACL_ERROR_INVALID_PARAM;
     }
     for (size_t index = 0; index < originalCount; ++index) {
-        if (originalArgs[index] == nullptr) {
-            return ACL_ERROR_INVALID_PARAM;
-        }
-        args.push_back(originalArgs[index]);
+        args.push_back(originalArgs[index]); // hostArgs在host内存中的存储地址
     }
-    args.push_back(traceArguments.data() + offset); // 隐藏参数的地址
+    args.push_back(&deviceBuffer); // 插入隐藏指针的存储地址
     return ACL_SUCCESS;
 }
 
@@ -114,7 +107,7 @@ bool GetCurrentDeviceId(uint32_t& deviceId) noexcept
     int32_t currentDeviceId = -1;
     const aclError result = function(&currentDeviceId);
     if (result != ACL_SUCCESS || currentDeviceId < 0) {
-        ASC_SAN_ERROR("acl_san: aclrtGetDevice failed: result=%d deviceId=%d", result, currentDeviceId);
+        ACL_SAN_ERROR("acl_san: aclrtGetDevice failed: result=%d deviceId=%d", result, currentDeviceId);
         return false;
     }
     deviceId = static_cast<uint32_t>(currentDeviceId);
@@ -311,11 +304,11 @@ aclError aclrtLaunchKernelWithHostArgsHook(
     const auto original = GetOriginalRuntimeFunction<aclrtLaunchKernelWithHostArgsFunc>(
         ACL_RT_API_aclrtLaunchKernelWithHostArgs, "aclrtLaunchKernelWithHostArgs");
     aclsan::PreparedTraceLaunch prepared;
-    const aclError prepareResult = aclsan::PrepareTraceLaunch(
-        funcHandle, numBlocks, hostArgs, argsSize, placeHolderArray, placeHolderNum, prepared);
-    if (prepareResult != ACL_SUCCESS) {
-        return prepareResult;
-    }
+    ACLSAN_RETURN_IF_ACL_ERROR(
+        aclsan::PrepareTraceLaunch(
+            funcHandle, numBlocks, hostArgs, argsSize, placeHolderArray, placeHolderNum,
+            aclsan::TraceArgumentMode::kHostArgs, prepared),
+        "Failed to prepare trace for aclrtLaunchKernelWithHostArgs");
 
     void* launchArguments = prepared.instrumented ? prepared.arguments.data() : hostArgs;
     const size_t launchArgumentBytes = prepared.instrumented ? prepared.arguments.size() : argsSize;
@@ -325,7 +318,7 @@ aclError aclrtLaunchKernelWithHostArgsHook(
     const aclError result = original(
         funcHandle, numBlocks, stream, config, launchArguments, launchArgumentBytes, launchPlaceholders,
         launchPlaceholderCount);
-    ASC_SAN_DEBUG(
+    ACL_SAN_DEBUG(
         "aclrtLaunchKernelWithHostArgs: function=%p blocks=%u stream=%p instrumented=%u result=%d", funcHandle,
         numBlocks, stream, static_cast<unsigned>(prepared.instrumented), result);
     aclsan::CompleteTraceLaunch(std::move(prepared), funcHandle, stream, result);
@@ -342,18 +335,20 @@ aclError aclrtLaunchKernelWithArgsArrayHook(
 {
     aclsan::PreparedTraceLaunch prepared;
     // 原始参数由 ArgsArray 直接传递，这里只准备隐藏参数及其所属的 trace buffer。
-    const aclError prepareResult = aclsan::PrepareTraceLaunch(func, numBlocks, nullptr, 0, nullptr, 0, prepared);
-    if (prepareResult != ACL_SUCCESS) {
-        return prepareResult;
-    }
+    ACLSAN_RETURN_IF_ACL_ERROR(
+        aclsan::PrepareTraceLaunch(
+            func, numBlocks, nullptr, 0, nullptr, 0, aclsan::TraceArgumentMode::kArgsArray, prepared),
+        "Failed to PrepareTraceLaunch for aclrtLaunchKernelWithArgsArray");
 
     aclError result = ACL_SUCCESS;
     try {
         std::vector<void*> launchArgs;
         if (prepared.instrumented) {
-            result = BuildInstrumentedArgsArray(func, prepared.arguments, args, launchArgs);
+            result =
+                BuildInstrumentedArgsArray(func, prepared.deviceBuffer, prepared.traceArgumentOffset, args, launchArgs);
             if (result != ACL_SUCCESS) {
-                ASC_SAN_ERROR("[launch-v2] incompatible ArgsArray parameters: result=%d", result);
+                ACL_SAN_ERROR(
+                    "BuildInstrumentedArgsArray failed in aclrtLaunchKernelWithArgsArrayHook: result=%d", result);
             }
         }
         if (result == ACL_SUCCESS) {
@@ -366,12 +361,11 @@ aclError aclrtLaunchKernelWithArgsArrayHook(
     } catch (...) {
         result = ACL_ERROR_FAILURE;
     }
-    const uint64_t launchId = prepared.launchId;
     aclsan::CompleteTraceLaunch(std::move(prepared), func, stream, result);
     std::string functionName;
     (void)aclsan::GetTraceFunctionName(func, functionName);
-    const AclsanLaunchData callbackData =
-        MakeLaunchData(launchId, func, stream, functionName, numBlocks, result, "aclrtLaunchKernelWithArgsArray");
+    const AclsanLaunchData callbackData = MakeLaunchData(
+        prepared.launchId, func, stream, functionName, numBlocks, result, "aclrtLaunchKernelWithArgsArray");
     aclsan::AclsanCallbackDispatcher::DispatchLaunch(callbackData);
     return result;
 }

@@ -13,7 +13,7 @@
 #include "internal/aclsan_active_probe_plan.h"
 #include "internal/aclsan_dispatch.h"
 #include "internal/aclsan_device_call_stack.h"
-#include "internal/aclsan_log.h"
+#include "plog_sink.h"
 #include "internal/aclsan_runtime_hook.h"
 #include "injection/injection_hook.h"
 
@@ -31,7 +31,7 @@
 #define ACLSAN_CHECK_ACTIVE_SUBSCRIBER(apiName, subscriber)                \
     do {                                                                   \
         if (!IsActive((subscriber))) {                                     \
-            ASC_SAN_ERROR("%s: subscriber is not initialized", (apiName)); \
+            ACL_SAN_ERROR("%s: subscriber is not initialized", (apiName)); \
             return ACLSAN_STATUS_ERROR_INVALID_PARAMETER;                  \
         }                                                                  \
     } while (false)
@@ -60,7 +60,7 @@ AclsanStatus UnavailableStatus(const std::string& error)
 
 [[noreturn]] void AbortConfigurationException(const char* operation, const char* reason) noexcept
 {
-    ASC_SAN_ERROR("[FATAL] npucheck internal failure: operation=%s reason=%s", operation, reason);
+    ACL_SAN_ERROR("[FATAL] npucheck internal failure: operation=%s reason=%s", operation, reason);
     std::abort();
 }
 
@@ -174,7 +174,7 @@ std::set<aclrtApiId> AclsanSubscriber::ComputeRequiredHooks(const std::set<Callb
     for (const CallbackKey& key : enabledCallbacks) {
         const auto route = g_callbackRoutes.find(key);
         if (route == g_callbackRoutes.end()) {
-            ASC_SAN_ERROR(
+            ACL_SAN_ERROR(
                 "ComputeRequiredHooks: callback route not found for domain=%u id=%u", static_cast<uint32_t>(key.domain),
                 static_cast<uint32_t>(key.id));
             continue;
@@ -202,16 +202,16 @@ bool AclsanSubscriber::IsActive(AclsanSubscriberHandle subscriber) const noexcep
 
 void AclsanSubscriber::LogConfigurationState(const char* operation, const char* stage) const noexcept
 {
-    ASC_SAN_DEBUG(
+    ACL_SAN_DEBUG(
         "operation=%s stage=%s enabled_callbacks=%zu required_hooks=%zu", operation, stage, enabledCallbacks_.size(),
         requiredHooks_.size());
     for (const CallbackKey& key : enabledCallbacks_) {
-        ASC_SAN_DEBUG(
+        ACL_SAN_DEBUG(
             "operation=%s callback_domain=%u callback_id=%u", operation, static_cast<uint32_t>(key.domain),
             static_cast<uint32_t>(key.id));
     }
     for (aclrtApiId apiId : requiredHooks_) {
-        ASC_SAN_DEBUG("operation=%s required_hook_api_id=%u", operation, static_cast<uint32_t>(apiId));
+        ACL_SAN_DEBUG("operation=%s required_hook_api_id=%u", operation, static_cast<uint32_t>(apiId));
     }
 }
 
@@ -256,11 +256,11 @@ AclsanStatus AclsanSubscriber::Subscribe(
     ACLSAN_CHECK_NULLPTR("aclsanSubscribe", callback);
 
     if (activeHandle_ != nullptr) {
-        ASC_SAN_ERROR("aclsanSubscribe: subscriber already exists");
+        ACL_SAN_ERROR("aclsanSubscribe: subscriber already exists");
         return ACLSAN_STATUS_ERROR_ALREADY_SUBSCRIBED;
     }
     if (acltoolHookInit() != 0) {
-        ASC_SAN_ERROR("aclsanSubscribe: acltoolHookInit failed");
+        ACL_SAN_ERROR("aclsanSubscribe: acltoolHookInit failed");
         return ACLSAN_STATUS_ERROR_INJECTION_FAILED;
     }
 
@@ -268,7 +268,7 @@ AclsanStatus AclsanSubscriber::Subscribe(
     callback_ = callback;
     userdata_ = userdata;
     *subscriber = activeHandle_;
-    ASC_SAN_INFO("aclsanSubscribe succeed");
+    ACL_SAN_INFO("aclsanSubscribe succeed");
     return ACLSAN_STATUS_SUCCESS;
 }
 
@@ -276,11 +276,11 @@ AclsanStatus AclsanSubscriber::EnableCallback(
     uint32_t enable, AclsanSubscriberHandle subscriber, AclsanCallbackDomain domain, AclsanCallbackId id)
 {
     ACLSAN_CHECK_ACTIVE_SUBSCRIBER("aclsanEnableCallback", subscriber);
-    ASC_SAN_DEBUG(
+    ACL_SAN_DEBUG(
         "aclsanEnableCallback start: enable=%u domain=%u id=%u", enable, static_cast<uint32_t>(domain),
         static_cast<uint32_t>(id));
     if (!IsValidCallbackId(domain, id)) {
-        ASC_SAN_ERROR(
+        ACL_SAN_ERROR(
             "aclsanEnableCallback: invalid domain + id combination, enable=%u domain=%u id=%u", enable,
             static_cast<uint32_t>(domain), static_cast<uint32_t>(id));
         return ACLSAN_STATUS_ERROR_INVALID_PARAMETER;
@@ -303,7 +303,7 @@ AclsanStatus AclsanSubscriber::Unsubscribe(AclsanSubscriberHandle subscriber) no
     requiredHooks_.clear();
     aclsan::CommitActiveProbePlan(0);
     LogConfigurationState("aclsanUnsubscribe", "after-reset");
-    ASC_SAN_INFO("aclsanUnsubscribe succeed");
+    ACL_SAN_INFO("aclsanUnsubscribe succeed");
     return ACLSAN_STATUS_SUCCESS;
 }
 
@@ -312,7 +312,7 @@ AclsanStatus AclsanSubscriber::EnableDomain(
 {
     ACLSAN_CHECK_ACTIVE_SUBSCRIBER("aclsanEnableDomain", subscriber);
     if (!IsValidCallbackDomain(domain)) {
-        ASC_SAN_ERROR("aclsanEnableDomain: invalid domain=%u", static_cast<uint32_t>(domain));
+        ACL_SAN_ERROR("aclsanEnableDomain: invalid domain=%u", static_cast<uint32_t>(domain));
         return ACLSAN_STATUS_ERROR_INVALID_PARAMETER;
     }
 
@@ -345,7 +345,7 @@ AclsanStatus AclsanSubscriber::GetCallbackState(
 
     const AclsanCallbackId id = static_cast<AclsanCallbackId>(cbid);
     if (!IsValidCallbackId(domain, id)) {
-        ASC_SAN_ERROR(
+        ACL_SAN_ERROR(
             "aclsanGetCallbackState: invalid domain + id combination, domain=%u id=%u", static_cast<uint32_t>(domain),
             cbid);
         return ACLSAN_STATUS_ERROR_INVALID_PARAMETER;
@@ -363,18 +363,18 @@ bool AclsanSubscriber::InvokeCallback(
     AclsanCallbackDomain domain, AclsanCallbackId id, const void* callbackData) noexcept
 {
     if (callbackData == nullptr) {
-        ASC_SAN_ERROR("InvokeCallback: callback data is nullptr");
+        ACL_SAN_ERROR("InvokeCallback: callback data is nullptr");
         return false;
     }
 
     if (callback_ == nullptr) {
-        ASC_SAN_ERROR("InvokeCallback: callback is nullptr");
+        ACL_SAN_ERROR("InvokeCallback: callback is nullptr");
         return false;
     }
 
     // 如果对应domain和id用户没有主动订阅，那么就不传回cbdata
     if (!IsCallbackEnabled(domain, id)) {
-        ASC_SAN_DEBUG(
+        ACL_SAN_DEBUG(
             "InvokeCallback: domain=%u id=%u is not enabled. No call for callback func", static_cast<uint32_t>(domain),
             static_cast<uint32_t>(id));
         return true;
@@ -383,7 +383,7 @@ bool AclsanSubscriber::InvokeCallback(
     try {
         callback_(userdata_, domain, id, callbackData);
     } catch (...) {
-        ASC_SAN_ERROR(
+        ACL_SAN_ERROR(
             "InvokeCallback: domain=%u id=%u failed", static_cast<uint32_t>(domain), static_cast<uint32_t>(id));
         return false;
     }

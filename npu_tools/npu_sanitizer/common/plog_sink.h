@@ -33,4 +33,32 @@ void WritePlogFormat(
 
 } // namespace aclsan
 
+// Format adapters only: levels and output are owned by the common CANN plog sink.
+#define ACL_SAN_DEBUG(...) \
+    ::aclsan::WritePlogFormat(::aclsan::PlogLevel::kDebug, __FILE__, __LINE__, __func__, __VA_ARGS__)
+#define ACL_SAN_INFO(...) \
+    ::aclsan::WritePlogFormat(::aclsan::PlogLevel::kInfo, __FILE__, __LINE__, __func__, __VA_ARGS__)
+#define ACL_SAN_WARNING(...) \
+    ::aclsan::WritePlogFormat(::aclsan::PlogLevel::kWarning, __FILE__, __LINE__, __func__, __VA_ARGS__)
+#define ACL_SAN_ERROR(...) \
+    ::aclsan::WritePlogFormat(::aclsan::PlogLevel::kError, __FILE__, __LINE__, __func__, __VA_ARGS__)
+
+// The caller provides ACL types; message is evaluated only when expression fails.
+#define ACLSAN_RETURN_IF_ACL_ERROR(expression, message)              \
+    do {                                                             \
+        const aclError aclsanStatus = (expression);                  \
+        if (aclsanStatus != ACL_SUCCESS) {                           \
+            ACL_SAN_ERROR("%s: result=%d", (message), aclsanStatus); \
+            return aclsanStatus;                                     \
+        }                                                            \
+    } while (false)
+
+#define ACLSAN_CHECK_NULLPTR(apiName, argument)                       \
+    do {                                                              \
+        if ((argument) == nullptr) {                                  \
+            ACL_SAN_ERROR("%s: %s is nullptr", (apiName), #argument); \
+            return ACLSAN_STATUS_ERROR_INVALID_PARAMETER;             \
+        }                                                             \
+    } while (false)
+
 #endif // NPU_SANITIZER_COMMON_PLOG_SINK_H
