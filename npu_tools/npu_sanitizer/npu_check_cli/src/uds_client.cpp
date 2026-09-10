@@ -87,7 +87,7 @@ bool UdsClient::ConnectWithRetry(
         }
         if (connect(fd_, reinterpret_cast<const sockaddr*>(&address), addrLen) == 0) {
             npucheck::WritePlog(
-                npucheck::PlogLevel::kDebug,
+                npucheck::PlogLevel::DEBUG,
                 "[UDS] phase=connect attempt=" + std::to_string(attempt) +
                     " errno=0 elapsed_ms=" + std::to_string(npucheck::ipc::MonotonicNowMs() - start));
             return true;
@@ -179,11 +179,11 @@ bool UdsClient::ConnectAndConfigure(
     hello.uid = static_cast<uint32_t>(getuid());
     if (!Send(npucheck::ipc::MessageType::CLIENT_HELLO, npucheck::ipc::EncodeHello(hello), deadline, error) ||
         !CheckServerIdentity(childPid, deadline, error)) {
-        npucheck::WritePlog(npucheck::PlogLevel::kDebug, "[UDS] phase=handshake result=failed");
+        npucheck::WritePlog(npucheck::PlogLevel::DEBUG, "[UDS] phase=handshake result=failed");
         return false;
     }
     npucheck::WritePlog(
-        npucheck::PlogLevel::kDebug,
+        npucheck::PlogLevel::DEBUG,
         "[UDS] phase=handshake peer_pid=" + std::to_string(childPid) + " peer_uid=" + std::to_string(getuid()) +
             " cred_match=1 negotiated_minor=" + std::to_string(negotiatedMinor_) + " result=ok");
 
@@ -203,10 +203,10 @@ bool UdsClient::ConnectAndConfigure(
         optionCount += tool.options.size();
     }
     npucheck::WritePlog(
-        npucheck::PlogLevel::kDebug, "[UDS] phase=configure tool_count=" + std::to_string(configure.tools.size()) +
-                                         " option_count=" + std::to_string(optionCount) + " length=" +
-                                         std::to_string(npucheck::ipc::kWireHeaderSize + encodedConfig.size()) +
-                                         " payload_size=" + std::to_string(encodedConfig.size()));
+        npucheck::PlogLevel::DEBUG, "[UDS] phase=configure tool_count=" + std::to_string(configure.tools.size()) +
+                                        " option_count=" + std::to_string(optionCount) + " length=" +
+                                        std::to_string(npucheck::ipc::kWireHeaderSize + encodedConfig.size()) +
+                                        " payload_size=" + std::to_string(encodedConfig.size()));
     if (!Send(npucheck::ipc::MessageType::CONFIGURE, encodedConfig, deadline, error)) {
         return false;
     }
@@ -237,8 +237,8 @@ bool UdsClient::ConnectAndConfigure(
         return false;
     }
     npucheck::WritePlog(
-        npucheck::PlogLevel::kDebug, "[UDS] phase=wait_ready elapsed_ms=" +
-                                         std::to_string(npucheck::ipc::MonotonicNowMs() - start) + " result=ready");
+        npucheck::PlogLevel::DEBUG, "[UDS] phase=wait_ready elapsed_ms=" +
+                                        std::to_string(npucheck::ipc::MonotonicNowMs() - start) + " result=ready");
     // 握手到此结束，deadline 使命完成。之后进入采集阶段，等待由调用方按 kNoDeadline 驱动。
     return true;
 }

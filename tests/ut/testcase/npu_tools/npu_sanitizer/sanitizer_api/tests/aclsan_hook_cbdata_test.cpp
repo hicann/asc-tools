@@ -786,7 +786,7 @@ void TestTraceArgumentModes()
     aclsan::PreparedTraceLaunch prepared;
     assert(
         aclsan::PrepareTraceLaunch(
-            function, 1, nullptr, 0, nullptr, 0, aclsan::TraceArgumentMode::kArgsArray, prepared) == ACL_SUCCESS);
+            function, 1, nullptr, 0, nullptr, 0, aclsan::TraceArgumentMode::ARGS_ARRAY, prepared) == ACL_SUCCESS);
     assert(prepared.instrumented && prepared.traceArgumentOffset == 24);
     assert(prepared.arguments.empty() && prepared.placeholders.empty());
     assert(prepared.deviceBuffer != nullptr);
@@ -796,7 +796,7 @@ void TestTraceArgumentModes()
     // 零参数 HostArgs 仍需生成带对齐填充及隐藏指针的连续参数区。
     assert(
         aclsan::PrepareTraceLaunch(
-            function, 1, nullptr, 0, nullptr, 0, aclsan::TraceArgumentMode::kHostArgs, prepared) == ACL_SUCCESS);
+            function, 1, nullptr, 0, nullptr, 0, aclsan::TraceArgumentMode::HOST_ARGS, prepared) == ACL_SUCCESS);
     assert(prepared.arguments.size() == 24 + sizeof(void*));
     void* hiddenPointer = nullptr;
     std::memcpy(&hiddenPointer, prepared.arguments.data() + 24, sizeof(hiddenPointer));

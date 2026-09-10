@@ -100,7 +100,7 @@ TEST(MemcheckTest, ReportsOutOfBoundsReadAtSynchronization)
     std::string rendered;
     EXPECT_EQ(
         npucheck::RenderNpuCheckReportRecord(npucheck::NpuCheckReportRecord::From(report), {}, &rendered),
-        ReportRenderStatus::kSuccess);
+        ReportRenderStatus::SUCCESS);
     EXPECT_NE(rendered.find("Invalid GM read of size 64 bytes"), std::string::npos);
     EXPECT_NE(rendered.find("by aicore (75) type (AIC) block (7) pipe (MTE2)"), std::string::npos);
     EXPECT_NE(rendered.find("Address 0x100ff0 is out of bounds"), std::string::npos);
@@ -548,7 +548,7 @@ TEST(MemcheckTest, GroupsDerivedDataByCompleteInstructionIdentity)
     std::string rendered;
     EXPECT_EQ(
         npucheck::RenderNpuCheckReportRecord(npucheck::NpuCheckReportRecord::From(reports[2]), {}, &rendered),
-        ReportRenderStatus::kSuccess);
+        ReportRenderStatus::SUCCESS);
     EXPECT_NE(rendered.find("by aicore (4) type (AIV) block (0) pipe (MTE2)"), std::string::npos);
 }
 

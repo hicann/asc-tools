@@ -398,29 +398,6 @@ std::string FormatChildExit(int status)
     return WIFEXITED(status) ? std::to_string(WEXITSTATUS(status)) : "unknown";
 }
 
-// --log-file 的三种形态：未指定 → 空；已存在的目录 → <dir>/npu_check-<session>.log；
-// 其余一律当作文件路径。
-bool ResolveLogPath(const std::string& requested, uint64_t sessionId, std::string& resolved, std::string& error)
-{
-    if (requested.empty()) {
-        resolved.clear();
-        return true;
-    }
-    boost::system::error_code filesystemError;
-    if (boost::filesystem::is_directory(requested, filesystemError) && !filesystemError) {
-        // 文件名带上 session：同一目录下并发跑多个实例不会互相覆盖。
-        resolved = (boost::filesystem::path(requested) / ("npu_check-" + std::to_string(sessionId) + ".log")).string();
-        return true;
-    }
-    const auto parent = boost::filesystem::path(requested).parent_path();
-    if (!parent.empty() && !boost::filesystem::exists(parent, filesystemError)) {
-        error = "log file directory does not exist: " + parent.string();
-        return false;
-    }
-    resolved = requested;
-    return true;
-}
-
 // 把 Options 里的工具集合转成线路上的 Configure 请求。解析阶段已经保证了排序与去重，
 // 这里只做搬运，不再重新规范化 —— 若两处各做一遍，规则一旦分叉就很难发现。
 npucheck::ipc::ConfigureRequest BuildConfigureRequest(const Options& options)
@@ -437,13 +414,13 @@ std::string FormatResultSummary(const ResultSummary& summary)
 {
     const char* outcome = "infra_failed";
     switch (summary.outcome) {
-        case Outcome::kForwarded:
+        case Outcome::FORWARDED:
             outcome = "forwarded";
             break;
-        case Outcome::kAppFailed:
+        case Outcome::APP_FAILED:
             outcome = "app_failed";
             break;
-        case Outcome::kInfraFailed:
+        case Outcome::INFRA_FAILED:
             outcome = "infra_failed";
             break;
     }
@@ -490,8 +467,8 @@ int RunApplication(const Options& options, const std::string& libraryPath)
         return summary.exit = 125;
     }
 
-    std::string logPath;
-    if (!ResolveLogPath(options.logFile, sessionId, logPath, error)) {
+    const std::string& logPath = options.logFile;
+    if (!logPath.empty() && !ValidateLogFilePath(logPath, error)) {
         std::cerr << "npu_check: " << error << '\n';
         return summary.exit = 125;
     }
@@ -517,7 +494,7 @@ int RunApplication(const Options& options, const std::string& libraryPath)
         toolNames += (toolNames.empty() ? "" : ",");
         toolNames += npucheck::ipc::ToolName(tool.toolId);
     }
-    npucheck::WritePlog(npucheck::PlogLevel::kDebug, "[INJECTION] library=" + libraryPath + " result=resolved");
+    npucheck::WritePlog(npucheck::PlogLevel::DEBUG, "[INJECTION] library=" + libraryPath + " result=resolved");
 
     int consolePipe[2] = {-1, -1};
     if (pipe2(consolePipe, O_CLOEXEC) != 0) {
@@ -600,8 +577,8 @@ int RunApplication(const Options& options, const std::string& libraryPath)
     }
 
     npucheck::WritePlog(
-        npucheck::PlogLevel::kDebug, "[CLI] session=" + std::to_string(sessionId) + " tools=" + toolNames +
-                                         " app_pid=" + std::to_string(child) + " app_pgid=" + std::to_string(child));
+        npucheck::PlogLevel::DEBUG, "[CLI] session=" + std::to_string(sessionId) + " tools=" + toolNames +
+                                        " app_pid=" + std::to_string(child) + " app_pgid=" + std::to_string(child));
     std::atomic<bool> childExited{false};
     std::thread consoleReader([&output, &childExited, fd = std::move(consoleRead)] {
         std::array<char, 8192> buffer{};
@@ -710,7 +687,7 @@ int RunApplication(const Options& options, const std::string& libraryPath)
                     // domain/code 是稳定取值进结构化日志，message 只原样转述给人看，
                     // 不参与任何判定。
                     npucheck::WritePlog(
-                        npucheck::PlogLevel::kDebug,
+                        npucheck::PlogLevel::DEBUG,
                         "[UDS] phase=error domain=" + std::to_string(static_cast<unsigned>(failure.domain)) +
                             " code=" + std::to_string(failure.code));
                     output.Sanitizer("ERROR " + failure.message, true);
@@ -728,7 +705,7 @@ int RunApplication(const Options& options, const std::string& libraryPath)
         });
     } else {
         protocolComplete = false;
-        npucheck::WritePlog(npucheck::PlogLevel::kDebug, "[UDS] phase=handshake result=failed");
+        npucheck::WritePlog(npucheck::PlogLevel::DEBUG, "[UDS] phase=handshake result=failed");
         output.Sanitizer("handshake=missing reason=\"" + error + "\"", true);
     }
 
@@ -750,10 +727,10 @@ int RunApplication(const Options& options, const std::string& libraryPath)
     // 最后才是"连接断了但报告没收全"。
     if (resultComplete) {
         npucheck::WritePlog(
-            npucheck::PlogLevel::kDebug, "[UDS] phase=result frames=" + std::to_string(resultFrames.load()) +
-                                             " bytes=" + std::to_string(result.size()) +
-                                             " truncated=" + (resultTruncated ? "1" : "0") +
-                                             " has_errors=" + (resultHasErrors ? "1" : "0"));
+            npucheck::PlogLevel::DEBUG, "[UDS] phase=result frames=" + std::to_string(resultFrames.load()) +
+                                            " bytes=" + std::to_string(result.size()) +
+                                            " truncated=" + (resultTruncated ? "1" : "0") +
+                                            " has_errors=" + (resultHasErrors ? "1" : "0"));
         output.Report(result);
         if (resultTruncated) {
             output.Sanitizer("report truncated: the diagnostic buffer reached its size limit", true);
@@ -762,9 +739,8 @@ int RunApplication(const Options& options, const std::string& libraryPath)
         // 报告缺失或截断：已经收到的分片一律丢弃。半份报告看上去和完整报告没有区别，
         // 输出它等于让用户把"没查到问题"和"没查完"混为一谈。
         npucheck::WritePlog(
-            npucheck::PlogLevel::kDebug, "[UDS] phase=result frames=" + std::to_string(resultFrames.load()) +
-                                             " bytes=" + std::to_string(result.size()) +
-                                             " truncated=unknown has_errors=unknown");
+            npucheck::PlogLevel::DEBUG, "[UDS] phase=result frames=" + std::to_string(resultFrames.load()) + " bytes=" +
+                                            std::to_string(result.size()) + " truncated=unknown has_errors=unknown");
         output.Sanitizer("result missing or truncated; the partial report was discarded", true);
     }
 
@@ -774,7 +750,7 @@ int RunApplication(const Options& options, const std::string& libraryPath)
     if (!handshake || !protocolComplete || !resultComplete) {
         // 基础设施失败：拿不到可信结论，退 125 与应用自身的退出码区分开。
         // has_errors 保持 unknown —— 没收到完整 Result 就没有结论可言。
-        summary.outcome = Outcome::kInfraFailed;
+        summary.outcome = Outcome::INFRA_FAILED;
         exitCode = 125;
     } else {
         summary.hasErrors = resultHasErrors ? 1 : 0;
@@ -785,7 +761,7 @@ int RunApplication(const Options& options, const std::string& libraryPath)
             exitCode = options.errorExitCode;
         }
         // 检出问题不算 app_failed：检查跑完了、报告也拿到了，结论由 has_errors 承载。
-        summary.outcome = childExit == 0 ? Outcome::kForwarded : Outcome::kAppFailed;
+        summary.outcome = childExit == 0 ? Outcome::FORWARDED : Outcome::APP_FAILED;
     }
     summary.exit = exitCode;
 

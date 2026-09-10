@@ -381,10 +381,10 @@ ReportRecord ToReportRecord(const NpuCheckSynccheckReport& report)
 ReportRenderStatus NormalizeSynccheckReport(const NpuCheckSynccheckReport& report, ReportRecord* out)
 {
     if (out == nullptr || !ValidateSynccheckReport(report)) {
-        return ReportRenderStatus::kInvalidArgument;
+        return ReportRenderStatus::INVALID_ARGUMENT;
     }
     *out = ToReportRecord(report);
-    return ReportRenderStatus::kSuccess;
+    return ReportRenderStatus::SUCCESS;
 }
 
 } // namespace npucheck::detail

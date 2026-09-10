@@ -29,8 +29,8 @@ struct CallStackResult;
 }
 
 enum class TraceArgumentMode {
-    kHostArgs,
-    kArgsArray,
+    HOST_ARGS,
+    ARGS_ARRAY,
 };
 
 struct PreparedTraceLaunch {

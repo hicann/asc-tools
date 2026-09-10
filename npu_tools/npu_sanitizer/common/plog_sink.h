@@ -17,10 +17,10 @@
 namespace npucheck {
 
 enum class PlogLevel : uint8_t {
-    kDebug = 0U,
-    kInfo = 1U,
-    kWarning = 2U,
-    kError = 3U,
+    DEBUG = 0U,
+    INFO = 1U,
+    WARNING = 2U,
+    ERROR = 3U,
 };
 
 void WritePlog(
@@ -42,13 +42,13 @@ using npucheck::WritePlogFormat;
 
 // Format adapters only: levels and output are owned by the common CANN plog sink.
 #define ACL_SAN_DEBUG(...) \
-    ::aclsan::WritePlogFormat(::aclsan::PlogLevel::kDebug, __FILE__, __LINE__, __func__, __VA_ARGS__)
+    ::aclsan::WritePlogFormat(::aclsan::PlogLevel::DEBUG, __FILE__, __LINE__, __func__, __VA_ARGS__)
 #define ACL_SAN_INFO(...) \
-    ::aclsan::WritePlogFormat(::aclsan::PlogLevel::kInfo, __FILE__, __LINE__, __func__, __VA_ARGS__)
+    ::aclsan::WritePlogFormat(::aclsan::PlogLevel::INFO, __FILE__, __LINE__, __func__, __VA_ARGS__)
 #define ACL_SAN_WARNING(...) \
-    ::aclsan::WritePlogFormat(::aclsan::PlogLevel::kWarning, __FILE__, __LINE__, __func__, __VA_ARGS__)
+    ::aclsan::WritePlogFormat(::aclsan::PlogLevel::WARNING, __FILE__, __LINE__, __func__, __VA_ARGS__)
 #define ACL_SAN_ERROR(...) \
-    ::aclsan::WritePlogFormat(::aclsan::PlogLevel::kError, __FILE__, __LINE__, __func__, __VA_ARGS__)
+    ::aclsan::WritePlogFormat(::aclsan::PlogLevel::ERROR, __FILE__, __LINE__, __func__, __VA_ARGS__)
 
 // The caller provides ACL types; message is evaluated only when expression fails.
 #define ACLSAN_RETURN_IF_ACL_ERROR(expression, message)              \

@@ -454,8 +454,8 @@ bool DecodeError(const std::vector<uint8_t>& payload, ErrorPayload& decoded, std
     if (payload.size() != kErrorHeaderSize + messageSize) {
         return Fail(error, "error payload length does not match the declared message size");
     }
-    if (domain < static_cast<uint16_t>(ErrorDomain::kInjection) ||
-        domain > static_cast<uint16_t>(ErrorDomain::kInternal)) {
+    if (domain < static_cast<uint16_t>(ErrorDomain::INJECTION) ||
+        domain > static_cast<uint16_t>(ErrorDomain::INTERNAL)) {
         return Fail(error, "unknown error domain");
     }
     decoded.domain = static_cast<ErrorDomain>(domain);
@@ -511,9 +511,9 @@ const char* MessageTypeName(MessageType type)
 const char* ToolName(ToolId id)
 {
     switch (id) {
-        case ToolId::kMemcheck:
+        case ToolId::MEMCHECK:
             return "memcheck";
-        case ToolId::kSynccheck:
+        case ToolId::SYNCCHECK:
             return "synccheck";
     }
     return "unknown";
@@ -522,11 +522,11 @@ const char* ToolName(ToolId id)
 bool LookupTool(const std::string& name, ToolId& id)
 {
     if (name == "memcheck") {
-        id = ToolId::kMemcheck;
+        id = ToolId::MEMCHECK;
         return true;
     }
     if (name == "synccheck") {
-        id = ToolId::kSynccheck;
+        id = ToolId::SYNCCHECK;
         return true;
     }
     return false;
@@ -537,8 +537,8 @@ const std::vector<OptionRegistryEntry>& OptionRegistry()
     // 当前全部是"出现即为真"的布尔开关：value_size=1 且只接受 0x01；
     // 缺省时不发送 OptionValue，由 Server 取注册表默认值。
     static const std::vector<OptionRegistryEntry> registry = {
-        {"check-cache-control", OptionId::kMemcheckCheckCacheControl, ToolId::kMemcheck, 0, 1, 0x01},
-        {"missing-barrier-init-is-fatal", OptionId::kSynccheckMissingBarrierInitIsFatal, ToolId::kSynccheck, 0, 1,
+        {"check-cache-control", OptionId::MEMCHECK_CHECK_CACHE_CONTROL, ToolId::MEMCHECK, 0, 1, 0x01},
+        {"missing-barrier-init-is-fatal", OptionId::SYNCCHECK_MISSING_BARRIER_INIT_IS_FATAL, ToolId::SYNCCHECK, 0, 1,
          0x01},
     };
     return registry;
@@ -567,8 +567,8 @@ const OptionRegistryEntry* LookupOptionById(OptionId optionId)
 bool IsKnownTool(uint16_t toolId)
 {
     switch (static_cast<ToolId>(toolId)) {
-        case ToolId::kMemcheck:
-        case ToolId::kSynccheck:
+        case ToolId::MEMCHECK:
+        case ToolId::SYNCCHECK:
             return true;
     }
     return false;

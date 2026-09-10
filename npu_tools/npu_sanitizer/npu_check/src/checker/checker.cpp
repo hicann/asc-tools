@@ -24,9 +24,9 @@ bool Checker::Accepts(AclsanCallbackDomain domain, AclsanCallbackId cbid) const
 std::unique_ptr<Checker> CreateChecker(npucheck::ipc::ToolId tool)
 {
     switch (tool) {
-        case npucheck::ipc::ToolId::kMemcheck:
+        case npucheck::ipc::ToolId::MEMCHECK:
             return std::make_unique<Memcheck>(true);
-        case npucheck::ipc::ToolId::kSynccheck:
+        case npucheck::ipc::ToolId::SYNCCHECK:
             return std::make_unique<npucheck::Synccheck>();
         default:
             return nullptr;

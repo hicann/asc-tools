@@ -21,7 +21,7 @@ int main(int argc, char** argv)
     // 脚本读到的是同一行格式，不必为不同失败阶段各写一套解析。
     const auto reportEarlyFailure = [](int exitCode) {
         npucheck::ResultSummary summary;
-        summary.outcome = npucheck::Outcome::kInfraFailed;
+        summary.outcome = npucheck::Outcome::INFRA_FAILED;
         summary.exit = exitCode;
         std::cerr << npucheck::FormatResultSummary(summary) << '\n';
         return exitCode;

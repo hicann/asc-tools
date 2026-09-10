@@ -60,7 +60,7 @@ int ToolManager::Initialize()
     std::ostringstream handshakeMessage;
     handshakeMessage << "UDS handshake completed session=" << server_.SessionId()
                      << " negotiated_minor=" << server_.NegotiatedMinor();
-    npucheck::WritePlog(npucheck::PlogLevel::kInfo, handshakeMessage.str());
+    npucheck::WritePlog(npucheck::PlogLevel::INFO, handshakeMessage.str());
     std::ostringstream configMessage;
     configMessage << "tool configuration work_dir=" << workDir_ << " tool_count=" << configure_.tools.size();
     for (const auto& tool : configure_.tools) {
@@ -69,32 +69,32 @@ int ToolManager::Initialize()
             configMessage << " option_id=0x" << std::hex << static_cast<unsigned>(option.optionId) << std::dec;
         }
     }
-    npucheck::WritePlog(npucheck::PlogLevel::kInfo, configMessage.str());
+    npucheck::WritePlog(npucheck::PlogLevel::INFO, configMessage.str());
     if (!ConfigureSanitizer(error)) {
-        npucheck::WritePlog(npucheck::PlogLevel::kError, error);
+        npucheck::WritePlog(npucheck::PlogLevel::ERROR, error);
         server_.SendInitializationError(
-            npucheck::ipc::ErrorDomain::kConfiguration, npucheck::ipc::error_code::kToolInitializationFailed, error);
+            npucheck::ipc::ErrorDomain::CONFIGURATION, npucheck::ipc::error_code::kToolInitializationFailed, error);
         RollbackSanitizer();
         server_.Shutdown();
         return 1;
     }
     // Ready 不带 payload，会话细节只写 plog。
-    npucheck::WritePlog(npucheck::PlogLevel::kInfo, BuildReadyMessage());
+    npucheck::WritePlog(npucheck::PlogLevel::INFO, BuildReadyMessage());
     if (!server_.SendReady(error)) {
-        npucheck::WritePlog(npucheck::PlogLevel::kError, error);
+        npucheck::WritePlog(npucheck::PlogLevel::ERROR, error);
         RollbackSanitizer();
         server_.Shutdown();
         return 1;
     }
     initialized_ = true;
-    npucheck::WritePlog(npucheck::PlogLevel::kInfo, "npu_check initialization completed");
+    npucheck::WritePlog(npucheck::PlogLevel::INFO, "npu_check initialization completed");
     return 0;
 }
 
 void ToolManager::LogHandshakeFailure(const std::string& reason) noexcept
 {
     try {
-        npucheck::WritePlog(npucheck::PlogLevel::kError, "UDS handshake failed: " + reason);
+        npucheck::WritePlog(npucheck::PlogLevel::ERROR, "UDS handshake failed: " + reason);
     } catch (...) {
         return;
     }
@@ -120,7 +120,7 @@ bool ToolManager::ConfigureSanitizer(std::string& error)
         return false;
     }
     subscribed_ = true;
-    npucheck::WritePlog(npucheck::PlogLevel::kInfo, "sanitizer callback subscriber registered");
+    npucheck::WritePlog(npucheck::PlogLevel::INFO, "sanitizer callback subscriber registered");
     return EnableCallbacks(error);
 }
 
@@ -137,7 +137,7 @@ bool ToolManager::EnableCallbacks(std::string& error)
         std::ostringstream message;
         message << "callback enabled domain=" << static_cast<uint32_t>(callback.domain)
                 << " cbid=" << static_cast<uint32_t>(callback.cbid);
-        npucheck::WritePlog(npucheck::PlogLevel::kDebug, message.str());
+        npucheck::WritePlog(npucheck::PlogLevel::DEBUG, message.str());
     }
     return true;
 }
@@ -192,21 +192,21 @@ void ToolManager::Finalize()
     }
     std::string renderedReport;
     const auto renderStatus = npucheck::RenderReportBundle(reportRecords, {}, &renderedReport);
-    const bool reportBundleAvailable = renderStatus == npucheck::ReportRenderStatus::kSuccess;
+    const bool reportBundleAvailable = renderStatus == npucheck::ReportRenderStatus::SUCCESS;
     if (!reportBundleAvailable) {
         {
             std::lock_guard<std::mutex> stateLock(stateMutex_);
             ++frameworkErrors_;
         }
         npucheck::WritePlog(
-            npucheck::PlogLevel::kError,
+            npucheck::PlogLevel::ERROR,
             "failed to render the session report bundle status=" + std::to_string(static_cast<int>(renderStatus)));
     } else if (!report_.Append(renderedReport) && !report_.Truncated()) {
-        npucheck::WritePlog(npucheck::PlogLevel::kError, "failed to record the rendered session report bundle");
+        npucheck::WritePlog(npucheck::PlogLevel::ERROR, "failed to record the rendered session report bundle");
     }
 
     const std::string summary = BuildSummaryMessage();
-    npucheck::WritePlog(npucheck::PlogLevel::kInfo, summary);
+    npucheck::WritePlog(npucheck::PlogLevel::INFO, summary);
     // 多工具时取"全部工具都分析完整"，任一工具留有在途或被丢弃的事件，整份报告就
     // 不能声称完整 —— 这里必须是与，不是二选一。
     bool analysisComplete = true;
@@ -237,17 +237,17 @@ void ToolManager::Finalize()
     if (!reportBundleAvailable || report_.Failed()) {
         // 报告本身没能拼出来，此时宁可什么都不给，也不能把残缺的正文当成结论发出去。
         server_.SendError(
-            npucheck::ipc::ErrorDomain::kInternal, npucheck::ipc::error_code::kReportUnavailable,
+            npucheck::ipc::ErrorDomain::INTERNAL, npucheck::ipc::error_code::kReportUnavailable,
             "npu_check cannot produce the session report");
     } else {
         const std::string reportText = report_.Take();
         std::string sendError;
         if (!server_.SendResult(reportText, hasErrors, truncated, sendError)) {
-            npucheck::WritePlog(npucheck::PlogLevel::kError, "failed to deliver the session report: " + sendError);
+            npucheck::WritePlog(npucheck::PlogLevel::ERROR, "failed to deliver the session report: " + sendError);
         }
     }
     server_.Shutdown();
-    npucheck::WritePlog(npucheck::PlogLevel::kInfo, sessionEnd.str());
+    npucheck::WritePlog(npucheck::PlogLevel::INFO, sessionEnd.str());
     checkers_.clear();
     initialized_ = false;
 }
@@ -323,10 +323,10 @@ void ToolManager::OnCallback(AclsanCallbackDomain domain, AclsanCallbackId cbid,
             } catch (const std::exception& error) {
                 ++frameworkErrors_;
                 npucheck::WritePlog(
-                    npucheck::PlogLevel::kError, std::string("checker callback failed: ") + error.what());
+                    npucheck::PlogLevel::ERROR, std::string("checker callback failed: ") + error.what());
             } catch (...) {
                 ++frameworkErrors_;
-                npucheck::WritePlog(npucheck::PlogLevel::kError, "checker callback failed");
+                npucheck::WritePlog(npucheck::PlogLevel::ERROR, "checker callback failed");
             }
         }
         if (malformed)
@@ -347,7 +347,7 @@ void ToolManager::OnCallbackException(const char* reason) noexcept
         }
         std::string message = "npu_check callback failed: ";
         message += reason != nullptr ? reason : "unspecified exception";
-        npucheck::WritePlog(npucheck::PlogLevel::kError, message);
+        npucheck::WritePlog(npucheck::PlogLevel::ERROR, message);
     } catch (...) {
         // Error reporting is best effort inside a noexcept runtime callback.
         return;
@@ -372,14 +372,14 @@ bool ToolManager::NormalizeAndStoreReportRecord(
 {
     npucheck::ReportRecord normalized;
     const auto status = npucheck::detail::NormalizeReport(report, &normalized);
-    if (status != npucheck::ReportRenderStatus::kSuccess) {
+    if (status != npucheck::ReportRenderStatus::SUCCESS) {
         std::ostringstream message;
         message << what << " normalization failed report_id=" << reportId << " status=" << static_cast<int>(status);
         {
             std::lock_guard<std::mutex> stateLock(stateMutex_);
             ++frameworkErrors_;
         }
-        npucheck::WritePlog(npucheck::PlogLevel::kError, message.str());
+        npucheck::WritePlog(npucheck::PlogLevel::ERROR, message.str());
         return false;
     }
     {
@@ -394,7 +394,7 @@ void ToolManager::PublishMalformed(AclsanCallbackDomain domain, AclsanCallbackId
     std::ostringstream output;
     output << "[NPU-CHECK-MALFORMED-CALLBACK] domain=" << static_cast<uint32_t>(domain) << " cbid=" << cbid
            << " reason=" << reason;
-    npucheck::WritePlog(npucheck::PlogLevel::kError, output.str());
+    npucheck::WritePlog(npucheck::PlogLevel::ERROR, output.str());
 }
 
 void ToolManager::LogCallback(AclsanCallbackDomain domain, AclsanCallbackId cbid, const void* cbdata)
@@ -403,7 +403,7 @@ void ToolManager::LogCallback(AclsanCallbackDomain domain, AclsanCallbackId cbid
     std::ostringstream message;
     message << "cbdata received count=" << count << " domain=" << static_cast<uint32_t>(domain)
             << " cbid=" << static_cast<uint32_t>(cbid) << " address=" << cbdata;
-    npucheck::WritePlog(npucheck::PlogLevel::kDebug, message.str());
+    npucheck::WritePlog(npucheck::PlogLevel::DEBUG, message.str());
 }
 
 std::string ToolManager::BuildReadyMessage() const

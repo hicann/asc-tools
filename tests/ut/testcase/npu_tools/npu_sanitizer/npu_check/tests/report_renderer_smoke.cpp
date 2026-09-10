@@ -375,15 +375,15 @@ TEST(ReportRendererTest, RendersTemplateAndWritesText)
     };
 
     std::string rendered;
-    EXPECT_EQ(npucheck::RenderReportText(tpl, fields, &rendered), ReportRenderStatus::kSuccess);
+    EXPECT_EQ(npucheck::RenderReportText(tpl, fields, &rendered), ReportRenderStatus::SUCCESS);
     EXPECT_EQ(rendered, "========= ERROR: Invalid access\n=========     at foo+0x10 in bar.cpp:27\n");
 
     std::ostringstream stream;
-    EXPECT_EQ(npucheck::WriteReportTextToStream(rendered, &stream), ReportRenderStatus::kSuccess);
+    EXPECT_EQ(npucheck::WriteReportTextToStream(rendered, &stream), ReportRenderStatus::SUCCESS);
     EXPECT_EQ(stream.str(), rendered);
 
     const std::string path = "/tmp/aclsan_report_renderer_smoke.txt";
-    EXPECT_EQ(npucheck::WriteReportTextToFile(rendered, path), ReportRenderStatus::kSuccess);
+    EXPECT_EQ(npucheck::WriteReportTextToFile(rendered, path), ReportRenderStatus::SUCCESS);
     EXPECT_EQ(ReadFile(path), rendered);
 }
 
@@ -395,13 +395,13 @@ TEST(ReportRendererTest, ReportsTemplateErrors)
 
     EXPECT_EQ(
         npucheck::RenderReportText(ReportTemplate{"{{missing}}"}, fields, &rendered),
-        ReportRenderStatus::kMissingField);
+        ReportRenderStatus::MISSING_FIELD);
     EXPECT_EQ(
         npucheck::RenderReportText(ReportTemplate{"{{missing"}, fields, &rendered),
-        ReportRenderStatus::kMalformedTemplate);
-    EXPECT_EQ(npucheck::RenderReportText(tpl, fields, nullptr), ReportRenderStatus::kInvalidArgument);
-    EXPECT_EQ(npucheck::WriteReportTextToStream(rendered, nullptr), ReportRenderStatus::kInvalidArgument);
-    EXPECT_EQ(npucheck::WriteReportTextToFile(rendered, ""), ReportRenderStatus::kOpenFailed);
+        ReportRenderStatus::MALFORMED_TEMPLATE);
+    EXPECT_EQ(npucheck::RenderReportText(tpl, fields, nullptr), ReportRenderStatus::INVALID_ARGUMENT);
+    EXPECT_EQ(npucheck::WriteReportTextToStream(rendered, nullptr), ReportRenderStatus::INVALID_ARGUMENT);
+    EXPECT_EQ(npucheck::WriteReportTextToFile(rendered, ""), ReportRenderStatus::OPEN_FAILED);
 }
 
 TEST(ReportRendererTest, ListsAndRendersBuiltinTemplates)
@@ -417,26 +417,26 @@ TEST(ReportRendererTest, ListsAndRendersBuiltinTemplates)
 
     std::string rendered;
     EXPECT_EQ(
-        npucheck::RenderReportRecord(MakeMemcheckInvalidAccessRecord(), {}, &rendered), ReportRenderStatus::kSuccess);
+        npucheck::RenderReportRecord(MakeMemcheckInvalidAccessRecord(), {}, &rendered), ReportRenderStatus::SUCCESS);
     EXPECT_EQ(
         rendered, "========= ERROR:[MEMCHECK] Invalid GM read of size 16 bytes\n"
                   "=========     at kernel+0x10 in kernel.cpp:42\n"
                   "=========     by aicore (3) type (AIC) block (7) pipe (MTE2) in launch (41)\n"
                   "=========     Address 0x1000 is out of bounds\n");
 
-    EXPECT_EQ(npucheck::RenderReportRecord(MakeInitcheckRecord(), {}, &rendered), ReportRenderStatus::kSuccess);
+    EXPECT_EQ(npucheck::RenderReportRecord(MakeInitcheckRecord(), {}, &rendered), ReportRenderStatus::SUCCESS);
     EXPECT_NE(
         rendered.find("========= ERROR:[INITCHECK] Uninitialized GM memory read of size 32 bytes"), std::string::npos);
 
-    EXPECT_EQ(npucheck::RenderReportRecord(MakeRaceRecord(), {}, &rendered), ReportRenderStatus::kSuccess);
+    EXPECT_EQ(npucheck::RenderReportRecord(MakeRaceRecord(), {}, &rendered), ReportRenderStatus::SUCCESS);
     EXPECT_NE(
         rendered.find("========= WARNING:[RACECHECK] Potential RAW hazard detected at UB 0x2000 in block (8) :"),
         std::string::npos);
 
-    EXPECT_EQ(npucheck::RenderReportRecord(MakeSyncRecord(), {}, &rendered), ReportRenderStatus::kSuccess);
+    EXPECT_EQ(npucheck::RenderReportRecord(MakeSyncRecord(), {}, &rendered), ReportRenderStatus::SUCCESS);
     EXPECT_NE(rendered.find("Synchronization pairing mismatch: unmatched WAIT_FLAG"), std::string::npos);
 
-    EXPECT_EQ(npucheck::RenderReportRecord(MakeSocRecord(), {}, &rendered), ReportRenderStatus::kSuccess);
+    EXPECT_EQ(npucheck::RenderReportRecord(MakeSocRecord(), {}, &rendered), ReportRenderStatus::SUCCESS);
     EXPECT_NE(rendered.find("========= ERROR:[SOCCHECK] SOC register mismatch detected."), std::string::npos);
 }
 
@@ -451,7 +451,7 @@ TEST(ReportRendererTest, MatchesBuiltinPatternOutputSnapshot)
             npucheck::RenderReportRecord(
                 ReportRecord{key, ReportSeverity::ERROR, MakePatternSnapshotFields(descriptor.reportTemplate)}, {},
                 &rendered),
-            ReportRenderStatus::kSuccess);
+            ReportRenderStatus::SUCCESS);
         if (!actual.empty()) {
             actual.push_back('\n');
         }
@@ -525,7 +525,7 @@ TEST(ReportRendererTest, AppendsStructuredCallStacks)
     record.stacks.push_back(frameStack);
 
     std::string rendered;
-    EXPECT_EQ(npucheck::RenderReportRecord(record, {}, &rendered), ReportRenderStatus::kSuccess);
+    EXPECT_EQ(npucheck::RenderReportRecord(record, {}, &rendered), ReportRenderStatus::SUCCESS);
     EXPECT_NE(
         rendered.find("=========  Host Frames:\n"
                       "=========     aclrtLaunchKernel [0x400123] in libacl.so\n"),
@@ -557,7 +557,7 @@ TEST(ReportRendererTest, RejectsRemovedBothCallStackFormat)
     std::string rendered;
     EXPECT_EQ(
         npucheck::RenderNpuCheckReportRecord(NpuCheckReportRecord::From(report), {}, &rendered),
-        ReportRenderStatus::kInvalidArgument);
+        ReportRenderStatus::INVALID_ARGUMENT);
     EXPECT_TRUE(rendered.empty());
 }
 
@@ -611,7 +611,7 @@ TEST(ReportRendererTest, RendersOnlyActiveCommonCallStackPrefix)
     std::string rendered;
     EXPECT_EQ(
         npucheck::RenderNpuCheckReportRecord(NpuCheckReportRecord::From(report), {}, &rendered),
-        ReportRenderStatus::kSuccess);
+        ReportRenderStatus::SUCCESS);
     EXPECT_NE(rendered.find("runtime API call to aclrtLaunchKernel"), std::string::npos);
     EXPECT_NE(rendered.find("active host frame"), std::string::npos);
     EXPECT_EQ(rendered.find("inactive host frame"), std::string::npos);
@@ -647,7 +647,7 @@ TEST(ReportRendererTest, PrefersStructuredFaultFrameForSourceLocation)
     std::string rendered;
     EXPECT_EQ(
         npucheck::RenderNpuCheckReportRecord(NpuCheckReportRecord::From(report), {}, &rendered),
-        ReportRenderStatus::kSuccess);
+        ReportRenderStatus::SUCCESS);
     EXPECT_NE(rendered.find("at symbolized_function+0x20 in symbolized.cpp:42"), std::string::npos);
     EXPECT_EQ(CountOccurrences(rendered, "=========  Host Frames:"), 1U);
     EXPECT_EQ(rendered.find("Host Frame: <unknown>"), std::string::npos);
@@ -665,7 +665,7 @@ TEST(ReportRendererTest, UsesAllocationMemorySpaceForAllocationPatterns)
     std::string rendered;
     EXPECT_EQ(
         npucheck::RenderNpuCheckReportRecord(NpuCheckReportRecord::From(leak), {}, &rendered),
-        ReportRenderStatus::kSuccess);
+        ReportRenderStatus::SUCCESS);
     EXPECT_NE(rendered.find("memory space GM"), std::string::npos);
 
     NpuCheckInitcheckReport unused{};
@@ -676,7 +676,7 @@ TEST(ReportRendererTest, UsesAllocationMemorySpaceForAllocationPatterns)
 
     EXPECT_EQ(
         npucheck::RenderNpuCheckReportRecord(NpuCheckReportRecord::From(unused), {}, &rendered),
-        ReportRenderStatus::kSuccess);
+        ReportRenderStatus::SUCCESS);
     EXPECT_NE(rendered.find("Unused L1 memory"), std::string::npos);
 }
 
@@ -695,7 +695,7 @@ TEST(ReportRendererTest, UsesRaceAccessCoreForCrossPipeTemplate)
     std::string rendered;
     EXPECT_EQ(
         npucheck::RenderNpuCheckReportRecord(NpuCheckReportRecord::From(report), {}, &rendered),
-        ReportRenderStatus::kSuccess);
+        ReportRenderStatus::SUCCESS);
     EXPECT_NE(rendered.find("First access by aicore (7) pipe (MTE2) in launch (41)"), std::string::npos);
     EXPECT_NE(rendered.find("Second access by aicore (7) pipe (V) in launch (42)"), std::string::npos);
 }
@@ -714,13 +714,13 @@ TEST(ReportRendererTest, IncludesLaunchIdForCommonDeviceExecutionPoint)
     std::string rendered;
     ASSERT_EQ(
         npucheck::RenderNpuCheckReportRecord(NpuCheckReportRecord::From(report), {}, &rendered),
-        ReportRenderStatus::kSuccess);
+        ReportRenderStatus::SUCCESS);
     EXPECT_NE(rendered.find("by aicore (18) type (AIV) block (0) pipe (MTE2) in launch (41)"), std::string::npos);
 
     report.common.exec.launchId = 0;
     ASSERT_EQ(
         npucheck::RenderNpuCheckReportRecord(NpuCheckReportRecord::From(report), {}, &rendered),
-        ReportRenderStatus::kSuccess);
+        ReportRenderStatus::SUCCESS);
     EXPECT_NE(rendered.find("pipe (MTE2) in launch (<unknown>)"), std::string::npos);
 }
 
@@ -735,7 +735,7 @@ TEST(ReportRendererTest, FallsBackToProgramCounterWhenFaultIsNotSymbolized)
     std::string rendered;
     EXPECT_EQ(
         npucheck::RenderNpuCheckReportRecord(NpuCheckReportRecord::From(report), {}, &rendered),
-        ReportRenderStatus::kSuccess);
+        ReportRenderStatus::SUCCESS);
     EXPECT_NE(rendered.find("at pc 0xabc in fallback_kernel"), std::string::npos);
     EXPECT_EQ(rendered.find("<unknown>+0x0 in <unknown>:0"), std::string::npos);
     EXPECT_NE(rendered.find("by aicore (<unknown>)"), std::string::npos);
@@ -755,7 +755,7 @@ TEST(ReportRendererTest, FallsBackToEachRaceSiteProgramCounter)
     std::string rendered;
     EXPECT_EQ(
         npucheck::RenderNpuCheckReportRecord(NpuCheckReportRecord::From(report), {}, &rendered),
-        ReportRenderStatus::kSuccess);
+        ReportRenderStatus::SUCCESS);
     EXPECT_NE(rendered.find("at pc 0x111 in writer_kernel"), std::string::npos);
     EXPECT_NE(rendered.find("at pc 0x222 in reader_kernel"), std::string::npos);
 }
@@ -778,7 +778,7 @@ TEST(ReportRendererTest, UsesFirstRaceSiteAsInvalidRemoteAccessLocation)
     std::string rendered;
     EXPECT_EQ(
         npucheck::RenderNpuCheckReportRecord(NpuCheckReportRecord::From(report), {}, &rendered),
-        ReportRenderStatus::kSuccess);
+        ReportRenderStatus::SUCCESS);
     EXPECT_NE(rendered.find("at pc 0x345 in remote_caller"), std::string::npos);
     EXPECT_NE(rendered.find("by aicore (6) type (AIC) block (7) pipe (MTE2) in launch (41)"), std::string::npos);
     EXPECT_EQ(rendered.find("in launch (99)"), std::string::npos);
@@ -795,7 +795,7 @@ TEST(ReportRendererTest, RejectsCrossPipeRaceAcrossDifferentPhysicalCores)
     std::string rendered = "stale";
     EXPECT_EQ(
         npucheck::RenderNpuCheckReportRecord(NpuCheckReportRecord::From(report), {}, &rendered),
-        ReportRenderStatus::kInvalidArgument);
+        ReportRenderStatus::INVALID_ARGUMENT);
     EXPECT_TRUE(rendered.empty());
 }
 
@@ -809,7 +809,7 @@ TEST(ReportRendererTest, RejectsCommonCallStackCountBeyondFixedCapacity)
     std::string rendered = "stale";
     EXPECT_EQ(
         npucheck::RenderNpuCheckReportRecord(NpuCheckReportRecord::From(report), {}, &rendered),
-        ReportRenderStatus::kInvalidArgument);
+        ReportRenderStatus::INVALID_ARGUMENT);
     EXPECT_TRUE(rendered.empty());
 }
 
@@ -822,7 +822,7 @@ TEST(ReportRendererTest, RejectsRecordToolMismatch)
     std::string rendered = "stale";
     EXPECT_EQ(
         npucheck::RenderNpuCheckReportRecord(NpuCheckReportRecord::From(report), {}, &rendered),
-        ReportRenderStatus::kInvalidArgument);
+        ReportRenderStatus::INVALID_ARGUMENT);
     EXPECT_TRUE(rendered.empty());
 }
 
@@ -836,7 +836,7 @@ TEST(ReportRendererTest, RejectsOuterToolAndPayloadMismatchSafely)
     record.tool = ReportTool::INITCHECK;
 
     std::string rendered = "stale";
-    EXPECT_EQ(npucheck::RenderNpuCheckReportRecord(record, {}, &rendered), ReportRenderStatus::kInvalidArgument);
+    EXPECT_EQ(npucheck::RenderNpuCheckReportRecord(record, {}, &rendered), ReportRenderStatus::INVALID_ARGUMENT);
     EXPECT_TRUE(rendered.empty());
 }
 
@@ -849,7 +849,7 @@ TEST(ReportRendererTest, RejectsRecordPatternMismatch)
     record.pattern = NpuCheckReportPattern::MEMCHECK_LEAK;
 
     std::string rendered = "stale";
-    EXPECT_EQ(npucheck::RenderNpuCheckReportRecord(record, {}, &rendered), ReportRenderStatus::kInvalidArgument);
+    EXPECT_EQ(npucheck::RenderNpuCheckReportRecord(record, {}, &rendered), ReportRenderStatus::INVALID_ARGUMENT);
     EXPECT_TRUE(rendered.empty());
 }
 
@@ -862,7 +862,7 @@ TEST(ReportRendererTest, RejectsPatternOwnedByAnotherTool)
     std::string rendered = "stale";
     EXPECT_EQ(
         npucheck::RenderNpuCheckReportRecord(NpuCheckReportRecord::From(report), {}, &rendered),
-        ReportRenderStatus::kInvalidArgument);
+        ReportRenderStatus::INVALID_ARGUMENT);
     EXPECT_TRUE(rendered.empty());
 }
 
@@ -873,7 +873,7 @@ TEST(ReportRendererTest, RejectsNullSelectedReportPointer)
     record.pattern = NpuCheckReportPattern::MEMCHECK_API_ERROR;
 
     std::string rendered = "stale";
-    EXPECT_EQ(npucheck::RenderNpuCheckReportRecord(record, {}, &rendered), ReportRenderStatus::kInvalidArgument);
+    EXPECT_EQ(npucheck::RenderNpuCheckReportRecord(record, {}, &rendered), ReportRenderStatus::INVALID_ARGUMENT);
     EXPECT_TRUE(rendered.empty());
 }
 
@@ -889,7 +889,7 @@ TEST(ReportRendererTest, RejectsDuplicateActiveCallStackRoles)
     std::string rendered = "stale";
     EXPECT_EQ(
         npucheck::RenderNpuCheckReportRecord(NpuCheckReportRecord::From(report), {}, &rendered),
-        ReportRenderStatus::kInvalidArgument);
+        ReportRenderStatus::INVALID_ARGUMENT);
     EXPECT_TRUE(rendered.empty());
 }
 
@@ -907,25 +907,25 @@ TEST(ReportRendererTest, ValidatesActiveCallStackMetadataAndBoundaries)
     std::string rendered;
     EXPECT_EQ(
         npucheck::RenderNpuCheckReportRecord(NpuCheckReportRecord::From(report), {}, &rendered),
-        ReportRenderStatus::kSuccess);
+        ReportRenderStatus::SUCCESS);
 
     report.common.stackCount = 1;
     report.common.stacks[0].role = static_cast<ReportStackRole>(0);
     EXPECT_EQ(
         npucheck::RenderNpuCheckReportRecord(NpuCheckReportRecord::From(report), {}, &rendered),
-        ReportRenderStatus::kInvalidArgument);
+        ReportRenderStatus::INVALID_ARGUMENT);
 
     report.common.stacks[0].role = ReportStackRole::FAULT_DEVICE;
     report.common.stacks[0].format = static_cast<ReportStackFormat>(99);
     EXPECT_EQ(
         npucheck::RenderNpuCheckReportRecord(NpuCheckReportRecord::From(report), {}, &rendered),
-        ReportRenderStatus::kInvalidArgument);
+        ReportRenderStatus::INVALID_ARGUMENT);
 
     report.common.stacks[0].format = ReportStackFormat::FRAMES;
     report.common.stacks[0].frames.resize(17);
     EXPECT_EQ(
         npucheck::RenderNpuCheckReportRecord(NpuCheckReportRecord::From(report), {}, &rendered),
-        ReportRenderStatus::kInvalidArgument);
+        ReportRenderStatus::INVALID_ARGUMENT);
 }
 
 TEST(ReportRendererTest, LoadsTemplateOverrides)
@@ -938,14 +938,14 @@ TEST(ReportRendererTest, LoadsTemplateOverrides)
 
     ReportTemplateOverrides overrides;
     std::string rendered;
-    EXPECT_EQ(npucheck::LoadReportTemplateOverridesFromFile(overridePath, &overrides), ReportRenderStatus::kSuccess);
+    EXPECT_EQ(npucheck::LoadReportTemplateOverridesFromFile(overridePath, &overrides), ReportRenderStatus::SUCCESS);
     EXPECT_EQ(
         npucheck::RenderReportRecord(MakeMemcheckInvalidAccessRecord(), overrides, &rendered),
-        ReportRenderStatus::kSuccess);
+        ReportRenderStatus::SUCCESS);
     EXPECT_EQ(rendered, "USER ERROR 1000\n");
 
     const ReportRecord unknownRecord{{ReportTool::MEMCHECK, "unknown"}, ReportSeverity::ERROR, {}};
-    EXPECT_EQ(npucheck::RenderReportRecord(unknownRecord, {}, &rendered), ReportRenderStatus::kUnknownTemplate);
+    EXPECT_EQ(npucheck::RenderReportRecord(unknownRecord, {}, &rendered), ReportRenderStatus::UNKNOWN_TEMPLATE);
 }
 
 TEST(ReportRendererTest, DoesNotInjectToolTemplateFields)
@@ -956,11 +956,11 @@ TEST(ReportRendererTest, DoesNotInjectToolTemplateFields)
     EXPECT_EQ(
         npucheck::RenderReportRecord(
             MakeMemcheckInvalidAccessRecord(), ReportTemplateOverrides{{key, {"{{Tool}}\n"}}}, &rendered),
-        ReportRenderStatus::kMissingField);
+        ReportRenderStatus::MISSING_FIELD);
     EXPECT_EQ(
         npucheck::RenderReportRecord(
             MakeMemcheckInvalidAccessRecord(), ReportTemplateOverrides{{key, {"{{tool}}\n"}}}, &rendered),
-        ReportRenderStatus::kMissingField);
+        ReportRenderStatus::MISSING_FIELD);
 }
 
 TEST(ReportRendererTest, RendersBundleSummaries)
@@ -1010,7 +1010,7 @@ TEST(ReportRendererTest, RendersBundleSummaries)
         MakeMemcheckInvalidAccessRecord(), MakeRaceRecord(), MakeSocRecord(), leakRecord, unusedRecord, deadlockRecord};
 
     std::string rendered;
-    EXPECT_EQ(npucheck::RenderReportBundle(records, {}, &rendered), ReportRenderStatus::kSuccess);
+    EXPECT_EQ(npucheck::RenderReportBundle(records, {}, &rendered), ReportRenderStatus::SUCCESS);
     EXPECT_EQ(rendered.rfind("========= NPU-CHECK\n", 0), 0U);
     EXPECT_NE(rendered.find("========= MEMCHECK SUMMARY: 1 errors, 1 warnings, 0 infos, 1 leaks"), std::string::npos);
     EXPECT_NE(
@@ -1038,7 +1038,7 @@ TEST(ReportRendererTest, SummarizesOnlyToolsPresentInBundle)
     const std::vector<ReportRecord> records{MakeMemcheckInvalidAccessRecord()};
 
     std::string rendered;
-    ASSERT_EQ(npucheck::RenderReportBundle(records, {}, &rendered), ReportRenderStatus::kSuccess);
+    ASSERT_EQ(npucheck::RenderReportBundle(records, {}, &rendered), ReportRenderStatus::SUCCESS);
     EXPECT_NE(rendered.find("========= MEMCHECK SUMMARY:"), std::string::npos);
     EXPECT_NE(rendered.find("=========     MEMCHECK:"), std::string::npos);
     EXPECT_EQ(rendered.find("INITCHECK SUMMARY"), std::string::npos);
@@ -1054,7 +1054,7 @@ TEST(ReportRendererTest, SummarizesOnlyToolsPresentInBundle)
 TEST(ReportRendererTest, EmptyBundleHasOnlyGlobalSummary)
 {
     std::string rendered;
-    ASSERT_EQ(npucheck::RenderReportBundle({}, {}, &rendered), ReportRenderStatus::kSuccess);
+    ASSERT_EQ(npucheck::RenderReportBundle({}, {}, &rendered), ReportRenderStatus::SUCCESS);
     EXPECT_EQ(rendered.find("MEMCHECK SUMMARY"), std::string::npos);
     EXPECT_EQ(rendered.find("INITCHECK SUMMARY"), std::string::npos);
     EXPECT_EQ(rendered.find("RACECHECK SUMMARY"), std::string::npos);
@@ -1091,7 +1091,7 @@ TEST(ReportRendererTest, RendersPairingMismatchReasonForDifferentOperationKinds)
         std::string rendered;
         ASSERT_EQ(
             npucheck::RenderNpuCheckReportRecord(NpuCheckReportRecord::From(report), {}, &rendered),
-            ReportRenderStatus::kSuccess);
+            ReportRenderStatus::SUCCESS);
         EXPECT_NE(rendered.find(testCase.expectedHeadline), std::string::npos);
         EXPECT_NE(rendered.find(testCase.expectedRelated), std::string::npos);
         EXPECT_EQ(rendered.find("observed sequence"), std::string::npos);
@@ -1108,7 +1108,7 @@ TEST(ReportRendererTest, SeparatesBundleRecordsWithOneEmptyLine)
     };
 
     std::string rendered;
-    ASSERT_EQ(npucheck::RenderReportBundle(records, overrides, &rendered), ReportRenderStatus::kSuccess);
+    ASSERT_EQ(npucheck::RenderReportBundle(records, overrides, &rendered), ReportRenderStatus::SUCCESS);
     EXPECT_NE(rendered.find("first record\n\nsecond record\n"), std::string::npos);
     EXPECT_EQ(rendered.find("first record\n\n\nsecond record\n"), std::string::npos);
 }
@@ -1133,7 +1133,7 @@ TEST(ReportRendererTest, RendersStructuredPairingMismatchEvidence)
     std::string rendered;
     ASSERT_EQ(
         npucheck::RenderNpuCheckReportRecord(NpuCheckReportRecord::From(report), {}, &rendered),
-        ReportRenderStatus::kSuccess);
+        ReportRenderStatus::SUCCESS);
     EXPECT_NE(rendered.find("Synchronization pairing mismatch: duplicate SET_FLAG."), std::string::npos);
     EXPECT_NE(
         rendered.find(
@@ -1163,7 +1163,7 @@ TEST(ReportRendererTest, IncludesLaunchIdForSoccheckProducerAndConsumer)
     std::string rendered;
     ASSERT_EQ(
         npucheck::RenderNpuCheckReportRecord(NpuCheckReportRecord::From(report), {}, &rendered),
-        ReportRenderStatus::kSuccess);
+        ReportRenderStatus::SUCCESS);
     EXPECT_NE(rendered.find("consumer aicore (4) in launch (42) observed"), std::string::npos);
     EXPECT_NE(rendered.find("producer aicore (3) in launch (41) expected"), std::string::npos);
 }
@@ -1185,7 +1185,7 @@ TEST(ReportRendererTest, IncludesLaunchIdForSynccheckActualRelatedPoint)
     std::string rendered;
     ASSERT_EQ(
         npucheck::RenderNpuCheckReportRecord(NpuCheckReportRecord::From(report), {}, &rendered),
-        ReportRenderStatus::kSuccess);
+        ReportRenderStatus::SUCCESS);
     EXPECT_NE(rendered.find("pipe (S) in launch (42) at pc 0x100 in sync_kernel"), std::string::npos);
     EXPECT_NE(
         rendered.find("related point: BARRIER by aicore (3) type (AIV) block (1) pipe (MTE2) in launch (41)"),
@@ -1221,7 +1221,7 @@ TEST(ReportRendererTest, RendersUnconsumedGetBufferWithExpectedRelatedPoint)
     std::string rendered;
     ASSERT_EQ(
         npucheck::RenderNpuCheckReportRecord(NpuCheckReportRecord::From(report), {}, &rendered),
-        ReportRenderStatus::kSuccess);
+        ReportRenderStatus::SUCCESS);
     EXPECT_NE(rendered.find("Synchronization pairing mismatch: redundant GET_BUF."), std::string::npos);
     EXPECT_NE(rendered.find("related point: expected RLS_BUF, but no matching point was observed"), std::string::npos);
     EXPECT_NE(rendered.find("pair kind GET_RLS_BUF, key (pipe=PIPE_MTE2, id=42, mode=3)"), std::string::npos);
@@ -1236,7 +1236,7 @@ TEST(ReportRendererTest, RejectsInvalidPairingMismatchMetadata)
         report.detailKind = NpuCheckSyncDetailKind::BARRIER;
         EXPECT_EQ(
             npucheck::RenderNpuCheckReportRecord(NpuCheckReportRecord::From(report), {}, &rendered),
-            ReportRenderStatus::kInvalidArgument);
+            ReportRenderStatus::INVALID_ARGUMENT);
     }
     {
         NpuCheckSynccheckReport report =
@@ -1244,7 +1244,7 @@ TEST(ReportRendererTest, RejectsInvalidPairingMismatchMetadata)
         std::get<NpuCheckSyncPairingError>(report.detail).reason = NpuCheckSyncMismatchReason::UNKNOWN;
         EXPECT_EQ(
             npucheck::RenderNpuCheckReportRecord(NpuCheckReportRecord::From(report), {}, &rendered),
-            ReportRenderStatus::kInvalidArgument);
+            ReportRenderStatus::INVALID_ARGUMENT);
     }
     {
         NpuCheckSynccheckReport report =
@@ -1252,7 +1252,7 @@ TEST(ReportRendererTest, RejectsInvalidPairingMismatchMetadata)
         report.primitiveKind = NpuCheckSyncPrimitiveKind::SET_WAIT_FLAG;
         EXPECT_EQ(
             npucheck::RenderNpuCheckReportRecord(NpuCheckReportRecord::From(report), {}, &rendered),
-            ReportRenderStatus::kInvalidArgument);
+            ReportRenderStatus::INVALID_ARGUMENT);
     }
     {
         NpuCheckSynccheckReport report =
@@ -1260,7 +1260,7 @@ TEST(ReportRendererTest, RejectsInvalidPairingMismatchMetadata)
         std::get<NpuCheckSyncPairingError>(report.detail).key.srcPipe = ACLSAN_DEVICE_PIPE_VECTOR;
         EXPECT_EQ(
             npucheck::RenderNpuCheckReportRecord(NpuCheckReportRecord::From(report), {}, &rendered),
-            ReportRenderStatus::kInvalidArgument);
+            ReportRenderStatus::INVALID_ARGUMENT);
     }
     {
         NpuCheckSynccheckReport report =
@@ -1268,7 +1268,7 @@ TEST(ReportRendererTest, RejectsInvalidPairingMismatchMetadata)
         report.relatedPoint.hasExecContext = true;
         EXPECT_EQ(
             npucheck::RenderNpuCheckReportRecord(NpuCheckReportRecord::From(report), {}, &rendered),
-            ReportRenderStatus::kInvalidArgument);
+            ReportRenderStatus::INVALID_ARGUMENT);
     }
     {
         NpuCheckSynccheckReport report =
@@ -1276,7 +1276,7 @@ TEST(ReportRendererTest, RejectsInvalidPairingMismatchMetadata)
         report.common.exec.pc = 0xdead;
         EXPECT_EQ(
             npucheck::RenderNpuCheckReportRecord(NpuCheckReportRecord::From(report), {}, &rendered),
-            ReportRenderStatus::kInvalidArgument);
+            ReportRenderStatus::INVALID_ARGUMENT);
     }
 }
 
@@ -1288,7 +1288,7 @@ TEST(ReportRendererTest, RejectsOrphanRelatedPointAndMismatchedPointStackPc)
         report.relatedPoint.operation = "UNREFERENCED_OPERATION";
         EXPECT_EQ(
             npucheck::RenderNpuCheckReportRecord(NpuCheckReportRecord::From(report), {}, &rendered),
-            ReportRenderStatus::kInvalidArgument);
+            ReportRenderStatus::INVALID_ARGUMENT);
     }
     {
         NpuCheckSynccheckReport report =
@@ -1302,7 +1302,7 @@ TEST(ReportRendererTest, RejectsOrphanRelatedPointAndMismatchedPointStackPc)
         report.common.stacks[0].frames.push_back(ReportFrame{0x2000, 0x20, "DifferentInstruction", "sync.cpp", 30});
         EXPECT_EQ(
             npucheck::RenderNpuCheckReportRecord(NpuCheckReportRecord::From(report), {}, &rendered),
-            ReportRenderStatus::kInvalidArgument);
+            ReportRenderStatus::INVALID_ARGUMENT);
     }
     {
         NpuCheckSynccheckReport report =
@@ -1310,14 +1310,14 @@ TEST(ReportRendererTest, RejectsOrphanRelatedPointAndMismatchedPointStackPc)
         report.common.flags = 0;
         EXPECT_EQ(
             npucheck::RenderNpuCheckReportRecord(NpuCheckReportRecord::From(report), {}, &rendered),
-            ReportRenderStatus::kInvalidArgument);
+            ReportRenderStatus::INVALID_ARGUMENT);
     }
     {
         NpuCheckSynccheckReport report = MakeSynccheckReport(NpuCheckReportPattern::SYNCCHECK_INVALID_ARGUMENT);
         report.primitiveKind = static_cast<NpuCheckSyncPrimitiveKind>(99);
         EXPECT_EQ(
             npucheck::RenderNpuCheckReportRecord(NpuCheckReportRecord::From(report), {}, &rendered),
-            ReportRenderStatus::kInvalidArgument);
+            ReportRenderStatus::INVALID_ARGUMENT);
     }
 }
 
@@ -1405,9 +1405,9 @@ TEST(ReportRendererTest, RendersStructuredReportsFromEachCheckerStruct)
 
     std::string rendered;
     for (const NpuCheckReportRecord& record : records) {
-        EXPECT_EQ(npucheck::RenderNpuCheckReportRecord(record, {}, &rendered), ReportRenderStatus::kSuccess);
+        EXPECT_EQ(npucheck::RenderNpuCheckReportRecord(record, {}, &rendered), ReportRenderStatus::SUCCESS);
     }
-    EXPECT_EQ(npucheck::RenderNpuCheckReportBundle(records, {}, &rendered), ReportRenderStatus::kSuccess);
+    EXPECT_EQ(npucheck::RenderNpuCheckReportBundle(records, {}, &rendered), ReportRenderStatus::SUCCESS);
     EXPECT_NE(rendered.find("========= ERROR:[MEMCHECK] Invalid GM read of size 16 bytes"), std::string::npos);
     EXPECT_NE(
         rendered.find("========= ERROR:[INITCHECK] Uninitialized GM memory read of size 32 bytes"), std::string::npos);
@@ -1436,7 +1436,7 @@ TEST(ReportRendererTest, RendersAllStructuredPatternTemplates)
         report.common.severity = ReportSeverity::ERROR;
         EXPECT_EQ(
             npucheck::RenderNpuCheckReportRecord(NpuCheckReportRecord::From(report), {}, &rendered),
-            ReportRenderStatus::kSuccess);
+            ReportRenderStatus::SUCCESS);
     }
 
     for (const auto pattern :
@@ -1449,7 +1449,7 @@ TEST(ReportRendererTest, RendersAllStructuredPatternTemplates)
         report.common.severity = ReportSeverity::ERROR;
         EXPECT_EQ(
             npucheck::RenderNpuCheckReportRecord(NpuCheckReportRecord::From(report), {}, &rendered),
-            ReportRenderStatus::kSuccess);
+            ReportRenderStatus::SUCCESS);
     }
 
     for (const auto pattern :
@@ -1463,7 +1463,7 @@ TEST(ReportRendererTest, RendersAllStructuredPatternTemplates)
         report.common.severity = ReportSeverity::WARNING;
         EXPECT_EQ(
             npucheck::RenderNpuCheckReportRecord(NpuCheckReportRecord::From(report), {}, &rendered),
-            ReportRenderStatus::kSuccess);
+            ReportRenderStatus::SUCCESS);
     }
 
     for (const auto pattern :
@@ -1475,7 +1475,7 @@ TEST(ReportRendererTest, RendersAllStructuredPatternTemplates)
         NpuCheckSynccheckReport report = MakeSynccheckReport(pattern);
         EXPECT_EQ(
             npucheck::RenderNpuCheckReportRecord(NpuCheckReportRecord::From(report), {}, &rendered),
-            ReportRenderStatus::kSuccess);
+            ReportRenderStatus::SUCCESS);
     }
 
     for (const auto pattern :
@@ -1489,7 +1489,7 @@ TEST(ReportRendererTest, RendersAllStructuredPatternTemplates)
         report.common.severity = ReportSeverity::ERROR;
         EXPECT_EQ(
             npucheck::RenderNpuCheckReportRecord(NpuCheckReportRecord::From(report), {}, &rendered),
-            ReportRenderStatus::kSuccess);
+            ReportRenderStatus::SUCCESS);
     }
 }
 

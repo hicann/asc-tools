@@ -367,7 +367,7 @@ int main()
 
     std::string output;
     const ReportRenderStatus status = RenderNpuCheckReportBundle(records, {}, &output);
-    if (status != ReportRenderStatus::kSuccess) {
+    if (status != ReportRenderStatus::SUCCESS) {
         std::cerr << "Failed to render NPU-CHECK demo bundle, status=" << static_cast<int>(status) << '\n';
         return 1;
     }

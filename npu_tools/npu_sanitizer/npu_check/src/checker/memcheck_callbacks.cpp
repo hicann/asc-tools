@@ -44,7 +44,7 @@ bool Memcheck::OnCallback(AclsanCallbackDomain domain, AclsanCallbackId cbid, co
             auto completed = OnSynchronization();
             std::ostringstream message;
             message << "synchronization completed reports=" << completed.size() << " stream=" << event->stream;
-            WritePlog(PlogLevel::kInfo, message.str());
+            WritePlog(PlogLevel::INFO, message.str());
             AppendCheckerReports(std::move(completed), reports);
         }
     }

@@ -160,7 +160,7 @@ aclError ExpandArguments(
 
 void StoreHiddenPointer(PreparedTraceLaunch& prepared, TraceArgumentMode argumentMode)
 {
-    if (argumentMode == TraceArgumentMode::kHostArgs) {
+    if (argumentMode == TraceArgumentMode::HOST_ARGS) {
         std::memcpy(
             prepared.arguments.data() + prepared.traceArgumentOffset, &prepared.deviceBuffer,
             sizeof(prepared.deviceBuffer));
@@ -356,7 +356,7 @@ aclError PrepareTraceLaunch(
         prepared.blockCount = blockCount;
         ACLSAN_RETURN_IF_ACL_ERROR(ResolveLaunchContext(prepared), "Failed to resolve trace launch context");
 
-        if (argumentMode == TraceArgumentMode::kHostArgs) {
+        if (argumentMode == TraceArgumentMode::HOST_ARGS) {
             ACLSAN_RETURN_IF_ACL_ERROR(
                 ExpandArguments(
                     hostArgs, argsSize, placeholders, placeholderCount, prepared.traceArgumentOffset, prepared),

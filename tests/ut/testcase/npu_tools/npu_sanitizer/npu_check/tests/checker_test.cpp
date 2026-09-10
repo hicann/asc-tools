@@ -19,8 +19,8 @@ namespace {
 std::vector<std::unique_ptr<Checker>> Both()
 {
     std::vector<std::unique_ptr<Checker>> result;
-    result.push_back(CreateChecker(npucheck::ipc::ToolId::kMemcheck));
-    result.push_back(CreateChecker(npucheck::ipc::ToolId::kSynccheck));
+    result.push_back(CreateChecker(npucheck::ipc::ToolId::MEMCHECK));
+    result.push_back(CreateChecker(npucheck::ipc::ToolId::SYNCCHECK));
     return result;
 }
 
@@ -117,7 +117,7 @@ TEST(CheckerTest, BothProduceReportsFromTheSameSynchronization)
         std::visit([&](auto& typed) { records.push_back(npucheck::NpuCheckReportRecord::From(typed)); }, report);
     }
     std::string text;
-    ASSERT_EQ(npucheck::RenderNpuCheckReportBundle(records, {}, &text), npucheck::ReportRenderStatus::kSuccess);
+    ASSERT_EQ(npucheck::RenderNpuCheckReportBundle(records, {}, &text), npucheck::ReportRenderStatus::SUCCESS);
     EXPECT_NE(text.find("MEMCHECK SUMMARY: 1 errors"), std::string::npos);
     EXPECT_NE(text.find("SYNCCHECK SUMMARY: 1 errors"), std::string::npos);
     for (const auto& checker : checkers) {

@@ -110,25 +110,25 @@ struct HelloPayload {
 // domain/code 是给机器看的稳定取值，进 CLI 的结构化日志；message 只供人读，接收端
 // 不得依赖它的内容做任何分支判断 —— 否则文案一改，判定逻辑就跟着坏。
 enum class ErrorDomain : uint16_t {
-    kInjection = 1,     // 注入 / 初始化：环境变量、bind/listen、日志打开
-    kConfiguration = 2, // 配置：Configure 解码、注册表校验、checker 构造
-    kProtocol = 3,      // 协议：会话号、序号、长度交叉校验、消息顺序
-    kInternal = 4,      // 库内部：报告不可用、回调框架异常
+    INJECTION = 1,     // 注入 / 初始化：环境变量、bind/listen、日志打开
+    CONFIGURATION = 2, // 配置：Configure 解码、注册表校验、checker 构造
+    PROTOCOL = 3,      // 协议：会话号、序号、长度交叉校验、消息顺序
+    INTERNAL = 4,      // 库内部：报告不可用、回调框架异常
 };
 
 // 域内错误码，取值仅在所属 domain 内唯一。V1 只区分到"能让日志有稳定取值"的粒度，
 // 具体原因由 message 承载。
 namespace error_code {
-// ErrorDomain::kInjection
+// ErrorDomain::INJECTION
 constexpr uint16_t kEnvironmentInvalid = 1;
 constexpr uint16_t kListenFailed = 2;
 // Code 3 is reserved (removed file-logger initialization failure).
-// ErrorDomain::kConfiguration
+// ErrorDomain::CONFIGURATION
 constexpr uint16_t kToolInitializationFailed = 1;
 constexpr uint16_t kConfigureMalformed = 2;
-// ErrorDomain::kProtocol
+// ErrorDomain::PROTOCOL
 constexpr uint16_t kFrameRejected = 1;
-// ErrorDomain::kInternal
+// ErrorDomain::INTERNAL
 constexpr uint16_t kReportUnavailable = 1;
 } // namespace error_code
 
@@ -136,7 +136,7 @@ constexpr size_t kErrorHeaderSize = 8;
 constexpr size_t kMaxErrorMessageSize = 1024;
 
 struct ErrorPayload {
-    ErrorDomain domain = ErrorDomain::kInternal;
+    ErrorDomain domain = ErrorDomain::INTERNAL;
     uint16_t code = 0;
     std::string message; // UTF-8，不以 NUL 结尾；超长时由编码器截断
 };
@@ -149,24 +149,24 @@ struct ErrorPayload {
 // ---------------------------------------------------------------------------
 
 enum class ToolId : uint16_t {
-    kMemcheck = 1,  // 内存访问与生命周期检查
-    kSynccheck = 2, // 同步原语及 barrier 使用检查
+    MEMCHECK = 1,  // 内存访问与生命周期检查
+    SYNCCHECK = 2, // 同步原语及 barrier 使用检查
 };
 
 enum class OptionId : uint16_t {
-    kMemcheckCheckCacheControl = 0x0101,
-    kSynccheckMissingBarrierInitIsFatal = 0x0201,
+    MEMCHECK_CHECK_CACHE_CONTROL = 0x0101,
+    SYNCCHECK_MISSING_BARRIER_INIT_IS_FATAL = 0x0201,
 };
 
 // 以下为内存逻辑模型，与线路布局无关：字段顺序、对齐、padding 都可能与线上不同，
 // 编码器必须逐字段读写，不得把结构体整体 memcpy 到帧里。
 struct OptionValue {
-    OptionId optionId = OptionId::kMemcheckCheckCacheControl; // 唯一确定所属工具和值规则
-    std::vector<uint8_t> value;                               // 注册表编码器生成的规范字节
+    OptionId optionId = OptionId::MEMCHECK_CHECK_CACHE_CONTROL; // 唯一确定所属工具和值规则
+    std::vector<uint8_t> value;                                 // 注册表编码器生成的规范字节
 };
 
 struct ToolRequest {
-    ToolId toolId = ToolId::kMemcheck;
+    ToolId toolId = ToolId::MEMCHECK;
     std::vector<OptionValue> options; // 按 optionId 升序，不重复
 };
 

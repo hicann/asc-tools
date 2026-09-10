@@ -137,11 +137,11 @@ std::vector<std::pair<uint16_t, std::vector<uint16_t>>> ToolShape(const Options&
     return shape;
 }
 
-constexpr uint16_t kMemcheck = static_cast<uint16_t>(npucheck::ipc::ToolId::kMemcheck);
-constexpr uint16_t kSynccheck = static_cast<uint16_t>(npucheck::ipc::ToolId::kSynccheck);
-constexpr uint16_t kCheckCacheControl = static_cast<uint16_t>(npucheck::ipc::OptionId::kMemcheckCheckCacheControl);
+constexpr uint16_t kMemcheck = static_cast<uint16_t>(npucheck::ipc::ToolId::MEMCHECK);
+constexpr uint16_t kSynccheck = static_cast<uint16_t>(npucheck::ipc::ToolId::SYNCCHECK);
+constexpr uint16_t kCheckCacheControl = static_cast<uint16_t>(npucheck::ipc::OptionId::MEMCHECK_CHECK_CACHE_CONTROL);
 constexpr uint16_t kMissingBarrierInitIsFatal =
-    static_cast<uint16_t>(npucheck::ipc::OptionId::kSynccheckMissingBarrierInitIsFatal);
+    static_cast<uint16_t>(npucheck::ipc::OptionId::SYNCCHECK_MISSING_BARRIER_INIT_IS_FATAL);
 
 // 完全没有 --tool 时工具集合取默认值 {memcheck}。
 TEST(OptionsTest, DefaultsToMemcheckWhenNoToolGiven)
@@ -347,6 +347,21 @@ TEST(OptionsTest, NormalizesLogFileToAbsolutePath)
     EXPECT_TRUE(Parse({"npu_check", kSampleApp}).options.logFile.empty());
 }
 
+TEST(OptionsTest, LogFileRequiresAnExistingParentAndAFileName)
+{
+    const auto root = boost::filesystem::temp_directory_path() / boost::filesystem::unique_path("log-path-%%%%-%%%%");
+    boost::filesystem::create_directories(root);
+    for (const auto& path :
+         {root.string(), root.string() + "/", (root / "missing/").string(), (root / "missing/report.log").string(),
+          std::string{}, std::string("/dev/null")}) {
+        EXPECT_FALSE(Parse({"npu-check", "--log-file", path, kSampleApp}).ok) << path;
+    }
+    EXPECT_TRUE(Parse({"npu-check", "--log-file", (root / "report").string(), kSampleApp}).ok);
+    TemporaryFile existing;
+    EXPECT_TRUE(Parse({"npu-check", "--log-file", existing.Path().string(), kSampleApp}).ok);
+    boost::filesystem::remove_all(root);
+}
+
 // --work-dir 的值要跨 fork 传给注入库，而子进程的当前目录不保证与 CLI 相同，
 // 相对路径会在两侧解析到不同位置，因此必须在解析阶段就转成绝对路径。
 TEST(OptionsTest, NormalizesWorkDirToAbsolutePath)
@@ -455,12 +470,12 @@ TEST(OptionsTest, RepeatedToolsAndLegacyAliasAreEquivalent)
         Parse({"npu-check", "--tools", "synccheck", "--tools", "memcheck", "--tool", "memcheck", kSampleApp});
     ASSERT_TRUE(combined.ok) << combined.error;
     ASSERT_EQ(combined.options.tools.size(), 2U);
-    EXPECT_EQ(combined.options.tools[0].toolId, npucheck::ipc::ToolId::kMemcheck);
-    EXPECT_EQ(combined.options.tools[1].toolId, npucheck::ipc::ToolId::kSynccheck);
+    EXPECT_EQ(combined.options.tools[0].toolId, npucheck::ipc::ToolId::MEMCHECK);
+    EXPECT_EQ(combined.options.tools[1].toolId, npucheck::ipc::ToolId::SYNCCHECK);
     const auto single = Parse({"npu-check", "--tools", "synccheck", kSampleApp});
     ASSERT_TRUE(single.ok) << single.error;
     ASSERT_EQ(single.options.tools.size(), 1U);
-    EXPECT_EQ(single.options.tools[0].toolId, npucheck::ipc::ToolId::kSynccheck);
+    EXPECT_EQ(single.options.tools[0].toolId, npucheck::ipc::ToolId::SYNCCHECK);
     EXPECT_FALSE(Parse({"npu-check", "--tools"}).ok);
     EXPECT_FALSE(Parse({"npu-check", "--tools", "invalid", kSampleApp}).ok);
     const auto forwarded = Parse({"npu-check", "--tools", "memcheck", "--", kSampleApp, "--tools", "synccheck"});

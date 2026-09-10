@@ -167,7 +167,7 @@ void Cleanup(const BinaryInstrumentationConfig& config, const std::string& work)
 
 void ReportInstrumentationFailure(const BinaryInstrumentationResult& result)
 {
-    aclsan::WritePlog(aclsan::PlogLevel::kError, "DBI patch failed at " + result.stage + ": " + result.diagnostic);
+    aclsan::WritePlog(aclsan::PlogLevel::ERROR, "DBI patch failed at " + result.stage + ": " + result.diagnostic);
 }
 
 } // namespace
@@ -292,8 +292,8 @@ RuntimeBinaryInstrumentationResult InstrumentRuntimeBinary(
             return {failure.status, strict, 0, 0};
         }
         aclsan::WritePlog(
-            aclsan::PlogLevel::kInfo, "DBI instrumentation started bytes=" + std::to_string(length) +
-                                          " probe_groups=" + std::to_string(probeGroupMask));
+            aclsan::PlogLevel::INFO, "DBI instrumentation started bytes=" + std::to_string(length) +
+                                         " probe_groups=" + std::to_string(probeGroupMask));
         const BinaryInstrumentationResult result = InstrumentBinary(config, data, length, runner, runnerData);
         if (result.status == BinaryInstrumentationStatus::Failed) {
             ReportInstrumentationFailure(result);
@@ -310,8 +310,8 @@ RuntimeBinaryInstrumentationResult InstrumentRuntimeBinary(
         }
         const int32_t consumerStatus = consumer(result.binary.data(), result.binary.size(), consumerData);
         aclsan::WritePlog(
-            aclsan::PlogLevel::kInfo, "DBI instrumentation completed bytes=" + std::to_string(result.binary.size()) +
-                                          " load_result=" + std::to_string(consumerStatus));
+            aclsan::PlogLevel::INFO, "DBI instrumentation completed bytes=" + std::to_string(result.binary.size()) +
+                                         " load_result=" + std::to_string(consumerStatus));
         return {result.status, config.strict ? 1U : 0U, consumerStatus, result.traceArgumentOffset};
     } catch (const std::exception& error) {
         const BinaryInstrumentationResult failure{

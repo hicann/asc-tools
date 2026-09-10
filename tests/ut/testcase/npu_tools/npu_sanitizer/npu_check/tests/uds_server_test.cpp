@@ -140,7 +140,7 @@ void RunClient(const std::string& udsName, uint64_t sessionId, ClientResult& res
 
     ConfigureRequest configure;
     ToolRequest tool;
-    tool.toolId = ToolId::kMemcheck;
+    tool.toolId = ToolId::MEMCHECK;
     configure.tools.push_back(std::move(tool));
     if (!SendClientFrame(fd, MessageType::CONFIGURE, sessionId, sequence++, EncodeConfigure(configure), result.error) ||
         ReceiveFrame(fd, result.ready, deadline, result.error) != IoStatus::OK ||
@@ -186,7 +186,7 @@ void RunResultClient(const std::string& udsName, uint64_t sessionId, ResultClien
     Frame serverHello{};
     ConfigureRequest configure;
     ToolRequest tool;
-    tool.toolId = ToolId::kMemcheck;
+    tool.toolId = ToolId::MEMCHECK;
     configure.tools.push_back(std::move(tool));
     Frame ready{};
     if (!SendClientFrame(fd, MessageType::CLIENT_HELLO, sessionId, sequence++, EncodeHello(hello), result.error) ||
@@ -312,7 +312,7 @@ TEST(UdsServerTest, SendsFlowErrorSynchronouslyAfterReady)
     const bool handshakeSucceeded = server.StartAndHandshake(config, serverError);
     const bool readySucceeded = handshakeSucceeded && server.SendReady(serverError);
     if (readySucceeded) {
-        server.SendError(ErrorDomain::kInternal, error_code::kReportUnavailable, "callback processing failed");
+        server.SendError(ErrorDomain::INTERNAL, error_code::kReportUnavailable, "callback processing failed");
     }
     client.join();
     server.Shutdown();
@@ -321,7 +321,7 @@ TEST(UdsServerTest, SendsFlowErrorSynchronouslyAfterReady)
     ASSERT_TRUE(readySucceeded) << serverError;
     ASSERT_TRUE(clientResult.error.empty()) << clientResult.error;
     ASSERT_EQ(config.tools.size(), 1U);
-    EXPECT_EQ(config.tools[0].toolId, ToolId::kMemcheck);
+    EXPECT_EQ(config.tools[0].toolId, ToolId::MEMCHECK);
     EXPECT_EQ(clientResult.ready.type, MessageType::READY);
     EXPECT_EQ(clientResult.ready.sequence, 2U);
     EXPECT_EQ(clientResult.flowError.type, MessageType::ERROR);
@@ -331,7 +331,7 @@ TEST(UdsServerTest, SendsFlowErrorSynchronouslyAfterReady)
     // Error 走 8 字节结构化头 + 文本，CLI 据 domain/code 记日志，message 只供人读。
     ErrorPayload flowError{};
     ASSERT_TRUE(DecodeError(clientResult.flowError.payload, flowError, clientResult.error));
-    EXPECT_EQ(flowError.domain, ErrorDomain::kInternal);
+    EXPECT_EQ(flowError.domain, ErrorDomain::INTERNAL);
     EXPECT_EQ(flowError.code, error_code::kReportUnavailable);
     EXPECT_EQ(flowError.message, "callback processing failed");
 }
@@ -359,7 +359,7 @@ TEST(UdsServerTest, SkipsMustIgnoreFramesWithoutBreakingSequence)
     const bool handshakeSucceeded = server.StartAndHandshake(config, serverError);
     const bool readySucceeded = handshakeSucceeded && server.SendReady(serverError);
     if (readySucceeded) {
-        server.SendError(ErrorDomain::kInternal, error_code::kReportUnavailable, "callback processing failed");
+        server.SendError(ErrorDomain::INTERNAL, error_code::kReportUnavailable, "callback processing failed");
     }
     client.join();
     server.Shutdown();
@@ -369,7 +369,7 @@ TEST(UdsServerTest, SkipsMustIgnoreFramesWithoutBreakingSequence)
     ASSERT_TRUE(readySucceeded) << serverError;
     ASSERT_TRUE(clientResult.error.empty()) << clientResult.error;
     ASSERT_EQ(config.tools.size(), 1U);
-    EXPECT_EQ(config.tools[0].toolId, ToolId::kMemcheck);
+    EXPECT_EQ(config.tools[0].toolId, ToolId::MEMCHECK);
     EXPECT_EQ(clientResult.ready.type, MessageType::READY);
 }
 

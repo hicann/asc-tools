@@ -131,6 +131,31 @@ bool IsSafelyOwned(const boost::filesystem::path& path, std::string& reason)
 
 } // namespace
 
+bool ValidateLogFilePath(const std::string& path, std::string& error)
+{
+    const boost::filesystem::path file(path);
+    if (path.empty() || path.back() == '/' || file.filename() == "." || file.filename() == "..") {
+        error = "--log-file requires a file path: " + path;
+        return false;
+    }
+    boost::system::error_code ec;
+    const auto parent = file.has_parent_path() ? file.parent_path() : boost::filesystem::path(".");
+    if (!boost::filesystem::is_directory(parent, ec) || ec) {
+        error = "log file parent is not an existing directory: " + parent.string();
+        return false;
+    }
+    const auto status = boost::filesystem::status(file, ec);
+    if (ec && ec != boost::system::errc::no_such_file_or_directory) {
+        error = "cannot inspect log file: " + path + ": " + ec.message();
+        return false;
+    }
+    if (boost::filesystem::exists(status) && !boost::filesystem::is_regular_file(status)) {
+        error = "--log-file requires a file path, not a directory: " + path;
+        return false;
+    }
+    return true;
+}
+
 bool ParseOptions(int argc, char** argv, Options& options, std::string& error)
 {
     options = {};
@@ -179,6 +204,9 @@ bool ParseOptions(int argc, char** argv, Options& options, std::string& error)
         }
         if (argument == "--log-file") {
             if (!NeedValue(argc, argv, i, value, error)) {
+                return false;
+            }
+            if (!ValidateLogFilePath(value, error)) {
                 return false;
             }
             options.logFile = AbsolutePath(value);
@@ -233,7 +261,7 @@ bool ParseOptions(int argc, char** argv, Options& options, std::string& error)
     // 默认值即不生效，不与显式指定的工具做并集 —— 否则用户没法把默认工具关掉。
     std::set<npucheck::ipc::ToolId> enabledTools = explicitTools;
     if (enabledTools.empty()) {
-        enabledTools.insert(npucheck::ipc::ToolId::kMemcheck);
+        enabledTools.insert(npucheck::ipc::ToolId::MEMCHECK);
     }
 
     // 子选项的依赖校验必须在默认值生效之后进行：否则只写 --check-cache-control 而不写
@@ -358,8 +386,8 @@ std::string Usage()
            "  --tools <memcheck|synccheck> enable a checker; repeatable and idempotent.\n"
            "                               Defaults to memcheck when no tool is given.\n"
            "  --tool <name>               alias for --tools\n"
-           "  --log-file <path>            directory or file receiving the report and\n"
-           "                               the application output\n"
+           "  --log-file <path>            file receiving the report and application output;\n"
+           "                               parent directory must exist; overwrites existing files\n"
            "  -h, --help                   show this help and exit\n"
            "\n"
            "Example: npu-check --tools memcheck --tools synccheck ./app\n"

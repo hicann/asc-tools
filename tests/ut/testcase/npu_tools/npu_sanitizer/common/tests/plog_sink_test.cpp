@@ -67,11 +67,11 @@ int main()
 
     // The test library starts with logging disabled.
     plog_test::ResetApi();
-    WritePlog(PlogLevel::kError, "must not throw", "source.cpp", 7U, "InstallHook");
+    WritePlog(PlogLevel::ERROR, "must not throw", "source.cpp", 7U, "InstallHook");
 
     ResetCapture();
     plog_test::SetApi({CheckLogLevelStub, DlogRecordStub});
-    WritePlog(PlogLevel::kWarning, "hook install failed", "source.cpp", 7U, "InstallHook");
+    WritePlog(PlogLevel::WARNING, "hook install failed", "source.cpp", 7U, "InstallHook");
 
     assert(g_checkCalls == 1);
     assert(g_recordCalls == 1);
@@ -83,7 +83,7 @@ int main()
         "[source.cpp:7] " + std::to_string(syscall(SYS_gettid)) + " InstallHook: hook install failed");
 
     // Default source information must describe the caller, not the sink.
-    for (auto level : {PlogLevel::kDebug, PlogLevel::kInfo, PlogLevel::kWarning, PlogLevel::kError}) {
+    for (auto level : {PlogLevel::DEBUG, PlogLevel::INFO, PlogLevel::WARNING, PlogLevel::ERROR}) {
         ResetCapture();
         const auto expectedLine = __LINE__ + 1;
         WritePlog(level, "record without a file logger");
@@ -94,20 +94,20 @@ int main()
     }
     // A worker must emit its own Linux TID, rather than the process ID.
     std::thread worker([] {
-        WritePlog(PlogLevel::kInfo, "worker", "thread.cpp", 3, "Worker");
+        WritePlog(PlogLevel::INFO, "worker", "thread.cpp", 3, "Worker");
         assert(std::string(g_message) == "[thread.cpp:3] " + std::to_string(syscall(SYS_gettid)) + " Worker: worker");
         assert(syscall(SYS_gettid) != getpid());
     });
     worker.join();
     ResetCapture();
     g_enabled = false;
-    WritePlog(PlogLevel::kDebug, "filtered by CANN");
+    WritePlog(PlogLevel::DEBUG, "filtered by CANN");
     assert(g_checkCalls == 1);
     assert(g_recordCalls == 0);
     g_enabled = true;
 
     ResetCapture();
-    WritePlog(PlogLevel::kError, std::string(4096, 'x') + "\ncompiler-error-tail");
+    WritePlog(PlogLevel::ERROR, std::string(4096, 'x') + "\ncompiler-error-tail");
     assert(g_recordCalls > 1);
     assert(std::strstr(g_message, "compiler-error-tail") != nullptr);
 

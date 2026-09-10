@@ -22,11 +22,11 @@ ConfigureRequest SampleConfigure()
 {
     ConfigureRequest request;
     ToolRequest memcheck;
-    memcheck.toolId = ToolId::kMemcheck;
-    memcheck.options.push_back({OptionId::kMemcheckCheckCacheControl, {0x01}});
+    memcheck.toolId = ToolId::MEMCHECK;
+    memcheck.options.push_back({OptionId::MEMCHECK_CHECK_CACHE_CONTROL, {0x01}});
     ToolRequest synccheck;
-    synccheck.toolId = ToolId::kSynccheck;
-    synccheck.options.push_back({OptionId::kSynccheckMissingBarrierInitIsFatal, {0x01}});
+    synccheck.toolId = ToolId::SYNCCHECK;
+    synccheck.options.push_back({OptionId::SYNCCHECK_MISSING_BARRIER_INIT_IS_FATAL, {0x01}});
     request.tools.push_back(std::move(memcheck));
     request.tools.push_back(std::move(synccheck));
     return request;
@@ -56,13 +56,13 @@ TEST(WireProtocolTest, RoundTripsHelloAndToolConfiguration)
     ASSERT_TRUE(DecodeConfigure(EncodeConfigure(request), decoded, error)) << error;
     ASSERT_EQ(decoded.tools.size(), 2U);
     EXPECT_EQ(decoded.globalFlags, 0U);
-    EXPECT_EQ(decoded.tools[0].toolId, ToolId::kMemcheck);
-    EXPECT_EQ(decoded.tools[1].toolId, ToolId::kSynccheck);
+    EXPECT_EQ(decoded.tools[0].toolId, ToolId::MEMCHECK);
+    EXPECT_EQ(decoded.tools[1].toolId, ToolId::SYNCCHECK);
     ASSERT_EQ(decoded.tools[0].options.size(), 1U);
-    EXPECT_EQ(decoded.tools[0].options[0].optionId, OptionId::kMemcheckCheckCacheControl);
+    EXPECT_EQ(decoded.tools[0].options[0].optionId, OptionId::MEMCHECK_CHECK_CACHE_CONTROL);
     EXPECT_EQ(decoded.tools[0].options[0].value, std::vector<uint8_t>{0x01});
     ASSERT_EQ(decoded.tools[1].options.size(), 1U);
-    EXPECT_EQ(decoded.tools[1].options[0].optionId, OptionId::kSynccheckMissingBarrierInitIsFatal);
+    EXPECT_EQ(decoded.tools[1].options[0].optionId, OptionId::SYNCCHECK_MISSING_BARRIER_INIT_IS_FATAL);
 
     // 线路上不出现任何原始命令行字符串：布局是 4 字节头 + 每工具 4 字节 + 每选项 5 字节。
     EXPECT_EQ(EncodeConfigure(request).size(), 4U + 2U * (4U + 5U));
@@ -77,27 +77,27 @@ TEST(WireProtocolTest, RejectsNonCanonicalConfigure)
 
     ConfigureRequest unsorted;
     ToolRequest synccheck;
-    synccheck.toolId = ToolId::kSynccheck;
+    synccheck.toolId = ToolId::SYNCCHECK;
     ToolRequest memcheck;
-    memcheck.toolId = ToolId::kMemcheck;
+    memcheck.toolId = ToolId::MEMCHECK;
     unsorted.tools.push_back(std::move(synccheck));
     unsorted.tools.push_back(std::move(memcheck));
     EXPECT_FALSE(DecodeConfigure(EncodeConfigure(unsorted), decoded, error));
 
     ConfigureRequest duplicated;
     ToolRequest first;
-    first.toolId = ToolId::kMemcheck;
+    first.toolId = ToolId::MEMCHECK;
     ToolRequest second;
-    second.toolId = ToolId::kMemcheck;
+    second.toolId = ToolId::MEMCHECK;
     duplicated.tools.push_back(std::move(first));
     duplicated.tools.push_back(std::move(second));
     EXPECT_FALSE(DecodeConfigure(EncodeConfigure(duplicated), decoded, error));
 
     ConfigureRequest duplicatedOption;
     ToolRequest tool;
-    tool.toolId = ToolId::kMemcheck;
-    tool.options.push_back({OptionId::kMemcheckCheckCacheControl, {0x01}});
-    tool.options.push_back({OptionId::kMemcheckCheckCacheControl, {0x01}});
+    tool.toolId = ToolId::MEMCHECK;
+    tool.options.push_back({OptionId::MEMCHECK_CHECK_CACHE_CONTROL, {0x01}});
+    tool.options.push_back({OptionId::MEMCHECK_CHECK_CACHE_CONTROL, {0x01}});
     duplicatedOption.tools.push_back(std::move(tool));
     EXPECT_FALSE(DecodeConfigure(EncodeConfigure(duplicatedOption), decoded, error));
 }
@@ -123,16 +123,16 @@ TEST(WireProtocolTest, RejectsInvalidConfigureContent)
     // 作用到错误的 checker 上。
     ConfigureRequest wrongOwner;
     ToolRequest owner;
-    owner.toolId = ToolId::kMemcheck;
-    owner.options.push_back({OptionId::kSynccheckMissingBarrierInitIsFatal, {0x01}});
+    owner.toolId = ToolId::MEMCHECK;
+    owner.options.push_back({OptionId::SYNCCHECK_MISSING_BARRIER_INIT_IS_FATAL, {0x01}});
     wrongOwner.tools.push_back(std::move(owner));
     EXPECT_FALSE(DecodeConfigure(EncodeConfigure(wrongOwner), decoded, error));
 
     // 值域越界：V1 全部是"出现即为真"的开关。
     ConfigureRequest badValue;
     ToolRequest valued;
-    valued.toolId = ToolId::kMemcheck;
-    valued.options.push_back({OptionId::kMemcheckCheckCacheControl, {0x07}});
+    valued.toolId = ToolId::MEMCHECK;
+    valued.options.push_back({OptionId::MEMCHECK_CHECK_CACHE_CONTROL, {0x07}});
     badValue.tools.push_back(std::move(valued));
     EXPECT_FALSE(DecodeConfigure(EncodeConfigure(badValue), decoded, error));
 
@@ -155,7 +155,7 @@ TEST(WireProtocolTest, RejectsOptionsAboveNegotiatedMinor)
     // 注册表里没有 introducedMinor > 0 的选项，因此这里用未知 optionId 覆盖另一条拒绝路径。
     ConfigureRequest unknown;
     ToolRequest tool;
-    tool.toolId = ToolId::kMemcheck;
+    tool.toolId = ToolId::MEMCHECK;
     tool.options.push_back({static_cast<OptionId>(0x0999), {0x01}});
     unknown.tools.push_back(std::move(tool));
     EXPECT_FALSE(ValidateConfigureMinor(unknown, 0, error));
@@ -324,7 +324,7 @@ TEST(WireProtocolTest, AcceptsHigherPeerMinorAndNegotiatesDown)
 TEST(WireProtocolTest, RoundTripsErrorPayload)
 {
     ErrorPayload payload{};
-    payload.domain = ErrorDomain::kConfiguration;
+    payload.domain = ErrorDomain::CONFIGURATION;
     payload.code = error_code::kConfigureMalformed;
     payload.message = "unsorted tool_id";
 
@@ -334,7 +334,7 @@ TEST(WireProtocolTest, RoundTripsErrorPayload)
     ErrorPayload decoded{};
     std::string error;
     ASSERT_TRUE(DecodeError(bytes, decoded, error)) << error;
-    EXPECT_EQ(decoded.domain, ErrorDomain::kConfiguration);
+    EXPECT_EQ(decoded.domain, ErrorDomain::CONFIGURATION);
     EXPECT_EQ(decoded.code, error_code::kConfigureMalformed);
     EXPECT_EQ(decoded.message, "unsorted tool_id");
 }
@@ -347,7 +347,7 @@ TEST(WireProtocolTest, RejectsMalformedErrorPayload)
     // 短于 8 字节的固定头。
     EXPECT_FALSE(DecodeError(std::vector<uint8_t>(4, 0), decoded, error));
 
-    auto valid = EncodeError({ErrorDomain::kProtocol, error_code::kFrameRejected, "bad sequence"});
+    auto valid = EncodeError({ErrorDomain::PROTOCOL, error_code::kFrameRejected, "bad sequence"});
     // reserved 非零。
     auto reservedSet = valid;
     reservedSet[7] = 1;
@@ -368,7 +368,7 @@ TEST(WireProtocolTest, RejectsMalformedErrorPayload)
 TEST(WireProtocolTest, TruncatesOverlongErrorMessage)
 {
     ErrorPayload payload{};
-    payload.domain = ErrorDomain::kInternal;
+    payload.domain = ErrorDomain::INTERNAL;
     payload.message.assign(kMaxErrorMessageSize + 100, 'x');
 
     const auto bytes = EncodeError(payload);

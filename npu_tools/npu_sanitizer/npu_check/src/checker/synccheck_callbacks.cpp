@@ -48,7 +48,7 @@ bool Synccheck::OnCallback(
                 << " kernel_sched_mode=" << attributes.kernelSchedMode
                 << " kernel_sched_mode_status=" << attributes.kernelSchedModeStatus
                 << " launch_result=" << data->common.result;
-        npucheck::WritePlog(npucheck::PlogLevel::kDebug, message.str());
+        npucheck::WritePlog(npucheck::PlogLevel::DEBUG, message.str());
 
         const auto logFailure = [data, functionName](const char* attribute, aclError status) {
             if (status == ACL_SUCCESS) {
@@ -57,7 +57,7 @@ bool Synccheck::OnCallback(
             std::ostringstream warning;
             warning << "kernel attribute query failed launch=" << data->launchId << " function=" << data->function
                     << " function_name=" << functionName << " attribute=" << attribute << " result=" << status;
-            npucheck::WritePlog(npucheck::PlogLevel::kWarning, warning.str());
+            npucheck::WritePlog(npucheck::PlogLevel::WARNING, warning.str());
         };
         logFailure("ACL_FUNC_ATTR_KERNEL_TYPE", attributes.kernelTypeStatus);
         logFailure("ACL_FUNC_ATTR_KERNEL_RATIO", attributes.kernelRatioStatus);

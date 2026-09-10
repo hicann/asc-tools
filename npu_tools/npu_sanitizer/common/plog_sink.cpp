@@ -39,13 +39,13 @@ PlogApi g_resolvedApi;
 int32_t ToDlogLevel(PlogLevel level) noexcept
 {
     switch (level) {
-        case PlogLevel::kDebug:
+        case PlogLevel::DEBUG:
             return DLOG_DEBUG;
-        case PlogLevel::kInfo:
+        case PlogLevel::INFO:
             return DLOG_INFO;
-        case PlogLevel::kWarning:
+        case PlogLevel::WARNING:
             return DLOG_WARN;
-        case PlogLevel::kError:
+        case PlogLevel::ERROR:
             return DLOG_ERROR;
     }
     return DLOG_ERROR;

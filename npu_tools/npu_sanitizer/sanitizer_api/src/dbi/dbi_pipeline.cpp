@@ -402,8 +402,8 @@ void LogToolOutput(const std::string& stage, const char* stream, const std::stri
         do {
             const size_t bytes = std::min(size_t{512}, end - offset);
             WritePlog(
-                PlogLevel::kDebug, "DBI stage=" + stage + " output=" + stream + " line=" + std::to_string(line) +
-                                       " part=" + std::to_string(part++) + " text=" + output.substr(offset, bytes));
+                PlogLevel::DEBUG, "DBI stage=" + stage + " output=" + stream + " line=" + std::to_string(line) +
+                                      " part=" + std::to_string(part++) + " text=" + output.substr(offset, bytes));
             offset += bytes;
         } while (offset < end);
         if (newline == std::string::npos) {
@@ -424,7 +424,7 @@ bool RunChecked(
     }
     LogToolOutput(stage, "command", command.str());
     const ToolResult toolResult = RunTool(arguments);
-    aclsan::WritePlog(aclsan::PlogLevel::kDebug, "DBI stage=" + stage + " exit=" + std::to_string(toolResult.exitCode));
+    aclsan::WritePlog(aclsan::PlogLevel::DEBUG, "DBI stage=" + stage + " exit=" + std::to_string(toolResult.exitCode));
     LogToolOutput(stage, "stdout", toolResult.standardOutput);
     LogToolOutput(stage, "stderr", toolResult.standardError);
     if (standardOutput != nullptr) {

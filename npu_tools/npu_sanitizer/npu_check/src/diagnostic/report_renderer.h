@@ -19,13 +19,13 @@
 namespace npucheck {
 
 enum class ReportRenderStatus {
-    kSuccess = 0,
-    kInvalidArgument = 1,
-    kMalformedTemplate = 2,
-    kMissingField = 3,
-    kOpenFailed = 4,
-    kWriteFailed = 5,
-    kUnknownTemplate = 6,
+    SUCCESS = 0,
+    INVALID_ARGUMENT = 1,
+    MALFORMED_TEMPLATE = 2,
+    MISSING_FIELD = 3,
+    OPEN_FAILED = 4,
+    WRITE_FAILED = 5,
+    UNKNOWN_TEMPLATE = 6,
 };
 struct ReportTemplate {
     std::string text;

@@ -64,11 +64,11 @@ std::string UnescapeTemplateText(const std::string& value)
 ReportRenderStatus ParseTemplateKey(const std::string& text, ReportTemplateKey* key)
 {
     if (key == nullptr) {
-        return ReportRenderStatus::kInvalidArgument;
+        return ReportRenderStatus::INVALID_ARGUMENT;
     }
     const std::size_t dot = text.find('.');
     if (dot == std::string::npos || dot == 0 || dot + 1 >= text.size()) {
-        return ReportRenderStatus::kMalformedTemplate;
+        return ReportRenderStatus::MALFORMED_TEMPLATE;
     }
 
     ReportTool tool = ReportTool::MEMCHECK;
@@ -84,37 +84,37 @@ ReportRenderStatus ParseTemplateKey(const std::string& text, ReportTemplateKey* 
         }
     }
     if (!found) {
-        return ReportRenderStatus::kUnknownTemplate;
+        return ReportRenderStatus::UNKNOWN_TEMPLATE;
     }
     *key = ReportTemplateKey{tool, text.substr(dot + 1)};
-    return ReportRenderStatus::kSuccess;
+    return ReportRenderStatus::SUCCESS;
 }
 
 ReportRenderStatus AppendTemplate(const ReportTemplate& tpl, const ReportFields& fields, std::string* out)
 {
     if (out == nullptr) {
-        return ReportRenderStatus::kInvalidArgument;
+        return ReportRenderStatus::INVALID_ARGUMENT;
     }
     std::size_t pos = 0;
     while (pos < tpl.text.size()) {
         const std::size_t open = tpl.text.find("{{", pos);
         if (open == std::string::npos) {
             out->append(tpl.text, pos, std::string::npos);
-            return ReportRenderStatus::kSuccess;
+            return ReportRenderStatus::SUCCESS;
         }
         out->append(tpl.text, pos, open - pos);
         const std::size_t close = tpl.text.find("}}", open + 2);
         if (close == std::string::npos) {
-            return ReportRenderStatus::kMalformedTemplate;
+            return ReportRenderStatus::MALFORMED_TEMPLATE;
         }
         const auto field = fields.find(tpl.text.substr(open + 2, close - open - 2));
         if (field == fields.end()) {
-            return ReportRenderStatus::kMissingField;
+            return ReportRenderStatus::MISSING_FIELD;
         }
         out->append(field->second);
         pos = close + 2;
     }
-    return ReportRenderStatus::kSuccess;
+    return ReportRenderStatus::SUCCESS;
 }
 
 std::string FieldOr(const ReportFields& fields, const std::string& key, const char* fallback)
@@ -227,7 +227,7 @@ void AppendCallStacks(const std::vector<ReportCallStack>& stacks, std::string* o
 ReportRenderStatus RenderReportText(const ReportTemplate& tpl, const ReportFields& fields, std::string* out)
 {
     if (out == nullptr) {
-        return ReportRenderStatus::kInvalidArgument;
+        return ReportRenderStatus::INVALID_ARGUMENT;
     }
     out->clear();
     return AppendTemplate(tpl, fields, out);
@@ -237,13 +237,13 @@ ReportRenderStatus RenderReportRecord(
     const ReportRecord& record, const ReportTemplateOverrides& overrides, std::string* out)
 {
     if (out == nullptr) {
-        return ReportRenderStatus::kInvalidArgument;
+        return ReportRenderStatus::INVALID_ARGUMENT;
     }
     const auto override = overrides.find(record.key);
     const ReportTemplate* tpl = override == overrides.end() ? FindBuiltinReportTemplate(record.key) : &override->second;
     if (tpl == nullptr) {
         out->clear();
-        return ReportRenderStatus::kUnknownTemplate;
+        return ReportRenderStatus::UNKNOWN_TEMPLATE;
     }
 
     ReportFields fields = record.fields;
@@ -251,40 +251,40 @@ ReportRenderStatus RenderReportRecord(
     fields["Severity"] = ReportSeverityName(record.severity);
     fields["pattern"] = record.key.pattern;
     const ReportRenderStatus status = RenderReportText(*tpl, fields, out);
-    if (status != ReportRenderStatus::kSuccess) {
+    if (status != ReportRenderStatus::SUCCESS) {
         return status;
     }
     AppendCallStacks(record.stacks, out);
-    return ReportRenderStatus::kSuccess;
+    return ReportRenderStatus::SUCCESS;
 }
 
 ReportRenderStatus WriteReportTextToStream(const std::string& text, std::ostream* out)
 {
     if (out == nullptr) {
-        return ReportRenderStatus::kInvalidArgument;
+        return ReportRenderStatus::INVALID_ARGUMENT;
     }
     (*out) << text;
-    return out->good() ? ReportRenderStatus::kSuccess : ReportRenderStatus::kWriteFailed;
+    return out->good() ? ReportRenderStatus::SUCCESS : ReportRenderStatus::WRITE_FAILED;
 }
 
 ReportRenderStatus WriteReportTextToFile(const std::string& text, const std::string& path)
 {
     std::ofstream out(path, std::ios::binary);
     if (!out.is_open()) {
-        return ReportRenderStatus::kOpenFailed;
+        return ReportRenderStatus::OPEN_FAILED;
     }
     out.write(text.data(), static_cast<std::streamsize>(text.size()));
-    return out.good() ? ReportRenderStatus::kSuccess : ReportRenderStatus::kWriteFailed;
+    return out.good() ? ReportRenderStatus::SUCCESS : ReportRenderStatus::WRITE_FAILED;
 }
 
 ReportRenderStatus LoadReportTemplateOverridesFromFile(const std::string& path, ReportTemplateOverrides* overrides)
 {
     if (overrides == nullptr) {
-        return ReportRenderStatus::kInvalidArgument;
+        return ReportRenderStatus::INVALID_ARGUMENT;
     }
     std::ifstream input(path);
     if (!input.is_open()) {
-        return ReportRenderStatus::kOpenFailed;
+        return ReportRenderStatus::OPEN_FAILED;
     }
     std::string line;
     while (std::getline(input, line)) {
@@ -294,16 +294,16 @@ ReportRenderStatus LoadReportTemplateOverridesFromFile(const std::string& path, 
         }
         const std::size_t eq = line.find('=');
         if (eq == std::string::npos || eq == 0) {
-            return ReportRenderStatus::kMalformedTemplate;
+            return ReportRenderStatus::MALFORMED_TEMPLATE;
         }
         ReportTemplateKey key{};
         const ReportRenderStatus status = ParseTemplateKey(Trim(line.substr(0, eq)), &key);
-        if (status != ReportRenderStatus::kSuccess) {
+        if (status != ReportRenderStatus::SUCCESS) {
             return status;
         }
         (*overrides)[key] = ReportTemplate{UnescapeTemplateText(line.substr(eq + 1))};
     }
-    return ReportRenderStatus::kSuccess;
+    return ReportRenderStatus::SUCCESS;
 }
 
 const char* ReportStackRoleTitle(ReportStackRole role)

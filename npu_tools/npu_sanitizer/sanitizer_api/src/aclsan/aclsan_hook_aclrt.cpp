@@ -307,7 +307,7 @@ aclError aclrtLaunchKernelWithHostArgsHook(
     ACLSAN_RETURN_IF_ACL_ERROR(
         aclsan::PrepareTraceLaunch(
             funcHandle, numBlocks, hostArgs, argsSize, placeHolderArray, placeHolderNum,
-            aclsan::TraceArgumentMode::kHostArgs, prepared),
+            aclsan::TraceArgumentMode::HOST_ARGS, prepared),
         "Failed to prepare trace for aclrtLaunchKernelWithHostArgs");
 
     void* launchArguments = prepared.instrumented ? prepared.arguments.data() : hostArgs;
@@ -337,7 +337,7 @@ aclError aclrtLaunchKernelWithArgsArrayHook(
     // 原始参数由 ArgsArray 直接传递，这里只准备隐藏参数及其所属的 trace buffer。
     ACLSAN_RETURN_IF_ACL_ERROR(
         aclsan::PrepareTraceLaunch(
-            func, numBlocks, nullptr, 0, nullptr, 0, aclsan::TraceArgumentMode::kArgsArray, prepared),
+            func, numBlocks, nullptr, 0, nullptr, 0, aclsan::TraceArgumentMode::ARGS_ARRAY, prepared),
         "Failed to PrepareTraceLaunch for aclrtLaunchKernelWithArgsArray");
 
     aclError result = ACL_SUCCESS;

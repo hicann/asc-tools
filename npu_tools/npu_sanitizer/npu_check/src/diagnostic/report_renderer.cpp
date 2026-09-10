@@ -19,7 +19,7 @@ ReportRenderStatus RenderReportBundle(
     const std::vector<ReportRecord>& records, const ReportTemplateOverrides& overrides, std::string* out)
 {
     if (out == nullptr) {
-        return ReportRenderStatus::kInvalidArgument;
+        return ReportRenderStatus::INVALID_ARGUMENT;
     }
 
     out->clear();
@@ -27,7 +27,7 @@ ReportRenderStatus RenderReportBundle(
     for (const ReportRecord& record : records) {
         std::string rendered;
         const ReportRenderStatus status = RenderReportRecord(record, overrides, &rendered);
-        if (status != ReportRenderStatus::kSuccess) {
+        if (status != ReportRenderStatus::SUCCESS) {
             out->clear();
             return status;
         }
@@ -39,7 +39,7 @@ ReportRenderStatus RenderReportBundle(
     }
 
     detail::AppendReportSummaries(records, out);
-    return ReportRenderStatus::kSuccess;
+    return ReportRenderStatus::SUCCESS;
 }
 
 ReportRenderStatus RenderNpuCheckReportRecord(
@@ -47,7 +47,7 @@ ReportRenderStatus RenderNpuCheckReportRecord(
 {
     ReportRecord templateRecord{};
     const ReportRenderStatus status = detail::NormalizeReport(record, &templateRecord);
-    if (status != ReportRenderStatus::kSuccess) {
+    if (status != ReportRenderStatus::SUCCESS) {
         if (out != nullptr) {
             out->clear();
         }
@@ -60,7 +60,7 @@ ReportRenderStatus RenderNpuCheckReportBundle(
     const std::vector<NpuCheckReportRecord>& records, const ReportTemplateOverrides& overrides, std::string* out)
 {
     if (out == nullptr) {
-        return ReportRenderStatus::kInvalidArgument;
+        return ReportRenderStatus::INVALID_ARGUMENT;
     }
 
     std::vector<ReportRecord> templateRecords;
@@ -68,7 +68,7 @@ ReportRenderStatus RenderNpuCheckReportBundle(
     for (const NpuCheckReportRecord& record : records) {
         ReportRecord templateRecord{};
         const ReportRenderStatus status = detail::NormalizeReport(record, &templateRecord);
-        if (status != ReportRenderStatus::kSuccess) {
+        if (status != ReportRenderStatus::SUCCESS) {
             out->clear();
             return status;
         }

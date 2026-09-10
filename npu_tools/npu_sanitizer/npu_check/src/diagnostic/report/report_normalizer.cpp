@@ -209,7 +209,7 @@ template <typename Report>
 ReportRenderStatus NormalizeTypedReport(const Report& report, ReportRecord* out)
 {
     *out = ToReportRecord(report);
-    return ReportRenderStatus::kSuccess;
+    return ReportRenderStatus::SUCCESS;
 }
 
 ReportRenderStatus NormalizeTypedReport(const NpuCheckSynccheckReport& report, ReportRecord* out)
@@ -222,23 +222,23 @@ ReportRenderStatus NormalizeTypedReport(const NpuCheckSynccheckReport& report, R
 ReportRenderStatus NormalizeReport(const NpuCheckReportRecord& record, ReportRecord* out)
 {
     if (out == nullptr) {
-        return ReportRenderStatus::kInvalidArgument;
+        return ReportRenderStatus::INVALID_ARGUMENT;
     }
     const int tool = static_cast<int>(record.tool);
     if (tool < static_cast<int>(ReportTool::MEMCHECK) || tool > static_cast<int>(ReportTool::SOCCHECK)) {
-        return ReportRenderStatus::kUnknownTemplate;
+        return ReportRenderStatus::UNKNOWN_TEMPLATE;
     }
     return std::visit(
         [&record, out](const auto& payload) -> ReportRenderStatus {
             using Payload = std::decay_t<decltype(payload)>;
             if constexpr (std::is_same_v<Payload, std::monostate>) {
-                return ReportRenderStatus::kInvalidArgument;
+                return ReportRenderStatus::INVALID_ARGUMENT;
             } else {
                 using Report = std::remove_const_t<std::remove_pointer_t<Payload>>;
                 if (payload == nullptr || record.tool != kReportTool<Report> ||
                     !ValidateReportCommon(payload->common, kReportTool<Report>, record.pattern) ||
                     !ValidateToolSpecific(*payload)) {
-                    return ReportRenderStatus::kInvalidArgument;
+                    return ReportRenderStatus::INVALID_ARGUMENT;
                 }
                 return NormalizeTypedReport(*payload, out);
             }
