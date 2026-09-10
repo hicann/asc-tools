@@ -10,7 +10,7 @@
 add_library(npu_compute_hardware_api_stub SHARED
   "${CMAKE_CURRENT_SOURCE_DIR}/hardware_api_stub.cpp"
 )
-target_link_libraries(npu_compute_hardware_api_stub PRIVATE npu_compute_test_headers)
+target_link_libraries(npu_compute_hardware_api_stub PRIVATE npu_compute_test_headers Boost::boost)
 set_target_properties(npu_compute_hardware_api_stub PROPERTIES
   OUTPUT_NAME npu_compute_hardware_api_stub
 )

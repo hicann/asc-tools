@@ -21,7 +21,5 @@ target_compile_definitions(${boost_filesystem_target} INTERFACE
 )
 
 add_subdirectory(injection)
-if(ASC_TOOLS_BUILD_NPU_COMPUTE)
-  add_subdirectory(npu_compute)
-endif()
+add_subdirectory(npu_compute)
 add_subdirectory(npu_sanitizer)

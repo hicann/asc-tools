@@ -9,7 +9,6 @@
  */
 #include "hardware/hardware_info_device.h"
 
-#include <charconv>
 #include <cstdint>
 #include <limits>
 #include <string>
@@ -47,9 +46,16 @@ bool ParseUnsigned(std::string_view text, Integer* value)
         return false;
     }
     Integer parsedValue = 0;
-    const auto parsed = std::from_chars(trimmed.data(), trimmed.data() + trimmed.size(), parsedValue);
-    if (parsed.ec != std::errc{} || parsed.ptr != trimmed.data() + trimmed.size()) {
-        return false;
+    const Integer maximum = std::numeric_limits<Integer>::max();
+    for (const char character : trimmed) {
+        if (character < '0' || character > '9') {
+            return false;
+        }
+        const Integer digit = static_cast<Integer>(character - '0');
+        if (parsedValue > (maximum - digit) / 10) {
+            return false;
+        }
+        parsedValue = parsedValue * 10 + digit;
     }
     *value = parsedValue;
     return true;

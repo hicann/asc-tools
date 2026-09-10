@@ -11,7 +11,6 @@
 
 #include <boost/filesystem.hpp>
 
-#include <charconv>
 #include <cstdint>
 #include <fstream>
 #include <limits>
@@ -58,8 +57,30 @@ bool ParseInteger(std::string_view text, Integer* value)
     if (trimmed.empty()) {
         return false;
     }
-    const auto parsed = std::from_chars(trimmed.data(), trimmed.data() + trimmed.size(), *value);
-    return parsed.ec == std::errc{} && parsed.ptr == trimmed.data() + trimmed.size();
+    const bool negative = trimmed.front() == '-';
+    const std::size_t begin = negative ? 1U : 0U;
+    if ((negative && !std::numeric_limits<Integer>::is_signed) || begin == trimmed.size()) {
+        return false;
+    }
+    // CPU/package IDs must be non-negative; preserve signed negative zero.
+    const uint64_t maximum = static_cast<uint64_t>(std::numeric_limits<Integer>::max());
+    uint64_t parsedValue = 0;
+    for (std::size_t index = begin; index < trimmed.size(); ++index) {
+        const char character = trimmed[index];
+        if (character < '0' || character > '9') {
+            return false;
+        }
+        const uint64_t digit = static_cast<uint64_t>(character - '0');
+        if (parsedValue > (maximum - digit) / 10) {
+            return false;
+        }
+        parsedValue = parsedValue * 10 + digit;
+    }
+    if (negative && parsedValue != 0) {
+        return false;
+    }
+    *value = static_cast<Integer>(parsedValue);
+    return true;
 }
 
 bool ReadFile(const boost::filesystem::path& path, std::string* content)

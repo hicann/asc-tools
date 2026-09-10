@@ -10,6 +10,7 @@
 #include "pmu/pmu_csv_writer.h"
 
 #include <algorithm>
+#include <array>
 #include <chrono>
 #include <cstdio>
 #include <cstdlib>
@@ -18,6 +19,7 @@
 #include <fstream>
 #include <iterator>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include <unistd.h>
@@ -782,16 +784,18 @@ int main()
         formulaConfig.outputDirectory = formula959Dir.string();
         formulaConfig.socName = "Ascend950PR_9599";
         CHECK(npucompute::PmuCsvWriter::Write(formulaResult, {"Memory"}, formulaConfig) == ACLPTI_SUCCESS);
-        for (const auto& [row, column] : std::array<std::pair<const char*, const char*>, 8>{
-                 std::pair{"cube7", "read_main_memory_datas(KB)"},
-                 std::pair{"cube7", "aic_main_mem_read_bw(GB/s)"},
-                 std::pair{"cube7", "GM_to_L1_datas(KB)"},
-                 std::pair{"cube7", "L0C_to_L1_datas(KB)"},
-                 std::pair{"cube7", "L0C_to_GM_datas(KB)"},
-                 std::pair{"vector7", "read_main_memory_datas(KB)"},
-                 std::pair{"vector7", "aiv_main_mem_read_bw(GB/s)"},
-                 std::pair{"vector7", "GM_to_UB_datas(KB)"},
+        for (const auto& cell : std::array<std::pair<const char*, const char*>, 8>{
+                 std::make_pair("cube7", "read_main_memory_datas(KB)"),
+                 std::make_pair("cube7", "aic_main_mem_read_bw(GB/s)"),
+                 std::make_pair("cube7", "GM_to_L1_datas(KB)"),
+                 std::make_pair("cube7", "L0C_to_L1_datas(KB)"),
+                 std::make_pair("cube7", "L0C_to_GM_datas(KB)"),
+                 std::make_pair("vector7", "read_main_memory_datas(KB)"),
+                 std::make_pair("vector7", "aiv_main_mem_read_bw(GB/s)"),
+                 std::make_pair("vector7", "GM_to_UB_datas(KB)"),
              }) {
+            const auto& row = cell.first;
+            const auto& column = cell.second;
             CHECK(
                 CsvValue(formula959Dir / "Memory.csv", row, column) ==
                 CsvValue(formulaDir / "Memory.csv", row, column));

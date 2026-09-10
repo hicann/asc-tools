@@ -11,6 +11,8 @@
 
 #include <cmath>
 #include <cstdio>
+#include <cstdint>
+#include <limits>
 #include <string>
 
 namespace {
@@ -124,5 +126,46 @@ int main()
 
     CHECK(!npucompute::SerializeHardwareInfoJsonl(zero, nullptr, &error));
     CHECK(!error.empty());
+
+    struct FrequencyCase {
+        std::string text;
+        bool valid;
+        uint32_t expected;
+    };
+    const FrequencyCase frequencyCases[] = {
+        {"1", true, 1},
+        {"0001800", true, 1800},
+        {" 1800", true, 1800},
+        {"4294967295", true, std::numeric_limits<uint32_t>::max()},
+        {"0", false, 0},
+        {"4294967296", false, 0},
+        {std::string(100, '9'), false, 0},
+        {"", false, 0},
+        {"abc", false, 0},
+        {"+1", false, 0},
+        {"-1", false, 0},
+        // Preserve the existing numeric-prefix extraction; this is not a full JSON validator.
+        {"12x", true, 12},
+        {"1e3", true, 1},
+        {std::string("12\0x", 4), true, 12},
+    };
+    for (const FrequencyCase& test : frequencyCases) {
+        const std::string input = "{\"category\":\"AI Core Information\",\"ai cube count\":36,\"ai vector count\":72,"
+                                  "\"ai cube frequency(MHZ)\":" +
+                                  test.text + ",\"ai vector frequency(MHZ)\":1800}\n";
+        error = "old error";
+        CHECK(npucompute::ParseHardwareInfoFrequenciesJsonl(input, &frequencies, &error) == test.valid);
+        CHECK(frequencies.aiCubeFrequencyMhz == test.expected);
+        CHECK(error.empty() == test.valid);
+        CHECK(frequencies.aiCubeCount == (test.valid ? 36U : 0U));
+        CHECK(frequencies.aiVectorCount == (test.valid ? 72U : 0U));
+        CHECK(frequencies.aiVectorFrequencyMhz == (test.valid ? 1800U : 0U));
+    }
+    CHECK(!npucompute::ParseHardwareInfoFrequenciesJsonl(
+        "{\"category\":\"AI Core Information\",\"ai cube count\":36,\"ai vector count\":72,"
+        "\"ai vector frequency(MHZ)\":1800}\n",
+        &frequencies, &error));
+    CHECK(!error.empty());
+    CHECK(frequencies.aiCubeFrequencyMhz == 0);
     return 0;
 }

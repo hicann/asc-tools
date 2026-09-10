@@ -395,6 +395,7 @@ add_executable(npu_compute_hardware_info_json_test
 target_include_directories(npu_compute_hardware_info_json_test PRIVATE
   ${NPU_COMPUTE_SOURCE_DIR}/src/compute
 )
+target_link_libraries(npu_compute_hardware_info_json_test PRIVATE Boost::boost)
 add_test(NAME npu_compute.hardware_info_json
   COMMAND npu_compute_hardware_info_json_test
 )
@@ -418,6 +419,7 @@ add_executable(npu_compute_hardware_info_device_test
 target_include_directories(npu_compute_hardware_info_device_test PRIVATE
   ${NPU_COMPUTE_SOURCE_DIR}/src/compute
 )
+target_link_libraries(npu_compute_hardware_info_device_test PRIVATE Boost::boost)
 add_test(NAME npu_compute.hardware_info_device
   COMMAND npu_compute_hardware_info_device_test
 )
@@ -433,6 +435,7 @@ target_link_libraries(npu_compute_hardware_device_api_test PRIVATE
   npu_compute_test_headers
   ${CMAKE_DL_LIBS}
 )
+target_link_libraries(npu_compute_hardware_device_api_test PRIVATE Boost::boost)
 add_test(NAME npu_compute.hardware_device_api
   COMMAND npu_compute_hardware_device_api_test
 )
@@ -642,7 +645,7 @@ add_test(
     "NPU_COMPUTE_TEST_BIN_DIR=$<TARGET_FILE_DIR:npu_compute_cli_test_bin>"
     "LD_PRELOAD=$<TARGET_FILE:npu_compute_hardware_api_stub>:$ENV{LD_PRELOAD}"
     ${Python3_EXECUTABLE} -m pytest -q -p no:cacheprovider
-    ${NPU_TOOLS_PY_TEST_ROOT}/npu_compute/test_npu_compute_integration.py
+    ${CMAKE_SOURCE_DIR}/tests/py_ut/testcase/npu_compute/test_npu_compute_integration.py
 )
 
 add_test(
@@ -650,6 +653,7 @@ add_test(
   COMMAND ${CMAKE_COMMAND} -E env
     "NPU_COMPUTE_TEST_BUILD_DIR=${CMAKE_BINARY_DIR}"
     "NPU_COMPUTE_TEST_BIN_DIR=$<TARGET_FILE_DIR:npu_compute_cli_test_bin>"
+    "NPU_COMPUTE_HARDWARE_API_STUB=$<TARGET_FILE:npu_compute_hardware_api_stub>"
     ${Python3_EXECUTABLE} -m pytest -q -p no:cacheprovider
-    ${NPU_TOOLS_PY_TEST_ROOT}/npu_compute/test_npu_compute_install.py
+    ${CMAKE_SOURCE_DIR}/tests/py_ut/testcase/npu_compute/test_npu_compute_install.py
 )

@@ -7,8 +7,8 @@
  * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
  * See LICENSE in the root of the software repository for the full text of the License.
  */
-#ifndef NPU_COMPUTE_STUBS_ACL_PTI_CALLBACK_INCLUDE_NPU_COMPUTE_ACL_PTI_CALLBACK_STUB_H_
-#define NPU_COMPUTE_STUBS_ACL_PTI_CALLBACK_INCLUDE_NPU_COMPUTE_ACL_PTI_CALLBACK_STUB_H_
+#ifndef NPU_TOOLS_NPU_COMPUTE_STUBS_ACL_PTI_CALLBACK_INCLUDE_NPU_COMPUTE_ACL_PTI_CALLBACK_STUB_H
+#define NPU_TOOLS_NPU_COMPUTE_STUBS_ACL_PTI_CALLBACK_INCLUDE_NPU_COMPUTE_ACL_PTI_CALLBACK_STUB_H
 
 #include "aclpti/aclpti.h"
 
@@ -17,7 +17,8 @@
 #include <string>
 #include <vector>
 
-namespace npucompute::test {
+namespace npucompute {
+namespace test {
 
 struct AclPtiEnableCall {
     std::size_t sequence;
@@ -50,8 +51,9 @@ bool InvokeAclPtiCallback(
     aclptiCallbackDomain domain, aclptiCallbackId cbid, aclptiCallbackSite site, aclError retval, void* functionParams);
 bool InvokeAclPtiRuntimeReady();
 
-} // namespace npucompute::test
+} // namespace test
+} // namespace npucompute
 
 extern "C" int AclPtiCallbackStubEmitRuntimeEvent(uint32_t cbid, uint32_t site, std::int32_t retval);
 
-#endif // NPU_COMPUTE_STUBS_ACL_PTI_CALLBACK_INCLUDE_NPU_COMPUTE_ACL_PTI_CALLBACK_STUB_H_
+#endif // NPU_TOOLS_NPU_COMPUTE_STUBS_ACL_PTI_CALLBACK_INCLUDE_NPU_COMPUTE_ACL_PTI_CALLBACK_STUB_H

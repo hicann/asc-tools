@@ -165,7 +165,7 @@ bool LoadPmuDataLevelFromEnvironment(const char* variableName, PmuDataLevel* lev
     return false;
 }
 
-} // namespace npucompute::detail
+} // namespace detail
 
 namespace {
 

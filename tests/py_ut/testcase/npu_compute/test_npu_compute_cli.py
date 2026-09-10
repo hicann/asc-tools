@@ -268,11 +268,20 @@ def test_arguments_after_program_are_passed_to_the_app_verbatim(tmp_path):
         code,
         "--section",
         "app-owned-value",
+        "",
+        "two words",
+        "",
         cwd=tmp_path,
     )
 
     assert result.returncode == 0
-    assert result.stdout.splitlines() == ["--section", "app-owned-value"]
+    assert result.stdout.splitlines() == [
+        "--section",
+        "app-owned-value",
+        "",
+        "two words",
+        "",
+    ]
 
 
 @pytest.mark.parametrize("app_argument", ("-h", "--help"))

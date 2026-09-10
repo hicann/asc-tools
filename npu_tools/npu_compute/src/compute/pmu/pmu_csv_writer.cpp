@@ -1200,7 +1200,7 @@ aclptiResult PmuCsvWriter::Write(
     }
     bool hasAic = false;
     bool hasAiv = false;
-    for (const auto& [key, _] : pmuLogs) {
+    for (const auto& [key, row] : pmuLogs) {
         hasAic = hasAic || key.coreType == ACLPTI_CORE_TYPE_AIC;
         hasAiv = hasAiv || key.coreType == ACLPTI_CORE_TYPE_AIV;
     }

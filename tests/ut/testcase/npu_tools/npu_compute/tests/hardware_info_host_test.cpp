@@ -130,5 +130,63 @@ int main()
     diagnostics.clear();
     CHECK(!npucompute::CollectHostInfo(outputDirectory, nullptr, &diagnosticSink, options));
     CHECK(Contains(diagnostics, "result is null"));
+
+    const std::string invalidOnline[] = {
+        "",    " \t\r\n", "1048577", "4294967295",          "4294967296",           "-1", "+1", "12x", "1 2",
+        "3-1", "0-1-2",   "0,,1",    std::string(100, '9'), std::string("0\0x", 3),
+    };
+    for (const std::string& text : invalidOnline) {
+        CHECK(WriteFile(cpuRoot / "online", text));
+        diagnostics.clear();
+        host.cpuPhysicalCount = 99;
+        CHECK(npucompute::CollectHostInfo(outputDirectory, &host, &diagnosticSink, options));
+        CHECK(host.cpuPhysicalCount == 0);
+        CHECK(Contains(diagnostics, "parse CPU online list failed"));
+    }
+    CHECK(WriteFile(cpuRoot / "cpu1048576/topology/physical_package_id", "1"));
+    const std::string validOnline[] = {"1048576", "1048576-1048576", " 0000,0-0 \n"};
+    for (const std::string& text : validOnline) {
+        CHECK(WriteFile(cpuRoot / "online", text));
+        diagnostics.clear();
+        CHECK(npucompute::CollectHostInfo(outputDirectory, &host, &diagnosticSink, options));
+        CHECK(host.cpuPhysicalCount == 1);
+        CHECK(diagnostics.empty());
+    }
+    CHECK(WriteFile(cpuRoot / "online", "0"));
+    struct PackageCase {
+        std::string text;
+        bool valid;
+    };
+    const PackageCase packages[] = {
+        {"0", true},
+        {"0001", true},
+        {" \t42\r\n", true},
+        {"9223372036854775807", true},
+        {"-0", true},
+        {"-00", true},
+        {"-1", false},
+        {"-9223372036854775808", false},
+        {"-9223372036854775809", false},
+        {"9223372036854775808", false},
+        {"18446744073709551616", false},
+        {std::string(100, '9'), false},
+        {"", false},
+        {" \t\r\n", false},
+        {"+1", false},
+        {"-", false},
+        {"--0", false},
+        {"12x", false},
+        {"1 2", false},
+        {std::string("0\0x", 3), false},
+    };
+    for (const PackageCase& test : packages) {
+        CHECK(WriteFile(cpuRoot / "cpu0/topology/physical_package_id", test.text));
+        diagnostics.clear();
+        host.cpuPhysicalCount = 99;
+        CHECK(npucompute::CollectHostInfo(outputDirectory, &host, &diagnosticSink, options));
+        CHECK(host.cpuPhysicalCount == (test.valid ? 1U : 0U));
+        CHECK(Contains(diagnostics, "parse CPU package ID failed") == !test.valid);
+        CHECK(diagnostics.size() == (test.valid ? 0U : 1U));
+    }
     return 0;
 }

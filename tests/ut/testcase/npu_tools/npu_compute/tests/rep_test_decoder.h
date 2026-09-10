@@ -7,8 +7,8 @@
  * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
  * See LICENSE in the root of the software repository for the full text of the License.
  */
-#ifndef NPU_COMPUTE_TESTS_REP_TEST_DECODER_H_
-#define NPU_COMPUTE_TESTS_REP_TEST_DECODER_H_
+#ifndef NPU_TOOLS_NPU_COMPUTE_TESTS_REP_TEST_DECODER_H
+#define NPU_TOOLS_NPU_COMPUTE_TESTS_REP_TEST_DECODER_H
 
 #include "report/rep_format.h"
 
@@ -40,4 +40,4 @@ bool DecodeRep(const std::vector<uint8_t>& encoded, DecodedRep* decoded, std::st
 
 } // namespace npucompute::cli::test
 
-#endif // NPU_COMPUTE_TESTS_REP_TEST_DECODER_H_
+#endif // NPU_TOOLS_NPU_COMPUTE_TESTS_REP_TEST_DECODER_H

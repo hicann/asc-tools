@@ -10,6 +10,7 @@
 #include "import/import_output_directory.h"
 
 #include <unistd.h>
+#include <sys/stat.h>
 
 #include <cstdio>
 #include <boost/filesystem.hpp>
@@ -249,10 +250,66 @@ int TestInvalidTargets()
     return 0;
 }
 
+int TestPublishConflictsPreserveTargets()
+{
+    for (int kind = 0; kind < 4; ++kind) {
+        TempDirectory temporary;
+        CHECK(!temporary.Path().empty());
+        boost::filesystem::path abandoned;
+        boost::filesystem::path target;
+        {
+            npucompute::cli::ImportOutputDirectory directory;
+            std::string error;
+            CHECK(npucompute::cli::ImportOutputDirectory::Create(
+                "input.npu-rep", temporary.Path().string(), &directory, &error));
+            target = directory.FinalPath();
+            abandoned = directory.TemporaryPath();
+            CHECK(WriteFile(abandoned / "incoming.txt", "incoming"));
+            // Claim the final name after Create checked that it was free.
+            if (kind == 0 || kind == 1) {
+                CHECK(boost::filesystem::create_directory(target));
+                if (kind == 1) {
+                    CHECK(WriteFile(target / "keep.txt", "keep"));
+                }
+            } else if (kind == 2) {
+                CHECK(WriteFile(target, "keep"));
+            } else {
+                CHECK(::symlink("missing-target", target.c_str()) == 0);
+            }
+            struct stat before {};
+            CHECK(::lstat(target.c_str(), &before) == 0);
+            CHECK(!directory.Publish(&error));
+            CHECK(error.find("publish import output directory failed") != std::string::npos);
+            CHECK(directory.TemporaryPath() == abandoned);
+            CHECK(ReadFile(abandoned / "incoming.txt") == "incoming");
+            struct stat after {};
+            CHECK(::lstat(target.c_str(), &after) == 0);
+            CHECK(before.st_dev == after.st_dev && before.st_ino == after.st_ino);
+            CHECK(before.st_mode == after.st_mode);
+            if (kind == 0) {
+                CHECK(boost::filesystem::is_empty(target));
+            } else if (kind == 1) {
+                CHECK(ReadFile(target / "keep.txt") == "keep");
+            } else if (kind == 2) {
+                CHECK(ReadFile(target) == "keep");
+            } else {
+                CHECK(boost::filesystem::read_symlink(target) == "missing-target");
+            }
+        }
+        CHECK(!boost::filesystem::exists(abandoned));
+        struct stat surviving {};
+        CHECK(::lstat(target.c_str(), &surviving) == 0);
+    }
+    return 0;
+}
+
 } // namespace
 
 int main()
 {
+    if (TestPublishConflictsPreserveTargets() != 0) {
+        return 1;
+    }
     if (TestExistingOutputRootAndPublish() != 0 || TestDefaultOutputDirectory() != 0 ||
         TestCreatesUniqueDirectoriesUnderOneRoot() != 0 || TestTemporaryCleanupAndPublishFailure() != 0 ||
         TestInvalidTargets() != 0) {

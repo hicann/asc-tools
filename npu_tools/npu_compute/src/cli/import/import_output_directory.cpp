@@ -175,6 +175,34 @@ bool CreateTemporaryDirectory(
     return Fail("unable to generate a unique import output directory after 128 attempts", error);
 }
 
+int RenameNoReplace(const char* source, const char* target)
+{
+#if defined(SYS_renameat2)
+    constexpr long kRenameAt2 = SYS_renameat2;
+#elif defined(__NR_renameat2)
+    constexpr long kRenameAt2 = __NR_renameat2;
+#elif defined(__linux__) && defined(__LP64__) && !defined(__ILP32__) && defined(__x86_64__)
+    // Linux x86_64 LP64 syscall ABI; do not use this number for x32.
+    constexpr long kRenameAt2 = 316;
+#elif defined(__linux__) && defined(__LP64__) && !defined(__ILP32__) && defined(__aarch64__)
+    // Linux AArch64 LP64 uses the asm-generic syscall ABI.
+    constexpr long kRenameAt2 = 276;
+#else
+    constexpr long kRenameAt2 = -1;
+#endif
+#if defined(RENAME_NOREPLACE)
+    constexpr unsigned int kNoReplace = RENAME_NOREPLACE;
+#else
+    constexpr unsigned int kNoReplace = 1U;
+#endif
+    if (kRenameAt2 < 0) {
+        errno = ENOSYS;
+        return -1;
+    }
+    // Preserve the kernel error; a non-atomic fallback could overwrite the target.
+    return static_cast<int>(::syscall(kRenameAt2, AT_FDCWD, source, AT_FDCWD, target, kNoReplace));
+}
+
 bool SyncDirectory(const boost::filesystem::path& directory, std::string* error)
 {
     const int descriptor = ::open(directory.c_str(), O_RDONLY | O_DIRECTORY | O_CLOEXEC | O_NOFOLLOW);
@@ -237,8 +265,7 @@ bool ImportOutputDirectory::Publish(std::string* error)
         return Fail("import output directory is not initialized", error);
     }
 
-    const long result =
-        ::syscall(SYS_renameat2, AT_FDCWD, temporaryPath_.c_str(), AT_FDCWD, finalPath_.c_str(), RENAME_NOREPLACE);
+    const int result = RenameNoReplace(temporaryPath_.c_str(), finalPath_.c_str());
     if (result != 0) {
         return FailErrno("publish import output directory failed", error);
     }

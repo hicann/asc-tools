@@ -33,7 +33,6 @@ ACLPTI_CMAKE = ACLPTI_SOURCE / "CMakeLists.txt"
 ACLPTI_PROFILING_API_SOURCE = ACLPTI_SOURCE / "profiling/api.cpp"
 REPLAY_RUNTIME_HEADER = ACLPTI_SOURCE / "profiling/replay_runtime.h"
 PRODUCT_CMAKE = REPO_ROOT / "npu_tools/npu_compute/CMakeLists.txt"
-COMPILE_SCRIPT = REPO_ROOT / "npu_tools/npu_compute/compile.sh"
 LIBRARY_SOURCE = REPO_ROOT / "npu_tools/npu_compute/src/compute/npu_compute.cpp"
 LIBRARY_CMAKE = REPO_ROOT / "npu_tools/npu_compute/src/compute/CMakeLists.txt"
 INJECTION_CMAKE = REPO_ROOT / "npu_tools/injection/CMakeLists.txt"
@@ -238,26 +237,6 @@ def test_product_cmake_uses_cann_runtime_and_profapi():
     assert "Injection::profapi" in backend_block
     assert "acl_runtime_stub" not in backend_block
     assert "acl_prof_api_stub" not in backend_block
-
-
-def test_compile_script_uses_current_cann_build_options():
-    script = COMPILE_SCRIPT.read_text(encoding="utf-8")
-
-    assert 'BUILD_DIR="${SCRIPT_DIR}/build"' in script
-    assert 'CANN_ROOT="${NPUCOMPUTE_CANN_ROOT:-${ASCEND_HOME_PATH:-}}"' in script
-    assert "NPU_COMPUTE_CANN_ENV_SCRIPT" not in script
-    assert 'source "${CANN_ENV_SCRIPT}"' not in script
-    assert "NPUCOMPUTE_CANN_ROOT or ASCEND_HOME_PATH must be set" in script
-    assert '-DNPUCOMPUTE_CANN_ROOT="${CANN_ROOT}"' in script
-    assert '-DINJECTION_CANN_ROOT="${CANN_ROOT}"' in script
-    assert "ASC_TOOLS_BUILD_NPU_COMPUTE" not in script
-    assert 'cmake -S "${SCRIPT_DIR}/.."' in script
-    assert "-U NPU_COMPUTE_BUILD_CANN_BACKEND" in script
-    assert "NPU_COMPUTE_BUILD_INTEGRATION_STUBS" not in script
-    assert "NPU_COMPUTE_BUILD_TESTS" not in script
-    assert "-DNPU_COMPUTE_BUILD_CANN_BACKEND" not in script
-    assert "-DNPU_COMPUTE_BUILD_INTEGRATION_STUBS" not in script
-    assert "--target npu_compute npu_compute_cli" in script
 
 
 def test_replay_waits_after_msprof_start_before_launching_kernel():

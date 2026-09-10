@@ -25,6 +25,7 @@
 #include <vector>
 
 #include <unistd.h>
+#include <sys/stat.h>
 
 namespace {
 
@@ -318,10 +319,57 @@ int TestInjectedFailuresLeaveNoPartialReport()
     return 0;
 }
 
+int TestPublishConflictsPreserveTargets()
+{
+    std::vector<uint8_t> encoded;
+    CHECK(BuildNestedRep(&encoded));
+    for (int kind = 0; kind < 4; ++kind) {
+        TempDirectory temporary;
+        CHECK(!temporary.Path().empty());
+        const boost::filesystem::path target = temporary.Path() / "result.npu-rep";
+        if (kind == 0 || kind == 1) {
+            CHECK(boost::filesystem::create_directory(target));
+            if (kind == 1) {
+                CHECK(WriteFile(target / "keep.txt", "keep"));
+            }
+        } else if (kind == 2) {
+            CHECK(WriteFile(target, "keep"));
+        } else {
+            CHECK(::symlink("missing-target", target.c_str()) == 0);
+        }
+        struct stat before {};
+        CHECK(::lstat(target.c_str(), &before) == 0);
+        std::string error;
+        CHECK(!PublishRepReport(encoded, ReportTarget{target}, &error));
+        CHECK(!error.empty());
+        CHECK(!HasTemporaryFile(temporary.Path()));
+        std::vector<uint8_t> actual;
+        struct stat after {};
+        CHECK(::lstat(target.c_str(), &after) == 0);
+        CHECK(before.st_dev == after.st_dev && before.st_ino == after.st_ino);
+        CHECK(before.st_mode == after.st_mode);
+        if (kind == 0) {
+            CHECK(boost::filesystem::is_empty(target));
+        } else if (kind == 1) {
+            CHECK(ReadFile(target / "keep.txt", &actual));
+            CHECK(actual == Bytes("keep"));
+        } else if (kind == 2) {
+            CHECK(ReadFile(target, &actual));
+            CHECK(actual == Bytes("keep"));
+        } else {
+            CHECK(boost::filesystem::read_symlink(target) == "missing-target");
+        }
+    }
+    return 0;
+}
+
 } // namespace
 
 int main()
 {
+    if (TestPublishConflictsPreserveTargets() != 0) {
+        return 1;
+    }
     if (TestPublishesCompleteRep() != 0 || TestExistingTargetIsNotOverwritten() != 0 ||
         TestRejectsInvalidRepAndUnwritableDirectory() != 0 || TestShortWritesAreRetried() != 0 ||
         TestInjectedFailuresLeaveNoPartialReport() != 0) {

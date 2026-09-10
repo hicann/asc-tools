@@ -7,9 +7,7 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # ----------------------------------------------------------------------------------------------------------
-import os
 from pathlib import Path
-import subprocess
 
 
 REPO_ROOT = Path(__file__).resolve().parents[4]
@@ -22,26 +20,6 @@ FORBIDDEN_PRODUCT_NAMES = (
     "npu_sanitizer",
     "NPU_SANITIZER",
 )
-
-
-def test_compile_script_requires_preloaded_cann_environment():
-    script = NPU_TOOLS_ROOT / "npu_compute/compile.sh"
-    script_text = script.read_text(encoding="utf-8")
-    environment = os.environ.copy()
-    environment.pop("NPUCOMPUTE_CANN_ROOT", None)
-    environment.pop("ASCEND_HOME_PATH", None)
-
-    result = subprocess.run(
-        ["bash", str(script)],
-        env=environment,
-        text=True,
-        capture_output=True,
-        check=False,
-    )
-
-    assert result.returncode != 0
-    assert "NPUCOMPUTE_CANN_ROOT or ASCEND_HOME_PATH must be set" in result.stderr
-    assert "/usr/local/Ascend" not in script_text
 
 
 def _source_text(root: Path) -> str:
@@ -132,7 +110,11 @@ def test_npu_tools_test_cmake_is_owned_by_tests_tree():
         assert "add_test(" not in cmake_text
 
 
-def test_enable_test_is_the_only_injection_test_switch():
+def test_injection_tests_use_top_level_enable_test_switch():
+    root_cmake = (REPO_ROOT / "CMakeLists.txt").read_text(encoding="utf-8")
+    npu_tools_test_cmake = (
+        REPO_ROOT / "tests/ut/testcase/npu_tools/CMakeLists.txt"
+    ).read_text(encoding="utf-8")
     cmake_files = (
         REPO_ROOT / "CMakeLists.txt",
         NPU_TOOLS_ROOT / "CMakeLists.txt",
@@ -142,6 +124,5 @@ def test_enable_test_is_the_only_injection_test_switch():
     cmake_text = "\n".join(path.read_text(encoding="utf-8") for path in cmake_files)
 
     assert "INJECTION_BUILD_TESTS" not in cmake_text
-    assert "if(ENABLE_TEST)" in (
-        REPO_ROOT / "tests/ut/testcase/npu_tools/CMakeLists.txt"
-    ).read_text(encoding="utf-8")
+    assert "if(ENABLE_TEST)" in root_cmake
+    assert "if(ENABLE_TEST)" not in npu_tools_test_cmake

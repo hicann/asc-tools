@@ -90,11 +90,12 @@ def test_package_build_includes_npu_compute_and_sanitizer():
         REPO_ROOT / "npu_tools/npu_sanitizer" / "CMakeLists.txt"
     ).read_text(encoding="utf-8")
     build_script = (REPO_ROOT / "build.sh").read_text(encoding="utf-8")
+    test_script = (
+        REPO_ROOT / "tests/ut/testcase/npu_tools/npu_compute/run_tests.sh"
+    ).read_text(encoding="utf-8")
 
-    assert 'option(BUILD_NPU_SANITIZER "' in top_level_cmake
-    assert 'option(ASC_TOOLS_BUILD_NPU_COMPUTE "' in top_level_cmake
-    assert "-DASC_TOOLS_BUILD_NPU_COMPUTE=ON" in build_script
-    assert "if(ASC_TOOLS_BUILD_NPU_COMPUTE OR BUILD_NPU_SANITIZER)" in (top_level_cmake)
+    for build_file in (top_level_cmake, npu_tools_cmake, build_script, test_script):
+        assert "ASC_TOOLS_BUILD_NPU_COMPUTE" not in build_file
 
     assert (
         'set(NPU_SANITIZER_INSTALL_BASE_DIR "${CMAKE_SYSTEM_PROCESSOR}-linux")'
@@ -138,17 +139,25 @@ def test_sanitizer_uses_shared_npu_tools_output_directories():
     sanitizer_cmake = (REPO_ROOT / "npu_tools/npu_sanitizer/CMakeLists.txt").read_text(
         encoding="utf-8"
     )
+    shared_library_output_block = sanitizer_cmake.split(
+        "foreach(target IN ITEMS acl_san npu_check)", 1
+    )[1].split("endforeach()", 1)[0]
+    cli_output_block = sanitizer_cmake.split(
+        "set_target_properties(npu_check_cli PROPERTIES", 1
+    )[1].split(")", 1)[0]
 
     assert "NPU_SANITIZER_LIBRARY_OUTPUT_DIR" not in sanitizer_cmake
     assert "NPU_SANITIZER_RUNTIME_OUTPUT_DIR" not in sanitizer_cmake
     assert (
-        'ARCHIVE_OUTPUT_DIRECTORY "${NPU_TOOLS_LIBRARY_OUTPUT_DIR}"' in sanitizer_cmake
+        'LIBRARY_OUTPUT_DIRECTORY "${NPU_TOOLS_LIBRARY_OUTPUT_DIR}"'
+        in shared_library_output_block
     )
     assert (
-        'LIBRARY_OUTPUT_DIRECTORY "${NPU_TOOLS_LIBRARY_OUTPUT_DIR}"' in sanitizer_cmake
+        'ARCHIVE_OUTPUT_DIRECTORY "${NPU_TOOLS_LIBRARY_OUTPUT_DIR}"'
+        not in shared_library_output_block
     )
     assert (
-        'RUNTIME_OUTPUT_DIRECTORY "${NPU_TOOLS_RUNTIME_OUTPUT_DIR}"' in sanitizer_cmake
+        'RUNTIME_OUTPUT_DIRECTORY "${NPU_TOOLS_RUNTIME_OUTPUT_DIR}"' in cli_output_block
     )
 
 

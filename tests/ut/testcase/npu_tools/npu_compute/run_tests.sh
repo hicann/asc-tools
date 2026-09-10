@@ -16,8 +16,7 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/../../../../.." && pwd -P)"
 BUILD_DIR="/tmp/asc_tools_npu_compute_integration"
 
 cmake -S "${REPO_ROOT}" -B "${BUILD_DIR}" \
-  -DENABLE_TEST=ON \
-  -DASC_TOOLS_BUILD_NPU_COMPUTE=ON
+  -DENABLE_TEST=ON
 
 cmake --build "${BUILD_DIR}" -j2
 

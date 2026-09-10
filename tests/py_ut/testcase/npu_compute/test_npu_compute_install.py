@@ -9,6 +9,7 @@
 # ----------------------------------------------------------------------------------------------------------
 import os
 import platform
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -145,12 +146,17 @@ def test_public_cli_symlink_uses_the_architecture_injection_library(
     assert f"ACL_API_INJECTION={expected}" in result.stdout.splitlines()
 
 
-def test_installed_layout_runs_the_minimal_stub_chain(
-    install_root, public_install_root
-):
-    architecture_root = install_root / f"{INSTALL_ARCH}-linux"
+def test_installed_layout_runs_the_minimal_stub_chain(install_root, tmp_path):
+    # Keep the product installation intact for the layout checks. This test
+    # runs the installed CLI with the same backends as the other stub tests.
+    stub_install_root = tmp_path / "stub-install"
+    shutil.copytree(install_root, stub_install_root, symlinks=True)
+    architecture_root = stub_install_root / f"{INSTALL_ARCH}-linux"
     private_library_root = architecture_root / "tools/npu_tools/lib64"
-    cli = public_install_root / "bin/npu-compute"
+    library = private_library_root / "libnpu-compute.so"
+    library.unlink()
+    shutil.copy2(BIN_DIR / "libnpu-compute-test.so", library)
+    cli = architecture_root / "bin/npu-compute"
     assert cli.is_file()
     environment = os.environ.copy()
     search_paths = [str(private_library_root), str(BIN_DIR)]
@@ -158,6 +164,14 @@ def test_installed_layout_runs_the_minimal_stub_chain(
         search_paths.append(environment["LD_LIBRARY_PATH"])
     environment["LD_LIBRARY_PATH"] = ":".join(search_paths)
     environment.pop("NPU_COMPUTE_STUB_SUBSCRIBE_RESULT", None)
+    environment["NPU_COMPUTE_DEBUG"] = "1"
+    hardware_stub = Path(os.environ["NPU_COMPUTE_HARDWARE_API_STUB"])
+    assert hardware_stub.is_file()
+    environment["LD_PRELOAD"] = ":".join(
+        value
+        for value in (str(hardware_stub), environment.get("LD_PRELOAD", ""))
+        if value
+    )
 
     result = subprocess.run(
         [
@@ -166,7 +180,7 @@ def test_installed_layout_runs_the_minimal_stub_chain(
             "PipeUtilization",
             str(BIN_DIR / "npu_compute_stub_demo_app"),
         ],
-        cwd=public_install_root,
+        cwd=stub_install_root,
         env=environment,
         text=True,
         capture_output=True,

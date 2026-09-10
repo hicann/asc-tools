@@ -71,6 +71,12 @@ int TestCollectionExport()
 
     CHECK(Parse({"npu-compute", "--section", "Memory", "--export", "reports", "./app"}, &config, &errors));
     CHECK(config.export_path == "reports");
+    CHECK(Parse({"npu-compute", "--section", "Memory", "./app"}, &config, &errors));
+    CHECK(!config.export_path);
+    CHECK(!config.import_path);
+    CHECK(!Parse({"npu-compute", "--section", "Memory", "--export", "", "./app"}, &config, &errors));
+    CHECK(errors == std::vector<std::string>({"--export requires a non-empty path"}));
+    CHECK(!config.export_path);
     return 0;
 }
 
@@ -99,6 +105,12 @@ int TestImportExportParsing()
     CHECK(Parse({"npu-compute", "-iold.npu-rep", "-onew.npu-rep"}, &config, &errors));
     CHECK(config.import_path == "old.npu-rep");
     CHECK(config.export_path == "new.npu-rep");
+    CHECK(Parse({"npu-compute", "--import", "old.npu-rep"}, &config, &errors));
+    CHECK(config.import_path == "old.npu-rep");
+    CHECK(!config.export_path);
+    CHECK(!Parse({"npu-compute", "--import", ""}, &config, &errors));
+    CHECK(errors == std::vector<std::string>({"--import requires a non-empty path"}));
+    CHECK(!config.import_path);
     return 0;
 }
 

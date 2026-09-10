@@ -378,11 +378,54 @@ bool TestInvalidDeviceCountAndOutputPointers()
     return true;
 }
 
+bool TestHbmCapacityParsing()
+{
+    struct Case {
+        std::string text;
+        bool valid;
+        uint64_t bytes;
+    };
+    const Case cases[] = {
+        {"0", true, 0},
+        {"0001048576", true, 1048576},
+        {" \t1048576\r\n", true, 1048576},
+        {"18446744073709551615", true, std::numeric_limits<uint64_t>::max()},
+        {"", false, 0},
+        {" \t\r\n", false, 0},
+        {"18446744073709551616", false, 0},
+        {std::string(100, '9'), false, 0},
+        {"-1", false, 0},
+        {"-0", false, 0},
+        {"+1", false, 0},
+        {"12x", false, 0},
+        {"1 2", false, 0},
+        {"1e3", false, 0},
+        {std::string("12\0x", 4), false, 0},
+    };
+    for (const Case& test : cases) {
+        FakeHardwareDeviceApi api;
+        api.platformValues[npucompute::kPlatformMemorySize] = test.text;
+        npucompute::DeviceInfo device;
+        npucompute::CpuInfo cpu;
+        npucompute::AiCoreInfo aiCore;
+        npucompute::MemoryInfo memory;
+        memory.hbmTotalMb = 99;
+        std::vector<std::string> diagnostics;
+        npucompute::DiagnosticSink sink = [&diagnostics](std::string_view value) { diagnostics.emplace_back(value); };
+        CHECK(npucompute::CollectDevice0Info(api, &device, &cpu, &aiCore, &memory, &sink));
+        CHECK(memory.hbmTotalMb == static_cast<double>(test.bytes) / (1024.0 * 1024.0));
+        CHECK(Contains(diagnostics, "invalid HBM total size") == !test.valid);
+        CHECK(diagnostics.size() == (test.valid ? 0U : 1U));
+        CHECK(memory.hbmUsedMb == 6.0);
+    }
+    return true;
+}
+
 } // namespace
 
 int main()
 {
-    if (!TestCompleteMapping() || !TestCollectAiCoreCountsOnlyReadsCountAttributes() ||
+    if (!TestHbmCapacityParsing() || !TestCompleteMapping() || !TestCollectAiCoreCountsOnlyReadsCountAttributes() ||
         !TestCollectAiCoreFrequencies() || !TestPartialFailuresAndInvalidValues() ||
         !TestNoVisibleDeviceSkipsDeviceQueries() || !TestInvalidDeviceCountAndOutputPointers()) {
         return 1;

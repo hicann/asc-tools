@@ -13,7 +13,6 @@
 #include "aclpti/aclpti_data.h"
 
 #include <cstdint>
-#include <optional>
 #include <string>
 #include <vector>
 

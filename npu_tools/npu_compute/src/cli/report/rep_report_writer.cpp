@@ -125,7 +125,30 @@ int SystemClose(int descriptor, void*) { return ::close(descriptor); }
 
 int SystemRename(const char* source, const char* target, void*)
 {
-    return static_cast<int>(::syscall(SYS_renameat2, AT_FDCWD, source, AT_FDCWD, target, RENAME_NOREPLACE));
+#if defined(SYS_renameat2)
+    constexpr long kRenameAt2 = SYS_renameat2;
+#elif defined(__NR_renameat2)
+    constexpr long kRenameAt2 = __NR_renameat2;
+#elif defined(__linux__) && defined(__LP64__) && !defined(__ILP32__) && defined(__x86_64__)
+    // Linux x86_64 LP64 syscall ABI; do not use this number for x32.
+    constexpr long kRenameAt2 = 316;
+#elif defined(__linux__) && defined(__LP64__) && !defined(__ILP32__) && defined(__aarch64__)
+    // Linux AArch64 LP64 uses the asm-generic syscall ABI.
+    constexpr long kRenameAt2 = 276;
+#else
+    constexpr long kRenameAt2 = -1;
+#endif
+#if defined(RENAME_NOREPLACE)
+    constexpr unsigned int kNoReplace = RENAME_NOREPLACE;
+#else
+    constexpr unsigned int kNoReplace = 1U;
+#endif
+    if (kRenameAt2 < 0) {
+        errno = ENOSYS;
+        return -1;
+    }
+    // Preserve the kernel error; a non-atomic fallback could overwrite the target.
+    return static_cast<int>(::syscall(kRenameAt2, AT_FDCWD, source, AT_FDCWD, target, kNoReplace));
 }
 
 class FileDescriptor {

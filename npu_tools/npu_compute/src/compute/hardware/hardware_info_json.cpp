@@ -9,9 +9,9 @@
  */
 #include "hardware/hardware_info_json.h"
 
-#include <charconv>
 #include <cmath>
 #include <iomanip>
+#include <limits>
 #include <locale>
 #include <sstream>
 #include <string>
@@ -112,15 +112,17 @@ bool ParsePositiveUintField(std::string_view line, std::string_view field, std::
         ++begin;
     }
     std::size_t end = begin;
+    std::uint32_t parsed = 0;
+    const std::uint32_t maximum = std::numeric_limits<std::uint32_t>::max();
     while (end < line.size() && line[end] >= '0' && line[end] <= '9') {
+        const std::uint32_t digit = static_cast<std::uint32_t>(line[end] - '0');
+        if (parsed > (maximum - digit) / 10) {
+            return false;
+        }
+        parsed = parsed * 10 + digit;
         ++end;
     }
-    if (end == begin) {
-        return false;
-    }
-    std::uint32_t parsed = 0;
-    const auto result = std::from_chars(line.data() + begin, line.data() + end, parsed);
-    if (result.ec != std::errc{} || result.ptr != line.data() + end || parsed == 0) {
+    if (end == begin || parsed == 0) {
         return false;
     }
     *value = parsed;
