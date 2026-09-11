@@ -9,6 +9,9 @@
  */
 #include "hardware/hardware_info_device.h"
 
+#include <acl/acl_rt.h>
+#include <acl/acl_platform.h>
+
 #include <cstdint>
 #include <limits>
 #include <string>
@@ -18,6 +21,7 @@ namespace npucompute {
 namespace {
 
 constexpr std::int32_t kDeviceId = 0;
+constexpr std::uint32_t kAiCoreFrequencyFallbackMhz = 1650;
 constexpr double kBytesPerMb = 1024.0 * 1024.0;
 
 void Diagnose(DiagnosticSink* diagnostics, const std::string& message)
@@ -98,7 +102,7 @@ void CollectChipInfo(HardwareDeviceApi& api, DeviceInfo* device, DiagnosticSink*
 void CollectArchitecture(HardwareDeviceApi& api, DeviceInfo* device, DiagnosticSink* diagnostics)
 {
     std::int64_t value = 0;
-    if (!api.GetDeviceAttribute(kDeviceId, kDeviceAttributeNpuArch, &value)) {
+    if (!api.GetDeviceAttribute(kDeviceId, ACL_DEV_ATTR_NPU_ARCH, &value)) {
         Diagnose(diagnostics, "GetDeviceAttribute failed for Device 0: NPU architecture");
         return;
     }
@@ -114,7 +118,7 @@ void CollectCpuInfo(HardwareDeviceApi& api, CpuInfo* cpu, DiagnosticSink* diagno
     if (!api.GetControlCpuCount(kDeviceId, &cpu->controlCpuCount)) {
         Diagnose(diagnostics, "GetControlCpuCount failed for Device 0");
     }
-    ReadCountAttribute(api, kDeviceAttributeAiCpuCoreCount, "AI CPU core count", &cpu->aiCpuCount, diagnostics);
+    ReadCountAttribute(api, ACL_DEV_ATTR_AICPU_CORE_NUM, "AI CPU core count", &cpu->aiCpuCount, diagnostics);
     if (!api.GetAiCpuFrequency(kDeviceId, &cpu->aiCpuFrequencyMhz)) {
         Diagnose(diagnostics, "GetAiCpuFrequency failed for Device 0");
     }
@@ -122,9 +126,9 @@ void CollectCpuInfo(HardwareDeviceApi& api, CpuInfo* cpu, DiagnosticSink* diagno
 
 void CollectAiCoreInfo(HardwareDeviceApi& api, AiCoreInfo* aiCore, DiagnosticSink* diagnostics)
 {
-    ReadCountAttribute(api, kDeviceAttributeAiCoreCount, "AI Core count", &aiCore->aiCoreCount, diagnostics);
-    ReadCountAttribute(api, kDeviceAttributeCubeCoreCount, "Cube Core count", &aiCore->aiCubeCount, diagnostics);
-    ReadCountAttribute(api, kDeviceAttributeVectorCoreCount, "Vector Core count", &aiCore->aiVectorCount, diagnostics);
+    ReadCountAttribute(api, ACL_DEV_ATTR_AICORE_CORE_NUM, "AI Core count", &aiCore->aiCoreCount, diagnostics);
+    ReadCountAttribute(api, ACL_DEV_ATTR_CUBE_CORE_NUM, "Cube Core count", &aiCore->aiCubeCount, diagnostics);
+    ReadCountAttribute(api, ACL_DEV_ATTR_VECTOR_CORE_NUM, "Vector Core count", &aiCore->aiVectorCount, diagnostics);
     CollectAiCoreFrequencies(api, &aiCore->aiCubeFrequencyMhz, &aiCore->aiVectorFrequencyMhz, diagnostics);
 }
 
@@ -132,7 +136,7 @@ void CollectMemoryInfo(HardwareDeviceApi& api, MemoryInfo* memory, DiagnosticSin
 {
     std::string totalBytesText;
     uint64_t totalBytes = 0;
-    if (!api.GetPlatformValue(kPlatformMemorySize, &totalBytesText)) {
+    if (!api.GetPlatformValue(ACL_PLATFORM_MEMORY_SIZE, &totalBytesText)) {
         Diagnose(diagnostics, "GetPlatformValue failed: HBM total size");
     } else if (!ParseUnsigned(totalBytesText, &totalBytes)) {
         Diagnose(diagnostics, "invalid HBM total size");
@@ -204,9 +208,9 @@ bool CollectAiCoreCounts(
     std::uint32_t cubeCount = 0;
     std::uint32_t vectorCount = 0;
     const bool readCube =
-        ReadCountAttribute(api, kDeviceAttributeCubeCoreCount, "Cube Core count", &cubeCount, diagnostics);
+        ReadCountAttribute(api, ACL_DEV_ATTR_CUBE_CORE_NUM, "Cube Core count", &cubeCount, diagnostics);
     const bool readVector =
-        ReadCountAttribute(api, kDeviceAttributeVectorCoreCount, "Vector Core count", &vectorCount, diagnostics);
+        ReadCountAttribute(api, ACL_DEV_ATTR_VECTOR_CORE_NUM, "Vector Core count", &vectorCount, diagnostics);
     if (!readCube || !readVector) {
         return false;
     }

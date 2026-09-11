@@ -122,11 +122,6 @@ bool EncodeRep(const std::vector<RepEntry>& entries, std::vector<uint8_t>* encod
             if (!names.insert(entry.file_name).second) {
                 return Fail("rep contains duplicate file names: " + entry.file_name, error);
             }
-            if constexpr (sizeof(std::size_t) > sizeof(uint64_t)) {
-                if (entry.payload.size() > std::numeric_limits<uint64_t>::max()) {
-                    return Fail("rep entry payload length exceeds uint64_t", error);
-                }
-            }
             if (!AddChecked(static_cast<uint64_t>(entry.payload.size()), &total_length, error)) {
                 return false;
             }

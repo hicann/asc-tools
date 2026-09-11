@@ -28,7 +28,7 @@ int main(int argc, char** argv)
         std::fflush(stderr);
     }
     if (config.show_help) {
-        npucompute::cli::PrintUsage(stdout, argv[0]);
+        npucompute::cli::PrintUsage(stdout, "npu-compute");
     }
     if (!parsed) {
         return npucompute::cli::kUsageErrorExitCode;

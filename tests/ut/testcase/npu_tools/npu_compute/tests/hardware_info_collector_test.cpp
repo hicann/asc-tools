@@ -9,6 +9,9 @@
  */
 #include "hardware/hardware_info_collector.h"
 
+#include <acl/acl_rt.h>
+#include <acl/acl_platform.h>
+
 #include <atomic>
 #include <chrono>
 #include <condition_variable>
@@ -108,7 +111,7 @@ public:
 
     bool GetDeviceAttribute(std::int32_t, std::int32_t attribute, std::int64_t* value) override
     {
-        if (attribute == npucompute::kDeviceAttributeNpuArch) {
+        if (attribute == ACL_DEV_ATTR_NPU_ARCH) {
             *value = 3510;
         } else {
             *value = 1;
@@ -118,7 +121,7 @@ public:
 
     bool GetPlatformValue(std::int32_t type, std::string* value) override
     {
-        *value = type == npucompute::kPlatformMemorySize ? "16777216" : "1000";
+        *value = type == ACL_PLATFORM_MEMORY_SIZE ? "16777216" : "1000";
         return true;
     }
 

@@ -37,15 +37,6 @@ constexpr char kHalLibrary[] = "libascend_hal.so";
 constexpr char kDsmiLibrary[] = "libdrvdsmi_host.so";
 constexpr std::size_t kPlatformValueSize = 4096;
 
-static_assert(kDeviceAttributeAiCpuCoreCount == ACL_DEV_ATTR_AICPU_CORE_NUM);
-static_assert(kDeviceAttributeAiCoreCount == ACL_DEV_ATTR_AICORE_CORE_NUM);
-static_assert(kDeviceAttributeCubeCoreCount == ACL_DEV_ATTR_CUBE_CORE_NUM);
-static_assert(kDeviceAttributeVectorCoreCount == ACL_DEV_ATTR_VECTOR_CORE_NUM);
-static_assert(kDeviceAttributeNpuArch == ACL_DEV_ATTR_NPU_ARCH);
-static_assert(kPlatformMemorySize == ACL_PLATFORM_MEMORY_SIZE);
-static_assert(kPlatformCubeFrequency == ACL_PLATFORM_CUBE_FREQ);
-static_assert(kPlatformVectorFrequency == ACL_PLATFORM_VEC_FREQ);
-
 class PosixDynamicSymbolResolver final : public DynamicSymbolResolver {
 public:
     void* FindLoadedSymbol(const char* name) override { return ::dlsym(RTLD_DEFAULT, name); }

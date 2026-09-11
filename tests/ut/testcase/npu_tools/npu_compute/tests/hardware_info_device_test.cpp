@@ -9,6 +9,9 @@
  */
 #include "hardware/hardware_info_device.h"
 
+#include <acl/acl_rt.h>
+#include <acl/acl_platform.h>
+
 #include <algorithm>
 #include <cstdint>
 #include <cstdio>
@@ -159,14 +162,13 @@ public:
     uint64_t hbmTotalBytes = 16ULL * 1024ULL * 1024ULL;
     uint32_t hbmFrequency = 3200;
     std::map<std::int32_t, std::int64_t> deviceAttributeValues = {
-        {npucompute::kDeviceAttributeNpuArch, 3510},       {npucompute::kDeviceAttributeAiCpuCoreCount, 6},
-        {npucompute::kDeviceAttributeAiCoreCount, 36},     {npucompute::kDeviceAttributeCubeCoreCount, 36},
-        {npucompute::kDeviceAttributeVectorCoreCount, 72},
+        {ACL_DEV_ATTR_NPU_ARCH, 3510},    {ACL_DEV_ATTR_AICPU_CORE_NUM, 6},   {ACL_DEV_ATTR_AICORE_CORE_NUM, 36},
+        {ACL_DEV_ATTR_CUBE_CORE_NUM, 36}, {ACL_DEV_ATTR_VECTOR_CORE_NUM, 72},
     };
     std::map<std::int32_t, std::string> platformValues = {
-        {npucompute::kPlatformMemorySize, "137438953472"},
-        {npucompute::kPlatformCubeFrequency, "1800"},
-        {npucompute::kPlatformVectorFrequency, "1700"},
+        {ACL_PLATFORM_MEMORY_SIZE, "137438953472"},
+        {ACL_PLATFORM_CUBE_FREQ, "1800"},
+        {ACL_PLATFORM_VEC_FREQ, "1700"},
     };
 
     bool failDeviceCount = false;
@@ -222,11 +224,10 @@ bool TestCompleteMapping()
     CHECK(diagnostics.empty());
 
     const std::vector<std::int32_t> expectedAttributes = {
-        npucompute::kDeviceAttributeNpuArch,         npucompute::kDeviceAttributeAiCpuCoreCount,
-        npucompute::kDeviceAttributeAiCoreCount,     npucompute::kDeviceAttributeCubeCoreCount,
-        npucompute::kDeviceAttributeVectorCoreCount,
+        ACL_DEV_ATTR_NPU_ARCH,      ACL_DEV_ATTR_AICPU_CORE_NUM,  ACL_DEV_ATTR_AICORE_CORE_NUM,
+        ACL_DEV_ATTR_CUBE_CORE_NUM, ACL_DEV_ATTR_VECTOR_CORE_NUM,
     };
-    const std::vector<std::int32_t> expectedPlatformTypes = {npucompute::kPlatformMemorySize};
+    const std::vector<std::int32_t> expectedPlatformTypes = {ACL_PLATFORM_MEMORY_SIZE};
     CHECK(api.deviceAttributes == expectedAttributes);
     CHECK(api.platformTypes == expectedPlatformTypes);
     CHECK(!api.deviceIds.empty());
@@ -246,8 +247,8 @@ bool TestCollectAiCoreCountsOnlyReadsCountAttributes()
     CHECK(cubeCount == 36);
     CHECK(vectorCount == 72);
     const std::vector<std::int32_t> expectedAttributes = {
-        npucompute::kDeviceAttributeCubeCoreCount,
-        npucompute::kDeviceAttributeVectorCoreCount,
+        ACL_DEV_ATTR_CUBE_CORE_NUM,
+        ACL_DEV_ATTR_VECTOR_CORE_NUM,
     };
     CHECK(api.deviceAttributes == expectedAttributes);
     const std::vector<std::int32_t> expectedDeviceIds = {0, 0};
@@ -262,14 +263,16 @@ bool TestCollectAiCoreCountsOnlyReadsCountAttributes()
 bool TestCollectAiCoreFrequencies()
 {
     FakeHardwareDeviceApi api;
+    api.aicFrequency = 1800;
+    api.aivFrequency = 1700;
     std::uint32_t cubeFrequency = 99;
     std::uint32_t vectorFrequency = 99;
     std::vector<std::string> diagnostics;
     npucompute::DiagnosticSink sink = [&diagnostics](std::string_view value) { diagnostics.emplace_back(value); };
 
     CHECK(npucompute::CollectAiCoreFrequencies(api, &cubeFrequency, &vectorFrequency, &sink));
-    CHECK(cubeFrequency == 1650);
-    CHECK(vectorFrequency == 1650);
+    CHECK(cubeFrequency == 1800);
+    CHECK(vectorFrequency == 1700);
     CHECK(api.deviceCountCalls == 0);
     CHECK(api.socNameCalls == 0);
     CHECK(api.deviceAttributes.empty());
@@ -298,10 +301,10 @@ bool TestPartialFailuresAndInvalidValues()
 {
     FakeHardwareDeviceApi api;
     api.failSocName = true;
-    api.failedDeviceAttributes.insert(npucompute::kDeviceAttributeAiCoreCount);
-    api.deviceAttributeValues[npucompute::kDeviceAttributeAiCpuCoreCount] = -1;
+    api.failedDeviceAttributes.insert(ACL_DEV_ATTR_AICORE_CORE_NUM);
+    api.deviceAttributeValues[ACL_DEV_ATTR_AICPU_CORE_NUM] = -1;
     api.failAiCoreFrequencies = true;
-    api.platformValues[npucompute::kPlatformMemorySize] = "not-bytes";
+    api.platformValues[ACL_PLATFORM_MEMORY_SIZE] = "not-bytes";
     api.hbmFreeBytes = 20;
     api.hbmTotalBytes = 10;
     api.failHbmFrequency = true;
@@ -404,7 +407,7 @@ bool TestHbmCapacityParsing()
     };
     for (const Case& test : cases) {
         FakeHardwareDeviceApi api;
-        api.platformValues[npucompute::kPlatformMemorySize] = test.text;
+        api.platformValues[ACL_PLATFORM_MEMORY_SIZE] = test.text;
         npucompute::DeviceInfo device;
         npucompute::CpuInfo cpu;
         npucompute::AiCoreInfo aiCore;

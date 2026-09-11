@@ -419,7 +419,10 @@ add_executable(npu_compute_hardware_info_device_test
 target_include_directories(npu_compute_hardware_info_device_test PRIVATE
   ${NPU_COMPUTE_SOURCE_DIR}/src/compute
 )
-target_link_libraries(npu_compute_hardware_info_device_test PRIVATE Boost::boost)
+target_link_libraries(npu_compute_hardware_info_device_test PRIVATE
+  npu_compute_test_headers
+  Boost::boost
+)
 add_test(NAME npu_compute.hardware_info_device
   COMMAND npu_compute_hardware_info_device_test
 )

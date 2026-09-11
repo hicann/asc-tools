@@ -9,6 +9,9 @@
  */
 #include "hardware/hardware_device_api.h"
 
+#include <acl/acl_rt.h>
+#include <acl/acl_platform.h>
+
 #include <algorithm>
 #include <cstdint>
 #include <cstdio>
@@ -293,9 +296,9 @@ bool TestLoadedSymbolsAndExactArguments()
         CHECK(count == 2);
         CHECK(api.GetSocName(&text));
         CHECK(text == "Ascend950PR_9599");
-        CHECK(api.GetDeviceAttribute(0, npucompute::kDeviceAttributeNpuArch, &attributeValue));
+        CHECK(api.GetDeviceAttribute(0, ACL_DEV_ATTR_NPU_ARCH, &attributeValue));
         CHECK(attributeValue == 3510);
-        CHECK(api.GetPlatformValue(npucompute::kPlatformCubeFrequency, &text));
+        CHECK(api.GetPlatformValue(ACL_PLATFORM_CUBE_FREQ, &text));
         CHECK(text == "1800");
         CHECK(api.GetControlCpuCount(0, &unsignedValue));
         CHECK(unsignedValue == 1);
@@ -315,8 +318,8 @@ bool TestLoadedSymbolsAndExactArguments()
         CHECK(unsignedValue == 3200);
 
         CHECK(g_calls.deviceInfoDeviceIds == std::vector<uint32_t>{0});
-        CHECK(g_calls.deviceAttributes == std::vector<std::int32_t>{npucompute::kDeviceAttributeNpuArch});
-        CHECK(g_calls.platformTypes == std::vector<std::int32_t>{npucompute::kPlatformCubeFrequency});
+        CHECK(g_calls.deviceAttributes == std::vector<std::int32_t>{ACL_DEV_ATTR_NPU_ARCH});
+        CHECK(g_calls.platformTypes == std::vector<std::int32_t>{ACL_PLATFORM_CUBE_FREQ});
         CHECK(g_calls.setDeviceIds == std::vector<std::int32_t>{0});
         CHECK(g_calls.memoryAttributes == std::vector<std::int32_t>{kAclHbmMem});
         CHECK((g_calls.halDeviceIds == std::vector<uint32_t>{0, 0, 0, 0, 0}));
@@ -364,8 +367,8 @@ bool TestSonameFallbackAndHandleLifetime()
         uint64_t totalBytes = 0;
         CHECK(api.GetDeviceCount(&count));
         CHECK(api.GetSocName(&value));
-        CHECK(api.GetDeviceAttribute(0, npucompute::kDeviceAttributeNpuArch, &attributeValue));
-        CHECK(api.GetPlatformValue(npucompute::kPlatformMemorySize, &value));
+        CHECK(api.GetDeviceAttribute(0, ACL_DEV_ATTR_NPU_ARCH, &attributeValue));
+        CHECK(api.GetPlatformValue(ACL_PLATFORM_MEMORY_SIZE, &value));
         CHECK(api.GetHbmUsage(0, &freeBytes, &totalBytes));
         CHECK(std::count(resolver->openedLibraries.begin(), resolver->openedLibraries.end(), "libascendcl.so") == 1);
         CHECK(std::count(resolver->openedLibraries.begin(), resolver->openedLibraries.end(), "libplatform.so") == 1);
@@ -410,7 +413,7 @@ bool TestMissingSingleAndAllSymbols()
     std::int32_t count = 0;
     std::int64_t attributeValue = 0;
     CHECK(partialApi.GetDeviceCount(&count));
-    CHECK(!partialApi.GetDeviceAttribute(0, npucompute::kDeviceAttributeNpuArch, &attributeValue));
+    CHECK(!partialApi.GetDeviceAttribute(0, ACL_DEV_ATTR_NPU_ARCH, &attributeValue));
     CHECK(partialApi.GetDeviceCount(&count));
 
     auto emptyResolver = std::make_shared<FakeDynamicSymbolResolver>();
@@ -421,8 +424,8 @@ bool TestMissingSingleAndAllSymbols()
     uint64_t totalBytes = 0;
     CHECK(!emptyApi.GetDeviceCount(&count));
     CHECK(!emptyApi.GetSocName(&text));
-    CHECK(!emptyApi.GetDeviceAttribute(0, npucompute::kDeviceAttributeNpuArch, &attributeValue));
-    CHECK(!emptyApi.GetPlatformValue(npucompute::kPlatformMemorySize, &text));
+    CHECK(!emptyApi.GetDeviceAttribute(0, ACL_DEV_ATTR_NPU_ARCH, &attributeValue));
+    CHECK(!emptyApi.GetPlatformValue(ACL_PLATFORM_MEMORY_SIZE, &text));
     CHECK(!emptyApi.GetControlCpuCount(0, &value));
     CHECK(!emptyApi.GetAiCoreFrequencies(0, &value, &value));
     CHECK(!emptyApi.GetAiCpuFrequency(0, &value));

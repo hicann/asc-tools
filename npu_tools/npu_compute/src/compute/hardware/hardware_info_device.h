@@ -17,17 +17,6 @@
 
 namespace npucompute {
 
-inline constexpr std::int32_t kDeviceAttributeAiCpuCoreCount = 1;
-inline constexpr std::int32_t kDeviceAttributeAiCoreCount = 101;
-inline constexpr std::int32_t kDeviceAttributeCubeCoreCount = 102;
-inline constexpr std::int32_t kDeviceAttributeVectorCoreCount = 201;
-inline constexpr std::int32_t kDeviceAttributeNpuArch = 601;
-
-inline constexpr std::int32_t kPlatformMemorySize = 5;
-inline constexpr std::int32_t kPlatformCubeFrequency = 6;
-inline constexpr std::int32_t kPlatformVectorFrequency = 7;
-inline constexpr std::uint32_t kAiCoreFrequencyFallbackMhz = 1650;
-
 class HardwareDeviceApi {
 public:
     virtual ~HardwareDeviceApi() = default;
