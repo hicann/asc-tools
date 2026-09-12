@@ -21,14 +21,14 @@
 #include <unistd.h>
 #include <utility>
 
-#include "aclsan/aclsan_api.h"
-#include "aclsan/aclsan_cbdata.h"
+#include "acl_san/aclsan_api.h"
+#include "acl_san/aclsan_cbdata.h"
 #include "device_instr/common/instruction_id.h"
 #include "device_instr/decoder_registry.h"
-#include "internal/aclsan_trace_buffer.h"
-#include "internal/aclsan_trace_runtime.h"
-#include "../src/aclsan/aclsan_dispatch.cpp"
-#include "../src/aclsan/aclsan_hook_aclrt.cpp"
+#include "aclsan_trace_buffer.h"
+#include "aclsan_trace_runtime.h"
+#include "../src/acl_san/aclsan_dispatch.cpp"
+#include "../src/acl_san/aclsan_hook_aclrt.cpp"
 
 namespace {
 

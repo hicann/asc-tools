@@ -10,7 +10,7 @@
 
 #include "device_instr/common/instruction_id.h"
 #include "device_instr/decoder_registry.h"
-#include "internal/aclsan_device_data.h"
+#include "aclsan_device_data.h"
 
 #include <cassert>
 #include <cstdint>

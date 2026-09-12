@@ -22,4 +22,4 @@ target_compile_definitions(${boost_filesystem_target} INTERFACE
 
 add_subdirectory(injection)
 add_subdirectory(npu_compute)
-add_subdirectory(npu_sanitizer)
+add_subdirectory(npu_check)

@@ -8,7 +8,7 @@
  * See LICENSE in the root of the software repository for the full text of the License.
  */
 
-#include "aclsan/aclsan_api.h"
+#include "acl_san/aclsan_api.h"
 #include "kernel_argument_elf_fixture.h"
 #include "injection/injection_hook.h"
 #include "injection/runtime_stub_api.h"

@@ -8,10 +8,10 @@
  * See LICENSE in the root of the software repository for the full text of the License.
  */
 
-#include "aclsan/aclsan_api.h"
-#include "internal/aclsan_dispatch.h"
-#include "internal/aclsan_device_call_stack.h"
-#include "internal/aclsan_runtime_hook.h"
+#include "acl_san/aclsan_api.h"
+#include "aclsan_dispatch.h"
+#include "aclsan_device_call_stack.h"
+#include "aclsan_runtime_hook.h"
 
 #include <cassert>
 #include <cstdint>

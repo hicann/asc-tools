@@ -34,7 +34,7 @@ def _source_text(root: Path) -> str:
 def test_injection_is_an_independent_sibling_component():
     assert (NPU_TOOLS_ROOT / "injection").is_dir()
     assert (NPU_TOOLS_ROOT / "npu_compute").is_dir()
-    assert (NPU_TOOLS_ROOT / "npu_sanitizer").is_dir()
+    assert (NPU_TOOLS_ROOT / "npu_check").is_dir()
     assert not (REPO_ROOT / "npu_compute").exists()
     assert not (REPO_ROOT / "npu_sanitizer").exists()
 
@@ -51,7 +51,7 @@ def test_injection_is_an_independent_sibling_component():
 
 def test_consumers_use_the_independent_injection_interface():
     compute_text = _source_text(NPU_TOOLS_ROOT / "npu_compute")
-    sanitizer_text = _source_text(NPU_TOOLS_ROOT / "npu_sanitizer")
+    sanitizer_text = _source_text(NPU_TOOLS_ROOT / "npu_check")
 
     assert '"injection/injection_hook.h"' in compute_text
     assert '"injection/injection_hook.h"' in sanitizer_text
@@ -76,7 +76,7 @@ def test_top_level_build_uses_npu_tools_orchestration():
     assert "if(ASC_TOOLS_BUILD_NPU_COMPUTE)" not in tools_cmake
     assert "add_subdirectory(injection)" in tools_cmake
     assert "add_subdirectory(npu_compute)" in tools_cmake
-    assert "add_subdirectory(npu_sanitizer)" in tools_cmake
+    assert "add_subdirectory(npu_check)" in tools_cmake
     assert tools_cmake.index("add_subdirectory(injection)") < tools_cmake.index(
         "add_subdirectory(npu_compute)"
     )
@@ -100,9 +100,9 @@ def test_npu_tools_test_cmake_is_owned_by_tests_tree():
     product_cmake_files = (
         NPU_TOOLS_ROOT / "injection/CMakeLists.txt",
         NPU_TOOLS_ROOT / "npu_compute/CMakeLists.txt",
-        NPU_TOOLS_ROOT / "npu_sanitizer/sanitizer_api/CMakeLists.txt",
-        NPU_TOOLS_ROOT / "npu_sanitizer/npu_check/CMakeLists.txt",
-        NPU_TOOLS_ROOT / "npu_sanitizer/npu_check_cli/CMakeLists.txt",
+        NPU_TOOLS_ROOT / "npu_check/src/acl_san/CMakeLists.txt",
+        NPU_TOOLS_ROOT / "npu_check/src/processor/CMakeLists.txt",
+        NPU_TOOLS_ROOT / "npu_check/src/cli/CMakeLists.txt",
     )
     for cmake_file in product_cmake_files:
         cmake_text = cmake_file.read_text(encoding="utf-8")

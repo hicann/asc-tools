@@ -86,9 +86,9 @@ def test_package_build_includes_npu_compute_and_sanitizer():
     npu_tools_cmake = (REPO_ROOT / "npu_tools" / "CMakeLists.txt").read_text(
         encoding="utf-8"
     )
-    sanitizer_cmake = (
-        REPO_ROOT / "npu_tools/npu_sanitizer" / "CMakeLists.txt"
-    ).read_text(encoding="utf-8")
+    sanitizer_cmake = (REPO_ROOT / "npu_tools/npu_check" / "CMakeLists.txt").read_text(
+        encoding="utf-8"
+    )
     build_script = (REPO_ROOT / "build.sh").read_text(encoding="utf-8")
     test_script = (
         REPO_ROOT / "tests/ut/testcase/npu_tools/npu_compute/run_tests.sh"
@@ -112,21 +112,21 @@ def test_package_build_includes_npu_compute_and_sanitizer():
     assert "install(TARGETS npu_check_cli" in sanitizer_cmake
     assert "install(TARGETS npu_check acl_san" in sanitizer_cmake
 
-    for submodule in ("npu_check_cli", "npu_check", "sanitizer_api"):
+    for submodule in ("src/cli", "src/processor", "src/acl_san"):
         submodule_cmake = (
-            REPO_ROOT / "npu_tools/npu_sanitizer" / submodule / "CMakeLists.txt"
+            REPO_ROOT / "npu_tools/npu_check" / submodule / "CMakeLists.txt"
         ).read_text(encoding="utf-8")
         assert "install(" not in submodule_cmake
 
     assert "add_subdirectory(npu_tools)" in top_level_cmake
-    for subdirectory in ("injection", "npu_compute", "npu_sanitizer"):
+    for subdirectory in ("injection", "npu_compute", "npu_check"):
         assert f"add_subdirectory({subdirectory})" in npu_tools_cmake
 
     sanitizer_subdirectories = (
-        "common",
-        "sanitizer_api",
-        "npu_check_cli",
-        "npu_check",
+        "src/shared",
+        "src/acl_san",
+        "src/cli",
+        "src/processor",
     )
     subdirectory_positions = [
         sanitizer_cmake.index(f"add_subdirectory({subdirectory})")
@@ -136,7 +136,7 @@ def test_package_build_includes_npu_compute_and_sanitizer():
 
 
 def test_sanitizer_uses_shared_npu_tools_output_directories():
-    sanitizer_cmake = (REPO_ROOT / "npu_tools/npu_sanitizer/CMakeLists.txt").read_text(
+    sanitizer_cmake = (REPO_ROOT / "npu_tools/npu_check/CMakeLists.txt").read_text(
         encoding="utf-8"
     )
     shared_library_output_block = sanitizer_cmake.split(

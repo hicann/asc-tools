@@ -8,19 +8,19 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 # ----------------------------------------------------------------------------------------------------------
 
-set(NPU_CHECK_SOURCE_DIR "${CMAKE_SOURCE_DIR}/npu_tools/npu_sanitizer/npu_check")
-set(NPU_CHECK_DBI_ROOT "${CMAKE_SOURCE_DIR}/npu_tools/npu_sanitizer/sanitizer_api")
-set(NPU_CHECK_DBI_SOURCE_DIR "${NPU_CHECK_DBI_ROOT}/src/dbi")
-set(NPU_CHECK_DBI_INCLUDE_DIR "${NPU_CHECK_DBI_ROOT}/include")
+set(NPU_CHECK_SOURCE_DIR "${CMAKE_SOURCE_DIR}/npu_tools/npu_check/src/processor")
+set(NPU_CHECK_DBI_ROOT "${CMAKE_SOURCE_DIR}/npu_tools/npu_check/src/acl_san")
+set(NPU_CHECK_DBI_SOURCE_DIR "${NPU_CHECK_DBI_ROOT}/dbi")
+set(NPU_CHECK_DBI_INCLUDE_DIR "${NPU_CHECK_DBI_ROOT}")
 set(NPU_CHECK_DBI_TEST_DIR "${NPU_TOOLS_TEST_ROOT}/npu_sanitizer/sanitizer_api/tests/dbi")
 set(NPU_CHECK_TEST_REPORT_RENDERER_SOURCES
-  "${NPU_CHECK_SOURCE_DIR}/src/diagnostic/report_renderer.cpp"
-  "${NPU_CHECK_SOURCE_DIR}/src/diagnostic/report/report_catalog.cpp"
-  "${NPU_CHECK_SOURCE_DIR}/src/diagnostic/report/report_fields.cpp"
-  "${NPU_CHECK_SOURCE_DIR}/src/diagnostic/report/report_normalizer.cpp"
-  "${NPU_CHECK_SOURCE_DIR}/src/diagnostic/report/report_summary.cpp"
-  "${NPU_CHECK_SOURCE_DIR}/src/diagnostic/report/report_text_renderer.cpp"
-  "${NPU_CHECK_SOURCE_DIR}/src/diagnostic/report/synccheck_adapter.cpp"
+  "${NPU_CHECK_SOURCE_DIR}/diagnostic/report_renderer.cpp"
+  "${NPU_CHECK_SOURCE_DIR}/diagnostic/report/report_catalog.cpp"
+  "${NPU_CHECK_SOURCE_DIR}/diagnostic/report/report_fields.cpp"
+  "${NPU_CHECK_SOURCE_DIR}/diagnostic/report/report_normalizer.cpp"
+  "${NPU_CHECK_SOURCE_DIR}/diagnostic/report/report_summary.cpp"
+  "${NPU_CHECK_SOURCE_DIR}/diagnostic/report/report_text_renderer.cpp"
+  "${NPU_CHECK_SOURCE_DIR}/diagnostic/report/synccheck_adapter.cpp"
 )
 
 if(NOT TARGET GTest::gtest)
@@ -43,7 +43,7 @@ target_compile_definitions(npu_check_unit_tests PRIVATE
   _GLIBCXX_USE_CXX11_ABI=0
 )
 target_include_directories(npu_check_unit_tests PRIVATE
-  "${NPU_CHECK_SOURCE_DIR}/src"
+  "${NPU_CHECK_SOURCE_DIR}"
   "${NPU_CHECK_DBI_INCLUDE_DIR}"
 )
 target_link_libraries(npu_check_unit_tests PRIVATE
@@ -53,15 +53,15 @@ add_test(NAME npu_check_unit_tests COMMAND npu_check_unit_tests)
 add_executable(npu_check_tool_manager_test
   gtest_main.cpp
   tool_manager_test.cpp
-  "${NPU_CHECK_SOURCE_DIR}/../npu_check_cli/src/options.cpp"
-  "${NPU_CHECK_SOURCE_DIR}/../npu_check_cli/src/uds_client.cpp"
+  "${NPU_CHECK_SOURCE_DIR}/../cli/options.cpp"
+  "${NPU_CHECK_SOURCE_DIR}/../cli/uds_client.cpp"
   ${NPU_CHECK_TEST_REPORT_RENDERER_SOURCES}
 )
 target_compile_features(npu_check_tool_manager_test PRIVATE cxx_std_17)
 target_compile_definitions(npu_check_tool_manager_test PRIVATE _GLIBCXX_USE_CXX11_ABI=0)
 target_include_directories(npu_check_tool_manager_test PRIVATE
-  "${NPU_CHECK_SOURCE_DIR}/src"
-  "${NPU_CHECK_SOURCE_DIR}/../npu_check_cli/src"
+  "${NPU_CHECK_SOURCE_DIR}"
+  "${NPU_CHECK_SOURCE_DIR}/../cli"
   "${NPU_CHECK_DBI_INCLUDE_DIR}"
 )
 target_link_libraries(npu_check_tool_manager_test PRIVATE
@@ -72,12 +72,12 @@ set_tests_properties(npu_check_tool_manager_test PROPERTIES TIMEOUT 45)
 add_executable(npu_check_kernel_attributes_test
   gtest_main.cpp
   kernel_attributes_test.cpp
-  "${NPU_CHECK_SOURCE_DIR}/src/tool_manager/kernel_attributes.cpp"
+  "${NPU_CHECK_SOURCE_DIR}/tool_manager/kernel_attributes.cpp"
 )
 target_compile_features(npu_check_kernel_attributes_test PRIVATE cxx_std_17)
 target_compile_definitions(npu_check_kernel_attributes_test PRIVATE _GLIBCXX_USE_CXX11_ABI=0)
 target_compile_options(npu_check_kernel_attributes_test PRIVATE -Wall -Wextra -Werror)
-target_include_directories(npu_check_kernel_attributes_test PRIVATE "${NPU_CHECK_SOURCE_DIR}/src")
+target_include_directories(npu_check_kernel_attributes_test PRIVATE "${NPU_CHECK_SOURCE_DIR}")
 target_link_libraries(npu_check_kernel_attributes_test PRIVATE injection_headers GTest::gtest)
 add_test(NAME npu_check_kernel_attributes_test COMMAND npu_check_kernel_attributes_test)
 
@@ -93,7 +93,8 @@ target_compile_definitions(npu_check_report_renderer_smoke PRIVATE _GLIBCXX_USE_
 target_compile_definitions(npu_check_report_renderer_smoke PRIVATE
   NPU_CHECK_REPORT_PATTERN_SNAPSHOT="${CMAKE_CURRENT_SOURCE_DIR}/report_renderer_patterns.golden")
 target_include_directories(npu_check_report_renderer_smoke PRIVATE
-  "${NPU_CHECK_SOURCE_DIR}/src"
+  "${NPU_CHECK_SOURCE_DIR}/../../include"
+  "${NPU_CHECK_SOURCE_DIR}"
   "${NPU_CHECK_DBI_INCLUDE_DIR}"
 )
 target_link_libraries(npu_check_report_renderer_smoke PRIVATE GTest::gtest)

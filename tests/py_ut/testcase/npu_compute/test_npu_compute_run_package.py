@@ -299,7 +299,7 @@ def test_forbidden_file_fails(tmp_path):
 
 
 def test_sanitizer_header_fails(tmp_path):
-    forbidden_header = f"{SANITIZER_ROOT}/include/aclsan/aclsan_api.h"
+    forbidden_header = f"{SANITIZER_ROOT}/include/acl_san/aclsan_api.h"
     package = create_run_package(tmp_path, (*REQUIRED_PATHS, forbidden_header))
 
     assert f"forbidden path: {forbidden_header}" in validate_paths(
@@ -449,12 +449,12 @@ def test_third_npu_check_file_conflicts_with_wrapper_and_executable(tmp_path):
 
 def test_npu_check_wrapper_is_installed_to_arch_bin():
     sanitizer_cmake = (
-        Path(__file__).parents[4] / "npu_tools" / "npu_sanitizer" / "CMakeLists.txt"
+        Path(__file__).parents[4] / "npu_tools" / "npu_check" / "CMakeLists.txt"
     ).read_text(encoding="utf-8")
 
     wrapper_install = re.compile(
         r"install\(PROGRAMS\s+"
-        r'"\$\{CMAKE_CURRENT_SOURCE_DIR\}/npu_check_cli/npu_check\.sh"\s+'
+        r'"\$\{CMAKE_CURRENT_SOURCE_DIR\}/src/cli/npu_check\.sh"\s+'
         r'DESTINATION "\$\{NPU_SANITIZER_INSTALL_BINDIR\}".*?'
         r"\bRENAME npu-check\b.*?"
         r"\bCOMPONENT asc-tools\s*\)",
@@ -467,7 +467,7 @@ def test_npu_check_library_keeps_origin_rpath_for_packaged_dependency():
     repo_root = Path(__file__).parents[4]
     top_level_cmake = (repo_root / "CMakeLists.txt").read_text(encoding="utf-8")
     npu_check_cmake = (
-        repo_root / "npu_tools" / "npu_sanitizer" / "npu_check" / "CMakeLists.txt"
+        repo_root / "npu_tools" / "npu_check" / "src" / "processor" / "CMakeLists.txt"
     ).read_text(encoding="utf-8")
 
     assert "set(CMAKE_SKIP_RPATH TRUE)" in top_level_cmake
@@ -477,7 +477,7 @@ def test_npu_check_library_keeps_origin_rpath_for_packaged_dependency():
 def test_npu_check_wrapper_executes_real_binary(tmp_path):
     repo_root = Path(__file__).parents[4]
     wrapper_source = (
-        repo_root / "npu_tools" / "npu_sanitizer" / "npu_check_cli" / "npu_check.sh"
+        repo_root / "npu_tools" / "npu_check" / "src" / "cli" / "npu_check.sh"
     )
     install_root = tmp_path / "cann"
     arch_bin = install_root / ARCH_ROOT / "bin"

@@ -12,13 +12,13 @@
 set -euo pipefail
 
 repo_root=${1:?"repository root is required"}
-launch_header="${repo_root}/npu_tools/npu_sanitizer/sanitizer_api/include/aclsan/aclsan_cbdata_launch.h"
-sanitizer_hook="${repo_root}/npu_tools/npu_sanitizer/sanitizer_api/src/aclsan/aclsan_hook_aclrt.cpp"
-attribute_source="${repo_root}/npu_tools/npu_sanitizer/npu_check/src/tool_manager/kernel_attributes.cpp"
-attribute_header="${repo_root}/npu_tools/npu_sanitizer/npu_check/src/tool_manager/kernel_attributes.h"
-tool_manager="${repo_root}/npu_tools/npu_sanitizer/npu_check/src/tool_manager/tool_manager.cpp"
-sync_checker="${repo_root}/npu_tools/npu_sanitizer/npu_check/src/checker/synccheck_callbacks.cpp"
-mem_checker="${repo_root}/npu_tools/npu_sanitizer/npu_check/src/checker/memcheck_callbacks.cpp"
+launch_header="${repo_root}/npu_tools/npu_check/include/acl_san/aclsan_cbdata_launch.h"
+sanitizer_hook="${repo_root}/npu_tools/npu_check/src/acl_san/aclsan_hook_aclrt.cpp"
+attribute_source="${repo_root}/npu_tools/npu_check/src/processor/tool_manager/kernel_attributes.cpp"
+attribute_header="${repo_root}/npu_tools/npu_check/src/processor/tool_manager/kernel_attributes.h"
+tool_manager="${repo_root}/npu_tools/npu_check/src/processor/tool_manager/tool_manager.cpp"
+sync_checker="${repo_root}/npu_tools/npu_check/src/processor/checker/synccheck_callbacks.cpp"
+mem_checker="${repo_root}/npu_tools/npu_check/src/processor/checker/memcheck_callbacks.cpp"
 
 Fail()
 {

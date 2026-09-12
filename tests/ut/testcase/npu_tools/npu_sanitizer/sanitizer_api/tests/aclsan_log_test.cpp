@@ -8,7 +8,7 @@
  * See LICENSE in the root of the software repository for the full text of the License.
  */
 
-#include "aclsan/aclsan_api.h"
+#include "acl_san/aclsan_api.h"
 #include "plog_sink.h"
 #include "plog_test_library.h"
 #include "acl/acl_base.h"

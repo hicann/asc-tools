@@ -10,7 +10,7 @@
 #include "diagnostic/report/report_catalog.h"
 #include "diagnostic/report/report_fields.h"
 
-#include "aclsan/aclsan_cbdata_device.h"
+#include "acl_san/aclsan_cbdata_device.h"
 #include <gtest/gtest.h>
 
 #include <algorithm>

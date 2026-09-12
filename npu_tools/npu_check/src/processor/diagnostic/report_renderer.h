@@ -1,0 +1,74 @@
+// Copyright (c) 2026 Huawei Technologies Co., Ltd.
+// This program is free software, you can redistribute it and/or modify it under the terms and conditions of
+// CANN Open Software License Agreement Version 2.0 (the "License").
+// Please refer to the License for details. You may not use this file except in compliance with the License.
+// THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
+// INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
+// See LICENSE in the root of the software repository for the full text of the License.
+
+#ifndef NPU_TOOLS_NPU_CHECK_SRC_PROCESSOR_DIAGNOSTIC_REPORT_RENDERER_H
+#define NPU_TOOLS_NPU_CHECK_SRC_PROCESSOR_DIAGNOSTIC_REPORT_RENDERER_H
+
+#include "diagnostic/report_message.h"
+
+#include <iosfwd>
+#include <map>
+#include <string>
+#include <vector>
+
+namespace npucheck {
+
+enum class ReportRenderStatus {
+    SUCCESS = 0,
+    INVALID_ARGUMENT = 1,
+    MALFORMED_TEMPLATE = 2,
+    MISSING_FIELD = 3,
+    OPEN_FAILED = 4,
+    WRITE_FAILED = 5,
+    UNKNOWN_TEMPLATE = 6,
+};
+struct ReportTemplate {
+    std::string text;
+};
+
+using ReportFields = std::map<std::string, std::string>;
+
+struct ReportTemplateKey {
+    ReportTool tool;
+    std::string pattern;
+
+    bool operator<(const ReportTemplateKey& other) const;
+    bool operator==(const ReportTemplateKey& other) const;
+};
+
+struct ReportRecord {
+    ReportTemplateKey key;
+    ReportSeverity severity;
+    ReportFields fields;
+    std::vector<ReportCallStack> stacks;
+};
+
+using ReportTemplateOverrides = std::map<ReportTemplateKey, ReportTemplate>;
+
+ReportRenderStatus RenderReportText(const ReportTemplate& tpl, const ReportFields& fields, std::string* out);
+ReportRenderStatus RenderReportRecord(
+    const ReportRecord& record, const ReportTemplateOverrides& overrides, std::string* out);
+ReportRenderStatus RenderReportBundle(
+    const std::vector<ReportRecord>& records, const ReportTemplateOverrides& overrides, std::string* out);
+ReportRenderStatus RenderNpuCheckReportRecord(
+    const NpuCheckReportRecord& record, const ReportTemplateOverrides& overrides, std::string* out);
+ReportRenderStatus RenderNpuCheckReportBundle(
+    const std::vector<NpuCheckReportRecord>& records, const ReportTemplateOverrides& overrides, std::string* out);
+ReportRenderStatus WriteReportTextToStream(const std::string& text, std::ostream* out);
+ReportRenderStatus WriteReportTextToFile(const std::string& text, const std::string& path);
+ReportRenderStatus LoadReportTemplateOverridesFromFile(const std::string& path, ReportTemplateOverrides* overrides);
+
+const ReportTemplate* FindBuiltinReportTemplate(const ReportTemplateKey& key);
+std::vector<ReportTemplateKey> ListBuiltinReportTemplates();
+const char* ReportToolName(ReportTool tool);
+const char* ReportSeverityName(ReportSeverity severity);
+const char* ReportStackRoleTitle(ReportStackRole role);
+
+} // namespace npucheck
+
+#endif // NPU_TOOLS_NPU_CHECK_SRC_PROCESSOR_DIAGNOSTIC_REPORT_RENDERER_H

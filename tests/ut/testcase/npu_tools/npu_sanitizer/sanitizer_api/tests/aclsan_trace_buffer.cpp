@@ -8,8 +8,8 @@
  * See LICENSE in the root of the software repository for the full text of the License.
  */
 
-#include "aclsan/aclsan_cbdata_device.h"
-#include "internal/aclsan_trace_buffer.h"
+#include "acl_san/aclsan_cbdata_device.h"
+#include "aclsan_trace_buffer.h"
 #include "dbi/trace_buffer_abi.h"
 
 #include <cstddef>

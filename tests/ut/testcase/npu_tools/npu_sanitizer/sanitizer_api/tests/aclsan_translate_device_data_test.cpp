@@ -19,8 +19,8 @@
 #include <vector>
 #include <unistd.h>
 
-#include "internal/aclsan_device_data.h"
-#include "internal/aclsan_device_data_log.h"
+#include "aclsan_device_data.h"
+#include "aclsan_device_data_log.h"
 #include "device_instr/decoder_registry.h"
 
 namespace {

@@ -18,7 +18,7 @@ include_dir=$1
 c_compiler=$2
 cxx_compiler=$3
 
-for header in "${include_dir}"/aclsan/*.h; do
+for header in "${include_dir}"/acl_san/*.h; do
     for language in c c++; do
         compiler=${c_compiler}
         standard=c11
@@ -27,7 +27,7 @@ for header in "${include_dir}"/aclsan/*.h; do
             standard=c++17
         fi
         printf 'Checking %s (%s)\n' "${header##*/}" "${standard}"
-        printf '#include "aclsan/%s"\n' "${header##*/}" |
+        printf '#include "acl_san/%s"\n' "${header##*/}" |
             "${compiler}" -x "${language}" -std="${standard}" -Wall -Wextra -Werror \
                 -fsyntax-only -I "${include_dir}" -
     done

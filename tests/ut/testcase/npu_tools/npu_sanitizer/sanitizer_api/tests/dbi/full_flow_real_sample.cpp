@@ -8,8 +8,8 @@
  * See LICENSE in the root of the software repository for the full text of the License.
  */
 
-#include "aclsan/aclsan_api.h"
-#include "aclsan/aclsan_cbdata_device.h"
+#include "acl_san/aclsan_api.h"
+#include "acl_san/aclsan_cbdata_device.h"
 #include "injection/injection_hook.h"
 
 #include <acl/acl.h>

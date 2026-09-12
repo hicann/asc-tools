@@ -5,14 +5,14 @@ foreach(required IN ITEMS DBI_ROOT PROBE_ARCH)
 endforeach()
 
 set(probe_sources
-  "${DBI_ROOT}/src/dbi/probes/${PROBE_ARCH}/fixpipe.cpp"
-  "${DBI_ROOT}/src/dbi/probes/${PROBE_ARCH}/matrix.cpp"
-  "${DBI_ROOT}/src/dbi/probes/${PROBE_ARCH}/mte1.cpp"
-  "${DBI_ROOT}/src/dbi/probes/${PROBE_ARCH}/mte2.cpp"
-  "${DBI_ROOT}/src/dbi/probes/${PROBE_ARCH}/mte3.cpp"
-  "${DBI_ROOT}/src/dbi/probes/${PROBE_ARCH}/scalar.cpp"
-  "${DBI_ROOT}/src/dbi/probes/${PROBE_ARCH}/sync.cpp"
-  "${DBI_ROOT}/src/dbi/probes/${PROBE_ARCH}/vector.cpp"
+  "${DBI_ROOT}/dbi/probes/${PROBE_ARCH}/fixpipe.cpp"
+  "${DBI_ROOT}/dbi/probes/${PROBE_ARCH}/matrix.cpp"
+  "${DBI_ROOT}/dbi/probes/${PROBE_ARCH}/mte1.cpp"
+  "${DBI_ROOT}/dbi/probes/${PROBE_ARCH}/mte2.cpp"
+  "${DBI_ROOT}/dbi/probes/${PROBE_ARCH}/mte3.cpp"
+  "${DBI_ROOT}/dbi/probes/${PROBE_ARCH}/scalar.cpp"
+  "${DBI_ROOT}/dbi/probes/${PROBE_ARCH}/sync.cpp"
+  "${DBI_ROOT}/dbi/probes/${PROBE_ARCH}/vector.cpp"
 )
 
 set(probe_content "")
@@ -23,9 +23,9 @@ foreach(probe_source IN LISTS probe_sources)
   file(READ "${probe_source}" source_content)
   string(APPEND probe_content "\n${source_content}")
 endforeach()
-file(READ "${DBI_ROOT}/include/dbi/trace_record.h" trace_record_content)
-file(READ "${DBI_ROOT}/include/dbi/trace_buffer_abi.h" trace_buffer_abi_content)
-file(READ "${DBI_ROOT}/src/dbi/probes/${PROBE_ARCH}/sync.cpp" sync_probe_content)
+file(READ "${DBI_ROOT}/dbi/trace_record.h" trace_record_content)
+file(READ "${DBI_ROOT}/dbi/trace_buffer_abi.h" trace_buffer_abi_content)
+file(READ "${DBI_ROOT}/dbi/probes/${PROBE_ARCH}/sync.cpp" sync_probe_content)
 
 foreach(trace_type IN ITEMS AclsanTraceBufferHeader AclsanTraceSliceHeader AclsanRawTraceRecord)
   string(FIND "${trace_buffer_abi_content}" "struct ${trace_type}" type_offset)
@@ -112,7 +112,7 @@ endif()
 string(REGEX MATCHALL "__sanitizer_report_[A-Za-z0-9_]+" probe_symbols "${probe_content}")
 list(REMOVE_DUPLICATES probe_symbols)
 list(SORT probe_symbols)
-file(READ "${DBI_ROOT}/src/dbi/dynamic_bind.cpp" binding_content)
+file(READ "${DBI_ROOT}/dbi/dynamic_bind.cpp" binding_content)
 string(REGEX MATCHALL "__sanitizer_report_[A-Za-z0-9_]+" binding_symbols "${binding_content}")
 list(REMOVE_DUPLICATES binding_symbols)
 list(SORT binding_symbols)

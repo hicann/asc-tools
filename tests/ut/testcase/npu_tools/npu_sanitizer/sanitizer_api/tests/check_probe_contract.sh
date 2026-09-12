@@ -11,9 +11,11 @@
 
 set -euo pipefail
 
-api_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
-dbi_include_dir="${api_dir}/include/dbi"
-dbi_source_dir="${api_dir}/src/dbi"
+repo_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../../../../.." && pwd)
+test_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+api_dir="${repo_root}/npu_tools/npu_check/src/acl_san"
+dbi_include_dir="${api_dir}/dbi"
+dbi_source_dir="${api_dir}/dbi"
 
 Fail()
 {
@@ -21,26 +23,26 @@ Fail()
     exit 1
 }
 
-[[ ! -e "${api_dir}/src/probe" ]] || Fail 'sanitizer_api/src/probe must not exist'
+[[ ! -e "${api_dir}/probe" ]] || Fail 'sanitizer_api/src/probe must not exist'
 [[ ! -e "${api_dir}/../dbi" ]] || Fail 'top-level npu_sanitizer/dbi must not exist'
-[[ ! -e "${api_dir}/src/dbi/msbit" ]] || Fail 'legacy msbit implementation directory must not remain'
-[[ -f "${api_dir}/src/dbi/ctrlbin/ctrlbin_writer.cpp" ]] || Fail 'ctrlbin writer implementation is missing'
-[[ -f "${api_dir}/src/dbi/ctrlbin/ctrlbin_bindings.h" ]] || Fail 'ctrlbin binding declarations are missing'
-if rg -n -i '\bmsbit\b|src/dbi/msbit' "${api_dir}/src" "${api_dir}/CMakeLists.txt"; then
+[[ ! -e "${api_dir}/dbi/msbit" ]] || Fail 'legacy msbit implementation directory must not remain'
+[[ -f "${api_dir}/dbi/ctrlbin/ctrlbin_writer.cpp" ]] || Fail 'ctrlbin writer implementation is missing'
+[[ -f "${api_dir}/dbi/ctrlbin/ctrlbin_bindings.h" ]] || Fail 'ctrlbin binding declarations are missing'
+if rg -n -i '\bmsbit\b|src/dbi/msbit' "${api_dir}" "${api_dir}/CMakeLists.txt"; then
     Fail 'production DBI code must not retain MSBit naming'
 fi
-grep -Fq 'src/dbi/ctrlbin/ctrlbin_writer.cpp' "${api_dir}/CMakeLists.txt" || \
+grep -Fq 'dbi/ctrlbin/ctrlbin_writer.cpp' "${api_dir}/CMakeLists.txt" || \
     Fail 'ctrlbin writer is not registered with the build'
 
 required_files=(
-    "${api_dir}/src/device_runtime/device_symbolizer.h"
-    "${api_dir}/src/device_runtime/device_symbolizer.cpp"
-    "${api_dir}/src/aclsan_trace_buffer.cpp"
-    "${api_dir}/src/aclsan_trace_runtime.cpp"
-    "${api_dir}/include/device_instr/soc_version.h"
-    "${api_dir}/include/internal/aclsan_active_probe_plan.h"
-    "${api_dir}/include/internal/aclsan_trace_buffer.h"
-    "${api_dir}/include/internal/aclsan_trace_runtime.h"
+    "${api_dir}/device_runtime/device_symbolizer.h"
+    "${api_dir}/device_runtime/device_symbolizer.cpp"
+    "${api_dir}/aclsan_trace_buffer.cpp"
+    "${api_dir}/aclsan_trace_runtime.cpp"
+    "${api_dir}/device_instr/soc_version.h"
+    "${api_dir}/aclsan_active_probe_plan.h"
+    "${api_dir}/aclsan_trace_buffer.h"
+    "${api_dir}/aclsan_trace_runtime.h"
     "${dbi_include_dir}/trace_buffer_abi.h"
     "${dbi_include_dir}/dbi_pipeline.h"
     "${dbi_source_dir}/dbi_pipeline.cpp"
@@ -51,17 +53,17 @@ for required_file in "${required_files[@]}"; do
     [[ -f "${required_file}" ]] || Fail "required file is missing: ${required_file}"
 done
 
-[[ ! -e "${api_dir}/include/device_instr/common/raw_data_struct.h" ]] || \
+[[ ! -e "${api_dir}/device_instr/common/raw_data_struct.h" ]] || \
     Fail 'duplicate raw_data_struct.h must not exist'
 if rg -n 'raw_data_struct\.h' \
-    "${api_dir}/include" "${api_dir}/src" "${api_dir}/tests" --glob '!check_probe_contract.sh'; then
+    "${api_dir}/../../include" "${api_dir}" "${test_dir}" --glob '!check_probe_contract.sh'; then
     Fail 'sanitizer_api still references the removed raw trace header or type'
 fi
 
 legacy_namespace='sani''tizer'
 legacy_trace_prefix='Asc''san'
 if rg -n "\\bnamespace ${legacy_namespace}\\b|\\b${legacy_namespace}::" \
-    "${api_dir}/include" "${api_dir}/src" "${api_dir}/tests" --glob '!check_probe_contract.sh'; then
+    "${api_dir}/../../include" "${api_dir}" "${test_dir}" --glob '!check_probe_contract.sh'; then
     Fail 'sanitizer_api must use the aclsan namespace'
 fi
 if rg -n "\\b${legacy_trace_prefix}[A-Za-z0-9_]*\\b" \
@@ -71,16 +73,16 @@ fi
 
 cmake_file="${api_dir}/CMakeLists.txt"
 grep -Fq 'npu_check_dbi_engine' "${cmake_file}" || Fail 'acl_san does not link the DBI engine'
-grep -Fq 'src/aclsan_trace_buffer.cpp' "${cmake_file}" || Fail 'trace buffer adapter is not built'
-grep -Fq 'src/aclsan_trace_runtime.cpp' "${cmake_file}" || Fail 'trace runtime is not built'
-grep -Fq 'src/device_runtime/device_symbolizer.cpp' "${cmake_file}" || Fail 'device symbolizer is not built'
+grep -Fq 'aclsan_trace_buffer.cpp' "${cmake_file}" || Fail 'trace buffer adapter is not built'
+grep -Fq 'aclsan_trace_runtime.cpp' "${cmake_file}" || Fail 'trace runtime is not built'
+grep -Fq 'device_runtime/device_symbolizer.cpp' "${cmake_file}" || Fail 'device symbolizer is not built'
 
-soc_version_header="${api_dir}/include/device_instr/soc_version.h"
+soc_version_header="${api_dir}/device_instr/soc_version.h"
 grep -Fq 'using SocVersionMappings = std::unordered_map<std::string, SocVersion>;' "${soc_version_header}" || \
     Fail 'SoC version mappings must use unordered_map<string, SocVersion>'
 grep -Fq 'DAV_3510' "${soc_version_header}" || Fail 'DAV_3510 SoC version is missing'
 
-trace_buffer="${api_dir}/src/aclsan_trace_buffer.cpp"
+trace_buffer="${api_dir}/aclsan_trace_buffer.cpp"
 trace_buffer_abi="${dbi_include_dir}/trace_buffer_abi.h"
 for trace_type in AclsanTraceBufferHeader AclsanTraceSliceHeader AclsanRawTraceRecord; do
     grep -Fq "struct ${trace_type}" "${trace_buffer_abi}" || Fail "trace buffer ABI does not define ${trace_type}"
@@ -116,15 +118,15 @@ if rg -n 'ASCSAN_TRACE_SLICES_PER_BLOCK|TraceSliceCount' "${trace_buffer_abi}" "
     Fail 'trace buffer layout must not size physical slices from the logical block count'
 fi
 
-trace_runtime="${api_dir}/src/aclsan_trace_runtime.cpp"
+trace_runtime="${api_dir}/aclsan_trace_runtime.cpp"
 grep -Fq 'aclsan::ResolveSocVersion(getSocName())' "${trace_runtime}" || \
     Fail 'trace runtime does not resolve the runtime SoC version'
 grep -Fq 'aclsan::FindDeviceInstructionDecoder(*socVersion)' "${trace_runtime}" || \
     Fail 'trace runtime does not select the decoder by SoC version'
 grep -Fq 'TranslateDecodedTraceToCallbackData(parsed, *decoded, memoryState)' "${trace_runtime}" || \
     Fail 'decoded DBI records and independent register state are not translated to public callback data'
-trace_translator="${api_dir}/src/aclsan/aclsan_translate_device_data.cpp"
-device_data_header="${api_dir}/include/internal/aclsan_device_data.h"
+trace_translator="${api_dir}/aclsan_translate_device_data.cpp"
+device_data_header="${api_dir}/aclsan_device_data.h"
 grep -Fq 'using DeviceMemoryAccessDataList = std::vector<AclsanDeviceMemoryAccessData>;' "${device_data_header}" || \
     Fail 'device memory access translator result is not a variable-length vector'
 grep -Fq 'std::variant<DeviceMemoryAccessDataList, AclsanDeviceSyncData>' "${device_data_header}" || \
@@ -132,7 +134,7 @@ grep -Fq 'std::variant<DeviceMemoryAccessDataList, AclsanDeviceSyncData>' "${dev
 grep -Fq 'std::get_if<DeviceMemoryAccessDataList>' "${trace_runtime}" || \
     Fail 'trace runtime does not consume the variable-length memory access list'
 if rg -n '\bDeviceMemoryAccessDataArray\b' \
-    "${api_dir}/include" "${api_dir}/src" "${api_dir}/tests" --glob '!check_probe_contract.sh'; then
+    "${api_dir}/../../include" "${api_dir}" "${test_dir}" --glob '!check_probe_contract.sh'; then
     Fail 'fixed-length DeviceMemoryAccessDataArray must not remain'
 fi
 for identity_field in launchId instrExecId deviceId phyCoreId blockId blockType; do
@@ -140,7 +142,7 @@ for identity_field in launchId instrExecId deviceId phyCoreId blockId blockType;
         Fail "callback translation does not use ParsedTraceRecord::${identity_field}"
 done
 if rg -n '\bTraceCallbackContext\b' \
-    "${api_dir}/include" "${api_dir}/src" "${api_dir}/tests" --glob '!check_probe_contract.sh'; then
+    "${api_dir}/../../include" "${api_dir}" "${test_dir}" --glob '!check_probe_contract.sh'; then
     Fail 'TraceCallbackContext must be merged into ParsedTraceRecord'
 fi
 grep -Fq 'std::get_if<SetPaddingParamField>' "${trace_runtime}" || \
@@ -205,7 +207,7 @@ grep -Fq '{InstrType::PIPE_BARRIER, 439, "__sanitizer_report_pipe_barrier", {0}}
     <<< "${binding_catalog}" || \
     Fail 'Sync PIPE_BARRIER binding is missing or has the wrong argument mask'
 
-hook_source="${api_dir}/src/aclsan/aclsan_hook_aclrt.cpp"
+hook_source="${api_dir}/aclsan_hook_aclrt.cpp"
 grep -Fq 'InstrumentRuntimeBinary' "${hook_source}" || \
     Fail 'binary-load hook does not use the DBI engine'
 grep -Fq 'SnapshotActiveProbePlan()' "${hook_source}" || Fail 'binary-load hook does not snapshot the active DBI plan'
@@ -214,13 +216,13 @@ grep -Fq 'CompleteTraceLaunch(' "${hook_source}" || Fail 'launch hook does not r
 grep -Fq 'CollectTraceStream(' "${hook_source}" || Fail 'synchronize hook does not collect DBI records'
 
 if rg -n '(getenv|setenv)\("NPU_CHECK_DBI_' \
-    "${api_dir}/src" "${api_dir}/include" "${api_dir}/../npu_check_cli/src"; then
+    "${api_dir}" "${api_dir}/../../include" "${api_dir}/../cli"; then
     Fail 'production code must not read or write NPU_CHECK_DBI_* environment variables'
 fi
 
 if rg -n \
     'ACLSAN_PROBE_|ACLSAN_BUILD_DEVICE_PROBE_RESOURCES|sanitizer_api/src/probe|src/probe/|ProbeRuntime|ProbeParseResult|DispatchProbeRecords' \
-    "${api_dir}/CMakeLists.txt" "${api_dir}/include" "${api_dir}/src" "${api_dir}/tests" \
+    "${api_dir}/CMakeLists.txt" "${api_dir}/../../include" "${api_dir}" "${test_dir}" \
     --glob '!check_probe_contract.sh' --glob '!aclsan_binary_load_dbi_hook.cpp'; then
     Fail 'legacy sanitizer_api probe implementation is still referenced'
 fi

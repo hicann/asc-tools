@@ -11,8 +11,9 @@
 
 set -euo pipefail
 
-api_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
-translator="${api_dir}/src/aclsan/aclsan_translate_device_data.cpp"
+repo_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../../../../.." && pwd)
+api_dir="${repo_root}/npu_tools/npu_check/src/acl_san"
+translator="${api_dir}/aclsan_translate_device_data.cpp"
 
 Fail()
 {
@@ -32,7 +33,7 @@ grep -Fq 'MemoryFieldToCbdataConverter{context, registerState}.Convert(MemoryIns
 if grep -Fq 'MakeMovAlignV2MemoryAccessData' "${translator}"; then
     Fail 'converter-covered MOV_ALIGN_V2 helper must be removed'
 fi
-converter="${api_dir}/src/aclsan_memory_cbdata.cpp"
+converter="${api_dir}/aclsan_memory_cbdata.cpp"
 grep -Fq 'data.accessIndex = accessIndex;' "${converter}" || Fail 'accessIndex is not derived from the list index'
 grep -Fq 'data.accessCount = accessCount;' "${converter}" || Fail 'accessCount is not derived from the final list size'
 

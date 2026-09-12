@@ -8,13 +8,13 @@
  * See LICENSE in the root of the software repository for the full text of the License.
  */
 
-#include "aclsan/aclsan_cbdata_common.h"
-#include "aclsan/aclsan_cbdata_device.h"
-#include "aclsan/aclsan_cbdata_launch.h"
-#include "aclsan/aclsan_cbdata_resource.h"
-#include "aclsan/aclsan_cbdata_synchronize.h"
-#include "aclsan/aclsan_cbdata.h"
-#include "aclsan/aclsan_api.h"
+#include "acl_san/aclsan_cbdata_common.h"
+#include "acl_san/aclsan_cbdata_device.h"
+#include "acl_san/aclsan_cbdata_launch.h"
+#include "acl_san/aclsan_cbdata_resource.h"
+#include "acl_san/aclsan_cbdata_synchronize.h"
+#include "acl_san/aclsan_cbdata.h"
+#include "acl_san/aclsan_api.h"
 
 #include <cstddef>
 #include <cstdint>
