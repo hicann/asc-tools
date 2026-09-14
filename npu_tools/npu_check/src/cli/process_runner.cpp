@@ -11,7 +11,7 @@
 #include "process_runner.h"
 
 #include "uds_client.h"
-#include "plog_sink.h"
+#include "npu_tool_log.h"
 
 #include <array>
 #include <atomic>
@@ -494,7 +494,7 @@ int RunApplication(const Options& options, const std::string& libraryPath)
         toolNames += (toolNames.empty() ? "" : ",");
         toolNames += npucheck::ipc::ToolName(tool.toolId);
     }
-    npucheck::WritePlog(npucheck::PlogLevel::DEBUG, "[INJECTION] library=" + libraryPath + " result=resolved");
+    ASCTOOL_DEBUG("[INJECTION] library=%s result=resolved", libraryPath.c_str());
 
     int consolePipe[2] = {-1, -1};
     if (pipe2(consolePipe, O_CLOEXEC) != 0) {
@@ -576,9 +576,9 @@ int RunApplication(const Options& options, const std::string& libraryPath)
         return summary.exit = 125;
     }
 
-    npucheck::WritePlog(
-        npucheck::PlogLevel::DEBUG, "[CLI] session=" + std::to_string(sessionId) + " tools=" + toolNames +
-                                        " app_pid=" + std::to_string(child) + " app_pgid=" + std::to_string(child));
+    ASCTOOL_DEBUG(
+        "[CLI] session=%llu tools=%s app_pid=%d app_pgid=%d", static_cast<unsigned long long>(sessionId),
+        toolNames.c_str(), static_cast<int>(child), static_cast<int>(child));
     std::atomic<bool> childExited{false};
     std::thread consoleReader([&output, &childExited, fd = std::move(consoleRead)] {
         std::array<char, 8192> buffer{};
@@ -686,10 +686,9 @@ int RunApplication(const Options& options, const std::string& libraryPath)
                     }
                     // domain/code 是稳定取值进结构化日志，message 只原样转述给人看，
                     // 不参与任何判定。
-                    npucheck::WritePlog(
-                        npucheck::PlogLevel::DEBUG,
-                        "[UDS] phase=error domain=" + std::to_string(static_cast<unsigned>(failure.domain)) +
-                            " code=" + std::to_string(failure.code));
+                    ASCTOOL_DEBUG(
+                        "[UDS] phase=error domain=%u code=%u", static_cast<unsigned>(failure.domain),
+                        static_cast<unsigned>(failure.code));
                     output.Sanitizer("ERROR " + failure.message, true);
                     break;
                 }
@@ -705,7 +704,7 @@ int RunApplication(const Options& options, const std::string& libraryPath)
         });
     } else {
         protocolComplete = false;
-        npucheck::WritePlog(npucheck::PlogLevel::DEBUG, "[UDS] phase=handshake result=failed");
+        ASCTOOL_DEBUG("[UDS] phase=handshake result=failed");
         output.Sanitizer("handshake=missing reason=\"" + error + "\"", true);
     }
 
@@ -726,11 +725,10 @@ int RunApplication(const Options& options, const std::string& libraryPath)
     // 判定顺序是固定的：先看有没有收到 MORE=0 的末帧，再看是不是被 Error 打断，
     // 最后才是"连接断了但报告没收全"。
     if (resultComplete) {
-        npucheck::WritePlog(
-            npucheck::PlogLevel::DEBUG, "[UDS] phase=result frames=" + std::to_string(resultFrames.load()) +
-                                            " bytes=" + std::to_string(result.size()) +
-                                            " truncated=" + (resultTruncated ? "1" : "0") +
-                                            " has_errors=" + (resultHasErrors ? "1" : "0"));
+        ASCTOOL_DEBUG(
+            "[UDS] phase=result frames=%llu bytes=%zu truncated=%d has_errors=%d",
+            static_cast<unsigned long long>(resultFrames.load()), result.size(), static_cast<int>(resultTruncated),
+            static_cast<int>(resultHasErrors));
         output.Report(result);
         if (resultTruncated) {
             output.Sanitizer("report truncated: the diagnostic buffer reached its size limit", true);
@@ -738,9 +736,9 @@ int RunApplication(const Options& options, const std::string& libraryPath)
     } else if (handshake) {
         // 报告缺失或截断：已经收到的分片一律丢弃。半份报告看上去和完整报告没有区别，
         // 输出它等于让用户把"没查到问题"和"没查完"混为一谈。
-        npucheck::WritePlog(
-            npucheck::PlogLevel::DEBUG, "[UDS] phase=result frames=" + std::to_string(resultFrames.load()) + " bytes=" +
-                                            std::to_string(result.size()) + " truncated=unknown has_errors=unknown");
+        ASCTOOL_DEBUG(
+            "[UDS] phase=result frames=%llu bytes=%zu truncated=unknown has_errors=unknown",
+            static_cast<unsigned long long>(resultFrames.load()), result.size());
         output.Sanitizer("result missing or truncated; the partial report was discarded", true);
     }
 

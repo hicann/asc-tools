@@ -6,7 +6,7 @@
 // INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 // See LICENSE in the root of the software repository for the full text of the License.
 
-#include "plog_sink.h"
+#include "npu_tool_log.h"
 #include "plog_test_library.h"
 
 #include <cassert>
@@ -63,54 +63,45 @@ void ResetCapture()
 
 int main()
 {
-    using namespace npucheck;
-
-    // The test library starts with logging disabled.
-    plog_test::ResetApi();
-    WritePlog(PlogLevel::ERROR, "must not throw", "source.cpp", 7U, "InstallHook");
+    plog_test::SetApi({CheckLogLevelStub, DlogRecordStub});
+    ResetCapture();
+    const auto expectedLine = __LINE__ + 1;
+    ASCTOOL_INFO("value=%d text=%s", 42, "100%");
+    assert(g_recordCalls == 1);
+    assert(g_level == DLOG_INFO);
+    assert(g_recordModuleId == static_cast<int32_t>(ASCTOOL));
+    const auto location = std::string(__FILE__) + ":" + std::to_string(expectedLine) + "][main]";
+    assert(std::strstr(g_message, location.c_str()) != nullptr);
+    assert(std::strstr(g_message, "value=42 text=100%\n") != nullptr);
 
     ResetCapture();
-    plog_test::SetApi({CheckLogLevelStub, DlogRecordStub});
-    WritePlog(PlogLevel::WARNING, "hook install failed", "source.cpp", 7U, "InstallHook");
+    ASCTOOL_DEBUG("debug");
+    assert(g_recordCalls == 1 && g_level == DLOG_DEBUG);
+    ASCTOOL_WARNING("warning");
+    assert(g_recordCalls == 2 && g_level == DLOG_WARN);
+    ASCTOOL_ERROR("error");
+    assert(g_recordCalls == 3 && g_level == DLOG_ERROR);
 
-    assert(g_checkCalls == 1);
-    assert(g_recordCalls == 1);
-    assert(g_checkModuleId == static_cast<int32_t>(ASCENDCKERNEL));
-    assert(g_recordModuleId == (static_cast<int32_t>(ASCENDCKERNEL) | static_cast<int32_t>(DEBUG_LOG_MASK)));
-    assert(g_level == DLOG_WARN);
-    assert(
-        std::string(g_message) ==
-        "[source.cpp:7] " + std::to_string(syscall(SYS_gettid)) + " InstallHook: hook install failed");
-
-    // Default source information must describe the caller, not the sink.
-    for (auto level : {PlogLevel::DEBUG, PlogLevel::INFO, PlogLevel::WARNING, PlogLevel::ERROR}) {
-        ResetCapture();
-        const auto expectedLine = __LINE__ + 1;
-        WritePlog(level, "record without a file logger");
-        assert(g_recordCalls == 1);
-        assert(
-            std::string(g_message) == "[plog_sink_test.cpp:" + std::to_string(expectedLine) + "] " +
-                                          std::to_string(syscall(SYS_gettid)) + " main: record without a file logger");
-    }
-    // A worker must emit its own Linux TID, rather than the process ID.
     std::thread worker([] {
-        WritePlog(PlogLevel::INFO, "worker", "thread.cpp", 3, "Worker");
-        assert(std::string(g_message) == "[thread.cpp:3] " + std::to_string(syscall(SYS_gettid)) + " Worker: worker");
+        ASCTOOL_INFO("worker");
+        assert(std::strstr(g_message, std::to_string(syscall(SYS_gettid)).c_str()) != nullptr);
         assert(syscall(SYS_gettid) != getpid());
     });
     worker.join();
+
     ResetCapture();
     g_enabled = false;
-    WritePlog(PlogLevel::DEBUG, "filtered by CANN");
-    assert(g_checkCalls == 1);
+    int evaluated = 0;
+    ASCTOOL_DEBUG("filtered %d", ++evaluated);
+    ASCTOOL_INFO("filtered %d", ++evaluated);
+    ASCTOOL_WARNING("filtered %d", ++evaluated);
     assert(g_recordCalls == 0);
+    assert(evaluated == 0);
     g_enabled = true;
 
     ResetCapture();
-    WritePlog(PlogLevel::ERROR, std::string(4096, 'x') + "\ncompiler-error-tail");
-    assert(g_recordCalls > 1);
-    assert(std::strstr(g_message, "compiler-error-tail") != nullptr);
-
+    ASCTOOL_ERROR("%s", (std::string(4096, 'x') + "\ncompiler-error-tail").c_str());
+    assert(g_recordCalls == 1); // Record size handling belongs to dlog.
     plog_test::ResetApi();
     return 0;
 }

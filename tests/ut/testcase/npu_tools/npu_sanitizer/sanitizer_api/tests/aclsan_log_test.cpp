@@ -1,15 +1,13 @@
-/**
- * Copyright (c) 2026 Huawei Technologies Co., Ltd.
- * This program is free software, you can redistribute it and/or modify it under the terms and conditions of
- * CANN Open Software License Agreement Version 2.0 (the "License").
- * Please refer to the License for details. You may not use this file except in compliance with the License.
- * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
- * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
- * See LICENSE in the root of the software repository for the full text of the License.
- */
+// Copyright (c) 2026 Huawei Technologies Co., Ltd.
+// This program is free software, you can redistribute it and/or modify it under the terms and conditions of
+// CANN Open Software License Agreement Version 2.0 (the "License").
+// Please refer to the License for details. You may not use this file except in compliance with the License.
+// THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
+// INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
+// See LICENSE in the root of the software repository for the full text of the License.
 
 #include "acl_san/aclsan_api.h"
-#include "plog_sink.h"
+#include "npu_tool_log.h"
 #include "plog_test_library.h"
 #include "acl/acl_base.h"
 
@@ -72,7 +70,7 @@ void TestAclErrorReturn()
     assert(g_plogLevel == DLOG_ERROR);
     const std::string expected = "Parameter query 100% failed: result=" + std::to_string(ACL_ERROR_INVALID_PARAM);
     assert(std::strstr(g_plogMessage, expected.c_str()) != nullptr);
-    assert(std::strstr(g_plogMessage, " CheckAclResult:") != nullptr);
+    assert(std::strstr(g_plogMessage, "[CheckAclResult]") != nullptr);
 }
 
 std::string CaptureNullPointerLog()
@@ -107,13 +105,12 @@ int main()
     assert(logs.empty()); // Internal errors belong to plog, not the check/console channel.
     assert(g_plogRecordCount == 1);
     assert(g_plogLevel == DLOG_ERROR);
-    assert(std::strstr(g_plogMessage, "[aclsan_log_test.cpp:") != nullptr);
+    assert(std::strstr(g_plogMessage, "aclsan_log_test.cpp:") != nullptr);
     assert(std::strstr(g_plogMessage, "TestApi: value is nullptr") != nullptr);
-    assert(std::strstr(g_plogMessage, " ValidatePointer: TestApi: value is nullptr") != nullptr);
+    assert(std::strstr(g_plogMessage, "[ValidatePointer]TestApi: value is nullptr") != nullptr);
     const std::string longMessage = std::string(4096, 'x') + "\napi-error-tail";
-    ACL_SAN_ERROR("%s", longMessage.c_str());
-    assert(g_plogRecordCount > 2);
-    assert(std::strstr(g_plogMessage, "api-error-tail") != nullptr);
+    ASCTOOL_ERROR("%s", longMessage.c_str());
+    assert(g_plogRecordCount == 2); // Long messages are passed to dlog as one record.
     TestAclErrorReturn();
     plog_test::ResetApi();
     return 0;

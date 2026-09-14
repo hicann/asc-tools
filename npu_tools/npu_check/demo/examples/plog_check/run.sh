@@ -56,7 +56,7 @@ while true; do
         "${ASCEND_PROCESS_LOG_PATH}"/{debug,run}/plog/plog-"${cli_pid}"_*.log
     )
     if ((${#plog_files[@]} > 0)) &&
-        plog_contains '] ASCENDCKERNEL(' && plog_contains '[tool_manager.cpp:' &&
+        plog_contains '] ASCTOOL(' && plog_contains '[tool_manager.cpp:' &&
         plog_contains 'npu_check initialization completed' &&
         plog_contains 'synchronization completed' &&
         plog_contains 'status=complete' &&

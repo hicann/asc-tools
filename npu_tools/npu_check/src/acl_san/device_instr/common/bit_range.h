@@ -11,7 +11,7 @@
 #ifndef NPU_TOOLS_NPU_CHECK_SRC_ACL_SAN_DEVICE_INSTR_COMMON_BIT_RANGE_H
 #define NPU_TOOLS_NPU_CHECK_SRC_ACL_SAN_DEVICE_INSTR_COMMON_BIT_RANGE_H
 
-#include "plog_sink.h"
+#include "npu_tool_log.h"
 
 #include <cstdint>
 #include <limits>
@@ -26,7 +26,7 @@ struct BitRange {
 inline uint64_t ExtractBitRange(uint64_t value, BitRange range) noexcept
 {
     if (range.begin > range.end || range.end >= 64) {
-        ACL_SAN_ERROR(
+        ASCTOOL_ERROR(
             "ExtractBitRange failed: invalid range begin=%u end=%u, expected 0 <= begin <= end < 64",
             static_cast<unsigned int>(range.begin), static_cast<unsigned int>(range.end));
         return 0;

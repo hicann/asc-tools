@@ -9,7 +9,7 @@
  */
 
 #include "uds_client.h"
-#include "plog_sink.h"
+#include "npu_tool_log.h"
 
 #include "uds_transport.h"
 
@@ -86,10 +86,9 @@ bool UdsClient::ConnectWithRetry(
             return false;
         }
         if (connect(fd_, reinterpret_cast<const sockaddr*>(&address), addrLen) == 0) {
-            npucheck::WritePlog(
-                npucheck::PlogLevel::DEBUG,
-                "[UDS] phase=connect attempt=" + std::to_string(attempt) +
-                    " errno=0 elapsed_ms=" + std::to_string(npucheck::ipc::MonotonicNowMs() - start));
+            ASCTOOL_DEBUG(
+                "[UDS] phase=connect attempt=%llu errno=0 elapsed_ms=%lld", static_cast<unsigned long long>(attempt),
+                static_cast<long long>(npucheck::ipc::MonotonicNowMs() - start));
             return true;
         }
         lastError = errno;
@@ -179,13 +178,12 @@ bool UdsClient::ConnectAndConfigure(
     hello.uid = static_cast<uint32_t>(getuid());
     if (!Send(npucheck::ipc::MessageType::CLIENT_HELLO, npucheck::ipc::EncodeHello(hello), deadline, error) ||
         !CheckServerIdentity(childPid, deadline, error)) {
-        npucheck::WritePlog(npucheck::PlogLevel::DEBUG, "[UDS] phase=handshake result=failed");
+        ASCTOOL_DEBUG("[UDS] phase=handshake result=failed");
         return false;
     }
-    npucheck::WritePlog(
-        npucheck::PlogLevel::DEBUG,
-        "[UDS] phase=handshake peer_pid=" + std::to_string(childPid) + " peer_uid=" + std::to_string(getuid()) +
-            " cred_match=1 negotiated_minor=" + std::to_string(negotiatedMinor_) + " result=ok");
+    ASCTOOL_DEBUG(
+        "[UDS] phase=handshake peer_pid=%u peer_uid=%u cred_match=1 negotiated_minor=%u result=ok",
+        static_cast<unsigned>(childPid), static_cast<unsigned>(getuid()), static_cast<unsigned>(negotiatedMinor_));
 
     // 在发送之前查：用户请求了当前协商版本不支持的选项时，直接报"版本不支持"，
     // 而不是把对端无法理解的配置送上线路再等它回 Error。
@@ -202,11 +200,9 @@ bool UdsClient::ConnectAndConfigure(
     for (const auto& tool : configure.tools) {
         optionCount += tool.options.size();
     }
-    npucheck::WritePlog(
-        npucheck::PlogLevel::DEBUG, "[UDS] phase=configure tool_count=" + std::to_string(configure.tools.size()) +
-                                        " option_count=" + std::to_string(optionCount) + " length=" +
-                                        std::to_string(npucheck::ipc::kWireHeaderSize + encodedConfig.size()) +
-                                        " payload_size=" + std::to_string(encodedConfig.size()));
+    ASCTOOL_DEBUG(
+        "[UDS] phase=configure tool_count=%zu option_count=%zu length=%zu payload_size=%zu", configure.tools.size(),
+        optionCount, npucheck::ipc::kWireHeaderSize + encodedConfig.size(), encodedConfig.size());
     if (!Send(npucheck::ipc::MessageType::CONFIGURE, encodedConfig, deadline, error)) {
         return false;
     }
@@ -236,9 +232,9 @@ bool UdsClient::ConnectAndConfigure(
         error = "READY frame carries an unexpected payload";
         return false;
     }
-    npucheck::WritePlog(
-        npucheck::PlogLevel::DEBUG, "[UDS] phase=wait_ready elapsed_ms=" +
-                                        std::to_string(npucheck::ipc::MonotonicNowMs() - start) + " result=ready");
+    ASCTOOL_DEBUG(
+        "[UDS] phase=wait_ready elapsed_ms=%lld result=ready",
+        static_cast<long long>(npucheck::ipc::MonotonicNowMs() - start));
     // 握手到此结束，deadline 使命完成。之后进入采集阶段，等待由调用方按 kNoDeadline 驱动。
     return true;
 }

@@ -14,7 +14,7 @@
 #include "aclsan_active_probe_plan.h"
 #include "aclsan_dispatch.h"
 #include "aclsan_device_data.h"
-#include "plog_sink.h"
+#include "npu_tool_log.h"
 #include "aclsan_runtime_hook.h"
 #include "aclsan_trace_runtime.h"
 #include "injection/injection_hook.h"
@@ -107,7 +107,7 @@ bool GetCurrentDeviceId(uint32_t& deviceId) noexcept
     int32_t currentDeviceId = -1;
     const aclError result = function(&currentDeviceId);
     if (result != ACL_SUCCESS || currentDeviceId < 0) {
-        ACL_SAN_ERROR("acl_san: aclrtGetDevice failed: result=%d deviceId=%d", result, currentDeviceId);
+        ASCTOOL_ERROR("acl_san: aclrtGetDevice failed: result=%d deviceId=%d", result, currentDeviceId);
         return false;
     }
     deviceId = static_cast<uint32_t>(currentDeviceId);
@@ -318,7 +318,7 @@ aclError aclrtLaunchKernelWithHostArgsHook(
     const aclError result = original(
         funcHandle, numBlocks, stream, config, launchArguments, launchArgumentBytes, launchPlaceholders,
         launchPlaceholderCount);
-    ACL_SAN_DEBUG(
+    ASCTOOL_DEBUG(
         "aclrtLaunchKernelWithHostArgs: function=%p blocks=%u stream=%p instrumented=%u result=%d", funcHandle,
         numBlocks, stream, static_cast<unsigned>(prepared.instrumented), result);
     aclsan::CompleteTraceLaunch(std::move(prepared), funcHandle, stream, result);
@@ -347,7 +347,7 @@ aclError aclrtLaunchKernelWithArgsArrayHook(
             result =
                 BuildInstrumentedArgsArray(func, prepared.deviceBuffer, prepared.traceArgumentOffset, args, launchArgs);
             if (result != ACL_SUCCESS) {
-                ACL_SAN_ERROR(
+                ASCTOOL_ERROR(
                     "BuildInstrumentedArgsArray failed in aclrtLaunchKernelWithArgsArrayHook: result=%d", result);
             }
         }

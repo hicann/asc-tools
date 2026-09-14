@@ -1,5 +1,5 @@
 # ----------------------------------------------------------------------------------------------------------
-# Copyright (c) 2025 Huawei Technologies Co., Ltd.
+# Copyright (c) 2026 Huawei Technologies Co., Ltd.
 # This program is free software, you can redistribute it and/or modify it under the terms and conditions of
 # CANN Open Software License Agreement Version 2.0 (the "License").
 # Please refer to the License for details. You may not use this file except in compliance with the License.
@@ -31,19 +31,9 @@ set_target_properties(npu_check_common PROPERTIES
   VISIBILITY_INLINES_HIDDEN YES
 )
 
-add_library(npu_sanitizer_plog STATIC plog_sink.cpp)
-target_compile_features(npu_sanitizer_plog PUBLIC cxx_std_17)
-target_include_directories(npu_sanitizer_plog PUBLIC
+# Header-only logging macros; propagate their include path and dlog dependency.
+add_library(npu_sanitizer_plog INTERFACE)
+target_include_directories(npu_sanitizer_plog INTERFACE
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
 )
-target_link_libraries(npu_sanitizer_plog PUBLIC
-  slog_headers
-)
-target_link_libraries(npu_sanitizer_plog PRIVATE
-  ${CMAKE_DL_LIBS}
-)
-set_target_properties(npu_sanitizer_plog PROPERTIES
-  POSITION_INDEPENDENT_CODE ON
-  CXX_VISIBILITY_PRESET hidden
-  VISIBILITY_INLINES_HIDDEN YES
-)
+target_link_libraries(npu_sanitizer_plog INTERFACE unified_dlog)

@@ -1,13 +1,15 @@
-// Copyright (c) 2026 Huawei Technologies Co., Ltd.
-// This program is free software, you can redistribute it and/or modify it under the terms and conditions of
-// CANN Open Software License Agreement Version 2.0 (the "License").
-// Please refer to the License for details. You may not use this file except in compliance with the License.
-// THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
-// INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
-// See LICENSE in the root of the software repository for the full text of the License.
+/**
+ * Copyright (c) 2026 Huawei Technologies Co., Ltd.
+ * This program is free software, you can redistribute it and/or modify it under the terms and conditions of
+ * CANN Open Software License Agreement Version 2.0 (the "License").
+ * Please refer to the License for details. You may not use this file except in compliance with the License.
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
+ * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
+ * See LICENSE in the root of the software repository for the full text of the License.
+ */
 
 #include "checker/memcheck.h"
-#include "plog_sink.h"
+#include "npu_tool_log.h"
 #include <sstream>
 
 namespace npucheck {
@@ -37,9 +39,7 @@ bool Memcheck::OnCallback(
     } else if (domain == ACLSAN_CB_DOMAIN_SYNCHRONIZE) {
         const auto* event = static_cast<const AclsanSynchronizeData*>(data);
         auto completed = OnSynchronization();
-        std::ostringstream message;
-        message << "synchronization completed reports=" << completed.size() << " stream=" << event->stream;
-        WritePlog(PlogLevel::INFO, message.str());
+        ASCTOOL_INFO("synchronization completed reports=%zu stream=%p", completed.size(), event->stream);
         AppendCheckerReports(std::move(completed), reports);
     }
     return true;

@@ -1,10 +1,12 @@
-// Copyright (c) 2026 Huawei Technologies Co., Ltd.
-// This program is free software, you can redistribute it and/or modify it under the terms and conditions of
-// CANN Open Software License Agreement Version 2.0 (the "License").
-// Please refer to the License for details. You may not use this file except in compliance with the License.
-// THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
-// INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
-// See LICENSE in the root of the software repository for the full text of the License.
+/**
+ * Copyright (c) 2026 Huawei Technologies Co., Ltd.
+ * This program is free software, you can redistribute it and/or modify it under the terms and conditions of
+ * CANN Open Software License Agreement Version 2.0 (the "License").
+ * Please refer to the License for details. You may not use this file except in compliance with the License.
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
+ * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
+ * See LICENSE in the root of the software repository for the full text of the License.
+ */
 
 #include "dbi/dbi_pipeline.h"
 
@@ -13,7 +15,7 @@
 #include "dbi/kernel_param_metadata.h"
 #include "dbi/probe_source_generator.h"
 #include "dbi/tool_runner.h"
-#include "plog_sink.h"
+#include "npu_tool_log.h"
 
 #include <algorithm>
 #include <atomic>
@@ -401,9 +403,9 @@ void LogToolOutput(const std::string& stage, const char* stream, const std::stri
         size_t part = 1;
         do {
             const size_t bytes = std::min(size_t{512}, end - offset);
-            WritePlog(
-                PlogLevel::DEBUG, "DBI stage=" + stage + " output=" + stream + " line=" + std::to_string(line) +
-                                      " part=" + std::to_string(part++) + " text=" + output.substr(offset, bytes));
+            ASCTOOL_DEBUG(
+                "DBI stage=%s output=%s line=%zu part=%zu text=%.*s", stage.c_str(), stream, line, part++,
+                static_cast<int>(bytes), output.data() + offset);
             offset += bytes;
         } while (offset < end);
         if (newline == std::string::npos) {
@@ -424,7 +426,7 @@ bool RunChecked(
     }
     LogToolOutput(stage, "command", command.str());
     const ToolResult toolResult = RunTool(arguments);
-    aclsan::WritePlog(aclsan::PlogLevel::DEBUG, "DBI stage=" + stage + " exit=" + std::to_string(toolResult.exitCode));
+    ASCTOOL_DEBUG("DBI stage=%s exit=%d", stage.c_str(), toolResult.exitCode);
     LogToolOutput(stage, "stdout", toolResult.standardOutput);
     LogToolOutput(stage, "stderr", toolResult.standardError);
     if (standardOutput != nullptr) {

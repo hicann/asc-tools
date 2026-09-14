@@ -17,7 +17,7 @@
 #include "aclsan_device_data.h"
 #include "aclsan_device_data_log.h"
 #include "aclsan_dispatch.h"
-#include "plog_sink.h"
+#include "npu_tool_log.h"
 #include "aclsan_runtime_hook.h"
 #include "aclsan_trace_buffer.h"
 #include "injection/injection_hook.h"
@@ -79,7 +79,7 @@ bool QueryPhysicalCoreCount(uint32_t deviceId, uint32_t& physicalCoreCount)
         getDeviceInfo(deviceId, ACL_DEV_ATTR_VECTOR_CORE_NUM, &vectorCoreCount) != ACL_SUCCESS) {
         return false;
     }
-    ACL_SAN_DEBUG(
+    ASCTOOL_DEBUG(
         "[trace] Device %u core count: cube=%lld vector=%lld", deviceId, static_cast<long long>(cubeCoreCount),
         static_cast<long long>(vectorCoreCount));
     physicalCoreCount = static_cast<uint32_t>(cubeCoreCount + vectorCoreCount);
@@ -174,7 +174,7 @@ void ReleaseDeviceBuffer(void* buffer) noexcept
     }
     const auto freeFunction = GetOriginalRuntimeFunction<aclrtFreeFunc>(ACL_RT_API_aclrtFree, "aclrtFree");
     if (freeFunction(buffer) != ACL_SUCCESS) {
-        ACL_SAN_ERROR("acl_san trace: failed to release launch-owned GM buffer %p", buffer);
+        ASCTOOL_ERROR("acl_san trace: failed to release launch-owned GM buffer %p", buffer);
     }
 }
 
@@ -186,25 +186,25 @@ aclError ResolveLaunchContext(PreparedTraceLaunch& prepared) noexcept
     const char* socName = getSocName();
     const std::optional<aclsan::SocVersion> socVersion = aclsan::ResolveSocVersion(socName);
     if (!socVersion.has_value()) {
-        ACL_SAN_ERROR("acl_san trace: get unsupported soc name %s.", socName != nullptr ? socName : "<null>");
+        ASCTOOL_ERROR("acl_san trace: get unsupported soc name %s.", socName != nullptr ? socName : "<null>");
         return ACL_ERROR_RT_INTERNAL_ERROR;
     }
 
     prepared.decoder = aclsan::FindDeviceInstructionDecoder(*socVersion);
     if (prepared.decoder == nullptr) {
-        ACL_SAN_ERROR("acl_san trace: cannot select Device instruction decoder for soc %s.", socName);
+        ASCTOOL_ERROR("acl_san trace: cannot select Device instruction decoder for soc %s.", socName);
         return ACL_ERROR_RT_INTERNAL_ERROR;
     }
 
     const auto getDevice = GetOriginalRuntimeFunction<aclrtGetDeviceFunc>(ACL_RT_API_aclrtGetDevice, "aclrtGetDevice");
     int32_t deviceId = -1;
     if (getDevice(&deviceId) != ACL_SUCCESS || deviceId < 0) {
-        ACL_SAN_ERROR("acl_san trace: cannot query current Device ID");
+        ASCTOOL_ERROR("acl_san trace: cannot query current Device ID");
         return ACL_ERROR_RT_INTERNAL_ERROR;
     }
     prepared.deviceId = static_cast<uint32_t>(deviceId);
     if (!QueryPhysicalCoreCount(prepared.deviceId, prepared.physicalCoreCount)) {
-        ACL_SAN_ERROR(
+        ASCTOOL_ERROR(
             "acl_san trace: cannot query a supported physical core topology for Device %u", prepared.deviceId);
         return ACL_ERROR_RT_INTERNAL_ERROR;
     }
@@ -227,7 +227,7 @@ void DispatchTraceRecords(
         }
         std::optional<aclsan::DecodedInstruction> decoded = decoder.decode(parsed.record);
         if (!decoded.has_value()) {
-            ACL_SAN_ERROR(
+            ASCTOOL_ERROR(
                 "acl_san trace: unsupported raw trace instrId=%u pc=0x%llx block=%u", parsed.record.instrId,
                 static_cast<unsigned long long>(parsed.record.pc), parsed.blockId);
             continue;
@@ -298,10 +298,10 @@ void RecordTraceBinaryLoadFromData(
     try {
         if (!DeviceBinaries().RecordBinaryLoadFromData(
                 reinterpret_cast<uintptr_t>(binary), instrumented, traceArgumentOffset, image, imageBytes)) {
-            ACL_SAN_ERROR("acl_san trace: failed to preserve device source for binary %p", binary);
+            ASCTOOL_ERROR("acl_san trace: failed to preserve device source for binary %p", binary);
         }
     } catch (...) {
-        ACL_SAN_ERROR("acl_san trace: failed to record binary load for %p", binary);
+        ASCTOOL_ERROR("acl_san trace: failed to record binary load for %p", binary);
     }
 }
 
@@ -319,7 +319,7 @@ void RecordTraceBinaryFunctionLookup(aclrtBinHandle binary, aclrtFuncHandle func
         DeviceBinaries().RecordBinaryFunctionLookup(
             reinterpret_cast<uintptr_t>(binary), reinterpret_cast<uintptr_t>(function), functionName);
     } catch (...) {
-        ACL_SAN_ERROR("acl_san trace: failed to record function %p for binary %p", function, binary);
+        ASCTOOL_ERROR("acl_san trace: failed to record function %p for binary %p", function, binary);
     }
 }
 
@@ -336,7 +336,7 @@ void RecordTraceFunctionLookup(aclrtFuncHandle function) noexcept
     try {
         DeviceBinaries().RecordLatestBinaryFunctionLookup(reinterpret_cast<uintptr_t>(function));
     } catch (...) {
-        ACL_SAN_ERROR("acl_san trace: failed to record function lookup for %p", function);
+        ASCTOOL_ERROR("acl_san trace: failed to record function lookup for %p", function);
     }
 }
 
@@ -367,7 +367,7 @@ aclError PrepareTraceLaunch(
         std::string error;
         if (!InitializeTraceBuffer(
                 prepared.hostBuffer, prepared.physicalCoreCount, blockCount, capacity, prepared.launchId, error)) {
-            ACL_SAN_ERROR("acl_san trace: cannot initialize launch buffer: %s", error.c_str());
+            ASCTOOL_ERROR("acl_san trace: cannot initialize launch buffer: %s", error.c_str());
             StoreHiddenPointer(prepared, argumentMode);
             return StrictModeEnabled() ? ACL_ERROR_FAILURE : ACL_SUCCESS;
         }
@@ -382,7 +382,7 @@ aclError PrepareTraceLaunch(
                 prepared.hostBuffer.size(), ACL_MEMCPY_HOST_TO_DEVICE);
         }
         if (status != ACL_SUCCESS) {
-            ACL_SAN_ERROR("acl_san trace: cannot allocate or initialize launch GM buffer, status=%d", status);
+            ASCTOOL_ERROR("acl_san trace: cannot allocate or initialize launch GM buffer, status=%d", status);
             ReleaseDeviceBuffer(prepared.deviceBuffer);
             prepared.deviceBuffer = nullptr;
             StoreHiddenPointer(prepared, argumentMode);
@@ -394,12 +394,12 @@ aclError PrepareTraceLaunch(
     } catch (const std::bad_alloc&) {
         ReleaseDeviceBuffer(prepared.deviceBuffer);
         prepared.deviceBuffer = nullptr;
-        ACL_SAN_ERROR("acl_san trace: out of memory while preparing launch");
+        ASCTOOL_ERROR("acl_san trace: out of memory while preparing launch");
         return ACL_ERROR_BAD_ALLOC;
     } catch (...) {
         ReleaseDeviceBuffer(prepared.deviceBuffer);
         prepared.deviceBuffer = nullptr;
-        ACL_SAN_ERROR("acl_san trace: unexpected failure while preparing launch");
+        ASCTOOL_ERROR("acl_san trace: unexpected failure while preparing launch");
         return ACL_ERROR_FAILURE;
     }
 }
@@ -431,7 +431,7 @@ void CompleteTraceLaunch(
         std::lock_guard<std::mutex> lock(state.mutex);
         state.pending.push_back(std::move(pending));
     } catch (...) {
-        ACL_SAN_ERROR(
+        ASCTOOL_ERROR(
             "acl_san trace: failed to retain launch=%llu", static_cast<unsigned long long>(prepared.launchId));
         ReleaseDeviceBuffer(prepared.deviceBuffer);
     }
@@ -454,7 +454,7 @@ void CollectTraceStream(aclrtStream stream) noexcept
             }
         }
     } catch (...) {
-        ACL_SAN_ERROR("acl_san trace: failed to detach completed launches for stream=%p", stream);
+        ASCTOOL_ERROR("acl_san trace: failed to detach completed launches for stream=%p", stream);
         return;
     }
 
@@ -468,7 +468,7 @@ void CollectTraceStream(aclrtStream stream) noexcept
             if (memcpyFunction(
                     pending.hostBuffer.data(), pending.hostBuffer.size(), pending.deviceBuffer,
                     pending.hostBuffer.size(), ACL_MEMCPY_DEVICE_TO_HOST) != ACL_SUCCESS) {
-                ACL_SAN_ERROR(
+                ASCTOOL_ERROR(
                     "acl_san trace: D2H failed for launch=%llu", static_cast<unsigned long long>(pending.launchId));
                 ReleaseDeviceBuffer(pending.deviceBuffer);
                 continue;
@@ -478,7 +478,7 @@ void CollectTraceStream(aclrtStream stream) noexcept
                 pending.hostBuffer.data(), pending.hostBuffer.size(), pending.physicalCoreCount, pending.blockCount,
                 pending.recordsPerCore, pending.launchId, pending.deviceId);
             if (!parsed.ok) {
-                ACL_SAN_ERROR(
+                ASCTOOL_ERROR(
                     "acl_san trace: malformed buffer for launch=%llu: %s",
                     static_cast<unsigned long long>(pending.launchId), parsed.error.c_str());
             } else {
@@ -486,14 +486,14 @@ void CollectTraceStream(aclrtStream stream) noexcept
                     DispatchTraceRecords(parsed.records, *pending.decoder);
                 }
                 if (parsed.overflowCount != 0) {
-                    ACL_SAN_ERROR(
+                    ASCTOOL_ERROR(
                         "acl_san trace: launch=%llu dropped %llu records",
                         static_cast<unsigned long long>(pending.launchId),
                         static_cast<unsigned long long>(parsed.overflowCount));
                 }
             }
         } catch (...) {
-            ACL_SAN_ERROR(
+            ASCTOOL_ERROR(
                 "acl_san trace: unexpected D2H processing failure for launch=%llu",
                 static_cast<unsigned long long>(pending.launchId));
         }

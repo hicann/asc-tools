@@ -9,7 +9,7 @@
 #ifndef NPU_SANITIZER_TEST_PLOG_CAPTURE_H
 #define NPU_SANITIZER_TEST_PLOG_CAPTURE_H
 
-#include "plog_sink.h"
+#include "npu_tool_log.h"
 #include "plog_test_library.h"
 #include <cstdarg>
 #include <cstdio>

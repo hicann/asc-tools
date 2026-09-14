@@ -1,14 +1,16 @@
-// Copyright (c) 2026 Huawei Technologies Co., Ltd.
-// This program is free software, you can redistribute it and/or modify it under the terms and conditions of
-// CANN Open Software License Agreement Version 2.0 (the "License").
-// Please refer to the License for details. You may not use this file except in compliance with the License.
-// THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
-// INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
-// See LICENSE in the root of the software repository for the full text of the License.
+/**
+ * Copyright (c) 2026 Huawei Technologies Co., Ltd.
+ * This program is free software, you can redistribute it and/or modify it under the terms and conditions of
+ * CANN Open Software License Agreement Version 2.0 (the "License").
+ * Please refer to the License for details. You may not use this file except in compliance with the License.
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
+ * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
+ * See LICENSE in the root of the software repository for the full text of the License.
+ */
 
 #include "checker/synccheck.h"
 #include "tool_manager/kernel_attributes.h"
-#include "plog_sink.h"
+#include "npu_tool_log.h"
 #include <sstream>
 
 namespace npucheck {
@@ -32,25 +34,23 @@ bool Synccheck::OnCallback(
         const auto* data = static_cast<const AclsanLaunchData*>(cbdata);
         const npucheck::KernelAttributes attributes = npucheck::QueryKernelAttributes(data->function);
         const char* functionName = data->functionName == nullptr ? "<unknown>" : data->functionName;
-        std::ostringstream message;
-        message << "kernel attributes launch=" << data->launchId << " function=" << data->function
-                << " function_name=" << functionName << " num_blocks=" << data->numBlocks
-                << " kernel_type=" << attributes.kernelType << " kernel_type_status=" << attributes.kernelTypeStatus
-                << " aic_ratio=" << attributes.aicRatio << " aiv_ratio=" << attributes.aivRatio
-                << " kernel_ratio_status=" << attributes.kernelRatioStatus
-                << " kernel_sched_mode=" << attributes.kernelSchedMode
-                << " kernel_sched_mode_status=" << attributes.kernelSchedModeStatus
-                << " launch_result=" << data->common.result;
-        npucheck::WritePlog(npucheck::PlogLevel::DEBUG, message.str());
+        ASCTOOL_DEBUG(
+            "kernel attributes launch=%llu function=%p function_name=%s num_blocks=%u "
+            "kernel_type=%lld kernel_type_status=%d aic_ratio=%u aiv_ratio=%u kernel_ratio_status=%d "
+            "kernel_sched_mode=%lld kernel_sched_mode_status=%d launch_result=%d",
+            static_cast<unsigned long long>(data->launchId), data->function, functionName,
+            static_cast<unsigned>(data->numBlocks), static_cast<long long>(attributes.kernelType),
+            attributes.kernelTypeStatus, static_cast<unsigned>(attributes.aicRatio),
+            static_cast<unsigned>(attributes.aivRatio), attributes.kernelRatioStatus,
+            static_cast<long long>(attributes.kernelSchedMode), attributes.kernelSchedModeStatus, data->common.result);
 
         const auto logFailure = [data, functionName](const char* attribute, aclError status) {
             if (status == ACL_SUCCESS) {
                 return;
             }
-            std::ostringstream warning;
-            warning << "kernel attribute query failed launch=" << data->launchId << " function=" << data->function
-                    << " function_name=" << functionName << " attribute=" << attribute << " result=" << status;
-            npucheck::WritePlog(npucheck::PlogLevel::WARNING, warning.str());
+            ASCTOOL_WARNING(
+                "kernel attribute query failed launch=%llu function=%p function_name=%s attribute=%s result=%d",
+                static_cast<unsigned long long>(data->launchId), data->function, functionName, attribute, status);
         };
         logFailure("ACL_FUNC_ATTR_KERNEL_TYPE", attributes.kernelTypeStatus);
         logFailure("ACL_FUNC_ATTR_KERNEL_RATIO", attributes.kernelRatioStatus);

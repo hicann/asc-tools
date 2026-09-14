@@ -1,10 +1,12 @@
-// Copyright (c) 2026 Huawei Technologies Co., Ltd.
-// This program is free software, you can redistribute it and/or modify it under the terms and conditions of
-// CANN Open Software License Agreement Version 2.0 (the "License").
-// Please refer to the License for details. You may not use this file except in compliance with the License.
-// THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
-// INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
-// See LICENSE in the root of the software repository for the full text of the License.
+/**
+ * Copyright (c) 2026 Huawei Technologies Co., Ltd.
+ * This program is free software, you can redistribute it and/or modify it under the terms and conditions of
+ * CANN Open Software License Agreement Version 2.0 (the "License").
+ * Please refer to the License for details. You may not use this file except in compliance with the License.
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
+ * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
+ * See LICENSE in the root of the software repository for the full text of the License.
+ */
 
 #include "tool_manager/tool_manager.h"
 
@@ -14,7 +16,7 @@
 #include <algorithm>
 #include <exception>
 #include <cstdlib>
-#include "plog_sink.h"
+#include "npu_tool_log.h"
 #include <memory>
 #include <sstream>
 
@@ -57,21 +59,21 @@ int ToolManager::Initialize()
     }
     const char* workDir = std::getenv(npucheck::ipc::kWorkDirEnv);
     workDir_ = workDir != nullptr ? workDir : "";
-    std::ostringstream handshakeMessage;
-    handshakeMessage << "UDS handshake completed session=" << server_.SessionId()
-                     << " negotiated_minor=" << server_.NegotiatedMinor();
-    npucheck::WritePlog(npucheck::PlogLevel::INFO, handshakeMessage.str());
+    ASCTOOL_INFO(
+        "UDS handshake completed session=%llu negotiated_minor=%u",
+        static_cast<unsigned long long>(server_.SessionId()), static_cast<unsigned>(server_.NegotiatedMinor()));
     std::ostringstream configMessage;
-    configMessage << "tool configuration work_dir=" << workDir_ << " tool_count=" << configure_.tools.size();
     for (const auto& tool : configure_.tools) {
         configMessage << " tool=" << npucheck::ipc::ToolName(tool.toolId) << " option_count=" << tool.options.size();
         for (const auto& option : tool.options) {
             configMessage << " option_id=0x" << std::hex << static_cast<unsigned>(option.optionId) << std::dec;
         }
     }
-    npucheck::WritePlog(npucheck::PlogLevel::INFO, configMessage.str());
+    ASCTOOL_INFO(
+        "tool configuration work_dir=%s tool_count=%zu%s", workDir_.c_str(), configure_.tools.size(),
+        configMessage.str().c_str());
     if (!ConfigureSanitizer(error)) {
-        npucheck::WritePlog(npucheck::PlogLevel::ERROR, error);
+        ASCTOOL_ERROR("sanitizer initialization failed: %s", error.c_str());
         server_.SendInitializationError(
             npucheck::ipc::ErrorDomain::CONFIGURATION, npucheck::ipc::error_code::kToolInitializationFailed, error);
         RollbackSanitizer();
@@ -79,22 +81,24 @@ int ToolManager::Initialize()
         return 1;
     }
     // Ready 不带 payload，会话细节只写 plog。
-    npucheck::WritePlog(npucheck::PlogLevel::INFO, BuildReadyMessage());
+    ASCTOOL_INFO(
+        "session=%llu api_version=%u tools=%s work_dir=%s", static_cast<unsigned long long>(server_.SessionId()),
+        static_cast<unsigned>(ACLSAN_API_VERSION), BuildToolNames().c_str(), workDir_.c_str());
     if (!server_.SendReady(error)) {
-        npucheck::WritePlog(npucheck::PlogLevel::ERROR, error);
+        ASCTOOL_ERROR("failed to send UDS ready notification: %s", error.c_str());
         RollbackSanitizer();
         server_.Shutdown();
         return 1;
     }
     initialized_ = true;
-    npucheck::WritePlog(npucheck::PlogLevel::INFO, "npu_check initialization completed");
+    ASCTOOL_INFO("npu_check initialization completed");
     return 0;
 }
 
 void ToolManager::LogHandshakeFailure(const std::string& reason) noexcept
 {
     try {
-        npucheck::WritePlog(npucheck::PlogLevel::ERROR, "UDS handshake failed: " + reason);
+        ASCTOOL_ERROR("UDS handshake failed: %s", reason.c_str());
     } catch (...) {
         return;
     }
@@ -120,7 +124,7 @@ bool ToolManager::ConfigureSanitizer(std::string& error)
         return false;
     }
     subscribed_ = true;
-    npucheck::WritePlog(npucheck::PlogLevel::INFO, "sanitizer callback subscriber registered");
+    ASCTOOL_INFO("sanitizer callback subscriber registered");
     return EnableCallbacks(error);
 }
 
@@ -134,10 +138,7 @@ bool ToolManager::EnableCallbacks(std::string& error)
             error = StatusMessage("aclsanEnableCallback", status);
             return false;
         }
-        std::ostringstream message;
-        message << "callback enabled domain=" << static_cast<uint32_t>(domain)
-                << " cbid=" << static_cast<uint32_t>(cbid);
-        npucheck::WritePlog(npucheck::PlogLevel::DEBUG, message.str());
+        ASCTOOL_DEBUG("callback enabled domain=%u cbid=%u", static_cast<unsigned>(domain), static_cast<unsigned>(cbid));
     }
     return true;
 }
@@ -198,15 +199,12 @@ void ToolManager::Finalize()
             std::lock_guard<std::mutex> stateLock(stateMutex_);
             ++frameworkErrors_;
         }
-        npucheck::WritePlog(
-            npucheck::PlogLevel::ERROR,
-            "failed to render the session report bundle status=" + std::to_string(static_cast<int>(renderStatus)));
+        ASCTOOL_ERROR("failed to render the session report bundle status=%d", static_cast<int>(renderStatus));
     } else if (!report_.Append(renderedReport) && !report_.Truncated()) {
-        npucheck::WritePlog(npucheck::PlogLevel::ERROR, "failed to record the rendered session report bundle");
+        ASCTOOL_ERROR("failed to record the rendered session report bundle");
     }
 
-    const std::string summary = BuildSummaryMessage();
-    npucheck::WritePlog(npucheck::PlogLevel::INFO, summary);
+    const std::string summary = BuildAndLogSummaryMessage();
     // 多工具时取"全部工具都分析完整"，任一工具留有在途或被丢弃的事件，整份报告就
     // 不能声称完整 —— 这里必须是与，不是二选一。
     bool analysisComplete = true;
@@ -219,11 +217,11 @@ void ToolManager::Finalize()
     const bool truncated = report_.Truncated();
     std::ostringstream sessionEnd;
     const bool transportComplete = server_.TransportComplete() && server_.DroppedMessages() == 0;
-    sessionEnd << "status="
-               << (unsubscribeStatus == ACLSAN_STATUS_SUCCESS && transportComplete && analysisComplete ? "complete" :
-                                                                                                         "incomplete")
-               << " aclsan_unsubscribe=" << static_cast<int>(unsubscribeStatus)
-               << " dropped_messages=" << server_.DroppedMessages()
+    const char* completionStatus =
+        unsubscribeStatus == ACLSAN_STATUS_SUCCESS && transportComplete && analysisComplete ? "complete" : "incomplete";
+    const auto droppedMessages = server_.DroppedMessages();
+    sessionEnd << "status=" << completionStatus << " aclsan_unsubscribe=" << static_cast<int>(unsubscribeStatus)
+               << " dropped_messages=" << droppedMessages
                << " analysis_complete=" << (analysisComplete ? "true" : "false")
                << " report_truncated=" << (truncated ? "true" : "false");
 
@@ -243,11 +241,14 @@ void ToolManager::Finalize()
         const std::string reportText = report_.Take();
         std::string sendError;
         if (!server_.SendResult(reportText, hasErrors, truncated, sendError)) {
-            npucheck::WritePlog(npucheck::PlogLevel::ERROR, "failed to deliver the session report: " + sendError);
+            ASCTOOL_ERROR("failed to deliver the session report: %s", sendError.c_str());
         }
     }
     server_.Shutdown();
-    npucheck::WritePlog(npucheck::PlogLevel::INFO, sessionEnd.str());
+    ASCTOOL_INFO(
+        "status=%s aclsan_unsubscribe=%d dropped_messages=%llu analysis_complete=%s report_truncated=%s",
+        completionStatus, static_cast<int>(unsubscribeStatus), static_cast<unsigned long long>(droppedMessages),
+        analysisComplete ? "true" : "false", truncated ? "true" : "false");
     checkers_.clear();
     initialized_ = false;
 }
@@ -327,11 +328,10 @@ void ToolManager::OnCallback(AclsanCallbackDomain domain, AclsanCallbackId cbid,
                 checker->OnCallback(domain, cbid, cbdata, reports);
             } catch (const std::exception& error) {
                 ++frameworkErrors_;
-                npucheck::WritePlog(
-                    npucheck::PlogLevel::ERROR, std::string("checker callback failed: ") + error.what());
+                ASCTOOL_ERROR("checker callback failed: %s", error.what());
             } catch (...) {
                 ++frameworkErrors_;
-                npucheck::WritePlog(npucheck::PlogLevel::ERROR, "checker callback failed");
+                ASCTOOL_ERROR("checker callback failed");
             }
         }
     }
@@ -345,9 +345,7 @@ void ToolManager::OnCallbackException(const char* reason) noexcept
             std::lock_guard<std::mutex> stateLock(stateMutex_);
             ++frameworkErrors_;
         }
-        std::string message = "npu_check callback failed: ";
-        message += reason != nullptr ? reason : "unspecified exception";
-        npucheck::WritePlog(npucheck::PlogLevel::ERROR, message);
+        ASCTOOL_ERROR("npu_check callback failed: %s", reason != nullptr ? reason : "unspecified exception");
     } catch (...) {
         // Error reporting is best effort inside a noexcept runtime callback.
         return;
@@ -373,13 +371,13 @@ bool ToolManager::NormalizeAndStoreReportRecord(
     npucheck::ReportRecord normalized;
     const auto status = npucheck::detail::NormalizeReport(report, &normalized);
     if (status != npucheck::ReportRenderStatus::SUCCESS) {
-        std::ostringstream message;
-        message << what << " normalization failed report_id=" << reportId << " status=" << static_cast<int>(status);
         {
             std::lock_guard<std::mutex> stateLock(stateMutex_);
             ++frameworkErrors_;
         }
-        npucheck::WritePlog(npucheck::PlogLevel::ERROR, message.str());
+        ASCTOOL_ERROR(
+            "%s normalization failed report_id=%llu status=%d", what, static_cast<unsigned long long>(reportId),
+            static_cast<int>(status));
         return false;
     }
     {
@@ -391,41 +389,45 @@ bool ToolManager::NormalizeAndStoreReportRecord(
 
 void ToolManager::LogMalformed(AclsanCallbackDomain domain, AclsanCallbackId cbid, const char* reason)
 {
-    std::ostringstream message;
-    message << "[NPU-CHECK-MALFORMED-CALLBACK]count=" << callbackCount_ << " domain=" << static_cast<uint32_t>(domain)
-            << " cbid=" << cbid << " reason=" << reason;
-    npucheck::WritePlog(npucheck::PlogLevel::ERROR, message.str());
+    ASCTOOL_ERROR(
+        "[NPU-CHECK-MALFORMED-CALLBACK]count=%llu domain=%u cbid=%u reason=%s",
+        static_cast<unsigned long long>(callbackCount_.load()), static_cast<unsigned>(domain),
+        static_cast<unsigned>(cbid), reason);
 }
 
 void ToolManager::LogCallback(AclsanCallbackDomain domain, AclsanCallbackId cbid, const void* cbdata)
 {
     const uint64_t count = ++callbackCount_;
-    std::ostringstream message;
-    message << "cbdata received count=" << count << " domain=" << static_cast<uint32_t>(domain)
-            << " cbid=" << static_cast<uint32_t>(cbid) << " address=" << cbdata;
-    npucheck::WritePlog(npucheck::PlogLevel::DEBUG, message.str());
+    ASCTOOL_DEBUG(
+        "cbdata received count=%llu domain=%u cbid=%u address=%p", static_cast<unsigned long long>(count),
+        static_cast<unsigned>(domain), static_cast<unsigned>(cbid), cbdata);
 }
 
-std::string ToolManager::BuildReadyMessage() const
+std::string ToolManager::BuildToolNames() const
 {
     std::ostringstream output;
-    output << "session=" << server_.SessionId() << " api_version=" << ACLSAN_API_VERSION << " tools=";
     for (size_t index = 0; index < configure_.tools.size(); ++index) {
         output << (index == 0 ? "" : ",") << npucheck::ipc::ToolName(configure_.tools[index].toolId);
     }
-    output << " work_dir=" << workDir_;
     return output.str();
 }
 
-std::string ToolManager::BuildSummaryMessage() const
+std::string ToolManager::BuildAndLogSummaryMessage() const
 {
     std::lock_guard<std::mutex> stateLock(stateMutex_);
     std::ostringstream output;
     for (const auto& checker : checkers_) {
         output << checker->Summary() << '\n';
     }
-    output << "callbacks=" << callbackCount_.load() << " malformed_callbacks=" << malformedCallbacks_
-           << " framework_errors=" << frameworkErrors_ << " dropped_messages=" << server_.DroppedMessages();
+    const auto callbackCount = callbackCount_.load();
+    const auto droppedMessages = server_.DroppedMessages();
+    ASCTOOL_INFO(
+        "session summary: %scallbacks=%llu malformed_callbacks=%llu framework_errors=%llu dropped_messages=%llu",
+        output.str().c_str(), static_cast<unsigned long long>(callbackCount),
+        static_cast<unsigned long long>(malformedCallbacks_), static_cast<unsigned long long>(frameworkErrors_),
+        static_cast<unsigned long long>(droppedMessages));
+    output << "callbacks=" << callbackCount << " malformed_callbacks=" << malformedCallbacks_
+           << " framework_errors=" << frameworkErrors_ << " dropped_messages=" << droppedMessages;
     return output.str();
 }
 

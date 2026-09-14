@@ -18,7 +18,7 @@
 
 namespace npucheck {
 
-// 命令行解析结果。ToolId / OptionValue / ToolRequest 的唯一定义见 common/wire_protocol.h。
+// 命令行解析结果。ToolId / OptionValue / ToolRequest 的唯一定义见 common/include/wire_protocol.h。
 struct Options {
     std::vector<npucheck::ipc::ToolRequest> tools; // 本次启用的工具及各自子选项，已按注册表规则规范化排序
     std::string logFile;                           // 用户指定的日志文件；空表示写 stdout

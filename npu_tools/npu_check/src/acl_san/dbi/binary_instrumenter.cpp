@@ -1,10 +1,12 @@
-// Copyright (c) 2026 Huawei Technologies Co., Ltd.
-// This program is free software, you can redistribute it and/or modify it under the terms and conditions of
-// CANN Open Software License Agreement Version 2.0 (the "License").
-// Please refer to the License for details. You may not use this file except in compliance with the License.
-// THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
-// INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
-// See LICENSE in the root of the software repository for the full text of the License.
+/**
+ * Copyright (c) 2026 Huawei Technologies Co., Ltd.
+ * This program is free software, you can redistribute it and/or modify it under the terms and conditions of
+ * CANN Open Software License Agreement Version 2.0 (the "License").
+ * Please refer to the License for details. You may not use this file except in compliance with the License.
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
+ * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
+ * See LICENSE in the root of the software repository for the full text of the License.
+ */
 #include "dbi/binary_instrumenter.h"
 #include "device_instr/soc_version.h"
 
@@ -18,7 +20,7 @@
 #include <boost/filesystem.hpp>
 #include <boost/system/error_code.hpp>
 #include <fstream>
-#include "plog_sink.h"
+#include "npu_tool_log.h"
 #include <iterator>
 #include <limits>
 #include <sstream>
@@ -167,7 +169,7 @@ void Cleanup(const BinaryInstrumentationConfig& config, const std::string& work)
 
 void ReportInstrumentationFailure(const BinaryInstrumentationResult& result)
 {
-    aclsan::WritePlog(aclsan::PlogLevel::ERROR, "DBI patch failed at " + result.stage + ": " + result.diagnostic);
+    ASCTOOL_ERROR("DBI patch failed at %s: %s", result.stage.c_str(), result.diagnostic.c_str());
 }
 
 } // namespace
@@ -291,9 +293,7 @@ RuntimeBinaryInstrumentationResult InstrumentRuntimeBinary(
             ReportInstrumentationFailure(failure);
             return {failure.status, strict, 0, 0};
         }
-        aclsan::WritePlog(
-            aclsan::PlogLevel::INFO, "DBI instrumentation started bytes=" + std::to_string(length) +
-                                         " probe_groups=" + std::to_string(probeGroupMask));
+        ASCTOOL_INFO("DBI instrumentation started bytes=%zu probe_groups=%u", length, probeGroupMask);
         const BinaryInstrumentationResult result = InstrumentBinary(config, data, length, runner, runnerData);
         if (result.status == BinaryInstrumentationStatus::Failed) {
             ReportInstrumentationFailure(result);
@@ -309,9 +309,7 @@ RuntimeBinaryInstrumentationResult InstrumentRuntimeBinary(
             return {failure.status, config.strict ? 1U : 0U, 0, 0};
         }
         const int32_t consumerStatus = consumer(result.binary.data(), result.binary.size(), consumerData);
-        aclsan::WritePlog(
-            aclsan::PlogLevel::INFO, "DBI instrumentation completed bytes=" + std::to_string(result.binary.size()) +
-                                         " load_result=" + std::to_string(consumerStatus));
+        ASCTOOL_INFO("DBI instrumentation completed bytes=%zu load_result=%d", result.binary.size(), consumerStatus);
         return {result.status, config.strict ? 1U : 0U, consumerStatus, result.traceArgumentOffset};
     } catch (const std::exception& error) {
         const BinaryInstrumentationResult failure{

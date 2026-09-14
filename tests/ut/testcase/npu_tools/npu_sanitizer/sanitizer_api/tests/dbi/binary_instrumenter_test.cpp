@@ -1,4 +1,4 @@
-// Copyright (c) 2025 Huawei Technologies Co., Ltd.
+// Copyright (c) 2026 Huawei Technologies Co., Ltd.
 // This program is free software, you can redistribute it and/or modify it under the terms and conditions of
 // CANN Open Software License Agreement Version 2.0 (the "License").
 // Please refer to the License for details. You may not use this file except in compliance with the License.
@@ -6,7 +6,7 @@
 // INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 // See LICENSE in the root of the software repository for the full text of the License.
 #include "dbi/binary_instrumenter.h"
-#include "../../../common/tests/plog_capture.h"
+#include "plog_capture.h"
 #include "device_instr/soc_version.h"
 
 #include <gtest/gtest.h>
@@ -333,7 +333,7 @@ TEST_F(BinaryInstrumenterTest, RuntimeFailureWritesDetailsOnlyToPlog)
     const std::string console = testing::internal::GetCapturedStderr();
     EXPECT_EQ(result.status, BinaryInstrumentationStatus::Failed);
     EXPECT_TRUE(console.empty());
-    EXPECT_NE(capture.Text().find("[binary_instrumenter.cpp:"), std::string::npos);
+    EXPECT_NE(capture.Text().find("binary_instrumenter.cpp:"), std::string::npos);
     EXPECT_NE(capture.Text().find("DBI patch failed at runtime-context: unsupported Runtime SoC"), std::string::npos);
 }
 
