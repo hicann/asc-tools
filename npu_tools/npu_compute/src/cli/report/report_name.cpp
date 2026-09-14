@@ -206,8 +206,12 @@ bool ResolveExplicitTarget(const boost::filesystem::path& path, ReportTarget* ta
     if (!ReadStatus(parent, &parent_status, error)) {
         return false;
     }
+    if (!boost::filesystem::exists(parent_status)) {
+        return Fail(
+            "output directory '" + parent.string() + "' does not exist. Create it before using --export.", error);
+    }
     if (!boost::filesystem::is_directory(parent_status)) {
-        return Fail("report output parent is not a directory: " + parent.string(), error);
+        return Fail("output parent path '" + parent.string() + "' is not a directory.", error);
     }
 
     boost::filesystem::file_status target_status;
@@ -218,7 +222,7 @@ bool ResolveExplicitTarget(const boost::filesystem::path& path, ReportTarget* ta
         if (!boost::filesystem::is_regular_file(target_status)) {
             return Fail("report target exists but is not a regular file: " + path.string(), error);
         }
-        return Fail("report target already exists: " + path.string(), error);
+        return Fail("output report '" + path.string() + "' already exists. Choose a different file name.", error);
     }
 
     target->path = path;
@@ -279,10 +283,7 @@ bool ResolveReportTargetWithSources(
     }
     if (!HasReportSuffix(resolved)) {
         return Fail(
-            "report export path must be an existing directory or end with "
-            ".npu-rep: " +
-                resolved.string(),
-            error);
+            "--export expects a new .npu-rep file or an existing directory: '" + resolved.string() + "'.", error);
     }
     return ResolveExplicitTarget(resolved, target, error);
 }

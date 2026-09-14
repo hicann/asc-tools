@@ -298,7 +298,7 @@ int TestRejectsUnsafeAndConflictingOutputModel()
 
     results = {{"device_0.bin", NpuRepFileType::NpuRep, {}, {}}};
     CHECK(!UnpackImportedProfileResults(results, output, &error));
-    CHECK(error.find("must end") != std::string::npos);
+    CHECK(error.find("invalid nested report entry name") != std::string::npos);
     CHECK(boost::filesystem::is_empty(output));
     return 0;
 }
@@ -313,7 +313,7 @@ int TestRejectsInvalidInputAndChildRep()
     CHECK(error.find("missing.npu-rep") != std::string::npos);
     CHECK(results.empty());
     CHECK(!ReadImportedProfileResults(temporary.Path(), &results, &error));
-    CHECK(error.find("regular file") != std::string::npos);
+    CHECK(error.find("is a directory") != std::string::npos);
 
     std::vector<uint8_t> child = Bytes("not-a-rep");
     std::vector<uint8_t> parent;
@@ -399,7 +399,7 @@ bool HasRuntimeCollectionOutput(const std::string& standardError)
 
 bool ExtractUnpackedPath(const ProcessResult& result, boost::filesystem::path* output)
 {
-    constexpr char kPrefix[] = "npu-compute: unpacked=";
+    constexpr char kPrefix[] = "npu-compute: unpacked= ";
     const std::size_t begin = result.standard_error.find(kPrefix);
     if (begin == std::string::npos || result.standard_error.find(kPrefix, begin + 1U) != std::string::npos) {
         return false;
@@ -494,7 +494,7 @@ int TestCliImportUnpacksResults(const boost::filesystem::path& cli)
     CHECK(RunCli(
         cli, {"--import", input.string(), "--export", regularFile.string()}, runtime_tmp, work, &regularFileResult));
     CHECK(regularFileResult.exit_code == 4);
-    CHECK(regularFileResult.standard_error.find("not a directory") != std::string::npos);
+    CHECK(regularFileResult.standard_error.find("requires an existing directory") != std::string::npos);
     CHECK(ReadFile(regularFile, &actual));
     CHECK(actual == Bytes("keep"));
 

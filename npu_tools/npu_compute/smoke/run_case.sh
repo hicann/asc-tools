@@ -339,6 +339,7 @@ run_case()
         return 1
     fi
     data_directory=${data_diagnostics[0]#npu-compute: data-directory=}
+    data_directory=${data_directory#" "}
     if [[ "${data_directory}" != /* ]]; then
         printf 'collection data directory is not absolute: %s\n' "${data_directory}" >&2
         return 1
@@ -354,7 +355,9 @@ run_case()
         return 1
     fi
 
-    if [[ "${report_diagnostics[0]#npu-compute: report=}" != "${report_path}" ]]; then
+    local reported_path=${report_diagnostics[0]#npu-compute: report=}
+    reported_path=${reported_path#" "}
+    if [[ "${reported_path}" != "${report_path}" ]]; then
         printf 'collection report diagnostic does not match requested report: %s\n' \
             "${report_diagnostics[0]}" >&2
         return 1

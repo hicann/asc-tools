@@ -337,7 +337,8 @@ bool PublishRepReportWithOperations(
             if (!boost::filesystem::is_regular_file(target_status)) {
                 return Fail("report target exists but is not a regular file: " + target.path.string(), error);
             }
-            return Fail("report target already exists: " + target.path.string(), error);
+            return Fail(
+                "output report '" + target.path.string() + "' already exists. Choose a different file name.", error);
         }
 
         boost::filesystem::path temporary_path;
@@ -349,8 +350,9 @@ bool PublishRepReportWithOperations(
         FileDescriptor temporary_descriptor(temporary_value, &operations);
         TemporaryFileCleanup temporary_cleanup(temporary_path);
         if (!WriteAll(temporary_descriptor.Get(), encoded, operations, error) ||
-            !SyncDescriptor(temporary_descriptor.Get(), "temporary rep", operations, error) ||
-            !temporary_descriptor.Close("temporary rep", error)) {
+            !SyncDescriptor(
+                temporary_descriptor.Get(), "temporary report '" + temporary_path.string() + "'", operations, error) ||
+            !temporary_descriptor.Close("temporary report '" + temporary_path.string() + "'", error)) {
             return false;
         }
 
@@ -374,8 +376,10 @@ bool PublishRepReportWithOperations(
             return FailErrno("publish rep report failed: " + target.path.string(), errno, error);
         }
         temporary_cleanup.Release();
-        if (!SyncDescriptor(directory_descriptor.Get(), "report output directory", operations, error) ||
-            !directory_descriptor.Close("report output directory", error)) {
+        if (!SyncDescriptor(
+                directory_descriptor.Get(), "report output directory '" + directory.string() + "'", operations,
+                error) ||
+            !directory_descriptor.Close("report output directory '" + directory.string() + "'", error)) {
             return false;
         }
         return true;

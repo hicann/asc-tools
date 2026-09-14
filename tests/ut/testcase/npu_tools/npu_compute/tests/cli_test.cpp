@@ -75,7 +75,7 @@ int TestCollectionExport()
     CHECK(!config.export_path);
     CHECK(!config.import_path);
     CHECK(!Parse({"npu-compute", "--section", "Memory", "--export", "", "./app"}, &config, &errors));
-    CHECK(errors == std::vector<std::string>({"--export requires a non-empty path"}));
+    CHECK(errors == std::vector<std::string>({"--export requires a non-empty output path."}));
     CHECK(!config.export_path);
     return 0;
 }
@@ -109,7 +109,7 @@ int TestImportExportParsing()
     CHECK(config.import_path == "old.npu-rep");
     CHECK(!config.export_path);
     CHECK(!Parse({"npu-compute", "--import", ""}, &config, &errors));
-    CHECK(errors == std::vector<std::string>({"--import requires a non-empty path"}));
+    CHECK(errors == std::vector<std::string>({"--import requires a non-empty input report file path."}));
     CHECK(!config.import_path);
     return 0;
 }
@@ -190,40 +190,52 @@ int TestHelpReportsAllOptionErrors()
     std::vector<std::string> errors;
 
     CHECK(!Parse({"npu-compute", "--bad-option", "--help"}, &config, &errors));
-    CHECK(errors == std::vector<std::string>({"unknown option: --bad-option"}));
+    CHECK(errors == std::vector<std::string>({"unknown option '--bad-option'. Use --help to see supported options."}));
     CHECK(config.show_help);
 
     errors.clear();
     CHECK(!Parse({"npu-compute", "--section", "Invalid", "--help"}, &config, &errors));
-    CHECK(errors == std::vector<std::string>({"unknown section: Invalid"}));
+    CHECK(
+        errors == std::vector<std::string>({"unsupported section name 'Invalid'. Names are case-sensitive; use "
+                                            "--list-sections to see supported names."}));
     CHECK(config.show_help);
 
     errors.clear();
     CHECK(!Parse({"npu-compute", "--section", "--help"}, &config, &errors));
-    CHECK(errors == std::vector<std::string>({"--section requires a value"}));
+    CHECK(
+        errors ==
+        std::vector<std::string>({"--section requires a section name. Use --list-sections to see supported names."}));
     CHECK(config.show_help);
 
     errors.clear();
     CHECK(!Parse({"npu-compute", "--bad-one", "--bad-two", "--help"}, &config, &errors));
-    CHECK(errors == std::vector<std::string>({"unknown option: --bad-one", "unknown option: --bad-two"}));
+    CHECK(
+        errors == std::vector<std::string>(
+                      {"unknown option '--bad-one'. Use --help to see supported options.",
+                       "unknown option '--bad-two'. Use --help to see supported options."}));
     CHECK(config.show_help);
 
     errors.clear();
     CHECK(!Parse({"npu-compute", "--bad-one", "--bad-two"}, &config, &errors));
-    CHECK(errors == std::vector<std::string>({"unknown option: --bad-one", "unknown option: --bad-two"}));
+    CHECK(
+        errors == std::vector<std::string>(
+                      {"unknown option '--bad-one'. Use --help to see supported options.",
+                       "unknown option '--bad-two'. Use --help to see supported options."}));
     CHECK(!config.show_help);
 
     errors.clear();
     CHECK(!Parse({"npu-compute", "hh", "-h", "/path/to/run.sh"}, &config, &errors));
-    CHECK(errors == std::vector<std::string>({"missing required --section option before program 'hh'"}));
+    CHECK(errors == std::vector<std::string>({"collection requires at least one --section before program 'hh'."}));
     CHECK(config.program == "hh");
     CHECK(config.program_arguments == std::vector<std::string>({"-h", "/path/to/run.sh"}));
 
     errors.clear();
     CHECK(!Parse({"npu-compute", "--section", "Invalid", "--replay-mode", "invalid", "--help"}, &config, &errors));
     CHECK(
-        errors ==
-        std::vector<std::string>({"unknown section: Invalid", "--replay-mode currently only accepts kernel"}));
+        errors == std::vector<std::string>(
+                      {"unsupported section name 'Invalid'. Names are case-sensitive; use --list-sections to see "
+                       "supported names.",
+                       "unsupported replay mode 'invalid'. Supported value: kernel."}));
     CHECK(config.show_help);
     return 0;
 }
@@ -265,6 +277,58 @@ int TestHelpMatchingAndProgramBoundary()
     return 0;
 }
 
+int TestMissingValueAndDuplicateState()
+{
+    CliConfig config;
+    std::vector<std::string> errors;
+    for (const std::string option : {"--import", "--export"}) {
+        CHECK(!Parse({"npu-compute", option, "--help", option, "file.npu-rep"}, &config, &errors));
+        CHECK(errors.size() == 2);
+        CHECK(errors[1] == option + " may only be specified once");
+        CHECK(!config.import_path && !config.export_path);
+    }
+    CHECK(!Parse({"npu-compute", "--replay-mode", "--help"}, &config, &errors));
+    CHECK(config.replay_mode_specified);
+    CHECK(errors == std::vector<std::string>({"--replay-mode requires a mode. Supported value: kernel."}));
+    CHECK(!Parse({"npu-compute", "--replay-mode", "--help", "--replay-mode", "kernel"}, &config, &errors));
+    CHECK(config.replay_mode_specified);
+    CHECK(errors.size() == 2);
+    CHECK(errors[1] == "--replay-mode may only be specified once");
+    CHECK(!Parse({"npu-compute", "--replay-mode=", "--replay-mode", "kernel"}, &config, &errors));
+    CHECK(errors.size() == 2);
+    CHECK(errors[1] == "--replay-mode may only be specified once");
+    return 0;
+}
+
+int TestNullArgumentsAndStateReset()
+{
+    CliConfig config;
+    std::vector<std::string> errors;
+    char name[] = "npu-compute";
+    char section[] = "--section";
+    char memory[] = "Memory";
+    char help[] = "--help";
+    char* missing_value[] = {name, section, nullptr};
+    CHECK(!ParseCli(3, missing_value, &config, &errors));
+    CHECK(
+        errors ==
+        std::vector<std::string>({"--section requires a section name. Use --list-sections to see supported names."}));
+    char* empty_program[] = {name, section, memory, nullptr, help};
+    CHECK(!ParseCli(5, empty_program, &config, &errors));
+    CHECK(!config.show_help);
+    CHECK(config.program.empty());
+    CHECK(config.program_arguments == std::vector<std::string>({"--help"}));
+    CHECK(Parse(
+        {"npu-compute", "--section", "Memory", "--section", "L2Cache", "--section", "Memory", "app"}, &config,
+        &errors));
+    CHECK(config.sections == std::vector<std::string>({"Memory", "L2Cache"}));
+    CHECK(Parse({"npu-compute", "--help"}, &config, &errors));
+    CHECK(config.show_help && errors.empty());
+    CHECK(config.sections.empty() && config.program.empty() && config.program_arguments.empty());
+    CHECK(!config.import_path && !config.export_path && !config.replay_mode_specified && !config.list_sections);
+    return 0;
+}
+
 int TestHelpText()
 {
     FILE* stream = std::tmpfile();
@@ -287,7 +351,7 @@ int main()
         TestInlineLongOptionValues() != 0 || TestForceOptionsAreRejected() != 0 || TestExistingCliBehavior() != 0 ||
         TestHelpWithoutErrors() != 0 || TestHelpReportsAllOptionErrors() != 0 ||
         TestHelpAcceptsListSectionsCombination() != 0 || TestHelpMatchingAndProgramBoundary() != 0 ||
-        TestHelpText() != 0) {
+        TestMissingValueAndDuplicateState() != 0 || TestNullArgumentsAndStateReset() != 0 || TestHelpText() != 0) {
         return 1;
     }
     return 0;

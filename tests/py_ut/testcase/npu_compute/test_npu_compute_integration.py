@@ -101,7 +101,7 @@ def extract_output_path(stderr):
 
 
 def extract_data_directory(stderr):
-    prefix = "npu-compute: data-directory="
+    prefix = "npu-compute: data-directory= "
     for line in stderr.splitlines():
         if line.startswith(prefix):
             return Path(line[len(prefix) :])
@@ -151,7 +151,7 @@ def test_cli_rejects_missing_hardware_info_file(tmp_path):
     assert result.returncode == 3
     assert "npu-compute: data-directory=" not in result.stderr
     assert list(tmp_path.iterdir()) == []
-    assert "HardwareInfo.jsonl is missing" in result.stderr
+    assert "hardware information was not generated" in result.stderr
 
 
 @pytest.mark.parametrize("mode", ("directory", "symlink"))
@@ -162,7 +162,7 @@ def test_cli_rejects_non_regular_hardware_info_path(mode, tmp_path):
     data_directory = extract_data_directory(result.stderr)
     assert data_directory.parent == tmp_path
     assert data_directory.is_dir()
-    assert "HardwareInfo.jsonl is not a regular file" in result.stderr
+    assert "hardware information path is not a regular file" in result.stderr
 
 
 def test_app_failure_takes_priority_over_missing_hardware_info(tmp_path):
@@ -171,8 +171,8 @@ def test_app_failure_takes_priority_over_missing_hardware_info(tmp_path):
     assert result.returncode == 7
     assert "npu-compute: data-directory=" not in result.stderr
     assert list(tmp_path.iterdir()) == []
-    assert "APP exited with status 7" in result.stderr
-    assert "HardwareInfo.jsonl is missing" not in result.stderr
+    assert "exited with code 7" in result.stderr
+    assert "hardware information was not generated" not in result.stderr
 
 
 def test_each_collection_receives_unique_writable_output_directory():
@@ -243,7 +243,7 @@ def test_app_nonzero_exit_is_preserved_after_successful_collection():
     assert result.returncode == 7
     assert "[libnpu-compute] subscriber initialized" in result.stderr
     assert "[demo] exiting with requested status 7" in result.stderr
-    assert "npu-compute: APP exited with status 7" in result.stderr
+    assert "exited with code 7" in result.stderr
 
 
 def test_multiple_sections_reach_aclpti_in_order():

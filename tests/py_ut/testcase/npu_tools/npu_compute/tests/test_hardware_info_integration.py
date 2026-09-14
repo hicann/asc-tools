@@ -21,7 +21,7 @@ APP = BIN_DIR / "npu_compute_stub_demo_app"
 
 
 def extract_data_directory(stderr):
-    prefix = "npu-compute: data-directory="
+    prefix = "npu-compute: data-directory= "
     for line in stderr.splitlines():
         if line.startswith(prefix):
             return Path(line[len(prefix) :])

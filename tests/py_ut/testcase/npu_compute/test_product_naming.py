@@ -77,7 +77,7 @@ def test_npu_compute_build_and_log_names_are_consistent():
     assert "OUTPUT_NAME npu-compute" in library_cmake
     assert "add_executable(npu_compute_cli" in cli_cmake
     assert "OUTPUT_NAME npu-compute" in cli_cmake
-    assert '"npu-compute: %s\\n"' in cli_main
+    assert '"[ERROR] npu-compute: %s\\n"' in cli_main
     assert '"[libnpu-compute]' in library_source
 
 

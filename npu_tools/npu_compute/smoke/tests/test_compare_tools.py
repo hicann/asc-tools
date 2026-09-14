@@ -136,7 +136,7 @@ class CompareReportsTest(unittest.TestCase):
                 'data_dir="${FAKE_NPU_COMPUTE_DATA_ROOT}/$(basename "${export_path}")"\n'
                 'mkdir -p "${data_dir}"\n'
                 "printf 'block_id,sub_block_id,aic_total_cycles\\n0,vector0,100\\n' > \"${data_dir}/PipeUtilization.csv\"\n"
-                "printf 'npu-compute: data-directory=%s\\n' \"${data_dir}\" >&2\n"
+                "printf 'npu-compute: data-directory= %s\\n' \"${data_dir}\" >&2\n"
                 "printf 'fixture report\\n' > \"${export_path}/report_fixture.npu-rep\"\n",
                 encoding="utf-8",
             )

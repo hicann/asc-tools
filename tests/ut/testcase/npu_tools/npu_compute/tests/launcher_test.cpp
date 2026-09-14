@@ -259,7 +259,7 @@ int TestInvalidExportIsRejectedBeforeAppLaunch()
     CHECK(report.empty());
     CHECK(!boost::filesystem::exists(marker));
     CHECK(!boost::filesystem::exists(output));
-    CHECK(error.find("resolve report target failed") != std::string::npos);
+    CHECK(error.find("Create it before using --export") != std::string::npos);
     return 0;
 }
 
@@ -280,7 +280,7 @@ int TestFailedAppRemovesEmptyDataAndDoesNotPublishReport()
     CHECK(collectionDataDirectory.empty());
     CHECK(boost::filesystem::is_empty(workDirectory.Path()));
     CHECK(!boost::filesystem::exists(output));
-    CHECK(error.find("status 23") != std::string::npos);
+    CHECK(error.find("exited with code 23") != std::string::npos);
     return 0;
 }
 
@@ -301,7 +301,7 @@ int TestMissingHardwareInfoRemovesEmptyDataAndDoesNotPublishReport()
     CHECK(collectionDataDirectory.empty());
     CHECK(boost::filesystem::is_empty(workDirectory.Path()));
     CHECK(!boost::filesystem::exists(output));
-    CHECK(error.find("HardwareInfo.jsonl is missing") != std::string::npos);
+    CHECK(error.find("hardware information was not generated") != std::string::npos);
     return 0;
 }
 
@@ -322,7 +322,7 @@ int TestMissingHardwareInfoKeepsDataAndDoesNotPublishReport()
     CHECK(report.empty());
     CHECK(IsCollectionDirectoryIn(collectionDataDirectory, workDirectory.Path()));
     CHECK(!boost::filesystem::exists(output));
-    CHECK(error.find("HardwareInfo.jsonl is missing") != std::string::npos);
+    CHECK(error.find("hardware information was not generated") != std::string::npos);
     return 0;
 }
 
@@ -366,7 +366,8 @@ int TestPublishingFailureKeepsCollectionDataDirectory()
     CHECK(report.empty());
     CHECK(IsCollectionDirectoryIn(collectionDataDirectory, workDirectory.Path()));
     CHECK(!boost::filesystem::exists(output));
-    CHECK(error.find("publish") != std::string::npos);
+    CHECK(error.find("create temporary rep failed") != std::string::npos);
+    CHECK(error.find("/proc/") != std::string::npos);
     return 0;
 }
 

@@ -71,7 +71,7 @@ bool ResolveOutputName(const ImportedProfileEntry& entry, std::string* name, std
         return true;
     }
     if (!RemoveSuffix(entry.name, ".npu.rep", name) && !RemoveSuffix(entry.name, ".rep", name)) {
-        return Fail("imported child rep name must end with .npu.rep or .rep: " + entry.name, error);
+        return Fail("invalid nested report entry name: '" + entry.name + "'.", error);
     }
     if (!IsSafeName(*name)) {
         return Fail("imported child directory name is unsafe: " + *name, error);
@@ -297,21 +297,30 @@ bool ReadInputFile(const boost::filesystem::path& path, std::vector<uint8_t>* co
 {
     boost::system::error_code status_error;
     const boost::filesystem::file_status status = boost::filesystem::symlink_status(path, status_error);
+    if (status_error == boost::system::errc::no_such_file_or_directory ||
+        (!status_error && !boost::filesystem::exists(status))) {
+        return Fail("--import report file does not exist: '" + path.string() + "'.", error);
+    }
     if (status_error) {
-        return Fail("inspect imported rep failed: " + path.string() + ": " + status_error.message(), error);
+        return Fail("cannot inspect input report '" + path.string() + "': " + status_error.message(), error);
+    }
+    if (boost::filesystem::is_directory(status)) {
+        return Fail("--import expects a report file, but '" + path.string() + "' is a directory.", error);
     }
     if (!boost::filesystem::is_regular_file(status)) {
-        return Fail("imported rep is not a regular file: " + path.string(), error);
+        return Fail(
+            "--import requires a regular report file; symbolic links are not supported: '" + path.string() + "'.",
+            error);
     }
 
     std::ifstream input(path.string(), std::ios::binary);
     if (!input.is_open()) {
-        return Fail("open imported rep failed: " + path.string(), error);
+        return Fail("cannot open input report '" + path.string() + "'.", error);
     }
     content->assign(std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>());
     if (input.bad()) {
         content->clear();
-        return Fail("read imported rep failed: " + path.string(), error);
+        return Fail("cannot read input report '" + path.string() + "'.", error);
     }
     return true;
 }
@@ -323,7 +332,7 @@ bool DecodeImportedEntries(
     DecodedRep decoded;
     std::string decode_error;
     if (!DecodeRep(encoded, &decoded, &decode_error)) {
-        return Fail("invalid imported rep " + logical_path + ": " + decode_error, error);
+        return Fail("invalid npu-compute report '" + logical_path + "': " + decode_error, error);
     }
 
     std::vector<ImportedProfileEntry> imported;

@@ -88,7 +88,8 @@ bool ResolveInjectionLibraryPath(std::string* path, std::string* error)
     }
 
     if (error != nullptr) {
-        *error = "libnpu-compute.so was not found next to npu-compute or in ../lib64";
+        *error = "cannot find a readable libnpu-compute.so at '" + candidates[0].string() + "' or '" +
+                 candidates[1].lexically_normal().string() + "'. Check the npu-compute installation.";
     }
     return false;
 }

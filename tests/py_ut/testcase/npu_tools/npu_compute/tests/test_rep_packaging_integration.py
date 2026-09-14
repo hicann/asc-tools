@@ -98,7 +98,7 @@ def decode_rep(data: bytes) -> DecodedRep:
 
 
 def extract_path(stderr: str, key: str) -> Path:
-    prefix = f"npu-compute: {key}="
+    prefix = f"npu-compute: {key}= "
     values = [
         Path(line[len(prefix) :])
         for line in stderr.splitlines()
@@ -317,7 +317,7 @@ def test_failed_app_does_not_publish_report(tmp_path):
     assert "npu-compute: report=" not in result.stderr
     assert list(work_directory.glob("*.npu-rep")) == []
     assert_no_temporary_report_files(work_directory)
-    assert "APP exited with status 17" in result.stderr
+    assert "exited with code 17" in result.stderr
 
 
 def test_sequential_collections_use_unique_data_directories_and_reports(tmp_path):

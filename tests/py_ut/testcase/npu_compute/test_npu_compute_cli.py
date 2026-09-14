@@ -98,19 +98,24 @@ def test_help_with_valid_tool_options_exits_zero(arguments, tmp_path):
     [
         (
             ("--bad-option", "--help"),
-            ["unknown option: --bad-option"],
+            ["unknown option '--bad-option'. Use --help to see supported options."],
         ),
         (
             ("--section", "--help"),
-            ["--section requires a value"],
+            [
+                "--section requires a section name. Use --list-sections to see supported names."
+            ],
         ),
         (
             ("--bad-one", "--bad-two", "--help"),
-            ["unknown option: --bad-one", "unknown option: --bad-two"],
+            [
+                "unknown option '--bad-one'. Use --help to see supported options.",
+                "unknown option '--bad-two'. Use --help to see supported options.",
+            ],
         ),
         (
             ("--bad-option", "--list-sections", "--help"),
-            ["unknown option: --bad-option"],
+            ["unknown option '--bad-option'. Use --help to see supported options."],
         ),
         (
             (
@@ -121,8 +126,8 @@ def test_help_with_valid_tool_options_exits_zero(arguments, tmp_path):
                 "--help",
             ),
             [
-                "unknown section: Invalid",
-                "--replay-mode currently only accepts kernel",
+                "unsupported section name 'Invalid'. Names are case-sensitive; use --list-sections to see supported names.",
+                "unsupported replay mode 'invalid'. Supported value: kernel.",
             ],
         ),
     ],
@@ -133,7 +138,7 @@ def test_help_reports_all_option_errors(arguments, expected_errors, tmp_path):
     assert result.returncode == 2
     assert result.stdout.count("Usage:") == 1
     assert result.stderr.splitlines() == [
-        f"npu-compute: {message}" for message in expected_errors
+        f"[ERROR] npu-compute: {message}" for message in expected_errors
     ]
     assert list(tmp_path.iterdir()) == []
 
@@ -152,12 +157,14 @@ def test_help_prints_all_errors_before_usage_and_does_not_run_program(tmp_path):
 
     assert result.returncode == 2
     assert result.stdout.count("Usage:") == 1
-    assert result.stdout.index("unknown option: --bad-one") < result.stdout.index(
-        "unknown option: --bad-two"
+    assert result.stdout.index(
+        "unknown option '--bad-one'. Use --help to see supported options."
+    ) < result.stdout.index(
+        "unknown option '--bad-two'. Use --help to see supported options."
     )
-    assert result.stdout.index("unknown option: --bad-two") < result.stdout.index(
-        "Usage:"
-    )
+    assert result.stdout.index(
+        "unknown option '--bad-two'. Use --help to see supported options."
+    ) < result.stdout.index("Usage:")
     assert not marker.exists()
     assert list(tmp_path.iterdir()) == []
 
@@ -169,7 +176,7 @@ def test_missing_section_identifies_the_parsed_program(program, tmp_path):
     assert result.returncode == 2
     assert result.stdout == ""
     assert result.stderr == (
-        f"npu-compute: missing required --section option before program '{program}'\n"
+        f"[ERROR] npu-compute: collection requires at least one --section before program '{program}'.\n"
     )
     assert list(tmp_path.iterdir()) == []
 
@@ -220,7 +227,7 @@ def test_sections_without_csv_writer_are_rejected(removed_section):
     result = run_cli("--section", removed_section, "/bin/true")
 
     assert result.returncode == 2
-    assert f"unknown section: {removed_section}" in result.stderr
+    assert f"unsupported section name '{removed_section}'" in result.stderr
 
 
 @pytest.mark.parametrize("abbreviation", ("--l", "--list"))
@@ -332,7 +339,7 @@ def test_invalid_options_and_combinations_exit_two(arguments):
     result = run_cli(*arguments)
 
     assert result.returncode == 2
-    assert result.stderr.startswith("npu-compute:")
+    assert result.stderr.startswith("[ERROR] npu-compute:")
 
 
 @pytest.mark.parametrize(
@@ -346,7 +353,7 @@ def test_missing_import_report_returns_report_error(arguments, tmp_path):
     result = run_cli(*arguments, cwd=tmp_path)
 
     assert result.returncode == 4
-    assert "inspect imported rep failed: missing.npu-rep" in result.stderr
+    assert "--import report file does not exist: 'missing.npu-rep'" in result.stderr
 
 
 def test_collection_rejects_export_path_without_report_suffix(tmp_path):
@@ -361,8 +368,7 @@ def test_collection_rejects_export_path_without_report_suffix(tmp_path):
 
     assert result.returncode == 4
     assert (
-        "report export path must be an existing directory or end with .npu-rep"
-        in result.stderr
+        "--export expects a new .npu-rep file or an existing directory" in result.stderr
     )
 
 
@@ -375,3 +381,44 @@ def test_pr_prototype_options_are_rejected(obsolete_option):
 
     assert result.returncode == 2
     assert "unknown option" in result.stderr
+
+
+@pytest.mark.parametrize("option", ["--replay-mode", "--import", "--export"])
+@pytest.mark.parametrize("tail", [[], ["kernel"], ["invalid"], [""], ["--help"]])
+def test_missing_value_records_option_occurrence(option, tail):
+    missing = {
+        "--replay-mode": "--replay-mode requires a mode. Supported value: kernel.",
+        "--import": "--import requires an input report file path.",
+        "--export": "--export requires an output path: a report file or directory.",
+    }[option]
+    result = run_cli(option, "--help", option, *tail)
+    second = (
+        missing
+        if not tail or tail == ["--help"]
+        else option + " may only be specified once"
+    )
+    assert result.returncode == 2
+    assert result.stderr.splitlines() == [
+        "[ERROR] npu-compute: " + missing,
+        "[ERROR] npu-compute: " + second,
+    ]
+    assert "Usage:" in result.stdout
+
+
+def test_replay_missing_value_preserves_other_error_order():
+    result = run_cli(
+        "--bad",
+        "--replay-mode",
+        "--help",
+        "--section",
+        "Invalid",
+        "--replay-mode",
+        "invalid",
+    )
+    assert result.returncode == 2
+    assert result.stderr.splitlines() == [
+        "[ERROR] npu-compute: unknown option '--bad'. Use --help to see supported options.",
+        "[ERROR] npu-compute: --replay-mode requires a mode. Supported value: kernel.",
+        "[ERROR] npu-compute: unsupported section name 'Invalid'. Names are case-sensitive; use --list-sections to see supported names.",
+        "[ERROR] npu-compute: --replay-mode may only be specified once",
+    ]

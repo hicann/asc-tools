@@ -22,7 +22,7 @@ int main(int argc, char** argv)
     std::vector<std::string> parse_errors;
     const bool parsed = npucompute::cli::ParseCli(argc, argv, &config, &parse_errors);
     for (const std::string& error : parse_errors) {
-        std::fprintf(stderr, "npu-compute: %s\n", error.c_str());
+        std::fprintf(stderr, "[ERROR] npu-compute: %s\n", error.c_str());
     }
     if (!parse_errors.empty()) {
         std::fflush(stderr);
@@ -47,7 +47,7 @@ int main(int argc, char** argv)
         std::string error;
         std::vector<npucompute::cli::ImportedProfileEntry> results;
         if (!npucompute::cli::ReadImportedProfileResults(*config.import_path, &results, &error)) {
-            std::fprintf(stderr, "npu-compute: %s\n", error.c_str());
+            std::fprintf(stderr, "[ERROR] npu-compute: %s\n", error.c_str());
             return npucompute::cli::kReportErrorExitCode;
         }
         npucompute::cli::ImportOutputDirectory outputDirectory;
@@ -55,10 +55,10 @@ int main(int argc, char** argv)
                 *config.import_path, config.export_path, &outputDirectory, &error) ||
             !npucompute::cli::UnpackImportedProfileResults(results, outputDirectory.TemporaryPath(), &error) ||
             !outputDirectory.Publish(&error)) {
-            std::fprintf(stderr, "npu-compute: %s\n", error.c_str());
+            std::fprintf(stderr, "[ERROR] npu-compute: %s\n", error.c_str());
             return npucompute::cli::kReportErrorExitCode;
         }
-        std::fprintf(stderr, "npu-compute: unpacked=%s\n", outputDirectory.FinalPath().c_str());
+        std::fprintf(stderr, "npu-compute: unpacked= %s\n", outputDirectory.FinalPath().c_str());
         return 0;
     }
 
@@ -67,16 +67,16 @@ int main(int argc, char** argv)
     std::string error;
     int result = npucompute::cli::LaunchTarget(config, &collection_data_directory, &report_path, &error);
     if (!collection_data_directory.empty()) {
-        std::fprintf(stderr, "npu-compute: data-directory=%s\n", collection_data_directory.c_str());
+        std::fprintf(stderr, "npu-compute: data-directory= %s\n", collection_data_directory.c_str());
     }
     if (result != 0) {
         if (!error.empty()) {
-            std::fprintf(stderr, "npu-compute: %s\n", error.c_str());
+            std::fprintf(stderr, "[ERROR] npu-compute: %s\n", error.c_str());
         }
         return result;
     }
     if (!report_path.empty()) {
-        std::fprintf(stderr, "npu-compute: report=%s\n", report_path.c_str());
+        std::fprintf(stderr, "npu-compute: report= %s\n", report_path.c_str());
     }
     return 0;
 }

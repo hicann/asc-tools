@@ -197,18 +197,18 @@ bool WaitForChild(pid_t child_pid, int* status, std::string* error)
     }
 }
 
-int ExitCodeFromStatus(int status, std::string* error)
+int ExitCodeFromStatus(int status, const std::string& program, std::string* error)
 {
     if (WIFEXITED(status)) {
         const int exit_code = WEXITSTATUS(status);
         if (exit_code != 0) {
-            SetError("APP exited with status " + std::to_string(exit_code), error);
+            SetError("target program '" + program + "' exited with code " + std::to_string(exit_code) + ".", error);
         }
         return exit_code;
     }
     if (WIFSIGNALED(status)) {
         const int signal_number = WTERMSIG(status);
-        SetError("APP terminated by signal " + std::to_string(signal_number), error);
+        SetError("target program '" + program + "' terminated by signal " + std::to_string(signal_number) + ".", error);
         return 128 + signal_number;
     }
     SetError("waitpid returned an unsupported APP status", error);
@@ -319,7 +319,7 @@ int LaunchProcessAndWait(const ProcessLaunchRequest& request, std::string* error
             "failed to start program '" + request.program + "': " + std::strerror(child_error.error_number), error);
         return child_error.error_number == ENOENT ? kProgramNotFoundExitCode : kProgramNotExecutableExitCode;
     }
-    return ExitCodeFromStatus(child_status, error);
+    return ExitCodeFromStatus(child_status, request.program, error);
 }
 
 } // namespace npucompute::cli

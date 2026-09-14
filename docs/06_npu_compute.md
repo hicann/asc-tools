@@ -58,12 +58,12 @@ npu-compute --section PipeUtilization bash ./run.sh
 
 | 选项 | 说明 |
 | :--- | :--- |
-| `-h`、`--help` | 输出帮助信息并退出。与其他合法选项同时使用时，只输出帮助信息；存在错误选项时，先输出全部参数错误，再输出帮助信息。|
-| `--list-sections` | 输出所有支持的 Section 并退出。只能单独使用；与 `-h` 或 `--help` 同时使用时，只输出帮助信息。|
-| `--section <id>` | 指定一个采集 Section，可重复指定。采集命令至少需要一个 Section。|
-| `--replay-mode <mode>` | 预留的采集模式选项，当前仅支持 `kernel`；不指定该选项时使用 `kernel` 模式。|
-| `-o <path>`、`--export <path>` | 采集模式下指定报告输出位置；导入模式下指定解包结果的父目录。|
-| `-i <report>`、`--import <report>` | 导入 `npu-compute` 生成的 `.npu-rep` 报告。|
+| `-h`、`--help` | 输出帮助信息。 |
+| `--list-sections` | 列出支持的指标组名称，单独使用。 |
+| `--section arg` | 指定要采集的指标组（Section）名称，区分大小写。可多次使用该选项指定不同指标组，采集命令至少需要指定一个指标组。 |
+| `--replay-mode arg` | Kernel 重放模式，当前仅支持 `kernel`，默认值为 `kernel`。 |
+| `-o arg`、`--export arg` | 采集时指定报告文件路径或已有目录；导入时指定保存解包结果的已有目录，工具会在其中创建新的结果子目录。未指定时，报告或解包结果保存在当前目录。 |
+| `-i arg`、`--import arg` | 导入并解包 npu-compute 生成的 `.npu-rep` 报告，可配合 `--export` 指定保存位置。 |
 
 同一个 `--section` 重复指定时只采集一次。`--replay-mode`、`--import` 和 `--export` 每条命令只能指定一次。
 
@@ -81,8 +81,8 @@ npu-compute \
 采集完成后，工具会在终端输出本次数据目录和报告路径：
 
 ```text
-npu-compute: data-directory=<数据目录>
-npu-compute: report=<报告路径>
+npu-compute: data-directory= <数据目录>
+npu-compute: report= <报告路径>
 ```
 
 数据目录位于执行命令时的当前目录，名称格式如下：
@@ -145,7 +145,7 @@ npu-compute --import ./reports/profile.npu-rep
 未指定 `--export` 时，工具在当前目录创建唯一的解包结果目录，并输出路径：
 
 ```text
-npu-compute: unpacked=<解包结果目录>
+npu-compute: unpacked= <解包结果目录>
 ```
 
 使用 `--export` 指定已有目录时，工具会在该目录下创建唯一的结果子目录：
@@ -157,7 +157,7 @@ npu-compute --import ./reports/profile.npu-rep --export ./restored
 
 解包结果目录包含打包前的采集文件，例如 `HardwareInfo.jsonl`、`PipeUtilization.csv` 和 `Memory.csv`。导入不会运行目标程序。
 
-`--import <report>` 可以单独使用；需要指定解包结果的保存目录时，可以同时使用 `--export <已存在目录>`。
+`--import arg` 可以单独使用；需要指定解包结果的保存目录时，可以同时使用 `--export <已存在目录>`。
 
 ## 报告内容
 

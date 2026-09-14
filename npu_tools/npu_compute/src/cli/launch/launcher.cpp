@@ -36,7 +36,8 @@ namespace {
 constexpr char kCollectionActiveEnvironment[] = "NPU_COMPUTE_COLLECTION_ACTIVE";
 constexpr char kCollectionOutputEnvironment[] = "NPU_COMPUTE_OUTPUT";
 constexpr char kNestedCollectionMarker[] = ".npu-compute-nested-collection";
-constexpr char kNestedCollectionError[] = "nested npu-compute collection is not supported";
+constexpr char kNestedCollectionError[] = "nested npu-compute collection is not supported. The target program or "
+                                          "script must not start another npu-compute collection.";
 
 class FileDescriptor {
 public:
@@ -161,18 +162,18 @@ bool ValidateHardwareInfoResult(const std::string& collectionDataDirectory, std:
     if (::lstat(path.c_str(), &status) != 0) {
         if (errno == ENOENT) {
             if (error != nullptr) {
-                *error = "HardwareInfo.jsonl is missing";
+                *error = "hardware information was not generated: '" + path + "'.";
             }
             return false;
         }
         if (error != nullptr) {
-            *error = "inspect HardwareInfo.jsonl failed: " + std::string(std::strerror(errno));
+            *error = "cannot inspect hardware information '" + path + "': " + std::string(std::strerror(errno));
         }
         return false;
     }
     if (!S_ISREG(status.st_mode)) {
         if (error != nullptr) {
-            *error = "HardwareInfo.jsonl is not a regular file";
+            *error = "hardware information path is not a regular file: '" + path + "'.";
         }
         return false;
     }
@@ -214,7 +215,7 @@ int LaunchTarget(
     std::string stage_error;
     ReportTarget target;
     if (!ResolveReportTarget(config.export_path, &target, &stage_error)) {
-        SetStageError("resolve report target failed", stage_error, error);
+        Fail(stage_error, error);
         return kReportErrorExitCode;
     }
 
@@ -272,7 +273,7 @@ int LaunchTarget(
     }
 
     if (!PublishRepReport(encoded, target, &stage_error)) {
-        SetStageError("publish report failed", stage_error, error);
+        Fail(stage_error, error);
         return finishCollection(kReportErrorExitCode);
     }
     if (report_path != nullptr) {

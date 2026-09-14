@@ -185,11 +185,11 @@ if [[ ${mode} == misleading_marker ]]; then
 else
     printf 'result verification passed: %s\n' "${case_id}"
 fi
-printf 'npu-compute: data-directory=%s\n' "${data_dir}"
+printf 'npu-compute: data-directory= %s\n' "${data_dir}"
 if [[ ${mode} == duplicate_data_diagnostic ]]; then
-    printf 'npu-compute: data-directory=%s\n' "${data_dir}"
+    printf 'npu-compute: data-directory= %s\n' "${data_dir}"
 fi
-printf 'npu-compute: report=%s\n' "${report_path}"
+printf 'npu-compute: report= %s\n' "${report_path}"
 if [[ ${mode} == collection_failure ]]; then
     exit 23
 fi

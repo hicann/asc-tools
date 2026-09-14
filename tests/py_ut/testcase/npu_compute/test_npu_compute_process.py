@@ -92,7 +92,7 @@ def nested_collection_script(tmp_path, swallow_failure):
 def assert_nested_collection_rejected(result, tmp_path):
     assert result.returncode == 3
     assert NESTED_COLLECTION_ERROR in result.stderr
-    assert "HardwareInfo.jsonl is missing" not in result.stderr
+    assert "hardware information was not generated" not in result.stderr
     assert list(tmp_path.glob("*.npu-rep")) == []
 
     assert "npu-compute: data-directory=" not in result.stderr
@@ -125,7 +125,7 @@ def test_app_exit_status_is_preserved():
     result = run_cli("/bin/sh", "-c", "exit 7")
 
     assert result.returncode == 7
-    assert "APP exited with status 7" in result.stderr
+    assert "exited with code 7" in result.stderr
 
 
 def test_program_not_found_returns_127():
@@ -134,7 +134,7 @@ def test_program_not_found_returns_127():
 
     assert result.returncode == 127
     assert result.stderr == (
-        f"npu-compute: failed to start program '{program}': No such file or directory\n"
+        f"[ERROR] npu-compute: failed to start program '{program}': No such file or directory\n"
     )
 
 
@@ -147,7 +147,7 @@ def test_program_not_executable_returns_126(tmp_path):
 
     assert result.returncode == 126
     assert result.stderr == (
-        f"npu-compute: failed to start program '{program}': Permission denied\n"
+        f"[ERROR] npu-compute: failed to start program '{program}': Permission denied\n"
     )
 
 
@@ -215,9 +215,9 @@ def test_nested_collection_preserves_nonempty_data_directory(tmp_path):
     assert result.returncode == 3
     assert NESTED_COLLECTION_ERROR in result.stderr
     data_directories = [
-        Path(line.split("=", 1)[1])
+        Path(line[len("npu-compute: data-directory= ") :])
         for line in result.stderr.splitlines()
-        if line.startswith("npu-compute: data-directory=")
+        if line.startswith("npu-compute: data-directory= ")
     ]
     assert len(data_directories) == 1
     assert (data_directories[0] / "partial.csv").is_file()
@@ -280,7 +280,7 @@ def test_sigterm_is_forwarded_and_child_is_reaped(tmp_path):
         stdout, stderr = process.communicate(timeout=5)
         assert stdout == ""
         assert process.returncode == 128 + signal.SIGTERM
-        assert "APP terminated by signal 15" in stderr
+        assert "terminated by signal 15" in stderr
         with pytest.raises(ProcessLookupError):
             os.kill(app_pid, 0)
     finally:

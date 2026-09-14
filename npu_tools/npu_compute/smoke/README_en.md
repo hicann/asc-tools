@@ -84,7 +84,7 @@ Each case first runs `npu-compute --list-sections`, then passes one `--section <
 - `MemoryUB`
 - `L2Cache`
 
-Full-suite logs are stored in `npu_tools/npu_compute/smoke/build/logs/<case>.log`. Each case stores its executable, `npu_compute.log`, and `result.npu-rep` under `examples/<case>/build/`. The `npu-compute: data-directory=<absolute-path>` diagnostic identifies the collection data directory for that run.
+Full-suite logs are stored in `npu_tools/npu_compute/smoke/build/logs/<case>.log`. Each case stores its executable, `npu_compute.log`, and `result.npu-rep` under `examples/<case>/build/`. The `npu-compute: data-directory= <absolute-path>` diagnostic identifies the collection data directory for that run.
 
 ## Pass Criteria
 

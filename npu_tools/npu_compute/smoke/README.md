@@ -110,7 +110,7 @@ cube/mix 的每个 block 处理 32 个已验证的 `16 x 16 x 16` tile，SIMT �
 
 全量运行日志位于 `npu_tools/npu_compute/smoke/build/logs/<case>.log`。每个 case 的
 `examples/<case>/build/` 下保存可执行程序、`npu_compute.log`、`result.npu-rep`，以及由
-`npu-compute: data-directory=<绝对路径>` 输出指出的本次采集数据目录。
+`npu-compute: data-directory= <绝对路径>` 输出指出的本次采集数据目录。
 
 ## 通过标准
 

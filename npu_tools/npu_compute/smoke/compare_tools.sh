@@ -115,7 +115,7 @@ copy_collection_data() {
     local raw_output_dir=$2
     local -a data_directories=()
 
-    mapfile -t data_directories < <(sed -n 's/^npu-compute: data-directory=//p' "${collection_log}")
+    mapfile -t data_directories < <(sed -n 's/^npu-compute: data-directory= \{0,1\}//p' "${collection_log}")
     if (( ${#data_directories[@]} != 1 )); then
         printf 'expected exactly one npu-compute data directory in %s, found %d\n' \
             "${collection_log}" "${#data_directories[@]}" >&2

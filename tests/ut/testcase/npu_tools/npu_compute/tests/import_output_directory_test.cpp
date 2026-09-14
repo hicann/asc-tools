@@ -232,7 +232,7 @@ int TestInvalidTargets()
     std::string error;
 
     CHECK(!npucompute::cli::ImportOutputDirectory::Create("/input/report.unknown", std::nullopt, &directory, &error));
-    CHECK(error.find("must end") != std::string::npos);
+    CHECK(error.find("Select a .npu-rep report") != std::string::npos);
     CHECK(!npucompute::cli::ImportOutputDirectory::Create(
         "/input/report.npu-rep", std::optional<std::string>("missing-output-root"), &directory, &error));
     CHECK(error.find("does not exist") != std::string::npos);
@@ -240,7 +240,7 @@ int TestInvalidTargets()
     CHECK(WriteFile(regularFile, "keep"));
     CHECK(!npucompute::cli::ImportOutputDirectory::Create(
         "/input/report.npu-rep", std::optional<std::string>(regularFile.string()), &directory, &error));
-    CHECK(error.find("not a directory") != std::string::npos);
+    CHECK(error.find("requires an existing directory") != std::string::npos);
     CHECK(ReadFile(regularFile) == "keep");
     CHECK(!npucompute::cli::ImportOutputDirectory::Create(
         "/input/report.npu-rep", std::optional<std::string>("/proc"), &directory, &error));
