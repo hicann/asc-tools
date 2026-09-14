@@ -59,10 +59,10 @@ private:
     bool EnableCallbacks(std::string& error);
     void RollbackSanitizer();
     void LogHandshakeFailure(const std::string& reason) noexcept;
-    void StoreReports(CheckerReports reports);
+    void StoreReports(CheckerReportList reports);
     bool NormalizeAndStoreReportRecord(
         const npucheck::NpuCheckReportRecord& report, uint64_t reportId, const char* what);
-    void PublishMalformed(AclsanCallbackDomain domain, AclsanCallbackId cbid, const char* reason);
+    void LogMalformed(AclsanCallbackDomain domain, AclsanCallbackId cbid, const char* reason);
     void LogCallback(AclsanCallbackDomain domain, AclsanCallbackId cbid, const void* cbdata);
     std::string BuildReadyMessage() const;
     std::string BuildSummaryMessage() const;

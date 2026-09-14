@@ -128,15 +128,15 @@ bool ToolManager::EnableCallbacks(std::string& error)
 {
     const auto required = RequiredCallbacks(checkers_);
 
-    for (const auto& callback : required) {
-        const AclsanStatus status = aclsanEnableCallback(1, subscriber_, callback.domain, callback.cbid);
+    for (const auto& [domain, cbid] : required) {
+        const AclsanStatus status = aclsanEnableCallback(1, subscriber_, domain, cbid);
         if (status != ACLSAN_STATUS_SUCCESS) {
             error = StatusMessage("aclsanEnableCallback", status);
             return false;
         }
         std::ostringstream message;
-        message << "callback enabled domain=" << static_cast<uint32_t>(callback.domain)
-                << " cbid=" << static_cast<uint32_t>(callback.cbid);
+        message << "callback enabled domain=" << static_cast<uint32_t>(domain)
+                << " cbid=" << static_cast<uint32_t>(cbid);
         npucheck::WritePlog(npucheck::PlogLevel::DEBUG, message.str());
     }
     return true;
@@ -308,18 +308,23 @@ void ToolManager::LeaveCallback()
 void ToolManager::OnCallback(AclsanCallbackDomain domain, AclsanCallbackId cbid, const void* cbdata)
 {
     LogCallback(domain, cbid, cbdata);
-    CheckerReports reports;
-    bool malformed = false;
+    if (!cbdata) {
+        LogMalformed(domain, cbid, "null callback data");
+        {
+            std::lock_guard<std::mutex> stateLock(stateMutex_);
+            ++malformedCallbacks_;
+        }
+        return;
+    }
+    CheckerReportList reports;
     {
         std::lock_guard<std::mutex> stateLock(stateMutex_);
         for (const auto& checker : checkers_) {
-            if (!checker->Accepts(domain, cbid)) {
+            if (!checker->IsSubscribed(domain, cbid)) {
                 continue;
             }
             try {
-                if (!checker->OnCallback(domain, cbid, cbdata, reports)) {
-                    malformed = true;
-                }
+                checker->OnCallback(domain, cbid, cbdata, reports);
             } catch (const std::exception& error) {
                 ++frameworkErrors_;
                 npucheck::WritePlog(
@@ -329,11 +334,6 @@ void ToolManager::OnCallback(AclsanCallbackDomain domain, AclsanCallbackId cbid,
                 npucheck::WritePlog(npucheck::PlogLevel::ERROR, "checker callback failed");
             }
         }
-        if (malformed)
-            ++malformedCallbacks_;
-    }
-    if (malformed) {
-        PublishMalformed(domain, cbid, "null, truncated, or incompatible callback data");
     }
     StoreReports(std::move(reports));
 }
@@ -354,7 +354,7 @@ void ToolManager::OnCallbackException(const char* reason) noexcept
     }
 }
 
-void ToolManager::StoreReports(CheckerReports reports)
+void ToolManager::StoreReports(CheckerReportList reports)
 {
     for (auto& report : reports) {
         std::visit(
@@ -389,12 +389,12 @@ bool ToolManager::NormalizeAndStoreReportRecord(
     return true;
 }
 
-void ToolManager::PublishMalformed(AclsanCallbackDomain domain, AclsanCallbackId cbid, const char* reason)
+void ToolManager::LogMalformed(AclsanCallbackDomain domain, AclsanCallbackId cbid, const char* reason)
 {
-    std::ostringstream output;
-    output << "[NPU-CHECK-MALFORMED-CALLBACK] domain=" << static_cast<uint32_t>(domain) << " cbid=" << cbid
-           << " reason=" << reason;
-    npucheck::WritePlog(npucheck::PlogLevel::ERROR, output.str());
+    std::ostringstream message;
+    message << "[NPU-CHECK-MALFORMED-CALLBACK]count=" << callbackCount_ << " domain=" << static_cast<uint32_t>(domain)
+            << " cbid=" << cbid << " reason=" << reason;
+    npucheck::WritePlog(npucheck::PlogLevel::ERROR, message.str());
 }
 
 void ToolManager::LogCallback(AclsanCallbackDomain domain, AclsanCallbackId cbid, const void* cbdata)

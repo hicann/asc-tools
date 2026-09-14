@@ -41,8 +41,9 @@ std::vector<ReportFrame> MakeReportFrames(const AclsanDeviceCallStack& stack)
 
 void PopulateStack(NpuCheckReportCommon& common, NpuCheckReportExecContext& exec, ReportStackRole role) noexcept
 {
-    if (common.stackCount > kNpuCheckReportStackMax)
+    if (common.stackCount > kNpuCheckReportStackMax) {
         return;
+    }
     auto index = common.stackCount;
     for (uint32_t i = 0; i < common.stackCount; ++i) {
         if (common.stacks[i].role == role) {
@@ -50,24 +51,29 @@ void PopulateStack(NpuCheckReportCommon& common, NpuCheckReportExecContext& exec
             break;
         }
     }
-    if (index == kNpuCheckReportStackMax)
+    if (index == kNpuCheckReportStackMax) {
         return;
+    }
     try {
         auto source = std::make_unique<AclsanDeviceCallStack>();
         const auto status =
             exec.pc == 0 ? ACLSAN_STATUS_ERROR_INVALID_STATE : aclsanGetDeviceCallStack(exec.pc, source.get());
         ReportCallStack stack;
         stack.role = role;
-        if (HasCallStackFrames(status))
+        if (HasCallStackFrames(status)) {
             stack.frames = MakeReportFrames(*source);
+        }
         stack.format = stack.frames.empty() ? ReportStackFormat::RAW_TEXT : ReportStackFormat::FRAMES;
-        if (stack.frames.empty())
+        if (stack.frames.empty()) {
             stack.rawText = FormatCallStackReport(status, *source);
+        }
         common.stacks[index] = std::move(stack);
-        if (source->binaryId != 0)
+        if (source->binaryId != 0) {
             exec.binaryId = source->binaryId;
-        if (index == common.stackCount)
+        }
+        if (index == common.stackCount) {
             ++common.stackCount;
+        }
     } catch (...) {
         // Report enrichment must not interrupt checker processing.
     }
@@ -76,8 +82,9 @@ void PopulateStack(NpuCheckReportCommon& common, NpuCheckReportExecContext& exec
 
 std::string FormatCallStackReport(AclsanStatus status, const AclsanDeviceCallStack& stack)
 {
-    if (!HasCallStackFrames(status) || stack.depth == 0)
+    if (!HasCallStackFrames(status) || stack.depth == 0) {
         return "Line information unavailable.\n";
+    }
     std::ostringstream output;
     const auto frames = MakeReportFrames(stack);
     for (size_t i = 0; i < frames.size(); ++i) {
@@ -85,10 +92,12 @@ std::string FormatCallStackReport(AclsanStatus status, const AclsanDeviceCallSta
         output << "  #" << i << ' ' << (frame.function.empty() ? "<unknown>" : frame.function);
         if (!frame.file.empty()) {
             output << " at " << frame.file;
-            if (frame.line != 0)
+            if (frame.line != 0) {
                 output << ':' << frame.line;
-            if (frame.line != 0 && frame.column != 0)
+            }
+            if (frame.line != 0 && frame.column != 0) {
                 output << ':' << frame.column;
+            }
         }
         output << '\n';
     }

@@ -34,10 +34,9 @@ struct MemcheckStats {
 
 class Memcheck final : public Checker {
 public:
-    explicit Memcheck(bool strictUnknown);
-    const std::vector<CallbackSpec>& Callbacks() const override;
+    const std::vector<CallbackSpec>& GetSubscribedID() const override;
     bool OnCallback(
-        AclsanCallbackDomain domain, AclsanCallbackId cbid, const void* data, CheckerReports& reports) override;
+        AclsanCallbackDomain domain, AclsanCallbackId cbid, const void* data, CheckerReportList& reports) override;
     std::string Summary() const override;
     bool HasErrors() const override;
     bool AnalysisComplete() const override;
@@ -56,13 +55,12 @@ private:
         const AclsanDeviceMemoryAccessData& data, uint64_t groupId);
     void Count(const std::vector<npucheck::NpuCheckMemcheckReport>& reports);
 
-    bool strictUnknown_ = true;
     AllocationRegistry allocations_;
     std::vector<AclsanDeviceMemoryAccessData> pendingDeviceAccesses_;
     MemcheckStats stats_{};
     uint64_t nextReportId_ = 1;
     uint64_t nextGroupId_ = 1;
-    static constexpr size_t kMaxPendingDeviceOperations = 1u << 20u;
+    static constexpr size_t maxPendingDeviceOperations = 1u << 20u;
 };
 
 } // namespace npucheck

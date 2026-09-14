@@ -14,64 +14,44 @@
 #include "wire_protocol.h"
 #include <memory>
 #include <string>
-#include <tuple>
 #include <utility>
 #include <variant>
 #include <vector>
 
 namespace npucheck {
-struct CallbackSpec {
-    AclsanCallbackDomain domain;
-    AclsanCallbackId cbid;
-    bool operator<(const CallbackSpec& other) const noexcept
-    {
-        return std::tie(domain, cbid) < std::tie(other.domain, other.cbid);
-    }
-};
+using CallbackSpec = std::pair<AclsanCallbackDomain, AclsanCallbackId>;
 using CheckerReport = std::variant<npucheck::NpuCheckMemcheckReport, npucheck::NpuCheckSynccheckReport>;
-using CheckerReports = std::vector<CheckerReport>;
+using CheckerReportList = std::vector<CheckerReport>;
 
 // Checkers declare their own events and state. ToolManager serializes callbacks,
 // unions subscriptions, and aggregates reports without knowing concrete checkers.
 class Checker {
 public:
     virtual ~Checker() = default;
-    virtual const std::vector<CallbackSpec>& Callbacks() const = 0;
-    // False means malformed data. Unrelated events are filtered by Accepts().
+    // 获取checker订阅的回调事件列表
+    virtual const std::vector<CallbackSpec>& GetSubscribedID() const = 0;
+    // checker自己的callback逻辑，False 表示数据格式错误。无关事件会通过 IsSubscribed() 进行过滤。
     virtual bool OnCallback(
-        AclsanCallbackDomain domain, AclsanCallbackId cbid, const void* data, CheckerReports& reports) = 0;
+        AclsanCallbackDomain domain, AclsanCallbackId cbid, const void* data, CheckerReportList& reports) = 0;
+    // 输出分析结果摘要，供工具管理器在分析结束时输出
     virtual std::string Summary() const = 0;
+    // 检查是否检测到错误
     virtual bool HasErrors() const = 0;
+    // 检查分析是否完成
     virtual bool AnalysisComplete() const = 0;
-    bool Accepts(AclsanCallbackDomain domain, AclsanCallbackId cbid) const;
+    // 检查是否订阅了指定的回调事件
+    bool IsSubscribed(AclsanCallbackDomain domain, AclsanCallbackId cbid) const;
 };
 
 std::unique_ptr<Checker> CreateChecker(npucheck::ipc::ToolId tool);
 std::vector<CallbackSpec> RequiredCallbacks(const std::vector<std::unique_ptr<Checker>>& checkers);
 
 template <class T>
-const T* ValidateCommonCallback(const void* data)
+void AppendCheckerReports(std::vector<T> source, CheckerReportList& target)
 {
-    if (data == nullptr)
-        return nullptr;
-    const auto* typed = static_cast<const T*>(data);
-    return typed->common.version == ACLSAN_API_VERSION && typed->common.size >= sizeof(T) ? typed : nullptr;
-}
-
-template <class T>
-const T* ValidateDeviceCallback(const void* data)
-{
-    if (data == nullptr)
-        return nullptr;
-    const auto* typed = static_cast<const T*>(data);
-    return typed->header.version == ACLSAN_API_VERSION && typed->header.size >= sizeof(T) ? typed : nullptr;
-}
-
-template <class T>
-void AppendCheckerReports(std::vector<T> source, CheckerReports& target)
-{
-    for (auto& report : source)
+    for (auto& report : source) {
         target.emplace_back(std::move(report));
+    }
 }
 } // namespace npucheck
 

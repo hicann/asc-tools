@@ -13,21 +13,22 @@
 #include <set>
 
 namespace npucheck {
-bool Checker::Accepts(AclsanCallbackDomain domain, AclsanCallbackId cbid) const
+bool Checker::IsSubscribed(AclsanCallbackDomain domain, AclsanCallbackId cbid) const
 {
-    const auto& callbacks = Callbacks();
-    return std::any_of(callbacks.begin(), callbacks.end(), [=](const auto& callback) {
-        return callback.domain == domain && callback.cbid == cbid;
+    const auto& idList = GetSubscribedID();
+    return std::any_of(idList.begin(), idList.end(), [=](const auto& callback) {
+        const auto& [subscribedDomain, subscribedCbid] = callback;
+        return subscribedDomain == domain && subscribedCbid == cbid;
     });
 }
 
 std::unique_ptr<Checker> CreateChecker(npucheck::ipc::ToolId tool)
 {
     switch (tool) {
-        case npucheck::ipc::ToolId::MEMCHECK:
-            return std::make_unique<Memcheck>(true);
-        case npucheck::ipc::ToolId::SYNCCHECK:
-            return std::make_unique<npucheck::Synccheck>();
+        case ipc::ToolId::MEMCHECK:
+            return std::make_unique<Memcheck>();
+        case ipc::ToolId::SYNCCHECK:
+            return std::make_unique<Synccheck>();
         default:
             return nullptr;
     }
@@ -37,7 +38,7 @@ std::vector<CallbackSpec> RequiredCallbacks(const std::vector<std::unique_ptr<Ch
 {
     std::set<CallbackSpec> callbacks;
     for (const auto& checker : checkers) {
-        callbacks.insert(checker->Callbacks().begin(), checker->Callbacks().end());
+        callbacks.insert(checker->GetSubscribedID().begin(), checker->GetSubscribedID().end());
     }
     return {callbacks.begin(), callbacks.end()};
 }

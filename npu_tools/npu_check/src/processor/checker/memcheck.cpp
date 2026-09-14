@@ -290,8 +290,6 @@ void SetDistance(
 
 } // namespace
 
-Memcheck::Memcheck(bool strictUnknown) : strictUnknown_(strictUnknown) {}
-
 void Memcheck::OnAllocation(const AclsanResourceData& data)
 {
     if (data.memorySpace != ACLSAN_MEMORY_SPACE_DEVICE || data.common.result != 0) {
@@ -320,7 +318,7 @@ std::vector<NpuCheckMemcheckReport> Memcheck::CheckAccess(
     uint64_t groupId)
 {
     const RangeResult range = allocations_.Classify(data.header.deviceId, address, bytes);
-    if (range.status == RangeStatus::VALID || (range.status == RangeStatus::UNKNOWN && !strictUnknown_)) {
+    if (range.status == RangeStatus::VALID) {
         return {};
     }
 
@@ -358,7 +356,7 @@ void Memcheck::QueueDeviceMemoryAccess(const AclsanDeviceMemoryAccessData& data)
         return;
     }
     ++stats_.deviceOperations;
-    if (pendingDeviceAccesses_.size() >= kMaxPendingDeviceOperations) {
+    if (pendingDeviceAccesses_.size() >= maxPendingDeviceOperations) {
         ++stats_.droppedDeviceOperations;
         return;
     }
@@ -373,10 +371,6 @@ std::vector<NpuCheckMemcheckReport> Memcheck::CheckDeviceMemoryAccess(
         ++stats_.droppedDeviceOperations;
         return std::vector<NpuCheckMemcheckReport>{};
     };
-    if (data.header.version != ACLSAN_API_VERSION || data.header.size < sizeof(AclsanDeviceMemoryAccessData) ||
-        data.accessCount == 0 || data.accessIndex >= data.accessCount) {
-        return markIncomplete();
-    }
 
     std::vector<NpuCheckReportAccessMode> accessModes;
     switch (data.accessMode) {
@@ -394,8 +388,7 @@ std::vector<NpuCheckMemcheckReport> Memcheck::CheckDeviceMemoryAccess(
             return markIncomplete();
     }
 
-    if (data.memorySpace != ACLSAN_DEVICE_MEMORY_SPACE_GM || ((data.header.flags & kDeviceEventFlagPredicated) != 0 &&
-                                                              data.predicateMask0 == 0 && data.predicateMask1 == 0)) {
+    if ((data.header.flags & kDeviceEventFlagPredicated) != 0 && data.predicateMask0 == 0 && data.predicateMask1 == 0) {
         return {};
     }
 
@@ -462,7 +455,7 @@ std::vector<NpuCheckMemcheckReport> Memcheck::OnSynchronization()
     ++stats_.synchronizationEvents;
     std::vector<AclsanDeviceMemoryAccessData> accesses;
     accesses.swap(pendingDeviceAccesses_);
-    stats_.pendingDeviceOperations = 0;
+    stats_.pendingDeviceOperations = pendingDeviceAccesses_.size(); // update stats after swap
 
     using InstructionIdentity = std::tuple<uint32_t, uint64_t, uint32_t, uint32_t, uint64_t>;
     std::map<InstructionIdentity, uint64_t> instructionGroups;
@@ -482,12 +475,7 @@ std::vector<NpuCheckMemcheckReport> Memcheck::OnSynchronization()
     return reports;
 }
 
-MemcheckStats Memcheck::Stats() const
-{
-    MemcheckStats stats = stats_;
-    stats.pendingDeviceOperations = pendingDeviceAccesses_.size();
-    return stats;
-}
+MemcheckStats Memcheck::Stats() const { return stats_; }
 
 void Memcheck::Count(const std::vector<NpuCheckMemcheckReport>& reports)
 {

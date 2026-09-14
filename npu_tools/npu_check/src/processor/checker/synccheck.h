@@ -33,10 +33,10 @@ struct SynccheckStats {
 
 class Synccheck final : public npucheck::Checker {
 public:
-    const std::vector<npucheck::CallbackSpec>& Callbacks() const override;
+    const std::vector<npucheck::CallbackSpec>& GetSubscribedID() const override;
     bool OnCallback(
         AclsanCallbackDomain domain, AclsanCallbackId cbid, const void* data,
-        npucheck::CheckerReports& reports) override;
+        npucheck::CheckerReportList& reports) override;
     std::string Summary() const override;
     bool HasErrors() const override;
     bool AnalysisComplete() const override;

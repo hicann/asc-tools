@@ -26,11 +26,11 @@ std::vector<std::unique_ptr<Checker>> Both()
 
 bool Dispatch(
     const std::vector<std::unique_ptr<Checker>>& checkers, AclsanCallbackDomain domain, AclsanCallbackId cbid,
-    const void* data, CheckerReports& reports)
+    const void* data, CheckerReportList& reports)
 {
     bool valid = true;
     for (const auto& checker : checkers) {
-        if (checker->Accepts(domain, cbid))
+        if (checker->IsSubscribed(domain, cbid))
             valid = checker->OnCallback(domain, cbid, data, reports) && valid;
     }
     return valid;
@@ -81,17 +81,20 @@ TEST(CheckerTest, CallbackUnionAndIndependentTools)
     EXPECT_EQ(
         std::count_if(
             callbacks.begin(), callbacks.end(),
-            [](const auto& cb) { return cb.domain == ACLSAN_CB_DOMAIN_SYNCHRONIZE; }),
+            [](const auto& cb) {
+                const auto& [domain, cbid] = cb;
+                return domain == ACLSAN_CB_DOMAIN_SYNCHRONIZE;
+            }),
         1);
-    EXPECT_FALSE(checkers[0]->Accepts(ACLSAN_CB_DOMAIN_LAUNCH, ACLSAN_CBID_LAUNCH_KERNEL));
-    EXPECT_TRUE(checkers[1]->Accepts(ACLSAN_CB_DOMAIN_LAUNCH, ACLSAN_CBID_LAUNCH_KERNEL));
+    EXPECT_FALSE(checkers[0]->IsSubscribed(ACLSAN_CB_DOMAIN_LAUNCH, ACLSAN_CBID_LAUNCH_KERNEL));
+    EXPECT_TRUE(checkers[1]->IsSubscribed(ACLSAN_CB_DOMAIN_LAUNCH, ACLSAN_CBID_LAUNCH_KERNEL));
     EXPECT_EQ(CreateChecker(static_cast<npucheck::ipc::ToolId>(0xffff)), nullptr);
 }
 
 TEST(CheckerTest, BothProduceReportsFromTheSameSynchronization)
 {
     auto checkers = Both();
-    CheckerReports reports;
+    CheckerReportList reports;
     AclsanResourceData allocation{};
     allocation.common.version = ACLSAN_API_VERSION;
     allocation.common.size = sizeof(allocation);
@@ -127,10 +130,10 @@ TEST(CheckerTest, BothProduceReportsFromTheSameSynchronization)
     }
 }
 
-TEST(CheckerTest, FailedSynchronizationPreservesMemcheckPendingState)
+TEST(CheckerTest, FailedSynchronizationAnalyzesPendingRecords)
 {
     auto checkers = Both();
-    CheckerReports reports;
+    CheckerReportList reports;
     const auto access = Access();
     const auto wait = Wait();
     Dispatch(checkers, ACLSAN_CB_DOMAIN_DEVICE_INSTRUCTION, ACLSAN_CBID_DEVICE_MEMORY_ACCESS, &access, reports);
@@ -138,30 +141,37 @@ TEST(CheckerTest, FailedSynchronizationPreservesMemcheckPendingState)
     const auto sync = Sync(1);
     EXPECT_TRUE(
         Dispatch(checkers, ACLSAN_CB_DOMAIN_SYNCHRONIZE, ACLSAN_CBID_SYNCHRONIZE_STREAM_SYNC_END, &sync, reports));
-    EXPECT_FALSE(checkers[0]->AnalysisComplete());
+    EXPECT_TRUE(checkers[0]->AnalysisComplete());
     EXPECT_TRUE(checkers[1]->AnalysisComplete());
     EXPECT_TRUE(checkers[1]->HasErrors());
-    ASSERT_EQ(reports.size(), 1U);
-    EXPECT_TRUE(std::holds_alternative<npucheck::NpuCheckSynccheckReport>(reports[0]));
+    EXPECT_TRUE(checkers[0]->HasErrors());
+    ASSERT_EQ(reports.size(), 2U);
+    EXPECT_TRUE(std::holds_alternative<npucheck::NpuCheckMemcheckReport>(reports[0]));
+    EXPECT_TRUE(std::holds_alternative<npucheck::NpuCheckSynccheckReport>(reports[1]));
+    reports.clear();
+    const auto nextSync = Sync();
+    EXPECT_TRUE(
+        Dispatch(checkers, ACLSAN_CB_DOMAIN_SYNCHRONIZE, ACLSAN_CBID_SYNCHRONIZE_STREAM_SYNC_END, &nextSync, reports));
+    EXPECT_TRUE(reports.empty());
+    EXPECT_NE(checkers[0]->Summary().find("pending_device_operations=0"), std::string::npos);
 }
 
-TEST(CheckerTest, MalformedCallbacksDoNotChangeCheckerState)
+TEST(CheckerTest, CallbackMetadataIsNotRevalidated)
 {
     auto checkers = Both();
-    CheckerReports reports;
+    CheckerReportList reports;
     auto wait = Wait();
     wait.header.size = 1;
-    EXPECT_FALSE(Dispatch(checkers, ACLSAN_CB_DOMAIN_DEVICE_INSTRUCTION, ACLSAN_CBID_DEVICE_SYNC, &wait, reports));
+    EXPECT_TRUE(Dispatch(checkers, ACLSAN_CB_DOMAIN_DEVICE_INSTRUCTION, ACLSAN_CBID_DEVICE_SYNC, &wait, reports));
     auto sync = Sync();
     sync.common.version = ACLSAN_API_VERSION + 1;
-    EXPECT_FALSE(
+    EXPECT_TRUE(
         Dispatch(checkers, ACLSAN_CB_DOMAIN_SYNCHRONIZE, ACLSAN_CBID_SYNCHRONIZE_STREAM_SYNC_END, &sync, reports));
-    EXPECT_FALSE(
-        Dispatch(checkers, ACLSAN_CB_DOMAIN_SYNCHRONIZE, ACLSAN_CBID_SYNCHRONIZE_STREAM_SYNC_END, nullptr, reports));
+    ASSERT_EQ(reports.size(), 1U);
+    EXPECT_TRUE(std::holds_alternative<npucheck::NpuCheckSynccheckReport>(reports.front()));
     for (const auto& checker : checkers) {
-        EXPECT_FALSE(checker->HasErrors());
         EXPECT_TRUE(checker->AnalysisComplete());
-        EXPECT_NE(checker->Summary().find("synchronizations=0"), std::string::npos);
+        EXPECT_NE(checker->Summary().find("synchronizations=1"), std::string::npos);
     }
 }
 

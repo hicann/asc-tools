@@ -69,7 +69,7 @@ AclsanDeviceMemoryAccessData Access(
 
 TEST(MemcheckTest, ReportsOutOfBoundsReadAtSynchronization)
 {
-    Memcheck checker(true);
+    Memcheck checker;
     checker.OnAllocation(AllocationEvent(0x100000, 4096, 1));
     const auto validRead = Access(DeviceSourceKind::MTE2, 0x100100, 64);
     auto invalidRead = Access(DeviceSourceKind::MTE2, 0x100ff0, 64);
@@ -113,7 +113,7 @@ TEST(MemcheckTest, ReportsOutOfBoundsReadAtSynchronization)
 
 TEST(MemcheckTest, IgnoresHostResourceEvents)
 {
-    Memcheck checker(true);
+    Memcheck checker;
     auto hostResource = AllocationEvent(0x180000, 256, 2);
     hostResource.memorySpace = ACLSAN_MEMORY_SPACE_HOST;
 
@@ -126,7 +126,7 @@ TEST(MemcheckTest, IgnoresHostResourceEvents)
 
 TEST(MemcheckTest, ReportsOutOfBoundsWriteAndIgnoresNonGmAccesses)
 {
-    Memcheck checker(true);
+    Memcheck checker;
     const auto invalidWrite = Access(DeviceSourceKind::MTE3, 0x200000, 64);
     checker.QueueDeviceMemoryAccess(invalidWrite);
 
@@ -143,7 +143,7 @@ TEST(MemcheckTest, ReportsOutOfBoundsWriteAndIgnoresNonGmAccesses)
 
 TEST(MemcheckTest, ExpandsBlockRepeatAndAffineLayouts)
 {
-    Memcheck checker(true);
+    Memcheck checker;
     checker.OnAllocation(AllocationEvent(0x200000, 512, 2));
 
     auto blockRepeat = Access(DeviceSourceKind::MTE3, 0x2001e8, 1);
@@ -171,7 +171,7 @@ TEST(MemcheckTest, ExpandsBlockRepeatAndAffineLayouts)
 
 TEST(MemcheckTest, UsesByteStrideForSparseGmAccesses)
 {
-    Memcheck checker(true);
+    Memcheck checker;
     checker.OnAllocation(AllocationEvent(0x1000, 32, 1));
     checker.OnAllocation(AllocationEvent(0x1080, 32, 2));
     checker.OnAllocation(AllocationEvent(0x1100, 32, 3));
@@ -205,7 +205,7 @@ TEST(MemcheckTest, ProcessesMoreThanFourRangesFromOneInstruction)
     constexpr uint64_t kInstrExecId = 41;
     constexpr uint64_t kSerialNo = 73;
 
-    Memcheck checker(true);
+    Memcheck checker;
     for (uint32_t index = 0; index + 1 < kAccessCount; ++index) {
         checker.OnAllocation(AllocationEvent(kBase + index * kStride, kAccessBytes, index + 1));
     }
@@ -242,7 +242,7 @@ TEST(MemcheckTest, ProcessesDisjointValidRangesWithoutCheckingTheirEnvelope)
     constexpr uint64_t kInstrExecId = 42;
     constexpr uint64_t kSerialNo = 74;
 
-    Memcheck checker(true);
+    Memcheck checker;
     for (uint32_t index = 0; index < kAccessCount; ++index) {
         const uint64_t address = kBase + index * kStride;
         checker.OnAllocation(AllocationEvent(address, kAccessBytes, index + 1));
@@ -264,7 +264,7 @@ TEST(MemcheckTest, ProcessesDisjointValidRangesWithoutCheckingTheirEnvelope)
 
 TEST(MemcheckTest, ChecksScalarAccessAtAllocationBoundary)
 {
-    Memcheck checker(true);
+    Memcheck checker;
     checker.OnAllocation(AllocationEvent(0x3000, 16, 1));
 
     auto scalar = Access(DeviceSourceKind::MTE2, 0x300f, 1);
@@ -283,7 +283,7 @@ TEST(MemcheckTest, ChecksScalarAccessAtAllocationBoundary)
 
 TEST(MemcheckTest, RepresentsTruncatedRowsWithoutTouchingPadding)
 {
-    Memcheck checker(true);
+    Memcheck checker;
     checker.OnAllocation(AllocationEvent(0x4000, 20, 1));
 
     auto truncated = Access(DeviceSourceKind::MTE2, 0x4000, 1);
@@ -299,7 +299,7 @@ TEST(MemcheckTest, RepresentsTruncatedRowsWithoutTouchingPadding)
 
 TEST(MemcheckTest, CoalescesLargeDenseAffineLayout)
 {
-    Memcheck checker(true);
+    Memcheck checker;
     constexpr uint64_t kBase = 0x100000;
     constexpr uint64_t kBytes = 2ULL * 1024 * 1024;
     checker.OnAllocation(AllocationEvent(kBase, kBytes, 1));
@@ -338,7 +338,7 @@ TEST(MemcheckTest, RepresentsBatchedNzZnZzAndNnLayouts)
     }};
 
     for (const auto& strides : formatStrides) {
-        Memcheck checker(true);
+        Memcheck checker;
         checker.OnAllocation(AllocationEvent(kBase, 2 * kMatrixBytes - 1, 1));
         auto access = Access(DeviceSourceKind::MTE2, kBase, 1);
         access.layoutKind = ACLSAN_MEM_LAYOUT_ND_AFFINE;
@@ -360,7 +360,7 @@ TEST(MemcheckTest, RepresentsBatchedNzZnZzAndNnLayouts)
 
 TEST(MemcheckTest, DropsOversizedSparseAffineLayoutWithoutEnvelopeFalsePositive)
 {
-    Memcheck checker(true);
+    Memcheck checker;
     checker.OnAllocation(AllocationEvent(0x5000, 8, 1));
     checker.OnAllocation(AllocationEvent(0x100005000, 8, 2));
 
@@ -380,7 +380,7 @@ TEST(MemcheckTest, DropsOversizedSparseAffineLayoutWithoutEnvelopeFalsePositive)
 
 TEST(MemcheckTest, DropsExtremeAndMalformedLayouts)
 {
-    Memcheck checker(true);
+    Memcheck checker;
     checker.OnAllocation(AllocationEvent(0x1000, 64, 1));
 
     auto extreme = Access(DeviceSourceKind::MTE2, 0x1000, 1);
@@ -412,7 +412,7 @@ TEST(MemcheckTest, DropsExtremeAndMalformedLayouts)
 TEST(MemcheckTest, SupportsNegativeBlockAndAffineStrides)
 {
     constexpr uint64_t kElementBytes = 16;
-    Memcheck checker(true);
+    Memcheck checker;
     checker.OnAllocation(AllocationEvent(0x1000, kElementBytes, 1));
     checker.OnAllocation(AllocationEvent(0x1040, kElementBytes, 2));
     checker.OnAllocation(AllocationEvent(0x1080, kElementBytes, 3));
@@ -443,7 +443,7 @@ TEST(MemcheckTest, SupportsNegativeBlockAndAffineStrides)
 
 TEST(MemcheckTest, DropsLayoutWhoseSegmentAddressOverflows)
 {
-    Memcheck checker(true);
+    Memcheck checker;
     auto overflow = Access(DeviceSourceKind::MTE2, std::numeric_limits<uint64_t>::max() - 7, 1);
     overflow.layoutKind = ACLSAN_MEM_LAYOUT_BLOCK_REPEAT;
     overflow.layout.blockRepeat.blockNum = 2;
@@ -458,7 +458,7 @@ TEST(MemcheckTest, DropsLayoutWhoseSegmentAddressOverflows)
 
 TEST(MemcheckTest, SeparatesReadWriteAndHonorsPredicate)
 {
-    Memcheck checker(true);
+    Memcheck checker;
     checker.OnAllocation(AllocationEvent(0x200000, 512, 2));
 
     auto readWrite = Access(DeviceSourceKind::MTE3, 0x2001fc, 8);
@@ -478,13 +478,13 @@ TEST(MemcheckTest, SeparatesReadWriteAndHonorsPredicate)
     EXPECT_TRUE(checker.OnSynchronization().empty());
 }
 
-TEST(MemcheckTest, HonorsStrictModeAndFreedRanges)
+TEST(MemcheckTest, ReportsUnknownAndFreedRanges)
 {
-    Memcheck nonStrict(false);
-    nonStrict.QueueDeviceMemoryAccess(Access(DeviceSourceKind::MTE2, 0x500000, 8));
-    EXPECT_TRUE(nonStrict.OnSynchronization().empty());
-
-    Memcheck checker(true);
+    Memcheck checker;
+    checker.QueueDeviceMemoryAccess(Access(DeviceSourceKind::MTE2, 0x500000, 8));
+    const auto unknown = checker.OnSynchronization();
+    ASSERT_EQ(unknown.size(), 1U);
+    EXPECT_EQ(unknown.front().common.pattern, NpuCheckReportPattern::MEMCHECK_INVALID_ACCESS);
     const auto released = AllocationEvent(0x300000, 128, 21);
     checker.OnAllocation(released);
     checker.OnFree(released);
@@ -498,7 +498,7 @@ TEST(MemcheckTest, HonorsStrictModeAndFreedRanges)
 
 TEST(MemcheckTest, UsesDeviceSpecificAllocationRanges)
 {
-    Memcheck checker(true);
+    Memcheck checker;
     checker.OnAllocation(AllocationEvent(0x600000, 64, 31, 0));
     checker.OnAllocation(AllocationEvent(0x600000, 128, 31, 1));
     checker.QueueDeviceMemoryAccess(Access(DeviceSourceKind::MTE2, 0x600030, 32, 0));
@@ -512,7 +512,7 @@ TEST(MemcheckTest, UsesDeviceSpecificAllocationRanges)
 
 TEST(MemcheckTest, GroupsDerivedDataByCompleteInstructionIdentity)
 {
-    Memcheck checker(true);
+    Memcheck checker;
     auto aicRead = Access(DeviceSourceKind::MTE2, 0x700000, 64, 1);
     aicRead.header.launchId = 9;
     aicRead.header.blockId = 0;

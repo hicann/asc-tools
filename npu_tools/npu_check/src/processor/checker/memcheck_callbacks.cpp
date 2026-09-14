@@ -11,7 +11,7 @@
 #include <sstream>
 
 namespace npucheck {
-const std::vector<CallbackSpec>& Memcheck::Callbacks() const
+const std::vector<CallbackSpec>& Memcheck::GetSubscribedID() const
 {
     static const std::vector<CallbackSpec> callbacks{
         {ACLSAN_CB_DOMAIN_RESOURCE, ACLSAN_CBID_RESOURCE_MEMORY_ALLOC},
@@ -21,32 +21,26 @@ const std::vector<CallbackSpec>& Memcheck::Callbacks() const
     return callbacks;
 }
 
-bool Memcheck::OnCallback(AclsanCallbackDomain domain, AclsanCallbackId cbid, const void* data, CheckerReports& reports)
+bool Memcheck::OnCallback(
+    AclsanCallbackDomain domain, AclsanCallbackId cbid, const void* data, CheckerReportList& reports)
 {
     if (domain == ACLSAN_CB_DOMAIN_RESOURCE) {
-        const auto* event = ValidateCommonCallback<AclsanResourceData>(data);
-        if (!event)
-            return false;
-        if (cbid == ACLSAN_CBID_RESOURCE_MEMORY_ALLOC)
+        const auto* event = static_cast<const AclsanResourceData*>(data);
+        if (cbid == ACLSAN_CBID_RESOURCE_MEMORY_ALLOC) {
             OnAllocation(*event);
-        else
+        } else {
             OnFree(*event);
+        }
     } else if (domain == ACLSAN_CB_DOMAIN_DEVICE_INSTRUCTION) {
-        const auto* event = ValidateDeviceCallback<AclsanDeviceMemoryAccessData>(data);
-        if (!event)
-            return false;
+        const auto* event = static_cast<const AclsanDeviceMemoryAccessData*>(data);
         QueueDeviceMemoryAccess(*event);
     } else if (domain == ACLSAN_CB_DOMAIN_SYNCHRONIZE) {
-        const auto* event = ValidateCommonCallback<AclsanSynchronizeData>(data);
-        if (!event)
-            return false;
-        if (event->common.result == 0) {
-            auto completed = OnSynchronization();
-            std::ostringstream message;
-            message << "synchronization completed reports=" << completed.size() << " stream=" << event->stream;
-            WritePlog(PlogLevel::INFO, message.str());
-            AppendCheckerReports(std::move(completed), reports);
-        }
+        const auto* event = static_cast<const AclsanSynchronizeData*>(data);
+        auto completed = OnSynchronization();
+        std::ostringstream message;
+        message << "synchronization completed reports=" << completed.size() << " stream=" << event->stream;
+        WritePlog(PlogLevel::INFO, message.str());
+        AppendCheckerReports(std::move(completed), reports);
     }
     return true;
 }

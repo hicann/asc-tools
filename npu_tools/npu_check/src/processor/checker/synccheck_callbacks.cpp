@@ -12,7 +12,7 @@
 #include <sstream>
 
 namespace npucheck {
-const std::vector<npucheck::CallbackSpec>& Synccheck::Callbacks() const
+const std::vector<npucheck::CallbackSpec>& Synccheck::GetSubscribedID() const
 {
     static const std::vector<npucheck::CallbackSpec> callbacks{
         {ACLSAN_CB_DOMAIN_DEVICE_INSTRUCTION, ACLSAN_CBID_DEVICE_SYNC},
@@ -21,22 +21,15 @@ const std::vector<npucheck::CallbackSpec>& Synccheck::Callbacks() const
     return callbacks;
 }
 bool Synccheck::OnCallback(
-    AclsanCallbackDomain domain, AclsanCallbackId, const void* cbdata, npucheck::CheckerReports& reports)
+    AclsanCallbackDomain domain, AclsanCallbackId, const void* cbdata, npucheck::CheckerReportList& reports)
 {
     if (domain == ACLSAN_CB_DOMAIN_DEVICE_INSTRUCTION) {
-        const auto* data = npucheck::ValidateDeviceCallback<AclsanDeviceSyncData>(cbdata);
-        if (!data)
-            return false;
+        const auto* data = static_cast<const AclsanDeviceSyncData*>(cbdata);
         OnDeviceSync(*data);
     } else if (domain == ACLSAN_CB_DOMAIN_SYNCHRONIZE) {
-        const auto* data = npucheck::ValidateCommonCallback<AclsanSynchronizeData>(cbdata);
-        if (!data)
-            return false;
         npucheck::AppendCheckerReports(OnSynchronization(), reports);
     } else if (domain == ACLSAN_CB_DOMAIN_LAUNCH) {
-        const auto* data = npucheck::ValidateCommonCallback<AclsanLaunchData>(cbdata);
-        if (!data)
-            return false;
+        const auto* data = static_cast<const AclsanLaunchData*>(cbdata);
         const npucheck::KernelAttributes attributes = npucheck::QueryKernelAttributes(data->function);
         const char* functionName = data->functionName == nullptr ? "<unknown>" : data->functionName;
         std::ostringstream message;

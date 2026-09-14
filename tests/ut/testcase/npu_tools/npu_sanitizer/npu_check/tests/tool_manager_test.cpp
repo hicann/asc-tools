@@ -35,7 +35,8 @@ struct Session {
     int initialized = -1;
 };
 
-Session RunSession(std::vector<std::string> args, bool memoryError, bool syncError, bool failSync = false)
+Session RunSession(
+    std::vector<std::string> args, bool memoryError, bool syncError, bool failSync = false, bool nullCallback = false)
 {
     enabled.clear();
     enableCalls = 0;
@@ -77,6 +78,9 @@ Session RunSession(std::vector<std::string> args, bool memoryError, bool syncErr
     npucheck::ToolManager manager;
     result.initialized = manager.Initialize();
     if (result.initialized == 0) {
+        if (nullCallback) {
+            Emit(ACLSAN_CB_DOMAIN_SYNCHRONIZE, ACLSAN_CBID_SYNCHRONIZE_STREAM_SYNC_END, nullptr);
+        }
         AclsanResourceData allocation{};
         allocation.common.version = ACLSAN_API_VERSION;
         allocation.common.size = sizeof(allocation);
@@ -190,7 +194,19 @@ TEST(ToolManagerTest, SingleCheckerAndFailedSyncRetainIndependentState)
     const auto incomplete =
         RunSession({"npu-check", "--tools", "memcheck", "--tools", "synccheck", "/bin/true"}, true, true, true);
     ASSERT_TRUE(incomplete.error.empty()) << incomplete.error;
-    EXPECT_NE(incomplete.text.find("status=incomplete"), std::string::npos);
-    EXPECT_NE(incomplete.text.find("pending_device_operations=1"), std::string::npos);
+    EXPECT_NE(incomplete.text.find("status=complete"), std::string::npos);
+    EXPECT_NE(incomplete.text.find("pending_device_operations=0"), std::string::npos);
+    EXPECT_NE(incomplete.text.find("MEMCHECK SUMMARY: 1 errors"), std::string::npos);
     EXPECT_NE(incomplete.flags & npucheck::ipc::kFlagHasErrors, 0U);
+}
+
+TEST(ToolManagerTest, NullCallbackIsCountedOnceAndDoesNotReachCheckers)
+{
+    const auto session = RunSession(
+        {"npu-check", "--tools", "memcheck", "--tools", "synccheck", "/bin/true"}, false, false, false, true);
+    ASSERT_TRUE(session.error.empty()) << session.error;
+    EXPECT_NE(session.text.find("malformed_callbacks=1"), std::string::npos);
+    EXPECT_NE(session.text.find("status=incomplete"), std::string::npos);
+    EXPECT_NE(session.text.find("pending_device_operations=0"), std::string::npos);
+    EXPECT_EQ(session.flags & npucheck::ipc::kFlagHasErrors, 0U);
 }
