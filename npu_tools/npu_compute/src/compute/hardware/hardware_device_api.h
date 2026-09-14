@@ -46,11 +46,14 @@ public:
     bool GetControlCpuCount(std::int32_t deviceId, uint32_t* value) override;
     bool GetAiCpuFrequency(std::int32_t deviceId, uint32_t* value) override;
     bool GetAiCoreFrequencies(std::int32_t deviceId, uint32_t* aicFrequencyMhz, uint32_t* aivFrequencyMhz) override;
+    bool GetRatedAiCoreFrequencies(std::int32_t deviceId, uint32_t* aicFrequencyMhz, uint32_t* aivFrequencyMhz);
     bool GetChipVersion(std::int32_t deviceId, std::string* value) override;
     bool GetHbmUsage(std::int32_t deviceId, uint64_t* freeBytes, uint64_t* totalBytes) override;
     bool GetHbmFrequency(std::int32_t deviceId, uint32_t* value) override;
 
 private:
+    bool ReadAiCoreFrequencies(
+        std::int32_t deviceId, uint32_t* aicFrequencyMhz, uint32_t* aivFrequencyMhz, bool currentFirst);
     class Impl;
     std::unique_ptr<Impl> impl_;
 };

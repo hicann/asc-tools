@@ -11,6 +11,7 @@
 
 #include "common/debug_log.h"
 #include "hardware/hardware_device_api.h"
+#include "report/report_writer.h"
 
 #include <algorithm>
 #include <array>
@@ -30,11 +31,14 @@
 namespace npucompute {
 namespace {
 
-constexpr std::array<aclptiCallbackId, 4> kHardwareInfoTriggerCallbackIds = {
+constexpr std::array<aclptiCallbackId, 7> kHardwareInfoTriggerCallbackIds = {
     ACLPTI_RUNTIME_CBID_aclrtLaunchKernel,
     ACLPTI_RUNTIME_CBID_aclrtLaunchKernelWithHostArgs,
     ACLPTI_RUNTIME_CBID_aclrtLaunchSIMTKernelWithHostArgs,
     ACLPTI_RUNTIME_CBID_aclrtLaunchKernelWithArgsArray,
+    ACLPTI_RUNTIME_CBID_aclrtLaunchSIMTKernelWithArgsArray,
+    ACLPTI_RUNTIME_CBID_aclrtBinaryGetFunction,
+    ACLPTI_RUNTIME_CBID_aclrtBinaryUnLoad,
 };
 constexpr double kMsopprofA5FallbackFrequencyMhz = 1650.0;
 
@@ -107,7 +111,7 @@ bool ParsePositiveDouble(std::string_view text, double* result)
     return true;
 }
 
-void LoadCsvDeviceInfo(PmuCsvConfig* config, bool loadFrequencies)
+void LoadCsvDeviceInfo(ReportConfig* config, bool loadFrequencies)
 {
     if (config == nullptr) {
         return;
@@ -259,9 +263,7 @@ int NpuComputeRuntime::Initialize()
         return kInitializeFailed;
     }
 
-    aclptiResult result = aclptiSubscribe(
-        &subscriber_, &NpuComputeRuntime::HardwareInfoTriggerCallback, static_cast<void*>(&hardware_info_collector_),
-        nullptr);
+    aclptiResult result = aclptiSubscribe(&subscriber_, &NpuComputeRuntime::HardwareInfoTriggerCallback, this, nullptr);
     if (result != ACLPTI_SUCCESS) {
         std::fprintf(stderr, "[libnpu-compute] aclptiSubscribe failed: %d\n", result);
         pmu_consumer_->ShutdownAndDrain();
@@ -357,7 +359,7 @@ aclptiResult NpuComputeRuntime::ProcessPmuData(std::shared_ptr<const aclptiProfi
             }
         }
     }
-    PmuCsvConfig csvConfig;
+    ReportConfig csvConfig;
     // Kernel EXIT arrives after replay PMU data, so publish HardwareInfo before processing CSV output.
     hardware_info_collector_.CollectOnKernelLaunch();
     {
@@ -368,13 +370,21 @@ aclptiResult NpuComputeRuntime::ProcessPmuData(std::shared_ptr<const aclptiProfi
         }
         csvConfig = csv_config_;
     }
-    const aclptiResult csvStatus = PmuCsvWriter::Write(*result, section_config_.Sections(), csvConfig);
+    KernelMetadata metadata = kernel_metadata_collector_.Snapshot();
+    DynamicHardwareDeviceApi api;
+    uint32_t ratedAic = 0;
+    uint32_t ratedAiv = 0;
+    api.GetRatedAiCoreFrequencies(0, &ratedAic, &ratedAiv);
+    if (ratedAic != 0) {
+        metadata.ratedAicFrequencyMhz = ratedAic;
+    }
+    if (ratedAiv != 0) {
+        metadata.ratedAivFrequencyMhz = ratedAiv;
+    }
+    const aclptiResult csvStatus = WritePmuReport(*result, section_config_.Sections(), csvConfig, metadata);
     if (csvStatus != ACLPTI_SUCCESS) {
         return csvStatus;
     }
-    // Upstream decode failures are retained in result->status/errorStats while
-    // valid PMU rows are still written. The callback status reflects only CSV
-    // processing, not whether the source aggregate was complete.
     return ACLPTI_SUCCESS;
 }
 
@@ -389,7 +399,15 @@ void NpuComputeRuntime::HardwareInfoTriggerCallback(
         callbackData->cbid != cbid || !IsHardwareInfoTriggerCallback(cbid)) {
         return;
     }
-    const bool accepted = callbackData->callbackSite == ACLPTI_API_EXIT && callbackData->retval == ACL_SUCCESS;
+    try {
+        static_cast<NpuComputeRuntime*>(userData)->kernel_metadata_collector_.OnCallback(cbid, *callbackData);
+    } catch (...) {
+        std::fprintf(stderr, "[libnpu-compute] Kernel metadata collection failed\n");
+    }
+    const bool isLaunch =
+        cbid != ACLPTI_RUNTIME_CBID_aclrtBinaryGetFunction && cbid != ACLPTI_RUNTIME_CBID_aclrtBinaryUnLoad;
+    const bool accepted =
+        isLaunch && callbackData->callbackSite == ACLPTI_API_EXIT && callbackData->retval == ACL_SUCCESS;
     if (DebugEnabled()) {
         std::fprintf(
             stderr, "[libnpu-compute] runtime callback domain=%d cbid=%u site=%d retval=%d accepted=%d\n",
@@ -400,8 +418,7 @@ void NpuComputeRuntime::HardwareInfoTriggerCallback(
         return;
     }
     try {
-        auto* collector = static_cast<HardwareInfoCollector*>(userData);
-        collector->CollectOnKernelLaunch();
+        static_cast<NpuComputeRuntime*>(userData)->hardware_info_collector_.CollectOnKernelLaunch();
     } catch (...) {
         std::fprintf(stderr, "[libnpu-compute] HardwareInfo trigger callback failed\n");
     }

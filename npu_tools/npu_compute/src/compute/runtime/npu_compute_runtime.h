@@ -13,8 +13,9 @@
 #include "aclpti/aclpti.h"
 #include "hardware/hardware_info_collector.h"
 #include "pmu/pmu_data_consumer.h"
-#include "pmu/pmu_csv_writer.h"
+#include "compute_types.h"
 #include "runtime/section_config.h"
+#include "runtime/kernel_metadata_collector.h"
 
 #include <cstddef>
 #include <memory>
@@ -54,8 +55,9 @@ private:
     bool csv_frequency_override_ = false;
     bool csv_device_info_loaded_ = false;
     SectionConfig section_config_;
-    PmuCsvConfig csv_config_;
+    ReportConfig csv_config_;
     HardwareInfoCollector hardware_info_collector_;
+    KernelMetadataCollector kernel_metadata_collector_;
 };
 
 } // namespace npucompute

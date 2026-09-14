@@ -53,7 +53,11 @@ set(NPU_COMPUTE_TEST_RUNTIME_SOURCES
   ${NPU_COMPUTE_SOURCE_DIR}/src/compute/npu_compute.cpp
   ${NPU_COMPUTE_SOURCE_DIR}/src/compute/runtime/npu_compute_runtime.cpp
   ${NPU_COMPUTE_SOURCE_DIR}/src/compute/pmu/pmu_data_consumer.cpp
-  ${NPU_COMPUTE_SOURCE_DIR}/src/compute/pmu/pmu_csv_writer.cpp
+  ${NPU_COMPUTE_SOURCE_DIR}/src/compute/report/pmu_csv_writer.cpp
+  ${NPU_COMPUTE_SOURCE_DIR}/src/compute/pmu/pmu_metric_builder.cpp
+  ${NPU_COMPUTE_SOURCE_DIR}/src/compute/report/summary_jsonl_writer.cpp
+  ${NPU_COMPUTE_SOURCE_DIR}/src/compute/report/report_writer.cpp
+  ${NPU_COMPUTE_SOURCE_DIR}/src/compute/runtime/kernel_metadata_collector.cpp
   ${NPU_COMPUTE_SOURCE_DIR}/src/compute/runtime/section_config.cpp
 )
 add_library(npu_compute_test SHARED ${NPU_COMPUTE_TEST_RUNTIME_SOURCES})
@@ -376,11 +380,37 @@ target_link_libraries(npu_compute_pmu_csv_writer_test
   PRIVATE acl_pti_test Boost::filesystem
 )
 target_sources(npu_compute_pmu_csv_writer_test PRIVATE
-  ${NPU_COMPUTE_SOURCE_DIR}/src/compute/pmu/pmu_csv_writer.cpp
+  ${NPU_COMPUTE_SOURCE_DIR}/src/compute/report/pmu_csv_writer.cpp
+  ${NPU_COMPUTE_SOURCE_DIR}/src/compute/pmu/pmu_metric_builder.cpp
 )
 add_test(NAME npu_compute.pmu_csv_writer
   COMMAND npu_compute_pmu_csv_writer_test
 )
+
+add_executable(npu_compute_pmu_report_writer_test
+  pmu_report_writer_test.cpp
+  ${NPU_COMPUTE_SOURCE_DIR}/src/compute/pmu/pmu_metric_builder.cpp
+  ${NPU_COMPUTE_SOURCE_DIR}/src/compute/report/pmu_csv_writer.cpp
+  ${NPU_COMPUTE_SOURCE_DIR}/src/compute/report/summary_jsonl_writer.cpp
+  ${NPU_COMPUTE_SOURCE_DIR}/src/compute/report/report_writer.cpp
+)
+target_include_directories(npu_compute_pmu_report_writer_test PRIVATE
+  ${NPU_COMPUTE_SOURCE_DIR}/src
+  ${NPU_COMPUTE_SOURCE_DIR}/src/compute
+)
+target_link_libraries(npu_compute_pmu_report_writer_test PRIVATE npu_compute_launcher_core_test)
+add_test(NAME npu_compute.pmu_report_writer COMMAND npu_compute_pmu_report_writer_test)
+
+add_executable(npu_compute_kernel_metadata_collector_test
+  kernel_metadata_collector_test.cpp
+  ${NPU_COMPUTE_SOURCE_DIR}/src/compute/runtime/kernel_metadata_collector.cpp
+)
+target_include_directories(npu_compute_kernel_metadata_collector_test PRIVATE
+  ${NPU_COMPUTE_SOURCE_DIR}/src/compute
+  ${NPU_COMPUTE_SOURCE_DIR}/src
+)
+target_link_libraries(npu_compute_kernel_metadata_collector_test PRIVATE npu_compute_test_headers)
+add_test(NAME npu_compute.kernel_metadata_collector COMMAND npu_compute_kernel_metadata_collector_test)
 
 add_executable(npu_compute_debug_log_test debug_log_test.cpp)
 target_include_directories(npu_compute_debug_log_test PRIVATE
@@ -497,7 +527,11 @@ set(NPU_COMPUTE_RUNTIME_IMPLEMENTATION_SOURCES
   ${NPU_COMPUTE_SOURCE_DIR}/src/compute/npu_compute.cpp
   ${NPU_COMPUTE_SOURCE_DIR}/src/compute/runtime/npu_compute_runtime.cpp
   ${NPU_COMPUTE_SOURCE_DIR}/src/compute/pmu/pmu_data_consumer.cpp
-  ${NPU_COMPUTE_SOURCE_DIR}/src/compute/pmu/pmu_csv_writer.cpp
+  ${NPU_COMPUTE_SOURCE_DIR}/src/compute/report/pmu_csv_writer.cpp
+  ${NPU_COMPUTE_SOURCE_DIR}/src/compute/pmu/pmu_metric_builder.cpp
+  ${NPU_COMPUTE_SOURCE_DIR}/src/compute/report/summary_jsonl_writer.cpp
+  ${NPU_COMPUTE_SOURCE_DIR}/src/compute/report/report_writer.cpp
+  ${NPU_COMPUTE_SOURCE_DIR}/src/compute/runtime/kernel_metadata_collector.cpp
   ${NPU_COMPUTE_SOURCE_DIR}/src/compute/runtime/section_config.cpp
 )
 

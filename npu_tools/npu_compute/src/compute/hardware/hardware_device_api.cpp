@@ -254,6 +254,18 @@ bool DynamicHardwareDeviceApi::GetAiCpuFrequency(std::int32_t deviceId, uint32_t
 bool DynamicHardwareDeviceApi::GetAiCoreFrequencies(
     std::int32_t deviceId, uint32_t* aicFrequencyMhz, uint32_t* aivFrequencyMhz)
 {
+    return ReadAiCoreFrequencies(deviceId, aicFrequencyMhz, aivFrequencyMhz, true);
+}
+
+bool DynamicHardwareDeviceApi::GetRatedAiCoreFrequencies(
+    std::int32_t deviceId, uint32_t* aicFrequencyMhz, uint32_t* aivFrequencyMhz)
+{
+    return ReadAiCoreFrequencies(deviceId, aicFrequencyMhz, aivFrequencyMhz, false);
+}
+
+bool DynamicHardwareDeviceApi::ReadAiCoreFrequencies(
+    std::int32_t deviceId, uint32_t* aicFrequencyMhz, uint32_t* aivFrequencyMhz, bool currentFirst)
+{
     if (deviceId < 0 || aicFrequencyMhz == nullptr || aivFrequencyMhz == nullptr) {
         return false;
     }
@@ -266,9 +278,10 @@ bool DynamicHardwareDeviceApi::GetAiCoreFrequencies(
         return false;
     }
 
-    const auto readFrequency = [function, deviceId](std::int32_t moduleType, uint32_t* value) {
+    const auto readFrequency = [function, deviceId, currentFirst](std::int32_t moduleType, uint32_t* value) {
         std::int64_t frequency = 0;
-        if (function(static_cast<uint32_t>(deviceId), moduleType, INFO_TYPE_CURRENT_FREQ, &frequency) ==
+        if (currentFirst &&
+            function(static_cast<uint32_t>(deviceId), moduleType, INFO_TYPE_CURRENT_FREQ, &frequency) ==
                 DRV_ERROR_NONE &&
             frequency > 0 && static_cast<uint64_t>(frequency) <= std::numeric_limits<uint32_t>::max()) {
             *value = static_cast<uint32_t>(frequency);

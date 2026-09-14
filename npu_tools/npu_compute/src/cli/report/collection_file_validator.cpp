@@ -11,9 +11,11 @@
 
 #include <boost/filesystem.hpp>
 #include <boost/system/error_code.hpp>
+#include <boost/property_tree/json_parser.hpp>
 
 #include <fstream>
 #include <string>
+#include <sstream>
 #include <system_error>
 
 namespace npucompute::cli {
@@ -33,15 +35,35 @@ bool ValidateJsonl(std::ifstream* input, const boost::filesystem::path& path, st
     bool line_has_content = false;
     char last = '\0';
     char character = '\0';
+    std::string line;
+    std::string lastCategory;
+    const bool summary = path.filename() == "summary.jsonl";
     while (input->get(character)) {
         last = character;
         if (character == '\n') {
             if (line_has_content) {
                 ++line_count;
+                if (summary) {
+                    try {
+                        if (lastCategory == "OpInfoSummary") {
+                            return Fail("OpInfoSummary must be the last JSONL record: " + path.string(), error);
+                        }
+                        boost::property_tree::ptree record;
+                        std::istringstream stream(line);
+                        boost::property_tree::read_json(stream, record);
+                        lastCategory = record.get<std::string>("category");
+                    } catch (const std::exception&) {
+                        return Fail("invalid summary JSONL record: " + path.string(), error);
+                    }
+                }
             }
             line_has_content = false;
+            line.clear();
         } else if (character != '\r') {
             line_has_content = true;
+            if (summary) {
+                line.push_back(character);
+            }
         }
     }
     if (input->bad()) {
@@ -50,8 +72,11 @@ bool ValidateJsonl(std::ifstream* input, const boost::filesystem::path& path, st
     if (last != '\n') {
         return Fail("JSONL collection file does not end with a newline: " + path.string(), error);
     }
-    if (line_count < 5U) {
+    if (path.filename() == "HardwareInfo.jsonl" && line_count < 5U) {
         return Fail("JSONL collection file contains fewer than five lines: " + path.string(), error);
+    }
+    if (line_count == 0 || (summary && lastCategory != "OpInfoSummary")) {
+        return Fail("JSONL has no records or summary does not end with OpInfoSummary: " + path.string(), error);
     }
     return true;
 }

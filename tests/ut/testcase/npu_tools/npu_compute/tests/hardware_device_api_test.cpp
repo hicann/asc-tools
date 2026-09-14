@@ -347,6 +347,11 @@ bool TestLoadedSymbolsAndExactArguments()
         CHECK(!Contains(resolver->openedLibraries, "libplatform.so"));
         CHECK(!Contains(resolver->requestedLoadedSymbols, "aclrtResetDevice"));
         CHECK(!Contains(resolver->requestedLibrarySymbols, "aclrtResetDevice"));
+        g_calls.halInfoTypes.clear();
+        CHECK(api.GetRatedAiCoreFrequencies(0, &aicFrequency, &aivFrequency));
+        CHECK(aicFrequency == 1650);
+        CHECK(aivFrequency == 1650);
+        CHECK(g_calls.halInfoTypes == std::vector<std::int32_t>({kHalInfoTypeFrequency, kHalInfoTypeFrequency}));
     }
     CHECK(Contains(resolver->closedLibraries, "libascend_hal.so"));
     CHECK(Contains(resolver->closedLibraries, "libdrvdsmi_host.so"));

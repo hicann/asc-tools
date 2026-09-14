@@ -40,11 +40,14 @@ namespace {
 constexpr char kSections[] = "PipeUtilization,Memory";
 constexpr char kHardwareInfoFile[] = "HardwareInfo.jsonl";
 constexpr char kDeviceCountFile[] = "device_count.calls";
-constexpr std::array<aclptiCallbackId, 4> kHardwareInfoTriggerCbids = {
+constexpr std::array<aclptiCallbackId, 7> kHardwareInfoTriggerCbids = {
     ACLPTI_RUNTIME_CBID_aclrtLaunchKernel,
     ACLPTI_RUNTIME_CBID_aclrtLaunchKernelWithHostArgs,
     ACLPTI_RUNTIME_CBID_aclrtLaunchSIMTKernelWithHostArgs,
     ACLPTI_RUNTIME_CBID_aclrtLaunchKernelWithArgsArray,
+    ACLPTI_RUNTIME_CBID_aclrtLaunchSIMTKernelWithArgsArray,
+    ACLPTI_RUNTIME_CBID_aclrtBinaryGetFunction,
+    ACLPTI_RUNTIME_CBID_aclrtBinaryUnLoad,
 };
 using namespace std::chrono_literals;
 
@@ -140,7 +143,7 @@ bool CheckSubscribeAndEnableContract()
     CHECK(npucompute::test::AclPtiSubscribeCount() == 1);
     CHECK(npucompute::test::CapturedAclPtiCallback() != nullptr);
     CHECK(npucompute::test::CapturedAclPtiUserData() != nullptr);
-    CHECK(npucompute::test::CapturedAclPtiUserData() != static_cast<void*>(&npucompute::NpuComputeRuntime::Instance()));
+    CHECK(npucompute::test::CapturedAclPtiUserData() == static_cast<void*>(&npucompute::NpuComputeRuntime::Instance()));
     const aclptiSubscribeHandle subscriber = npucompute::test::CapturedAclPtiSubscriber();
     CHECK(subscriber != nullptr);
 

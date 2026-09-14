@@ -7,7 +7,7 @@
  * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
  * See LICENSE in the root of the software repository for the full text of the License.
  */
-#include "pmu/pmu_csv_writer.h"
+#include "report/report_writer.h"
 
 #include <algorithm>
 #include <array>
@@ -347,13 +347,13 @@ int main()
     result.pmuLogs.emplace(aclptiBlockKey{2, 3, ACLPTI_CORE_TYPE_AIC, 3}, aicRow);
     result.pmuLogs.emplace(aclptiBlockKey{2, 3, ACLPTI_CORE_TYPE_AIV, 3}, aivRow);
 
-    npucompute::PmuCsvConfig config;
+    npucompute::ReportConfig config;
     config.outputDirectory = directory.string();
     config.frequencyMhz = 1000.0;
     config.socName = "950X";
     CHECK(
-        npucompute::PmuCsvWriter::Write(
-            result, {"L2Cache", "Memory", "MemoryL0", "MemoryUB", "PipeUtilization"}, config) == ACLPTI_SUCCESS);
+        npucompute::WritePmuCsv(result, {"L2Cache", "Memory", "MemoryL0", "MemoryUB", "PipeUtilization"}, config) ==
+        ACLPTI_SUCCESS);
 
     const std::string l2 = ReadFile(directory / "L2Cache.csv");
     CHECK(l2.find("block_id,sub_block_id") == 0);
@@ -383,7 +383,7 @@ int main()
     config.outputDirectory = splitFrequencyDirectory.string();
     config.aicFrequencyMhz = 500.0;
     config.aivFrequencyMhz = 2000.0;
-    CHECK(npucompute::PmuCsvWriter::Write(result, {"L2Cache"}, config) == ACLPTI_SUCCESS);
+    CHECK(npucompute::WritePmuCsv(result, {"L2Cache"}, config) == ACLPTI_SUCCESS);
     const std::string splitFrequencyL2 = ReadFile(splitFrequencyDirectory / "L2Cache.csv");
     CHECK(CsvValue(splitFrequencyDirectory / "L2Cache.csv", "cube3", "aic_time(us)") == "2.000000");
     CHECK(CsvValue(splitFrequencyDirectory / "L2Cache.csv", "vector3", "aiv_time(us)") == "1.000000");
@@ -403,7 +403,7 @@ int main()
         ACLPTI_CORE_TYPE_AIC, 9, 1000.0,
         {{0x424, 10.0}, {0x425, 2.0}, {0x426, 1.0}, {0x427, 5.0}, {0x428, 1.0}, {0x429, 1.0}}));
     secondResult.pmuLogs.emplace(aclptiBlockKey{8, 9, ACLPTI_CORE_TYPE_AIC, 9}, secondRow);
-    CHECK(npucompute::PmuCsvWriter::Write(secondResult, {"L2Cache"}, config) == ACLPTI_SUCCESS);
+    CHECK(npucompute::WritePmuCsv(secondResult, {"L2Cache"}, config) == ACLPTI_SUCCESS);
     CHECK(ReadFile(directory / "L2Cache.csv") == l2);
     const std::vector<boost::filesystem::path> nestedL2Files = NestedCsvFiles(directory, "L2Cache.csv");
     CHECK(nestedL2Files.size() == 1);
@@ -430,7 +430,7 @@ int main()
     std::string sparseLog;
     aclptiResult sparseWriteStatus = ACLPTI_ERROR_INTERNAL;
     CHECK(CaptureStderr(
-        [&] { sparseWriteStatus = npucompute::PmuCsvWriter::Write(sparseResult, {"L2Cache"}, config); }, &sparseLog));
+        [&] { sparseWriteStatus = npucompute::WritePmuCsv(sparseResult, {"L2Cache"}, config); }, &sparseLog));
     CHECK(sparseWriteStatus == ACLPTI_SUCCESS);
     CHECK(sparseLog.find("CSV section data availability: section=L2Cache rows=1") != std::string::npos);
     CHECK(sparseLog.find("missingFields=") != std::string::npos);
@@ -456,7 +456,7 @@ int main()
         ("npu_compute_csv_mirror_test_" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
     config.outputDirectory = mirrorPrimaryDirectory.string();
     config.mirrorOutputDirectory = mirrorDirectory.string();
-    CHECK(npucompute::PmuCsvWriter::Write(sparseResult, {"L2Cache"}, config) == ACLPTI_SUCCESS);
+    CHECK(npucompute::WritePmuCsv(sparseResult, {"L2Cache"}, config) == ACLPTI_SUCCESS);
     CHECK(boost::filesystem::exists(mirrorPrimaryDirectory / "L2Cache.csv"));
     CHECK(boost::filesystem::exists(mirrorDirectory / "L2Cache.csv"));
     CHECK(ReadFile(mirrorDirectory / "L2Cache.csv") == ReadFile(mirrorPrimaryDirectory / "L2Cache.csv"));
@@ -481,8 +481,7 @@ int main()
     std::string mirrorFailureLog;
     aclptiResult mirrorFailureStatus = ACLPTI_ERROR_INTERNAL;
     CHECK(CaptureStderr(
-        [&] { mirrorFailureStatus = npucompute::PmuCsvWriter::Write(sparseResult, {"L2Cache"}, config); },
-        &mirrorFailureLog));
+        [&] { mirrorFailureStatus = npucompute::WritePmuCsv(sparseResult, {"L2Cache"}, config); }, &mirrorFailureLog));
     CHECK(mirrorFailureStatus == ACLPTI_SUCCESS);
     CHECK(boost::filesystem::exists(mirrorFailurePrimaryDirectory / "L2Cache.csv"));
     CHECK(mirrorFailureLog.find("CSV mirror") != std::string::npos);
@@ -501,8 +500,7 @@ int main()
     std::string filesystemLog;
     aclptiResult filesystemStatus = ACLPTI_SUCCESS;
     CHECK(CaptureStderr(
-        [&] { filesystemStatus = npucompute::PmuCsvWriter::Write(sparseResult, {"L2Cache"}, config); },
-        &filesystemLog));
+        [&] { filesystemStatus = npucompute::WritePmuCsv(sparseResult, {"L2Cache"}, config); }, &filesystemLog));
     CHECK(filesystemStatus == ACLPTI_ERROR_CSV_WRITE);
     CHECK(filesystemLog.find("CSV write rejected: output path is not a directory") != std::string::npos);
     CHECK(filesystemLog.find("path=" + blockedDirectory.string()) != std::string::npos);
@@ -513,7 +511,7 @@ int main()
     std::string relativeLog;
     aclptiResult relativeStatus = ACLPTI_SUCCESS;
     CHECK(CaptureStderr(
-        [&] { relativeStatus = npucompute::PmuCsvWriter::Write(sparseResult, {"L2Cache"}, config); }, &relativeLog));
+        [&] { relativeStatus = npucompute::WritePmuCsv(sparseResult, {"L2Cache"}, config); }, &relativeLog));
     CHECK(relativeStatus == ACLPTI_ERROR_INVALID_PARAMETER);
     CHECK(relativeLog.find("CSV write rejected: output path must be absolute") != std::string::npos);
     CHECK(relativeLog.find("path=relative_csv_output") != std::string::npos);
@@ -534,25 +532,24 @@ int main()
     }
     aclptiProfilingDataResult emptyResult;
     config.outputDirectory = emptyDirectory.string();
-    CHECK(npucompute::PmuCsvWriter::Write(emptyResult, {"L2Cache"}, config) == ACLPTI_SUCCESS);
+    CHECK(npucompute::WritePmuCsv(emptyResult, {"L2Cache"}, config) == ACLPTI_SUCCESS);
     CHECK(ReadFile(existingCsv) == "sentinel\n");
 
     aclptiProfilingDataResult failedEmptyResult;
     failedEmptyResult.status = ACLPTI_ERROR_DECODE;
     failedEmptyResult.errorStats.failedRecordCount = 1;
-    CHECK(npucompute::PmuCsvWriter::Write(failedEmptyResult, {"L2Cache"}, config) == ACLPTI_SUCCESS);
+    CHECK(npucompute::WritePmuCsv(failedEmptyResult, {"L2Cache"}, config) == ACLPTI_SUCCESS);
     CHECK(ReadFile(existingCsv) == "sentinel\n");
 
     boost::filesystem::remove_all(emptyDirectory);
 
-    CHECK(npucompute::PmuCsvConfig{}.outputDirectory.empty());
+    CHECK(npucompute::ReportConfig{}.outputDirectory.empty());
     config.outputDirectory.clear();
     CHECK(setenv("NPU_COMPUTE_DEBUG", "1", 1) == 0);
     std::string emptyOutputLog;
     aclptiResult emptyOutputStatus = ACLPTI_SUCCESS;
     CHECK(CaptureStderr(
-        [&] { emptyOutputStatus = npucompute::PmuCsvWriter::Write(sparseResult, {"L2Cache"}, config); },
-        &emptyOutputLog));
+        [&] { emptyOutputStatus = npucompute::WritePmuCsv(sparseResult, {"L2Cache"}, config); }, &emptyOutputLog));
     CHECK(emptyOutputStatus == ACLPTI_ERROR_INVALID_PARAMETER);
     CHECK(emptyOutputLog.find("CSV write rejected: output path is empty") != std::string::npos);
     if (hadPreviousDebug) {
@@ -576,10 +573,10 @@ int main()
             row.coreData.push_back(Core(ACLPTI_CORE_TYPE_AIC, 0, 4000.0, {}));
             s1Result.pmuLogs.emplace(aclptiBlockKey{i, 0, ACLPTI_CORE_TYPE_AIC, 0}, row);
         }
-        npucompute::PmuCsvConfig s1Config;
+        npucompute::ReportConfig s1Config;
         s1Config.outputDirectory = s1Dir.string();
         s1Config.frequencyMhz = 1000.0;
-        CHECK(npucompute::PmuCsvWriter::Write(s1Result, {"L2Cache"}, s1Config) == ACLPTI_SUCCESS);
+        CHECK(npucompute::WritePmuCsv(s1Result, {"L2Cache"}, s1Config) == ACLPTI_SUCCESS);
         CHECK(CsvValue(s1Dir / "L2Cache.csv", "cube0", "aic_time(us)") == "4.000000");
         boost::filesystem::remove_all(s1Dir);
     }
@@ -597,10 +594,10 @@ int main()
         s2Row.coreId = 0;
         s2Row.coreData.push_back(Core(ACLPTI_CORE_TYPE_AIC, 0, 4000.0, {}));
         s2Result.pmuLogs.emplace(aclptiBlockKey{5, 0, ACLPTI_CORE_TYPE_AIC, 0}, s2Row);
-        npucompute::PmuCsvConfig s2Config;
+        npucompute::ReportConfig s2Config;
         s2Config.outputDirectory = s2Dir.string();
         s2Config.frequencyMhz = 1000.0;
-        CHECK(npucompute::PmuCsvWriter::Write(s2Result, {"L2Cache"}, s2Config) == ACLPTI_SUCCESS);
+        CHECK(npucompute::WritePmuCsv(s2Result, {"L2Cache"}, s2Config) == ACLPTI_SUCCESS);
         CHECK(CsvValue(s2Dir / "L2Cache.csv", "cube0", "aic_time(us)") == "4.000000");
         boost::filesystem::remove_all(s2Dir);
     }
@@ -620,10 +617,10 @@ int main()
             row.coreData.push_back(Core(ACLPTI_CORE_TYPE_AIC, 0, 3000.0, {}));
             s3Result.pmuLogs.emplace(aclptiBlockKey{i, 0, ACLPTI_CORE_TYPE_AIC, 0}, row);
         }
-        npucompute::PmuCsvConfig s3Config;
+        npucompute::ReportConfig s3Config;
         s3Config.outputDirectory = s3Dir.string();
         s3Config.frequencyMhz = 1000.0;
-        CHECK(npucompute::PmuCsvWriter::Write(s3Result, {"L2Cache"}, s3Config) == ACLPTI_SUCCESS);
+        CHECK(npucompute::WritePmuCsv(s3Result, {"L2Cache"}, s3Config) == ACLPTI_SUCCESS);
         CHECK(CsvValue(s3Dir / "L2Cache.csv", "cube0", "aic_time(us)") == "3.000000");
         boost::filesystem::remove_all(s3Dir);
     }
@@ -641,10 +638,10 @@ int main()
         s4Row.coreId = 0;
         s4Row.coreData.push_back(Core(ACLPTI_CORE_TYPE_AIV, 0, 4000.0, {}));
         s4Result.pmuLogs.emplace(aclptiBlockKey{10, 0, ACLPTI_CORE_TYPE_AIV, 0}, s4Row);
-        npucompute::PmuCsvConfig s4Config;
+        npucompute::ReportConfig s4Config;
         s4Config.outputDirectory = s4Dir.string();
         s4Config.frequencyMhz = 1000.0;
-        CHECK(npucompute::PmuCsvWriter::Write(s4Result, {"L2Cache"}, s4Config) == ACLPTI_SUCCESS);
+        CHECK(npucompute::WritePmuCsv(s4Result, {"L2Cache"}, s4Config) == ACLPTI_SUCCESS);
         CHECK(CsvValue(s4Dir / "L2Cache.csv", "vector0", "aiv_time(us)") == "4.000000");
         boost::filesystem::remove_all(s4Dir);
     }
@@ -670,10 +667,10 @@ int main()
         pureAivResult.taskLogs.emplace(
             1, std::vector<aclptiTaskLogRow>{{1, 0x00U, 1, 2, 1000}, {1, 0x01U, 1, 2, 5000}});
 
-        npucompute::PmuCsvConfig config;
+        npucompute::ReportConfig config;
         config.outputDirectory = pureAivDir.string();
         config.frequencyMhz = 1000.0;
-        CHECK(npucompute::PmuCsvWriter::Write(pureAivResult, {"Memory", "MemoryUB"}, config) == ACLPTI_SUCCESS);
+        CHECK(npucompute::WritePmuCsv(pureAivResult, {"Memory", "MemoryUB"}, config) == ACLPTI_SUCCESS);
         CHECK(CsvValue(pureAivDir / "Memory.csv", "vector0", "aiv_gm_to_ub_bw(GB/s)") == "11.920929");
         CHECK(CsvValue(pureAivDir / "Memory.csv", "vector1", "aiv_gm_to_ub_bw(GB/s)") == "5.960464");
         CHECK(CsvValue(pureAivDir / "MemoryUB.csv", "vector0", "aiv_ub_read_bw_vector(GB/s)") == "0.953674");
@@ -702,10 +699,10 @@ int main()
         pureAicResult.taskLogs.emplace(
             1, std::vector<aclptiTaskLogRow>{{1, 0x00U, 1, 2, 1000}, {1, 0x01U, 1, 2, 5000}});
 
-        npucompute::PmuCsvConfig config;
+        npucompute::ReportConfig config;
         config.outputDirectory = pureAicDir.string();
         config.frequencyMhz = 1000.0;
-        CHECK(npucompute::PmuCsvWriter::Write(pureAicResult, {"Memory", "MemoryL0"}, config) == ACLPTI_SUCCESS);
+        CHECK(npucompute::WritePmuCsv(pureAicResult, {"Memory", "MemoryL0"}, config) == ACLPTI_SUCCESS);
         CHECK(CsvValue(pureAicDir / "Memory.csv", "cube0", "aic_l1_read_bw(GB/s)") == "0.953674");
         CHECK(CsvValue(pureAicDir / "Memory.csv", "cube1", "aic_l1_read_bw(GB/s)") == "0.476837");
         CHECK(CsvValue(pureAicDir / "MemoryL0.csv", "cube0", "aic_l0a_read_bw(GB/s)") == "0.953674");
@@ -755,12 +752,12 @@ int main()
         formulaResult.pmuLogs.emplace(aclptiBlockKey{20, 7, ACLPTI_CORE_TYPE_AIC, 9}, formulaAic);
         formulaResult.pmuLogs.emplace(aclptiBlockKey{20, 7, ACLPTI_CORE_TYPE_AIV, 11}, formulaAiv);
 
-        npucompute::PmuCsvConfig formulaConfig;
+        npucompute::ReportConfig formulaConfig;
         formulaConfig.outputDirectory = formulaDir.string();
         formulaConfig.frequencyMhz = 1000.0;
         formulaConfig.socName = "950X";
         CHECK(
-            npucompute::PmuCsvWriter::Write(
+            npucompute::WritePmuCsv(
                 formulaResult, {"L2Cache", "Memory", "MemoryL0", "MemoryUB", "PipeUtilization"}, formulaConfig) ==
             ACLPTI_SUCCESS);
 
@@ -783,7 +780,7 @@ int main()
         const boost::filesystem::path formula959Dir = formulaDir.string() + "_9599";
         formulaConfig.outputDirectory = formula959Dir.string();
         formulaConfig.socName = "Ascend950PR_9599";
-        CHECK(npucompute::PmuCsvWriter::Write(formulaResult, {"Memory"}, formulaConfig) == ACLPTI_SUCCESS);
+        CHECK(npucompute::WritePmuCsv(formulaResult, {"Memory"}, formulaConfig) == ACLPTI_SUCCESS);
         for (const auto& cell : std::array<std::pair<const char*, const char*>, 8>{
                  std::make_pair("cube7", "read_main_memory_datas(KB)"),
                  std::make_pair("cube7", "aic_main_mem_read_bw(GB/s)"),
@@ -835,7 +832,7 @@ int main()
         const boost::filesystem::path taskDurationDir = formulaDir.string() + "_task_duration";
         formulaConfig.outputDirectory = taskDurationDir.string();
         CHECK(
-            npucompute::PmuCsvWriter::Write(
+            npucompute::WritePmuCsv(
                 formulaResult, {"Memory", "MemoryL0", "MemoryUB", "PipeUtilization"}, formulaConfig) == ACLPTI_SUCCESS);
         CHECK(CsvValue(taskDurationDir / "Memory.csv", "cube7", "aic_l1_read_bw(GB/s)") == "0.238419");
         CHECK(CsvValue(taskDurationDir / "Memory.csv", "vector7", "aiv_gm_to_ub_bw(GB/s)") == "2.086163");
@@ -873,22 +870,22 @@ int main()
         taskRow.coreData.push_back(Core(ACLPTI_CORE_TYPE_AIC, 2, 2000.0, {}));
         levelResult.taskPmuLogs.emplace(aclptiBlockKey{0, 4, ACLPTI_CORE_TYPE_AIC, 2}, taskRow);
 
-        npucompute::PmuCsvConfig defaultConfig;
+        npucompute::ReportConfig defaultConfig;
         defaultConfig.outputDirectory = defaultDir.string();
         defaultConfig.frequencyMhz = 1000.0;
-        CHECK(npucompute::PmuCsvWriter::Write(levelResult, sections, defaultConfig) == ACLPTI_SUCCESS);
+        CHECK(npucompute::WritePmuCsv(levelResult, sections, defaultConfig) == ACLPTI_SUCCESS);
         CHECK(CsvValue(defaultDir / "L2Cache.csv", "cube3", "aic_total_cycles") == "1000");
         CHECK(CsvValue(defaultDir / "L2Cache.csv", "cube4", "aic_total_cycles").empty());
 
-        npucompute::PmuCsvConfig blockConfig = defaultConfig;
+        npucompute::ReportConfig blockConfig = defaultConfig;
         blockConfig.outputDirectory = blockDir.string();
         blockConfig.pmuDataLevel = npucompute::PmuDataLevel::Block;
-        CHECK(npucompute::PmuCsvWriter::Write(levelResult, sections, blockConfig) == ACLPTI_SUCCESS);
+        CHECK(npucompute::WritePmuCsv(levelResult, sections, blockConfig) == ACLPTI_SUCCESS);
 
-        npucompute::PmuCsvConfig taskConfig = defaultConfig;
+        npucompute::ReportConfig taskConfig = defaultConfig;
         taskConfig.outputDirectory = taskDir.string();
         taskConfig.pmuDataLevel = npucompute::PmuDataLevel::Task;
-        CHECK(npucompute::PmuCsvWriter::Write(levelResult, sections, taskConfig) == ACLPTI_SUCCESS);
+        CHECK(npucompute::WritePmuCsv(levelResult, sections, taskConfig) == ACLPTI_SUCCESS);
         CHECK(CsvValue(taskDir / "L2Cache.csv", "cube4", "block_id") == "0");
         CHECK(CsvValue(taskDir / "L2Cache.csv", "cube4", "aic_total_cycles") == "2000");
         CHECK(CsvValue(taskDir / "L2Cache.csv", "cube3", "aic_total_cycles").empty());
@@ -901,7 +898,7 @@ int main()
         aclptiProfilingDataResult blockOnlyResult;
         blockOnlyResult.pmuLogs = levelResult.pmuLogs;
         taskConfig.outputDirectory = emptyDir.string();
-        CHECK(npucompute::PmuCsvWriter::Write(blockOnlyResult, sections, taskConfig) == ACLPTI_SUCCESS);
+        CHECK(npucompute::WritePmuCsv(blockOnlyResult, sections, taskConfig) == ACLPTI_SUCCESS);
         CHECK(!boost::filesystem::exists(emptyDir));
 
         boost::filesystem::remove_all(defaultDir);

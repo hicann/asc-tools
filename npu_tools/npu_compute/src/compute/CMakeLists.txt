@@ -16,7 +16,11 @@ add_library(npu_compute SHARED
   hardware/hardware_info_writer.cpp
   npu_compute.cpp
   pmu/pmu_data_consumer.cpp
-  pmu/pmu_csv_writer.cpp
+  report/pmu_csv_writer.cpp
+  pmu/pmu_metric_builder.cpp
+  report/summary_jsonl_writer.cpp
+  report/report_writer.cpp
+  runtime/kernel_metadata_collector.cpp
   runtime/npu_compute_runtime.cpp
   runtime/section_config.cpp
 )
