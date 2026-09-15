@@ -181,6 +181,50 @@ int main()
     CHECK(records[0].get<double>("aic_total_cycles") == 0);
     CHECK(records[1].get<std::string>("aicore_parallel_balance") == "null");
 
+    // Summary metrics must use task PMU rows even when CSV selects block rows.
+    config.outputDirectory = (boost::filesystem::path(directory) / "arithmetic-conflict").string();
+    config.pmuDataLevel = npucompute::PmuDataLevel::Block;
+    aclptiProfilingDataResult arithmeticConflict;
+    aclptiPmuDataRow arithmeticCube{};
+    arithmeticCube.coreType = ACLPTI_CORE_TYPE_AIC;
+    arithmeticCube.totalCycles = 1000;
+    arithmeticCube.values = {{768, 99},  {789, 21}, {790, 32}, {808, 100}, {809, 200},
+                             {810, 300}, {11, 10},  {13, 20},  {14, 30},   {15, 40}};
+    arithmeticConflict.taskPmuLogs.emplace(aclptiBlockKey{}, arithmeticCube);
+    aclptiPmuDataRow arithmeticVector{};
+    arithmeticVector.coreType = ACLPTI_CORE_TYPE_AIV;
+    arithmeticVector.totalCycles = 2000;
+    arithmeticVector.values = {{1281, 1000}, {1282, 200}, {1283, 300}, {1284, 500}, {12, 100},  {14, 200}, {15, 300},
+                               {1344, 400},  {1366, 500}, {1376, 10},  {1377, 20},  {1378, 30}, {1379, 40}};
+    arithmeticConflict.taskPmuLogs.emplace(aclptiBlockKey{0, 0, ACLPTI_CORE_TYPE_AIV, 0}, arithmeticVector);
+    arithmeticConflict.pmuLogs = arithmeticConflict.taskPmuLogs;
+    for (auto& entry : arithmeticConflict.pmuLogs) {
+        entry.second.totalCycles = 9999;
+        entry.second.values.clear();
+    }
+    const std::vector<std::string> arithmeticSections = {"ArithmeticUtilization", "ResourceConflictRatio"};
+    CHECK(npucompute::WritePmuReport(arithmeticConflict, arithmeticSections, config) == ACLPTI_SUCCESS);
+    records = ReadSummary(config.outputDirectory);
+    CHECK(records.size() == 3);
+    for (std::size_t index = 0; index < arithmeticSections.size(); ++index) {
+        CHECK(records[index].get<std::string>("category") == arithmeticSections[index]);
+        CHECK(records[index].get<double>("aic_total_cycles") == 1000);
+        CHECK(records[index].get<double>("aiv_total_cycles") == 2000);
+        CHECK(!records[index].get_optional<std::string>("block_id"));
+        CHECK(!records[index].get_optional<std::string>("sub_block_id"));
+    }
+    CHECK(records[0].get<uint64_t>("aic_cube_total_instr_number") == 99);
+    CHECK(records[0].get<uint64_t>("aic_cube_fp_instr_number") == 21);
+    CHECK(records[0].get<uint64_t>("aic_cube_int_instr_number") == 32);
+    CHECK(std::abs(records[0].get<double>("aic_cube_ratio") - 0.3) < 1e-6);
+    CHECK(std::abs(records[0].get<double>("aiv_vec_ratio") - 0.5) < 1e-6);
+    CHECK(std::abs(records[1].get<double>("aic_cube_wait_ratio") - 0.01) < 1e-6);
+    CHECK(std::abs(records[1].get<double>("aiv_vec_sfu_cflt_ratio") - 0.05) < 1e-6);
+    CHECK(records[2].get<std::string>("category") == "OpInfoSummary");
+    CHECK(npucompute::cli::ValidateCollectionFile(
+        boost::filesystem::path(config.outputDirectory) / "summary.jsonl", npucompute::cli::NpuRepFileType::Jsonl,
+        &error));
+
     const auto bad = boost::filesystem::path(directory) / "bad";
     boost::filesystem::create_directories(bad / "summary.jsonl");
     config.outputDirectory = bad.string();

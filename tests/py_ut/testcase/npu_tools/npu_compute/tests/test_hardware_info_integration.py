@@ -7,10 +7,13 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # ----------------------------------------------------------------------------------------------------------
+import csv
 import json
 import os
 import subprocess
 from pathlib import Path
+
+import pytest
 
 
 BIN_DIR = Path(os.environ["NPU_COMPUTE_TEST_BIN_DIR"])
@@ -133,7 +136,16 @@ def test_cli_profapi_callback_collector_and_jsonl_end_to_end(tmp_path):
     assert content == expected
 
 
-def test_cli_real_aclpti_callback_chain(tmp_path):
+@pytest.mark.parametrize(
+    "sections",
+    [
+        ("PipeUtilization",),
+        ("ArithmeticUtilization",),
+        ("ResourceConflictRatio",),
+        ("ArithmeticUtilization", "ResourceConflictRatio"),
+    ],
+)
+def test_cli_real_aclpti_callback_chain(tmp_path, sections):
     work_directory = tmp_path / "aclpti-chain"
     work_directory.mkdir()
     environment = os.environ.copy()
@@ -146,10 +158,16 @@ def test_cli_real_aclpti_callback_chain(tmp_path):
         value for value in (str(BIN_DIR), existing_library_path) if value
     )
     environment["NPU_COMPUTE_DEBUG"] = "1"
+    # The profiling stub emits task-level PMU records, without block task logs.
+    environment["NPU_COMPUTE_PMU_LEVEL"] = "task"
     environment.pop("INJECTION_TEST_CALLBACK_EVENTS", None)
 
+    command = [str(CLI)]
+    for section in sections:
+        command.extend(("--section", section))
+    command.append(str(APP))
     result = subprocess.run(
-        [str(CLI), "--section", "PipeUtilization", str(APP)],
+        command,
         env=environment,
         cwd=work_directory,
         text=True,
@@ -183,3 +201,66 @@ def test_cli_real_aclpti_callback_chain(tmp_path):
     assert len(hardware_info.read_text(encoding="utf-8").splitlines()) == 5
     assert data_directory.parent == work_directory
     assert list(data_directory.glob("HardwareInfo*.jsonl")) == [hardware_info]
+
+    # This uses the real injected library and PTI profiler, not CSV fixture files.
+    # Checking exact section names also catches injection SectionConfig omissions.
+    csv_files = sorted(data_directory.rglob("*.csv"))
+    assert csv_files, result.stderr
+    assert {path.stem for path in csv_files} == set(sections)
+    section_metrics = {
+        "PipeUtilization": "aic_cube_ratio",
+        "ArithmeticUtilization": "aic_cube_total_instr_number",
+        "ResourceConflictRatio": "aiv_vec_sfu_cflt_ratio",
+    }
+    for path in csv_files:
+        with path.open(encoding="utf-8", newline="") as stream:
+            reader = csv.DictReader(stream)
+            rows = list(reader)
+            assert section_metrics[path.stem] in reader.fieldnames
+        assert rows, path
+        assert all(None not in row and None not in row.values() for row in rows)
+        assert all(row["block_id"] != "" and row["sub_block_id"] != "" for row in rows)
+
+    reports = list(work_directory.glob("*.npu-rep"))
+    assert len(reports) == 1, result.stderr
+    imported = subprocess.run(
+        [str(CLI), "--import", str(reports[0]), "--export", str(tmp_path)],
+        cwd=work_directory,
+        env=environment,
+        text=True,
+        capture_output=True,
+        timeout=60,
+        check=False,
+    )
+    assert imported.returncode == 0, imported.stderr
+    prefix = "npu-compute: unpacked= "
+    unpacked = [
+        Path(line[len(prefix) :])
+        for line in imported.stderr.splitlines()
+        if line.startswith(prefix)
+    ]
+    assert len(unpacked) == 1, imported.stderr
+    original_csv = {
+        path.relative_to(data_directory): path.read_bytes() for path in csv_files
+    }
+    restored_csv = {
+        path.relative_to(unpacked[0]): path.read_bytes()
+        for path in unpacked[0].rglob("*.csv")
+    }
+    assert restored_csv == original_csv
+
+    summaries = sorted(data_directory.rglob("summary.jsonl"))
+    assert summaries, result.stderr
+    for path in summaries:
+        records = [
+            json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()
+        ]
+        assert [record["category"] for record in records] == [
+            *sections,
+            "OpInfoSummary",
+        ]
+        for section, record in zip(sections, records):
+            assert section_metrics[section] in record
+            assert "block_id" not in record
+        restored = unpacked[0] / path.relative_to(data_directory)
+        assert restored.read_bytes() == path.read_bytes()

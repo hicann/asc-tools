@@ -312,6 +312,133 @@ bool CaptureStderr(Function function, std::string* output)
 
 int main()
 {
+    {
+        const auto path = boost::filesystem::temp_directory_path() /
+                          boost::filesystem::unique_path("npu_compute_arithmetic_%%%%-%%%%");
+        npucompute::ReportConfig config;
+        config.outputDirectory = path.string();
+        config.frequencyMhz = 1000.0;
+        aclptiProfilingDataResult result;
+        aclptiPmuDataRow cube{};
+        cube.coreType = ACLPTI_CORE_TYPE_AIC;
+        cube.coreData.push_back(Core(
+            ACLPTI_CORE_TYPE_AIC, 0, 1000,
+            {{768, 99},
+             {789, 21},
+             {790, 32},
+             {808, 100},
+             {809, 200},
+             {810, 300},
+             {11, 10},
+             {13, 20},
+             {14, 30},
+             {15, 40}}));
+        aclptiPmuDataRow vector{};
+        vector.coreType = ACLPTI_CORE_TYPE_AIV;
+        vector.coreData.push_back(Core(
+            ACLPTI_CORE_TYPE_AIV, 0, 2000,
+            {{1281, 1000},
+             {1282, 200},
+             {1283, 300},
+             {1284, 500},
+             {12, 100},
+             {14, 200},
+             {15, 300},
+             {1344, 400},
+             {1366, 500},
+             {1376, 10},
+             {1377, 20},
+             {1378, 30},
+             {1379, 40}}));
+        result.pmuLogs.emplace(aclptiBlockKey{0, 0, ACLPTI_CORE_TYPE_AIC, 0}, cube);
+        result.pmuLogs.emplace(aclptiBlockKey{0, 0, ACLPTI_CORE_TYPE_AIV, 0}, vector);
+        const std::vector<std::string> sections = {"ArithmeticUtilization", "ResourceConflictRatio", "PipeUtilization"};
+        CHECK(npucompute::WritePmuCsv(result, sections, config) == ACLPTI_SUCCESS);
+        const auto arithmetic = path / "ArithmeticUtilization.csv";
+        const auto conflict = path / "ResourceConflictRatio.csv";
+        CHECK(CsvHeader(arithmetic).size() == 16);
+        CHECK(CsvHeader(conflict).size() == 16);
+        for (const auto& [field, value] : std::vector<std::pair<std::string, std::string>>{
+                 {"aic_cube_ratio", "0.300000"},
+                 {"aic_cube_fp_ratio", "0.100000"},
+                 {"aic_cube_int_ratio", "0.200000"},
+                 {"aic_cube_total_instr_number", "99"},
+                 {"aic_cube_fp_instr_number", "21"},
+                 {"aic_cube_int_instr_number", "32"},
+                 {"aic_time(us)", "1.000000"}}) {
+            CHECK(CsvValue(arithmetic, "cube0", field) == value);
+            CHECK(CsvValue(arithmetic, "vector0", field) == "NA");
+        }
+        for (const auto& [field, value] : std::vector<std::pair<std::string, std::string>>{
+                 {"aiv_vec_ratio", "0.500000"},
+                 {"aiv_vec_vf_ratio", "0.100000"},
+                 {"aiv_vec_sfu_ratio", "0.150000"},
+                 {"aiv_vec_simt_vf_ratio", "0.250000"}}) {
+            CHECK(CsvValue(arithmetic, "vector0", field) == value);
+            CHECK(CsvValue(arithmetic, "cube0", field) == "NA");
+        }
+        for (const auto& [field, value] : std::vector<std::pair<std::string, std::string>>{
+                 {"aic_cube_wait_ratio", "0.010000"},
+                 {"aic_mte1_wait_ratio", "0.020000"},
+                 {"aic_mte2_wait_ratio", "0.030000"},
+                 {"aic_mte3_wait_ratio", "0.040000"}}) {
+            CHECK(CsvValue(conflict, "cube0", field) == value);
+            CHECK(CsvValue(conflict, "vector0", field) == "NA");
+        }
+        for (const auto& [field, value] : std::vector<std::pair<std::string, std::string>>{
+                 {"aiv_vec_wait_ratio", "0.050000"},
+                 {"aiv_mte2_wait_ratio", "0.100000"},
+                 {"aiv_mte3_wait_ratio", "0.150000"},
+                 {"aiv_vec_ldu_cflt_ratio", "0.200000"},
+                 {"aiv_vec_stu_cflt_ratio", "0.250000"},
+                 {"aiv_vec_sfu_cflt_ratio", "0.050000"}}) {
+            CHECK(CsvValue(conflict, "vector0", field) == value);
+            CHECK(CsvValue(conflict, "cube0", field) == "NA");
+        }
+        CHECK(
+            CsvValue(arithmetic, "cube0", "aic_cube_ratio") ==
+            CsvValue(path / "PipeUtilization.csv", "cube0", "aic_cube_ratio"));
+        // Missing events must not become zero; task input uses its own counters.
+        vector.coreData.front().values.erase(1377);
+        vector.coreData.front().values[1282] = 0;
+        result.taskPmuLogs.emplace(aclptiBlockKey{0, 0, ACLPTI_CORE_TYPE_AIV, 0}, vector);
+        config.outputDirectory = (path / "task").string();
+        config.pmuDataLevel = npucompute::PmuDataLevel::Task;
+        config.frequencyMhz = 2000;
+        CHECK(npucompute::WritePmuCsv(result, sections, config) == ACLPTI_SUCCESS);
+        CHECK(CsvValue(path / "task/ResourceConflictRatio.csv", "vector0", "aiv_vec_sfu_cflt_ratio") == "NA");
+        CHECK(CsvValue(path / "task/ArithmeticUtilization.csv", "vector0", "aiv_vec_vf_ratio") == "0.000000");
+        CHECK(CsvValue(path / "task/ArithmeticUtilization.csv", "vector0", "aiv_time(us)") == "1.000000");
+        CHECK(CsvValue(path / "task/ArithmeticUtilization.csv", "vector0", "aiv_vec_ratio") == "0.500000");
+        vector.coreData.front().values[1377] = 20;
+        vector.coreData.front().totalCycles = 0;
+        result.taskPmuLogs.clear();
+        result.taskPmuLogs.emplace(aclptiBlockKey{0, 0, ACLPTI_CORE_TYPE_AIV, 0}, vector);
+        config.outputDirectory = (path / "zero").string();
+        CHECK(npucompute::WritePmuCsv(result, sections, config) == ACLPTI_SUCCESS);
+        CHECK(CsvValue(path / "zero/ResourceConflictRatio.csv", "vector0", "aiv_vec_sfu_cflt_ratio") == "NA");
+        CHECK(CsvValue(path / "zero/ArithmeticUtilization.csv", "vector0", "aiv_vec_ratio") == "NA");
+        // A collection containing only a new section must also prevent overwrites.
+        for (const std::string section : {"ArithmeticUtilization", "ResourceConflictRatio"}) {
+            const auto repeated = path / section;
+            config.outputDirectory = repeated.string();
+            config.pmuDataLevel = npucompute::PmuDataLevel::Block;
+            CHECK(npucompute::WritePmuCsv(result, {section}, config) == ACLPTI_SUCCESS);
+            const auto original = ReadFile(repeated / (section + ".csv"));
+            config.frequencyMhz = 4000;
+            CHECK(npucompute::WritePmuCsv(result, {section}, config) == ACLPTI_SUCCESS);
+            CHECK(ReadFile(repeated / (section + ".csv")) == original);
+            std::size_t children = 0;
+            for (const auto& entry : boost::filesystem::directory_iterator(repeated)) {
+                if (boost::filesystem::is_directory(entry.path())) {
+                    ++children;
+                    CHECK(boost::filesystem::exists(entry.path() / (section + ".csv")));
+                }
+            }
+            CHECK(children == 1);
+        }
+        boost::filesystem::remove_all(path);
+    }
     const auto directory =
         boost::filesystem::temp_directory_path() /
         ("npu_compute_csv_test_" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));

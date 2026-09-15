@@ -90,6 +90,12 @@ int TestPipelineOption()
     CHECK(config.sections == std::vector<std::string>{"Pipeline"});
     CHECK(Parse({"npu-compute", "--section=Pipeline", "--section", "Memory", "./app"}, &config, &errors));
     CHECK(config.collect_pipeline);
+    CHECK(Parse(
+        {"npu-compute", "--section", "Pipeline", "--section", "ArithmeticUtilization", "--section",
+         "ResourceConflictRatio", "./app"},
+        &config, &errors));
+    CHECK(config.collect_pipeline);
+    CHECK(config.sections == std::vector<std::string>({"Pipeline", "ArithmeticUtilization", "ResourceConflictRatio"}));
     CHECK(!Parse({"npu-compute", "--pipeline", "--section", "Memory", "./app"}, &config, &errors));
     CHECK(errors == std::vector<std::string>({"unknown option '--pipeline'. Use --help to see supported options."}));
     return 0;
@@ -163,8 +169,27 @@ int TestExistingCliBehavior()
     CliConfig config;
     std::vector<std::string> errors;
     const bool parsed = Parse(
-        {"npu-compute", "--section", "PipeUtilization", "--section", "Memory", "--section", "MemoryL0", "--section",
-         "MemoryUB", "--section", "L2Cache", "./app", "--export", "app-owned", "--force-overwrite"},
+        {"npu-compute",
+         "--section",
+         "PipeUtilization",
+         "--section",
+         "Memory",
+         "--section",
+         "MemoryL0",
+         "--section",
+         "MemoryUB",
+         "--section",
+         "L2Cache",
+         "--section",
+         "ArithmeticUtilization",
+         "--section",
+         "ResourceConflictRatio",
+         "--section",
+         "ArithmeticUtilization",
+         "./app",
+         "--export",
+         "app-owned",
+         "--force-overwrite"},
         &config, &errors);
     if (!parsed) {
         for (const std::string& error : errors) {
@@ -173,7 +198,9 @@ int TestExistingCliBehavior()
     }
     CHECK(parsed);
     CHECK(
-        config.sections == std::vector<std::string>({"PipeUtilization", "Memory", "MemoryL0", "MemoryUB", "L2Cache"}));
+        config.sections == std::vector<std::string>(
+                               {"PipeUtilization", "Memory", "MemoryL0", "MemoryUB", "L2Cache", "ArithmeticUtilization",
+                                "ResourceConflictRatio"}));
     CHECK(!config.export_path.has_value());
     CHECK(config.program_arguments == std::vector<std::string>({"--export", "app-owned", "--force-overwrite"}));
     return 0;

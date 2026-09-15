@@ -17,8 +17,9 @@
 namespace npucompute {
 namespace {
 
-constexpr std::array<const char*, 6> kSupportedSections = {
-    "PipeUtilization", "Memory", "MemoryL0", "MemoryUB", "L2Cache", "Pipeline",
+constexpr std::array<const char*, 8> kSupportedSections = {
+    "PipeUtilization",       "Memory", "MemoryL0", "MemoryUB", "L2Cache", "Pipeline", "ArithmeticUtilization",
+    "ResourceConflictRatio",
 };
 
 bool Fail(const std::string& message, std::string* error)

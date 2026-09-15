@@ -838,6 +838,94 @@ CsvRow PipeRow(const RowMetrics& row, const ReportConfig& config)
     return BuildRow(PipeHeader(), fields);
 }
 
+std::vector<std::string> ArithmeticHeader()
+{
+    return {
+        "block_id",
+        "sub_block_id",
+        "aic_time(us)",
+        "aic_total_cycles",
+        "aic_cube_ratio",
+        "aic_cube_fp_ratio",
+        "aic_cube_int_ratio",
+        "aic_cube_total_instr_number",
+        "aic_cube_fp_instr_number",
+        "aic_cube_int_instr_number",
+        "aiv_time(us)",
+        "aiv_total_cycles",
+        "aiv_vec_ratio",
+        "aiv_vec_vf_ratio",
+        "aiv_vec_sfu_ratio",
+        "aiv_vec_simt_vf_ratio"};
+}
+
+CsvRow ArithmeticRow(const RowMetrics& row, const ReportConfig& config)
+{
+    CsvFields fields = CommonFields(row, config);
+    for (const auto& [name, event] : std::initializer_list<std::pair<const char*, uint32_t>>{
+             {"aic_cube_ratio", 810}, {"aic_cube_fp_ratio", 808}, {"aic_cube_int_ratio", 809}}) {
+        SetMetric(fields, name, ValueRatio(row.aic, event), RatioReason(row.aic, {event}));
+    }
+    SetEvent(fields, "aic_cube_total_instr_number", row.aic, 768);
+    SetEvent(fields, "aic_cube_fp_instr_number", row.aic, 789);
+    SetEvent(fields, "aic_cube_int_instr_number", row.aic, 790);
+    for (const auto& [name, event] : std::initializer_list<std::pair<const char*, uint32_t>>{
+             {"aiv_vec_ratio", 1281},
+             {"aiv_vec_vf_ratio", 1282},
+             {"aiv_vec_sfu_ratio", 1283},
+             {"aiv_vec_simt_vf_ratio", 1284}}) {
+        SetMetric(fields, name, ValueRatio(row.aiv, event), RatioReason(row.aiv, {event}));
+    }
+    return BuildRow(ArithmeticHeader(), fields);
+}
+
+std::vector<std::string> ResourceConflictHeader()
+{
+    return {
+        "block_id",
+        "sub_block_id",
+        "aic_time(us)",
+        "aic_total_cycles",
+        "aic_cube_wait_ratio",
+        "aic_mte1_wait_ratio",
+        "aic_mte2_wait_ratio",
+        "aic_mte3_wait_ratio",
+        "aiv_time(us)",
+        "aiv_total_cycles",
+        "aiv_vec_stu_cflt_ratio",
+        "aiv_vec_ldu_cflt_ratio",
+        "aiv_vec_sfu_cflt_ratio",
+        "aiv_vec_wait_ratio",
+        "aiv_mte2_wait_ratio",
+        "aiv_mte3_wait_ratio"};
+}
+
+CsvRow ResourceConflictRow(const RowMetrics& row, const ReportConfig& config)
+{
+    CsvFields fields = CommonFields(row, config);
+    for (const auto& [name, event] : std::initializer_list<std::pair<const char*, uint32_t>>{
+             {"aic_cube_wait_ratio", 11},
+             {"aic_mte1_wait_ratio", 13},
+             {"aic_mte2_wait_ratio", 14},
+             {"aic_mte3_wait_ratio", 15}}) {
+        SetMetric(fields, name, ValueRatio(row.aic, event), RatioReason(row.aic, {event}));
+    }
+    for (const auto& [name, event] : std::initializer_list<std::pair<const char*, uint32_t>>{
+             {"aiv_vec_stu_cflt_ratio", 1366},
+             {"aiv_vec_ldu_cflt_ratio", 1344},
+             {"aiv_vec_wait_ratio", 12},
+             {"aiv_mte2_wait_ratio", 14},
+             {"aiv_mte3_wait_ratio", 15}}) {
+        SetMetric(fields, name, ValueRatio(row.aiv, event), RatioReason(row.aiv, {event}));
+    }
+    // Ascend950 SFU conflicts combine four counters before normalization.
+    const auto sfu = SumEvents(row.aiv, {1376, 1377, 1378, 1379});
+    SetMetric(
+        fields, "aiv_vec_sfu_cflt_ratio", sfu.has_value() ? Ratio(*sfu, row.aiv.Cycles()) : std::nullopt,
+        RatioReason(row.aiv, {1376, 1377, 1378, 1379}));
+    return BuildRow(ResourceConflictHeader(), fields);
+}
+
 struct SectionWriter {
     std::vector<std::string> (*header)();
     std::function<CsvRow(const RowMetrics&, const ReportConfig&, Metric)> row;
@@ -846,6 +934,12 @@ struct SectionWriter {
 const std::map<std::string_view, SectionWriter>& SectionWriters()
 {
     static const std::map<std::string_view, SectionWriter> writers = {
+        {"ArithmeticUtilization",
+         {&ArithmeticHeader,
+          [](const RowMetrics& row, const ReportConfig& config, Metric) { return ArithmeticRow(row, config); }}},
+        {"ResourceConflictRatio",
+         {&ResourceConflictHeader,
+          [](const RowMetrics& row, const ReportConfig& config, Metric) { return ResourceConflictRow(row, config); }}},
         {"L2Cache",
          {&L2Header, [](const RowMetrics& row, const ReportConfig& config, Metric) { return L2Row(row, config); }}},
         {"Memory",

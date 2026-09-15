@@ -13,6 +13,8 @@ The following sections are currently supported:
 | `MemoryL0` | L0 memory access data |
 | `MemoryUB` | Unified Buffer access data |
 | `L2Cache` | L2 Cache access data |
+| `ArithmeticUtilization` | Cube FP/INT instruction counts and Cube/Vector active cycle ratios |
+| `ResourceConflictRatio` | Pipeline wait ratios and Vector resource conflict ratios |
 
 Section names are case-sensitive.
 

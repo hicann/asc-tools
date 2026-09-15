@@ -162,7 +162,9 @@ bool IsEmptySuccessfulResult(const aclptiProfilingDataResult& result)
 
 bool HasRootSectionCsv(const boost::filesystem::path& outputDirectory)
 {
-    for (const auto& section : {"L2Cache", "Memory", "MemoryL0", "MemoryUB", "PipeUtilization"}) {
+    for (const auto& section :
+         {"L2Cache", "Memory", "MemoryL0", "MemoryUB", "PipeUtilization", "ArithmeticUtilization",
+          "ResourceConflictRatio"}) {
         if (boost::filesystem::exists(outputDirectory / (std::string(section) + ".csv"))) {
             return true;
         }

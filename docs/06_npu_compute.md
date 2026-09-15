@@ -13,6 +13,8 @@
 | `MemoryL0` | L0 存储访问数据 |
 | `MemoryUB` | Unified Buffer 访问数据 |
 | `L2Cache` | L2 Cache 访问数据 |
+| `ArithmeticUtilization` | Cube FP/INT 指令数与 Cube、Vector 活跃周期占比 |
+| `ResourceConflictRatio` | 流水等待率与 Vector 资源冲突率 |
 
 Section 名称区分大小写。
 
