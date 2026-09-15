@@ -7,20 +7,18 @@
  * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
  * See LICENSE in the root of the software repository for the full text of the License.
  */
-#include "aclpti/aclpti_data.h"
+#ifndef NPU_TOOLS_NPU_COMPUTE_SRC_CLI_REPORT_PIPE_TRACE_FINALIZER_H
+#define NPU_TOOLS_NPU_COMPUTE_SRC_CLI_REPORT_PIPE_TRACE_FINALIZER_H
 
-#include "profiling_data_manager.h"
+#include <boost/filesystem/path.hpp>
 
-#include <utility>
+#include <string>
 
-// Public registration is backed by the process-wide manager singleton.
-aclptiResult aclptiRegisterProfilingDataCallback(aclptiProfilingDataCallback callback)
-{
-    return aclpti::data::ProfilingDataManager::Instance().RegisterProfilingDataCallback(std::move(callback));
-}
+namespace npucompute::cli {
 
-extern "C" aclptiResult aclptiRegisterDataModuleShutdownCallback(
-    aclptiDataModuleShutdownCallback callback, void* userData)
-{
-    return aclpti::data::ProfilingDataManager::Instance().RegisterShutdownCallback(callback, userData);
-}
+bool FinalizePipeTrace(
+    const boost::filesystem::path& collectionDirectory, bool pipelineEnabled, std::string* error = nullptr);
+
+} // namespace npucompute::cli
+
+#endif // NPU_TOOLS_NPU_COMPUTE_SRC_CLI_REPORT_PIPE_TRACE_FINALIZER_H

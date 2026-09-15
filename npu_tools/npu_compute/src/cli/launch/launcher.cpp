@@ -12,6 +12,7 @@
 #include "launch/injection_path.h"
 #include "launch/process_launcher.h"
 #include "report/rep_directory_packer.h"
+#include "report/pipe_trace_finalizer.h"
 #include "report/rep_report_writer.h"
 #include "report/report_name.h"
 #include "launch/staging_directory.h"
@@ -112,6 +113,7 @@ bool BuildChildEnvironment(
     SetEnvironmentValue("ACL_API_INJECTION", injection_path, environment);
     SetEnvironmentValue("NPU_COMPUTE_SECTIONS", sections, environment);
     SetEnvironmentValue("NPU_COMPUTE_REPLAY_MODE", ReplayModeName(config.replay_mode), environment);
+    SetEnvironmentValue("NPU_COMPUTE_PIPELINE", config.collect_pipeline ? "1" : "0", environment);
     SetEnvironmentValue("NPU_COMPUTE_OUTPUT", collection_data_directory, environment);
     SetEnvironmentValue("NPU_COMPUTE_CSV_OUTPUT_DIR", collection_data_directory, environment);
     SetEnvironmentValue(kCollectionActiveEnvironment, "1", environment);
@@ -264,6 +266,10 @@ int LaunchTarget(
     }
     if (!ValidateHardwareInfoResult(collection_data.Path(), error)) {
         return finishCollection(kCollectionErrorExitCode);
+    }
+    if (!FinalizePipeTrace(collection_data.Path(), config.collect_pipeline, &stage_error)) {
+        SetStageError("finalize PipeTrace failed", stage_error, error);
+        return finishCollection(kReportErrorExitCode);
     }
 
     std::vector<uint8_t> encoded;

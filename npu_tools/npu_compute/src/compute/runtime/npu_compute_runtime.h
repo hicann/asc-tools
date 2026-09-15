@@ -11,16 +11,20 @@
 #define NPU_TOOLS_NPU_COMPUTE_SRC_COMPUTE_RUNTIME_NPU_COMPUTE_RUNTIME_H
 
 #include "aclpti/aclpti.h"
+#include "biu/biu_pipeline.h"
 #include "hardware/hardware_info_collector.h"
 #include "pmu/pmu_data_consumer.h"
 #include "compute_types.h"
 #include "runtime/section_config.h"
 #include "runtime/kernel_metadata_collector.h"
 
+#include <boost/filesystem/path.hpp>
+
 #include <cstddef>
 #include <memory>
 #include <mutex>
 #include <string>
+#include <vector>
 
 namespace npucompute {
 
@@ -54,8 +58,14 @@ private:
     std::size_t enabled_hardware_callback_count_ = 0;
     bool csv_frequency_override_ = false;
     bool csv_device_info_loaded_ = false;
+    bool pipeline_enabled_ = false;
+    bool pipeline_finalized_ = false;
+    uint64_t pipeline_result_sequence_ = 0;
     SectionConfig section_config_;
     ReportConfig csv_config_;
+    BiuClockConfig biu_clock_config_;
+    boost::filesystem::path pipeline_process_directory_;
+    std::vector<PipeTraceFragmentInfo> pipeline_fragments_;
     HardwareInfoCollector hardware_info_collector_;
     KernelMetadataCollector kernel_metadata_collector_;
 };

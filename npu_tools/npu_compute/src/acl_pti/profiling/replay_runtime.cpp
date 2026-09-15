@@ -75,6 +75,7 @@ aclptiResult ReplayRuntime::ReplayKernel(const ReplayLaunchFunction& launchFunct
         return ACLPTI_ERROR_PROFILING_FAILED;
     }
     const aclptiResult status = rangeProfiler_.ReplayKernel(replayMemory_, launchFunction, stream);
+    // One original launch owns all rounds above and exactly one complete result publication.
     const aclptiResult shutdownStatus = StopProfiling();
     if (status == ACLPTI_SUCCESS) {
         return shutdownStatus;

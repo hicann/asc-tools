@@ -301,6 +301,28 @@ bool DynamicHardwareDeviceApi::ReadAiCoreFrequencies(
     return readAic && readAiv;
 }
 
+bool DynamicHardwareDeviceApi::GetSyscntFrequencyHz(std::int32_t deviceId, double* frequencyHz)
+{
+    if (frequencyHz == nullptr) {
+        return false;
+    }
+    *frequencyHz = 0.0;
+    if (deviceId < 0) {
+        return false;
+    }
+    using Function = drvError_t (*)(uint32_t, std::int32_t, std::int32_t, std::int64_t*);
+    const Function function = ToFunction<Function>(impl_->Resolve("halGetDeviceInfo", kHalLibrary));
+    std::int64_t frequencyKhz = 0;
+    if (function == nullptr ||
+        function(static_cast<uint32_t>(deviceId), MODULE_TYPE_SYSTEM, INFO_TYPE_DEV_OSC_FREQUE, &frequencyKhz) !=
+            DRV_ERROR_NONE ||
+        frequencyKhz <= 0) {
+        return false;
+    }
+    *frequencyHz = static_cast<double>(frequencyKhz) * 1000.0;
+    return true;
+}
+
 bool DynamicHardwareDeviceApi::GetChipVersion(std::int32_t deviceId, std::string* value)
 {
     if (deviceId < 0 || value == nullptr) {

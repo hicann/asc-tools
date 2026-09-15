@@ -16,13 +16,15 @@
 #include <mutex>
 #include <utility>
 
-namespace aclpti::data::detail {
+namespace aclpti::data {
 
+// Closing rejects new writes but preserves queued items for the consumer to drain.
 template <typename T>
 class BoundedQueue {
 public:
     explicit BoundedQueue(std::size_t capacity) : capacity_(capacity) {}
 
+    // Nonblocking alternative: false means full or closed.
     bool TryPush(T value)
     {
         std::lock_guard<std::mutex> lock(mutex_);
@@ -34,6 +36,7 @@ public:
         return true;
     }
 
+    // Apply backpressure instead of dropping profiling records when the queue is full.
     bool Push(T value)
     {
         std::unique_lock<std::mutex> lock(mutex_);
@@ -46,6 +49,7 @@ public:
         return true;
     }
 
+    // Return false only after Close() and after all accepted items have been consumed.
     bool Pop(T& value)
     {
         std::unique_lock<std::mutex> lock(mutex_);
@@ -57,6 +61,14 @@ public:
         queue_.pop_front();
         writable_.notify_one();
         return true;
+    }
+
+    // Only after the previous consumer has joined and no producers remain.
+    void Reset()
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        queue_.clear();
+        closed_ = false;
     }
 
     void Close()
@@ -76,6 +88,6 @@ private:
     bool closed_ = false;
 };
 
-} // namespace aclpti::data::detail
+} // namespace aclpti::data
 
 #endif // NPU_TOOLS_NPU_COMPUTE_SRC_ACL_PTI_DATA_BOUNDED_QUEUE_H

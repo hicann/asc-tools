@@ -15,7 +15,7 @@
 #define NPU_TOOLS_NPU_COMPUTE_SRC_ACL_PTI_PROFILING_RANGE_PROFILER_H
 
 #include "aclpti/aclpti_range_profiler.h"
-#include "acl_pti/data/module.h"
+#include "acl_pti/data/profiling_data_manager.h"
 #include "injection/injection_hook.h"
 #include "replay_memory.h"
 
@@ -80,7 +80,7 @@ private:
     aclptiBlockResultMode blockResult_ = ACLPTI_BLOCK_RESULT_DISABLED;
     bool collectPipeline_ = false;
     bool collectPcSampling_ = false;
-    data::Module dataModule_;
+    data::ProfilingDataManager& dataManager_ = data::ProfilingDataManager::Instance();
 };
 
 } // namespace aclpti::profiling

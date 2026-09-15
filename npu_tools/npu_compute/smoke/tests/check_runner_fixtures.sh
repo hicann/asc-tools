@@ -52,6 +52,9 @@ mode=${NPU_COMPUTE_FIXTURE_MODE:-pass}
 
 if [[ ${1:-} == --list-sections ]]; then
     case ${mode} in
+        pipeline_*)
+            printf '%s\n' "${baseline[@]}" Pipeline
+            ;;
         list_missing)
             printf '%s\n' PipeUtilization Memory MemoryL0 L2Cache FutureSection
             ;;
@@ -100,6 +103,12 @@ fi
 for section in "${baseline[@]}"; do
     printf '"metric,name",value\n"%s,fixture",1\n' "${section}" > "${data_dir}/${section}.csv"
 done
+rm -f -- "${data_dir}/PipeTrace.json"
+case ${mode} in
+    pipeline_valid) printf '{"traceEvents":[{"ph":"X","ts":0,"dur":1}]}\n' > "${data_dir}/PipeTrace.json" ;;
+    pipeline_empty) printf '{"traceEvents":[]}\n' > "${data_dir}/PipeTrace.json" ;;
+    pipeline_invalid) printf '{"traceEvents":null}\n' > "${data_dir}/PipeTrace.json" ;;
+esac
 case ${case_id} in
     vector_add)
         printf 'block_id,sub_block_id,value\n0,vector0,1\n0,vector0,2\n' \
@@ -298,6 +307,12 @@ expect_case_failure()
 expect_case_failure list_missing 'required Section is unavailable: MemoryUB'
 expect_case_failure list_duplicate 'duplicate Section ID: Memory'
 expect_case_failure list_blank 'blank Section ID'
+for trace_mode in pipeline_valid pipeline_empty; do
+    run_case_fixture "${trace_mode}" simt_hello "${fixture_root}/${trace_mode}.out" || fail "${trace_mode} rejected"
+done
+expect_case_failure pipeline_missing 'missing or empty Pipeline trace:' simt_hello
+expect_case_failure pipeline_invalid 'invalid Pipeline trace:' simt_hello
+
 expect_case_failure list_failure 'npu-compute --list-sections failed with status 19'
 expect_case_failure header_only 'CSV requires a header and data row'
 expect_case_failure mismatched_fields 'CSV field count mismatch'

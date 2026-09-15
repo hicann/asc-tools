@@ -11,7 +11,12 @@
 
 #include <map>
 
-namespace aclpti::data::detail {
+namespace aclpti::data {
+uint32_t ReadLittleEndianWord(const uint8_t* bytes)
+{
+    return uint32_t(bytes[0]) | (uint32_t(bytes[1]) << 8U) | (uint32_t(bytes[2]) << 16U) | (uint32_t(bytes[3]) << 24U);
+}
+
 namespace {
 
 constexpr std::size_t kTaskLogSize = 32;
@@ -22,6 +27,7 @@ constexpr uint32_t kTaskEndFunction = 0x01U;
 constexpr uint32_t kBlockStartFunction = 0x24U;
 constexpr uint32_t kBlockEndFunction = 0x25U;
 
+// Explicit little-endian reads avoid alignment and native-struct layout assumptions.
 uint32_t Word(const std::byte* data, std::size_t index)
 {
     const std::byte* bytes = data + index * sizeof(uint32_t);
@@ -39,18 +45,17 @@ uint64_t Counter(const std::byte* data, std::size_t lowWord)
 
 } // namespace
 
-ResultOr<DecodedRecord> DecodeRawRecord(const std::byte* data, std::size_t size, uint64_t recordIndex)
+DecodeResult DecodeRawRecord(const std::byte* data, std::size_t size, uint64_t recordIndex)
 {
     PmuSlots noEvents{};
     noEvents.fill(kInvalidPmuEvent);
     return DecodeRawRecord(data, size, recordIndex, noEvents);
 }
 
-ResultOr<DecodedRecord> DecodeRawRecord(
-    const std::byte* data, std::size_t size, uint64_t recordIndex, const PmuSlots& pmuEventIds)
+DecodeResult DecodeRawRecord(const std::byte* data, std::size_t size, uint64_t recordIndex, const PmuSlots& pmuEventIds)
 {
     if (data == nullptr || (size != kTaskLogSize && size != kPmuRecordSize)) {
-        return ResultOr<DecodedRecord>(ACLPTI_ERROR_INVALID_RAW_DATA);
+        return DecodeResult(ACLPTI_ERROR_INVALID_RAW_DATA);
     }
 
     const uint32_t function = Word(data, 0) & 0x3fU;
@@ -60,7 +65,7 @@ ResultOr<DecodedRecord> DecodeRawRecord(
     if (size == kTaskLogSize) {
         if ((Word(data, 0) >> 16U) != kPmuMagic || (function != kTaskStartFunction && function != kTaskEndFunction &&
                                                     function != kBlockStartFunction && function != kBlockEndFunction)) {
-            return ResultOr<DecodedRecord>(ACLPTI_ERROR_DECODE);
+            return DecodeResult(ACLPTI_ERROR_DECODE);
         }
 
         TaskLog32 record{};
@@ -74,12 +79,12 @@ ResultOr<DecodedRecord> DecodeRawRecord(
             record.coreType = (Word(data, 5) & 1U) == 0 ? ACLPTI_CORE_TYPE_AIC : ACLPTI_CORE_TYPE_AIV;
             record.coreTypeId = static_cast<uint8_t>((Word(data, 5) >> 1U) & 0x7fU);
         }
-        return ResultOr<DecodedRecord>(DecodedRecord{recordIndex, record});
+        return DecodeResult(DecodedRecord{recordIndex, record});
     }
 
     if ((Word(data, 0) >> 16U) != kPmuMagic ||
         (function != kBlockPmuFunctionType && function != kTaskPmuFunctionType)) {
-        return ResultOr<DecodedRecord>(ACLPTI_ERROR_DECODE);
+        return DecodeResult(ACLPTI_ERROR_DECODE);
     }
 
     PmuRecord128 record{};
@@ -98,6 +103,7 @@ ResultOr<DecodedRecord> DecodeRawRecord(
         long double sum = 0.0L;
         std::size_t count = 0;
     };
+    // Repeated event IDs occupy multiple hardware slots; average them instead of double counting.
     std::map<uint32_t, EventAccumulator> eventValues;
     for (std::size_t index = 0; index < kMaxPmuSlots; ++index) {
         const uint32_t eventId = pmuEventIds[index];
@@ -112,7 +118,7 @@ ResultOr<DecodedRecord> DecodeRawRecord(
         record.pmuValues.emplace(
             eventId, static_cast<double>(accumulator.sum / static_cast<long double>(accumulator.count)));
     }
-    return ResultOr<DecodedRecord>(DecodedRecord{recordIndex, record});
+    return DecodeResult(DecodedRecord{recordIndex, record});
 }
 
-} // namespace aclpti::data::detail
+} // namespace aclpti::data

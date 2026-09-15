@@ -13,7 +13,7 @@ set -euo pipefail
 
 npu_compute_case_smoke_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 readonly npu_compute_case_smoke_dir
-readonly npu_compute_baseline_sections=(PipeUtilization Memory MemoryL0 MemoryUB L2Cache)
+readonly npu_compute_baseline_sections=(PipeUtilization Memory MemoryL0 MemoryUB L2Cache Pipeline)
 declare -a sections=()
 declare -a section_args=()
 
@@ -88,6 +88,28 @@ build_section_args()
     for section in "${sections[@]}"; do
         section_args+=(--section "${section}")
     done
+}
+
+validate_pipeline_trace()
+{
+    local trace_path=$1
+    if [[ ! -f "${trace_path}" || ! -s "${trace_path}" || -L "${trace_path}" ]]; then
+        printf 'missing or empty Pipeline trace: %s\n' "${trace_path}" >&2
+        return 1
+    fi
+    python3 - "${trace_path}" <<'PYTRACE'
+import json
+import pathlib
+import sys
+
+path = pathlib.Path(sys.argv[1])
+try:
+    trace = json.loads(path.read_text())
+    if not isinstance(trace, dict) or not isinstance(trace.get("traceEvents"), list):
+        raise ValueError("traceEvents must be an array")
+except (OSError, ValueError) as error:
+    sys.exit(f"invalid Pipeline trace: {path}: {error}")
+PYTRACE
 }
 
 validate_hardware_info()
@@ -375,6 +397,10 @@ run_case()
     validate_hardware_info "${hardware_info}"
 
     for section in "${sections[@]}"; do
+        if [[ "${section}" == Pipeline ]]; then
+            validate_pipeline_trace "${data_directory}/PipeTrace.json"
+            continue
+        fi
         csv_path="${data_directory}/${section}.csv"
         if [[ ! -f "${csv_path}" || ! -s "${csv_path}" || -L "${csv_path}" ]]; then
             printf 'missing or empty Section CSV: %s\n' "${csv_path}" >&2

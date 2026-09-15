@@ -13,15 +13,17 @@
 #include "hardware/hardware_device_api.h"
 #include "report/report_writer.h"
 
+#include <boost/filesystem.hpp>
+#include <boost/system/error_code.hpp>
+
 #include <algorithm>
 #include <array>
 #include <cerrno>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
-#include <boost/filesystem.hpp>
-#include <boost/system/error_code.hpp>
 #include <memory>
+#include <set>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -31,7 +33,7 @@
 namespace npucompute {
 namespace {
 
-constexpr std::array<aclptiCallbackId, 7> kHardwareInfoTriggerCallbackIds = {
+constexpr std::array<aclptiCallbackId, 8> kHardwareInfoTriggerCallbackIds = {
     ACLPTI_RUNTIME_CBID_aclrtLaunchKernel,
     ACLPTI_RUNTIME_CBID_aclrtLaunchKernelWithHostArgs,
     ACLPTI_RUNTIME_CBID_aclrtLaunchSIMTKernelWithHostArgs,
@@ -39,6 +41,7 @@ constexpr std::array<aclptiCallbackId, 7> kHardwareInfoTriggerCallbackIds = {
     ACLPTI_RUNTIME_CBID_aclrtLaunchSIMTKernelWithArgsArray,
     ACLPTI_RUNTIME_CBID_aclrtBinaryGetFunction,
     ACLPTI_RUNTIME_CBID_aclrtBinaryUnLoad,
+    ACLPTI_RUNTIME_CBID_aclrtGetFuncBySymbol,
 };
 constexpr double kMsopprofA5FallbackFrequencyMhz = 1650.0;
 
@@ -230,6 +233,15 @@ int NpuComputeRuntime::Initialize()
         csv_config_.aivFrequencyMhz = parsed;
         csv_frequency_override_ = true;
     }
+    pipeline_enabled_ = section_config_.PipelineEnabled();
+    if (pipeline_enabled_) {
+        if (CreatePipeTraceProcessStaging(outputDirectory, &pipeline_process_directory_, &error) != ACLPTI_SUCCESS ||
+            WritePipeTraceManifest(pipeline_process_directory_, "collecting", ACLPTI_SUCCESS, pipeline_fragments_) !=
+                ACLPTI_SUCCESS) {
+            std::fprintf(stderr, "[libnpu-compute] initialize PipeTrace staging failed: %s\n", error.c_str());
+            return kInitializeFailed;
+        }
+    }
     npucompute::detail::DebugLog(
         "npu-compute", "PMU data level configured: %s",
         csv_config_.pmuDataLevel == PmuDataLevel::Task ? "task" : "block");
@@ -340,10 +352,25 @@ int NpuComputeRuntime::ShutdownAfterPtiDrain()
         std::lock_guard<std::mutex> lock(mutex_);
         consumer = std::move(pmu_consumer_);
     }
-    if (consumer == nullptr) {
-        return 0;
+    aclptiResult status = ACLPTI_SUCCESS;
+    if (consumer != nullptr) {
+        status = consumer->ShutdownAndDrain();
     }
-    return consumer->ShutdownAndDrain() == ACLPTI_SUCCESS ? 0 : kInitializeFailed;
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (pipeline_enabled_ && !pipeline_finalized_) {
+        if (status == ACLPTI_SUCCESS && pipeline_fragments_.empty()) {
+            status = ACLPTI_ERROR_TRACE_INCOMPLETE;
+        }
+        const std::string state = status == ACLPTI_SUCCESS ? "complete" : "failed";
+        const aclptiResult manifestStatus = WritePipeTraceManifest(
+            pipeline_process_directory_, state, status, pipeline_fragments_,
+            status == ACLPTI_SUCCESS ? std::string() : "pipeline collection or processing failed");
+        if (manifestStatus != ACLPTI_SUCCESS) {
+            status = manifestStatus;
+        }
+        pipeline_finalized_ = true;
+    }
+    return status == ACLPTI_SUCCESS ? 0 : kInitializeFailed;
 }
 
 aclptiResult NpuComputeRuntime::ProcessPmuData(std::shared_ptr<const aclptiProfilingDataResult> result)
@@ -382,10 +409,81 @@ aclptiResult NpuComputeRuntime::ProcessPmuData(std::shared_ptr<const aclptiProfi
         metadata.ratedAivFrequencyMhz = ratedAiv;
     }
     const aclptiResult csvStatus = WritePmuReport(*result, section_config_.Sections(), csvConfig, metadata);
-    if (csvStatus != ACLPTI_SUCCESS) {
-        return csvStatus;
+    aclptiResult firstStatus = result->status == ACLPTI_SUCCESS ? csvStatus : result->status;
+
+    if (pipeline_enabled_) {
+        biu_clock_config_.aicFrequencyHz = csvConfig.aicFrequencyMhz * 1000000.0;
+        biu_clock_config_.aivFrequencyHz = csvConfig.aivFrequencyMhz * 1000000.0;
+        DynamicHardwareDeviceApi deviceApi;
+        bool pipelineReplaySeen = false;
+        for (const auto& [replayId, replay] : result->pipelineData) {
+            pipelineReplaySeen = true;
+            const std::string fragmentName = "result-" + std::to_string(pipeline_result_sequence_) + "-device-" +
+                                             std::to_string(replay.deviceId) + "-replay-" + std::to_string(replayId) +
+                                             ".json";
+            PipeTraceWriter writer;
+            std::string writerError;
+            aclptiResult parseStatus = writer.Begin(pipeline_process_directory_ / fragmentName, &writerError);
+            BiuParseStats stats;
+            if (parseStatus == ACLPTI_SUCCESS &&
+                !deviceApi.GetSyscntFrequencyHz(replay.deviceId, &biu_clock_config_.syscntFrequencyHz)) {
+                std::fprintf(
+                    stderr,
+                    "[libnpu-compute] failed to query positive device oscillator frequency "
+                    "(halGetDeviceInfo INFO_TYPE_DEV_OSC_FREQUE) for device %d\n",
+                    replay.deviceId);
+                parseStatus = ACLPTI_ERROR_INVALID_PARAMETER;
+            }
+            biu_clock_config_.source = "halGetDeviceInfo device oscillator and device AI-core frequencies";
+            if (parseStatus == ACLPTI_SUCCESS) {
+                parseStatus = ParsePipelineReplay(
+                    replayId, replay, biu_clock_config_,
+                    [&writer](const BiuInterval& interval) { return writer.Append(interval); }, &stats);
+            }
+            if (stats.incompleteIntervalCount != 0) {
+                std::fprintf(
+                    stderr,
+                    "[libnpu-compute] WARNING: BIU device=%d replay=%llu: skipped %llu incomplete intervals "
+                    "(missing start or end); retained %llu complete intervals. Pipeline trace may be partial.\n",
+                    replay.deviceId, static_cast<unsigned long long>(replayId),
+                    static_cast<unsigned long long>(stats.incompleteIntervalCount),
+                    static_cast<unsigned long long>(stats.intervalCount));
+            }
+            if (parseStatus == ACLPTI_SUCCESS) {
+                parseStatus = writer.Commit();
+            }
+            if (parseStatus == ACLPTI_SUCCESS) {
+                pipeline_fragments_.push_back(PipeTraceFragmentInfo{
+                    pipeline_result_sequence_,
+                    replayId,
+                    replay.deviceId,
+                    fragmentName,
+                    writer.EventCount(),
+                });
+            } else {
+                writer.Abort();
+            }
+            npucompute::detail::DebugLog(
+                "npu-compute",
+                "BIU replay processed: device=%d replay=%llu status=%d payloadBytes=%llu paddingBytes=%llu "
+                "intervals=%llu invalid=%llu incomplete=%llu",
+                replay.deviceId, static_cast<unsigned long long>(replayId), static_cast<int>(parseStatus),
+                static_cast<unsigned long long>(stats.payloadBytes),
+                static_cast<unsigned long long>(stats.paddingBytes),
+                static_cast<unsigned long long>(stats.intervalCount),
+                static_cast<unsigned long long>(stats.invalidRecordCount),
+                static_cast<unsigned long long>(stats.incompleteIntervalCount));
+            if (firstStatus == ACLPTI_SUCCESS && parseStatus != ACLPTI_SUCCESS) {
+                firstStatus = parseStatus;
+            }
+        }
+        if (!pipelineReplaySeen && firstStatus == ACLPTI_SUCCESS) {
+            firstStatus = ACLPTI_ERROR_TRACE_INCOMPLETE;
+        }
+        ++pipeline_result_sequence_;
     }
-    return ACLPTI_SUCCESS;
+    // Preserve the source failure while still writing data from successful replays.
+    return firstStatus;
 }
 
 void NpuComputeRuntime::HardwareInfoTriggerCallback(
@@ -404,8 +502,9 @@ void NpuComputeRuntime::HardwareInfoTriggerCallback(
     } catch (...) {
         std::fprintf(stderr, "[libnpu-compute] Kernel metadata collection failed\n");
     }
-    const bool isLaunch =
-        cbid != ACLPTI_RUNTIME_CBID_aclrtBinaryGetFunction && cbid != ACLPTI_RUNTIME_CBID_aclrtBinaryUnLoad;
+    const bool isLaunch = cbid != ACLPTI_RUNTIME_CBID_aclrtBinaryGetFunction &&
+                          cbid != ACLPTI_RUNTIME_CBID_aclrtBinaryUnLoad &&
+                          cbid != ACLPTI_RUNTIME_CBID_aclrtGetFuncBySymbol;
     const bool accepted =
         isLaunch && callbackData->callbackSite == ACLPTI_API_EXIT && callbackData->retval == ACL_SUCCESS;
     if (DebugEnabled()) {

@@ -24,6 +24,7 @@ enum class ReplayMode {
 struct CliConfig {
     bool show_help = false;
     bool list_sections = false;
+    bool collect_pipeline = false;
     std::vector<std::string> sections;
     ReplayMode replay_mode = ReplayMode::Kernel;
     bool replay_mode_specified = false;

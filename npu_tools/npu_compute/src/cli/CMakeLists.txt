@@ -16,6 +16,7 @@ add_library(npu_compute_launcher_core STATIC
   launch/process_launcher.cpp
   launch/staging_directory.cpp
   report/collection_file_validator.cpp
+  report/pipe_trace_finalizer.cpp
   report/rep_decoder.cpp
   report/rep_directory_packer.cpp
   report/rep_encoder.cpp

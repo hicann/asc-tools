@@ -17,8 +17,8 @@
 namespace npucompute {
 namespace {
 
-constexpr std::array<const char*, 5> kSupportedSections = {
-    "PipeUtilization", "Memory", "MemoryL0", "MemoryUB", "L2Cache",
+constexpr std::array<const char*, 6> kSupportedSections = {
+    "PipeUtilization", "Memory", "MemoryL0", "MemoryUB", "L2Cache", "Pipeline",
 };
 
 bool Fail(const std::string& message, std::string* error)
@@ -78,6 +78,8 @@ bool SectionConfig::LoadFromEnvironment(const char* name, std::string* error)
         return Fail("section count is out of range", error);
     }
     sections_ = std::move(parsed_sections);
+    const bool pipelineSection = std::find(sections_.begin(), sections_.end(), "Pipeline") != sections_.end();
+    sections_.erase(std::remove(sections_.begin(), sections_.end(), "Pipeline"), sections_.end());
     section_pointers_.clear();
     section_pointers_.reserve(sections_.size());
     for (const std::string& section : sections_) {
@@ -86,7 +88,15 @@ bool SectionConfig::LoadFromEnvironment(const char* name, std::string* error)
     params_.sections = section_pointers_.data();
     params_.numSections = section_pointers_.size();
     params_.blockResult = ACLPTI_BLOCK_RESULT_ALL;
-    params_.collectPipeline = false;
+    const char* pipeline = std::getenv("NPU_COMPUTE_PIPELINE");
+    if (pipeline == nullptr || pipeline[0] == '\0' || std::string(pipeline) == "0") {
+        params_.collectPipeline = pipelineSection;
+    } else if (std::string(pipeline) == "1") {
+        params_.collectPipeline = true;
+    } else {
+        Reset();
+        return Fail("NPU_COMPUTE_PIPELINE must be 0 or 1", error);
+    }
     params_.collectPcSampling = false;
     return true;
 }
@@ -102,10 +112,18 @@ std::string SectionConfig::JoinedSections() const
         }
         joined += section;
     }
+    if (params_.collectPipeline) {
+        if (!joined.empty()) {
+            joined += ',';
+        }
+        joined += "Pipeline";
+    }
     return joined;
 }
 
 const std::vector<std::string>& SectionConfig::Sections() const { return sections_; }
+
+bool SectionConfig::PipelineEnabled() const { return params_.collectPipeline; }
 
 void SectionConfig::Reset()
 {

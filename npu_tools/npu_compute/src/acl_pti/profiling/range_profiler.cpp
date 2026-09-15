@@ -116,14 +116,14 @@ void LogMsprofConfig(const MsprofConfig& config, std::size_t roundId)
 
 aclptiResult RangeProfiler::Initialize()
 {
-    const aclptiResult initializeStatus = dataModule_.Initialize();
+    const aclptiResult initializeStatus = dataManager_.Initialize();
     npucompute::detail::DebugLog(
         "aclpti", "RangeProfiler data module init result=%d", static_cast<std::int32_t>(initializeStatus));
     if (initializeStatus != ACLPTI_SUCCESS) {
         npucompute::detail::DebugLog("aclpti", "RangeProfiler data module initialization failed");
         return initializeStatus;
     }
-    MsprofRawDataCallback callback = dataModule_.GetRawDataCallback();
+    MsprofRawDataCallback callback = dataManager_.GetRawDataCallback();
     if (callback == nullptr) {
         npucompute::detail::DebugLog("aclpti", "RangeProfiler callback registration missing callback");
         Shutdown();
@@ -141,7 +141,7 @@ aclptiResult RangeProfiler::Initialize()
 
 aclptiResult RangeProfiler::Shutdown()
 {
-    const aclptiResult status = dataModule_.ForceShutdown();
+    const aclptiResult status = dataManager_.ForceShutdown();
     npucompute::detail::DebugLog(
         "aclpti", "RangeProfiler data module shutdown result=%d", static_cast<std::int32_t>(status));
     if (status != ACLPTI_SUCCESS) {
@@ -195,6 +195,9 @@ aclptiResult RangeProfiler::SetConfig(const aclptiRangeProfilerSetConfigParams* 
         pmuEvents_ = std::move(events);
         blockResult_ = params->blockResult;
         collectPipeline_ = params->collectPipeline;
+        if (collectPipeline_) {
+            npucompute::detail::DebugLog("aclpti", "selected section name=Pipeline");
+        }
         collectPcSampling_ = params->collectPcSampling;
         npucompute::detail::DebugLog(
             "aclpti", "requested sections=%zu events=%zu block=%d pipeline=%d pcSampling=%d", params->numSections,
@@ -350,7 +353,7 @@ aclptiResult RangeProfiler::StartProfilingRound(
 {
     ConfigureProfilingRound(round, roundId, deviceId, config);
 
-    const aclptiResult prepareStatus = dataModule_.PrepareReplay(config->prepareInfo);
+    const aclptiResult prepareStatus = dataManager_.PrepareReplay(config->prepareInfo);
     if (prepareStatus != ACLPTI_SUCCESS) {
         npucompute::detail::DebugLog(
             "aclpti", "error operation=replay_prepare status=%d replay=%llu round=%zu", static_cast<int>(prepareStatus),
@@ -363,8 +366,8 @@ aclptiResult RangeProfiler::StartProfilingRound(
     LogMsprofConfig(config->msprof, roundId);
     const int startResult = MsprofStart(kMsprofCollectionType, &config->msprof, sizeof(config->msprof));
     if (startResult != 0) {
-        dataModule_.RecordReplayStatus({roundId, ACLPTI_ERROR_RESULT_UNRELIABLE});
-        dataModule_.ReleaseReplay(roundId);
+        dataManager_.RecordReplayStatus({roundId, ACLPTI_ERROR_RESULT_UNRELIABLE});
+        dataManager_.ReleaseReplay(roundId);
         npucompute::detail::DebugLog(
             "aclpti", "error operation=prof_start status=%d replay=%llu round=%zu", startResult,
             static_cast<unsigned long long>(roundId), roundId);
@@ -390,14 +393,14 @@ aclptiResult RangeProfiler::FinishProfilingRound(
                                                        ACLPTI_SUCCESS;
     const data::ReplayStopInfo stopInfo{round, roundStatus};
     npucompute::detail::DebugLog("aclpti", "record replay status round=%zu", round);
-    const data::ReplayResult replayResult = dataModule_.RecordReplayStatus(stopInfo);
+    const data::ReplayResult replayResult = dataManager_.RecordReplayStatus(stopInfo);
     npucompute::detail::DebugLog(
         "aclpti", "record replay status result round=%zu result=%d copiedRecords=%llu copiedBytes=%llu", round,
         static_cast<int>(replayResult.status),
         static_cast<unsigned long long>(replayResult.callbackStats.copiedRecordCount),
         static_cast<unsigned long long>(replayResult.callbackStats.copiedBytes));
     npucompute::detail::DebugLog("aclpti", "release replay round=%zu", round);
-    const aclptiResult releaseStatus = dataModule_.ReleaseReplay(round);
+    const aclptiResult releaseStatus = dataManager_.ReleaseReplay(round);
     npucompute::detail::DebugLog(
         "aclpti", "release replay result round=%zu result=%d", round, static_cast<int>(releaseStatus));
 

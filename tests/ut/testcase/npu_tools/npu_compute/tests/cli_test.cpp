@@ -80,6 +80,21 @@ int TestCollectionExport()
     return 0;
 }
 
+int TestPipelineOption()
+{
+    CliConfig config;
+    std::vector<std::string> errors;
+    CHECK(Parse({"npu-compute", "--section", "Pipeline", "./app"}, &config, &errors));
+    CHECK(errors.empty());
+    CHECK(config.collect_pipeline);
+    CHECK(config.sections == std::vector<std::string>{"Pipeline"});
+    CHECK(Parse({"npu-compute", "--section=Pipeline", "--section", "Memory", "./app"}, &config, &errors));
+    CHECK(config.collect_pipeline);
+    CHECK(!Parse({"npu-compute", "--pipeline", "--section", "Memory", "./app"}, &config, &errors));
+    CHECK(errors == std::vector<std::string>({"unknown option '--pipeline'. Use --help to see supported options."}));
+    return 0;
+}
+
 int TestBusinessExitCodes()
 {
     CHECK(npucompute::cli::kUsageErrorExitCode == 2);
@@ -347,9 +362,9 @@ int TestHelpText()
 
 int main()
 {
-    if (TestBusinessExitCodes() != 0 || TestCollectionExport() != 0 || TestImportExportParsing() != 0 ||
-        TestInlineLongOptionValues() != 0 || TestForceOptionsAreRejected() != 0 || TestExistingCliBehavior() != 0 ||
-        TestHelpWithoutErrors() != 0 || TestHelpReportsAllOptionErrors() != 0 ||
+    if (TestBusinessExitCodes() != 0 || TestCollectionExport() != 0 || TestPipelineOption() != 0 ||
+        TestImportExportParsing() != 0 || TestInlineLongOptionValues() != 0 || TestForceOptionsAreRejected() != 0 ||
+        TestExistingCliBehavior() != 0 || TestHelpWithoutErrors() != 0 || TestHelpReportsAllOptionErrors() != 0 ||
         TestHelpAcceptsListSectionsCombination() != 0 || TestHelpMatchingAndProgramBoundary() != 0 ||
         TestMissingValueAndDuplicateState() != 0 || TestNullArgumentsAndStateReset() != 0 || TestHelpText() != 0) {
         return 1;

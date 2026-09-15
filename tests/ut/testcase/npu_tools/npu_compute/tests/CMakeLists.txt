@@ -22,7 +22,10 @@ add_library(acl_pti_test SHARED
   ${NPU_COMPUTE_SOURCE_DIR}/src/acl_pti/callback/api.cpp
   ${NPU_COMPUTE_SOURCE_DIR}/src/acl_pti/callback/dispatcher.cpp
   ${NPU_COMPUTE_SOURCE_DIR}/src/acl_pti/data/api.cpp
-  ${NPU_COMPUTE_SOURCE_DIR}/src/acl_pti/data/module.cpp
+  ${NPU_COMPUTE_SOURCE_DIR}/src/acl_pti/data/profiling_data_manager.cpp
+  ${NPU_COMPUTE_SOURCE_DIR}/src/acl_pti/data/data_processor.cpp
+  ${NPU_COMPUTE_SOURCE_DIR}/src/acl_pti/data/data_receiver.cpp
+  ${NPU_COMPUTE_SOURCE_DIR}/src/acl_pti/data/replay_data_aggregation.cpp
   ${NPU_COMPUTE_SOURCE_DIR}/src/acl_pti/data/raw_data_decoder.cpp
   ${NPU_COMPUTE_SOURCE_DIR}/src/acl_pti/profiling/api.cpp
   ${NPU_COMPUTE_SOURCE_DIR}/src/acl_pti/profiling/range_profiler.cpp
@@ -30,7 +33,9 @@ add_library(acl_pti_test SHARED
   ${NPU_COMPUTE_SOURCE_DIR}/src/acl_pti/profiling/replay_runtime.cpp
   ${NPU_COMPUTE_SOURCE_DIR}/src/acl_pti/handler/runtime_api_handlers.cpp
 )
-target_compile_definitions(acl_pti_test PRIVATE NPU_COMPUTE_ENABLE_TEST_CONTROLS=1)
+target_compile_definitions(acl_pti_test PRIVATE
+  NPU_COMPUTE_ENABLE_TEST_CONTROLS=1
+)
 target_include_directories(acl_pti_test PRIVATE "${NPU_COMPUTE_SOURCE_DIR}/src")
 target_link_libraries(acl_pti_test
   PUBLIC npu_compute_test_headers
@@ -44,6 +49,7 @@ set_target_properties(acl_pti_test PROPERTIES
 npu_compute_set_test_output(acl_pti_test)
 
 set(NPU_COMPUTE_TEST_RUNTIME_SOURCES
+  ${NPU_COMPUTE_SOURCE_DIR}/src/compute/biu/biu_pipeline.cpp
   ${NPU_COMPUTE_SOURCE_DIR}/src/compute/hardware/hardware_device_api.cpp
   ${NPU_COMPUTE_SOURCE_DIR}/src/compute/hardware/hardware_info_collector.cpp
   ${NPU_COMPUTE_SOURCE_DIR}/src/compute/hardware/hardware_info_device.cpp
@@ -83,6 +89,7 @@ npu_compute_set_test_output(npu_compute_test)
 
 add_library(npu_compute_launcher_core_test STATIC
   ${NPU_COMPUTE_SOURCE_DIR}/src/cli/report/collection_file_validator.cpp
+  ${NPU_COMPUTE_SOURCE_DIR}/src/cli/report/pipe_trace_finalizer.cpp
   ${NPU_COMPUTE_SOURCE_DIR}/src/cli/config/config.cpp
   ${NPU_COMPUTE_SOURCE_DIR}/src/cli/import/import_output_directory.cpp
   ${NPU_COMPUTE_SOURCE_DIR}/src/cli/import/imported_profile_results.cpp
@@ -338,13 +345,19 @@ target_link_libraries(acl_prof_api_stub_test PRIVATE acl_prof_api_stub)
 add_test(NAME npu_compute.prof_api_stub COMMAND acl_prof_api_stub_test)
 
 add_executable(acl_pti_data_module_test pti_data_module_impl_test.cpp)
-target_compile_definitions(acl_pti_data_module_test PRIVATE NPU_COMPUTE_ENABLE_TEST_CONTROLS=1)
+target_compile_definitions(acl_pti_data_module_test PRIVATE
+  NPU_COMPUTE_ENABLE_TEST_CONTROLS=1
+)
 target_sources(acl_pti_data_module_test PRIVATE
   ${NPU_COMPUTE_SOURCE_DIR}/src/acl_pti/data/api.cpp
-  ${NPU_COMPUTE_SOURCE_DIR}/src/acl_pti/data/module.cpp
+  ${NPU_COMPUTE_SOURCE_DIR}/src/acl_pti/data/profiling_data_manager.cpp
+  ${NPU_COMPUTE_SOURCE_DIR}/src/acl_pti/data/data_processor.cpp
+  ${NPU_COMPUTE_SOURCE_DIR}/src/acl_pti/data/data_receiver.cpp
+  ${NPU_COMPUTE_SOURCE_DIR}/src/acl_pti/data/replay_data_aggregation.cpp
   ${NPU_COMPUTE_SOURCE_DIR}/src/acl_pti/data/raw_data_decoder.cpp
 )
 target_include_directories(acl_pti_data_module_test BEFORE PRIVATE
+  ${NPU_COMPUTE_SOURCE_DIR}/src/compute
   ${NPU_COMPUTE_SOURCE_DIR}/src
   ${NPU_TOOLS_TEST_ROOT}/injection/tests/stubs/runtime/include
   ${NPU_TOOLS_TEST_ROOT}/injection/tests/stubs/prof_api/include
@@ -409,8 +422,25 @@ target_include_directories(npu_compute_kernel_metadata_collector_test PRIVATE
   ${NPU_COMPUTE_SOURCE_DIR}/src/compute
   ${NPU_COMPUTE_SOURCE_DIR}/src
 )
-target_link_libraries(npu_compute_kernel_metadata_collector_test PRIVATE npu_compute_test_headers)
+target_link_libraries(npu_compute_kernel_metadata_collector_test PRIVATE npu_compute_test_headers ${CMAKE_DL_LIBS})
 add_test(NAME npu_compute.kernel_metadata_collector COMMAND npu_compute_kernel_metadata_collector_test)
+add_executable(npu_compute_biu_pipeline_test
+  biu_pipeline_test.cpp
+  ${NPU_COMPUTE_SOURCE_DIR}/src/compute/biu/biu_pipeline.cpp
+)
+target_include_directories(npu_compute_biu_pipeline_test PRIVATE
+  ${NPU_COMPUTE_SOURCE_DIR}/src/compute
+)
+target_link_libraries(npu_compute_biu_pipeline_test PRIVATE
+  acl_pti_test Boost::filesystem
+)
+add_test(NAME npu_compute.biu_pipeline COMMAND npu_compute_biu_pipeline_test)
+
+add_executable(npu_compute_pipe_trace_finalizer_test pipe_trace_finalizer_test.cpp)
+target_link_libraries(npu_compute_pipe_trace_finalizer_test PRIVATE
+  npu_compute_launcher_core_test Boost::filesystem
+)
+add_test(NAME npu_compute.pipe_trace_finalizer COMMAND npu_compute_pipe_trace_finalizer_test)
 
 add_executable(npu_compute_debug_log_test debug_log_test.cpp)
 target_include_directories(npu_compute_debug_log_test PRIVATE
@@ -518,6 +548,7 @@ add_test(NAME npu_compute.acl_pti_callback_stub
 )
 
 set(NPU_COMPUTE_RUNTIME_IMPLEMENTATION_SOURCES
+  ${NPU_COMPUTE_SOURCE_DIR}/src/compute/biu/biu_pipeline.cpp
   ${NPU_COMPUTE_SOURCE_DIR}/src/compute/hardware/hardware_device_api.cpp
   ${NPU_COMPUTE_SOURCE_DIR}/src/compute/hardware/hardware_info_collector.cpp
   ${NPU_COMPUTE_SOURCE_DIR}/src/compute/hardware/hardware_info_device.cpp

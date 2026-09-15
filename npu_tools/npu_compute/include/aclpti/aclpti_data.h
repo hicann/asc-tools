@@ -20,6 +20,7 @@
 #include <functional>
 #include <map>
 #include <memory>
+#include <tuple>
 #include <vector>
 
 enum aclptiCoreType : uint8_t {
@@ -110,14 +111,46 @@ struct aclptiRawDataChunk {
     std::vector<uint8_t> bytes;
 };
 
+enum class aclptiBiuCoreKind : uint8_t { Aic, Aiv0, Aiv1 };
+enum class aclptiBiuFormat : uint8_t { Unknown = 0, Chip6 = 1 };
+
+struct aclptiPipelineKey {
+    uint8_t groupId = 0;
+    aclptiBiuCoreKind coreKind = aclptiBiuCoreKind::Aic;
+
+    bool operator<(const aclptiPipelineKey& other) const
+    {
+        return std::tie(groupId, coreKind) < std::tie(other.groupId, other.coreKind);
+    }
+};
+
+struct aclptiReplayStats {
+    uint64_t receivedBytes = 0;
+    uint64_t acceptedBytes = 0;
+    uint64_t rejectedChunkCount = 0;
+    uint64_t failedRecordCount = 0;
+};
+
+// One BIU capture stream; replay ID is the key in the complete profiling result.
+struct aclptiPipelineData {
+    int32_t deviceId = -1;
+    aclptiResult status = ACLPTI_SUCCESS;
+    aclptiReplayStats stats;
+    aclptiBiuFormat format = aclptiBiuFormat::Unknown;
+    std::map<aclptiPipelineKey, std::vector<uint32_t>> channels;
+};
+
+// Complete collection for one original launch, including all of its profiling replays.
+// PMU events are merged before delivery; distinct original launches must never share a result.
 struct aclptiProfilingDataResult {
     aclptiResult status = ACLPTI_SUCCESS;
     std::map<uint16_t, std::vector<aclptiTaskLogRow>> taskLogs;
     std::map<aclptiBlockKey, std::vector<aclptiTaskLogRow>> blockLogs;
     std::map<aclptiBlockKey, aclptiPmuDataRow> pmuLogs;
     std::map<aclptiBlockKey, aclptiPmuDataRow> taskPmuLogs;
-    std::vector<aclptiRawDataChunk> pipelineData;
+    std::map<uint64_t, aclptiPipelineData> pipelineData;
     std::vector<aclptiRawDataChunk> pcSamplingData;
+    aclptiReplayStats stats; // Totals across the complete profiling collection.
     struct ErrorStats {
         uint64_t failedRecordCount = 0;
         std::map<uint64_t, uint64_t> failedRecordCountByReplay;

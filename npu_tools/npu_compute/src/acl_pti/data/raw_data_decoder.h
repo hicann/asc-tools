@@ -10,74 +10,19 @@
 #ifndef NPU_TOOLS_NPU_COMPUTE_SRC_ACL_PTI_DATA_RAW_DATA_DECODER_H
 #define NPU_TOOLS_NPU_COMPUTE_SRC_ACL_PTI_DATA_RAW_DATA_DECODER_H
 
-#include "acl_pti/data/module.h"
+#include "data_types.h"
 
-#include <array>
-#include <cstddef>
-#include <cstdint>
-#include <map>
-#include <optional>
-#include <utility>
-#include <variant>
+namespace aclpti::data {
 
-namespace aclpti::data::detail {
+// Caller must provide at least four readable bytes; alignment is unrestricted.
+uint32_t ReadLittleEndianWord(const uint8_t* bytes);
 
-constexpr uint8_t kBlockPmuFunctionType = 0x29U;
-constexpr uint8_t kTaskPmuFunctionType = 0x2aU;
+// Without slot configuration, decode metadata only and leave the PMU event map empty.
+DecodeResult DecodeRawRecord(const std::byte* data, std::size_t size, uint64_t recordIndex);
 
-template <typename T>
-class ResultOr {
-public:
-    explicit ResultOr(aclptiResult status) : status_(status) {}
-    explicit ResultOr(T value) : value_(std::move(value)) {}
-
-    bool Ok() const { return status_ == ACLPTI_SUCCESS && value_.has_value(); }
-    aclptiResult Status() const { return status_; }
-    const T& Value() const { return value_.value(); }
-
-private:
-    aclptiResult status_ = ACLPTI_SUCCESS;
-    std::optional<T> value_;
-};
-
-struct TaskLog32 {
-    uint8_t funcType;
-    uint16_t taskId;
-    uint16_t rtStreamId;
-    uint64_t systemCounter;
-    uint16_t blockId;
-    uint16_t subBlockId;
-    aclptiCoreType coreType;
-    uint8_t coreTypeId;
-};
-
-struct PmuRecord128 {
-    uint8_t funcType;
-    uint16_t taskId;
-    uint16_t rtStreamId;
-    uint64_t totalCycles;
-    uint64_t taskStartSystemCounter;
-    uint64_t taskEndSystemCounter;
-    bool overflow;
-    aclptiCoreType coreType;
-    uint8_t coreId;
-    uint16_t blockId;
-    uint16_t subBlockId;
-    std::map<uint32_t, double> pmuValues;
-};
-
-using DecodedPayload = std::variant<TaskLog32, PmuRecord128>;
-
-struct DecodedRecord {
-    uint64_t recordIndex;
-    DecodedPayload payload;
-};
-
-ResultOr<DecodedRecord> DecodeRawRecord(const std::byte* data, std::size_t size, uint64_t recordIndex);
-
-ResultOr<DecodedRecord> DecodeRawRecord(
+// Accepts exactly one 32-byte task log or 128-byte PMU record; never retains data.
+DecodeResult DecodeRawRecord(
     const std::byte* data, std::size_t size, uint64_t recordIndex, const PmuSlots& pmuEventIds);
-
-} // namespace aclpti::data::detail
+} // namespace aclpti::data
 
 #endif // NPU_TOOLS_NPU_COMPUTE_SRC_ACL_PTI_DATA_RAW_DATA_DECODER_H

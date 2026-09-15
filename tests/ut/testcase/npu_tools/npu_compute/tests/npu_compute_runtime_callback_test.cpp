@@ -40,7 +40,7 @@ namespace {
 constexpr char kSections[] = "PipeUtilization,Memory";
 constexpr char kHardwareInfoFile[] = "HardwareInfo.jsonl";
 constexpr char kDeviceCountFile[] = "device_count.calls";
-constexpr std::array<aclptiCallbackId, 7> kHardwareInfoTriggerCbids = {
+constexpr std::array<aclptiCallbackId, 8> kHardwareInfoTriggerCbids = {
     ACLPTI_RUNTIME_CBID_aclrtLaunchKernel,
     ACLPTI_RUNTIME_CBID_aclrtLaunchKernelWithHostArgs,
     ACLPTI_RUNTIME_CBID_aclrtLaunchSIMTKernelWithHostArgs,
@@ -48,6 +48,7 @@ constexpr std::array<aclptiCallbackId, 7> kHardwareInfoTriggerCbids = {
     ACLPTI_RUNTIME_CBID_aclrtLaunchSIMTKernelWithArgsArray,
     ACLPTI_RUNTIME_CBID_aclrtBinaryGetFunction,
     ACLPTI_RUNTIME_CBID_aclrtBinaryUnLoad,
+    ACLPTI_RUNTIME_CBID_aclrtGetFuncBySymbol,
 };
 using namespace std::chrono_literals;
 
@@ -97,6 +98,42 @@ bool SetScenarioEnvironment(const boost::filesystem::path& output)
 {
     return ::setenv("NPU_COMPUTE_OUTPUT", output.c_str(), 1) == 0 &&
            ::setenv("NPU_COMPUTE_SECTIONS", kSections, 1) == 0 && ::unsetenv("NPU_COMPUTE_PMU_LEVEL") == 0;
+}
+
+bool TestPipelineSection()
+{
+    const char* previous = std::getenv("NPU_COMPUTE_PIPELINE");
+    const bool hadPrevious = previous != nullptr;
+    const std::string saved = previous == nullptr ? "" : previous;
+    npucompute::SectionConfig config;
+    std::string error;
+    CHECK(setenv("NPU_COMPUTE_PIPELINE", "0", 1) == 0);
+    CHECK(setenv("NPU_COMPUTE_TEST_SECTIONS", "Pipeline", 1) == 0);
+    CHECK(config.LoadFromEnvironment("NPU_COMPUTE_TEST_SECTIONS", &error));
+    CHECK(config.PipelineEnabled());
+    CHECK(config.Params()->collectPipeline);
+    CHECK(config.Params()->numSections == 0);
+    CHECK(config.Sections().empty());
+    CHECK(config.JoinedSections() == "Pipeline");
+    CHECK(setenv("NPU_COMPUTE_TEST_SECTIONS", "Memory,Pipeline,Pipeline", 1) == 0);
+    CHECK(config.LoadFromEnvironment("NPU_COMPUTE_TEST_SECTIONS", &error));
+    CHECK(config.PipelineEnabled());
+    CHECK(config.Params()->numSections == 1);
+    CHECK(std::string(config.Params()->sections[0]) == "Memory");
+    CHECK(config.Sections() == std::vector<std::string>{"Memory"});
+    CHECK(config.JoinedSections() == "Memory,Pipeline");
+    CHECK(setenv("NPU_COMPUTE_TEST_SECTIONS", "Memory", 1) == 0);
+    CHECK(config.LoadFromEnvironment("NPU_COMPUTE_TEST_SECTIONS", &error));
+    CHECK(!config.PipelineEnabled());
+    CHECK(config.JoinedSections() == "Memory");
+    CHECK(setenv("NPU_COMPUTE_PIPELINE", "1", 1) == 0);
+    CHECK(config.LoadFromEnvironment("NPU_COMPUTE_TEST_SECTIONS", &error));
+    CHECK(config.PipelineEnabled());
+    CHECK(setenv("NPU_COMPUTE_TEST_SECTIONS", "pipeline", 1) == 0);
+    CHECK(!config.LoadFromEnvironment("NPU_COMPUTE_TEST_SECTIONS", &error));
+    CHECK(unsetenv("NPU_COMPUTE_TEST_SECTIONS") == 0);
+    CHECK((hadPrevious ? setenv("NPU_COMPUTE_PIPELINE", saved.c_str(), 1) : unsetenv("NPU_COMPUTE_PIPELINE")) == 0);
+    return true;
 }
 
 bool TestPmuLevelEnvironment()
@@ -249,20 +286,38 @@ bool RunCsvSocNameChild(const boost::filesystem::path& output)
     row.subBlockId = 0;
     row.coreType = ACLPTI_CORE_TYPE_AIV;
     row.coreId = 0;
-    aclptiPmuDataRow::CoreData core{};
-    core.coreType = ACLPTI_CORE_TYPE_AIV;
-    core.coreId = 0;
-    core.sampleCount = 1;
-    core.totalCycles = 1000.0;
-    core.values = {{0x422U, 100.0}, {0x57fU, 10.0}, {0x580U, 10.0}};
-    core.valueCounts = {{0x422U, 1}, {0x57fU, 1}, {0x580U, 1}};
-    row.coreData.push_back(std::move(core));
+    row.totalCycles = 1000.0;
+    row.values = {{0x422U, 100.0}, {0x57fU, 10.0}, {0x580U, 10.0}};
     result->pmuLogs.emplace(aclptiBlockKey{0, 0, ACLPTI_CORE_TYPE_AIV, 0}, std::move(row));
 
     CHECK(g_profilingDataCallback(result) == ACLPTI_SUCCESS);
     npucompute::NpuComputeRuntime::Instance().Stop();
     CHECK(npucompute::NpuComputeRuntime::Instance().ShutdownAfterPtiDrain() == 0);
     CHECK(CsvValue(output / "Memory.csv", "vector0", "GM_to_UB_bw_usage_rate(%)") == "5.358925");
+    return true;
+}
+
+bool RunPipelineClockChild(const boost::filesystem::path& output, bool failQuery)
+{
+    CHECK(SetScenarioEnvironment(output));
+    CHECK(::setenv("NPU_COMPUTE_SECTIONS", "Pipeline", 1) == 0);
+    CHECK(::unsetenv("NPU_COMPUTE_SYSCNT_FREQUENCY_MHZ") == 0);
+    CHECK(::setenv("NPU_COMPUTE_FREQUENCY_MHZ", "1000", 1) == 0);
+    npucompute::test::ResetAclPtiCallbackStub();
+    CHECK(acltoolInitialize() == ACLPTI_SUCCESS);
+    CHECK(npucompute::test::CapturedAclPtiCollectPipeline());
+    CHECK(g_profilingDataCallback != nullptr);
+    auto result = std::make_shared<aclptiProfilingDataResult>();
+    auto& replay = result->pipelineData[7];
+    replay.deviceId = failQuery ? 4 : 3;
+    replay.format = aclptiBiuFormat::Chip6;
+    replay.channels[{0, aclptiBiuCoreKind::Aic}] = {0xe00003e8U, 0xe0000000U, 0xe0000000U, 0xe0000000U,
+                                                    0xf0000000U, 0xf001000aU, 0xf0000014U, 0xf0010004U};
+    CHECK(g_profilingDataCallback(result) == ACLPTI_SUCCESS);
+    npucompute::NpuComputeRuntime::Instance().Stop();
+    CHECK(
+        npucompute::NpuComputeRuntime::Instance().ShutdownAfterPtiDrain() ==
+        (failQuery ? npucompute::kInitializeFailed : 0));
     return true;
 }
 
@@ -569,6 +624,9 @@ bool RunPmuLevelFailureChild(const boost::filesystem::path& output)
 
 bool RunChildScenario(const std::string& scenario, const boost::filesystem::path& output)
 {
+    if (scenario == "pipeline-clock" || scenario == "pipeline-clock-failure") {
+        return RunPipelineClockChild(output, scenario == "pipeline-clock-failure");
+    }
     if (scenario.rfind("success-", 0) == 0) {
         return RunSuccessChild(scenario, output);
     }
@@ -691,6 +749,10 @@ bool TestNormalStop(const char* executable)
     TempDirectory temporary;
     CHECK(!temporary.Path().empty());
     CHECK(LaunchChild(executable, "normal-stop", temporary.Path()));
+    TempDirectory pipeline;
+    CHECK(LaunchChild(executable, "pipeline-clock", pipeline.Path()));
+    TempDirectory failure;
+    CHECK(LaunchChild(executable, "pipeline-clock-failure", failure.Path()));
     CHECK(!boost::filesystem::exists(temporary.Path() / kHardwareInfoFile));
     CHECK(!boost::filesystem::exists(temporary.Path() / kDeviceCountFile));
     return true;
@@ -743,6 +805,15 @@ extern "C" aclError aclrtGetDeviceCount(uint32_t* count)
     return written ? ACL_SUCCESS : ACL_ERROR_FAILURE;
 }
 
+extern "C" int halGetDeviceInfo(uint32_t deviceId, int32_t moduleType, int32_t infoType, int64_t* value)
+{
+    if (deviceId != 3 || moduleType != 0 || infoType != 25 || value == nullptr) {
+        return 3;
+    }
+    *value = 1000000; // kHz: 1 GHz system counter
+    return 0;
+}
+
 extern "C" const char* aclrtGetSocName() { return "Ascend950PR_9599"; }
 
 aclptiResult aclptiRegisterProfilingDataCallback(aclptiProfilingDataCallback callback)
@@ -763,8 +834,8 @@ int main(int argc, char** argv)
         std::fprintf(stderr, "unexpected runtime callback test arguments\n");
         return 2;
     }
-    return TestPmuLevelEnvironment() && TestSuccessAndNormalExit(argv[0]) && TestIgnoredEvents(argv[0]) &&
-                   TestInitializationFailures(argv[0]) && TestNormalStop(argv[0]) &&
+    return TestPipelineSection() && TestPmuLevelEnvironment() && TestSuccessAndNormalExit(argv[0]) &&
+                   TestIgnoredEvents(argv[0]) && TestInitializationFailures(argv[0]) && TestNormalStop(argv[0]) &&
                    TestStopDuringCollectionDoesNotHoldRuntimeMutex(argv[0]) && TestCsvSocNameSelection(argv[0]) ?
                0 :
                1;

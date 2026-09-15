@@ -47,6 +47,8 @@ public:
     bool GetAiCpuFrequency(std::int32_t deviceId, uint32_t* value) override;
     bool GetAiCoreFrequencies(std::int32_t deviceId, uint32_t* aicFrequencyMhz, uint32_t* aivFrequencyMhz) override;
     bool GetRatedAiCoreFrequencies(std::int32_t deviceId, uint32_t* aicFrequencyMhz, uint32_t* aivFrequencyMhz);
+    // Device oscillator query returns kHz; expose Hz for BIU syscnt conversion.
+    bool GetSyscntFrequencyHz(std::int32_t deviceId, double* frequencyHz);
     bool GetChipVersion(std::int32_t deviceId, std::string* value) override;
     bool GetHbmUsage(std::int32_t deviceId, uint64_t* freeBytes, uint64_t* totalBytes) override;
     bool GetHbmFrequency(std::int32_t deviceId, uint32_t* value) override;

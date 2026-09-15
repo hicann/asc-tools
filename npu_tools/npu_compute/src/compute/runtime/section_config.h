@@ -28,6 +28,7 @@ public:
     aclptiRangeProfilerSetConfigParams* Params();
     std::string JoinedSections() const;
     const std::vector<std::string>& Sections() const;
+    bool PipelineEnabled() const;
 
 private:
     void Reset();

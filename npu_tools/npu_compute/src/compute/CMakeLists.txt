@@ -8,6 +8,7 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 # ----------------------------------------------------------------------------------------------------------
 add_library(npu_compute SHARED
+  biu/biu_pipeline.cpp
   hardware/hardware_device_api.cpp
   hardware/hardware_info_collector.cpp
   hardware/hardware_info_device.cpp

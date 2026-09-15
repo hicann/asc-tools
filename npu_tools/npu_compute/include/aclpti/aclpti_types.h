@@ -36,6 +36,8 @@ typedef enum aclptiResult {
     ACLPTI_ERROR_CSV_INCOMPLETE = 18,
     ACLPTI_ERROR_CSV_WRITE = 19,
     ACLPTI_ERROR_RESULT_UNRELIABLE = 20,
+    ACLPTI_ERROR_TRACE_INCOMPLETE = 21,
+    ACLPTI_ERROR_TRACE_WRITE = 22,
 } aclptiResult;
 
 typedef struct aclptiSubscriber_st* aclptiSubscribeHandle;

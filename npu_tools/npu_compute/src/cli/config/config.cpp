@@ -17,8 +17,8 @@
 namespace npucompute::cli {
 namespace {
 
-constexpr std::array<const char*, 5> kSupportedSections = {
-    "PipeUtilization", "Memory", "MemoryL0", "MemoryUB", "L2Cache",
+constexpr std::array<const char*, 6> kSupportedSections = {
+    "PipeUtilization", "Memory", "MemoryL0", "MemoryUB", "L2Cache", "Pipeline",
 };
 
 void AddError(const std::string& message, std::vector<std::string>* errors) { errors->push_back(message); }
@@ -68,6 +68,9 @@ void AddSection(
         AddError("unsupported section name '" + section + "'. " + hint, errors);
     } else if (std::find(config->sections.begin(), config->sections.end(), section) == config->sections.end()) {
         config->sections.push_back(section);
+        if (section == "Pipeline") {
+            config->collect_pipeline = true;
+        }
     }
 }
 

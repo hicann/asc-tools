@@ -75,6 +75,8 @@ struct Calls {
 };
 
 Calls g_calls;
+std::int64_t g_oscFrequencyKhz = 1000000;
+std::int32_t g_oscStatus = 0;
 
 void ResetCalls() { g_calls = {}; }
 
@@ -125,6 +127,10 @@ extern "C" std::int32_t StubHalGetDeviceInfo(
     g_calls.halDeviceIds.push_back(deviceId);
     g_calls.halModuleTypes.push_back(moduleType);
     g_calls.halInfoTypes.push_back(infoType);
+    if (moduleType == 0 && infoType == 25) {
+        *value = g_oscFrequencyKhz;
+        return g_oscStatus;
+    }
     if (moduleType == kHalModuleTypeCcpu && infoType == kHalInfoTypeCoreNum) {
         *value = 1;
         return 0;
@@ -275,6 +281,36 @@ public:
 bool Contains(const std::vector<std::string>& values, std::string_view expected)
 {
     return std::find(values.begin(), values.end(), expected) != values.end();
+}
+
+bool TestSyscntFrequency()
+{
+    ResetCalls();
+    auto resolver = std::make_shared<FakeDynamicSymbolResolver>();
+    resolver->AddDriverLibraries();
+    npucompute::DynamicHardwareDeviceApi api(resolver);
+    double frequencyHz = 0;
+    CHECK(api.GetSyscntFrequencyHz(3, &frequencyHz));
+    CHECK(frequencyHz == 1000000000.0);
+    CHECK(g_calls.halDeviceIds == std::vector<uint32_t>{3});
+    CHECK(g_calls.halModuleTypes == std::vector<std::int32_t>{0});
+    CHECK(g_calls.halInfoTypes == std::vector<std::int32_t>{25});
+    for (const auto invalid : {0, -1}) {
+        g_oscFrequencyKhz = invalid;
+        CHECK(!api.GetSyscntFrequencyHz(3, &frequencyHz));
+        CHECK(frequencyHz == 0);
+    }
+    g_oscFrequencyKhz = 1000000;
+    g_oscStatus = kHalErrorInvalidValue;
+    CHECK(!api.GetSyscntFrequencyHz(3, &frequencyHz));
+    CHECK(frequencyHz == 0);
+    g_oscStatus = 0;
+    CHECK(!api.GetSyscntFrequencyHz(-1, &frequencyHz));
+    CHECK(!api.GetSyscntFrequencyHz(3, nullptr));
+    auto missing = std::make_shared<FakeDynamicSymbolResolver>();
+    npucompute::DynamicHardwareDeviceApi missingApi(missing);
+    CHECK(!missingApi.GetSyscntFrequencyHz(3, &frequencyHz));
+    return true;
 }
 
 bool TestLoadedSymbolsAndExactArguments()
@@ -444,7 +480,7 @@ bool TestMissingSingleAndAllSymbols()
 
 int main()
 {
-    if (!TestLoadedSymbolsAndExactArguments() || !TestSonameFallbackAndHandleLifetime() ||
+    if (!TestSyscntFrequency() || !TestLoadedSymbolsAndExactArguments() || !TestSonameFallbackAndHandleLifetime() ||
         !TestMissingDriverLibrariesAreIndependent() || !TestMissingSingleAndAllSymbols()) {
         return 1;
     }

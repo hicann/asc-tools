@@ -16,7 +16,10 @@ add_library(acl_pti SHARED
   callback/api.cpp
   callback/dispatcher.cpp
   data/api.cpp
-  data/module.cpp
+  data/profiling_data_manager.cpp
+  data/data_processor.cpp
+  data/data_receiver.cpp
+  data/replay_data_aggregation.cpp
   data/raw_data_decoder.cpp
   profiling/api.cpp
   profiling/range_profiler.cpp

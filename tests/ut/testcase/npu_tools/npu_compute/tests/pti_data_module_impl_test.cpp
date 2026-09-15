@@ -7,7 +7,7 @@
  * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
  * See LICENSE in the root of the software repository for the full text of the License.
  */
-#include "acl_pti/data/module.h"
+#include "acl_pti/data/profiling_data_manager.h"
 #include "acl_pti/data/raw_data_decoder.h"
 
 #include <algorithm>
@@ -39,7 +39,6 @@
     } while (false)
 
 namespace data = aclpti::data;
-namespace data_detail = aclpti::data::detail;
 
 void StoreWord(std::byte* data, std::size_t index, uint32_t value)
 {
@@ -228,27 +227,27 @@ int TestRawDataDecoder()
     StoreWord(taskLog.data(), 2, 0x89abcdefU);
     StoreWord(taskLog.data(), 3, 0x01234567U);
 
-    const auto start = data_detail::DecodeRawRecord(taskLog.data(), taskLog.size(), 3);
+    const auto start = data::DecodeRawRecord(taskLog.data(), taskLog.size(), 3);
     CHECK(start.Ok());
     CHECK(start.Value().recordIndex == 3);
-    CHECK(std::holds_alternative<data_detail::TaskLog32>(start.Value().payload));
-    const auto& startLog = std::get<data_detail::TaskLog32>(start.Value().payload);
+    CHECK(std::holds_alternative<data::TaskLog32>(start.Value().payload));
+    const auto& startLog = std::get<data::TaskLog32>(start.Value().payload);
     CHECK(startLog.funcType == 0x00);
     CHECK(startLog.taskId == 0x1234);
     CHECK(startLog.rtStreamId == 0x0056);
     CHECK(startLog.systemCounter == 0x0123456789abcdefULL);
 
     StoreWord(taskLog.data(), 0, 0x6bd30001U);
-    const auto end = data_detail::DecodeRawRecord(taskLog.data(), taskLog.size(), 4);
+    const auto end = data::DecodeRawRecord(taskLog.data(), taskLog.size(), 4);
     CHECK(end.Ok());
-    CHECK(std::get<data_detail::TaskLog32>(end.Value().payload).funcType == 0x01);
+    CHECK(std::get<data::TaskLog32>(end.Value().payload).funcType == 0x01);
 
     StoreWord(taskLog.data(), 0, 0x6bd30024U);
     StoreWord(taskLog.data(), 5, (0x5aU << 1U) | 1U);
     StoreWord(taskLog.data(), 6, 0x12345678U);
-    const auto block = data_detail::DecodeRawRecord(taskLog.data(), taskLog.size(), 6);
+    const auto block = data::DecodeRawRecord(taskLog.data(), taskLog.size(), 6);
     CHECK(block.Ok());
-    const auto& blockLog = std::get<data_detail::TaskLog32>(block.Value().payload);
+    const auto& blockLog = std::get<data::TaskLog32>(block.Value().payload);
     CHECK(blockLog.funcType == 0x24);
     CHECK(blockLog.taskId == 0x1234);
     CHECK(blockLog.rtStreamId == 0x0056);
@@ -276,11 +275,11 @@ int TestRawDataDecoder()
         StoreWord(pmu.data(), 9 + index * 2, static_cast<uint32_t>(value >> 32U));
     }
 
-    const auto decoded = data_detail::DecodeRawRecord(
+    const auto decoded = data::DecodeRawRecord(
         pmu.data(), pmu.size(), 5, PmuEvents({0x10, 0x20, 0x30, 0x40, 0x50, 0x60, 0x70, 0x80, 0x90, 0xa0}));
     CHECK(decoded.Ok());
-    CHECK(std::holds_alternative<data_detail::PmuRecord128>(decoded.Value().payload));
-    const auto& record = std::get<data_detail::PmuRecord128>(decoded.Value().payload);
+    CHECK(std::holds_alternative<data::PmuRecord128>(decoded.Value().payload));
+    const auto& record = std::get<data::PmuRecord128>(decoded.Value().payload);
     CHECK(record.funcType == 0x2aU);
     CHECK(record.taskId == 0x4321);
     CHECK(record.rtStreamId == 0x0078);
@@ -295,17 +294,17 @@ int TestRawDataDecoder()
     CHECK(record.pmuValues.at(0xa0) == 0x100000009ULL);
 
     StoreWord(pmu.data(), 0, 0x6bd30029U);
-    const auto blockPmu = data_detail::DecodeRawRecord(pmu.data(), pmu.size(), 6, PmuEvents({0x10}));
+    const auto blockPmu = data::DecodeRawRecord(pmu.data(), pmu.size(), 6, PmuEvents({0x10}));
     CHECK(blockPmu.Ok());
-    const auto& blockPmuRecord = std::get<data_detail::PmuRecord128>(blockPmu.Value().payload);
+    const auto& blockPmuRecord = std::get<data::PmuRecord128>(blockPmu.Value().payload);
     CHECK(blockPmuRecord.funcType == 0x29U);
     CHECK(blockPmuRecord.blockId == 0x1234);
     CHECK(blockPmuRecord.subBlockId == 0x5678);
     CHECK(blockPmuRecord.pmuValues.at(0x10) == 0x100000000ULL);
 
-    const auto redundantSlot = data_detail::DecodeRawRecord(pmu.data(), pmu.size(), 6, PmuEvents({796, 0x10}));
+    const auto redundantSlot = data::DecodeRawRecord(pmu.data(), pmu.size(), 6, PmuEvents({796, 0x10}));
     CHECK(redundantSlot.Ok());
-    const auto& redundantSlotRecord = std::get<data_detail::PmuRecord128>(redundantSlot.Value().payload);
+    const auto& redundantSlotRecord = std::get<data::PmuRecord128>(redundantSlot.Value().payload);
     CHECK(redundantSlotRecord.pmuValues.at(796) == 0x100000000ULL);
     CHECK(redundantSlotRecord.pmuValues.at(0x10) == 0x100000001ULL);
 
@@ -315,25 +314,26 @@ int TestRawDataDecoder()
     StoreWord(pmu.data(), 9, 0U);
     StoreWord(pmu.data(), 10, 300U);
     StoreWord(pmu.data(), 11, 0U);
-    const auto duplicateEvent = data_detail::DecodeRawRecord(pmu.data(), pmu.size(), 7, PmuEvents({0x10, 0x10}));
+    const auto duplicateEvent = data::DecodeRawRecord(pmu.data(), pmu.size(), 7, PmuEvents({0x10, 0x10}));
     CHECK(duplicateEvent.Ok());
-    const auto& duplicateRecord = std::get<data_detail::PmuRecord128>(duplicateEvent.Value().payload);
+    const auto& duplicateRecord = std::get<data::PmuRecord128>(duplicateEvent.Value().payload);
     CHECK(duplicateRecord.pmuValues.at(0x10) == 200.0);
 
-    CHECK(data_detail::DecodeRawRecord(nullptr, 32, 0).Status() == ACLPTI_ERROR_INVALID_RAW_DATA);
-    CHECK(data_detail::DecodeRawRecord(pmu.data(), 64, 0).Status() == ACLPTI_ERROR_INVALID_RAW_DATA);
+    CHECK(data::DecodeRawRecord(nullptr, 32, 0).Status() == ACLPTI_ERROR_INVALID_RAW_DATA);
+    CHECK(data::DecodeRawRecord(pmu.data(), 64, 0).Status() == ACLPTI_ERROR_INVALID_RAW_DATA);
     StoreWord(pmu.data(), 0, 0x0000002aU);
-    CHECK(data_detail::DecodeRawRecord(pmu.data(), pmu.size(), 0).Status() == ACLPTI_ERROR_DECODE);
+    CHECK(data::DecodeRawRecord(pmu.data(), pmu.size(), 0).Status() == ACLPTI_ERROR_DECODE);
     StoreWord(taskLog.data(), 0, 0x6bd30002U);
-    CHECK(data_detail::DecodeRawRecord(taskLog.data(), taskLog.size(), 0).Status() == ACLPTI_ERROR_DECODE);
+    CHECK(data::DecodeRawRecord(taskLog.data(), taskLog.size(), 0).Status() == ACLPTI_ERROR_DECODE);
     return 0;
 }
 
 int TestBlockAndTaskPmuAreAggregatedSeparately()
 {
     ResultSink sink;
-    data::Module module([&sink](const auto& result) { return sink.Accept(result); });
-    CHECK(module.Initialize() == ACLPTI_SUCCESS);
+    auto& module = data::ProfilingDataManager::Instance();
+    aclptiProfilingDataCallback moduleCallback = [&sink](const auto& result) { return sink.Accept(result); };
+    CHECK(module.Initialize(std::move(moduleCallback)) == ACLPTI_SUCCESS);
     CHECK(module.PrepareReplay({41, PmuEvents({0x701})}) == ACLPTI_SUCCESS);
 
     const MsprofRawDataCallback callback = module.GetRawDataCallback();
@@ -363,6 +363,7 @@ int TestBlockAndTaskPmuAreAggregatedSeparately()
 
     const auto result = sink.Wait();
     CHECK(result != nullptr);
+    CHECK(result != nullptr);
     CHECK(result->pmuLogs.size() == 1);
     CHECK(result->taskPmuLogs.size() == 1);
     const aclptiBlockKey key{0, 0, ACLPTI_CORE_TYPE_AIC, 3};
@@ -379,16 +380,17 @@ int TestReplayLifecycle()
 {
     ResultSink sink;
     std::atomic<bool> callbackCompleted{false};
-    data::Module module([&sink, &callbackCompleted](const auto& result) {
+    auto& module = data::ProfilingDataManager::Instance();
+    aclptiProfilingDataCallback moduleCallback = [&sink, &callbackCompleted](const auto& result) {
         const auto status = sink.Accept(result);
         callbackCompleted.store(true, std::memory_order_release);
         return status;
-    });
+    };
     CHECK(module.GetRawDataCallback() == nullptr);
-    CHECK(module.Initialize() == ACLPTI_SUCCESS);
+    CHECK(module.Initialize(std::move(moduleCallback)) == ACLPTI_SUCCESS);
 
-    data::Module second([](const auto&) { return ACLPTI_SUCCESS; });
-    CHECK(second.Initialize() == ACLPTI_ERROR_REPLAY_ACTIVE);
+    CHECK(&module == &data::ProfilingDataManager::Instance());
+    CHECK(module.Initialize() == ACLPTI_SUCCESS);
 
     data::PmuSlots noEvents{};
     noEvents.fill(data::kInvalidPmuEvent);
@@ -398,12 +400,13 @@ int TestReplayLifecycle()
     CHECK(module.PrepareReplay({40, noEvents}) == ACLPTI_SUCCESS);
     CHECK(module.RecordReplayStatus({40, ACLPTI_SUCCESS}).status == ACLPTI_SUCCESS);
     CHECK(module.ReleaseReplay(40) == ACLPTI_SUCCESS);
+    CHECK(module.PrepareReplay({40, noEvents}) == ACLPTI_ERROR_INVALID_PARAMETER);
     auto eventHole = PmuEvents({0x701});
     eventHole[2] = 0x22;
     CHECK(module.PrepareReplay({40, eventHole}) == ACLPTI_ERROR_INVALID_PARAMETER);
 
     const auto eventIds = PmuEvents({0x701, 0x22});
-    CHECK(module.PrepareReplay({42, eventIds}) == ACLPTI_SUCCESS);
+    CHECK(module.PrepareReplay({42, eventIds, data::ReplayKind::Pmu}) == ACLPTI_SUCCESS);
     CHECK(module.PrepareReplay({43, PmuEvents({0x1})}) == ACLPTI_ERROR_REPLAY_ACTIVE);
 
     const MsprofRawDataCallback callback = module.GetRawDataCallback();
@@ -425,6 +428,7 @@ int TestReplayLifecycle()
     std::memcpy(logChunk.data(), firstLog.data(), 32);
     std::memcpy(logChunk.data() + 32, secondLog.data(), 32);
     auto multiLog = RawData(logChunk, LOG_DATA_TYPE);
+    multiLog.deviceId = 17;
     multiLog.chunkModule = 1;
     multiLog.offset = 900;
     multiLog.isLastChunk = true;
@@ -441,8 +445,6 @@ int TestReplayLifecycle()
     CHECK(stopped.callbackStats.copiedRecordCount == 5);
     CHECK(stopped.callbackStats.copiedBytes == 448);
     CHECK(stopped.callbackStats.receivedBytes == 448);
-    CHECK(stopped.callbackStats.offsetMismatchCount == 0);
-    CHECK(stopped.callbackStats.lastChunkCount == 0);
     CHECK(module.ReleaseReplay(42) == ACLPTI_SUCCESS);
     CHECK(module.Shutdown() == ACLPTI_SUCCESS);
     CHECK(callbackCompleted.load(std::memory_order_acquire));
@@ -466,8 +468,9 @@ int TestReplayLifecycle()
 int TestFailedReplay()
 {
     ResultSink sink;
-    data::Module module([&sink](const auto& result) { return sink.Accept(result); });
-    CHECK(module.Initialize() == ACLPTI_SUCCESS);
+    auto& module = data::ProfilingDataManager::Instance();
+    aclptiProfilingDataCallback moduleCallback = [&sink](const auto& result) { return sink.Accept(result); };
+    CHECK(module.Initialize(std::move(moduleCallback)) == ACLPTI_SUCCESS);
     CHECK(module.PrepareReplay({7, PmuEvents({0x500})}) == ACLPTI_SUCCESS);
     CHECK(module.Shutdown() == ACLPTI_ERROR_REPLAY_ACTIVE);
 
@@ -481,14 +484,17 @@ int TestFailedReplay()
     const auto result = sink.Wait();
     CHECK(result != nullptr);
     CHECK(result->status == ACLPTI_ERROR_PROFILING_FAILED);
-    CHECK(result->errorStats.failedRecordCount == 1);
-    CHECK(result->errorStats.failedRecordCountByReplay.at(7) == 1);
+    CHECK(result->stats.failedRecordCount == 1);
+    CHECK(result->stats.failedRecordCount == 1);
     CHECK(result->pmuLogs.empty());
     CHECK(sink.Count() == 1);
 
     ResultSink decodeSink;
-    data::Module decodeModule([&decodeSink](const auto& decodedResult) { return decodeSink.Accept(decodedResult); });
-    CHECK(decodeModule.Initialize() == ACLPTI_SUCCESS);
+    auto& decodeModule = data::ProfilingDataManager::Instance();
+    aclptiProfilingDataCallback decodeModuleCallback = [&decodeSink](const auto& decodedResult) {
+        return decodeSink.Accept(decodedResult);
+    };
+    CHECK(decodeModule.Initialize(std::move(decodeModuleCallback)) == ACLPTI_SUCCESS);
     CHECK(decodeModule.PrepareReplay({8, PmuEvents({0x8, 0xa})}) == ACLPTI_SUCCESS);
     auto malformed = PmuRecord(1, 2, 3, 4);
     StoreWord(malformed.data(), 0, 0x0000002aU);
@@ -500,14 +506,17 @@ int TestFailedReplay()
     const auto decodeResult = decodeSink.Wait();
     CHECK(decodeResult != nullptr);
     CHECK(decodeResult->status == ACLPTI_ERROR_PROFILING_FAILED);
-    CHECK(decodeResult->errorStats.failedRecordCount == 1);
-    CHECK(decodeResult->errorStats.failedRecordCountByReplay.at(8) == 1);
+    CHECK(decodeResult->stats.failedRecordCount == 1);
+    CHECK(decodeResult->stats.failedRecordCount == 1);
     CHECK(decodeResult->pmuLogs.empty());
 
     setenv("NPU_COMPUTE_SKIP_DATA_PARSE", "1", 1);
     ResultSink skippedSink;
-    data::Module skippedModule([&skippedSink](const auto& skippedResult) { return skippedSink.Accept(skippedResult); });
-    CHECK(skippedModule.Initialize() == ACLPTI_SUCCESS);
+    auto& skippedModule = data::ProfilingDataManager::Instance();
+    aclptiProfilingDataCallback skippedModuleCallback = [&skippedSink](const auto& skippedResult) {
+        return skippedSink.Accept(skippedResult);
+    };
+    CHECK(skippedModule.Initialize(std::move(skippedModuleCallback)) == ACLPTI_SUCCESS);
     CHECK(skippedModule.PrepareReplay({9, PmuEvents({0x8, 0xa})}) == ACLPTI_SUCCESS);
     CHECK(skippedModule.GetRawDataCallback()(&malformedRaw) == 0);
     CHECK(skippedModule.RecordReplayStatus({9, ACLPTI_SUCCESS}).status == ACLPTI_ERROR_PROFILING_FAILED);
@@ -519,21 +528,15 @@ int TestFailedReplay()
     CHECK(skippedResult->status == ACLPTI_ERROR_PROFILING_FAILED);
     CHECK(skippedResult->pmuLogs.empty());
 
-    bool threw = false;
-    try {
-        data::Module invalid(aclptiProfilingDataCallback{});
-    } catch (const std::invalid_argument&) {
-        threw = true;
-    }
-    CHECK(threw);
     return 0;
 }
 
 int TestForceShutdownActiveReplay()
 {
     ResultSink sink;
-    data::Module module([&sink](const auto& result) { return sink.Accept(result); });
-    CHECK(module.Initialize() == ACLPTI_SUCCESS);
+    auto& module = data::ProfilingDataManager::Instance();
+    aclptiProfilingDataCallback moduleCallback = [&sink](const auto& result) { return sink.Accept(result); };
+    CHECK(module.Initialize(std::move(moduleCallback)) == ACLPTI_SUCCESS);
     CHECK(module.PrepareReplay({9, PmuEvents({0x8})}) == ACLPTI_SUCCESS);
     CHECK(module.Shutdown() == ACLPTI_ERROR_REPLAY_ACTIVE);
     CHECK(module.ForceShutdown() == ACLPTI_SUCCESS);
@@ -549,8 +552,9 @@ int TestForceShutdownActiveReplay()
 int TestReplayFailureIsPublished()
 {
     ResultSink sink;
-    data::Module module([&sink](const auto& result) { return sink.Accept(result); });
-    CHECK(module.Initialize() == ACLPTI_SUCCESS);
+    auto& module = data::ProfilingDataManager::Instance();
+    aclptiProfilingDataCallback moduleCallback = [&sink](const auto& result) { return sink.Accept(result); };
+    CHECK(module.Initialize(std::move(moduleCallback)) == ACLPTI_SUCCESS);
     CHECK(module.PrepareReplay({12, PmuEvents({0x8})}) == ACLPTI_SUCCESS);
     CHECK(module.RecordReplayStatus({12, ACLPTI_ERROR_PROFILING_FAILED}).status == ACLPTI_ERROR_PROFILING_FAILED);
     CHECK(module.ReleaseReplay(12) == ACLPTI_SUCCESS);
@@ -559,20 +563,24 @@ int TestReplayFailureIsPublished()
     const auto result = sink.Wait();
     CHECK(result != nullptr);
     CHECK(result->status == ACLPTI_ERROR_PROFILING_FAILED);
-    CHECK(result->errorStats.failedRecordCount == 0);
+    CHECK(result->stats.failedRecordCount == 0);
     return 0;
 }
 
 int TestOpaqueInstructionChunks()
 {
     ResultSink sink;
-    data::Module module([&sink](const auto& result) { return sink.Accept(result); });
-    CHECK(module.Initialize() == ACLPTI_SUCCESS);
+    auto& module = data::ProfilingDataManager::Instance();
+    aclptiProfilingDataCallback moduleCallback = [&sink](const auto& result) { return sink.Accept(result); };
+    CHECK(module.Initialize(std::move(moduleCallback)) == ACLPTI_SUCCESS);
     CHECK(module.PrepareReplay({10, PmuEvents({}), data::ReplayKind::Pipeline}) == ACLPTI_SUCCESS);
 
     const MsprofRawDataCallback callback = module.GetRawDataCallback();
     CHECK(callback != nullptr);
-    const std::array<std::byte, 3> firstBytes{std::byte{0x11}, std::byte{0x22}, std::byte{0x33}};
+    const std::array<std::byte, 8> firstBytes{
+        std::byte{0x11}, std::byte{0x22}, std::byte{0x33}, std::byte{0x44},
+        std::byte{0x55}, std::byte{0x66}, std::byte{0x77}, std::byte{0x88},
+    };
     auto first = RawData(firstBytes, BIU_PERF_DATA_TYPE, 2);
     first.chunkModule = 4;
     first.offset = 0;
@@ -587,23 +595,30 @@ int TestOpaqueInstructionChunks()
     CHECK(callback(&oversized) == static_cast<std::int32_t>(ACLPTI_ERROR_INVALID_RAW_DATA));
 
     auto gap = first;
-    gap.offset = 1;
+    gap.offset = 4;
     CHECK(callback(&gap) == static_cast<std::int32_t>(ACLPTI_ERROR_INVALID_RAW_DATA));
     CHECK(callback(&first) == static_cast<std::int32_t>(ACLPTI_SUCCESS));
 
-    const std::array<std::byte, 2> secondBytes{std::byte{0x44}, std::byte{0x55}};
+    const std::array<std::byte, 4> secondBytes{std::byte{0x99}, std::byte{0xaa}, std::byte{0xbb}, std::byte{0xcc}};
     auto wrongType = RawData(secondBytes, PC_SAMPLING_DATA_TYPE, 2);
-    wrongType.offset = 3;
+    wrongType.offset = 8;
     CHECK(callback(&wrongType) == static_cast<std::int32_t>(ACLPTI_ERROR_INVALID_RAW_DATA));
 
     auto second = RawData(secondBytes, BIU_PERF_DATA_TYPE, 2);
-    second.chunkModule = 5;
-    second.offset = 3;
+    second.chunkModule = 4;
+    second.offset = 8;
     second.isLastChunk = true;
     CHECK(callback(&second) == static_cast<std::int32_t>(ACLPTI_SUCCESS));
 
+    const std::array<std::byte, 4> aivBytes{std::byte{0x04}, std::byte{0x03}, std::byte{0x02}, std::byte{0x01}};
+    auto aiv = RawData(aivBytes, BIU_PERF_AIV0_DATA_TYPE, 2);
+    aiv.chunkModule = 5;
+    aiv.isLastChunk = true;
+    CHECK(callback(&aiv) == static_cast<std::int32_t>(ACLPTI_SUCCESS));
+
     auto afterLast = RawData(secondBytes, BIU_PERF_DATA_TYPE, 2);
-    afterLast.offset = 5;
+    afterLast.chunkModule = 4;
+    afterLast.offset = 12;
     CHECK(callback(&afterLast) == static_cast<std::int32_t>(ACLPTI_ERROR_INVALID_RAW_DATA));
     CHECK(module.RecordReplayStatus({10, ACLPTI_SUCCESS}).status == ACLPTI_ERROR_PROFILING_FAILED);
     CHECK(module.ReleaseReplay(10) == ACLPTI_SUCCESS);
@@ -612,26 +627,29 @@ int TestOpaqueInstructionChunks()
     const auto result = sink.Wait();
     CHECK(result != nullptr);
     CHECK(result->status == ACLPTI_ERROR_PROFILING_FAILED);
-    CHECK(result->pipelineData.size() == 2);
+    const auto replay = result->pipelineData.find(10);
+    CHECK(replay != result->pipelineData.end());
+    CHECK(replay->second.deviceId == 2);
+    CHECK(replay->second.format == aclptiBiuFormat::Chip6);
+    CHECK(replay->second.channels.size() == 2);
     CHECK(result->pcSamplingData.empty());
-    CHECK(result->pipelineData[0].replayId == 10);
-    CHECK(result->pipelineData[0].deviceId == 2);
-    CHECK(result->pipelineData[0].chunkModule == 4);
-    CHECK(result->pipelineData[0].offset == 0);
-    CHECK(!result->pipelineData[0].isLastChunk);
-    CHECK((result->pipelineData[0].bytes == std::vector<uint8_t>{0x11, 0x22, 0x33}));
-    CHECK(result->pipelineData[1].offset == 3);
-    CHECK(result->pipelineData[1].isLastChunk);
-    CHECK((result->pipelineData[1].bytes == std::vector<uint8_t>{0x44, 0x55}));
-    CHECK(result->errorStats.failedRecordCount == 5);
+    CHECK(
+        (replay->second.channels.at({4, aclptiBiuCoreKind::Aic}) ==
+         std::vector<uint32_t>{0x44332211U, 0x88776655U, 0xccbbaa99U}));
+    CHECK((replay->second.channels.at({5, aclptiBiuCoreKind::Aiv0}) == std::vector<uint32_t>{0x01020304U}));
+    CHECK(replay->second.stats.receivedBytes == 28);
+    CHECK(replay->second.stats.acceptedBytes == 16);
+    CHECK(replay->second.stats.rejectedChunkCount == 5);
+    CHECK(result->stats.failedRecordCount == 5);
     return 0;
 }
 
 int TestOpaquePcSamplingChunk()
 {
     ResultSink sink;
-    data::Module module([&sink](const auto& result) { return sink.Accept(result); });
-    CHECK(module.Initialize() == ACLPTI_SUCCESS);
+    auto& module = data::ProfilingDataManager::Instance();
+    aclptiProfilingDataCallback moduleCallback = [&sink](const auto& result) { return sink.Accept(result); };
+    CHECK(module.Initialize(std::move(moduleCallback)) == ACLPTI_SUCCESS);
     CHECK(module.PrepareReplay({11, PmuEvents({}), data::ReplayKind::PcSampling}) == ACLPTI_SUCCESS);
 
     const MsprofRawDataCallback callback = module.GetRawDataCallback();
@@ -648,6 +666,7 @@ int TestOpaquePcSamplingChunk()
     const auto result = sink.Wait();
     CHECK(result != nullptr);
     CHECK(result->status == ACLPTI_SUCCESS);
+    CHECK(result->pcSamplingData.at(0).deviceId == 3);
     CHECK(result->pipelineData.empty());
     CHECK(result->pcSamplingData.size() == 1);
     CHECK(result->pcSamplingData[0].replayId == 11);
@@ -662,13 +681,15 @@ int TestOpaquePcSamplingChunk()
 int TestOpaqueAggregationAllocationFailure()
 {
     ResultSink sink;
-    data::Module module([&sink](const auto& result) { return sink.Accept(result); });
-    CHECK(module.Initialize() == ACLPTI_SUCCESS);
+    auto& module = data::ProfilingDataManager::Instance();
+    aclptiProfilingDataCallback moduleCallback = [&sink](const auto& result) { return sink.Accept(result); };
+    CHECK(module.Initialize(std::move(moduleCallback)) == ACLPTI_SUCCESS);
     CHECK(module.PrepareReplay({13, PmuEvents({}), data::ReplayKind::Pipeline}) == ACLPTI_SUCCESS);
     CHECK(setenv("NPU_COMPUTE_TEST_OPAQUE_AGGREGATE_OOM", "1", 1) == 0);
 
-    const std::array<std::byte, 2> bytes{std::byte{0x11}, std::byte{0x22}};
+    const std::array<std::byte, 4> bytes{std::byte{0x11}, std::byte{0x22}, std::byte{0x33}, std::byte{0x44}};
     auto raw = RawData(bytes, BIU_PERF_DATA_TYPE);
+    raw.chunkModule = 0;
     raw.isLastChunk = true;
     CHECK(module.GetRawDataCallback()(&raw) == static_cast<std::int32_t>(ACLPTI_SUCCESS));
     CHECK(module.RecordReplayStatus({13, ACLPTI_SUCCESS}).status == ACLPTI_ERROR_PROFILING_FAILED);
@@ -679,16 +700,55 @@ int TestOpaqueAggregationAllocationFailure()
     const auto result = sink.Wait();
     CHECK(result != nullptr);
     CHECK(result->status == ACLPTI_ERROR_PROFILING_FAILED);
-    CHECK(result->pipelineData.empty());
-    CHECK(result->errorStats.failedRecordCount == 1);
+    CHECK(result->pipelineData.at(13).channels.empty());
+    CHECK(result->stats.failedRecordCount == 1);
+    return 0;
+}
+
+int TestReplayDeviceIsInferredFromRawData()
+{
+    ResultSink sink;
+    auto& module = data::ProfilingDataManager::Instance();
+    aclptiProfilingDataCallback moduleCallback = [&sink](const auto& result) { return sink.Accept(result); };
+    CHECK(module.Initialize(std::move(moduleCallback)) == ACLPTI_SUCCESS);
+    CHECK(module.PrepareReplay({15, PmuEvents({}), data::ReplayKind::Pipeline}) == ACLPTI_SUCCESS);
+
+    const std::array<std::byte, 4> bytes{std::byte{0x11}, std::byte{0x22}, std::byte{0x33}, std::byte{0x44}};
+    auto first = RawData(bytes, BIU_PERF_DATA_TYPE, 2);
+    first.chunkModule = 0;
+    CHECK(module.GetRawDataCallback()(&first) == static_cast<std::int32_t>(ACLPTI_SUCCESS));
+
+    auto wrongDevice = first;
+    wrongDevice.deviceId = 3;
+    wrongDevice.offset = 4;
+    wrongDevice.isLastChunk = true;
+    CHECK(module.GetRawDataCallback()(&wrongDevice) == static_cast<std::int32_t>(ACLPTI_ERROR_INVALID_RAW_DATA));
+
+    auto last = first;
+    last.offset = 4;
+    last.isLastChunk = true;
+    CHECK(module.GetRawDataCallback()(&last) == static_cast<std::int32_t>(ACLPTI_SUCCESS));
+    CHECK(module.RecordReplayStatus({15, ACLPTI_SUCCESS}).status == ACLPTI_ERROR_PROFILING_FAILED);
+    CHECK(module.ReleaseReplay(15) == ACLPTI_SUCCESS);
+    CHECK(module.Shutdown() == ACLPTI_SUCCESS);
+
+    const auto result = sink.Wait();
+    CHECK(result != nullptr);
+    const auto& replay = result->pipelineData.at(15);
+    CHECK(replay.deviceId == 2);
+    CHECK(replay.stats.receivedBytes == 12);
+    CHECK(replay.stats.acceptedBytes == 8);
+    CHECK(replay.stats.rejectedChunkCount == 1);
+    CHECK(replay.stats.failedRecordCount == 1);
     return 0;
 }
 
 int TestDecoderAllocationFailure()
 {
     ResultSink sink;
-    data::Module module([&sink](const auto& result) { return sink.Accept(result); });
-    CHECK(module.Initialize() == ACLPTI_SUCCESS);
+    auto& module = data::ProfilingDataManager::Instance();
+    aclptiProfilingDataCallback moduleCallback = [&sink](const auto& result) { return sink.Accept(result); };
+    CHECK(module.Initialize(std::move(moduleCallback)) == ACLPTI_SUCCESS);
     CHECK(module.PrepareReplay({14, PmuEvents({0x55})}) == ACLPTI_SUCCESS);
     CHECK(setenv("NPU_COMPUTE_TEST_DECODE_OOM", "1", 1) == 0);
 
@@ -704,7 +764,7 @@ int TestDecoderAllocationFailure()
     CHECK(result != nullptr);
     CHECK(result->status == ACLPTI_ERROR_PROFILING_FAILED);
     CHECK(result->pmuLogs.empty());
-    CHECK(result->errorStats.failedRecordCount == 1);
+    CHECK(result->stats.failedRecordCount == 1);
     return 0;
 }
 
@@ -714,8 +774,9 @@ int TestInvalidChunkDiagnostics()
     const std::string previousDebugValue = previousDebug == nullptr ? std::string() : std::string(previousDebug);
 
     ResultSink sink;
-    data::Module module([&sink](const auto& result) { return sink.Accept(result); });
-    CHECK(module.Initialize() == ACLPTI_SUCCESS);
+    auto& module = data::ProfilingDataManager::Instance();
+    aclptiProfilingDataCallback moduleCallback = [&sink](const auto& result) { return sink.Accept(result); };
+    CHECK(module.Initialize(std::move(moduleCallback)) == ACLPTI_SUCCESS);
     CHECK(module.PrepareReplay({9, PmuEvents({0x55})}) == ACLPTI_SUCCESS);
     const MsprofRawDataCallback callback = module.GetRawDataCallback();
     CHECK(callback != nullptr);
@@ -746,12 +807,12 @@ int TestInvalidChunkDiagnostics()
 
 int TestProcessCallbackRegistration()
 {
-    data::Module standalone;
+    auto& standalone = data::ProfilingDataManager::Instance();
     CHECK(standalone.Initialize() == ACLPTI_SUCCESS);
     CHECK(standalone.Shutdown() == ACLPTI_SUCCESS);
 
     ResultSink sink;
-    data::Module module;
+    auto& module = data::ProfilingDataManager::Instance();
     CHECK(aclptiRegisterProfilingDataCallback({}) == ACLPTI_ERROR_INVALID_PARAMETER);
     CHECK(aclptiRegisterProfilingDataCallback([&sink](const auto& result) {
               return sink.Accept(result);
@@ -777,7 +838,8 @@ int TestShutdownCallback()
 {
     static std::atomic<int> shutdownCalls{0};
     shutdownCalls.store(0);
-    data::Module module([](const auto&) { return ACLPTI_SUCCESS; });
+    auto& module = data::ProfilingDataManager::Instance();
+    aclptiProfilingDataCallback moduleCallback = [](const auto&) { return ACLPTI_SUCCESS; };
     CHECK(
         aclptiRegisterDataModuleShutdownCallback(
             [](void* userData) {
@@ -786,7 +848,7 @@ int TestShutdownCallback()
                 return ACLPTI_SUCCESS;
             },
             &shutdownCalls) == ACLPTI_SUCCESS);
-    CHECK(module.Initialize() == ACLPTI_SUCCESS);
+    CHECK(module.Initialize(std::move(moduleCallback)) == ACLPTI_SUCCESS);
     CHECK(module.PrepareReplay({100, PmuEvents({0x8})}) == ACLPTI_SUCCESS);
     CHECK(module.RecordReplayStatus({100, ACLPTI_SUCCESS}).status == ACLPTI_SUCCESS);
     CHECK(module.ReleaseReplay(100) == ACLPTI_SUCCESS);
@@ -796,8 +858,9 @@ int TestShutdownCallback()
     CHECK(shutdownCalls.load() == 1);
 
     ResultSink sink;
-    data::Module emptyModule([&sink](const auto& result) { return sink.Accept(result); });
-    CHECK(emptyModule.Initialize() == ACLPTI_SUCCESS);
+    auto& emptyModule = data::ProfilingDataManager::Instance();
+    aclptiProfilingDataCallback emptyModuleCallback = [&sink](const auto& result) { return sink.Accept(result); };
+    CHECK(emptyModule.Initialize(std::move(emptyModuleCallback)) == ACLPTI_SUCCESS);
     CHECK(emptyModule.Shutdown() == ACLPTI_SUCCESS);
     CHECK(shutdownCalls.load() == 2);
     CHECK(sink.Count() == 0);
@@ -807,8 +870,9 @@ int TestShutdownCallback()
 int TestCrossReplayAggregate()
 {
     ResultSink sink;
-    data::Module module([&sink](const auto& result) { return sink.Accept(result); });
-    CHECK(module.Initialize() == ACLPTI_SUCCESS);
+    auto& module = data::ProfilingDataManager::Instance();
+    aclptiProfilingDataCallback moduleCallback = [&sink](const auto& result) { return sink.Accept(result); };
+    CHECK(module.Initialize(std::move(moduleCallback)) == ACLPTI_SUCCESS);
 
     const auto firstEvents = PmuEvents({0x10, 0x20});
     CHECK(module.PrepareReplay({201, firstEvents}) == ACLPTI_SUCCESS);
@@ -842,9 +906,11 @@ int TestCrossReplayAggregate()
     CHECK(module.RecordReplayStatus({202, ACLPTI_SUCCESS}).status == ACLPTI_SUCCESS);
     CHECK(module.ReleaseReplay(202) == ACLPTI_SUCCESS);
 
+    CHECK(sink.Count() == 0); // No per-replay delivery before the original launch completes.
     CHECK(module.Shutdown() == ACLPTI_SUCCESS);
     CHECK(sink.Count() == 1);
     const auto result = sink.Wait();
+    CHECK(result != nullptr);
     CHECK(result != nullptr);
     CHECK(result->status == ACLPTI_SUCCESS);
     CHECK(result->taskLogs.at(7).size() == 1);
@@ -880,8 +946,9 @@ int TestCrossReplayAggregate()
 int TestMsopprofA5ReplayMerge()
 {
     ResultSink sink;
-    data::Module module([&sink](const auto& result) { return sink.Accept(result); });
-    CHECK(module.Initialize() == ACLPTI_SUCCESS);
+    auto& module = data::ProfilingDataManager::Instance();
+    aclptiProfilingDataCallback moduleCallback = [&sink](const auto& result) { return sink.Accept(result); };
+    CHECK(module.Initialize(std::move(moduleCallback)) == ACLPTI_SUCCESS);
 
     CHECK(module.PrepareReplay({211, PmuEvents({10, 20})}) == ACLPTI_SUCCESS);
     auto first = PmuRecord(7, 8, 4, 10);
@@ -923,6 +990,7 @@ int TestMsopprofA5ReplayMerge()
     CHECK(module.Shutdown() == ACLPTI_SUCCESS);
     const auto result = sink.Wait();
     CHECK(result != nullptr);
+    CHECK(result != nullptr);
     CHECK(result->pmuLogs.size() == 1);
     const auto& [key, row] = *result->pmuLogs.begin();
     CHECK(key.blockId == 4);
@@ -945,8 +1013,9 @@ int TestFailedPackageIsDropped()
 {
     constexpr std::size_t kMalformedRecordCount = 5000;
     ResultSink sink;
-    data::Module module([&sink](const auto& result) { return sink.Accept(result); });
-    CHECK(module.Initialize() == ACLPTI_SUCCESS);
+    auto& module = data::ProfilingDataManager::Instance();
+    aclptiProfilingDataCallback moduleCallback = [&sink](const auto& result) { return sink.Accept(result); };
+    CHECK(module.Initialize(std::move(moduleCallback)) == ACLPTI_SUCCESS);
     CHECK(module.PrepareReplay({303, PmuEvents({0x55})}) == ACLPTI_SUCCESS);
 
     auto valid = PmuRecord(1, 2, 8, 77);
@@ -970,8 +1039,8 @@ int TestFailedPackageIsDropped()
     const auto result = sink.Wait();
     CHECK(result != nullptr);
     CHECK(result->status == ACLPTI_ERROR_PROFILING_FAILED);
-    CHECK(result->errorStats.failedRecordCount == kMalformedRecordCount);
-    CHECK(result->errorStats.failedRecordCountByReplay.at(303) == kMalformedRecordCount);
+    CHECK(result->stats.failedRecordCount == kMalformedRecordCount);
+    CHECK(result->stats.failedRecordCount == kMalformedRecordCount);
     CHECK(result->pmuLogs.empty());
     return 0;
 }
@@ -979,8 +1048,9 @@ int TestFailedPackageIsDropped()
 int TestRawQueueBackpressure()
 {
     ResultSink sink;
-    data::Module module([&sink](const auto& result) { return sink.Accept(result); });
-    CHECK(module.Initialize() == ACLPTI_SUCCESS);
+    auto& module = data::ProfilingDataManager::Instance();
+    aclptiProfilingDataCallback moduleCallback = [&sink](const auto& result) { return sink.Accept(result); };
+    CHECK(module.Initialize(std::move(moduleCallback)) == ACLPTI_SUCCESS);
     CHECK(module.PrepareReplay({404, PmuEvents({0x55})}) == ACLPTI_SUCCESS);
 
     const MsprofRawDataCallback callback = module.GetRawDataCallback();
@@ -988,7 +1058,8 @@ int TestRawQueueBackpressure()
 
     auto payload = PmuRecord(1, 2, 8, 77);
     auto raw = RawData(payload, PMU_DATA_TYPE);
-    for (std::size_t index = 0; index < 1500; ++index) {
+    constexpr size_t recordCount = 12000;
+    for (std::size_t index = 0; index < recordCount; ++index) {
         raw.offset = static_cast<uint64_t>(index * raw.chunkSize);
         CHECK(callback(&raw) == 0);
     }
@@ -1001,13 +1072,170 @@ int TestRawQueueBackpressure()
     const auto result = sink.Wait();
     CHECK(result != nullptr);
     CHECK(result->status == ACLPTI_SUCCESS);
-    CHECK(result->errorStats.failedRecordCount == 0);
+    CHECK(result->stats.failedRecordCount == 0);
+    CHECK(result->pmuLogs.begin()->second.systemCounters.size() == recordCount);
+    CHECK(result->stats.acceptedBytes == recordCount * 128);
     CHECK(result->pmuLogs.at(aclptiBlockKey{8, 0, ACLPTI_CORE_TYPE_AIC, 3}).values.at(0x55) == 77.0);
+    return 0;
+}
+
+int TestQueueFailureAndForceShutdown()
+{
+    ResultSink sink;
+    auto& module = data::ProfilingDataManager::Instance();
+    aclptiProfilingDataCallback moduleCallback = [&](const auto& result) { return sink.Accept(result); };
+    CHECK(module.Initialize(std::move(moduleCallback)) == ACLPTI_SUCCESS);
+    CHECK(module.PrepareReplay({501, PmuEvents({0x55})}) == ACLPTI_SUCCESS);
+    auto raw = RawData(PmuRecord(1, 2, 8, 77), PMU_DATA_TYPE);
+    CHECK(setenv("NPU_COMPUTE_TEST_QUEUE_OOM", "1", 1) == 0);
+    CHECK(module.GetRawDataCallback()(&raw) == ACLPTI_ERROR_OUT_OF_MEMORY);
+    CHECK(unsetenv("NPU_COMPUTE_TEST_QUEUE_OOM") == 0);
+    CHECK(module.RecordReplayStatus({501, ACLPTI_SUCCESS}).status == ACLPTI_ERROR_PROFILING_FAILED);
+    CHECK(module.ReleaseReplay(501) == ACLPTI_SUCCESS);
+    CHECK(module.PrepareReplay({502, PmuEvents({0x55})}) == ACLPTI_SUCCESS);
+    CHECK(module.GetRawDataCallback()(&raw) == ACLPTI_SUCCESS);
+    CHECK(module.ForceShutdown() == ACLPTI_SUCCESS);
+    const auto result = sink.Wait();
+    CHECK(result != nullptr);
+    CHECK(result->stats.acceptedBytes == 128);
+    CHECK(result->errorStats.failedRecordCountByReplay.at(501) == 1);
+    CHECK(result->status == ACLPTI_ERROR_RESULT_UNRELIABLE);
+    CHECK(result->pmuLogs.empty());
+    return 0;
+}
+
+int TestRejectedChunkDoesNotBindDevice()
+{
+    ResultSink sink;
+    auto& module = data::ProfilingDataManager::Instance();
+    aclptiProfilingDataCallback moduleCallback = [&](const auto& result) { return sink.Accept(result); };
+    CHECK(module.Initialize(std::move(moduleCallback)) == ACLPTI_SUCCESS);
+    CHECK(module.PrepareReplay({503, PmuEvents({}), data::ReplayKind::Pipeline}) == ACLPTI_SUCCESS);
+    const std::array<std::byte, 4> bytes{};
+    auto raw = RawData(bytes, BIU_PERF_DATA_TYPE, 3);
+    raw.chunkModule = 6;
+    raw.isLastChunk = true;
+    CHECK(module.GetRawDataCallback()(&raw) == ACLPTI_ERROR_INVALID_RAW_DATA);
+    raw.deviceId = 2;
+    raw.chunkModule = 0;
+    CHECK(module.GetRawDataCallback()(&raw) == ACLPTI_SUCCESS);
+    CHECK(module.RecordReplayStatus({503, ACLPTI_SUCCESS}).status == ACLPTI_ERROR_PROFILING_FAILED);
+    CHECK(module.ReleaseReplay(503) == ACLPTI_SUCCESS);
+    CHECK(module.Shutdown() == ACLPTI_SUCCESS);
+    const auto result = sink.Wait();
+    CHECK(result != nullptr);
+    CHECK(result->pipelineData.at(503).deviceId == 2);
+    CHECK(result->pipelineData.at(503).channels.at({0, aclptiBiuCoreKind::Aic}).size() == 1);
+    return 0;
+}
+
+int TestResultAllocationFailure()
+{
+    auto& module = data::ProfilingDataManager::Instance();
+    aclptiProfilingDataCallback moduleCallback = [](const auto&) { return ACLPTI_ERROR_CALLBACK; };
+    CHECK(module.Initialize(std::move(moduleCallback)) == ACLPTI_SUCCESS);
+    CHECK(module.PrepareReplay({504, PmuEvents({})}) == ACLPTI_SUCCESS);
+    CHECK(module.RecordReplayStatus({504, ACLPTI_SUCCESS}).status == ACLPTI_SUCCESS);
+    CHECK(module.ReleaseReplay(504) == ACLPTI_SUCCESS);
+    CHECK(setenv("NPU_COMPUTE_TEST_RESULT_OOM", "1", 1) == 0);
+    CHECK(module.Shutdown() == ACLPTI_ERROR_OUT_OF_MEMORY);
+    CHECK(unsetenv("NPU_COMPUTE_TEST_RESULT_OOM") == 0);
+    CHECK(module.Shutdown() == ACLPTI_ERROR_OUT_OF_MEMORY);
+    return 0;
+}
+
+// Each collection models one original launch; replay IDs may restart in the next collection.
+int TestCompleteProfilingIsolation()
+{
+    std::shared_ptr<const aclptiProfilingDataResult> firstResult;
+    for (uint32_t collection = 0; collection < 2; ++collection) {
+        ResultSink sink;
+        auto& module = data::ProfilingDataManager::Instance();
+        CHECK(module.Initialize([&sink](const auto& result) { return sink.Accept(result); }) == ACLPTI_SUCCESS);
+        for (uint32_t round = 0; round < 2; ++round) {
+            const uint32_t event = 0x700 + collection * 2 + round;
+            CHECK(module.PrepareReplay({round, PmuEvents({event})}) == ACLPTI_SUCCESS);
+            auto raw = RawData(PmuRecord(7, 8, 2, 100 + collection * 10 + round), PMU_DATA_TYPE);
+            CHECK(module.GetRawDataCallback()(&raw) == ACLPTI_SUCCESS);
+            CHECK(module.RecordReplayStatus({round, ACLPTI_SUCCESS}).status == ACLPTI_SUCCESS);
+            CHECK(module.ReleaseReplay(round) == ACLPTI_SUCCESS);
+            CHECK(sink.Count() == 0);
+        }
+        CHECK(module.Shutdown() == ACLPTI_SUCCESS);
+        CHECK(sink.Count() == 1);
+        const auto result = sink.Wait();
+        CHECK(result != nullptr);
+        CHECK(result->pmuLogs.size() == 1);
+        const auto& values = result->pmuLogs.begin()->second.values;
+        CHECK(values.size() == 2);
+        CHECK(values.at(0x700 + collection * 2) == 100 + collection * 10);
+        CHECK(values.at(0x701 + collection * 2) == 101 + collection * 10);
+        if (collection == 0) {
+            firstResult = result;
+        }
+    }
+    CHECK(firstResult->pmuLogs.begin()->second.values.at(0x700) == 100);
+    CHECK(firstResult->pmuLogs.begin()->second.values.count(0x702) == 0);
+    return 0;
+}
+
+int TestSingletonRestart()
+{
+    auto& manager = data::ProfilingDataManager::Instance();
+    CHECK(&manager == &data::ProfilingDataManager::Instance());
+    MsprofRawDataCallback callback = nullptr;
+    for (int round = 0; round < 2; ++round) {
+        ResultSink sink;
+        CHECK(manager.Initialize([&](const auto& result) { return sink.Accept(result); }) == ACLPTI_SUCCESS);
+        callback = manager.GetRawDataCallback();
+        CHECK(manager.PrepareReplay({900, PmuEvents({0x701})}) == ACLPTI_SUCCESS);
+        auto raw = RawData(PmuRecord(1, 2, 0, 100 + round), PMU_DATA_TYPE);
+        CHECK(callback(&raw) == 0);
+        CHECK(manager.RecordReplayStatus({900, ACLPTI_SUCCESS}).status == ACLPTI_SUCCESS);
+        CHECK(manager.ReleaseReplay(900) == ACLPTI_SUCCESS);
+        CHECK(manager.Shutdown() == ACLPTI_SUCCESS);
+        const auto result = sink.Wait();
+        CHECK(result != nullptr);
+        CHECK(result->pmuLogs.size() == 1);
+        CHECK(callback(&raw) == ACLPTI_ERROR_NOT_INITIALIZED);
+    }
+    return 0;
+}
+
+int TestProcessorPhaseBoundaries()
+{
+    data::DataProcessor processor;
+    processor.Start();
+    auto raw = RawData(PmuRecord(1, 2, 0, 100), PMU_DATA_TYPE);
+    CHECK(processor.ReceiveRawData(&raw) == ACLPTI_ERROR_NO_ACTIVE_REPLAY);
+    CHECK(processor.PrepareReplay({900, PmuEvents({0x701})}) == ACLPTI_SUCCESS);
+    CHECK(processor.PrepareReplay({901, PmuEvents({0x701})}) == ACLPTI_ERROR_REPLAY_ACTIVE);
+    CHECK(processor.ReleaseReplay(900) == ACLPTI_ERROR_INVALID_STATE);
+    CHECK(processor.RecordReplayStatus({901, ACLPTI_SUCCESS}).status == ACLPTI_ERROR_REPLAY_NOT_FOUND);
+    CHECK(processor.ReceiveRawData(&raw) == ACLPTI_SUCCESS);
+    CHECK(processor.RecordReplayStatus({900, ACLPTI_SUCCESS}).status == ACLPTI_SUCCESS);
+    CHECK(processor.ReceiveRawData(&raw) == ACLPTI_ERROR_INVALID_STATE);
+    CHECK(processor.CloseReplay(false) == ACLPTI_ERROR_REPLAY_ACTIVE);
+    CHECK(processor.ReleaseReplay(900) == ACLPTI_SUCCESS);
+    CHECK(processor.CloseReplay(false) == ACLPTI_SUCCESS);
+    auto result = processor.StopAndTakeResult();
+    CHECK(result.has_value());
+    CHECK(result->pmuLogs.size() == 1);
     return 0;
 }
 
 int main()
 {
+    if (TestProcessorPhaseBoundaries() != 0) {
+        return 1;
+    }
+    if (TestSingletonRestart() != 0) {
+        return 1;
+    }
+    if (TestQueueFailureAndForceShutdown() != 0 || TestRejectedChunkDoesNotBindDevice() != 0 ||
+        TestResultAllocationFailure() != 0) {
+        return 1;
+    }
     if (TestRawDataDecoder() != 0) {
         return 1;
     }
@@ -1035,6 +1263,9 @@ int main()
     if (TestOpaqueAggregationAllocationFailure() != 0) {
         return 1;
     }
+    if (TestReplayDeviceIsInferredFromRawData() != 0) {
+        return 1;
+    }
     if (TestDecoderAllocationFailure() != 0) {
         return 1;
     }
@@ -1047,7 +1278,7 @@ int main()
     if (TestShutdownCallback() != 0) {
         return 1;
     }
-    if (TestCrossReplayAggregate() != 0) {
+    if (TestCompleteProfilingIsolation() != 0 || TestCrossReplayAggregate() != 0) {
         return 1;
     }
     if (TestMsopprofA5ReplayMerge() != 0) {

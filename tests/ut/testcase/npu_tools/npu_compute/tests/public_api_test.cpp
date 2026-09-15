@@ -17,6 +17,8 @@
 
 static_assert(std::is_same_v<decltype(aclptiProfilingDataResult{}.status), aclptiResult>);
 static_assert(
+    std::is_same_v<decltype(aclptiProfilingDataResult{}.pipelineData), std::map<uint64_t, aclptiPipelineData>>);
+static_assert(
     std::is_same_v<decltype(&aclptiRegisterProfilingDataCallback), aclptiResult (*)(aclptiProfilingDataCallback)>);
 static_assert(std::is_same_v<
               decltype(&aclptiRegisterDataModuleShutdownCallback),
