@@ -509,9 +509,19 @@ extern "C" aclError aclrtBinaryGetFunction(
         "aclrtBinaryGetFunction", binHandle, kernelName, funcHandle);
 }
 
+extern "C" aclError aclrtFunctionGetBinary(aclrtFuncHandle, aclrtBinHandle*) { return ACL_ERROR_INVALID_PARAM; }
+
+extern "C" aclError aclrtGetFunctionName(aclrtFuncHandle, uint32_t, char*) { return ACL_ERROR_INVALID_PARAM; }
+
 extern "C" aclError aclrtGetFuncBySymbol(const void* symbol, aclrtFuncHandle* funcHandle)
 {
     return CallCurrent<aclError (*)(const void*, aclrtFuncHandle*)>("aclrtGetFuncBySymbol", symbol, funcHandle);
+}
+
+extern "C" aclError aclrtBinaryGetFunctionByEntry(aclrtBinHandle binary, uint64_t entry, aclrtFuncHandle* function)
+{
+    return CallCurrent<aclError (*)(aclrtBinHandle, uint64_t, aclrtFuncHandle*)>(
+        "aclrtBinaryGetFunctionByEntry", binary, entry, function);
 }
 
 extern "C" aclError aclrtBinaryUnLoad(aclrtBinHandle binHandle)

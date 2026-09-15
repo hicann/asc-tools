@@ -108,6 +108,40 @@ uint32_t g_start_data_type = 0;
 uint32_t g_stop_data_type = 0;
 uint32_t g_callback_type = 0;
 std::vector<uint8_t> g_kernel_inputs;
+std::vector<void*> g_launch_handles;
+std::size_t g_binary_loads = 0;
+std::vector<void*> g_unloaded_binaries;
+int g_binary_tokens[4];
+int g_function_tokens[4];
+
+int RealBinaryLoad(const void*, std::size_t, const aclrtBinaryLoadOptions*, aclrtBinHandle* binary)
+{
+    *binary = &g_binary_tokens[g_binary_loads++];
+    return ACL_SUCCESS;
+}
+
+int RealBinaryFunction(aclrtBinHandle binary, const char* name, aclrtFuncHandle* function)
+{
+    if (std::strcmp(name, "sample") != 0) {
+        return ACL_ERROR_INVALID_PARAM;
+    }
+    *function = &g_function_tokens[static_cast<int*>(binary) - g_binary_tokens];
+    return ACL_SUCCESS;
+}
+
+int RealBinaryEntry(aclrtBinHandle binary, std::uint64_t entry, aclrtFuncHandle* function)
+{
+    if (entry != 42) {
+        return ACL_ERROR_INVALID_PARAM;
+    }
+    return RealBinaryFunction(binary, "sample", function);
+}
+
+int RealBinaryUnload(aclrtBinHandle binary)
+{
+    g_unloaded_binaries.push_back(binary);
+    return ACL_SUCCESS;
+}
 std::vector<ObservedConfig> g_configs;
 const void* g_expected_args_data = nullptr;
 const void* g_started_config = nullptr;
@@ -146,9 +180,10 @@ int RealMemset(void* destination, std::size_t destination_size, int value, std::
     return 0;
 }
 
-int RealLaunch(void*, uint32_t, const void* args_data, std::size_t args_size, void*)
+int RealLaunch(void* function, uint32_t, const void* args_data, std::size_t args_size, void*)
 {
     ++g_launch_calls;
+    g_launch_handles.push_back(function);
     if (args_data == nullptr || args_data != g_expected_args_data || args_size != sizeof(KernelArgs)) {
         return -1;
     }
@@ -159,10 +194,13 @@ int RealLaunch(void*, uint32_t, const void* args_data, std::size_t args_size, vo
 }
 
 int RealLaunchWithHostArgs(
-    aclrtFuncHandle, uint32_t, aclrtStream, aclrtLaunchKernelCfg*, void*, std::size_t, aclrtPlaceHolderInfo*,
-    std::size_t)
+    aclrtFuncHandle function, uint32_t blocks, aclrtStream stream, aclrtLaunchKernelCfg*, void* args, std::size_t size,
+    aclrtPlaceHolderInfo*, std::size_t)
 {
     ++g_launch_with_host_args_calls;
+    if (args != nullptr) {
+        return RealLaunch(function, blocks, args, size, stream);
+    }
     return 0;
 }
 
@@ -199,8 +237,11 @@ int ProfilerStart(uint32_t, const void* config, uint32_t length)
         return -1;
     }
     const auto* msprofConfig = static_cast<const MsprofConfig*>(config);
-    if (msprofConfig->configInfo.attrs == nullptr || msprofConfig->configInfo.numAttrs != 2 ||
-        msprofConfig->configInfo.attrs[1].id != PROF_CONFIG_ATTR_TASK_BLOCK) {
+    const bool pipeline = msprofConfig->configInfo.attrs != nullptr &&
+                          msprofConfig->configInfo.attrs[0].id == PROF_CONFIG_ATTR_INSTR &&
+                          msprofConfig->configInfo.attrs[0].value.instrMode == PROF_COMPUTE_BIU_PERF;
+    if (msprofConfig->configInfo.attrs == nullptr || msprofConfig->configInfo.numAttrs != (pipeline ? 1U : 2U) ||
+        (!pipeline && msprofConfig->configInfo.attrs[1].id != PROF_CONFIG_ATTR_TASK_BLOCK)) {
         return -1;
     }
     ObservedConfig observed{
@@ -209,7 +250,7 @@ int ProfilerStart(uint32_t, const void* config, uint32_t length)
         msprofConfig->profSwitch,
         msprofConfig->configInfo.attrs[0].id,
         0,
-        msprofConfig->configInfo.attrs[1].value.taskBlockMode,
+        pipeline ? 0 : msprofConfig->configInfo.attrs[1].value.taskBlockMode,
         {},
     };
     if (observed.primaryAttr == PROF_CONFIG_ATTR_AICORE_METRICS) {
@@ -280,11 +321,27 @@ extern "C" aclError aclrtGetDevice(std::int32_t* deviceId)
     return ACL_SUCCESS;
 }
 
+extern "C" aclError aclrtFunctionGetBinary(aclrtFuncHandle function, aclrtBinHandle* binary)
+{
+    if (function != &g_function_tokens[0])
+        return ACL_ERROR_INVALID_PARAM;
+    *binary = &g_binary_tokens[0];
+    return ACL_SUCCESS;
+}
+
+extern "C" aclError aclrtGetFunctionName(aclrtFuncHandle, uint32_t, char* name)
+{
+    std::strcpy(name, "sample");
+    return ACL_SUCCESS;
+}
+
 int main(int argc, char** argv)
 {
     const bool useShrinkBlock = argc == 2 && std::strcmp(argv[1], "shrink") == 0;
     const bool useDebugLog = argc == 2 && std::strcmp(argv[1], "debug") == 0;
-    CHECK(argc == 1 || useShrinkBlock || useDebugLog);
+    const bool useHostArgs = argc == 2 && std::strcmp(argv[1], "host") == 0;
+    const bool useSymbol = argc == 2 && std::strcmp(argv[1], "symbol") == 0;
+    CHECK(argc == 1 || useShrinkBlock || useDebugLog || useHostArgs || useSymbol);
     if (useDebugLog) {
         CHECK(setenv("NPU_COMPUTE_DEBUG", "1", 1) == 0);
     } else {
@@ -298,6 +355,10 @@ int main(int argc, char** argv)
     CHECK(RuntimeStubSetOriginFunction("aclrtMemcpy", &RealMemcpy) == 0);
     CHECK(RuntimeStubSetOriginFunction("aclrtMemset", &RealMemset) == 0);
     CHECK(RuntimeStubSetOriginFunction("aclrtLaunchKernel", &RealLaunch) == 0);
+    CHECK(RuntimeStubSetOriginFunction("aclrtBinaryLoadFromData", &RealBinaryLoad) == 0);
+    CHECK(RuntimeStubSetOriginFunction("aclrtBinaryGetFunction", &RealBinaryFunction) == 0);
+    CHECK(RuntimeStubSetOriginFunction("aclrtBinaryGetFunctionByEntry", &RealBinaryEntry) == 0);
+    CHECK(RuntimeStubSetOriginFunction("aclrtBinaryUnLoad", &RealBinaryUnload) == 0);
     CHECK(RuntimeStubSetOriginFunction("aclrtLaunchKernelWithHostArgs", &RealLaunchWithHostArgs) == 0);
     CHECK(RuntimeStubSetOriginFunction("aclrtSetDevice", &RealSetDevice) == 0);
     CHECK(RuntimeStubSetOriginFunction("aclrtResetDevice", &RealResetDevice) == 0);
@@ -346,6 +407,26 @@ int main(int argc, char** argv)
     aclptiRangeProfilerSetConfigParams invalidConfig{nullptr, 0, ACLPTI_BLOCK_RESULT_ALL, false, false};
     CHECK(aclptiRangeProfilerSetConfig(&invalidConfig) == ACLPTI_ERROR_INVALID_PARAMETER);
 
+    const char binaryImage[] = "sample ELF (toolchain stub input)";
+    aclrtBinHandle binary = nullptr;
+    CHECK(aclrtBinaryLoadFromData(binaryImage, sizeof(binaryImage), nullptr, &binary) == ACL_SUCCESS);
+    CHECK(binary == &g_binary_tokens[0]);
+    CHECK(g_binary_loads == 2);
+    aclrtFuncHandle namedFunction = nullptr;
+    if (useSymbol) {
+        // Like Bisheng's generated host stub: symbol lookup is the only function query.
+        CHECK(aclrtGetFuncBySymbol(&g_function_tokens[0], &namedFunction) == ACL_SUCCESS);
+    } else {
+        CHECK(aclrtBinaryGetFunction(binary, "sample", &namedFunction) == ACL_SUCCESS);
+    }
+    CHECK(namedFunction == &g_function_tokens[0]);
+    // The second binary deliberately reuses Entry 42; it must retain its own mapping.
+    aclrtBinHandle entryBinary = nullptr;
+    CHECK(aclrtBinaryLoadFromData(binaryImage, sizeof(binaryImage), nullptr, &entryBinary) == ACL_SUCCESS);
+    aclrtFuncHandle entryFunction = nullptr;
+    CHECK(aclrtBinaryGetFunctionByEntry(entryBinary, 42, &entryFunction) == ACL_SUCCESS);
+    CHECK(entryFunction == &g_function_tokens[2]);
+
     void* alignedAllocation = nullptr;
     CHECK(aclrtMallocAlign32(&alignedAllocation, 1, ACL_MEM_MALLOC_HUGE_FIRST) == 0);
     uint8_t alignedValue = 3;
@@ -365,13 +446,29 @@ int main(int argc, char** argv)
     std::string profilingLog;
     aclError firstLaunchStatus = ACL_ERROR_RT_FAILURE;
     CHECK(CaptureStderr(
-        [&] { firstLaunchStatus = aclrtLaunchKernel(nullptr, 1, &args, sizeof(args), nullptr); }, &profilingLog));
+        [&] {
+            auto function = useShrinkBlock ? entryFunction : namedFunction;
+            firstLaunchStatus = useHostArgs ? aclrtLaunchKernelWithHostArgs(
+                                                  function, 1, nullptr, nullptr, &args, sizeof(args), nullptr, 0) :
+                                              aclrtLaunchKernel(function, 1, &args, sizeof(args), nullptr);
+        },
+        &profilingLog));
     CHECK(firstLaunchStatus == ACL_SUCCESS);
     CHECK(g_start_calls == 5);
     CHECK(g_stop_calls == 5);
     CHECK(g_start_data_type == 8);
     CHECK(g_stop_data_type == 8);
     CHECK(g_launch_calls == 6);
+    void* expectedOriginal = useShrinkBlock ? &g_function_tokens[2] : &g_function_tokens[0];
+    void* expectedPatched = useShrinkBlock ? &g_function_tokens[3] : &g_function_tokens[1];
+    CHECK(
+        (g_launch_handles == std::vector<void*>{
+                                 expectedOriginal, expectedOriginal, expectedOriginal, expectedOriginal,
+                                 expectedPatched, expectedOriginal}));
+    CHECK(aclrtBinaryGetFunctionByEntry(entryBinary, 43, &entryFunction) == ACL_ERROR_INVALID_PARAM);
+    CHECK(aclrtBinaryUnLoad(binary) == ACL_SUCCESS);
+    CHECK(aclrtBinaryUnLoad(entryBinary) == ACL_SUCCESS);
+    CHECK(g_unloaded_binaries.size() == 4);
     CHECK(g_sync_calls == 6);
     CHECK(g_get_device_calls == 1);
     CHECK(g_soc_name_calls == 0);
@@ -403,7 +500,7 @@ int main(int argc, char** argv)
     CHECK(g_configs[3].profSwitch == (PROF_TASK_TIME_MASK | PROF_INSTR_MASK));
     CHECK(g_configs[3].primaryAttr == PROF_CONFIG_ATTR_INSTR);
     CHECK(g_configs[3].instrMode == PROF_COMPUTE_BIU_PERF);
-    CHECK(g_configs[3].blockMode == expectedBlockMode);
+    CHECK(g_configs[3].blockMode == 0);
     CHECK(g_configs[4].profSwitch == (PROF_TASK_TIME_MASK | PROF_INSTR_MASK));
     CHECK(g_configs[4].primaryAttr == PROF_CONFIG_ATTR_INSTR);
     CHECK(g_configs[4].instrMode == PROF_COMPUTE_PC_SAMPLING);
@@ -445,7 +542,7 @@ int main(int argc, char** argv)
     CHECK(
         aclrtLaunchKernelWithHostArgs(nullptr, 1, nullptr, nullptr, nullptr, 0, nullptr, 0) ==
         ACL_ERROR_PROFILING_FAILURE);
-    CHECK(g_launch_with_host_args_calls == 1);
+    CHECK(g_launch_with_host_args_calls == (useHostArgs ? 7U : 1U));
     CHECK(g_get_device_calls == 1);
     CHECK(g_start_calls == starts_before_host_args);
     CHECK(g_sync_calls == syncs_before_host_args);

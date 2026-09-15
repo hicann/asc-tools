@@ -8,6 +8,7 @@
  * See LICENSE in the root of the software repository for the full text of the License.
  */
 #include "range_profiler.h"
+#include "binary_registry.h"
 
 #include "common/debug_log.h"
 #include "profiling/prof_api.h"
@@ -291,7 +292,7 @@ void RangeProfiler::ConfigureProfilingRound(
     }
 
     std::size_t attrCount = 1;
-    if (blockResult_ != ACLPTI_BLOCK_RESULT_DISABLED) {
+    if (round.kind != data::ReplayKind::Pipeline && blockResult_ != ACLPTI_BLOCK_RESULT_DISABLED) {
         MsprofConfigAttr& blockAttr = config->attrs[attrCount++];
         blockAttr.id = PROF_CONFIG_ATTR_TASK_BLOCK;
         blockAttr.value.taskBlockMode =
@@ -413,7 +414,8 @@ aclptiResult RangeProfiler::FinishProfilingRound(
 }
 
 aclptiResult RangeProfiler::ReplayKernel(
-    const ReplayMemory& replayMemory, const ReplayLaunchFunction& launchFunction, aclrtStream stream)
+    const ReplayMemory& replayMemory, BinaryRegistry& binaryRegistry, aclrtFuncHandle originalFunction,
+    const ReplayLaunchFunction& launchFunction, aclrtStream stream)
 {
     try {
         std::int32_t deviceId = -1;
@@ -441,7 +443,23 @@ aclptiResult RangeProfiler::ReplayKernel(
             }
 
             npucompute::detail::DebugLog("aclpti", "launch replay kernel round=%zu", round);
-            const aclError launchStatus = launchFunction();
+            const bool pipeline = rounds[round].kind == data::ReplayKind::Pipeline;
+            const auto function =
+                pipeline ? binaryRegistry.FindInstrumentedFunction(originalFunction) : originalFunction;
+            aclError launchStatus;
+            if (pipeline && function == nullptr) {
+                // The original launch validated originalFunction, but does not guarantee an
+                // instrumented companion exists. Skip launch and let FinishProfilingRound
+                // below stop and release the profiling round already started above.
+                npucompute::detail::DebugLog(
+                    "aclpti",
+                    "error operation=pipeline_function_lookup status=%d round=%zu originalFunction=%p; "
+                    "enable pipeline before binary load and obtain the function by name or entry",
+                    ACL_ERROR_PROFILING_FAILURE, round, originalFunction);
+                launchStatus = ACL_ERROR_PROFILING_FAILURE;
+            } else {
+                launchStatus = launchFunction(function);
+            }
             npucompute::detail::DebugLog(
                 "aclpti", "launch replay kernel result round=%zu result=%d", round, launchStatus);
             status = FinishProfilingRound(round, config, launchStatus, synchronizeFunction, stream);

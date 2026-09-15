@@ -15,6 +15,21 @@ set(NPU_COMPUTE_ACLPTI_TEST_BACKENDS
 
 find_package(Threads REQUIRED)
 
+find_package(Python3 REQUIRED COMPONENTS Interpreter)
+add_executable(npu_compute_binary_instrumenter_test binary_instrumenter_test.cpp
+  ${NPU_COMPUTE_SOURCE_DIR}/src/acl_pti/profiling/binary_instrumenter.cpp)
+target_include_directories(npu_compute_binary_instrumenter_test PRIVATE "${NPU_COMPUTE_SOURCE_DIR}/src")
+target_link_libraries(npu_compute_binary_instrumenter_test PRIVATE npu_compute_kernel_end Boost::filesystem Threads::Threads ${CMAKE_DL_LIBS})
+add_test(NAME npu_compute.binary_instrumenter
+  COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/binary_instrumenter_test.py
+    $<TARGET_FILE:npu_compute_binary_instrumenter_test>)
+
+add_executable(npu_compute_binary_registry_test binary_registry_test.cpp
+  ${NPU_COMPUTE_SOURCE_DIR}/src/acl_pti/profiling/binary_registry.cpp)
+target_include_directories(npu_compute_binary_registry_test PRIVATE "${NPU_COMPUTE_SOURCE_DIR}/src")
+target_link_libraries(npu_compute_binary_registry_test PRIVATE npu_compute_test_headers Threads::Threads)
+add_test(NAME npu_compute.binary_registry COMMAND npu_compute_binary_registry_test)
+
 add_library(acl_pti_test SHARED
   ${NPU_COMPUTE_SOURCE_DIR}/src/acl_pti/initialization.cpp
   ${NPU_COMPUTE_SOURCE_DIR}/src/acl_pti/activity/api.cpp
@@ -31,7 +46,9 @@ add_library(acl_pti_test SHARED
   ${NPU_COMPUTE_SOURCE_DIR}/src/acl_pti/profiling/range_profiler.cpp
   ${NPU_COMPUTE_SOURCE_DIR}/src/acl_pti/profiling/replay_memory.cpp
   ${NPU_COMPUTE_SOURCE_DIR}/src/acl_pti/profiling/replay_runtime.cpp
+  ${NPU_COMPUTE_SOURCE_DIR}/src/acl_pti/profiling/binary_registry.cpp
   ${NPU_COMPUTE_SOURCE_DIR}/src/acl_pti/handler/runtime_api_handlers.cpp
+  binary_instrumenter_stub.cpp
 )
 target_compile_definitions(acl_pti_test PRIVATE
   NPU_COMPUTE_ENABLE_TEST_CONTROLS=1
@@ -226,8 +243,10 @@ target_link_libraries(acl_pti_replay_test
 )
 set_target_properties(acl_pti_replay_test PROPERTIES ENABLE_EXPORTS YES)
 add_test(NAME npu_compute.replay COMMAND acl_pti_replay_test)
+add_test(NAME npu_compute.replay_symbol COMMAND acl_pti_replay_test symbol)
 add_test(NAME npu_compute.replay_debug COMMAND acl_pti_replay_test debug)
 add_test(NAME npu_compute.replay_shrink_block COMMAND acl_pti_replay_test shrink)
+add_test(NAME npu_compute.replay_pipeline_host_args COMMAND acl_pti_replay_test host)
 
 add_executable(acl_pti_simt_replay_test simt_replay_test.cpp)
 target_link_libraries(acl_pti_simt_replay_test
@@ -285,6 +304,12 @@ set_target_properties(acl_pti_runtime_failure_short_circuit_test
 add_test(NAME npu_compute.runtime_failure_short_circuit
   COMMAND acl_pti_runtime_failure_short_circuit_test
 )
+foreach(scenario malloc free memcpy memset launch missing shutdown-failure binary-disabled
+    binary-load binary-companion-load binary-name binary-entry binary-companion-name
+    binary-companion-entry binary-unload binary-companion-unload)
+  add_test(NAME npu_compute.runtime_failure.${scenario}
+    COMMAND acl_pti_runtime_failure_short_circuit_test ${scenario})
+endforeach()
 
 add_executable(acl_pti_hook_failure_domain_test hook_failure_domain_test.cpp)
 target_link_libraries(acl_pti_hook_failure_domain_test

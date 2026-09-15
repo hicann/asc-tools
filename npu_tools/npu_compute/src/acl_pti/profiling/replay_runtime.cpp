@@ -36,6 +36,50 @@ aclptiResult ReplayRuntime::SetConfig(const aclptiRangeProfilerSetConfigParams* 
     return rangeProfiler_.SetConfig(params);
 }
 
+aclptiResult ReplayRuntime::RegisterBinary(
+    const void* data, std::size_t size, const aclrtBinaryLoadOptions* options, aclrtBinHandle binary)
+{
+    if (!CollectPipeline() || !ProfilingAvailable()) {
+        return ACLPTI_SUCCESS;
+    }
+    return HandleProfilingResult(binaryRegistry_.RegisterBinary(data, size, options, binary));
+}
+
+aclptiResult ReplayRuntime::RegisterBinaryFunction(aclrtBinHandle binary, const char* name, aclrtFuncHandle function)
+{
+    if (!CollectPipeline() || !ProfilingAvailable()) {
+        return ACLPTI_SUCCESS;
+    }
+    return HandleProfilingResult(binaryRegistry_.RegisterBinaryFunction(binary, name, function));
+}
+
+aclptiResult ReplayRuntime::RegisterBinaryFunction(aclrtBinHandle binary, std::uint64_t entry, aclrtFuncHandle function)
+{
+    if (!CollectPipeline() || !ProfilingAvailable()) {
+        return ACLPTI_SUCCESS;
+    }
+    return HandleProfilingResult(binaryRegistry_.RegisterBinaryFunction(binary, entry, function));
+}
+
+aclptiResult ReplayRuntime::RegisterSymbolFunction(aclrtFuncHandle function)
+{
+    if (!CollectPipeline() || !ProfilingAvailable()) {
+        return ACLPTI_SUCCESS;
+    }
+    return HandleProfilingResult(binaryRegistry_.RegisterSymbolFunction(function));
+}
+
+aclptiResult ReplayRuntime::PrepareBinaryUnload(aclrtBinHandle binary, BinaryRegistry::UnloadContext& context)
+{
+    // Cleanup must remain available after profiling has stopped.
+    return HandleProfilingResult(binaryRegistry_.PrepareBinaryUnload(binary, context));
+}
+
+aclptiResult ReplayRuntime::CompleteBinaryUnload(BinaryRegistry::UnloadContext& context)
+{
+    return HandleProfilingResult(binaryRegistry_.CompleteBinaryUnload(context));
+}
+
 aclptiResult ReplayRuntime::MirrorMalloc(void** devPtr, std::size_t size, aclrtMemMallocPolicy policy)
 {
     if (!ProfilingAvailable()) {
@@ -69,12 +113,14 @@ aclptiResult ReplayRuntime::MirrorMemset(void* devPtr, std::size_t maxCount, std
     return HandleProfilingResult(replayMemory_.MirrorMemset(devPtr, maxCount, value, count));
 }
 
-aclptiResult ReplayRuntime::ReplayKernel(const ReplayLaunchFunction& launchFunction, aclrtStream stream)
+aclptiResult ReplayRuntime::ReplayKernel(
+    aclrtFuncHandle originalFunction, const ReplayLaunchFunction& launchFunction, aclrtStream stream)
 {
     if (!ProfilingAvailable()) {
         return ACLPTI_ERROR_PROFILING_FAILED;
     }
-    const aclptiResult status = rangeProfiler_.ReplayKernel(replayMemory_, launchFunction, stream);
+    const aclptiResult status =
+        rangeProfiler_.ReplayKernel(replayMemory_, binaryRegistry_, originalFunction, launchFunction, stream);
     // One original launch owns all rounds above and exactly one complete result publication.
     const aclptiResult shutdownStatus = StopProfiling();
     if (status == ACLPTI_SUCCESS) {

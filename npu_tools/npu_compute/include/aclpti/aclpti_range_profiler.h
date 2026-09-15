@@ -31,8 +31,8 @@ typedef enum aclptiBlockResultMode {
 typedef struct aclptiRangeProfilerSetConfigParams {
     const char* const* sections;
     size_t numSections;
-    aclptiBlockResultMode blockResult;
-    bool collectPipeline;
+    aclptiBlockResultMode blockResult; // Applies to PMU/PC sampling; ignored for pipeline.
+    bool collectPipeline;              // Enable before aclrtBinaryLoadFromData; requires kernel-end probe assets.
     bool collectPcSampling;
 } aclptiRangeProfilerSetConfigParams;
 

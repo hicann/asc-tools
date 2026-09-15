@@ -16,6 +16,7 @@
 
 #include "range_profiler.h"
 #include "replay_memory.h"
+#include "binary_registry.h"
 
 #include <atomic>
 
@@ -28,6 +29,19 @@ public:
 
     /// Applies the requested profiling collection configuration.
     aclptiResult SetConfig(const aclptiRangeProfilerSetConfigParams* params);
+
+    bool CollectPipeline() const { return rangeProfiler_.CollectPipeline(); }
+
+    aclptiResult RegisterBinary(
+        const void* data, std::size_t size, const aclrtBinaryLoadOptions* options, aclrtBinHandle binary);
+    aclptiResult RegisterBinaryFunction(aclrtBinHandle binary, const char* name, aclrtFuncHandle function);
+    aclptiResult RegisterBinaryFunction(aclrtBinHandle binary, std::uint64_t entry, aclrtFuncHandle function);
+    aclptiResult RegisterSymbolFunction(aclrtFuncHandle function);
+    aclptiResult PrepareBinaryUnload(aclrtBinHandle binary, BinaryRegistry::UnloadContext& context);
+    aclptiResult CompleteBinaryUnload(BinaryRegistry::UnloadContext& context);
+
+    /// Stops profiling once; callers preserve the error that triggered shutdown.
+    aclptiResult StopProfiling();
 
     /// Allocates replay shadow memory for a successful device allocation.
     aclptiResult MirrorMalloc(void** devPtr, std::size_t size, aclrtMemMallocPolicy policy);
@@ -42,8 +56,12 @@ public:
     /// Mirrors a device memset for replay.
     aclptiResult MirrorMemset(void* devPtr, std::size_t maxCount, std::int32_t value, std::size_t count);
 
-    /// Restores replay memory and profiles each replay round for a kernel launch.
-    aclptiResult ReplayKernel(const ReplayLaunchFunction& launchFunction, aclrtStream stream);
+    /// Delegates replay rounds to RangeProfiler and shuts down profiling afterwards.
+    /// Called after the handler has successfully submitted the original launch.
+    /// The callback invokes the supplied function using the original launch arguments.
+    /// Invoked synchronously and never retained; captured arguments must live until return.
+    aclptiResult ReplayKernel(
+        aclrtFuncHandle originalFunction, const ReplayLaunchFunction& launchFunction, aclrtStream stream);
 
 private:
     /// Reports whether new profiling work may be started.
@@ -52,12 +70,10 @@ private:
     /// Stops profiling after a failed optional operation and preserves its root status.
     aclptiResult HandleProfilingResult(aclptiResult status);
 
-    /// Stops profiling and shuts down its data module once.
-    aclptiResult StopProfiling();
-
     bool initialized_ = false;
     std::atomic<bool> profilingAvailable_{true};
     ReplayMemory replayMemory_;
+    BinaryRegistry binaryRegistry_;
     RangeProfiler rangeProfiler_;
 };
 

@@ -29,7 +29,9 @@ struct MsprofConfigAttr;
 
 namespace aclpti::profiling {
 
-using ReplayLaunchFunction = std::function<aclError()>;
+class BinaryRegistry;
+
+using ReplayLaunchFunction = std::function<aclError(aclrtFuncHandle)>;
 
 class RangeProfiler {
 public:
@@ -39,9 +41,12 @@ public:
     /// Validates and stores the requested PMU and instruction collection configuration.
     aclptiResult SetConfig(const aclptiRangeProfilerSetConfigParams* params);
 
+    bool CollectPipeline() const { return collectPipeline_; }
+
     /// Replays a kernel and distinguishes profiling-only failures from unreliable device results.
     aclptiResult ReplayKernel(
-        const ReplayMemory& replayMemory, const ReplayLaunchFunction& launchFunction, aclrtStream stream);
+        const ReplayMemory& replayMemory, BinaryRegistry& binaryRegistry, aclrtFuncHandle originalFunction,
+        const ReplayLaunchFunction& launchFunction, aclrtStream stream);
 
     /// Drains raw profiling data and stops the data module.
     aclptiResult Shutdown();

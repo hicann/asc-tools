@@ -42,6 +42,7 @@ aclptiResult InitializeDependencies()
         return replayResult;
     }
     if (!handler::RegisterRuntimeApiHandlers()) {
+        (void)profiling::GetReplayRuntime().StopProfiling();
         npucompute::detail::DebugLog("aclpti", "runtime handler registration failed");
         return ACLPTI_ERROR_INITIALIZATION_FAILED;
     }

@@ -174,16 +174,6 @@ int main()
         CHECK(aclptiEnableCallback(true, subscriber, ACLPTI_CB_DOMAIN_RUNTIME_API, cbid) == ACLPTI_SUCCESS);
         CHECK(aclptiEnableCallback(false, subscriber, ACLPTI_CB_DOMAIN_RUNTIME_API, cbid) == ACLPTI_SUCCESS);
     }
-    int originalSymbol = 0;
-    aclrtFuncHandle functionHandle = nullptr;
-    CHECK(aclrtGetFuncBySymbol(&originalSymbol, &functionHandle) == 31);
-    CHECK(functionHandle == &originalSymbol);
-    CHECK(g_getFuncBySymbolCalls == 1);
-    CHECK(g_getFuncBySymbolArgument == &originalSymbol);
-    CHECK(aclrtBinaryUnLoad(&originalSymbol) == 32);
-    CHECK(g_binaryUnLoadCalls == 1);
-    CHECK(g_binaryUnLoadArgument == &originalSymbol);
-    CHECK(g_callbackState.eventCount == 0);
     CHECK(
         aclptiEnableCallback(true, subscriber, ACLPTI_CB_DOMAIN_RUNTIME_API, ACLPTI_RUNTIME_CBID_aclrtMalloc) ==
         ACLPTI_SUCCESS);
@@ -214,6 +204,18 @@ int main()
     CHECK(g_freeCalls == 2);
     CHECK(g_callbackState.eventCount == 2);
 
+    CHECK(
+        aclptiEnableCallback(false, subscriber, ACLPTI_CB_DOMAIN_RUNTIME_API, ACLPTI_RUNTIME_CBID_aclrtMalloc) ==
+        ACLPTI_SUCCESS);
+    g_failMalloc = false;
+    allocation = nullptr;
+    CHECK(aclrtMalloc(&allocation, 8, ACL_MEM_MALLOC_HUGE_FIRST) == ACL_SUCCESS);
+    CHECK(g_callbackState.eventCount == 2);
+    CHECK(aclrtFree(allocation) == ACL_SUCCESS);
+
+    CHECK(
+        aclptiEnableCallback(true, subscriber, ACLPTI_CB_DOMAIN_RUNTIME_API, ACLPTI_RUNTIME_CBID_aclrtMalloc) ==
+        ACLPTI_SUCCESS);
     g_failMalloc = true;
     allocation = nullptr;
     CHECK(aclrtMalloc(&allocation, 8, ACL_MEM_MALLOC_HUGE_FIRST) == ACL_ERROR_INVALID_PARAM);
@@ -223,15 +225,15 @@ int main()
     CHECK(g_callbackState.events[3].site == ACLPTI_API_EXIT);
     CHECK(g_callbackState.events[3].retval == ACL_ERROR_INVALID_PARAM);
 
-    CHECK(
-        aclptiEnableCallback(false, subscriber, ACLPTI_CB_DOMAIN_RUNTIME_API, ACLPTI_RUNTIME_CBID_aclrtMalloc) ==
-        ACLPTI_SUCCESS);
-    g_failMalloc = false;
-    allocation = nullptr;
-    CHECK(aclrtMalloc(&allocation, 8, ACL_MEM_MALLOC_HUGE_FIRST) == ACL_SUCCESS);
-    CHECK(g_callbackState.eventCount == 4);
-    CHECK(aclrtFree(allocation) == ACL_SUCCESS);
-
+    int originalSymbol = 0;
+    aclrtFuncHandle functionHandle = nullptr;
+    CHECK(aclrtGetFuncBySymbol(&originalSymbol, &functionHandle) == 31);
+    CHECK(functionHandle == &originalSymbol);
+    CHECK(g_getFuncBySymbolCalls == 1);
+    CHECK(g_getFuncBySymbolArgument == &originalSymbol);
+    CHECK(aclrtBinaryUnLoad(&originalSymbol) == 32);
+    CHECK(g_binaryUnLoadCalls == 1);
+    CHECK(g_binaryUnLoadArgument == &originalSymbol);
     CHECK(
         aclptiEnableCallback(
             true, subscriber, ACLPTI_CB_DOMAIN_RUNTIME_API, ACLPTI_RUNTIME_CBID_aclrtGetFuncBySymbol) ==
