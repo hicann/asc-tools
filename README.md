@@ -39,9 +39,9 @@ Ascend C Tools是[CANN](https://hiascend.com/software/cann) （Compute Architect
 ├── scripts                             // Ascend C Tools打包脚本
 ├── tests                                // Ascend C Tools的UT用例
 ├── third_party                         // Ascend C Tools依赖的第三方库文件
-├── utils
-│   ├── msobjdump                       // Ascend C Tools msobjdump实现源代码
-└── └── show_kernel_debug_data          // Ascend C Tools show_kernel_debug_data实现源代码
+└── utils
+    ├── msobjdump                       // Ascend C Tools msobjdump实现源代码
+    └── show_kernel_debug_data          // Ascend C Tools show_kernel_debug_data实现源代码
 ```
 
 ## 📖文档介绍

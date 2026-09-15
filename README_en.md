@@ -39,9 +39,9 @@ The directory structure of this repository is as follows:
 ├── scripts                             // Ascend C Tools packaging scripts
 ├── tests                                // Ascend C Tools UT test cases
 ├── third_party                         // Third-party library files that Ascend C Tools depends on
-├── utils
-│   ├── msobjdump                       // Ascend C Tools msobjdump implementation source code
-└── └── show_kernel_debug_data          // Ascend C Tools show_kernel_debug_data implementation source code
+└── utils
+    ├── msobjdump                       // Ascend C Tools msobjdump implementation source code
+    └── show_kernel_debug_data          // Ascend C Tools show_kernel_debug_data implementation source code
 ```
 
 ## 📖 Documentation
