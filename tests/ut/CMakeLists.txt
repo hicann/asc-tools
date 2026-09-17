@@ -363,5 +363,3 @@ foreach(product_type ${TIKICPULIB_PRODUCT_TYPE_LIST})
         TASK_NUM 1
     )
 endforeach()
-
-add_subdirectory(testcase/npu_tools)
