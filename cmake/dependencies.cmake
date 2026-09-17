@@ -16,6 +16,8 @@ set(CMAKE_MODULE_PATH
 )
 message(STATUS "CMAKE_MODULE_PATH            :${CMAKE_MODULE_PATH}")
 
+add_cann_third_party(boost)
+
 if (NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE "Release" CACHE STRING "Build type(default Release)"
     FORCE)
@@ -25,4 +27,5 @@ find_cann_package(unified_dlog REQUIRED)
 find_cann_package(securec REQUIRED)
 find_cann_package(mmpa REQUIRED)
 find_cann_package(acl_rt REQUIRED)
+find_cann_package(msprof REQUIRED)
 find_cann_package(pvmodel REQUIRED)
