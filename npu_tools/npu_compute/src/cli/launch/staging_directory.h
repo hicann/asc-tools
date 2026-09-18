@@ -18,9 +18,14 @@ namespace npucompute::cli {
 
 class StagingDirectory {
 public:
+    StagingDirectory() = default;
+    ~StagingDirectory();
+    StagingDirectory(const StagingDirectory&) = delete;
+    StagingDirectory& operator=(const StagingDirectory&) = delete;
+
     static bool Create(const boost::filesystem::path& root, StagingDirectory* result, std::string* error);
 
-    bool RemoveIfEmpty(std::string* error);
+    bool Remove(std::string* error);
     const std::string& Path() const noexcept;
 
 private:

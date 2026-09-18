@@ -200,7 +200,7 @@ def test_nested_collection_started_by_script_is_rejected(swallow_failure, tmp_pa
     assert_nested_collection_rejected(result, tmp_path)
 
 
-def test_nested_collection_preserves_nonempty_data_directory(tmp_path):
+def test_nested_collection_removes_nonempty_data_directory(tmp_path):
     script = tmp_path / "nested_collection_with_partial_data.py"
     script.write_text(
         "import os, pathlib, subprocess\n"
@@ -214,13 +214,8 @@ def test_nested_collection_preserves_nonempty_data_directory(tmp_path):
 
     assert result.returncode == 3
     assert NESTED_COLLECTION_ERROR in result.stderr
-    data_directories = [
-        Path(line[len("npu-compute: data-directory= ") :])
-        for line in result.stderr.splitlines()
-        if line.startswith("npu-compute: data-directory= ")
-    ]
-    assert len(data_directories) == 1
-    assert (data_directories[0] / "partial.csv").is_file()
+    assert "npu-compute: data-directory=" not in result.stderr
+    assert list(tmp_path.glob("npu-compute-*")) == []
 
 
 @pytest.mark.parametrize("arguments", (("--help",), ("--list-sections",)))

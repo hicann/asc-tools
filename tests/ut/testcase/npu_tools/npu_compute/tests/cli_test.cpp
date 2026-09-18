@@ -269,7 +269,9 @@ int TestHelpReportsAllOptionErrors()
 
     errors.clear();
     CHECK(!Parse({"npu-compute", "hh", "-h", "/path/to/run.sh"}, &config, &errors));
-    CHECK(errors == std::vector<std::string>({"collection requires at least one --section before program 'hh'."}));
+    CHECK(
+        errors ==
+        std::vector<std::string>({"collection requires at least one --set or --section before program 'hh'."}));
     CHECK(config.program == "hh");
     CHECK(config.program_arguments == std::vector<std::string>({"-h", "/path/to/run.sh"}));
 
@@ -373,6 +375,61 @@ int TestNullArgumentsAndStateReset()
     return 0;
 }
 
+int TestSets()
+{
+    CliConfig config;
+    std::vector<std::string> errors;
+    const std::vector<std::string> basic = {"Pipeline", "PipeUtilization",      "Memory", "MemoryL0", "MemoryUB",
+                                            "L2Cache",  "ArithmeticUtilization"};
+    auto full = basic;
+    full.push_back("ResourceConflictRatio");
+    CHECK(Parse({"npu-compute", "--set", "basic", "./app"}, &config, &errors));
+    CHECK(config.sections == basic && config.collect_pipeline);
+    CHECK(Parse({"npu-compute", "./app"}, &config, &errors));
+    CHECK(config.sets == std::vector<std::string>({"basic"}));
+    CHECK(config.sections == basic && config.collect_pipeline);
+    CHECK(Parse({"npu-compute", "--set=full", "--set", "basic", "--section", "Memory", "./app"}, &config, &errors));
+    CHECK(config.sections == full);
+    auto reordered = basic;
+    reordered.erase(reordered.begin() + 2);
+    reordered.insert(reordered.begin(), "Memory");
+    CHECK(Parse({"npu-compute", "--section", "Memory", "--set", "basic", "./app"}, &config, &errors));
+    CHECK(config.sections == reordered);
+    CHECK(Parse(
+        {"npu-compute", "--set", "basic", "--section", "ResourceConflictRatio", "--replay-mode=kernel", "-o",
+         "x.npu-rep", "./app", "--set", "full"},
+        &config, &errors));
+    CHECK(config.sections == full);
+    CHECK(config.program_arguments == std::vector<std::string>({"--set", "full"}));
+    CHECK(Parse({"npu-compute", "--list-sets"}, &config, &errors));
+    for (const auto& args : std::vector<std::vector<std::string>>{
+             {"--set"},
+             {"--set="},
+             {"--set", ""},
+             {"--set", "Basic"},
+             {"--set", "basic,full"},
+             {"--set", "basic"},
+             {"--set", "basic", "--import", "x.npu-rep"},
+             {"--list-sets", "--list-sets"},
+             {"--list-sets=basic"},
+             {"--list-sets", "--list-sections"},
+             {"--list-sets", "--set", "basic"},
+             {"--list-sets", "--section", "Memory"},
+             {"--list-sets", "--replay-mode", "kernel"},
+             {"--list-sets", "-o", "x.npu-rep"},
+             {"--list-sets", "--import", "x.npu-rep"},
+             {"--list-sets", "./app"}}) {
+        auto command = args;
+        command.insert(command.begin(), "npu-compute");
+        CHECK(!Parse(command, &config, &errors));
+        CHECK(!errors.empty());
+    }
+    CHECK(Parse({"npu-compute", "-h", "--set", "basic"}, &config, &errors));
+    CHECK(Parse({"npu-compute", "--list-sets", "--help"}, &config, &errors));
+    CHECK(!Parse({"npu-compute", "--help", "--set", "invalid"}, &config, &errors));
+    return 0;
+}
+
 int TestHelpText()
 {
     FILE* stream = std::tmpfile();
@@ -391,7 +448,7 @@ int TestHelpText()
 
 static int RunSuiteMain()
 {
-    if (TestBusinessExitCodes() != 0 || TestCollectionExport() != 0 || TestPipelineOption() != 0 ||
+    if (TestSets() != 0 || TestBusinessExitCodes() != 0 || TestCollectionExport() != 0 || TestPipelineOption() != 0 ||
         TestImportExportParsing() != 0 || TestInlineLongOptionValues() != 0 || TestForceOptionsAreRejected() != 0 ||
         TestExistingCliBehavior() != 0 || TestHelpWithoutErrors() != 0 || TestHelpReportsAllOptionErrors() != 0 ||
         TestHelpAcceptsListSectionsCombination() != 0 || TestHelpMatchingAndProgramBoundary() != 0 ||

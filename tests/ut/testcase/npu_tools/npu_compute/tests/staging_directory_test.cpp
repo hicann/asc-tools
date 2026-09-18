@@ -184,14 +184,14 @@ int TestRemovesEmptyDirectory()
     const boost::filesystem::path created = result.Path();
     CHECK(boost::filesystem::is_directory(created));
 
-    CHECK(result.RemoveIfEmpty(&error));
+    CHECK(result.Remove(&error));
     CHECK(error.empty());
     CHECK(result.Path().empty());
     CHECK(!boost::filesystem::exists(created));
     return 0;
 }
 
-int TestPreservesNonEmptyDirectory()
+int TestRemovesNonEmptyDirectoryRecursively()
 {
     TestDirectory root;
     CHECK(!root.Path().empty());
@@ -206,10 +206,33 @@ int TestPreservesNonEmptyDirectory()
     CHECK(std::fputs("name,value\npartial,1\n", file) >= 0);
     CHECK(std::fclose(file) == 0);
 
-    CHECK(result.RemoveIfEmpty(&error));
+    CHECK(result.Remove(&error));
     CHECK(error.empty());
-    CHECK(result.Path() == created.string());
-    CHECK(boost::filesystem::is_regular_file(data));
+    CHECK(result.Path().empty());
+    CHECK(!boost::filesystem::exists(created));
+    return 0;
+}
+
+int TestDestructorRemovesNonEmptyDirectoryRecursively()
+{
+    TestDirectory root;
+    CHECK(!root.Path().empty());
+    boost::filesystem::path created;
+    {
+        StagingDirectory result;
+        std::string error;
+        CHECK(StagingDirectory::Create(root.Path(), &result, &error));
+        created = result.Path();
+        const boost::filesystem::path nested = created / "device_0";
+        CHECK(boost::filesystem::create_directory(nested));
+        const boost::filesystem::path data = nested / "Memory.csv";
+        std::FILE* file = std::fopen(data.c_str(), "w");
+        CHECK(file != nullptr);
+        CHECK(std::fputs("name,value\nread,1\n", file) >= 0);
+        CHECK(std::fclose(file) == 0);
+    }
+
+    CHECK(!boost::filesystem::exists(created));
     return 0;
 }
 
@@ -219,7 +242,8 @@ static int RunSuiteMain()
 {
     if (TestCreatesUniqueDirectoriesUnderExplicitRoot() != 0 || TestIgnoresTmpdirForExplicitRoot() != 0 ||
         TestRejectsInvalidRootAndClearsResult() != 0 || TestRejectsNullResult() != 0 ||
-        TestRemovesEmptyDirectory() != 0 || TestPreservesNonEmptyDirectory() != 0) {
+        TestRemovesEmptyDirectory() != 0 || TestRemovesNonEmptyDirectoryRecursively() != 0 ||
+        TestDestructorRemovesNonEmptyDirectoryRecursively() != 0) {
         return 1;
     }
     return 0;

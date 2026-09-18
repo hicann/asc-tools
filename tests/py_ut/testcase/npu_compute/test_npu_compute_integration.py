@@ -100,14 +100,6 @@ def extract_output_path(stderr):
     raise AssertionError(f"missing demo output path in:\n{stderr}")
 
 
-def extract_data_directory(stderr):
-    prefix = "npu-compute: data-directory= "
-    for line in stderr.splitlines():
-        if line.startswith(prefix):
-            return Path(line[len(prefix) :])
-    raise AssertionError(f"missing CLI data directory in:\n{stderr}")
-
-
 def run_hardware_info_result_app(mode, work_directory, exit_code=0):
     environment = os.environ.copy()
     existing_library_path = environment.get("LD_LIBRARY_PATH", "")
@@ -137,12 +129,9 @@ def test_cli_accepts_regular_hardware_info_file(tmp_path):
     result = run_hardware_info_result_app("regular", tmp_path)
 
     assert result.returncode == 0, result.stderr
-    data_directory = extract_data_directory(result.stderr)
-    hardware_info = data_directory / "HardwareInfo.jsonl"
-    assert data_directory.is_absolute()
-    assert data_directory.parent == tmp_path
-    assert hardware_info.is_file()
-    assert not hardware_info.is_symlink()
+    assert "npu-compute: data-directory=" not in result.stderr
+    assert list(tmp_path.glob("npu-compute-*")) == []
+    assert len(list(tmp_path.glob("*.npu-rep"))) == 1
 
 
 def test_cli_rejects_missing_hardware_info_file(tmp_path):
@@ -159,9 +148,8 @@ def test_cli_rejects_non_regular_hardware_info_path(mode, tmp_path):
     result = run_hardware_info_result_app(mode, tmp_path)
 
     assert result.returncode == 3
-    data_directory = extract_data_directory(result.stderr)
-    assert data_directory.parent == tmp_path
-    assert data_directory.is_dir()
+    assert "npu-compute: data-directory=" not in result.stderr
+    assert list(tmp_path.glob("npu-compute-*")) == []
     assert "hardware information path is not a regular file" in result.stderr
 
 
@@ -184,12 +172,10 @@ def test_each_collection_receives_unique_writable_output_directory():
     first_output = extract_output_path(first.stderr)
     second_output = extract_output_path(second.stderr)
     assert first_output.is_absolute()
-    assert first_output.is_dir()
-    assert os.access(first_output, os.W_OK)
     assert second_output.is_absolute()
-    assert second_output.is_dir()
-    assert os.access(second_output, os.W_OK)
     assert first_output != second_output
+    assert not first_output.exists()
+    assert not second_output.exists()
 
 
 def test_collection_runs_the_connected_replay_chain():

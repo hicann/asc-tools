@@ -21,8 +21,7 @@ inline constexpr int kCollectionErrorExitCode = 3;
 inline constexpr int kReportErrorExitCode = 4;
 inline constexpr int kInternalErrorExitCode = 5;
 
-int LaunchTarget(
-    const CliConfig& config, std::string* collection_data_directory, std::string* report_path, std::string* error);
+int LaunchTarget(const CliConfig& config, std::string* report_path, std::string* error);
 
 } // namespace npucompute::cli
 

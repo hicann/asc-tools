@@ -191,14 +191,10 @@ void SetStageError(const std::string& stage, const std::string& detail, std::str
 
 } // namespace
 
-int LaunchTarget(
-    const CliConfig& config, std::string* collection_data_directory, std::string* report_path, std::string* error)
+int LaunchTarget(const CliConfig& config, std::string* report_path, std::string* error)
 {
     if (error != nullptr) {
         error->clear();
-    }
-    if (collection_data_directory != nullptr) {
-        collection_data_directory->clear();
     }
     if (report_path != nullptr) {
         report_path->clear();
@@ -234,12 +230,9 @@ int LaunchTarget(
     }
     const auto finishCollection = [&](int result) {
         std::string cleanup_error;
-        if (!collection_data.RemoveIfEmpty(&cleanup_error)) {
+        if (!collection_data.Remove(&cleanup_error)) {
             SetStageError("finalize collection data directory failed", cleanup_error, error);
             result = kInternalErrorExitCode;
-        }
-        if (collection_data_directory != nullptr) {
-            *collection_data_directory = collection_data.Path();
         }
         return result;
     };

@@ -32,6 +32,8 @@ void SetError(const std::string& message, std::string* error)
 
 } // namespace
 
+StagingDirectory::~StagingDirectory() { Remove(nullptr); }
+
 bool StagingDirectory::Create(const boost::filesystem::path& root, StagingDirectory* result, std::string* error)
 {
     if (error != nullptr) {
@@ -82,7 +84,7 @@ bool StagingDirectory::Create(const boost::filesystem::path& root, StagingDirect
     return true;
 }
 
-bool StagingDirectory::RemoveIfEmpty(std::string* error)
+bool StagingDirectory::Remove(std::string* error)
 {
     if (error != nullptr) {
         error->clear();
@@ -91,20 +93,14 @@ bool StagingDirectory::RemoveIfEmpty(std::string* error)
         return true;
     }
 
-    if (::rmdir(path_.c_str()) == 0) {
+    boost::system::error_code filesystem_error;
+    boost::filesystem::remove_all(path_, filesystem_error);
+    if (!filesystem_error) {
         path_.clear();
-        return true;
-    }
-    const int remove_error = errno;
-    if (remove_error == ENOENT) {
-        path_.clear();
-        return true;
-    }
-    if (remove_error == ENOTEMPTY || remove_error == EEXIST) {
         return true;
     }
 
-    SetError("remove empty collection data directory failed: " + std::string(std::strerror(remove_error)), error);
+    SetError("remove collection data directory failed: " + filesystem_error.message(), error);
     return false;
 }
 

@@ -23,12 +23,83 @@ CLI = BIN_DIR / "npu-compute"
 APP = BIN_DIR / "npu_compute_stub_demo_app"
 
 
-def extract_data_directory(stderr):
-    prefix = "npu-compute: data-directory= "
-    for line in stderr.splitlines():
-        if line.startswith(prefix):
-            return Path(line[len(prefix) :])
-    raise AssertionError(f"missing data directory in:\n{stderr}")
+def test_list_sets_and_errors_do_not_launch(tmp_path):
+    basic = [
+        "Pipeline",
+        "PipeUtilization",
+        "Memory",
+        "MemoryL0",
+        "MemoryUB",
+        "L2Cache",
+        "ArithmeticUtilization",
+    ]
+    expected = ""
+    for name, members in (
+        ("basic", basic),
+        ("full", [*basic, "ResourceConflictRatio"]),
+    ):
+        expected += name + ":\n" + "".join("  " + member + "\n" for member in members)
+    result = subprocess.run(
+        [str(CLI), "--list-sets"],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout == expected
+    assert result.stderr == ""
+    assert list(tmp_path.iterdir()) == []
+    for arguments, message in (
+        (["--list-sets", str(APP)], "use --list-sets as a standalone command."),
+        (["--list-sets=basic"], "--list-sets does not take a value."),
+        (
+            ["--set="],
+            "--set requires a set name. Use --list-sets to see supported names.",
+        ),
+        (
+            ["--set", "Basic", str(APP)],
+            "unsupported set name 'Basic'. Names are case-sensitive; use --list-sets to see supported names.",
+        ),
+    ):
+        result = subprocess.run(
+            [str(CLI), *arguments],
+            cwd=tmp_path,
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        assert result.returncode == 2
+        assert result.stderr == "[ERROR] npu-compute: " + message + "\n"
+        assert result.stdout == ""
+        assert list(tmp_path.iterdir()) == []
+
+
+def extract_path(stderr, key):
+    prefix = f"npu-compute: {key}= "
+    values = [
+        Path(line[len(prefix) :])
+        for line in stderr.splitlines()
+        if line.startswith(prefix)
+    ]
+    assert len(values) == 1, stderr
+    return values[0]
+
+
+def unpack_report(result, work_directory):
+    report = extract_path(result.stderr, "report")
+    output_root = work_directory / "unpacked"
+    output_root.mkdir()
+    imported = subprocess.run(
+        [str(CLI), "--import", str(report), "--export", str(output_root)],
+        cwd=work_directory,
+        text=True,
+        capture_output=True,
+        timeout=60,
+        check=False,
+    )
+    assert imported.returncode == 0, imported.stderr
+    return extract_path(imported.stderr, "unpacked")
 
 
 def test_cli_profapi_callback_collector_and_jsonl_end_to_end(tmp_path):
@@ -89,13 +160,13 @@ def test_cli_profapi_callback_collector_and_jsonl_end_to_end(tmp_path):
     assert result.stderr.count("[hardware_api_stub] aclrtGetDeviceCount") == 1
     assert "[aclpti] initialize dependencies" not in result.stderr
 
-    data_directory = extract_data_directory(result.stderr)
-    hardware_info = data_directory / "HardwareInfo.jsonl"
-    assert data_directory.is_dir()
-    assert data_directory.parent == work_directory
+    assert "npu-compute: data-directory=" not in result.stderr
+    assert list(work_directory.glob("npu-compute-*")) == []
+    output_directory = unpack_report(result, work_directory)
+    hardware_info = output_directory / "HardwareInfo.jsonl"
     assert hardware_info.is_file()
     assert not hardware_info.is_symlink()
-    assert list(data_directory.glob("HardwareInfo*.jsonl")) == [hardware_info]
+    assert list(output_directory.glob("HardwareInfo*.jsonl")) == [hardware_info]
 
     content = hardware_info.read_text(encoding="utf-8")
     lines = content.splitlines()
@@ -195,16 +266,17 @@ def test_cli_real_aclpti_callback_chain(tmp_path, sections):
     )
     assert "disable ACL PTI callback failed" not in result.stderr
 
-    data_directory = extract_data_directory(result.stderr)
-    hardware_info = data_directory / "HardwareInfo.jsonl"
+    assert "npu-compute: data-directory=" not in result.stderr
+    assert list(work_directory.glob("npu-compute-*")) == []
+    output_directory = unpack_report(result, work_directory)
+    hardware_info = output_directory / "HardwareInfo.jsonl"
     assert hardware_info.is_file()
     assert len(hardware_info.read_text(encoding="utf-8").splitlines()) == 5
-    assert data_directory.parent == work_directory
-    assert list(data_directory.glob("HardwareInfo*.jsonl")) == [hardware_info]
+    assert list(output_directory.glob("HardwareInfo*.jsonl")) == [hardware_info]
 
     # This uses the real injected library and PTI profiler, not CSV fixture files.
     # Checking exact section names also catches injection SectionConfig omissions.
-    csv_files = sorted(data_directory.rglob("*.csv"))
+    csv_files = sorted(output_directory.rglob("*.csv"))
     assert csv_files, result.stderr
     assert {path.stem for path in csv_files} == set(sections)
     section_metrics = {
@@ -241,7 +313,7 @@ def test_cli_real_aclpti_callback_chain(tmp_path, sections):
     ]
     assert len(unpacked) == 1, imported.stderr
     original_csv = {
-        path.relative_to(data_directory): path.read_bytes() for path in csv_files
+        path.relative_to(output_directory): path.read_bytes() for path in csv_files
     }
     restored_csv = {
         path.relative_to(unpacked[0]): path.read_bytes()
@@ -249,7 +321,7 @@ def test_cli_real_aclpti_callback_chain(tmp_path, sections):
     }
     assert restored_csv == original_csv
 
-    summaries = sorted(data_directory.rglob("summary.jsonl"))
+    summaries = sorted(output_directory.rglob("summary.jsonl"))
     assert summaries, result.stderr
     for path in summaries:
         records = [
@@ -262,5 +334,5 @@ def test_cli_real_aclpti_callback_chain(tmp_path, sections):
         for section, record in zip(sections, records):
             assert section_metrics[section] in record
             assert "block_id" not in record
-        restored = unpacked[0] / path.relative_to(data_directory)
+        restored = unpacked[0] / path.relative_to(output_directory)
         assert restored.read_bytes() == path.read_bytes()

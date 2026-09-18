@@ -141,10 +141,8 @@ def run_fixture(
     return result, work_directory
 
 
-def assert_collection_data_directory(path: Path, work_directory: Path):
-    assert path.is_absolute() and path.is_dir()
-    assert path.parent == work_directory.resolve()
-    assert re.fullmatch(r"npu-compute-[0-9]+-[0-9]+-[A-Za-z0-9]{6}", path.name)
+def assert_no_collection_data_directories(work_directory: Path):
+    assert list(work_directory.glob("npu-compute-*")) == []
 
 
 def assert_no_temporary_report_files(work_directory: Path):
@@ -184,16 +182,14 @@ def test_cli_recursively_packages_fixture_files(tmp_path):
     assert result.returncode == 0, result.stderr
     assert "[aclpti]" not in result.stderr
     assert "[prof_api_stub]" not in result.stderr
-    data_directory = extract_path(result.stderr, "data-directory")
     report = extract_path(result.stderr, "report")
-    assert_collection_data_directory(data_directory, work_directory)
+    assert "npu-compute: data-directory=" not in result.stderr
+    assert_no_collection_data_directories(work_directory)
     assert report.is_absolute() and report.is_file()
     assert report.parent == work_directory.resolve()
     assert re.fullmatch(r"report_[0-9]+_[0-9a-f]{8}\.npu-rep", report.name)
     assert list(work_directory.glob("*.npu-rep")) == [report]
     assert_no_temporary_report_files(work_directory)
-    assert (data_directory / ".hardware_info.lock").is_file()
-
     top = decode_rep(report.read_bytes())
     assert [entry.name for entry in top.entries] == [
         "HardwareInfo.jsonl",
@@ -235,9 +231,8 @@ def test_cli_uses_explicit_report_file_and_existing_report_directory(tmp_path):
 
     assert explicit_result.returncode == 0, explicit_result.stderr
     assert extract_path(explicit_result.stderr, "report") == explicit_report
-    assert_collection_data_directory(
-        extract_path(explicit_result.stderr, "data-directory"), explicit_work
-    )
+    assert "npu-compute: data-directory=" not in explicit_result.stderr
+    assert_no_collection_data_directories(explicit_work)
     assert explicit_report.is_file()
     assert_no_temporary_report_files(explicit_report.parent)
 
@@ -253,9 +248,8 @@ def test_cli_uses_explicit_report_file_and_existing_report_directory(tmp_path):
     assert report.parent == report_directory
     assert report.is_file()
     assert re.fullmatch(r"report_[0-9]+_[0-9a-f]{8}\.npu-rep", report.name)
-    assert_collection_data_directory(
-        extract_path(directory_result.stderr, "data-directory"), directory_work
-    )
+    assert "npu-compute: data-directory=" not in directory_result.stderr
+    assert_no_collection_data_directories(directory_work)
     assert_no_temporary_report_files(report_directory)
 
 
@@ -312,40 +306,40 @@ def test_failed_app_does_not_publish_report(tmp_path):
     result, work_directory = run_fixture(tmp_path, exit_code=17)
 
     assert result.returncode == 17
-    data_directory = extract_path(result.stderr, "data-directory")
-    assert_collection_data_directory(data_directory, work_directory)
+    assert "npu-compute: data-directory=" not in result.stderr
+    assert_no_collection_data_directories(work_directory)
     assert "npu-compute: report=" not in result.stderr
     assert list(work_directory.glob("*.npu-rep")) == []
     assert_no_temporary_report_files(work_directory)
     assert "exited with code 17" in result.stderr
 
 
-def test_sequential_collections_use_unique_data_directories_and_reports(tmp_path):
+def test_sequential_collections_remove_data_directories_and_use_unique_reports(
+    tmp_path,
+):
     work_directory = tmp_path / "work"
     first_result, _ = run_fixture(tmp_path, work_directory=work_directory)
     second_result, _ = run_fixture(tmp_path, work_directory=work_directory)
 
     assert first_result.returncode == 0, first_result.stderr
     assert second_result.returncode == 0, second_result.stderr
-    data_directories = {
-        extract_path(first_result.stderr, "data-directory"),
-        extract_path(second_result.stderr, "data-directory"),
-    }
     reports = {
         extract_path(first_result.stderr, "report"),
         extract_path(second_result.stderr, "report"),
     }
-    assert len(data_directories) == 2
     assert len(reports) == 2
-    for data_directory in data_directories:
-        assert_collection_data_directory(data_directory, work_directory)
+    assert "npu-compute: data-directory=" not in first_result.stderr
+    assert "npu-compute: data-directory=" not in second_result.stderr
+    assert_no_collection_data_directories(work_directory)
     for report in reports:
         assert report.parent == work_directory
         assert report.is_file()
     assert_no_temporary_report_files(work_directory)
 
 
-def test_concurrent_collections_use_unique_data_directories_and_reports(tmp_path):
+def test_concurrent_collections_remove_data_directories_and_use_unique_reports(
+    tmp_path,
+):
     work_directory = tmp_path / "work"
     work_directory.mkdir()
     environment = os.environ.copy()
@@ -369,18 +363,13 @@ def test_concurrent_collections_use_unique_data_directories_and_reports(tmp_path
         assert process.returncode == 0, standard_error
         standard_errors.append(standard_error)
 
-    data_directories = [
-        extract_path(standard_error, "data-directory")
-        for standard_error in standard_errors
-    ]
     reports = [
         extract_path(standard_error, "report") for standard_error in standard_errors
     ]
-    assert len(set(data_directories)) == 2
     assert len(set(reports)) == 2
-    for data_directory in data_directories:
-        assert_collection_data_directory(data_directory, work_directory)
-        assert (data_directory / "HardwareInfo.jsonl").read_bytes() == HARDWARE_INFO
+    for standard_error in standard_errors:
+        assert "npu-compute: data-directory=" not in standard_error
+    assert_no_collection_data_directories(work_directory)
     for report in reports:
         assert report.parent == work_directory
         assert report.is_file()

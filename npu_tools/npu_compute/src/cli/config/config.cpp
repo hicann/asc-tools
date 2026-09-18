@@ -24,6 +24,25 @@ constexpr std::array<const char*, 8> kSupportedSections = {
 
 void AddError(const std::string& message, std::vector<std::string>* errors) { errors->push_back(message); }
 
+constexpr std::array<const char*, 2> kSupportedSets = {"basic", "full"};
+
+std::vector<std::string> SetSections(const std::string& name)
+{
+    std::vector<std::string> sections;
+    // Pipeline leads each set; all other members retain registry order.
+    for (const char* section : kSupportedSections) {
+        if (std::string(section) == "Pipeline") {
+            sections.emplace_back(section);
+        }
+    }
+    for (const char* section : kSupportedSections) {
+        if (std::string(section) != "Pipeline" && (name == "full" || std::string(section) != "ResourceConflictRatio")) {
+            sections.emplace_back(section);
+        }
+    }
+    return sections;
+}
+
 bool IsSupportedSection(const std::string& section)
 {
     return std::find(kSupportedSections.begin(), kSupportedSections.end(), section) != kSupportedSections.end();
@@ -80,6 +99,13 @@ void ValidateCombinations(const CliConfig& config, std::vector<std::string>* err
     if (config.show_help || !errors->empty()) {
         return;
     }
+    if (config.list_sets) {
+        if (config.list_sections || config.replay_mode_specified || config.import_path || config.export_path ||
+            !config.sections.empty() || !config.program.empty()) {
+            AddError("use --list-sets as a standalone command.", errors);
+        }
+        return;
+    }
     if (config.list_sections) {
         if (config.replay_mode_specified || config.import_path.has_value() || config.export_path.has_value() ||
             !config.sections.empty() || !config.program.empty()) {
@@ -89,7 +115,7 @@ void ValidateCombinations(const CliConfig& config, std::vector<std::string>* err
     }
     if (config.import_path.has_value()) {
         if (config.replay_mode_specified || !config.sections.empty() || !config.program.empty()) {
-            AddError("--import cannot be combined with --section, --replay-mode or a target program.", errors);
+            AddError("--import cannot be combined with --set, --section, --replay-mode or a target program.", errors);
         }
         return;
     }
@@ -99,9 +125,10 @@ void ValidateCombinations(const CliConfig& config, std::vector<std::string>* err
     }
     if (config.sections.empty()) {
         if (config.program.empty()) {
-            AddError("collection requires at least one --section before the program.", errors);
+            AddError("collection requires at least one --set or --section before the program.", errors);
         } else {
-            AddError("collection requires at least one --section before program '" + config.program + "'.", errors);
+            AddError(
+                "collection requires at least one --set or --section before program '" + config.program + "'.", errors);
         }
     }
     if (config.program.empty()) {
@@ -130,6 +157,39 @@ struct OptionSpec {
     void (*handler)(const OptionSpec&, const OptionValue&, ParseContext&);
 };
 void HandleHelp(const OptionSpec&, const OptionValue&, ParseContext& context) { context.config->show_help = true; }
+void HandleSet(const OptionSpec& spec, const OptionValue& value, ParseContext& context)
+{
+    if (value.state == ValueState::Missing) {
+        return;
+    }
+    if (value.text.empty()) {
+        AddError(spec.missing_message, context.errors);
+        return;
+    }
+    if (std::find(kSupportedSets.begin(), kSupportedSets.end(), value.text) == kSupportedSets.end()) {
+        const std::string hint = value.text.find(',') != std::string::npos ?
+                                     "Specify each set separately, for example: --set basic --set full." :
+                                     "Names are case-sensitive; use --list-sets to see supported names.";
+        AddError("unsupported set name '" + value.text + "'. " + hint, context.errors);
+        return;
+    }
+    auto& sets = context.config->sets;
+    if (std::find(sets.begin(), sets.end(), value.text) != sets.end()) {
+        return;
+    }
+    sets.push_back(value.text);
+    for (const auto& section : SetSections(value.text)) {
+        AddSection(section, spec.missing_message, context.config, context.errors);
+    }
+}
+void HandleListSets(const OptionSpec&, const OptionValue&, ParseContext& context)
+{
+    if (context.config->list_sets) {
+        AddError("--list-sets may only be specified once", context.errors);
+    } else {
+        context.config->list_sets = true;
+    }
+}
 void HandleSection(const OptionSpec& spec, const OptionValue& value, ParseContext& context)
 {
     if (value.state != ValueState::Missing) {
@@ -198,7 +258,10 @@ void HandleExport(const OptionSpec&, const OptionValue& value, ParseContext& con
     context.export_specified = true;
 }
 
-const std::array<OptionSpec, 6> kOptions = {{
+const std::array<OptionSpec, 8> kOptions = {{
+    {"--set", '\0', OptionArity::RequiredValue, "--set requires a set name. Use --list-sets to see supported names.",
+     HandleSet},
+    {"--list-sets", '\0', OptionArity::Flag, nullptr, HandleListSets},
     {"--help", 'h', OptionArity::Flag, nullptr, HandleHelp},
     {"--list-sections", '\0', OptionArity::Flag, nullptr, HandleListSections},
     {"--section", '\0', OptionArity::RequiredValue,
@@ -216,6 +279,10 @@ public:
     {
         for (int index = 1; index < argc; ++index) {
             const std::string argument = Argument(argv[index]);
+            if (argument.rfind("--list-sets=", 0) == 0) {
+                AddError("--list-sets does not take a value.", context_.errors);
+                continue;
+            }
             bool inline_value = false;
             OptionValue value;
             const OptionSpec* spec = FindOption(argument, &inline_value, &value.text);
@@ -269,6 +336,18 @@ private:
     ParseContext context_;
 };
 
+void ApplyDefaultSet(CliConfig* config, std::vector<std::string>* errors)
+{
+    if (config->show_help || !errors->empty() || config->list_sets || config->list_sections || config->import_path ||
+        !config->sections.empty() || config->program.empty()) {
+        return;
+    }
+    config->sets.push_back("basic");
+    for (const auto& section : SetSections("basic")) {
+        AddSection(section, "", config, errors);
+    }
+}
+
 } // namespace
 
 bool ParseCli(int argc, char** argv, CliConfig* config, std::vector<std::string>* errors)
@@ -286,6 +365,7 @@ bool ParseCli(int argc, char** argv, CliConfig* config, std::vector<std::string>
     CliParser parser(config, errors);
     parser.Parse(argc, argv);
 
+    ApplyDefaultSet(config, errors);
     ValidateCombinations(*config, errors);
     return errors->empty();
 }
@@ -311,12 +391,20 @@ void PrintUsage(FILE* stream, const char* program)
         "Options:\n"
         "  -h, --help                 Show help information.\n"
         "\n"
+        "      --set arg             Select a predefined section set: basic or full.\n"
+        "                             May be repeated or combined with --section.\n"
+        "                             Sections are deduplicated in first-occurrence order.\n"
+        "                             Defaults to basic when no set or section is given.\n"
+        "\n"
+        "      --list-sets           List predefined sets and their section names.\n"
+        "                             Use as a standalone command.\n"
+        "\n"
         "      --list-sections        List supported section names.\n"
         "\n"
         "      --section arg          Select a metric group by name (case-sensitive).\n"
         "                             Use --list-sections to see supported names.\n"
-        "                             Required for collection.\n"
-        "                             No section is selected by default.\n"
+        "                             Collection requires --section or --set.\n"
+        "                             Defaults to basic when no set or section is given.\n"
         "                             Specify different groups separately:\n"
         "                               --section Memory --section L2Cache\n"
         "\n"
@@ -342,6 +430,19 @@ void PrintSections(FILE* stream)
     }
     for (const char* section : kSupportedSections) {
         std::fprintf(stream, "%s\n", section);
+    }
+}
+
+void PrintSets(FILE* stream)
+{
+    if (stream == nullptr) {
+        return;
+    }
+    for (const char* name : kSupportedSets) {
+        std::fprintf(stream, "%s:\n", name);
+        for (const auto& section : SetSections(name)) {
+            std::fprintf(stream, "  %s\n", section.c_str());
+        }
     }
 }
 

@@ -24,6 +24,8 @@ enum class ReplayMode {
 struct CliConfig {
     bool show_help = false;
     bool list_sections = false;
+    bool list_sets = false;
+    std::vector<std::string> sets;
     bool collect_pipeline = false;
     std::vector<std::string> sections;
     ReplayMode replay_mode = ReplayMode::Kernel;
@@ -41,6 +43,7 @@ const char* ReplayModeName(ReplayMode mode);
 void PrintUsage(FILE* stream, const char* program);
 
 void PrintSections(FILE* stream);
+void PrintSets(FILE* stream);
 
 } // namespace npucompute::cli
 

@@ -38,6 +38,10 @@ int main(int argc, char** argv)
         return 0;
     }
 
+    if (config.list_sets) {
+        npucompute::cli::PrintSets(stdout);
+        return 0;
+    }
     if (config.list_sections) {
         npucompute::cli::PrintSections(stdout);
         return 0;
@@ -62,13 +66,9 @@ int main(int argc, char** argv)
         return 0;
     }
 
-    std::string collection_data_directory;
     std::string report_path;
     std::string error;
-    int result = npucompute::cli::LaunchTarget(config, &collection_data_directory, &report_path, &error);
-    if (!collection_data_directory.empty()) {
-        std::fprintf(stderr, "npu-compute: data-directory= %s\n", collection_data_directory.c_str());
-    }
+    int result = npucompute::cli::LaunchTarget(config, &report_path, &error);
     if (result != 0) {
         if (!error.empty()) {
             std::fprintf(stderr, "[ERROR] npu-compute: %s\n", error.c_str());
