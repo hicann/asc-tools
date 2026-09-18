@@ -146,7 +146,7 @@ stages:
             identifier: process_checkout
             uses: checkout
             with:
-              token: ${{secrets.GIT_TOKEN}}
+              allow-unsafe-pr-checkout: true
           -
             name: download
             uses: obs-download
