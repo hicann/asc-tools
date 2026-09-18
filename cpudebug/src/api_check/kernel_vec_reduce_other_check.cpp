@@ -24,7 +24,7 @@ bool TikcppVecReduceOtherCheck::CheckWholeReduceDtypeBytes(const std::string& er
 {
     uint32_t dstDtypeBytes = param_.dstDtypeBytes;
     uint32_t srcDtypeBytes = param_.src0DtypeBytes;
-#if defined(__NPU_ARCH__) && ((__NPU_ARCH__ == 3510) || (__NPU_ARCH__ == 5102))
+#if defined(__NPU_ARCH__) && (__NPU_ARCH__ == 3510)
     // WholeReduceSum Support type promotion: dst byte size can be 2x src byte size
     // (e.g. int32_t/int16_t, uint32_t/uint16_t)
     if (apiName == "WholeReduceSum") {

@@ -245,8 +245,7 @@ std::string GetCoreName(int idx)
 {
     int coreIdx = idx;
     std::string coreName = "CORE_" + std::to_string(coreIdx);
-    if (g_socVersion == SocVersion::VER_220 || g_socVersion == SocVersion::VER_310 ||
-        g_socVersion == SocVersion::VER_510) {
+    if (g_socVersion == SocVersion::VER_220 || g_socVersion == SocVersion::VER_310) {
         coreName = ConvertCpuIdxToCoreName(idx);
     }
     return coreName;
@@ -257,8 +256,7 @@ void BacktracePrint(int sig)
     int flatIdx = block_idx;
     const std::map<int, std::string>& coreTypeMap = GetCoreTypeMap();
     std::string coreName = coreTypeMap.at(AscendC::MIX_TYPE);
-    if (g_socVersion == SocVersion::VER_220 || g_socVersion == SocVersion::VER_310 ||
-        g_socVersion == SocVersion::VER_510) {
+    if (g_socVersion == SocVersion::VER_220 || g_socVersion == SocVersion::VER_310) {
         if (g_kernelMode == KernelMode::MIX_MODE) {
             coreName = coreTypeMap.at(g_coreType);
             flatIdx = (g_coreType == AscendC::AIC_TYPE) ? block_idx : (block_idx * g_taskRation + sub_block_idx);

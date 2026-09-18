@@ -151,7 +151,7 @@ public:
         {Hardware::L0B, "L0B"}, {Hardware::L0C, "L0C"},   {Hardware::UB, "UB"},
 #if defined(__NPU_ARCH__) &&                                                                                 \
     ((__NPU_ARCH__ == 2201) || (__NPU_ARCH__ == 3002) || (__NPU_ARCH__ == 3102) || (__NPU_ARCH__ == 3510) || \
-     (__NPU_ARCH__ == 5102) || (__NPU_ARCH__ == 3003) || (__NPU_ARCH__ == 3103) || (__NPU_ARCH__ == 3113))
+     (__NPU_ARCH__ == 3003) || (__NPU_ARCH__ == 3103) || (__NPU_ARCH__ == 3113))
         {Hardware::BIAS, "BT"}, {Hardware::FIXBUF, "FB"},
 #endif
     };
@@ -162,7 +162,7 @@ public:
         {"UBL0CV16", 512},   {"UBL0CV32", 1024},   {"L0CSC32UB", 256}, {"UBL0CSC32", 256},
         {"L0CDPf16UB", 512}, {"L0CDPf32UB", 1024}, {"L1BT", 64},       {"L1FB", 128},
     };
-#if defined(__NPU_ARCH__) && ((__NPU_ARCH__ == 3510) || (__NPU_ARCH__ == 5102))
+#if defined(__NPU_ARCH__) && (__NPU_ARCH__ == 3510)
     const std::map<std::string, uint16_t> srcBurstLenUnitMap{
         {"L0C16UB", 512},    {"L0C32UB", 1024},    {"UBL0C16", 512},   {"UBL0C32", 1024},
         {"L1L0C16", 512},    {"L1L0C32", 1024},    {"L0CV16UB", 512},  {"L0CV32UB", 1024},
@@ -192,7 +192,7 @@ public:
         {"L0CDPf32UB", 1024}, {"L1BT", 32},       {"L1FB", 32},
     };
 
-#if defined(__NPU_ARCH__) && ((__NPU_ARCH__ == 3510) || (__NPU_ARCH__ == 5102))
+#if defined(__NPU_ARCH__) && (__NPU_ARCH__ == 3510)
     const std::map<TPosition, Hardware> positionHardMap = {
         {TPosition::GM, Hardware::GM},      {TPosition::A1, Hardware::L1},
         {TPosition::B1, Hardware::L1},      {TPosition::TSCM, Hardware::L1},
@@ -257,7 +257,7 @@ public:
 
 #endif
 
-#if defined(__NPU_ARCH__) && ((__NPU_ARCH__ == 3510) || (__NPU_ARCH__ == 5102))
+#if defined(__NPU_ARCH__) && (__NPU_ARCH__ == 3510)
     const std::map<Hardware, uint32_t> bufferInitLen = {
         {Hardware::GM, 1024 * 1024}, {Hardware::UB, 1024 * 256},    {Hardware::L1, 1024 * 512},
         {Hardware::L0A, 1024 * 64},  {Hardware::L0B, 1024 * 64},    {Hardware::L0C, 1024 * 256},
@@ -318,15 +318,15 @@ public:
     uint8_t* cpuL0C;
     uint8_t* cpuBIAS;
     uint8_t* cpuFIXBUF;
-#if defined(__NPU_ARCH__) && ((__NPU_ARCH__ == 3510) || (__NPU_ARCH__ == 5102))
+#if defined(__NPU_ARCH__) && (__NPU_ARCH__ == 3510)
     uint8_t* cpuSSbuf;
 #endif
     std::map<Hardware, uint8_t*> hardwareCpuBufferMap;
 
 private:
     std::set<Hardware> allocatorUsed;
-#if defined(__NPU_ARCH__) && ((__NPU_ARCH__ == 5102) || (__NPU_ARCH__ == 2103) || (__NPU_ARCH__ == 3003) || \
-                              (__NPU_ARCH__ == 3103) || (__NPU_ARCH__ == 3113) || (__NPU_ARCH__ == 3510))
+#if defined(__NPU_ARCH__) && ((__NPU_ARCH__ == 2103) || (__NPU_ARCH__ == 3003) || (__NPU_ARCH__ == 3103) || \
+                              (__NPU_ARCH__ == 3113) || (__NPU_ARCH__ == 3510))
 
     ConstDefiner()
     {
@@ -336,7 +336,7 @@ private:
         cpuL0C = new uint8_t[bufferInitLen.at(Hardware::L0C)];
         cpuBIAS = new uint8_t[bufferInitLen.at(Hardware::BIAS)];
         cpuFIXBUF = new uint8_t[bufferInitLen.at(Hardware::FIXBUF)];
-#if defined(__NPU_ARCH__) && ((__NPU_ARCH__ == 3510) || (__NPU_ARCH__ == 5102))
+#if defined(__NPU_ARCH__) && (__NPU_ARCH__ == 3510)
         cpuSSbuf = nullptr;
         if (g_kernelMode != KernelMode::MIX_MODE) {
             cpuUB = new uint8_t[bufferInitLen.at(Hardware::UB)];
@@ -401,7 +401,7 @@ private:
             cpuGM = nullptr;
         }
         if (cpuUB != nullptr) {
-#if defined(__NPU_ARCH__) && ((__NPU_ARCH__ == 3510) || (__NPU_ARCH__ == 5102))
+#if defined(__NPU_ARCH__) && (__NPU_ARCH__ == 3510)
             if (g_kernelMode == KernelMode::MIX_MODE) {
                 if (g_coreType == AscendC::MIX && block_idx == 0 && sub_block_idx == 0) {
                     GmFree(cpuUB);
@@ -415,7 +415,7 @@ private:
             cpuUB = nullptr;
         }
         if (cpuL1 != nullptr) {
-#if defined(__NPU_ARCH__) && ((__NPU_ARCH__ == 3510) || (__NPU_ARCH__ == 5102))
+#if defined(__NPU_ARCH__) && (__NPU_ARCH__ == 3510)
             if (g_kernelMode == KernelMode::MIX_MODE) {
                 if (g_coreType == AscendC::MIX && block_idx == 0 && sub_block_idx == 0) {
                     GmFree(cpuL1);
@@ -448,7 +448,7 @@ private:
             delete[] cpuFIXBUF;
             cpuFIXBUF = nullptr;
         }
-#if defined(__NPU_ARCH__) && ((__NPU_ARCH__ == 3510) || (__NPU_ARCH__ == 5102))
+#if defined(__NPU_ARCH__) && (__NPU_ARCH__ == 3510)
         if (cpuSSbuf != nullptr) {
             if (g_kernelMode == KernelMode::MIX_MODE) {
                 if (g_coreType == AscendC::MIX && block_idx == 0 && sub_block_idx == 0) {

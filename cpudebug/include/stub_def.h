@@ -174,7 +174,7 @@ enum class KernelMode {
     AIV_MODE,
     MIX_AIC_1_1,
 };
-enum class SocVersion { VER_100 = 100, VER_200 = 200, VER_220 = 220, VER_310 = 310, VER_510 = 510, VER_MAX = 0xFFFFFF };
+enum class SocVersion { VER_100 = 100, VER_200 = 200, VER_220 = 220, VER_310 = 310, VER_MAX = 0xFFFFFF };
 
 using ArgInfoT = struct ArgInfoT {  // parameter info
     std::string argType;            // tensor, tensorlist, workspace, tiling
@@ -197,7 +197,7 @@ extern const int AIV_TYPE;
 extern const int PAGE_SIZE;
 extern const uint64_t ONE_GIGABYTE;
 extern bool g_isVdeq;
-#if defined(__NPU_ARCH__) && ((__NPU_ARCH__ == 3510) || (__NPU_ARCH__ == 5102))
+#if defined(__NPU_ARCH__) && (__NPU_ARCH__ == 3510)
 constexpr int32_t FLAG_NUM = 32;
 #else
 constexpr int32_t FLAG_NUM = 16;
@@ -234,8 +234,6 @@ inline void InitSocVersion()
     g_socVersion = SocVersion::VER_220;
 #elif (defined(__NPU_ARCH__) && (__NPU_ARCH__ == 3102))
     g_socVersion = SocVersion::VER_310;
-#elif defined(__NPU_ARCH__) && (__NPU_ARCH__ == 5102)
-    g_socVersion = SocVersion::VER_510;
 #else
     g_socVersion = SocVersion::VER_MAX;
 #endif
