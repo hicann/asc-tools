@@ -151,18 +151,17 @@ aclError OriginalLaunch(
 
     auto* bytes = static_cast<uint8_t*>(traceBuffer);
     auto* header = reinterpret_cast<aclsan::AclsanTraceBufferHeader*>(bytes);
-    size_t sliceBytes = 0;
     if (header->magic != aclsan::ASCSAN_TRACE_BUFFER_MAGIC || header->blockCount != blocks ||
-        header->recordsPerCore != aclsan::ASCSAN_TRACE_RECORDS_PER_CORE_DEFAULT || header->physicalCoreCount != 108U ||
-        !aclsan::TraceSliceBytes(header->recordsPerCore, &sliceBytes)) {
+        header->physicalCoreCount != 6U) {
         return ACL_ERROR_INVALID_PARAM;
     }
 
     constexpr uint32_t blockIds[] = {0U, 1U};
-    constexpr uint32_t phyCoreIds[] = {5U, 18U};
+    constexpr uint32_t phyCoreIds[] = {0U, 1U};
     for (uint32_t recordIndex = 0; recordIndex < 2; ++recordIndex) {
         auto* slice = reinterpret_cast<aclsan::AclsanTraceSliceHeader*>(
-            bytes + sizeof(*header) + static_cast<size_t>(phyCoreIds[recordIndex]) * sliceBytes);
+            bytes + sizeof(*header) +
+            static_cast<size_t>(phyCoreIds[recordIndex]) * aclsan::ASCSAN_TRACE_BYTES_PER_CORE);
         auto* record =
             reinterpret_cast<aclsan::AclsanRawTraceRecord*>(reinterpret_cast<uint8_t*>(slice) + sizeof(*slice));
         record->pc = kRecords[recordIndex].pc;
@@ -203,11 +202,11 @@ aclError OriginalGetDeviceInfo(uint32_t deviceId, aclrtDevAttr attr, int64_t* va
         return ACL_ERROR_INVALID_PARAM;
     }
     if (attr == ACL_DEV_ATTR_CUBE_CORE_NUM) {
-        *value = 36;
+        *value = 2;
         return ACL_SUCCESS;
     }
     if (attr == ACL_DEV_ATTR_VECTOR_CORE_NUM) {
-        *value = 72;
+        *value = 4;
         return ACL_SUCCESS;
     }
     return ACL_ERROR_INVALID_PARAM;
@@ -299,13 +298,13 @@ int main()
     CHECK(g_state.callbacks.size() == 2);
     CHECK(g_state.callbacks[0].blockId == 0);
     CHECK(g_state.callbacks[0].blockType == ACLSAN_DEVICE_BLOCK_TYPE_AICORE_CUBE);
-    CHECK(g_state.callbacks[0].phyCoreId == 5);
+    CHECK(g_state.callbacks[0].phyCoreId == 0);
     CHECK(g_state.callbacks[0].pipeline == ACLSAN_DEVICE_PIPE_SCALAR);
     CHECK(g_state.callbacks[0].siteId == 0);
     CHECK(g_state.callbacks[0].pc == 0x1000);
     CHECK(g_state.callbacks[1].blockId == 1);
     CHECK(g_state.callbacks[1].blockType == ACLSAN_DEVICE_BLOCK_TYPE_AICORE_VECTOR);
-    CHECK(g_state.callbacks[1].phyCoreId == 18);
+    CHECK(g_state.callbacks[1].phyCoreId == 1);
     CHECK(g_state.callbacks[1].pipeline == ACLSAN_DEVICE_PIPE_SCALAR);
     CHECK(g_state.callbacks[1].siteId == 0);
     CHECK(g_state.callbacks[1].pc == 0x2000);

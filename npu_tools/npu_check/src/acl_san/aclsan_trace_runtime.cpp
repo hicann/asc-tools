@@ -42,7 +42,6 @@ struct PendingTrace {
     aclrtStream stream = nullptr;
     void* deviceBuffer = nullptr;
     uint32_t blockCount = 0;
-    uint32_t recordsPerCore = 0;
     uint32_t physicalCoreCount = 0;
     uint32_t deviceId = 0;
     const aclsan::DeviceInstructionDecoder* decoder = nullptr;
@@ -363,16 +362,13 @@ aclError PrepareTraceLaunch(
                 "Failed to expand trace launch arguments");
         }
 
-        constexpr uint32_t capacity = aclsan::ASCSAN_TRACE_RECORDS_PER_CORE_DEFAULT;
         std::string error;
         if (!InitializeTraceBuffer(
-                prepared.hostBuffer, prepared.physicalCoreCount, blockCount, capacity, prepared.launchId, error)) {
+                prepared.hostBuffer, prepared.physicalCoreCount, blockCount, prepared.launchId, error)) {
             ASCTOOL_ERROR("acl_san trace: cannot initialize launch buffer: %s", error.c_str());
             StoreHiddenPointer(prepared, argumentMode);
             return StrictModeEnabled() ? ACL_ERROR_FAILURE : ACL_SUCCESS;
         }
-        prepared.recordsPerCore = capacity;
-
         const auto mallocFunction = GetOriginalRuntimeFunction<aclrtMallocFunc>(ACL_RT_API_aclrtMalloc, "aclrtMalloc");
         const auto memcpyFunction = GetOriginalRuntimeFunction<aclrtMemcpyFunc>(ACL_RT_API_aclrtMemcpy, "aclrtMemcpy");
         aclError status = mallocFunction(&prepared.deviceBuffer, prepared.hostBuffer.size(), ACL_MEM_MALLOC_HUGE_FIRST);
@@ -416,17 +412,15 @@ void CompleteTraceLaunch(
     }
 
     try {
-        PendingTrace pending{
-            prepared.launchId,
-            function,
-            stream,
-            prepared.deviceBuffer,
-            prepared.blockCount,
-            prepared.recordsPerCore,
-            prepared.physicalCoreCount,
-            prepared.deviceId,
-            prepared.decoder,
-            std::move(prepared.hostBuffer)};
+        PendingTrace pending{prepared.launchId,
+                             function,
+                             stream,
+                             prepared.deviceBuffer,
+                             prepared.blockCount,
+                             prepared.physicalCoreCount,
+                             prepared.deviceId,
+                             prepared.decoder,
+                             std::move(prepared.hostBuffer)};
         TraceRuntimeState& state = State();
         std::lock_guard<std::mutex> lock(state.mutex);
         state.pending.push_back(std::move(pending));
@@ -476,7 +470,7 @@ void CollectTraceStream(aclrtStream stream) noexcept
 
             TraceBufferParseResult parsed = ParseTraceBuffer(
                 pending.hostBuffer.data(), pending.hostBuffer.size(), pending.physicalCoreCount, pending.blockCount,
-                pending.recordsPerCore, pending.launchId, pending.deviceId);
+                pending.launchId, pending.deviceId);
             if (!parsed.ok) {
                 ASCTOOL_ERROR(
                     "acl_san trace: malformed buffer for launch=%llu: %s",

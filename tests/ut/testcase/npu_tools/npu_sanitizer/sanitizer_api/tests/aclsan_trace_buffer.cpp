@@ -38,17 +38,22 @@ using aclsan::AclsanTraceBufferHeader;
 using aclsan::AclsanTraceSliceHeader;
 using aclsan::DeviceInstructionCategory;
 
-static_assert(aclsan::ASCSAN_TRACE_BUFFER_MAGIC == 0x41534353414E3036ULL);
-static_assert(sizeof(AclsanTraceBufferHeader) == 40);
+static_assert(aclsan::ASCSAN_TRACE_BUFFER_MAGIC == 0x41534353414E3037ULL);
+static_assert(sizeof(AclsanTraceBufferHeader) == 32);
 static_assert(std::is_same_v<aclsan::AclsanTraceSegmentHeader, AclsanTraceBufferHeader>);
 static_assert(offsetof(AclsanTraceBufferHeader, magic) == 0);
 static_assert(offsetof(AclsanTraceBufferHeader, launchId) == 8);
 static_assert(offsetof(AclsanTraceBufferHeader, segmentBytes) == 16);
 static_assert(offsetof(AclsanTraceBufferHeader, blockCount) == 24);
-static_assert(offsetof(AclsanTraceBufferHeader, recordsPerCore) == 28);
-static_assert(offsetof(AclsanTraceBufferHeader, physicalCoreCount) == 32);
+static_assert(offsetof(AclsanTraceBufferHeader, physicalCoreCount) == 28);
 static_assert(sizeof(AclsanTraceSliceHeader) == 16);
 static_assert(sizeof(AclsanRawTraceRecord) == 72);
+static_assert(aclsan::ASCSAN_TRACE_BYTES_PER_CORE == 1024U * 1024U);
+static_assert(aclsan::ASCSAN_TRACE_RECORDS_PER_CORE == 14563U);
+static_assert(
+    aclsan::ASCSAN_TRACE_BYTES_PER_CORE - sizeof(AclsanTraceSliceHeader) -
+        aclsan::ASCSAN_TRACE_RECORDS_PER_CORE * sizeof(AclsanRawTraceRecord) ==
+    24U);
 static_assert(sizeof(AclsanTraceSliceHeader) % alignof(AclsanRawTraceRecord) == 0);
 static_assert(offsetof(AclsanRawTraceRecord, pc) == 0);
 static_assert(offsetof(AclsanRawTraceRecord, args) == 8);
@@ -65,11 +70,7 @@ static_assert(offsetof(AclsanRawTraceRecord, reserved) == 64);
 AclsanTraceSliceHeader* SliceAt(std::vector<uint8_t>& buffer, uint32_t sliceIndex)
 {
     auto* header = reinterpret_cast<AclsanTraceBufferHeader*>(buffer.data());
-    size_t sliceBytes = 0;
-    if (!aclsan::TraceSliceBytes(header->recordsPerCore, &sliceBytes)) {
-        return nullptr;
-    }
-    const size_t sliceOffset = sizeof(*header) + static_cast<size_t>(sliceIndex) * sliceBytes;
+    const size_t sliceOffset = sizeof(*header) + static_cast<size_t>(sliceIndex) * aclsan::ASCSAN_TRACE_BYTES_PER_CORE;
     return reinterpret_cast<AclsanTraceSliceHeader*>(buffer.data() + sliceOffset);
 }
 
@@ -96,13 +97,13 @@ bool PutRecord(
     return true;
 }
 
-bool InitializesDynamicPhysicalCoreSlices()
+bool InitializesFixedPhysicalCoreSlices()
 {
     std::vector<uint8_t> first;
     std::vector<uint8_t> second;
     std::string error;
-    CHECK(aclsan::InitializeTraceBuffer(first, 12, 1, 2, 17, error));
-    CHECK(aclsan::InitializeTraceBuffer(second, 12, 4096, 2, 18, error));
+    CHECK(aclsan::InitializeTraceBuffer(first, 12, 1, 17, error));
+    CHECK(aclsan::InitializeTraceBuffer(second, 12, 4096, 18, error));
     CHECK(first.size() == second.size());
 
     const auto* header = reinterpret_cast<const AclsanTraceBufferHeader*>(first.data());
@@ -110,11 +111,13 @@ bool InitializesDynamicPhysicalCoreSlices()
     CHECK(header->launchId == 17);
     CHECK(header->segmentBytes == first.size());
     CHECK(header->blockCount == 1);
-    CHECK(header->recordsPerCore == 2);
     CHECK(header->physicalCoreCount == 12);
-    size_t sliceBytes = 0;
-    CHECK(aclsan::TraceSliceBytes(header->recordsPerCore, &sliceBytes));
-    CHECK(first.size() == sizeof(*header) + header->physicalCoreCount * sliceBytes);
+    CHECK(
+        first.size() ==
+        sizeof(*header) + static_cast<size_t>(header->physicalCoreCount) * aclsan::ASCSAN_TRACE_BYTES_PER_CORE);
+    CHECK(
+        reinterpret_cast<const uint8_t*>(SliceAt(first, 1)) - reinterpret_cast<const uint8_t*>(SliceAt(first, 0)) ==
+        static_cast<ptrdiff_t>(aclsan::ASCSAN_TRACE_BYTES_PER_CORE));
     for (uint32_t sliceIndex = 0; sliceIndex < header->physicalCoreCount; ++sliceIndex) {
         const auto* slice = SliceAt(first, sliceIndex);
         CHECK(slice != nullptr);
@@ -125,8 +128,8 @@ bool InitializesDynamicPhysicalCoreSlices()
     }
 
     std::vector<uint8_t> larger;
-    CHECK(aclsan::InitializeTraceBuffer(larger, 18, 1, 2, 19, error));
-    CHECK(larger.size() == sizeof(*header) + 18U * sliceBytes);
+    CHECK(aclsan::InitializeTraceBuffer(larger, 18, 1, 19, error));
+    CHECK(larger.size() == sizeof(*header) + 18U * aclsan::ASCSAN_TRACE_BYTES_PER_CORE);
     return true;
 }
 
@@ -134,11 +137,11 @@ bool ParsesOneSegmentFromLargerStorage()
 {
     std::vector<uint8_t> storage;
     std::string error;
-    CHECK(aclsan::InitializeTraceBuffer(storage, 12, 1, 2, 20, error));
+    CHECK(aclsan::InitializeTraceBuffer(storage, 12, 1, 20, error));
     const size_t segmentBytes = storage.size();
     storage.resize(segmentBytes + 64U, 0xA5U);
 
-    const auto parsed = aclsan::ParseTraceBuffer(storage.data(), storage.size(), 12, 1, 2, 20, 0);
+    const auto parsed = aclsan::ParseTraceBuffer(storage.data(), storage.size(), 12, 1, 20, 0);
     CHECK(parsed.ok);
     CHECK(parsed.records.empty());
     CHECK(reinterpret_cast<const AclsanTraceBufferHeader*>(storage.data())->segmentBytes == segmentBytes);
@@ -149,14 +152,14 @@ bool ParsesMultipleLogicalBlocksInOnePhysicalSlice()
 {
     std::vector<uint8_t> buffer;
     std::string error;
-    CHECK(aclsan::InitializeTraceBuffer(buffer, 12, 20, 5, 19, error));
+    CHECK(aclsan::InitializeTraceBuffer(buffer, 12, 20, 19, error));
     constexpr uint32_t blockIds[] = {7, 7, 11, 11, 7};
     for (uint32_t index = 0; index < 5; ++index) {
         CHECK(PutRecord(buffer, 1, index, blockIds[index], 0x100 + index, ACLSAN_DEVICE_PIPE_MTE2, 1));
     }
 
     constexpr uint32_t deviceId = 3;
-    const auto parsed = aclsan::ParseTraceBuffer(buffer.data(), buffer.size(), 12, 20, 5, 19, deviceId);
+    const auto parsed = aclsan::ParseTraceBuffer(buffer.data(), buffer.size(), 12, 20, 19, deviceId);
     CHECK(parsed.ok);
     CHECK(parsed.records.size() == 5);
     constexpr uint32_t instructionIds[] = {1, 2, 1, 2, 3};
@@ -177,24 +180,24 @@ bool ParsesTwoPartPhysicalCoreTopology()
 {
     std::vector<uint8_t> buffer;
     std::string error;
-    CHECK(aclsan::InitializeTraceBuffer(buffer, 12, 2, 1, 21, error));
+    CHECK(aclsan::InitializeTraceBuffer(buffer, 12, 2, 21, error));
     CHECK(PutRecord(buffer, 1, 0, 1, 0x200, ACLSAN_DEVICE_PIPE_MTE2, 1));
-    CHECK(PutRecord(buffer, 2, 0, 2, 0x300, ACLSAN_DEVICE_PIPE_MTE3, 2));
-    CHECK(PutRecord(buffer, 7, 0, 1, 0x400, ACLSAN_DEVICE_PIPE_MTE2, 7));
+    CHECK(PutRecord(buffer, 2, 0, 1, 0x300, ACLSAN_DEVICE_PIPE_MTE3, 2));
+    CHECK(PutRecord(buffer, 7, 0, 0, 0x400, ACLSAN_DEVICE_PIPE_MTE2, 7));
     CHECK(PutRecord(buffer, 8, 0, 2, 0x500, ACLSAN_DEVICE_PIPE_MTE3, 8));
 
-    const auto parsed = aclsan::ParseTraceBuffer(buffer.data(), buffer.size(), 12, 2, 1, 21, 0);
+    const auto parsed = aclsan::ParseTraceBuffer(buffer.data(), buffer.size(), 12, 2, 21, 0);
     CHECK(parsed.ok);
     CHECK(parsed.records.size() == 4);
     CHECK(parsed.records[0].blockId == 1);
     CHECK(parsed.records[0].blockType == ACLSAN_DEVICE_BLOCK_TYPE_AICORE_CUBE);
     CHECK(parsed.records[0].phyCoreId == 1);
     CHECK(parsed.records[0].instrExecId == 1);
-    CHECK(parsed.records[1].blockId == 2);
+    CHECK(parsed.records[1].blockId == 1);
     CHECK(parsed.records[1].blockType == ACLSAN_DEVICE_BLOCK_TYPE_AICORE_VECTOR);
     CHECK(parsed.records[1].phyCoreId == 2);
     CHECK(parsed.records[1].instrExecId == 1);
-    CHECK(parsed.records[2].blockId == 1);
+    CHECK(parsed.records[2].blockId == 0);
     CHECK(parsed.records[2].blockType == ACLSAN_DEVICE_BLOCK_TYPE_AICORE_CUBE);
     CHECK(parsed.records[2].phyCoreId == 7);
     CHECK(parsed.records[3].blockId == 2);
@@ -208,10 +211,10 @@ bool SupportsFullAicBlockCountRange()
     constexpr uint32_t maxBlockCount = std::numeric_limits<uint32_t>::max();
     std::vector<uint8_t> buffer;
     std::string error;
-    CHECK(aclsan::InitializeTraceBuffer(buffer, 12, maxBlockCount, 1, 22, error));
+    CHECK(aclsan::InitializeTraceBuffer(buffer, 12, maxBlockCount, 22, error));
     CHECK(PutRecord(buffer, 0, 0, maxBlockCount - 1U, 0x450, ACLSAN_DEVICE_PIPE_MTE2, 0));
 
-    const auto parsed = aclsan::ParseTraceBuffer(buffer.data(), buffer.size(), 12, maxBlockCount, 1, 22, 0);
+    const auto parsed = aclsan::ParseTraceBuffer(buffer.data(), buffer.size(), 12, maxBlockCount, 22, 0);
     CHECK(parsed.ok);
     CHECK(parsed.records.size() == 1);
     CHECK(parsed.records[0].blockType == ACLSAN_DEVICE_BLOCK_TYPE_AICORE_CUBE);
@@ -233,15 +236,36 @@ bool ReportsOverflowAndKeepsRecords()
 {
     std::vector<uint8_t> buffer;
     std::string error;
-    CHECK(aclsan::InitializeTraceBuffer(buffer, 12, 1, 1, 23, error));
+    CHECK(aclsan::InitializeTraceBuffer(buffer, 12, 1, 23, error));
     CHECK(PutRecord(buffer, 0, 0, 0, 0x500, ACLSAN_DEVICE_PIPE_FIXPIPE, 0));
     auto* slice = reinterpret_cast<AclsanTraceSliceHeader*>(buffer.data() + sizeof(AclsanTraceBufferHeader));
     slice->overflowCount = 9;
 
-    const auto parsed = aclsan::ParseTraceBuffer(buffer.data(), buffer.size(), 12, 1, 1, 23, 0);
+    const auto parsed = aclsan::ParseTraceBuffer(buffer.data(), buffer.size(), 12, 1, 23, 0);
     CHECK(parsed.ok);
     CHECK(parsed.overflowCount == 9);
     CHECK(parsed.records.size() == 1);
+    return true;
+}
+
+bool DoesNotValidateLogicalBlockPlacement()
+{
+    std::vector<uint8_t> buffer;
+    std::string error;
+    CHECK(aclsan::InitializeTraceBuffer(buffer, 12, 2, 29, error));
+    CHECK(PutRecord(buffer, 1, 0, 0, 0x900, ACLSAN_DEVICE_PIPE_MTE2, 1));
+    CHECK(PutRecord(buffer, 1, 1, 1, 0x901, ACLSAN_DEVICE_PIPE_MTE2, 1));
+    CHECK(PutRecord(buffer, 0, 0, 1, 0xA00, ACLSAN_DEVICE_PIPE_MTE2, 0));
+
+    const auto parsed = aclsan::ParseTraceBuffer(buffer.data(), buffer.size(), 12, 2, 29, 0);
+    CHECK(parsed.ok);
+    CHECK(parsed.records.size() == 3);
+    CHECK(parsed.records[0].blockId == 1);
+    CHECK(parsed.records[0].instrExecId == 1);
+    CHECK(parsed.records[1].blockId == 0);
+    CHECK(parsed.records[1].instrExecId == 1);
+    CHECK(parsed.records[2].blockId == 1);
+    CHECK(parsed.records[2].instrExecId == 2);
     return true;
 }
 
@@ -249,37 +273,39 @@ bool RejectsMalformedBuffers()
 {
     std::vector<uint8_t> buffer;
     std::string error;
-    CHECK(aclsan::InitializeTraceBuffer(buffer, 12, 2, 1, 29, error));
+    CHECK(aclsan::InitializeTraceBuffer(buffer, 12, 2, 29, error));
 
     auto corrupt = buffer;
     reinterpret_cast<AclsanTraceBufferHeader*>(corrupt.data())->magic ^= 1;
-    CHECK(!aclsan::ParseTraceBuffer(corrupt.data(), corrupt.size(), 12, 2, 1, 29, 0).ok);
-    CHECK(!aclsan::ParseTraceBuffer(buffer.data(), buffer.size(), 12, 2, 1, 30, 0).ok);
-    CHECK(!aclsan::ParseTraceBuffer(buffer.data(), buffer.size() - 1, 12, 2, 1, 29, 0).ok);
+    CHECK(!aclsan::ParseTraceBuffer(corrupt.data(), corrupt.size(), 12, 2, 29, 0).ok);
+    CHECK(!aclsan::ParseTraceBuffer(buffer.data(), buffer.size(), 12, 2, 30, 0).ok);
+    CHECK(!aclsan::ParseTraceBuffer(buffer.data(), buffer.size() - 1, 12, 2, 29, 0).ok);
 
     corrupt = buffer;
     reinterpret_cast<AclsanTraceBufferHeader*>(corrupt.data())->physicalCoreCount = 18;
-    CHECK(!aclsan::ParseTraceBuffer(corrupt.data(), corrupt.size(), 12, 2, 1, 29, 0).ok);
+    CHECK(!aclsan::ParseTraceBuffer(corrupt.data(), corrupt.size(), 12, 2, 29, 0).ok);
 
     corrupt = buffer;
     reinterpret_cast<AclsanTraceBufferHeader*>(corrupt.data())->segmentBytes -= 1U;
-    CHECK(!aclsan::ParseTraceBuffer(corrupt.data(), corrupt.size(), 12, 2, 1, 29, 0).ok);
+    CHECK(!aclsan::ParseTraceBuffer(corrupt.data(), corrupt.size(), 12, 2, 29, 0).ok);
 
     corrupt = buffer;
-    reinterpret_cast<AclsanTraceSliceHeader*>(corrupt.data() + sizeof(AclsanTraceBufferHeader))->recordCount = 2;
-    CHECK(!aclsan::ParseTraceBuffer(corrupt.data(), corrupt.size(), 12, 2, 1, 29, 0).ok);
+    reinterpret_cast<AclsanTraceSliceHeader*>(corrupt.data() + sizeof(AclsanTraceBufferHeader))->recordCount =
+        aclsan::ASCSAN_TRACE_RECORDS_PER_CORE + 1U;
+    CHECK(!aclsan::ParseTraceBuffer(corrupt.data(), corrupt.size(), 12, 2, 29, 0).ok);
 
     corrupt = buffer;
     CHECK(PutRecord(corrupt, 1, 0, 0, 0x600, ACLSAN_DEVICE_PIPE_MTE2, 2));
-    CHECK(!aclsan::ParseTraceBuffer(corrupt.data(), corrupt.size(), 12, 2, 1, 29, 0).ok);
+    CHECK(!aclsan::ParseTraceBuffer(corrupt.data(), corrupt.size(), 12, 2, 29, 0).ok);
 
     corrupt = buffer;
     CHECK(PutRecord(corrupt, 1, 0, 2, 0x700, ACLSAN_DEVICE_PIPE_MTE2, 1));
-    CHECK(!aclsan::ParseTraceBuffer(corrupt.data(), corrupt.size(), 12, 2, 1, 29, 0).ok);
+    CHECK(!aclsan::ParseTraceBuffer(corrupt.data(), corrupt.size(), 12, 2, 29, 0).ok);
 
     corrupt = buffer;
     CHECK(PutRecord(corrupt, 2, 0, 4, 0x800, ACLSAN_DEVICE_PIPE_MTE3, 2));
-    CHECK(!aclsan::ParseTraceBuffer(corrupt.data(), corrupt.size(), 12, 2, 1, 29, 0).ok);
+    CHECK(!aclsan::ParseTraceBuffer(corrupt.data(), corrupt.size(), 12, 2, 29, 0).ok);
+
     return true;
 }
 
@@ -287,16 +313,14 @@ bool RejectsInvalidShape()
 {
     std::vector<uint8_t> buffer;
     std::string error;
-    CHECK(!aclsan::InitializeTraceBuffer(buffer, 0, 1, 1, 1, error));
-    CHECK(!aclsan::InitializeTraceBuffer(buffer, 10, 1, 1, 1, error));
-    CHECK(!aclsan::InitializeTraceBuffer(buffer, 12, 0, 1, 1, error));
-    CHECK(!aclsan::InitializeTraceBuffer(buffer, 12, 1, 0, 1, error));
+    CHECK(!aclsan::InitializeTraceBuffer(buffer, 0, 1, 1, error));
+    CHECK(!aclsan::InitializeTraceBuffer(buffer, 10, 1, 1, error));
+    CHECK(!aclsan::InitializeTraceBuffer(buffer, 12, 0, 1, error));
 
     size_t bytes = 0;
-    CHECK(!aclsan::TraceBufferBytes(0, 1, &bytes));
-    CHECK(!aclsan::TraceBufferBytes(10, 1, &bytes));
-    CHECK(!aclsan::TraceBufferBytes(12, 0, &bytes));
-    CHECK(!aclsan::TraceBufferBytes(12, 1, nullptr));
+    CHECK(!aclsan::TraceBufferBytes(0, &bytes));
+    CHECK(!aclsan::TraceBufferBytes(10, &bytes));
+    CHECK(!aclsan::TraceBufferBytes(12, nullptr));
     return true;
 }
 
@@ -304,13 +328,14 @@ bool RejectsInvalidShape()
 
 TEST(AclsanTraceBuffer, Main)
 {
-    ASSERT_TRUE(InitializesDynamicPhysicalCoreSlices());
+    ASSERT_TRUE(InitializesFixedPhysicalCoreSlices());
     ASSERT_TRUE(ParsesOneSegmentFromLargerStorage());
     ASSERT_TRUE(ParsesMultipleLogicalBlocksInOnePhysicalSlice());
     ASSERT_TRUE(ParsesTwoPartPhysicalCoreTopology());
     ASSERT_TRUE(SupportsFullAicBlockCountRange());
     ASSERT_TRUE(RejectsUnrepresentableLogicalBlockIds());
     ASSERT_TRUE(ReportsOverflowAndKeepsRecords());
+    ASSERT_TRUE(DoesNotValidateLogicalBlockPlacement());
     ASSERT_TRUE(RejectsMalformedBuffers());
     ASSERT_TRUE(RejectsInvalidShape());
 }

@@ -104,6 +104,9 @@ grep -Fq 'const TraceBlockKey blockKey{blockType, wire.blockId};' "${trace_buffe
     Fail 'instruction execution identity is not keyed by block type and logical block ID'
 grep -Fq 'parsed.instrExecId = ++instructionCounts[blockKey];' "${trace_buffer}" || \
     Fail 'instruction execution ID is not counted per logical block'
+if grep -Eq 'seenLogicalBlocks|sliceBlockId' "${trace_buffer}"; then
+    Fail 'Host parser must not validate logical block placement'
+fi
 grep -Fq 'parsed.blockId = wire.blockId;' "${trace_buffer}" || Fail 'block ID is not read from the raw record'
 grep -Fq 'parsed.blockType = blockType;' "${trace_buffer}" || Fail 'block type is not derived from the DBI slice'
 grep -Fq 'parsed.phyCoreId = expectedPhyCoreId;' "${trace_buffer}" || \

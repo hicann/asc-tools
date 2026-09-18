@@ -39,12 +39,12 @@ struct TraceBufferParseResult {
 };
 
 bool InitializeTraceBuffer(
-    std::vector<uint8_t>& buffer, uint32_t physicalCoreCount, uint32_t blockCount, uint32_t recordsPerCore,
-    uint64_t launchId, std::string& error);
+    std::vector<uint8_t>& buffer, uint32_t physicalCoreCount, uint32_t blockCount, uint64_t launchId,
+    std::string& error);
 
 TraceBufferParseResult ParseTraceBuffer(
     const uint8_t* buffer, size_t bytes, uint32_t expectedPhysicalCoreCount, uint32_t expectedBlockCount,
-    uint32_t expectedRecordsPerCore, uint64_t expectedLaunchId, uint32_t deviceId);
+    uint64_t expectedLaunchId, uint32_t deviceId);
 
 } // namespace aclsan
 

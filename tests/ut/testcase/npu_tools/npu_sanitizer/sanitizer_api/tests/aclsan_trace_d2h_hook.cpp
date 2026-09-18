@@ -186,18 +186,14 @@ aclError OriginalLaunch(
 
     auto* bytes = static_cast<uint8_t*>(deviceBuffer);
     auto* header = reinterpret_cast<aclsan::AclsanTraceBufferHeader*>(bytes);
-    size_t sliceBytes = 0;
     if (header->magic != aclsan::ASCSAN_TRACE_BUFFER_MAGIC || header->blockCount != blocks ||
-        !aclsan::TraceSliceBytes(header->recordsPerCore, &sliceBytes)) {
+        header->physicalCoreCount != 6U) {
         return ACL_ERROR_INVALID_PARAM;
     }
-    if (header->physicalCoreCount != 108U) {
-        return ACL_ERROR_INVALID_PARAM;
-    }
-    constexpr uint32_t phyCoreId = 18U;
+    constexpr uint32_t phyCoreId = 1U;
     const uint32_t sliceIndex = phyCoreId;
     auto* slice = reinterpret_cast<aclsan::AclsanTraceSliceHeader*>(
-        bytes + sizeof(*header) + static_cast<size_t>(sliceIndex) * sliceBytes);
+        bytes + sizeof(*header) + static_cast<size_t>(sliceIndex) * aclsan::ASCSAN_TRACE_BYTES_PER_CORE);
     auto* record = reinterpret_cast<aclsan::AclsanRawTraceRecord*>(reinterpret_cast<uint8_t*>(slice) + sizeof(*slice));
     record->pc = 0x1234;
     if (g_writeMultiMemoryRecords) {
@@ -259,7 +255,7 @@ aclError OriginalLaunch(
         second->siteId = 38;
         second->category = aclsan::DeviceInstructionCategory::Synchronization;
         second->pipeline = ACLSAN_DEVICE_PIPE_SCALAR;
-        second->blockId = 0;
+        second->blockId = 1;
         second->reserved = 0;
         slice->recordCount = 2;
     }
@@ -284,11 +280,11 @@ aclError OriginalGetDeviceInfo(uint32_t deviceId, aclrtDevAttr attr, int64_t* va
     }
     ++g_deviceInfoCalls;
     if (attr == ACL_DEV_ATTR_CUBE_CORE_NUM) {
-        *value = 36;
+        *value = 2;
         return ACL_SUCCESS;
     }
     if (attr == ACL_DEV_ATTR_VECTOR_CORE_NUM) {
-        *value = 72;
+        *value = 4;
         return ACL_SUCCESS;
     }
     return ACL_ERROR_INVALID_PARAM;
@@ -432,7 +428,7 @@ int main()
     CHECK(g_records[0].launchId == 1);
     CHECK(g_records[0].instrExecId == 1);
     CHECK(g_records[0].deviceId == 3);
-    CHECK(g_records[0].phyCoreId == 18);
+    CHECK(g_records[0].phyCoreId == 1);
     CHECK(g_records[0].blockId == 1);
     CHECK(g_records[0].blockType == ACLSAN_DEVICE_BLOCK_TYPE_AICORE_VECTOR);
     CHECK(g_records[0].pc == 0x1234);
@@ -440,10 +436,10 @@ int main()
     CHECK(g_records[0].dstPipe == 3);
     CHECK(g_records[0].objectId == 7);
     CHECK(g_records[1].launchId == 1);
-    CHECK(g_records[1].instrExecId == 1);
+    CHECK(g_records[1].instrExecId == 2);
     CHECK(g_records[1].deviceId == 3);
-    CHECK(g_records[1].phyCoreId == 18);
-    CHECK(g_records[1].blockId == 0);
+    CHECK(g_records[1].phyCoreId == 1);
+    CHECK(g_records[1].blockId == 1);
     CHECK(g_records[1].blockType == ACLSAN_DEVICE_BLOCK_TYPE_AICORE_VECTOR);
     CHECK(g_records[1].pc == 0x2234);
     CHECK(g_records[1].objectId == 8);

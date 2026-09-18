@@ -158,7 +158,7 @@ extern "C" AclsanStatus aclsanGetDeviceCallStack(uint64_t, AclsanDeviceCallStack
 TEST(ToolManagerTest, CombinedToolsReportBothAndSubscribeSharedCallbackOnce)
 {
     const auto result = RunSession(
-        {"npu-check", "--tools", "synccheck", "--tools", "memcheck", "--tools", "memcheck", "/bin/true"}, true, true);
+        {"npu-check", "--tool", "synccheck", "--tool", "memcheck", "--tool", "memcheck", "/bin/true"}, true, true);
     ASSERT_EQ(result.initialized, 0);
     ASSERT_TRUE(result.error.empty()) << result.error;
     EXPECT_EQ(enableCalls, 6U);
@@ -176,7 +176,7 @@ TEST(ToolManagerTest, ErrorFlagAggregatesEitherTool)
 {
     for (auto errors : {std::pair{false, false}, std::pair{true, false}, std::pair{false, true}}) {
         const auto result = RunSession(
-            {"npu-check", "--tools", "memcheck", "--tools", "synccheck", "/bin/true"}, errors.first, errors.second);
+            {"npu-check", "--tool", "memcheck", "--tool", "synccheck", "/bin/true"}, errors.first, errors.second);
         ASSERT_EQ(result.initialized, 0);
         ASSERT_TRUE(result.error.empty()) << result.error;
         EXPECT_EQ((result.flags & npucheck::ipc::kFlagHasErrors) != 0, errors.first || errors.second);
@@ -186,13 +186,13 @@ TEST(ToolManagerTest, ErrorFlagAggregatesEitherTool)
 
 TEST(ToolManagerTest, SingleCheckerAndFailedSyncRetainIndependentState)
 {
-    const auto single = RunSession({"npu-check", "--tools", "synccheck", "/bin/true"}, true, true);
+    const auto single = RunSession({"npu-check", "--tool", "synccheck", "/bin/true"}, true, true);
     ASSERT_TRUE(single.error.empty()) << single.error;
     EXPECT_EQ(enableCalls, 3U);
     EXPECT_EQ(single.text.find("tool=memcheck"), std::string::npos);
     EXPECT_NE(single.text.find("tool=synccheck"), std::string::npos);
     const auto incomplete =
-        RunSession({"npu-check", "--tools", "memcheck", "--tools", "synccheck", "/bin/true"}, true, true, true);
+        RunSession({"npu-check", "--tool", "memcheck", "--tool", "synccheck", "/bin/true"}, true, true, true);
     ASSERT_TRUE(incomplete.error.empty()) << incomplete.error;
     EXPECT_NE(incomplete.text.find("status=complete"), std::string::npos);
     EXPECT_NE(incomplete.text.find("pending_device_operations=0"), std::string::npos);
@@ -202,8 +202,8 @@ TEST(ToolManagerTest, SingleCheckerAndFailedSyncRetainIndependentState)
 
 TEST(ToolManagerTest, NullCallbackIsCountedOnceAndDoesNotReachCheckers)
 {
-    const auto session = RunSession(
-        {"npu-check", "--tools", "memcheck", "--tools", "synccheck", "/bin/true"}, false, false, false, true);
+    const auto session =
+        RunSession({"npu-check", "--tool", "memcheck", "--tool", "synccheck", "/bin/true"}, false, false, false, true);
     ASSERT_TRUE(session.error.empty()) << session.error;
     EXPECT_NE(session.text.find("malformed_callbacks=1"), std::string::npos);
     EXPECT_NE(session.text.find("status=incomplete"), std::string::npos);

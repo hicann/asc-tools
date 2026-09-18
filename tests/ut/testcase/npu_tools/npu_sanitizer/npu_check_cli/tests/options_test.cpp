@@ -451,6 +451,7 @@ TEST(OptionsTest, UsageListsOnlyPublicOptions)
     EXPECT_NE(usage.find("Usage: npu-check"), std::string::npos);
     EXPECT_EQ(usage.find("Usage: npu_check"), std::string::npos);
     EXPECT_NE(usage.find("--tool"), std::string::npos);
+    EXPECT_EQ(usage.find("--tools"), std::string::npos);
     EXPECT_NE(usage.find("--log-file"), std::string::npos);
     EXPECT_NE(usage.find("--help"), std::string::npos);
     EXPECT_NE(usage.find("-h"), std::string::npos);
@@ -464,22 +465,19 @@ TEST(OptionsTest, UsageListsOnlyPublicOptions)
     EXPECT_EQ(usage.find("--missing-barrier-init-is-fatal"), std::string::npos);
 }
 
-TEST(OptionsTest, RepeatedToolsAndLegacyAliasAreEquivalent)
+TEST(OptionsTest, RejectsRemovedToolsOption)
 {
-    const auto combined =
-        Parse({"npu-check", "--tools", "synccheck", "--tools", "memcheck", "--tool", "memcheck", kSampleApp});
-    ASSERT_TRUE(combined.ok) << combined.error;
-    ASSERT_EQ(combined.options.tools.size(), 2U);
-    EXPECT_EQ(combined.options.tools[0].toolId, npucheck::ipc::ToolId::MEMCHECK);
-    EXPECT_EQ(combined.options.tools[1].toolId, npucheck::ipc::ToolId::SYNCCHECK);
-    const auto single = Parse({"npu-check", "--tools", "synccheck", kSampleApp});
-    ASSERT_TRUE(single.ok) << single.error;
-    ASSERT_EQ(single.options.tools.size(), 1U);
-    EXPECT_EQ(single.options.tools[0].toolId, npucheck::ipc::ToolId::SYNCCHECK);
-    EXPECT_FALSE(Parse({"npu-check", "--tools"}).ok);
-    EXPECT_FALSE(Parse({"npu-check", "--tools", "invalid", kSampleApp}).ok);
-    const auto forwarded = Parse({"npu-check", "--tools", "memcheck", "--", kSampleApp, "--tools", "synccheck"});
-    ASSERT_TRUE(forwarded.ok);
+    const auto result = Parse({"npu-check", "--tools", "memcheck", kSampleApp});
+
+    EXPECT_FALSE(result.ok);
+    EXPECT_EQ(result.error, "unknown option: --tools");
+}
+
+TEST(OptionsTest, ForwardsRemovedToolsOptionAfterSeparator)
+{
+    const auto forwarded = Parse({"npu-check", "--tool", "memcheck", "--", kSampleApp, "--tools", "synccheck"});
+
+    ASSERT_TRUE(forwarded.ok) << forwarded.error;
     EXPECT_EQ(forwarded.options.application, (std::vector<std::string>{kSampleApp, "--tools", "synccheck"}));
     EXPECT_EQ(forwarded.options.tools.size(), 1U);
 }

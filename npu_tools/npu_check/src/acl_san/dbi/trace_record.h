@@ -33,9 +33,8 @@ __aicore__ inline void WriteTraceRecord(
     const uint32_t phyCoreId = static_cast<uint32_t>(get_coreid());
     const uint32_t blockCount = header->blockCount;
     const uint32_t physicalCoreCount = header->physicalCoreCount;
-    if (header->magic != aclsan::ASCSAN_TRACE_BUFFER_MAGIC || blockCount == 0U || header->recordsPerCore == 0U ||
-        physicalCoreCount == 0U || physicalCoreCount % aclsan::ASCSAN_PHYSICAL_CORE_TOPOLOGY_UNIT != 0U ||
-        phyCoreId >= physicalCoreCount) {
+    if (header->magic != aclsan::ASCSAN_TRACE_BUFFER_MAGIC || blockCount == 0U || physicalCoreCount == 0U ||
+        physicalCoreCount % aclsan::ASCSAN_PHYSICAL_CORE_TOPOLOGY_UNIT != 0U || phyCoreId >= physicalCoreCount) {
         return;
     }
 
@@ -47,11 +46,9 @@ __aicore__ inline void WriteTraceRecord(
         return;
     }
 
-    const uint64_t sliceBytes = sizeof(aclsan::AclsanTraceSliceHeader) +
-                                static_cast<uint64_t>(header->recordsPerCore) * sizeof(aclsan::AclsanRawTraceRecord);
-    if (sliceBytes > (UINT64_MAX - sizeof(aclsan::AclsanTraceBufferHeader)) / physicalCoreCount ||
-        header->segmentBytes !=
-            sizeof(aclsan::AclsanTraceBufferHeader) + static_cast<uint64_t>(physicalCoreCount) * sliceBytes) {
+    constexpr uint64_t sliceBytes = aclsan::ASCSAN_TRACE_BYTES_PER_CORE;
+    if (header->segmentBytes !=
+        sizeof(aclsan::AclsanTraceBufferHeader) + static_cast<uint64_t>(physicalCoreCount) * sliceBytes) {
         return;
     }
     __gm__ uint8_t* sliceAddress =
@@ -59,7 +56,7 @@ __aicore__ inline void WriteTraceRecord(
     __gm__ aclsan::AclsanTraceSliceHeader* slice =
         reinterpret_cast<__gm__ aclsan::AclsanTraceSliceHeader*>(sliceAddress);
     const uint32_t index = slice->recordCount;
-    if (index >= header->recordsPerCore) {
+    if (index >= aclsan::ASCSAN_TRACE_RECORDS_PER_CORE) {
         if (slice->overflowCount != UINT32_MAX) {
             slice->overflowCount = slice->overflowCount + 1U;
         }

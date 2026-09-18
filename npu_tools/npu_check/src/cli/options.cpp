@@ -190,7 +190,7 @@ bool ParseOptions(int argc, char** argv, Options& options, std::string& error)
         }
 
         std::string value;
-        if (argument == "--tools" || argument == "--tool") {
+        if (argument == "--tool") {
             if (!NeedValue(argc, argv, i, value, error)) {
                 return false;
             }
@@ -380,17 +380,16 @@ std::string Usage()
     // 内部调测选项（--work-dir、--handshake-timeout-ms、--error-exitcode）不对外承诺
     // 兼容性，可随时变更或删除，因此不得出现在这里 —— 一旦印进帮助，用户就会按对外
     // 契约来依赖它。它们仍然照常解析，只是不做广告。
-    return "Usage: npu-check [--tools <name>]... [--log-file <path>]\n"
+    return "Usage: npu-check [--tool <name>]... [--log-file <path>]\n"
            "                 [--] <application> [args...]\n"
            "Options:\n"
-           "  --tools <memcheck|synccheck> enable a checker; repeatable and idempotent.\n"
-           "                               Defaults to memcheck when no tool is given.\n"
-           "  --tool <name>               alias for --tools\n"
+           "  --tool <memcheck|synccheck> enable a checker; repeatable and idempotent.\n"
+           "                              Defaults to memcheck when no tool is given.\n"
            "  --log-file <path>            file receiving the report and application output;\n"
            "                               parent directory must exist; overwrites existing files\n"
            "  -h, --help                   show this help and exit\n"
            "\n"
-           "Example: npu-check --tools memcheck --tools synccheck ./app\n"
+           "Example: npu-check --tool memcheck --tool synccheck ./app\n"
            "\n"
            "Pass -- before <application> when the application path or its arguments start\n"
            "with '-'.\n";

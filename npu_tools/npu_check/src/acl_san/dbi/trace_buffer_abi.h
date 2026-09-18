@@ -16,8 +16,8 @@
 
 namespace aclsan {
 
-constexpr uint64_t ASCSAN_TRACE_BUFFER_MAGIC = 0x41534353414E3036ULL;
-constexpr uint32_t ASCSAN_TRACE_RECORDS_PER_CORE_DEFAULT = 256U;
+constexpr uint64_t ASCSAN_TRACE_BUFFER_MAGIC = 0x41534353414E3037ULL;
+constexpr size_t ASCSAN_TRACE_BYTES_PER_CORE = 1024U * 1024U;
 constexpr uint32_t ASCSAN_PHYSICAL_CORE_PART_COUNT = 2U;
 constexpr uint32_t ASCSAN_AIC_CORE_RATIO_DENOMINATOR = 3U;
 constexpr uint32_t ASCSAN_PHYSICAL_CORE_TOPOLOGY_UNIT =
@@ -58,26 +58,25 @@ constexpr bool IsTraceBlockIdValid(uint64_t blockId, bool isAic, uint32_t blockC
 // [segment base, segment base + segmentBytes) 边界；未来多个 segment 可在共享 buffer 中连续存放。
 // Buffer 的三层布局：
 //   [AclsanTraceBufferHeader]
-//   [physical core slice 0: AclsanTraceSliceHeader][record 0] ... [record recordsPerCore - 1]
+//   [physical core slice 0: AclsanTraceSliceHeader][records][padding to ASCSAN_TRACE_BYTES_PER_CORE]
 //   ...
 //
 // 大小及偏移计算：
-//   sliceBytes  = sizeof(AclsanTraceSliceHeader) +
-//                 recordsPerCore * sizeof(AclsanRawTraceRecord)
+//   sliceBytes  = ASCSAN_TRACE_BYTES_PER_CORE
 //   sliceCount  = physicalCoreCount
 //   segmentBytes = sizeof(AclsanTraceBufferHeader) + sliceCount * sliceBytes
 //   sliceOffset(sliceIndex) = sizeof(AclsanTraceBufferHeader) + sliceIndex * sliceBytes
 //
-// blockCount 保存 launch blockDim A，只用于校验 record 携带的逻辑 blockId。物理核分为两部分，
-// 每部分的前 1/3 为 AIC、后 2/3 为 AIV。sliceIndex 等于 get_coreid()；每个物理核执行的
-// 所有逻辑 block 共享一个 slice，有效记录下标范围为 [0, recordCount)。recordCount 即该 slice 的
-// 有效结尾，不额外写入 record 或 launch 尾标志。
+// blockCount 保存 launch blockDim A，只用于校验 record 携带的逻辑 blockId。
+// 物理核分为两部分，每部分的前 1/3 为 AIC、后 2/3 为 AIV。
+// sliceIndex 等于 get_coreid()。每个物理核执行的所有逻辑 block 共享一个 slice，
+// 有效记录下标范围为 [0, recordCount)。
+// recordCount 即该 slice 的有效结尾，不额外写入 record 或 launch 尾标志。
 struct AclsanTraceBufferHeader {
     uint64_t magic;        // Trace segment 格式标识，固定为 ASCSAN_TRACE_BUFFER_MAGIC。
     uint64_t launchId;     // Host 为本次 launch 分配的标识；该 segment 内所有 record 均继承此归属。
     uint64_t segmentBytes; // 包含 header 和所有定长 slice 的完整 segment 字节数。
     uint32_t blockCount;   // 本次 kernel launch 的 blockDim，即 A。
-    uint32_t recordsPerCore;    // 每个物理核 slice 最多可保存的原始 trace 记录数。
     uint32_t physicalCoreCount; // Host 查询得到的 Cube 与 Vector 物理核数量之和。
 };
 
@@ -106,28 +105,15 @@ struct AclsanRawTraceRecord {
     uint32_t reserved;                  // 显式保留字段，固定写 0。
 };
 
-constexpr bool TraceSliceBytes(uint32_t recordsPerCore, size_t* bytes)
-{
-    if (recordsPerCore == 0 || bytes == nullptr ||
-        static_cast<size_t>(recordsPerCore) >
-            (SIZE_MAX - sizeof(AclsanTraceSliceHeader)) / sizeof(AclsanRawTraceRecord)) {
-        return false;
-    }
-    *bytes = sizeof(AclsanTraceSliceHeader) + static_cast<size_t>(recordsPerCore) * sizeof(AclsanRawTraceRecord);
-    return true;
-}
+constexpr uint32_t ASCSAN_TRACE_RECORDS_PER_CORE = static_cast<uint32_t>(
+    (ASCSAN_TRACE_BYTES_PER_CORE - sizeof(AclsanTraceSliceHeader)) / sizeof(AclsanRawTraceRecord));
 
-constexpr bool TraceBufferBytes(uint32_t physicalCoreCount, uint32_t recordsPerCore, size_t* bytes)
+constexpr bool TraceBufferBytes(uint32_t physicalCoreCount, size_t* bytes)
 {
-    size_t sliceBytes = 0;
-    if (bytes == nullptr || !IsTracePhysicalCoreTopologyValid(physicalCoreCount) ||
-        !TraceSliceBytes(recordsPerCore, &sliceBytes)) {
+    if (bytes == nullptr || !IsTracePhysicalCoreTopologyValid(physicalCoreCount)) {
         return false;
     }
-    if (static_cast<size_t>(physicalCoreCount) > (SIZE_MAX - sizeof(AclsanTraceBufferHeader)) / sliceBytes) {
-        return false;
-    }
-    *bytes = sizeof(AclsanTraceBufferHeader) + static_cast<size_t>(physicalCoreCount) * sliceBytes;
+    *bytes = sizeof(AclsanTraceBufferHeader) + static_cast<size_t>(physicalCoreCount) * ASCSAN_TRACE_BYTES_PER_CORE;
     return true;
 }
 
