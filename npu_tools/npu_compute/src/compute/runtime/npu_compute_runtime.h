@@ -1,0 +1,75 @@
+/**
+ * Copyright (c) 2026 Huawei Technologies Co., Ltd.
+ * This program is free software, you can redistribute it and/or modify it under the terms and conditions of
+ * CANN Open Software License Agreement Version 2.0 (the "License").
+ * Please refer to the License for details. You may not use this file except in compliance with the License.
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
+ * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
+ * See LICENSE in the root of the software repository for the full text of the License.
+ */
+#ifndef NPU_TOOLS_NPU_COMPUTE_SRC_COMPUTE_RUNTIME_NPU_COMPUTE_RUNTIME_H
+#define NPU_TOOLS_NPU_COMPUTE_SRC_COMPUTE_RUNTIME_NPU_COMPUTE_RUNTIME_H
+
+#include "aclpti/aclpti.h"
+#include "biu/biu_pipeline.h"
+#include "hardware/hardware_info_collector.h"
+#include "pmu/pmu_data_consumer.h"
+#include "compute_types.h"
+#include "runtime/section_config.h"
+#include "runtime/kernel_metadata_collector.h"
+
+#include <boost/filesystem/path.hpp>
+
+#include <cstddef>
+#include <memory>
+#include <mutex>
+#include <string>
+#include <vector>
+
+namespace npucompute {
+
+inline constexpr int kInitializeFailed = -1;
+
+namespace detail {
+
+bool LoadPmuDataLevelFromEnvironment(const char* variableName, PmuDataLevel* level, std::string* error);
+
+} // namespace detail
+
+class NpuComputeRuntime {
+public:
+    static NpuComputeRuntime& Instance();
+
+    int Initialize();
+    void Stop() noexcept;
+    int ShutdownAfterPtiDrain();
+
+private:
+    static void HardwareInfoTriggerCallback(
+        void* userData, aclptiCallbackDomain domain, aclptiCallbackId cbid,
+        const aclptiCallbackData* callbackData) noexcept;
+
+    void DisableHardwareCallbacks() noexcept;
+    aclptiResult ProcessPmuData(std::shared_ptr<const aclptiProfilingDataResult> result);
+
+    std::mutex mutex_;
+    std::shared_ptr<PmuDataConsumer> pmu_consumer_;
+    aclptiSubscribeHandle subscriber_ = nullptr;
+    std::size_t enabled_hardware_callback_count_ = 0;
+    bool csv_frequency_override_ = false;
+    bool csv_device_info_loaded_ = false;
+    bool pipeline_enabled_ = false;
+    bool pipeline_finalized_ = false;
+    uint64_t pipeline_result_sequence_ = 0;
+    SectionConfig section_config_;
+    ReportConfig csv_config_;
+    BiuClockConfig biu_clock_config_;
+    boost::filesystem::path pipeline_process_directory_;
+    std::vector<PipeTraceFragmentInfo> pipeline_fragments_;
+    HardwareInfoCollector hardware_info_collector_;
+    KernelMetadataCollector kernel_metadata_collector_;
+};
+
+} // namespace npucompute
+
+#endif // NPU_TOOLS_NPU_COMPUTE_SRC_COMPUTE_RUNTIME_NPU_COMPUTE_RUNTIME_H
