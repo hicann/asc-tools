@@ -5,6 +5,8 @@
 
 工具调用演示可参考[msobjdump样例](../examples/04_msobjdump/README.md)。
 
+通过 Agent 使用本工具时，可参考 [tool-npu-objdump Skill](../skills/tool-npu-objdump/SKILL.md)，了解环境准备、命令选择和元数据解读。
+
 ## 命令格式
 
 -  解析ELF文件的命令

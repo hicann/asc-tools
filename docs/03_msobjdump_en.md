@@ -5,6 +5,8 @@ This tool provides parsing and extraction capabilities for generated operator EL
 
 For a tool usage demonstration, refer to the [msobjdump example](../examples/04_msobjdump/README.md).
 
+When using this tool through an Agent, refer to the [tool-npu-objdump Skill](../skills/tool-npu-objdump/SKILL.md) for environment preparation, command selection, and metadata interpretation.
+
 ## Command Format
 
 - Command to parse an ELF file
