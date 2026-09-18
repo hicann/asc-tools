@@ -18,10 +18,12 @@ else
     echo "api-check=continue" >> "${ATOMGIT_OUTPUT}"
 fi
 if [[ "${task_name}" == *ubuntu24* ]]; then
-    if [ "${TARGET_BRANCH}" == "master" ] || [ "${TARGET_BRANCH}" == "experimental" ]; then
-        sudo update-alternatives --set gcc /usr/bin/gcc-15
-    else
-        sudo update-alternatives --set gcc /usr/bin/gcc-14
+    if sudo update-alternatives --set gcc /usr/bin/gcc-16 2>/dev/null; then
+        echo "Switched to gcc-16"
+    elif sudo update-alternatives --set gcc /usr/bin/gcc-15 2>/dev/null; then
+        echo "Switched to gcc-15"
+    elif sudo update-alternatives --set gcc /usr/bin/gcc-14 2>/dev/null; then
+        echo "gcc-16/15 not available, fell back to gcc-14"
     fi
 else
     if [[ -f "/opt/rh/devtoolset-7/enable" ]]; then
