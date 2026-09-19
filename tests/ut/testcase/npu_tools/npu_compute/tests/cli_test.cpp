@@ -268,10 +268,9 @@ int TestHelpReportsAllOptionErrors()
     CHECK(!config.show_help);
 
     errors.clear();
-    CHECK(!Parse({"npu-compute", "hh", "-h", "/path/to/run.sh"}, &config, &errors));
-    CHECK(
-        errors ==
-        std::vector<std::string>({"collection requires at least one --set or --section before program 'hh'."}));
+    CHECK(Parse({"npu-compute", "hh", "-h", "/path/to/run.sh"}, &config, &errors));
+    CHECK(errors.empty());
+    CHECK(config.sets == std::vector<std::string>({"basic"}));
     CHECK(config.program == "hh");
     CHECK(config.program_arguments == std::vector<std::string>({"-h", "/path/to/run.sh"}));
 
