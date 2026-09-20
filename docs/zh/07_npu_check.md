@@ -4,7 +4,7 @@ npu-check 是面向昇腾 NPU 的运行时正确性检查工具，帮助客户�
 
 本手册面向 Ascend C 算子开发者，介绍环境准备、命令行用法、检查功能、报告阅读和典型使用示例。
 
-通过 Agent 使用本工具时，可参考 [tool-npu-check Skill](../skills/tool-npu-check/SKILL.md)，了解适用范围、检查类型选择、受控运行、报告解读和算子复测。
+通过 Agent 使用本工具时，可参考 [tool-npu-check Skill](../../skills/tool-npu-check/SKILL.md)，了解适用范围、检查类型选择、受控运行、报告解读和算子复测。
 
 ## 目录
 

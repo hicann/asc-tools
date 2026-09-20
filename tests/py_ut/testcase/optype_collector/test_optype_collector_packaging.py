@@ -28,7 +28,7 @@ REMOVE_SOFTLINK_SCRIPT = (
     REPO_ROOT / "scripts/package/asc-tools/scripts/asc-tools_custom_remove_softlink.sh"
 )
 SETUP_SCRIPT = REPO_ROOT / "utils/optype_collector/setup.py"
-USER_DOC = REPO_ROOT / "docs/05_optype_collector.md"
+USER_DOC = REPO_ROOT / "docs/zh/05_optype_collector.md"
 MSOBJDUMP_CMAKE = REPO_ROOT / "utils/msobjdump/CMakeLists.txt"
 MSOBJDUMP_SHELL = REPO_ROOT / "utils/msobjdump/msobjdump.sh"
 POSTINST_SCRIPT = REPO_ROOT / "scripts/package/asc-tools/rpm_deb/custom_postinst.sh"

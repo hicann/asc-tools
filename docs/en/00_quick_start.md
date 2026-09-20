@@ -24,13 +24,13 @@ For users without NPU devices, you can directly use the **CANNLab Cloud Developm
 
 1. Go to the GitCode page of the open-source repository, click the "`CANNLab > Cloud Development`" button, and log in with your verified Huawei Cloud account. If you have not registered or verified your account, please follow the on-screen instructions to complete registration and verification.
 
-   <p align="center"><img src="./figures/cloudIDE.png" alt="Cloud Platform" width="750px" height="90px"></p>
+   <p align="center"><img src="../zh/figures/cloudIDE.png" alt="Cloud Platform" width="750px" height="90px"></p>
 
 2. Follow the on-screen instructions to create an NPU environment, configure specifications, and start the cloud development environment. Then click "`Connect > WebIDE or Visual Studio Code`" to enter the one-stop development platform.
 
    The current open-source project resources are located in the /mnt/workspace/gitCode/\${gitCode_id} directory by default, where \${gitCode_id} represents the developer's personal GitCode account.
 
-   <p align="center"><img src="./figures/webIDE.png" alt="Cloud Platform" width="1000px" height="150px"></p>
+   <p align="center"><img src="../zh/figures/webIDE.png" alt="Cloud Platform" width="1000px" height="150px"></p>
 
 > [!NOTE] Usage Notes
 >
@@ -106,7 +106,7 @@ For users with NPU devices, this environment can be used for development and exp
 
 For users with NPU devices, this environment is recommended for ecosystem development contributions.
 
-DevContainer is based on VS Code Dev Containers and automatically builds a consistent containerized development environment through the `.devcontainer` configuration in the repository, with built-in toolchains such as `conda` and `Python`. It shares device access with the host's NPU driver, making it suitable for scenarios that require source code compilation, running UTs, and contributing code to this repository. For detailed information, please refer to [`.devcontainer/README.md`](../.devcontainer/README.md).
+DevContainer is based on VS Code Dev Containers and automatically builds a consistent containerized development environment through the `.devcontainer` configuration in the repository, with built-in toolchains such as `conda` and `Python`. It shares device access with the host's NPU driver, making it suitable for scenarios that require source code compilation, running UTs, and contributing code to this repository. For detailed information, please refer to [`.devcontainer/README.md`](../../.devcontainer/README.md).
 
 > [!NOTE] Usage Notes
 > DevContainer only mounts the host's NPU driver (read-only). **The CANN toolkit and ops packages need to be manually installed after the container starts**. Please refer to [Download and Install CANN Packages](#📥 Download and Install CANN Packages).
@@ -142,7 +142,7 @@ CANN packages are divided into the CANN toolkit package and the CANN ops package
     ```
 
     > [!IMPORTANT] Installation Notes
-    > Some operator examples in [examples](../examples/) require this package for compilation and execution. To fully experience the example compilation and execution workflow, it is recommended to install this package.
+    > Some operator examples in [examples](../../examples/) require this package for compilation and execution. To fully experience the example compilation and execution workflow, it is recommended to install this package.
 
 | Parameter | Description |
 | :--- | :--- |
@@ -243,7 +243,7 @@ source /usr/local/Ascend/cann/set_env.sh
 > [!NOTE] Before You Start
 > If you are using **containerization technology**, the dependencies are already installed in the container. You can skip this step.
 
-   The following lists only the dependencies used for compiling the source code of this open-source repository. Refer to [DevContainer Python Dependencies (using Python 3.12 as an example)](../.devcontainer/requirements.txt) in the repository. For installation instructions for python, gcc, and cmake, please refer to the corresponding version of the [User Manual](https://hiascend.com/document/redirect/CannCommunityInstDepend), select the installation scenario, and refer to the "Install CANN > Install Dependencies" section.
+   The following lists only the dependencies used for compiling the source code of this open-source repository. Refer to [DevContainer Python Dependencies (using Python 3.12 as an example)](../../.devcontainer/requirements.txt) in the repository. For installation instructions for python, gcc, and cmake, please refer to the corresponding version of the [User Manual](https://hiascend.com/document/redirect/CannCommunityInstDepend), select the installation scenario, and refer to the "Install CANN > Install Dependencies" section.
 
    - python >= 3.7.0 (Note: Python has announced EOL for versions 3.7.x/3.8.x. CANN will soon stop supporting these versions. Please upgrade to version >= 3.9.x)
 
@@ -384,7 +384,7 @@ source /usr/local/Ascend/cann/set_env.sh
    bash build.sh --pkg --cann_3rd_lib_path={your_3rd_party_path}
    ```
 
-   After the build completes, the cann-asc-tools_*<cann_version>*_linux-*<arch>*.run package will be generated in the `build_out` directory.
+   After the build completes, the `cann-asc-tools_*<cann_version>*_linux-*<arch>*.run` package will be generated in the `build_out` directory.
 
     > [!CAUTION] Possible Build Errors
     > This repository depends on other CANN open-source repositories and **does not support independent upgrades yet**. It must be compiled with the matching version of the CANN package:

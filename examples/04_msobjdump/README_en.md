@@ -2,7 +2,7 @@
 
 ## Overview
 
-This example demonstrates the usage of the `msobjdump` tool in a fusion compilation scenario based on the MatmulLeakyRelu operator. The example generates a fusion compilation artifact by compiling [matmul_leakyrelu.asc](./matmul_leakyrelu.asc), and then uses `msobjdump` to parse and disassemble the generated ELF file. For detailed information about the `msobjdump` tool, please refer to [msobjdump Tool](../../docs/03_msobjdump_en.md).
+This example demonstrates the usage of the `msobjdump` tool in a fusion compilation scenario based on the MatmulLeakyRelu operator. The example generates a fusion compilation artifact by compiling [matmul_leakyrelu.asc](./matmul_leakyrelu.asc), and then uses `msobjdump` to parse and disassemble the generated ELF file. For detailed information about the `msobjdump` tool, please refer to [msobjdump Tool](../../docs/en/03_msobjdump.md).
 
 ## Supported Products and CANN Software Versions
 
@@ -58,7 +58,7 @@ Execute the following steps in the root directory of this example to build and r
 
 - Configure Environment Variables
 
-  Configure the environment variables based on the [installation method](../../docs/00_quick_start.md#prepare&install) of the CANN development toolkit in your current environment.
+  Configure the environment variables based on the [installation method](../../docs/en/00_quick_start.md#prepare&install) of the CANN development toolkit in your current environment.
 
   ```bash
   source ${install_path}/cann/set_env.sh

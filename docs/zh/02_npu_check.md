@@ -89,7 +89,7 @@ npu check对内存读写、指令同步、Tensor操作的合法性进行检测�
 
 ## 使用示例
 
-下面以[add](https://gitcode.com/cann/asc-devkit/blob/master/examples/01_utilities/03_cpudebug/add.cpp)为示例，介绍在调用CPU调测API并使用gdb/printf对算子核函数进行调试之后，开发者可以基于生成的log文件使用npu check工具检查Kernel源码的实现逻辑。
+下面以[add](https://gitcode.com/cann/asc-devkit/blob/master/examples/01_simd_cpp_api/01_utilities/06_cpu_debug/cpu_debug.asc)为示例，介绍在调用CPU调测API并使用gdb/printf对算子核函数进行调试之后，开发者可以基于生成的log文件使用npu check工具检查Kernel源码的实现逻辑。
 
 **步骤1**:构造错误用例
 

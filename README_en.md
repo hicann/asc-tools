@@ -50,7 +50,7 @@ The directory structure of this repository is as follows:
 
 | Document | Description |
 |------|------|
-|[Quick Start](./docs/00_quick_start.md)|A quick tutorial to get started with the project. Includes environment setup, compilation and execution, and local verification.|
+|[Quick Start](./docs/en/00_quick_start.md)|A quick tutorial to get started with the project. Includes environment setup, compilation and execution, and local verification.|
 |[Usage Guide](./docs)|Usage instructions for each tool.|
 |[Related Documentation](https://hiascend.com/document/redirect/CannCommunityOpdevAscendC)|Ascend C operator programming guide, which also provides detailed introductions to the twin debugging cpu_debug, msobjdump, and show_kernel_debug_data tools.|
 

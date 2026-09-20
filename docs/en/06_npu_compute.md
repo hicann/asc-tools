@@ -21,7 +21,7 @@ Section names are case-sensitive.
 
 ## Environment Preparation
 
-Refer to [Quick Start](00_quick_start_en.md) to prepare the environment. Install a CANN package that matches the target NPU and driver, then load the CANN environment. Replace `<CANN installation directory>` with the actual installation directory:
+Refer to [Quick Start](00_quick_start.md) to prepare the environment. Install a CANN package that matches the target NPU and driver, then load the CANN environment. Replace `<CANN installation directory>` with the actual installation directory:
 
 ```bash
 source <CANN installation directory>/cann/set_env.sh

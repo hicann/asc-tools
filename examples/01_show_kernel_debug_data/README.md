@@ -2,7 +2,7 @@
 
 ## 概述
 
-本样例基于Add算子演示kernel侧调试信息的生成和解析流程。样例在Ascend C kernel中调用`AscendC::DumpTensor`、`AscendC::printf`和`AscendC::PrintTimeStamp`生成调试数据，再通过[show_kernel_debug_data工具](../../docs/04_show_kernel_debug_data.md)解析dump二进制文件。
+本样例基于Add算子演示kernel侧调试信息的生成和解析流程。样例在Ascend C kernel中调用`AscendC::DumpTensor`、`AscendC::printf`和`AscendC::PrintTimeStamp`生成调试数据，再通过[show_kernel_debug_data工具](../../docs/zh/04_show_kernel_debug_data.md)解析dump二进制文件。
 
 ## 本样例支持的产品及CANN软件版本
 
@@ -42,7 +42,7 @@
 
 - 配置环境变量
 
-  请根据当前环境上CANN开发套件包的[安装方式](../../docs/00_quick_start.md#prepare&install)，配置环境变量。
+  请根据当前环境上CANN开发套件包的[安装方式](../../docs/zh/00_quick_start.md#prepare&install)，配置环境变量。
 
   ```bash
   source ${install_path}/cann/set_env.sh

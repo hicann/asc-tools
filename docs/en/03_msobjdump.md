@@ -4,9 +4,9 @@
 
 This tool provides parsing, extraction, and Ascend AICore instruction disassembly capabilities for generated operator ELF files (Executable and Linkable Format), presenting the results in a readable format so that developers can intuitively obtain kernel file information. For a detailed introduction of this tool, please refer to the "Programming Guide > Appendix > msobjdump Tool" section in [Ascend C Operator Development](https://hiascend.com/document/redirect/CannCommunityOpdevAscendC).
 
-For a tool usage demonstration, refer to the [msobjdump example](../examples/04_msobjdump/README_en.md).
+For a tool usage demonstration, refer to the [msobjdump example](../../examples/04_msobjdump/README_en.md).
 
-When using this tool through an Agent, refer to the [tool-npu-objdump Skill](../skills/tool-npu-objdump/SKILL.md) for environment preparation, command selection, and metadata interpretation.
+When using this tool through an Agent, refer to the [tool-npu-objdump Skill](../../skills/tool-npu-objdump/SKILL.md) for environment preparation, command selection, and metadata interpretation.
 
 ## Command Format
 

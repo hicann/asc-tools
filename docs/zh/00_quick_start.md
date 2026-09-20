@@ -6,14 +6,14 @@
 
 | 环境情况 | 用于社区体验 / 算子开发（CANN商用/社区版） | 用于生态开发（CANN master） |
 | :---: | :---: | :---: |
-| **无NPU设备** | [云开发环境](#1️⃣-云开发环境) | [云开发环境](#1️⃣-云开发环境) + [手动下载安装CANN master](#📥-下载安装cann包)|
-| **有NPU设备** | [基于CANN镜像的Docker](#2️⃣-基于cann镜像的docker) | [Dev Container](#3️⃣-devcontainer) + [手动下载安装CANN master](#📥-下载安装cann包) |
+| **无NPU设备** | [云开发环境](#1️⃣-云开发环境) | [云开发环境](#1️⃣-云开发环境) + [手动下载安装CANN master](#cann-install)|
+| **有NPU设备** | [基于CANN镜像的Docker](#2️⃣-基于cann镜像的docker) | [Dev Container](#3️⃣-devcontainer) + [手动下载安装CANN master](#cann-install) |
 
 > [!TIP] 选择建议
 >
 > - 为了保障开发体验环境的质量，推荐用户基于**容器化技术**完成**环境准备**。
 > - 如不希望使用容器，也可在带NPU设备的主机上完成**环境准备**，请参考[CANN软件安装指南 - 在物理机上安装](https://www.hiascend.com/document/redirect/CannCommunityInstWizard)。
-> - 针对仅体验"编译安装本开源仓 + 仿真环境运行算子"的用户，不要求主机带NPU设备，可跳过安装NPU驱动和固件，直接安装CANN包，请参考[下载安装CANN包](#📥-下载安装cann包)。
+> - 针对仅体验"编译安装本开源仓 + 仿真环境运行算子"的用户，不要求主机带NPU设备，可跳过安装NPU驱动和固件，直接安装CANN包，请参考[下载安装CANN包](#cann-install)。
 
 ### 1️⃣ 云开发环境<a name="cloud-dev-env"></a>
 
@@ -24,18 +24,18 @@
 
 1. 进入开源仓Gitcode页面，单击"`CANNLab > 云开发`"按钮，使用已认证过的华为云账号登录。若未注册或认证，请根据页面提示进行注册和认证。
 
-   <p align="center"><img src="./figures/cloudIDE.png" alt="云平台" width="750px" height="90px"></p>
+   <p align="center"><img src="figures/cloudIDE.png" alt="云平台" width="750px" height="90px"></p>
 
 2. 根据页面提示创建NPU环境并配置规格，启动云开发环境后，单击"`连接 > WebIDE 或 Visual Studio Code`"进入一站式开发平台。
 
    当前开源项目资源默认在/mnt/workspace/gitCode/${gitCode_id}目录下，${gitCode_id}表示开发者个人gitCode账号。
 
-   <p align="center"><img src="./figures/webIDE.png" alt="云平台" width="1000px" height="150px"></p>
+   <p align="center"><img src="figures/webIDE.png" alt="云平台" width="1000px" height="150px"></p>
 
 > [!NOTE] 使用说明
 >
 > - 环境默认安装了最新的商用版NPU驱动和固件、CANN包，源码下载时注意与软件配套。
-> - 如需下载特定版本的CANN包，请参考[下载安装CANN包](#📥-下载安装cann包)。
+> - 如需下载特定版本的CANN包，请参考[下载安装CANN包](#cann-install)。
 > - 更多关于**CANNLab云开发环境**的介绍，请参考[CANNLab指导](https://gitcode.com/org/cann/discussions/54)。
 > - [Huawei Developer Space插件](https://marketplace.visualstudio.com/items?itemName=HuaweiCloud.developerspace)为VSCode IDE接入**云开发环境**提供技术支持。
 
@@ -106,10 +106,10 @@
 
 对于有NPU设备的用户，推荐使用此环境进行生态开发者贡献。
 
-DevContainer基于VS Code Dev Containers，通过仓库内`.devcontainer`配置自动构建一致的容器化开发环境，内置`conda`、`Python`等开发工具链。与宿主机的NPU驱动共享设备访问，适合需要编译源码、运行UT、向本仓贡献代码的场景。详细说明请参考[`.devcontainer/README.md`](../.devcontainer/README.md)。
+DevContainer基于VS Code Dev Containers，通过仓库内`.devcontainer`配置自动构建一致的容器化开发环境，内置`conda`、`Python`等开发工具链。与宿主机的NPU驱动共享设备访问，适合需要编译源码、运行UT、向本仓贡献代码的场景。详细说明请参考[`.devcontainer/README.md`](../../.devcontainer/README.md)。
 
 > [!NOTE] 使用说明
-> DevContainer仅挂载宿主机的NPU驱动（只读），**CANN toolkit和ops包需在容器启动后手动安装**，请参考[下载安装CANN包](#📥-下载安装cann包)。
+> DevContainer仅挂载宿主机的NPU驱动（只读），**CANN toolkit和ops包需在容器启动后手动安装**，请参考[下载安装CANN包](#cann-install)。
 
 ### 📥 下载安装CANN包<a name="cann-install"></a>
 <!-- 待加入AI Agent下载 & 安装CANN包的skill -->
@@ -142,7 +142,7 @@ CANN包分为CANN toolkit包和CANN ops包。
     ```
 
     > [!IMPORTANT] 安装说明
-    > [examples](../examples/)中部分算子样例的编译运行依赖本包，若想完整体验样例编译运行流程，建议安装此包。
+    > [examples](../../examples/)中部分算子样例的编译运行依赖本包，若想完整体验样例编译运行流程，建议安装此包。
 
 | 参数 | 说明 |
 | :--- | :--- |
@@ -237,7 +237,7 @@ source /usr/local/Ascend/cann/set_env.sh
 > [!NOTE] 使用前须知
 > 如果您使用**容器化技术**，容器中已为您安装好依赖，可跳过此步骤。
 
-   以下所列仅为本开源仓源码编译用到的依赖，可参考仓库内[DevContainer Python依赖（以 Python 3.12 为例）](../.devcontainer/requirements.txt)，其中python、gcc、cmake的安装方法请参见配套版本的[用户手册](https://hiascend.com/document/redirect/CannCommunityInstDepend)，选择安装场景后，参见"安装CANN > 安装依赖"章节进行相关依赖的安装。
+   以下所列仅为本开源仓源码编译用到的依赖，可参考仓库内[DevContainer Python依赖（以 Python 3.12 为例）](../../.devcontainer/requirements.txt)，其中python、gcc、cmake的安装方法请参见配套版本的[用户手册](https://hiascend.com/document/redirect/CannCommunityInstDepend)，选择安装场景后，参见"安装CANN > 安装依赖"章节进行相关依赖的安装。
 
    - python >= 3.7.0 (注意：python宣布3.7.x/3.8.x版本已经EOL，CANN即将停止对该版本的支持，请升级到>=3.9.x版本)
 
@@ -369,7 +369,7 @@ source /usr/local/Ascend/cann/set_env.sh
   bash build.sh --pkg --cann_3rd_lib_path={your_3rd_party_path}
   ```
 
-  编译完成后会在`build_out`目录下生成cann-asc-tools_*<cann_version>*_linux-*<arch>*.run软件包。
+  编译完成后会在`build_out`目录下生成`cann-asc-tools_*<cann_version>*_linux-*<arch>*.run`软件包。
 
    > [!CAUTION] 编译报错可能
    > 本仓依赖其他CANN开源仓，**暂不支持独立升级**，须搭配对应版本的CANN包进行编译：

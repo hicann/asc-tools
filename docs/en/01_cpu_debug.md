@@ -6,11 +6,11 @@ Before deploying operators to the NPU, the CPU Debug tool helps users perform ba
 
 ## Environment Preparation
 
-Please refer to [Quick Start](00_quick_start_en.md#Environment Preparation) to complete the environment preparation.
+Please refer to [Quick Start](00_quick_start.md#Environment Preparation) to complete the environment preparation.
 
 ## Usage
 
-Using the [cpudebug](../examples/02_cpudebug/) example, you can start CPU debugging in just two steps.
+Using the [cpudebug](../../examples/02_cpudebug/) example, you can start CPU debugging in just two steps.
 
 ### Step 1: Add Header File Reference
 

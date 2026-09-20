@@ -4,9 +4,9 @@
 
 本工具主要针对生成的算子ELF文件（Executable and Linkable Format）提供解析、提取和Ascend AICore指令反汇编功能，并将结果信息以可读形式呈现，方便开发者直观获得kernel文件信息。关于本工具的详细介绍请参考《[Ascend C算子开发](https://hiascend.com/document/redirect/CannCommunityOpdevAscendC)》中的“编程指南 > 附录 > msobjdump工具”。
 
-工具调用演示可参考[msobjdump样例](../examples/04_msobjdump/README.md)。
+工具调用演示可参考[msobjdump样例](../../examples/04_msobjdump/README.md)。
 
-通过 Agent 使用本工具时，可参考 [tool-npu-objdump Skill](../skills/tool-npu-objdump/SKILL.md)，了解环境准备、命令选择和元数据解读。
+通过 Agent 使用本工具时，可参考 [tool-npu-objdump Skill](../../skills/tool-npu-objdump/SKILL.md)，了解环境准备、命令选择和元数据解读。
 
 ## 命令格式
 

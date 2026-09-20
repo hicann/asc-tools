@@ -106,4 +106,4 @@ python3 -m msobjdump --dump-elf "$input_file"
 - [故障排查](references/troubleshooting.md)：遇到依赖、格式、路径或版本问题时读取。
 - [自检与更新规则](references/update-policy.md)：来源或 CLI 发生变化时读取。
 
-本 Skill 的知识依据为 asc-tools 的 `docs/03_msobjdump.md`、`examples/04_msobjdump/README.md` 和 `utils/msobjdump/msobjdump/` 实现。具体格式能力以当前工具与输入实际表现为准。
+本 Skill 的知识依据为 asc-tools 的 `docs/zh/03_msobjdump.md`、`examples/04_msobjdump/README.md` 和 `utils/msobjdump/msobjdump/` 实现。具体格式能力以当前工具与输入实际表现为准。

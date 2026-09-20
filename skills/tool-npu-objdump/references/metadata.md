@@ -69,7 +69,7 @@ Disassembly of section .text:
 
 以下路径位于 asc-tools 仓库；本页已保留使用所需含义，独立分发 Skill 时不依赖仓库在固定本机路径存在。
 
-- `docs/03_msobjdump.md`：命令格式和字段定义。
+- `docs/zh/03_msobjdump.md`：命令格式和字段定义。
 - `examples/04_msobjdump/README.md`：融合编译产物的输出示例，含 `--sass` 用法。
 - `utils/msobjdump/msobjdump/msobjdump_main.py`：`B_TYPE_MAP`、`F_TYPE_MAP`、`K_TYPE_MAP`、`_show_ascend_meta_tlv`、`_show_ascend_meta_op_tlv`、`_detect_obj_type`、`_classify_sass_file`、`_collect_sass_images`、`_disassemble_sass_image`。
 - `scripts/package/asc-tools/`：`npu-objdump` 主命令与 `msobjdump` 兼容软链的安装与卸载脚本。
