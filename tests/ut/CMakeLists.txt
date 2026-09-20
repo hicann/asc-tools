@@ -363,6 +363,6 @@ foreach(product_type ${TIKICPULIB_PRODUCT_TYPE_LIST})
         TASK_NUM 1
     )
 endforeach()
-if(ENABLE_BUILD_DEVICE)
+if(ENABLE_NPU_TOOLS)
     add_subdirectory(testcase/npu_tools)
 endif()
