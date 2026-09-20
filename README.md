@@ -34,9 +34,12 @@ Ascend C Tools是[CANN](https://hiascend.com/software/cann) （Compute Architect
 ├── docs                                // Ascend C Tools使用说明
 ├── examples                            // Ascend C Tools样例工程
 ├── libraries                           // Ascend C Tools依赖的库文件
+├── npu_tools                           // Ascend C Tools NPU侧工具
+│   ├── npu_check                       // Ascend C Tools npu-check实现源代码
+│   └── npu_compute                     // Ascend C Tools npu-compute实现源代码
 ├── npuchk                              // Ascend C Tools npu check检查工具
 ├── scripts                             // Ascend C Tools打包脚本
-├── tests                                // Ascend C Tools的UT用例
+├── tests                               // Ascend C Tools的UT用例
 ├── third_party                         // Ascend C Tools依赖的第三方库文件
 └── utils
     ├── msobjdump                       // Ascend C Tools msobjdump实现源代码

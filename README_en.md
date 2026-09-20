@@ -34,9 +34,12 @@ The directory structure of this repository is as follows:
 ├── docs                                // Ascend C Tools usage documentation
 ├── examples                            // Ascend C Tools example projects
 ├── libraries                           // Library files that Ascend C Tools depends on
+├── npu_tools                           // Ascend C Tools NPU-side tools
+│   ├── npu_check                       // Ascend C Tools npu-check implementation source code
+│   └── npu_compute                     // Ascend C Tools npu-compute implementation source code
 ├── npuchk                              // Ascend C Tools npu check inspection tool
 ├── scripts                             // Ascend C Tools packaging scripts
-├── tests                                // Ascend C Tools UT test cases
+├── tests                               // Ascend C Tools UT test cases
 ├── third_party                         // Third-party library files that Ascend C Tools depends on
 └── utils
     ├── msobjdump                       // Ascend C Tools msobjdump implementation source code

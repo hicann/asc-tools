@@ -4,6 +4,8 @@ npu-check is a runtime correctness checking tool for Ascend NPUs. It helps users
 
 This guide is intended for Ascend C operator developers. It covers environment setup, command-line usage, checking features, report reading, and usage examples.
 
+When using this tool through an Agent, refer to the [tool-npu-check Skill](../skills/tool-npu-check/SKILL.md) for applicability checks, checker selection, controlled execution, report interpretation, and operator retesting.
+
 ## Contents
 
 - [1. Overview](#1-overview)
@@ -37,7 +39,7 @@ Correct numerical results do not necessarily mean the code is correct. For examp
 
 ### 2.1 Environment Setup
 
-Follow the [Quick Start](../../docs/00_quick_start.md) to prepare the environment. Before using npu-check, install a CANN package compatible with the target NPU and driver, then load the CANN environment variables. Replace `<CANN-install-directory>` in the following command with the actual installation directory:
+Follow the [Quick Start](00_quick_start_en.md) to prepare the environment. Before using npu-check, install a CANN package compatible with the target NPU and driver, then load the CANN environment variables. Replace `<CANN-install-directory>` in the following command with the actual installation directory:
 
 ```bash
 source <CANN-install-directory>/cann/set_env.sh

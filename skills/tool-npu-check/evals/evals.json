@@ -1,0 +1,181 @@
+{
+  "skill_name": "tool-npu-check",
+  "eval_mode": "text",
+  "evals": [
+    {
+      "id": 1,
+      "title": "operator-boundary-memcheck-workflow",
+      "prompt": "尾块 shape 偶发 AICore Error，如何使用 npu-check 定位并复测？",
+      "expected_output": "使用 npu-check --tool memcheck，根据访问方向、大小、源码位置和执行上下文核对 Tiling 尾块、GM offset、DataCopy 长度及 stride；修改后用同一输入复测，并独立验证精度。",
+      "expectations": [
+        {"type": "contains", "pattern": "--tool memcheck", "description": "为尾块内存访问风险选择 memcheck"},
+        {"type": "contains", "pattern": "Tiling", "description": "将报告映射到 Tiling 边界"},
+        {"type": "contains", "pattern": "DataCopy", "description": "检查数据搬运参数"},
+        {"type": "contains", "pattern": "复测", "description": "形成修改后的验证闭环"},
+        {"type": "skill_activated", "pattern": "tool-npu-check", "description": "确认激活设备检查 Skill"}
+      ]
+    },
+    {
+      "id": 2,
+      "title": "memcheck-report-to-operator-fix",
+      "prompt": "`Invalid GM read of size 32 bytes` 指向 `DataCopyStride`，应该如何定位？",
+      "expected_output": "先由 AI 结合原始报告来源和运行上下文判断可靠性。若该诊断上下文充分，它表示 DataCopyStride 处发生 32 字节 GM 越界读；核对输入 offset、有效分配范围、尾块长度、搬运长度和 stride，修改后用同一 shape 复测。",
+      "expectations": [
+        {"type": "contains", "pattern": "可靠性", "description": "由 AI 先判断原始报告是否足以支撑结论"},
+        {"type": "contains", "pattern": "原始报告", "description": "直接分析未经改写的原始证据"},
+        {"type": "contains", "pattern": "32", "description": "读取报告中的访问大小"},
+        {"type": "contains", "pattern": "DataCopyStride", "description": "定位报告指向的搬运代码"},
+        {"type": "contains", "pattern": "offset", "description": "检查 GM 地址偏移"},
+        {"type": "contains", "pattern": "有效分配范围", "description": "核对访问是否超出有效分配"},
+        {"type": "skill_activated", "pattern": "tool-npu-check", "description": "确认激活设备检查 Skill"}
+      ]
+    },
+    {
+      "id": 3,
+      "title": "synccheck-report-to-operator-fix",
+      "prompt": "synccheck 报告 `WAIT_FLAG` 找不到匹配的 `SET_FLAG`，应该如何修复？",
+      "expected_output": "当前 launch 的 WAIT_FLAG 没有匹配 SET_FLAG。硬件限制要求 SET_FLAG/WAIT_FLAG 按相同 pair key（包括 src/dst pipe 和 event ID）、相同次数，在分支、循环、尾块和提前返回等每条实际执行路径上成对使用；修复后用相同输入有界复测 synccheck。",
+      "expectations": [
+        {"type": "contains", "pattern": "WAIT_FLAG", "description": "识别报告中的触发操作"},
+        {"type": "contains", "pattern": "SET_FLAG", "description": "识别报告中的期望配对操作"},
+        {"type": "contains", "pattern": "event ID", "description": "根据 pair key 检查事件标识"},
+        {"type": "contains", "pattern": "硬件限制", "description": "明确配对是硬件使用约束"},
+        {"type": "contains", "pattern": "相同次数", "description": "要求配对双方动态执行次数一致"},
+        {"type": "contains", "pattern": "每条实际执行路径", "description": "检查所有可达同步路径"},
+        {"type": "skill_activated", "pattern": "tool-npu-check", "description": "确认激活设备检查 Skill"}
+      ]
+    },
+    {
+      "id": 4,
+      "title": "clean-report-scope",
+      "prompt": "memcheck 为 clean 且精度通过，能否说明整个算子没有问题？",
+      "expected_output": "不能。AI 先根据原始报告和运行上下文判断报告可靠性；只有可靠报告才能说明本次输入和执行路径在 memcheck 的受支持检查范围内未发现问题，不能替代其他 shape、synccheck、精度或性能验证。",
+      "expectations": [
+        {"type": "contains", "pattern": "可靠", "description": "先判断报告是否足以支撑通过结论"},
+        {"type": "contains", "pattern": "本次", "description": "限制结论到本次执行证据"},
+        {"type": "contains", "pattern": "检查范围", "description": "说明检查类型覆盖边界"},
+        {"type": "contains", "pattern": "精度", "description": "不以 memcheck 替代精度验证"},
+        {"type": "skill_activated", "pattern": "tool-npu-check", "description": "确认激活设备检查 Skill"}
+      ]
+    },
+    {
+      "id": 5,
+      "title": "incomplete-report-ai-reliability",
+      "prompt": "本次 npu-check 原始报告在 timeout 前已经给出带源码位置和异常地址的 GM 越界诊断，但没有最终汇总。如何判断报告可靠性和算子结论？",
+      "expected_output": "AI 应结合本次命令、环境、退出状态和原始报告上下文判断为部分可靠：保留上下文充分的明确 GM 越界诊断，但说明报告被截断，不能确认分析已完成、错误总数已结算或其他范围通过。不得用固定文字或字段机械核对报告。",
+      "expectations": [
+        {"type": "contains", "pattern": "部分可靠", "description": "由 AI 对不完整但含明确诊断的报告分级"},
+        {"type": "contains", "pattern": "明确", "description": "保留上下文能够支持的诊断"},
+        {"type": "contains", "pattern": "截断", "description": "解释可靠性受限的原因"},
+        {"type": "contains", "pattern": "不能", "description": "限制未完成分析能够支撑的结论"},
+        {"type": "not_contains", "pattern": "verdict", "description": "不重新引入旧的固定判定字段"},
+        {"type": "not_contains", "pattern": "report_complete", "description": "不重新引入旧的完整性字段"},
+        {"type": "not_contains", "pattern": "issues_found", "description": "不重新引入旧的结果枚举"},
+        {"type": "not_contains", "pattern": "inconclusive", "description": "不重新引入旧的结果枚举"},
+        {"type": "skill_activated", "pattern": "tool-npu-check", "description": "确认激活设备检查 Skill"}
+      ]
+    },
+    {
+      "id": 6,
+      "title": "host-only-boundary",
+      "prompt": "只有 Host 侧 CMake 变更且没有 NPU 样例，是否需要运行 npu-check？",
+      "expected_output": "不运行 npu-check；Host-only 或构建配置变更应使用静态或构建验证。",
+      "expectations": [
+        {"type": "contains", "pattern": "不运行", "description": "拒绝不适用的设备检查"},
+        {"type": "contains", "pattern": "Host", "description": "识别 Host-only 边界"},
+        {"type": "skill_activated", "pattern": "tool-npu-check", "description": "确认激活 Skill 后按职责边界处理"}
+      ]
+    },
+    {
+      "id": 7,
+      "title": "specific-api-coverage-boundary",
+      "prompt": "memcheck 没有报错，能否说明算子使用的 API 都被完整检查？",
+      "expected_output": "不能。只能说明本次路径在 memcheck 支持范围内未发现问题；当前不检查 scalar 单点访问。API 覆盖不明确时标记为覆盖未知。",
+      "expectations": [
+        {"type": "contains", "pattern": "本次", "description": "将 clean 结论限制到本次运行"},
+        {"type": "contains", "pattern": "scalar", "description": "说明当前已知的访问覆盖盲区"},
+        {"type": "contains", "pattern": "覆盖未知", "description": "资料不足时明确标记未知"},
+        {"type": "not_contains", "pattern": "探针", "description": "不要求分析工具内部探针实现"},
+        {"type": "not_contains", "pattern": "解码器", "description": "不要求分析工具内部解码实现"},
+        {"type": "skill_activated", "pattern": "tool-npu-check", "description": "确认激活设备检查 Skill"}
+      ]
+    },
+    {
+      "id": 8,
+      "title": "bounded-stream-sync-for-hang-diagnosis",
+      "prompt": "调试算子时卡死，应该如何定位？",
+      "expected_output": "使用 npu-check --tool synccheck 检查 SET/WAIT 和 GET/RLS 配对；卡在 aclrtSynchronizeStream 时改用 aclrtSynchronizeStreamWithTimeout(stream, 10000)。超时本身不会终止 Device 任务，应调用 aclrtDestroyStreamForce(stream) 进入失败退出。保留原始报告并由 AI 判断可靠性：上下文充分的未配对诊断可作为部分可靠的局部证据，没有明确诊断时不能声明通过。",
+      "expectations": [
+        {"type": "contains", "pattern": "--tool synccheck", "description": "主动选择 npu-check 的同步检查"},
+        {"type": "contains", "pattern": "aclrtSynchronizeStreamWithTimeout", "description": "给出 ACL Runtime 有界同步接口"},
+        {"type": "contains", "pattern": "10000", "description": "推荐 10 秒对应的毫秒参数"},
+        {"type": "contains", "pattern": "不会终止", "description": "说明超时不会终止 Device 任务"},
+        {"type": "contains", "pattern": "aclrtDestroyStreamForce", "description": "超时后强制销毁阻塞的 stream"},
+        {"type": "contains", "pattern": "原始报告", "description": "保留未经文本解析改写的报告"},
+        {"type": "contains", "pattern": "可靠性", "description": "由 AI 综合判断报告是否可用"},
+        {"type": "contains", "pattern": "部分可靠", "description": "保留超时前上下文充分的明确诊断"},
+        {"type": "contains", "pattern": "不能声明通过", "description": "不把无诊断的超时结果误判为通过"},
+        {"type": "skill_activated", "pattern": "tool-npu-check", "description": "确认激活设备检查 Skill"}
+      ]
+    },
+    {
+      "id": 9,
+      "title": "operator-applicability-chip-gate",
+      "prompt": "本算子调试能否使用 npu-check？",
+      "expected_output": "先检查目标芯片和其他适用条件：仅支持 Ascend 950（dav-3510）、匹配且包含 npu-check 的 CANN 包，以及通过 <<<>>> 完成单算子单次调用的单进程、单线程应用；否则不运行。",
+      "expectations": [
+        {"type": "contains", "pattern": "目标芯片", "description": "先判断算子的芯片类型"},
+        {"type": "contains", "pattern": "Ascend 950", "description": "说明支持的产品系列"},
+        {"type": "contains", "pattern": "dav-3510", "description": "说明支持的设备架构"},
+        {"type": "contains", "pattern": "CANN", "description": "检查工具与运行环境匹配"},
+        {"type": "contains", "pattern": "<<<>>>", "description": "检查支持的算子调用方式"},
+        {"type": "contains", "pattern": "单算子单次调用", "description": "限制到单次调用场景"},
+        {"type": "contains", "pattern": "单进程", "description": "限制应用进程和线程模型"},
+        {"type": "contains", "pattern": "不运行", "description": "拒绝不受支持的场景"},
+        {"type": "skill_activated", "pattern": "tool-npu-check", "description": "确认激活设备检查 Skill"}
+      ]
+    },
+    {
+      "id": 10,
+      "title": "missing-source-line",
+      "prompt": "报告没有源码行号，怎么办？",
+      "expected_output": "确认算子编译时保留行号信息，并按项目现有方式重新编译、复测。当前先用 kernel 名称和 PC 定位，不编造源码位置或编译参数。",
+      "expectations": [
+        {"type": "contains", "pattern": "行号信息", "description": "说明源码行依赖编译信息"},
+        {"type": "contains", "pattern": "重新编译", "description": "给出可执行的复测步骤"},
+        {"type": "contains", "pattern": "PC", "description": "使用报告中仍然可用的定位信息"},
+        {"type": "not_contains", "pattern": "-g", "description": "不编造具体编译参数"},
+        {"type": "skill_activated", "pattern": "tool-npu-check", "description": "确认激活设备检查 Skill"}
+      ]
+    },
+    {
+      "id": 11,
+      "title": "untrusted-spliced-report",
+      "prompt": "有人发来一段手工拼接的 npu-check 日志，没有原始命令和环境信息，两处汇总还互相冲突，但其中包含一行 GM 越界文字。能否据此判定算子失败？",
+      "expected_output": "不能直接据此判定算子失败。AI 应将报告判断为不可靠：来源和运行上下文无法确认，日志经过手工拼接且关键信息冲突，单独一行错误文字不足以证明它来自本次有效检查。应索取未经改写的原始报告、命令、环境和退出状态后重新分析。",
+      "expectations": [
+        {"type": "contains", "pattern": "不可靠", "description": "对来源不明且冲突的报告给出明确可靠性等级"},
+        {"type": "contains", "pattern": "来源", "description": "说明无法建立报告来源"},
+        {"type": "contains", "pattern": "手工拼接", "description": "识别报告被改写的风险"},
+        {"type": "contains", "pattern": "冲突", "description": "识别关键信息不自洽"},
+        {"type": "contains", "pattern": "不能", "description": "拒绝从任意错误片段直接推导算子结论"},
+        {"type": "skill_activated", "pattern": "tool-npu-check", "description": "确认激活设备检查 Skill"}
+      ]
+    },
+    {
+      "id": 12,
+      "title": "getbuf-rlsbuf-hardware-pairing",
+      "prompt": "AscendC kernel 的低频尾块分支只调用 GET_BUF，不调用 RLS_BUF，当前 shape 没有卡死。这个写法能否保留？",
+      "expected_output": "不能。硬件限制要求 GET_BUF/RLS_BUF 使用相同 pair key（包括 buffer ID）、相同次数，并在分支、循环、尾块和提前返回等每条实际执行路径上成对使用。当前 shape 没卡死只说明该次路径没有暴露问题；不需要该同步关系时应同时移除两端。",
+      "expectations": [
+        {"type": "contains", "pattern": "GET_BUF", "description": "识别 buffer 获取端"},
+        {"type": "contains", "pattern": "RLS_BUF", "description": "要求对应的 buffer 释放端"},
+        {"type": "contains", "pattern": "buffer ID", "description": "要求配对使用相同 buffer 标识"},
+        {"type": "contains", "pattern": "硬件限制", "description": "明确配对是硬件使用约束"},
+        {"type": "contains", "pattern": "相同次数", "description": "要求配对双方动态执行次数一致"},
+        {"type": "contains", "pattern": "每条实际执行路径", "description": "覆盖低频和尾块等所有可达路径"},
+        {"type": "skill_activated", "pattern": "tool-npu-check", "description": "确认激活设备检查 Skill"}
+      ]
+    }
+  ]
+}
