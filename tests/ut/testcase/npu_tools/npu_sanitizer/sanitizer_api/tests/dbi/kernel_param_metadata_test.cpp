@@ -15,6 +15,7 @@
 #include <elf.h>
 #include <iostream>
 #include <limits>
+#include <utility>
 #include <vector>
 
 namespace {
@@ -53,6 +54,26 @@ std::string Metadata(uint32_t count, uint32_t lastOffset)
     }
     // 未知 TLV 必须原样保留。
     data += std::string("\x63\x00\x03\x00xyz", 7);
+    return data;
+}
+
+std::string ReorderParameters(std::string data, const std::vector<uint32_t>& order)
+{
+    assert(Get<uint32_t>(data, 4) == order.size());
+    const auto original = data;
+    for (size_t i = 0; i < order.size(); ++i) {
+        assert(order[i] < order.size());
+        data.replace(16 + i * 40, 40, original.substr(16 + order[i] * 40, 40));
+    }
+    return data;
+}
+
+std::string ControlMetadata(uint32_t kernelType)
+{
+    std::string data(8, '\0');
+    Put<uint16_t>(data, 0, 1);
+    Put<uint16_t>(data, 2, 4);
+    Put<uint32_t>(data, 4, kernelType);
     return data;
 }
 
@@ -164,11 +185,78 @@ void CheckMixedAndIdempotent()
     Put(invalid, 64 + 4 * 64, second);
     CheckRejected(original, invalid, 24);
 }
+
+void CheckControlMetadataIsIgnoredAndPreserved()
+{
+    const auto original = Elf({ControlMetadata(3), Metadata(1, 0)});
+    auto patched = Elf({ControlMetadata(7), Metadata(2, 8)});
+    const auto before = patched;
+    std::string diagnostic;
+    assert(aclsan::ModifyKernelParamMetadata(original, patched, 24, diagnostic));
+
+    const auto control = Get<Elf64_Shdr>(patched, 64 + 3 * 64);
+    const auto controlBefore = Get<Elf64_Shdr>(before, 64 + 3 * 64);
+    assert(
+        patched.substr(control.sh_offset, control.sh_size) ==
+        before.substr(controlBefore.sh_offset, controlBefore.sh_size));
+    assert(Get<uint32_t>(patched, control.sh_offset + 4) == 7);
+
+    const auto parameters = Get<Elf64_Shdr>(patched, 64 + 4 * 64);
+    assert(Get<uint32_t>(patched, parameters.sh_offset + 4) == 2);
+    assert(Get<uint32_t>(patched, parameters.sh_offset + 8) == 32);
+
+    uint32_t maximumArea = 0;
+    bool found = false;
+    assert(aclsan::GetMaximumKernelArgumentArea(original, maximumArea, found, diagnostic));
+    assert(found);
+    assert(maximumArea == 8);
+
+    assert(aclsan::GetMaximumKernelArgumentArea(Elf({ControlMetadata(3)}), maximumArea, found, diagnostic));
+    assert(!found);
+    assert(maximumArea == 0);
+}
+
+void CheckRuntimeOrdinalSemantics()
+{
+    auto originalMetadata = Metadata(3, 16);
+    Put<uint32_t>(originalMetadata, 16 + 12, 16);
+    Put<uint32_t>(originalMetadata, 16 + 40 + 12, 0);
+    Put<uint32_t>(originalMetadata, 16 + 80 + 12, 8);
+    originalMetadata = ReorderParameters(std::move(originalMetadata), {2, 0, 1});
+
+    const auto original = Elf({originalMetadata});
+    auto patched = Elf({ReorderParameters(Metadata(4, 24), {3, 1, 0, 2})});
+    std::string diagnostic;
+    assert(aclsan::ModifyKernelParamMetadata(original, patched, 24, diagnostic));
+
+    const auto section = Get<Elf64_Shdr>(patched, 64 + 3 * 64);
+    const uint32_t expectedOffsets[] = {16, 0, 8, 24};
+    for (uint32_t ordinal = 0; ordinal < 4; ++ordinal) {
+        const size_t parameter = section.sh_offset + 16 + ordinal * 40;
+        assert(Get<uint32_t>(patched, parameter + 8) == ordinal);
+        assert(Get<uint32_t>(patched, parameter + 12) == expectedOffsets[ordinal]);
+    }
+
+    uint32_t maximumArea = 0;
+    bool found = false;
+    assert(aclsan::GetMaximumKernelArgumentArea(original, maximumArea, found, diagnostic));
+    assert(found);
+    assert(maximumArea == 24);
+
+    auto invalid = Metadata(2, 8);
+    Put<uint32_t>(invalid, 16 + 40 + 8, 0);
+    CheckRejected(Elf({invalid}), patched, 24);
+    invalid = Metadata(2, 8);
+    Put<uint32_t>(invalid, 16 + 40 + 8, 2);
+    CheckRejected(Elf({invalid}), patched, 24);
+}
 } // namespace
 
 TEST(KernelParamMetadata, Main)
 {
     CheckMixedAndIdempotent();
+    CheckControlMetadataIsIgnoredAndPreserved();
+    CheckRuntimeOrdinalSemantics();
     const auto original = Elf({Metadata(0, 0)});
     auto patched = original;
     std::string diagnostic;

@@ -15,6 +15,7 @@
 #include <limits>
 #include <map>
 #include <stdexcept>
+#include <utility>
 #include <vector>
 
 namespace aclsan {
@@ -122,7 +123,13 @@ struct Tlv {
     std::string value;
 };
 
-std::vector<Tlv> ReadMetadata(const std::string& data, const Section& section)
+struct Metadata {
+    std::vector<Tlv> values;
+    std::vector<std::string> parameters;
+    bool hasParameterLayout;
+};
+
+Metadata ReadMetadata(const std::string& data, const Section& section)
 {
     const std::string bytes = data.substr(section.offset, section.size);
     std::vector<Tlv> values;
@@ -140,14 +147,29 @@ std::vector<Tlv> ReadMetadata(const std::string& data, const Section& section)
             count = Read(bytes, offset, 4);
         } else if (tag == PARAM_INFO) {
             Require(length == PARAM_INFO_SIZE, "unsupported ParamInfo layout");
-            Require(Read(bytes, offset + 4, 4) == infoCount, "non-sequential parameter index");
             ++infoCount;
         }
         values.push_back({tag, bytes.substr(offset, length)});
         offset += length;
     }
+    if (summaryCount == 0) {
+        Require(infoCount == 0, "parameter descriptions are missing ParamSummary");
+        return {std::move(values), {}, false};
+    }
     Require(summaryCount == 1 && infoCount == count, "inconsistent parameter summary and descriptions");
-    return values;
+    std::vector<std::string> parameters(count);
+    std::vector<bool> seen(count, false);
+    for (const auto& item : values) {
+        if (item.tag != PARAM_INFO) {
+            continue;
+        }
+        const uint64_t ordinal = Read(item.value, 4, 4);
+        Require(ordinal < count, "parameter ordinal is out of range");
+        Require(!seen[ordinal], "duplicate parameter ordinal");
+        seen[ordinal] = true;
+        parameters[ordinal] = item.value;
+    }
+    return {std::move(values), std::move(parameters), true};
 }
 
 void AppendTlv(std::string& output, uint16_t tag, const std::string& value)
@@ -159,34 +181,35 @@ void AppendTlv(std::string& output, uint16_t tag, const std::string& value)
     output += value;
 }
 
-std::string NormalizeMetadata(const std::vector<Tlv>& original, const std::vector<Tlv>& patched, uint32_t traceOffset)
+std::string NormalizeMetadata(const Metadata& original, const Metadata& patched, uint32_t traceOffset)
 {
-    std::vector<std::string> parameters;
-    uint64_t end = 0;
-    for (const auto& item : original) {
+    for (const auto& item : original.values) {
         if (item.tag == PARAM_SUMMARY) {
             Require(Read(item.value, 4, 4) <= traceOffset, "original argument area exceeds trace offset");
         }
-        if (item.tag != PARAM_INFO) {
-            continue;
-        }
-        const uint64_t offset = Read(item.value, 8, 4);
-        const uint64_t size = Read(item.value, 12, 4);
+    }
+    std::vector<std::pair<uint64_t, uint64_t>> ranges;
+    for (const auto& parameter : original.parameters) {
+        const uint64_t offset = Read(parameter, 8, 4);
+        const uint64_t size = Read(parameter, 12, 4);
         Require(
-            size > 0 && offset >= end && offset <= traceOffset && size <= traceOffset - offset,
-            "original parameter overlaps trace pointer or another parameter");
-        end = offset + size;
-        parameters.push_back(item.value);
+            size > 0 && offset <= traceOffset && size <= traceOffset - offset,
+            "original parameter overlaps trace pointer");
+        ranges.emplace_back(offset, offset + size);
+    }
+    std::sort(ranges.begin(), ranges.end());
+    for (size_t i = 1; i < ranges.size(); ++i) {
+        Require(ranges[i - 1].second <= ranges[i].first, "original parameters overlap");
     }
     // 与 dav-3510 bisheng-tune 的 synthetic pointer ParamInfo 一致：8 字节、8 字节对齐、类型 2。
     std::string pointer(PARAM_INFO_SIZE, '\0');
-    Write(pointer, 4, parameters.size(), 4);
+    Write(pointer, 4, original.parameters.size(), 4);
     Write(pointer, 8, traceOffset, 4);
     Write(pointer, 12, POINTER_SIZE, 4);
     Write(pointer, 16, POINTER_SIZE, 2);
     Write(pointer, 18, 2, 2);
     std::string output;
-    for (const auto& item : patched) {
+    for (const auto& item : patched.values) {
         if (item.tag == PARAM_INFO) {
             continue;
         }
@@ -196,12 +219,13 @@ std::string NormalizeMetadata(const std::vector<Tlv>& original, const std::vecto
         }
         const uint64_t count = Read(item.value, 0, 4);
         Require(
-            count == parameters.size() || count == parameters.size() + 1, "unexpected instrumented parameter count");
+            count == original.parameters.size() || count == original.parameters.size() + 1,
+            "unexpected instrumented parameter count");
         std::string summary = item.value;
-        Write(summary, 0, parameters.size() + 1, 4);
+        Write(summary, 0, original.parameters.size() + 1, 4);
         Write(summary, 4, traceOffset + POINTER_SIZE, 4);
         AppendTlv(output, PARAM_SUMMARY, summary);
-        for (const auto& parameter : parameters) {
+        for (const auto& parameter : original.parameters) {
             AppendTlv(output, PARAM_INFO, parameter);
         }
         AppendTlv(output, PARAM_INFO, pointer);
@@ -209,6 +233,42 @@ std::string NormalizeMetadata(const std::vector<Tlv>& original, const std::vecto
     return output;
 }
 } // namespace
+
+bool GetMaximumKernelArgumentArea(
+    const std::string& kernelElf, uint32_t& maximumArea, bool& found, std::string& diagnostic)
+{
+    maximumArea = 0;
+    found = false;
+    try {
+        for (const auto& entry : ReadSections(kernelElf)) {
+            const auto metadata = ReadMetadata(kernelElf, entry.second);
+            if (!metadata.hasParameterLayout) {
+                continue;
+            }
+            uint32_t summaryArea = 0;
+            uint64_t parameterEnd = 0;
+            for (const auto& item : metadata.values) {
+                if (item.tag == PARAM_SUMMARY) {
+                    summaryArea = static_cast<uint32_t>(Read(item.value, 4, 4));
+                }
+            }
+            for (const auto& parameter : metadata.parameters) {
+                const uint64_t parameterOffset = Read(parameter, 8, 4);
+                const uint64_t parameterSize = Read(parameter, 12, 4);
+                parameterEnd = std::max(parameterEnd, parameterOffset + parameterSize);
+            }
+            const uint64_t area = std::max<uint64_t>(summaryArea, parameterEnd);
+            Require(area <= std::numeric_limits<uint32_t>::max(), "kernel argument area exceeds 32-bit range");
+            maximumArea = std::max(maximumArea, static_cast<uint32_t>(area));
+            found = true;
+        }
+        diagnostic.clear();
+        return true;
+    } catch (const std::exception& error) {
+        diagnostic = error.what();
+        return false;
+    }
+}
 
 bool ModifyKernelParamMetadata(
     const std::string& original, std::string& patched, uint32_t traceOffset, std::string& diagnostic)
@@ -226,8 +286,15 @@ bool ModifyKernelParamMetadata(
             const auto destination = destinations.find(entry.first);
             Require(destination != destinations.end(), "instrumented kernel metadata section is missing");
             const Section& section = destination->second;
-            const auto metadata =
-                NormalizeMetadata(ReadMetadata(original, entry.second), ReadMetadata(patched, section), traceOffset);
+            const auto sourceMetadata = ReadMetadata(original, entry.second);
+            const auto destinationMetadata = ReadMetadata(patched, section);
+            Require(
+                sourceMetadata.hasParameterLayout == destinationMetadata.hasParameterLayout,
+                "instrumented kernel metadata kind changed");
+            if (!sourceMetadata.hasParameterLayout) {
+                continue;
+            }
+            const auto metadata = NormalizeMetadata(sourceMetadata, destinationMetadata, traceOffset);
             if (metadata == patched.substr(section.offset, section.size)) {
                 continue;
             }

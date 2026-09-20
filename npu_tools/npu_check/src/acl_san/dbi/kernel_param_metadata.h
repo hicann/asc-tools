@@ -19,6 +19,8 @@ namespace aclsan {
 // original: 插桩前原始device elf的完整二进制内容     patched: bisheng-tune插桩后devce elf的完整二进制内容
 bool ModifyKernelParamMetadata(
     const std::string& original, std::string& patched, uint32_t traceOffset, std::string& diagnostic);
+bool GetMaximumKernelArgumentArea(
+    const std::string& kernelElf, uint32_t& maximumArea, bool& found, std::string& diagnostic);
 } // namespace aclsan
 
 #endif // NPU_TOOLS_NPU_CHECK_SRC_ACL_SAN_DBI_KERNEL_PARAM_METADATA_H

@@ -11,6 +11,7 @@
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <cstdlib>
 #include <cstring>
 #include <elf.h>
@@ -61,6 +62,7 @@ struct TestState {
     std::string inputContents;
     std::vector<std::string> workDirectories;
     int runnerCalls = 0;
+    uint32_t traceArgumentOffset = 0;
     bool patchSucceeds = true;
     BinaryInstrumentationConfig config;
 };
@@ -118,6 +120,7 @@ DbiResult FakePatch(const DbiRequest& request, void* userdata)
     auto& state = *static_cast<TestState*>(userdata);
     ++state.runnerCalls;
     state.workDirectories.push_back(request.workDirectory);
+    state.traceArgumentOffset = request.traceArgumentOffset;
     std::ifstream input(request.inputKernel, std::ios::binary);
     state.inputContents.assign(std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>());
     if (!state.patchSucceeds) {
@@ -129,23 +132,28 @@ DbiResult FakePatch(const DbiRequest& request, void* userdata)
     return {output.good(), request.outputKernel, output.good() ? "complete" : "write", {}};
 }
 
-std::vector<uint8_t> MakeKernelArgumentSizeElf(uint32_t argumentSize)
+std::vector<uint8_t> MakeKernelArgumentSizeElf(
+    uint32_t argumentSize, const std::vector<std::pair<uint32_t, uint32_t>>& parameters = {})
 {
-    constexpr char kSectionNames[] = "\0.shstrtab\0__CCE_KernelArgSize";
+    constexpr char kSectionNames[] = "\0.shstrtab\0__CCE_KernelArgSize\0.ascend.meta.kernel";
     const std::string sectionNames(kSectionNames, sizeof(kSectionNames));
     const size_t sectionHeadersOffset = sizeof(Elf64_Ehdr);
-    const size_t sectionNamesOffset = sectionHeadersOffset + 3 * sizeof(Elf64_Shdr);
+    const size_t sectionNamesOffset = sectionHeadersOffset + 4 * sizeof(Elf64_Shdr);
     const size_t argumentSizeOffset = sectionNamesOffset + sectionNames.size();
-    std::vector<uint8_t> image(argumentSizeOffset + sizeof(argumentSize), 0);
+    const size_t metadataOffset = argumentSizeOffset + sizeof(argumentSize);
+    const size_t metadataSize = 16 + parameters.size() * 40;
+    std::vector<uint8_t> image(metadataOffset + metadataSize, 0);
 
     Elf64_Ehdr header{};
     std::memcpy(header.e_ident, ELFMAG, SELFMAG);
     header.e_ident[EI_CLASS] = ELFCLASS64;
     header.e_ident[EI_DATA] = ELFDATA2LSB;
     header.e_ident[EI_VERSION] = EV_CURRENT;
+    header.e_version = EV_CURRENT;
+    header.e_ehsize = sizeof(header);
     header.e_shoff = sectionHeadersOffset;
     header.e_shentsize = sizeof(Elf64_Shdr);
-    header.e_shnum = 3;
+    header.e_shnum = 4;
     header.e_shstrndx = 1;
     std::memcpy(image.data(), &header, sizeof(header));
 
@@ -166,6 +174,37 @@ std::vector<uint8_t> MakeKernelArgumentSizeElf(uint32_t argumentSize)
         image.data() + sectionHeadersOffset + 2 * sizeof(Elf64_Shdr), &argumentSizeHeader, sizeof(argumentSizeHeader));
     std::memcpy(image.data() + sectionNamesOffset, sectionNames.data(), sectionNames.size());
     std::memcpy(image.data() + argumentSizeOffset, &argumentSize, sizeof(argumentSize));
+
+    std::vector<uint8_t> metadata(metadataSize, 0);
+    const auto write16 = [&](size_t offset, uint16_t value) {
+        std::memcpy(metadata.data() + offset, &value, sizeof(value));
+    };
+    const auto write32 = [&](size_t offset, uint32_t value) {
+        std::memcpy(metadata.data() + offset, &value, sizeof(value));
+    };
+    uint32_t argumentArea = 0;
+    for (const auto& parameter : parameters) {
+        argumentArea = std::max(argumentArea, parameter.first + parameter.second);
+    }
+    write16(0, 16);
+    write16(2, 12);
+    write32(4, parameters.size());
+    write32(8, argumentArea);
+    for (size_t index = 0; index < parameters.size(); ++index) {
+        const size_t offset = 16 + index * 40;
+        write16(offset, 17);
+        write16(offset + 2, 36);
+        write32(offset + 8, index);
+        write32(offset + 12, parameters[index].first);
+        write32(offset + 16, parameters[index].second);
+    }
+    std::memcpy(image.data() + metadataOffset, metadata.data(), metadata.size());
+    Elf64_Shdr metadataHeader{};
+    metadataHeader.sh_name = 31;
+    metadataHeader.sh_type = SHT_NOTE;
+    metadataHeader.sh_offset = metadataOffset;
+    metadataHeader.sh_size = metadata.size();
+    std::memcpy(image.data() + sectionHeadersOffset + 3 * sizeof(Elf64_Shdr), &metadataHeader, sizeof(metadataHeader));
     return image;
 }
 
@@ -226,6 +265,19 @@ TEST_F(BinaryInstrumenterTest, InstrumentsWithoutKernelArgumentSizeMetadata)
 
     EXPECT_EQ(result.status, BinaryInstrumentationStatus::Instrumented);
     EXPECT_EQ(state_.runnerCalls, 1);
+}
+
+TEST_F(BinaryInstrumenterTest, UsesParameterMetadataForAggregateArguments)
+{
+    state_.config.traceArgumentOffset = 0;
+    const std::vector<uint8_t> original = MakeKernelArgumentSizeElf(16, {{0, 24}, {24, 24}});
+
+    const BinaryInstrumentationResult result =
+        InstrumentBinary(state_.config, original.data(), original.size(), &FakePatch, &state_);
+
+    EXPECT_EQ(result.status, BinaryInstrumentationStatus::Instrumented);
+    EXPECT_EQ(result.traceArgumentOffset, 48U);
+    EXPECT_EQ(state_.traceArgumentOffset, 48U);
 }
 
 TEST_F(BinaryInstrumenterTest, SkipsIncompleteConfiguration)

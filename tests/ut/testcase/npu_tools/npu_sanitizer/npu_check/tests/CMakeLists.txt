@@ -115,6 +115,18 @@ target_link_libraries(npu_check_dbi_pipeline_tests PRIVATE
   npu_check_dbi_ctrlbin npu_check_dbi_probe_runtime npu_sanitizer_plog Threads::Threads GTest::gtest Boost::filesystem)
 add_test(NAME npu_check_dbi_pipeline COMMAND npu_check_dbi_pipeline_tests)
 
+add_executable(npu_check_dbi_kernel_param_metadata_tests
+  gtest_main.cpp
+  "${NPU_CHECK_DBI_TEST_DIR}/kernel_param_metadata_test.cpp"
+  "${NPU_CHECK_DBI_SOURCE_DIR}/kernel_param_metadata.cpp"
+)
+target_compile_features(npu_check_dbi_kernel_param_metadata_tests PRIVATE cxx_std_17)
+target_compile_options(npu_check_dbi_kernel_param_metadata_tests PRIVATE -Wall -Wextra -Werror)
+target_compile_definitions(npu_check_dbi_kernel_param_metadata_tests PRIVATE _GLIBCXX_USE_CXX11_ABI=0)
+target_include_directories(npu_check_dbi_kernel_param_metadata_tests PRIVATE "${NPU_CHECK_DBI_INCLUDE_DIR}")
+target_link_libraries(npu_check_dbi_kernel_param_metadata_tests PRIVATE Threads::Threads GTest::gtest)
+add_test(NAME npu_check_dbi_kernel_param_metadata COMMAND npu_check_dbi_kernel_param_metadata_tests)
+
 add_executable(npu_check_dbi_integration_tests
   gtest_main.cpp
   "${NPU_CHECK_DBI_TEST_DIR}/dbi_integration_test.cpp"

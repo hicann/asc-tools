@@ -8,6 +8,7 @@
  * See LICENSE in the root of the software repository for the full text of the License.
  */
 #include "dbi/binary_instrumenter.h"
+#include "dbi/kernel_param_metadata.h"
 #include "device_instr/soc_version.h"
 
 #include <unistd.h>
@@ -112,6 +113,8 @@ bool ResolveTraceArgumentOffset(const void* data, size_t length, uint32_t& trace
         return false;
     }
     const char* names = reinterpret_cast<const char*>(bytes + sectionNames.sh_offset);
+    uint32_t maximumArgumentSize = 0;
+    bool hasKernelArgumentSize = false;
     for (size_t index = 0; index < header.e_shnum; ++index) {
         Elf64_Shdr section{};
         ReadSection(index, section);
@@ -128,23 +131,35 @@ bool ResolveTraceArgumentOffset(const void* data, size_t length, uint32_t& trace
             diagnostic = "__CCE_KernelArgSize is malformed";
             return false;
         }
-        uint32_t maximumArgumentSize = 0;
         for (size_t offset = 0; offset < section.sh_size; offset += sizeof(uint32_t)) {
             uint32_t argumentSize = 0;
             std::memcpy(&argumentSize, bytes + section.sh_offset + offset, sizeof(argumentSize));
             maximumArgumentSize = std::max(maximumArgumentSize, argumentSize);
         }
-        constexpr uint32_t kMinimumTraceArgumentOffset = sizeof(uint64_t);
-        maximumArgumentSize = std::max(maximumArgumentSize, kMinimumTraceArgumentOffset);
-        if (maximumArgumentSize > std::numeric_limits<uint32_t>::max() - 7U) {
-            diagnostic = "__CCE_KernelArgSize cannot be aligned";
-            return false;
-        }
-        traceArgumentOffset = (maximumArgumentSize + 7U) & ~7U;
-        return true;
+        hasKernelArgumentSize = true;
     }
-    diagnostic = "__CCE_KernelArgSize is missing";
-    return false;
+
+    const std::string kernelElf(static_cast<const char*>(data), length);
+    uint32_t metadataArgumentArea = 0;
+    bool hasParameterMetadata = false;
+    if (!GetMaximumKernelArgumentArea(kernelElf, metadataArgumentArea, hasParameterMetadata, diagnostic)) {
+        diagnostic = "cannot read kernel parameter metadata: " + diagnostic;
+        return false;
+    }
+    if (!hasKernelArgumentSize && !hasParameterMetadata) {
+        diagnostic = "__CCE_KernelArgSize and kernel parameter metadata are missing";
+        return false;
+    }
+
+    maximumArgumentSize = std::max(maximumArgumentSize, metadataArgumentArea);
+    constexpr uint32_t kMinimumTraceArgumentOffset = sizeof(uint64_t);
+    maximumArgumentSize = std::max(maximumArgumentSize, kMinimumTraceArgumentOffset);
+    if (maximumArgumentSize > std::numeric_limits<uint32_t>::max() - 7U) {
+        diagnostic = "kernel argument area cannot be aligned";
+        return false;
+    }
+    traceArgumentOffset = (maximumArgumentSize + 7U) & ~7U;
+    return true;
 }
 
 DbiResult RunPipeline(const DbiRequest& request, void*) { return RunDbiPipeline(request); }
