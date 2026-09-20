@@ -102,6 +102,10 @@ createToolSoftLink()
         [ -L "$_src_dir/$tool_file" ] && continue
         createSoftLink "$_src_dir" "$_dst_dir" "$tool_file"
     done
+    if [ -d "$_src_dir/msobjdump" ] && [ -d "$_dst_dir/msobjdump" ]; then
+        createSoftLink "$_src_dir/msobjdump" "$_dst_dir/msobjdump" "npu-objdump"
+        createSoftLink "$_src_dir/msobjdump" "$_dst_dir/msobjdump" "msobjdump"
+    fi
     if [ -d "$install_path/$version_dir/tools" ]; then
         if [ ! -d "$install_path/$latest_dir/tools" ]; then
             mkdir -p "$install_path/$latest_dir/tools"

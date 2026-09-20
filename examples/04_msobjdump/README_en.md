@@ -2,7 +2,7 @@
 
 ## Overview
 
-This example demonstrates the usage of the `msobjdump` tool in a fusion compilation scenario based on the MatmulLeakyRelu operator. The example generates a fusion compilation artifact by compiling [matmul_leakyrelu.asc](./matmul_leakyrelu.asc), and then uses `msobjdump` to parse the generated ELF file. For detailed information about the `msobjdump` tool, please refer to [msobjdump Tool](../../docs/03_msobjdump.md).
+This example demonstrates the usage of the `msobjdump` tool in a fusion compilation scenario based on the MatmulLeakyRelu operator. The example generates a fusion compilation artifact by compiling [matmul_leakyrelu.asc](./matmul_leakyrelu.asc), and then uses `msobjdump` to parse and disassemble the generated ELF file. For detailed information about the `msobjdump` tool, please refer to [msobjdump Tool](../../docs/03_msobjdump_en.md).
 
 ## Supported Products and CANN Software Versions
 
@@ -50,7 +50,7 @@ This example demonstrates the usage of the `msobjdump` tool in a fusion compilat
 
 - Implementation:
 
-  On the Host side, Tiling parameters are generated via `GenerateTiling`; on the Kernel side, per-core address calculation is performed via `CalcGMOffset`, matrix multiplication is computed via `matmulObj.Iterate`, the activation function is applied via `LeakyRelu`, and the result is finally copied back to Global Memory.
+  On the Host side, Tiling parameters are generated via `GenerateTiling`; on the Kernel side, per-core address calculation is performed via `CalcOffset`, matrix multiplication is computed via `matmulObj.Iterate`, the activation function is applied via `LeakyRelu`, and the result is finally copied back to Global Memory.
 
 ## Build and Run
 
@@ -91,6 +91,8 @@ Execute the following steps in the root directory of this example to build and r
   | Option | Values | Description |
   |--------|--------|-------------|
   | `CMAKE_ASC_ARCHITECTURES` | `dav-2201` (default), `dav-3510` | NPU architecture:<br>&bull; dav-2201, corresponding to Atlas A2 Training Series Products/Atlas A2 Inference Series Products and Atlas A3 Training Series Products/Atlas A3 Inference Series Products<br>&bull; dav-3510, corresponding to Ascend 950PR/Ascend 950DT |
+
+  Use `dav-2201` for Atlas A2/A3 series products and `dav-3510` for Ascend 950PR/Ascend 950DT. Select the architecture option according to the target product.
 
 - Execution Result
 
@@ -211,7 +213,21 @@ Execute the following steps in the root directory of this example to build and r
 
     ```bash
     mkdir -p objdump_out
-    msobjdump --extract-elf ./demo
+    msobjdump --extract-elf ./demo --out-dir ./objdump_out
     ```
 
-    After executing the above command, the `demo.aicore.o` file will be saved to the current working directory by default. To specify a different output path, use the `--out-dir` option.
+    After executing the above command, the `demo.aicore.o` file will be saved in the `objdump_out` directory. If `--out-dir` is not specified, the file is saved in the current working directory by default.
+
+  - Disassemble Device instructions in the fusion compilation artifact
+
+    ```bash
+    msobjdump --sass ./demo
+    ```
+
+    `demo` is a Host ELF containing a Device ELF. `msobjdump` automatically extracts the Device ELF and invokes the disassembly backend; manually running `llvm-objcopy` is not required. If `demo.aicore.o` has already been extracted with `--extract-elf`, it can also be disassembled directly:
+
+    ```bash
+    msobjdump --sass ./objdump_out/demo.aicore.o
+    ```
+
+    The command above is equivalent to the package's primary command `npu-objdump --sass ./demo` (`msobjdump` is a compatibility symbolic link).

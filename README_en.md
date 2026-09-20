@@ -14,18 +14,17 @@ Ascend C Tools is a debugging toolkit provided by [CANN](https://hiascend.com/so
 
 - **msobjdump**
 
-    msobjdump provides parsing and extraction capabilities for operator ELF (Executable and Linkable Format) files compiled from Kernel direct-invocation operator development and engineered operator development, presenting the resulting information in a readable format so that developers can intuitively obtain Kernel file information.
+    msobjdump provides parsing, extraction, and Ascend AICore instruction disassembly capabilities for operator ELF (Executable and Linkable Format) files compiled from Kernel direct-invocation operator development and engineered operator development, presenting the resulting information in a readable format so that developers can intuitively obtain Kernel file information.
 
 - **show_kernel_debug_data**
 
     The show_kernel_debug_data tool is used for offline parsing of Kernel-side operator debugging information saved via the AscendC::DumpTensor/AscendC::print interfaces.
 
-
 ## 🔍 Directory Structure
 
 The directory structure of this repository is as follows:
 
-```
+```text
 ├── cmake                               // Ascend C Tools build source code
 ├── cpudebug                            // Ascend C Tools cpu debug tool implementation source code
 │   ├── cmake                           // Ascend C Tools cpu debug build source code
@@ -51,7 +50,6 @@ The directory structure of this repository is as follows:
 |[Quick Start](./docs/00_quick_start.md)|A quick tutorial to get started with the project. Includes environment setup, compilation and execution, and local verification.|
 |[Usage Guide](./docs)|Usage instructions for each tool.|
 |[Related Documentation](https://hiascend.com/document/redirect/CannCommunityOpdevAscendC)|Ascend C operator programming guide, which also provides detailed introductions to the twin debugging cpu_debug, msobjdump, and show_kernel_debug_data tools.|
-
 
 ## 📝 Related Information
 

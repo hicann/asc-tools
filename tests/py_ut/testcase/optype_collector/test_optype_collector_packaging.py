@@ -29,6 +29,10 @@ REMOVE_SOFTLINK_SCRIPT = (
 )
 SETUP_SCRIPT = REPO_ROOT / "utils/optype_collector/setup.py"
 USER_DOC = REPO_ROOT / "docs/05_optype_collector.md"
+MSOBJDUMP_CMAKE = REPO_ROOT / "utils/msobjdump/CMakeLists.txt"
+MSOBJDUMP_SHELL = REPO_ROOT / "utils/msobjdump/msobjdump.sh"
+POSTINST_SCRIPT = REPO_ROOT / "scripts/package/asc-tools/rpm_deb/custom_postinst.sh"
+PRERM_SCRIPT = REPO_ROOT / "scripts/package/asc-tools/rpm_deb/custom_prerm.sh"
 
 
 class TestOpTypeCollectorPackaging(unittest.TestCase):
@@ -156,6 +160,55 @@ class TestOpTypeCollectorPackaging(unittest.TestCase):
         self.assertNotIn("msopst", user_doc)
         self.assertNotIn("ascend910_95", user_doc)
         self.assertNotIn("兼容", user_doc)
+
+    def test_npu_objdump_entry_with_msobjdump_compat_softlink(self):
+        cmake = MSOBJDUMP_CMAKE.read_text(encoding="utf-8")
+        postinst = POSTINST_SCRIPT.read_text(encoding="utf-8")
+        prerm = PRERM_SCRIPT.read_text(encoding="utf-8")
+        uninstall = UNINSTALL_SCRIPT.read_text(encoding="utf-8")
+        create_softlink = CREATE_SOFTLINK_SCRIPT.read_text(encoding="utf-8")
+        remove_softlink = REMOVE_SOFTLINK_SCRIPT.read_text(encoding="utf-8")
+
+        # npu-objdump is the delivered entry, msobjdump is a symlink to it.
+        self.assertIn("install(FILES ${CMAKE_INSTALL_PREFIX}/lib/npu-objdump", cmake)
+        self.assertRegex(cmake, r"create_symlink\s+npu-objdump\s+msobjdump")
+        self.assertNotRegex(cmake, r"create_symlink\s+msobjdump\s+npu-objdump")
+        self.assertIn("create_msobjdump_softlink", postinst)
+        self.assertIn('ln -s "npu-objdump"', postinst)
+        self.assertIn("remove_msobjdump_softlink", prerm)
+        self.assertIn('readlink "${link_path}"', prerm)
+        self.assertIn(
+            'removeSoftLink "${install_path}/tools/msobjdump/" "msobjdump"', uninstall
+        )
+        # 卸载必须同时清理两个名字的文件/软链形态并回收目录，避免 verify_package
+        # 卸载后残留（tools/msobjdump/npu-objdump 实体文件曾导致 CI 失败）。
+        self.assertIn(
+            'removeSoftLink "${install_path}/tools/msobjdump/" "npu-objdump"', uninstall
+        )
+        self.assertIn(
+            'rm -f "${install_path}/tools/msobjdump/msobjdump" '
+            '"${install_path}/tools/msobjdump/npu-objdump"',
+            uninstall,
+        )
+        self.assertIn('rmdir "${install_path}/tools/msobjdump"', uninstall)
+        self.assertIn(
+            'createSoftLink "$_src_dir/msobjdump" "$_dst_dir/msobjdump" "npu-objdump"',
+            create_softlink,
+        )
+        self.assertIn(
+            'createSoftLink "$_src_dir/msobjdump" "$_dst_dir/msobjdump" "msobjdump"',
+            create_softlink,
+        )
+        self.assertIn(
+            'removeSoftLink "$install_path/$latest_dir/tools/msobjdump" "msobjdump"',
+            remove_softlink,
+        )
+
+    def test_msobjdump_shell_preserves_input_path_arguments(self):
+        shell = MSOBJDUMP_SHELL.read_text(encoding="utf-8")
+
+        self.assertIn('python3 -m msobjdump "$@"', shell)
+        self.assertIn('main "$@"', shell)
 
 
 if __name__ == "__main__":

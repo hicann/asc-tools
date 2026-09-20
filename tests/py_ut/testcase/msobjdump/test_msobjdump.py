@@ -13,6 +13,7 @@ import os
 import sys
 import shutil
 import struct
+import subprocess
 import tempfile
 import unittest
 import contextlib
@@ -115,6 +116,167 @@ class TestMsObjdump(unittest.TestCase):
 
                 action(None, SimpleNamespace(), a_file)
                 self.assertEqual(mock_get_o_file.call_count, 2)
+
+    def test_parse_args_supports_sass_without_short_alias(self):
+        args = msobjdump_main.parse_args(["--sass", __file__])
+
+        self.assertEqual(args.sass, os.path.realpath(__file__))
+        self.assertFalse(args.verbose)
+        with self.assertRaises(SystemExit) as context:
+            msobjdump_main.parse_args(["-sass", __file__])
+        self.assertEqual(context.exception.code, 2)
+
+    def test_parse_args_rejects_sass_with_existing_action(self):
+        with self.assertRaises(SystemExit) as context:
+            msobjdump_main.parse_args(["--sass", __file__, "--verbose"])
+
+        self.assertEqual(context.exception.code, 2)
+
+    def test_classify_sass_file_recognizes_device_machine(self):
+        objdump = msobjdump_main.ObjDump.__new__(msobjdump_main.ObjDump)
+        with tempfile.NamedTemporaryFile() as input_file:
+            header = subprocess.CompletedProcess(
+                [], 0, "Machine: <unknown>: 0x1029\n", ""
+            )
+            with (
+                patch.object(utils, "get_elf_header", return_value=header),
+                patch.object(
+                    utils,
+                    "get_section_headers_in_file",
+                    return_value="[ 2] .text PROGBITS 00000000 000040 000008 00 AX",
+                ),
+            ):
+                self.assertEqual(objdump._classify_sass_file(input_file.name), "device")
+
+    def test_collect_sass_images_visits_all_archive_members(self):
+        objdump = msobjdump_main.ObjDump.__new__(msobjdump_main.ObjDump)
+        objdump.tmp_dir = tempfile.mkdtemp()
+        archive_file = os.path.join(objdump.tmp_dir, "libkernels.a")
+        with open(archive_file, "wb") as file_obj:
+            file_obj.write(msobjdump_main.ARCHIVE_MAGIC)
+
+        def extract_member(_archive, _member, output_file):
+            with open(output_file, "wb") as file_obj:
+                file_obj.write(b"member")
+            return subprocess.CompletedProcess([], 0, b"", b"")
+
+        try:
+            with (
+                patch.object(
+                    utils,
+                    "list_archive_members",
+                    return_value=subprocess.CompletedProcess(
+                        [], 0, "host.o\ndevice.o\n", ""
+                    ),
+                ),
+                patch.object(
+                    utils, "extract_archive_member", side_effect=extract_member
+                ),
+                patch.object(
+                    objdump,
+                    "_classify_sass_file",
+                    # 归档本身也经分类器分叉（统一分叉点）：archive -> host.o -> device.o
+                    side_effect=["archive", "host", "device"],
+                ),
+            ):
+                images, diagnostics = objdump._collect_sass_images(archive_file)
+
+            self.assertEqual(diagnostics, [])
+            self.assertEqual(len(images), 1)
+            self.assertIn("device.o", images[0].source)
+        finally:
+            shutil.rmtree(objdump.tmp_dir)
+
+    def test_disassemble_sass_rejects_placeholder_output(self):
+        objdump = msobjdump_main.ObjDump.__new__(msobjdump_main.ObjDump)
+        image = msobjdump_main.SassImage("device.o", "device.o")
+        result = subprocess.CompletedProcess(
+            [],
+            0,
+            "device.o: file format elf64-hiipu\n"
+            "       0:                00000000 <not available>\n",
+            "",
+        )
+        with patch.object(utils, "disassemble_with_llvm_objdump", return_value=result):
+            output, error = objdump._disassemble_sass_image(image, "llvm-objdump")
+
+        self.assertIn("<not available>", output)
+        self.assertIn("no usable device instructions", error)
+
+    def test_disassemble_sass_rejects_empty_output(self):
+        objdump = msobjdump_main.ObjDump.__new__(msobjdump_main.ObjDump)
+        image = msobjdump_main.SassImage("device.o", "device.o")
+        result = subprocess.CompletedProcess([], 0, "", "")
+        with patch.object(utils, "disassemble_with_llvm_objdump", return_value=result):
+            output, error = objdump._disassemble_sass_image(image, "llvm-objdump")
+
+        self.assertEqual(output, "")
+        self.assertIn("no valid instruction lines", error)
+
+    def test_disassemble_sass_rejects_partial_unknown_output(self):
+        objdump = msobjdump_main.ObjDump.__new__(msobjdump_main.ObjDump)
+        image = msobjdump_main.SassImage("device.o", "device.o")
+        result = subprocess.CompletedProcess(
+            [],
+            0,
+            "       0:                00000000\tEND\n"
+            "       4:                00000000 <unknown>\n",
+            "",
+        )
+        with patch.object(utils, "disassemble_with_llvm_objdump", return_value=result):
+            output, error = objdump._disassemble_sass_image(image, "llvm-objdump")
+
+        self.assertIn("END", output)
+        self.assertIn("unknown instructions", error)
+
+    def test_sass_process_prints_source_and_returns_success(self):
+        objdump = msobjdump_main.ObjDump.__new__(msobjdump_main.ObjDump)
+        objdump.src_obj = __file__
+        objdump._sass_tools = {}
+        objdump.tmp_dir = tempfile.mkdtemp()
+        image = msobjdump_main.SassImage("device.o", "input.o")
+        try:
+            with (
+                patch.object(
+                    objdump, "_get_sass_tool", return_value="/opt/llvm-objdump"
+                ),
+                patch.object(
+                    objdump, "_collect_sass_images", return_value=([image], [])
+                ),
+                patch.object(
+                    objdump,
+                    "_disassemble_sass_image",
+                    return_value=(
+                        "device.o: file format elf64-hiipu\n"
+                        "       0:                00000000\tEND\n",
+                        "",
+                    ),
+                ),
+                contextlib.redirect_stdout(StringIO()) as output,
+            ):
+                result = objdump._sass_process()
+
+            self.assertEqual(result, 0)
+            self.assertIn("===== [SASS] input.o =====", output.getvalue())
+            self.assertIn("END", output.getvalue())
+        finally:
+            shutil.rmtree(objdump.tmp_dir)
+
+    def test_constructor_cleans_temporary_directory_when_initialization_fails(self):
+        with tempfile.TemporaryDirectory() as out_dir:
+            args = SimpleNamespace(out_dir=out_dir)
+            with patch.object(
+                msobjdump_main.ObjDump,
+                "_set_parse_obj_and_mode",
+                side_effect=RuntimeError("parse failed"),
+            ):
+                with self.assertRaisesRegex(RuntimeError, "parse failed"):
+                    msobjdump_main.ObjDump(args)
+
+            self.assertEqual(
+                [name for name in os.listdir(out_dir) if name.startswith("objdump_")],
+                [],
+            )
 
     def _make_out_dir(self, out_dir_name):
         out_dir = os.path.join(FILE_PATH, out_dir_name)
@@ -933,6 +1095,28 @@ class TestMsObjdump(unittest.TestCase):
         self.assertIs(
             utils.extract_aicore_binary_from_elf("demo", "demo.aicore.o"), mock_result
         )
+
+    @patch("msobjdump.utils.subprocess.run")
+    def test_utils_sass_wrappers_use_argument_lists_and_stable_locale(self, mock_run):
+        mock_run.return_value = MagicMock(stdout="", stderr="", returncode=0)
+
+        utils.get_elf_header("input with space.o")
+        utils.list_archive_members("lib with space.a")
+        utils.disassemble_with_llvm_objdump(
+            "device with space.o", "/opt/cann/bin/llvm-objdump"
+        )
+
+        self.assertEqual(mock_run.call_count, 3)
+        expected_commands = [
+            ["readelf", "-hW", "input with space.o"],
+            ["ar", "t", "lib with space.a"],
+            ["/opt/cann/bin/llvm-objdump", "-d", "device with space.o"],
+        ]
+        for call, command in zip(mock_run.call_args_list, expected_commands):
+            self.assertEqual(call.args[0], command)
+            self.assertFalse(call.kwargs["shell"])
+            self.assertEqual(call.kwargs["env"]["LC_ALL"], "C")
+            self.assertEqual(call.kwargs["env"]["LANG"], "C")
 
 
 if __name__ == "__main__":

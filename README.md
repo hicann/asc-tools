@@ -14,18 +14,17 @@ Ascend C Tools是[CANN](https://hiascend.com/software/cann) （Compute Architect
 
 - **msobjdump**
 
-    msobjdump针对Kernel直调算子开发与工程化算子开发编译生成的算子ELF文件（Executable and Linkable Format）提供解析和解压功能，并将结果信息以可读形式呈现，方便开发者直观获得Kernel文件信息。
+    msobjdump针对Kernel直调算子开发与工程化算子开发编译生成的算子ELF文件（Executable and Linkable Format）提供解析、提取和Ascend AICore指令反汇编功能，并将结果信息以可读形式呈现，方便开发者直观获得Kernel文件信息。
 
 - **show_kernel_debug_data**
 
     show_kernel_debug_data工具用于离线解析通过AscendC::DumpTensor/AscendC::print接口保存的Kernel侧算子调试信息。
 
-
 ## 🔍目录结构说明
 
 本代码仓目录结构如下:
 
-```
+```text
 ├── cmake                               // Ascend C Tools构建源代码
 ├── cpudebug                            // Ascend C Tools cpu debug工具实现源代码
 │   ├── cmake                           // Ascend C Tools cpu debug 构建源代码
@@ -51,7 +50,6 @@ Ascend C Tools是[CANN](https://hiascend.com/software/cann) （Compute Architect
 |[快速入门](./docs/00_quick_start.md)|快速体验项目的简易教程。包括环境搭建、编译执行、本地验证等操作。|
 |[使用说明](./docs)|各工具使用说明。|
 |[相关文档](https://hiascend.com/document/redirect/CannCommunityOpdevAscendC)|Ascend C算子编程指南，同时该文档中提供了孪生调试cpu_debug、msobjdump、show_kernel_debug_data工具的详细介绍。|
-
 
 ## 📝相关信息
 

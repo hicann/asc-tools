@@ -141,6 +141,20 @@ create_softlink() {
     ln -s "${WHL_INSTALL_DIR_PATH}/bin/${link_name}" "${BIN_DIR_PATH}/${link_name}" || true
 }
 
+create_msobjdump_softlink() {
+    local tool_dir="${sourcedir}/tools/msobjdump"
+    local link_path="${tool_dir}/msobjdump"
+
+    [ ! -f "${tool_dir}/npu-objdump" ] && return 0
+    if [ -e "${link_path}" ] && [ ! -L "${link_path}" ]; then
+        return 0
+    fi
+    if [ -L "${link_path}" ] && [ "$(readlink "${link_path}")" != "npu-objdump" ]; then
+        return 0
+    fi
+    [ -L "${link_path}" ] || ln -s "npu-objdump" "${link_path}"
+}
+
 create_cpudebug_cmake_softlink() {
     local target_name="$1"
     local link_name="$2"
@@ -188,6 +202,7 @@ install_whl "mindstudio_opst-*-py3-none-any.whl"
 create_softlink "msopgen"
 create_softlink "msopst"
 create_softlink "optype_collector"
+create_msobjdump_softlink
 
 create_cpudebug_cmake_softlink "cpudebug-config.cmake" "tikicpulib-config.cmake"
 create_cpudebug_cmake_softlink "targets-cpudebug.cmake" "targets-tikicpulib.cmake"

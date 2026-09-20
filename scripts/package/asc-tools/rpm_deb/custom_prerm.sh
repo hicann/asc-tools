@@ -24,6 +24,15 @@ remove_softlink() {
     return 0
 }
 
+remove_msobjdump_softlink() {
+    local link_path="${sourcedir}/tools/msobjdump/msobjdump"
+
+    if [ -L "${link_path}" ] && [ "$(readlink "${link_path}")" = "npu-objdump" ]; then
+        rm -f "${link_path}"
+    fi
+    return 0
+}
+
 remove_local_bin() {
     local bin_name="$1"
 
@@ -60,6 +69,7 @@ done
 remove_softlink "msopgen"
 remove_softlink "msopst"
 remove_softlink "optype_collector"
+remove_msobjdump_softlink
 
 remove_cpudebug_cmake_softlink "tikicpulib-config.cmake"
 remove_cpudebug_cmake_softlink "targets-tikicpulib.cmake"

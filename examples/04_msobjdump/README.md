@@ -2,7 +2,7 @@
 
 ## 概述
 
-本样例基于MatmulLeakyRelu算子演示融合编译场景下`msobjdump`工具的使用方式。样例通过编译[matmul_leakyrelu.asc](./matmul_leakyrelu.asc)生成融合编译产物，再使用`msobjdump`解析生成的ELF文件。`msobjdump`工具的详细说明请参考[msobjdump工具](../../docs/03_msobjdump.md)。
+本样例基于MatmulLeakyRelu算子演示融合编译场景下`msobjdump`工具的使用方式。样例通过编译[matmul_leakyrelu.asc](./matmul_leakyrelu.asc)生成融合编译产物，再使用`msobjdump`解析并反汇编生成的ELF文件。`msobjdump`工具的详细说明请参考[msobjdump工具](../../docs/03_msobjdump.md)。
 
 ## 本样例支持的产品及CANN软件版本
 
@@ -14,7 +14,7 @@
 
 ## 目录结构介绍
 
-```
+```text
 ├── 04_msobjdump
 │   ├── CMakeLists.txt          // 编译工程文件
 │   ├── data_utils.h            // 数据读入写出函数
@@ -31,7 +31,7 @@
 
   MatmulLeakyRelu计算公式为：
 
-  ```
+  ```text
   C = A * B + Bias
   C = C > 0 ? C : C * 0.001
   ```
@@ -50,7 +50,7 @@
 
 - 样例实现：
 
-  Host侧通过`GenerateTiling`生成Tiling参数；Kernel侧通过`CalcGMOffset`完成分核地址计算，通过`matmulObj.Iterate`完成矩阵乘计算，再通过`LeakyRelu`完成激活函数计算，最后将结果搬回Global Memory。
+  Host侧通过`GenerateTiling`生成Tiling参数；Kernel侧通过`CalcOffset`完成分核地址计算，通过`matmulObj.Iterate`完成矩阵乘计算，再通过`LeakyRelu`完成激活函数计算，最后将结果搬回Global Memory。
 
 ## 编译运行
 
@@ -92,6 +92,8 @@
   |------|--------|------|
   | `CMAKE_ASC_ARCHITECTURES` | `dav-2201`（默认）、`dav-3510` | NPU 架构：<br>&bull; dav-2201，对应 Atlas A2 训练系列产品/Atlas A2 推理系列产品和 Atlas A3 训练系列产品/Atlas A3 推理系列产品<br>&bull; dav-3510，对应 Ascend 950PR/Ascend 950DT |
 
+  `dav-2201`用于Atlas A2/A3系列产品，`dav-3510`用于Ascend 950PR/Ascend 950DT。根据目标产品选择对应的架构参数。
+
 - 执行结果
 
   执行结果如下，说明精度对比成功。
@@ -105,6 +107,7 @@
   样例中的`demo`为融合编译生成的ELF文件。若该ELF中包含`.aicore_binary`段，`msobjdump`会自动提取该段内容并继续解析，无需手工拆分中间文件。
 
   - 解析融合编译产物
+
     ```bash
     msobjdump --dump-elf ./demo
     ```
@@ -128,10 +131,13 @@
     ```
 
   - 全量打印融合编译产物中的device信息
+
     ```bash
     msobjdump --dump-elf ./demo --verbose
     ```
+
     本样例实际输出如下：
+
     ```Plain Text
     .ascend.meta META INFO
     RUNTIME_IMPLICIT_INFO: DOUBLE_PAGE_TABLE_ADDR
@@ -192,6 +198,7 @@
     ```
 
   - 获取融合编译产物中的ELF文件列表
+
     ```bash
     msobjdump --list-elf ./demo
     ```
@@ -203,9 +210,24 @@
     ```
 
   - 解压融合编译产物中的ELF文件
+
     ```bash
     mkdir -p objdump_out
-    msobjdump --extract-elf ./demo
+    msobjdump --extract-elf ./demo --out-dir ./objdump_out
     ```
 
-    执行上述命令，默认在当前执行路径下落盘`demo.aicore.o`文件，若需指定路径可通过--out-dir进行设置。
+    执行上述命令，工具会在`objdump_out`目录下落盘`demo.aicore.o`文件。若不设置`--out-dir`，则默认在当前执行路径下落盘。
+
+  - 反汇编融合编译产物中的Device指令
+
+    ```bash
+    msobjdump --sass ./demo
+    ```
+
+    `demo`为包含Device ELF的Host ELF，`msobjdump`会自动提取其中的Device ELF并调用后端进行反汇编，不需要手工执行`llvm-objcopy`。如果已经通过`--extract-elf`提取出`demo.aicore.o`，也可以直接执行：
+
+    ```bash
+    msobjdump --sass ./objdump_out/demo.aicore.o
+    ```
+
+    上述命令与安装包主命令`npu-objdump --sass ./demo`等价（`msobjdump`为兼容软链接）。

@@ -11,12 +11,11 @@
 # ----------------------------------------------------------------------------------------------------------
 
 import sys
-from msobjdump.msobjdump_main import parse_args
+from msobjdump.msobjdump_main import main as msobjdump_main
 
 
 def main():
-    args = parse_args()
-    args.entry_function(args)
+    return msobjdump_main()
 
 
 if __name__ == "__main__":

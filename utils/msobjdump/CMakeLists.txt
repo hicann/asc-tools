@@ -16,13 +16,22 @@ if(BUILD_OPEN_PROJECT)
     add_custom_target(msobjdump-0.1.0-py3-none-any.whl ALL
         COMMAND ${CMAKE_COMMAND} -E chdir ${msobjdump_path} ${HI_PYTHON} setup.py bdist_wheel
         COMMAND ${CMAKE_COMMAND} -E copy ${msobjdump_path}/dist/msobjdump*.whl ${CMAKE_INSTALL_PREFIX}/lib/msobjdump-0.1.0-py3-none-any.whl
-        COMMAND ${CMAKE_COMMAND} -E copy ${msobjdump_path}/msobjdump.sh ${CMAKE_INSTALL_PREFIX}/lib/msobjdump
+        COMMAND ${CMAKE_COMMAND} -E copy ${msobjdump_path}/msobjdump.sh ${CMAKE_INSTALL_PREFIX}/lib/npu-objdump
         COMMAND ${CMAKE_COMMAND} -E remove_directory ${msobjdump_path}/msobjdump.egg-info ${msobjdump_path}/build ${msobjdump_path}/dist
     )
 
-    install(FILES ${CMAKE_INSTALL_PREFIX}/lib/msobjdump
+    install(FILES ${CMAKE_INSTALL_PREFIX}/lib/npu-objdump
         ${INSTALL_OPTIONAL} DESTINATION tools/msobjdump/
         PERMISSIONS OWNER_READ OWNER_EXECUTE GROUP_READ GROUP_EXECUTE
+        COMPONENT asc-tools
+    )
+    install(CODE
+        "execute_process(
+            COMMAND ${CMAKE_COMMAND} -E create_symlink
+            npu-objdump
+            msobjdump
+            WORKING_DIRECTORY \"\${CMAKE_INSTALL_PREFIX}/tools/msobjdump/\"
+        )"
         COMPONENT asc-tools
     )
     install(FILES ${CMAKE_INSTALL_PREFIX}/lib/msobjdump-0.1.0-py3-none-any.whl

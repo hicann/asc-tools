@@ -313,5 +313,11 @@ uninstallPython
 removeSoftLink "${install_path}/${PLT_ARCH}-linux/bin/" "msopgen"
 removeSoftLink "${install_path}/${PLT_ARCH}-linux/bin/" "msopst"
 removeSoftLink "${install_path}/${PLT_ARCH}-linux/bin/" "optype_collector"
+# npu-objdump 为主命令实体文件、msobjdump 为兼容软链；两个名字都可能以文件或
+# 软链形态存在（取决于版本），逐名清理后再尝试移除空目录，保证卸载后无残留。
+removeSoftLink "${install_path}/tools/msobjdump/" "msobjdump"
+removeSoftLink "${install_path}/tools/msobjdump/" "npu-objdump"
+rm -f "${install_path}/tools/msobjdump/msobjdump" "${install_path}/tools/msobjdump/npu-objdump"
+rmdir "${install_path}/tools/msobjdump" 2>/dev/null
 
 exit 0

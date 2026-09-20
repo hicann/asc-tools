@@ -78,6 +78,8 @@ removeToolSoftLink()
         fi
     fi
     if [ -d "$install_path/$latest_dir/tools/msobjdump" ]; then
+        removeSoftLink "$install_path/$latest_dir/tools/msobjdump" "npu-objdump"
+        removeSoftLink "$install_path/$latest_dir/tools/msobjdump" "msobjdump"
         rm -f "$install_path/$latest_dir/tools/msobjdump"
     fi
     if [ -d "$install_path/$latest_dir/tools/optype_collector" ]; then
