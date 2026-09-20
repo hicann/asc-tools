@@ -67,7 +67,7 @@ npu-compute --section PipeUtilization bash ./run.sh
 | `--list-sections` | 列出支持的指标组名称，单独使用。 |
 | `--list-sets` | 列出 basic、full 及其包含的 Section，单独使用，不启动采集。 |
 | `--set arg` | 选择 basic 或 full，区分大小写。未指定 `--set` 和 `--section` 时默认使用 basic。支持重复指定，可与 `--section` 组合。 |
-| `--section arg` | 指定要采集的指标组（Section）名称，区分大小写。可多次使用该选项指定不同指标组，采集命令至少需要指定一个指标组。 |
+| `--section arg` | 指定要采集的指标组（Section）名称，区分大小写。使用该命令行选项时必须配合指标组名称，没有默认值。可多次使用该选项指定不同指标组。 |
 | `--replay-mode arg` | Kernel 重放模式，当前仅支持 `kernel`，默认值为 `kernel`。 |
 | `-o arg`、`--export arg` | 采集时指定报告文件路径或已有目录；导入时指定保存解包结果的已有目录，工具会在其中创建新的结果子目录。未指定时，报告或解包结果保存在当前目录。 |
 | `-i arg`、`--import arg` | 导入并解包 npu-compute 生成的 `.npu-rep` 报告，可配合 `--export` 指定保存位置。 |
@@ -94,20 +94,11 @@ npu-compute \
   ./application
 ```
 
-采集完成后，工具会在终端输出本次数据目录和报告路径：
+采集完成后，工具会在终端输出报告路径：
 
 ```text
-npu-compute: data-directory= <数据目录>
 npu-compute: report= <报告路径>
 ```
-
-数据目录位于执行命令时的当前目录，名称格式如下：
-
-```text
-npu-compute-<毫秒时间戳>-<进程ID>-<随机后缀>
-```
-
-每次采集使用独立的数据目录，因此多次调用不会混合采集文件。数据目录中包含 `HardwareInfo.jsonl`、`summary.jsonl` 和本次实际生成的 Section 数据文件。
 
 ### 指定报告输出位置
 
