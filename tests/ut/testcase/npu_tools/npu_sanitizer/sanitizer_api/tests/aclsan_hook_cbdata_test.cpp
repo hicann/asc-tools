@@ -71,6 +71,7 @@ int32_t g_currentDeviceId = 3;
 aclError g_getDeviceResult = ACL_SUCCESS;
 int32_t g_clearCallbackResult = 0;
 int32_t g_registerMallocResult = 0;
+size_t g_lastMallocSize = 0;
 
 void ResetCapture()
 {
@@ -86,6 +87,7 @@ void ResetCapture()
     g_getDeviceResult = ACL_SUCCESS;
     g_clearCallbackResult = 0;
     g_registerMallocResult = 0;
+    g_lastMallocSize = 0;
     g_functionAttributeQueryCalls = 0;
 }
 
@@ -107,7 +109,7 @@ std::string CaptureDebugLogs(Action action)
 
 aclError FakeAclrtMalloc(void** deviceAddress, size_t size, aclrtMemMallocPolicy policy)
 {
-    (void)size;
+    g_lastMallocSize = size;
     (void)policy;
     if (deviceAddress == nullptr) {
         return ACL_ERROR_INVALID_PARAM;
@@ -219,6 +221,21 @@ void TestMallocCallbackData()
     assert(g_callbackCapture.resource.memorySpace == ACLSAN_MEMORY_SPACE_DEVICE);
     assert(g_callbackCapture.resource.deviceId == 3);
     assert(g_callbackCapture.resource.resourceId == reinterpret_cast<uintptr_t>(deviceAddress));
+}
+
+void TestMallocCallbackDataRoundsSizeUpTo32Bytes()
+{
+    constexpr std::array<std::pair<size_t, uint64_t>, 4> kCases = {{{1, 32}, {31, 32}, {32, 32}, {33, 64}}};
+    for (const auto& [requestedSize, expectedSize] : kCases) {
+        ResetCapture();
+        void* deviceAddress = nullptr;
+
+        assert(aclrtMallocHook(&deviceAddress, requestedSize, ACL_MEM_MALLOC_HUGE_FIRST) == ACL_SUCCESS);
+        assert(g_lastMallocSize == requestedSize);
+        assert(g_callbackCapture.calls == 1);
+        assert(g_callbackCapture.resource.ptr == deviceAddress);
+        assert(g_callbackCapture.resource.bytes == expectedSize);
+    }
 }
 
 void TestMallocPreservesOriginalRuntimeError()
@@ -916,6 +933,7 @@ TEST(AclsanHookCbdata, Main)
     };
     const aclsan_test::BoundaryGuard boundaryGuard{boundary};
     TestMallocCallbackData();
+    TestMallocCallbackDataRoundsSizeUpTo32Bytes();
     TestMallocPreservesOriginalRuntimeError();
     TestMallocSkipsCallbackWhenGetDeviceFails();
     TestMissingOriginalMallocAborts();

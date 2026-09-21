@@ -22,6 +22,7 @@
 #include <array>
 #include <cstdint>
 #include <dlfcn.h>
+#include <limits>
 #include <new>
 #include <set>
 #include <shared_mutex>
@@ -46,6 +47,16 @@ namespace {
 
 using aclsan::AbortHookFailure;
 using aclsan::GetOriginalRuntimeFunction;
+
+uint64_t AlignDeviceMemorySize(uint64_t bytes) noexcept
+{
+    constexpr uint64_t deviceMemoryAlignment = 32U;
+    constexpr uint64_t alignmentMask = deviceMemoryAlignment - 1U;
+    if (bytes > std::numeric_limits<uint64_t>::max() - alignmentMask) {
+        return bytes;
+    }
+    return (bytes + alignmentMask) & ~alignmentMask;
+}
 
 // TODO: 中间要加上异常报错 / 中止机制
 // 复制业务参数地址，再追加调用方保存的隐藏指针的地址；其存储需保持有效直到 launch 返回。
@@ -186,8 +197,8 @@ aclError aclrtMallocHook(void** deviceAddress, std::size_t size, aclrtMemMallocP
     if (result == ACL_SUCCESS && deviceAddress != nullptr) {
         allocatedAddress = *deviceAddress;
     }
-    const AclsanResourceData callbackData =
-        MakeDeviceResourceData("aclrtMalloc", result, allocatedAddress, static_cast<uint64_t>(size), deviceId);
+    const AclsanResourceData callbackData = MakeDeviceResourceData(
+        "aclrtMalloc", result, allocatedAddress, AlignDeviceMemorySize(static_cast<uint64_t>(size)), deviceId);
     aclsan::AclsanCallbackDispatcher::DispatchResource(ACLSAN_CBID_RESOURCE_MEMORY_ALLOC, callbackData);
     return result;
 }
