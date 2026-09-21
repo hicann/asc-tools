@@ -89,20 +89,20 @@ npu check对内存读写、指令同步、Tensor操作的合法性进行检测�
 
 ## 使用示例
 
-下面以[add](https://gitcode.com/cann/asc-devkit/blob/master/examples/01_simd_cpp_api/01_utilities/06_cpu_debug/cpu_debug.asc)为示例，介绍在调用CPU调测API并使用gdb/printf对算子核函数进行调试之后，开发者可以基于生成的log文件使用npu check工具检查Kernel源码的实现逻辑。
+下面以[add](https://gitcode.com/cann/asc-devkit/blob/master/examples/01_simd_cpp_api/00_introduction/01_add/add_tpipe_tque/add_tpipe_tque.asc)为示例，介绍在调用CPU调测API并使用gdb/printf对算子核函数进行调试之后，开发者可以基于生成的log文件使用npu check工具检查Kernel源码的实现逻辑。
 
 **步骤1**:构造错误用例
 
 在add_custom代码的CopyIn函数中加入如下FreeTensor操作。
 
 ``` cpp
-AscendC::LocalTensor<half> xLocal = inQueueX.AllocTensor<half>();
-AscendC::LocalTensor<half> yLocal = inQueueY.AllocTensor<half>();
+AscendC::LocalTensor<float> xLocal = inQueueX.AllocTensor<float>();
+AscendC::LocalTensor<float> yLocal = inQueueY.AllocTensor<float>();
 // 此处增加以下一行代码来构造错误示例
 inQueueX.FreeTensor(xLocal);
 // 剩余代码保持不变
-AscendC::DataCopy(xLocal, xGm[progress * TILE_LENGTH], TILE_LENGTH);
-AscendC::DataCopy(yLocal, yGm[progress * TILE_LENGTH], TILE_LENGTH);
+AscendC::DataCopy(xLocal, xGm, blockLength);
+AscendC::DataCopy(yLocal, yGm, blockLength);
 inQueueX.EnQue(xLocal);
 inQueueY.EnQue(yLocal);
 ```
@@ -115,10 +115,10 @@ inQueueY.EnQue(yLocal);
 
 ```bash
 mkdir -p build && cd build;
-cmake .. -DSOC_VERSION=${SOC_VERSION}; make -j
+cmake ..  -DCMAKE_ASC_RUN_MODE=cpu -DCMAKE_ASC_ARCHITECTURES=${SOC_VERSION}; make -j
 python3 ../scripts/gen_data.py
-./add
-python3 ../scripts/verify_result.py output_z.bin golden.bin
+./demo
+python3 ../scripts/verify_result.py output/output.bin output/golden.bin
 ```
 
 **步骤3**:找到对应的log文件进行检查
