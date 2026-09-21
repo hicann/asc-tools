@@ -3,7 +3,7 @@
 ## 概述
 本工具主要针对生成的算子ELF文件（Executable and Linkable Format）提供解析和解压功能，并将结果信息以可读形式呈现，方便开发者直观获得kernel文件信息。关于本工具的详细介绍请参考《[Ascend C算子开发](https://hiascend.com/document/redirect/CannCommunityOpdevAscendC)》中的“编程指南 > 附录 > msobjdump工具”。
 
-工具调用演示可参考[msobjdump样例](../examples/04_msobjdump/README.md)。
+工具调用演示可参考[msobjdump样例](../../examples/04_msobjdump/README.md)。
 
 ## 命令格式
 
@@ -11,19 +11,19 @@
     ```bash
     msobjdump --dump-elf <elf_file> [--verbose]
     ```
-    --dump-elf <elf_file>为必选，表示待解析ELF文件路径。[--verbose]为可选，用于开启ELF文件中全量打印device信息功能。
+    `--dump-elf <elf_file>`为必选，表示待解析ELF文件路径。`[--verbose]`为可选，用于开启ELF文件中全量打印device信息功能。
 
 -  解压ELF文件的命令
     ```bash
     msobjdump --extract-elf <elf_file> [--out-dir <out_path>]
     ```
-    --extract-elf <elf_file>为必选，表示待解析ELF文件路径。[--out-dir <out_path>]为可选，用于设置解压文件的落盘路径。
+    `--extract-elf <elf_file>`为必选，表示待解析ELF文件路径。`[--out-dir <out_path>]`为可选，用于设置解压文件的落盘路径。
 
 -  获取ELF文件列表的命令
     ```bash
     msobjdump --list-elf <elf_file>
     ```
-    --list-elf <elf_file>为可选，获取ELF文件中包含的device信息文件列表，并打印显示。
+    `--list-elf <elf_file>`为可选，获取ELF文件中包含的device信息文件列表，并打印显示。
 
   下表为ELF文件中常见字段说明：
 | 字段名 | 含义 | 是否必选 | 打印说明 |

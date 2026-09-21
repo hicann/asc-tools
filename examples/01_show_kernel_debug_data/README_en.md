@@ -2,7 +2,7 @@
 
 ## Overview
 
-This example demonstrates the generation and parsing workflow of kernel-side debugging information based on the Add operator. The example calls `AscendC::DumpTensor`, `AscendC::printf`, and `AscendC::PrintTimeStamp` within an Ascend C kernel to generate debugging data, and then parses the dump binary files using the [show_kernel_debug_data tool](../../docs/04_show_kernel_debug_data.md).
+This example demonstrates the generation and parsing workflow of kernel-side debugging information based on the Add operator. The example calls `AscendC::DumpTensor`, `AscendC::printf`, and `AscendC::PrintTimeStamp` within an Ascend C kernel to generate debugging data, and then parses the dump binary files using the [show_kernel_debug_data tool](../../docs/en/04_show_kernel_debug_data.md).
 
 ## Supported Products and CANN Software Versions
 
@@ -42,7 +42,7 @@ Execute the following steps in the root directory of this example to build and r
 
 - Configure environment variables
 
-  Please configure environment variables according to the [installation method](../../docs/00_quick_start.md#prepare&install) of the CANN development toolkit on your current environment.
+  Please configure environment variables according to the [installation method](../../docs/en/00_quick_start.md#prepare&install) of the CANN development toolkit on your current environment.
 
   ```bash
   source ${install_path}/cann/set_env.sh

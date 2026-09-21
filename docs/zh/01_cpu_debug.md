@@ -6,12 +6,12 @@
 
 ## 环境准备
 
-请参考[快速入门](00_quick_start.md#环境准备)完成环境准备。
+请参考[快速入门](00_quick_start.md#prepare&install)完成环境准备。
 
 
 ## 使用方法
 
-以[cpudebug](../examples/02_cpudebug/)样例为例，只需以下两步即可开始CPU调试。
+以[cpudebug](../../examples/02_cpudebug/)样例为例，只需以下两步即可开始CPU调试。
 
 ### 步骤1：添加头文件引用
 

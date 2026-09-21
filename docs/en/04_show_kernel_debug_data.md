@@ -2,7 +2,7 @@
 
 Kernel-side operator debugging information (AscendC::DumpTensor, AscendC::printf, etc.) can be obtained after configuring Dump settings. The show_kernel_debug_data tool provides offline parsing capabilities, helping users obtain and parse debugging information (converting bin files into a readable format).
 
-For a tool usage demonstration, refer to the [show_kernel_debug_data example](../examples/01_show_kernel_debug_data/README.md).
+For a tool usage demonstration, refer to the [show_kernel_debug_data example](../../examples/01_show_kernel_debug_data/README.md).
 
 ## Usage
 

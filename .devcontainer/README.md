@@ -123,11 +123,11 @@ Dev Containers扩展会自动构建镜像并启动容器。首次构建约需5�
 
 ### 步骤六：容器内安装CANN
 
-容器启动后，在容器终端参考[📥 下载安装CANN包](../docs/00_quick_start.md#cann-install)章节完成toolkit和ops包的下载与安装。
+容器启动后，在容器终端参考[📥 下载安装CANN包](../docs/zh/00_quick_start.md#cann-install)章节完成toolkit和ops包的下载与安装。
 
 ### 步骤七：验证环境
 
-在容器终端参考[✅ 环境验证](../docs/00_quick_start.md#cann-verify)章节确认NPU设备与CANN包状态，然后按[⚙️ 环境变量配置](../docs/00_quick_start.md#cann-env-setup)加载环境变量，即可开始算子开发。
+在容器终端参考[✅ 环境验证](../docs/zh/00_quick_start.md#cann-verify)章节确认NPU设备与CANN包状态，然后按[⚙️ 环境变量配置](../docs/zh/00_quick_start.md#cann-env-setup)加载环境变量，即可开始算子开发。
 
 ## 🤖 快速开始（AI Agent）<a name="快速开始ai-agent"></a>
 
@@ -186,7 +186,7 @@ docker run -itd --name ascendc_container ascendc:ubuntu24.04
 > [!IMPORTANT] 重要
 >
 > - 若用户需要挂载数据目录，以`-v /host/path:/container/path`的形式逐条追加。
-> - 容器启动后，须在容器内手动安装CANN toolkit和ops包。请向用户询问CANN包的路径或安装命令，或参考[📥 下载安装CANN包](../docs/00_quick_start.md#cann-install)章节。
+> - 容器启动后，须在容器内手动安装CANN toolkit和ops包。请向用户询问CANN包的路径或安装命令，或参考[📥 下载安装CANN包](../docs/zh/00_quick_start.md#cann-install)章节。
 
 ## 🐍 Python环境
 

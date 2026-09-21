@@ -2,7 +2,7 @@
 
 kernel侧算子调试信息（AscendC::DumpTensor, AscendC::printf等）可通过Dump配置后进行获取。show_kernel_debug_data工具提供了离线解析能力，帮助用户获取并解析调试信息（将bin文件解析成可读格式）。
 
-工具调用演示可参考[show_kernel_debug_data样例](../examples/01_show_kernel_debug_data/README.md)。
+工具调用演示可参考[show_kernel_debug_data样例](../../examples/01_show_kernel_debug_data/README.md)。
 
 ## 使用方法
 

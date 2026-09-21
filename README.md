@@ -48,7 +48,7 @@ Ascend C Tools是[CANN](https://hiascend.com/software/cann) （Compute Architect
 
 | 文档 | 说明 |
 |------|------|
-|[快速入门](./docs/00_quick_start.md)|快速体验项目的简易教程。包括环境搭建、编译执行、本地验证等操作。|
+|[快速入门](./docs/zh/00_quick_start.md)|快速体验项目的简易教程。包括环境搭建、编译执行、本地验证等操作。|
 |[使用说明](./docs)|各工具使用说明。|
 |[相关文档](https://hiascend.com/document/redirect/CannCommunityOpdevAscendC)|Ascend C算子编程指南，同时该文档中提供了孪生调试cpu_debug、msobjdump、show_kernel_debug_data工具的详细介绍。|
 

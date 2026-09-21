@@ -52,7 +52,7 @@ Execute the following steps in the root directory of this example to build and r
 
 - Configure environment variables
 
-  Please configure environment variables according to the [installation method](../../docs/00_quick_start.md#prepare&install) of the CANN development toolkit on your current environment.
+  Please configure environment variables according to the [installation method](../../docs/en/00_quick_start.md#prepare&install) of the CANN development toolkit on your current environment.
 
   ```bash
   source ${install_path}/cann/set_env.sh

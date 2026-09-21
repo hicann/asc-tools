@@ -28,7 +28,7 @@ REMOVE_SOFTLINK_SCRIPT = (
     REPO_ROOT / "scripts/package/asc-tools/scripts/asc-tools_custom_remove_softlink.sh"
 )
 SETUP_SCRIPT = REPO_ROOT / "utils/optype_collector/setup.py"
-USER_DOC = REPO_ROOT / "docs/05_optype_collector.md"
+USER_DOC = REPO_ROOT / "docs/zh/05_optype_collector.md"
 
 
 class TestOpTypeCollectorPackaging(unittest.TestCase):

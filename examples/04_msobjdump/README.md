@@ -2,7 +2,7 @@
 
 ## 概述
 
-本样例基于MatmulLeakyRelu算子演示融合编译场景下`msobjdump`工具的使用方式。样例通过编译[matmul_leakyrelu.asc](./matmul_leakyrelu.asc)生成融合编译产物，再使用`msobjdump`解析生成的ELF文件。`msobjdump`工具的详细说明请参考[msobjdump工具](../../docs/03_msobjdump.md)。
+本样例基于MatmulLeakyRelu算子演示融合编译场景下`msobjdump`工具的使用方式。样例通过编译[matmul_leakyrelu.asc](./matmul_leakyrelu.asc)生成融合编译产物，再使用`msobjdump`解析生成的ELF文件。`msobjdump`工具的详细说明请参考[msobjdump工具](../../docs/zh/03_msobjdump.md)。
 
 ## 本样例支持的产品及CANN软件版本
 
@@ -58,7 +58,7 @@
 
 - 配置环境变量
 
-  请根据当前环境上CANN开发套件包的[安装方式](../../docs/00_quick_start.md#prepare&install)，配置环境变量。
+  请根据当前环境上CANN开发套件包的[安装方式](../../docs/zh/00_quick_start.md#prepare&install)，配置环境变量。
 
   ```bash
   source ${install_path}/cann/set_env.sh
