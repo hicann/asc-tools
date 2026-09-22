@@ -19,9 +19,15 @@ namespace npucompute {
 
 aclptiResult WritePmuReport(
     const aclptiProfilingDataResult& result, const std::vector<std::string>& sections, const ReportConfig& config,
-    const KernelMetadata& metadata)
+    const KernelMetadata& metadata, ArtifactSink* sink, std::string_view artifactPrefix, bool* degraded)
 {
     try {
+        if (sink != nullptr) {
+            const auto csvStatus = WritePmuCsv(result, sections, config, sink, artifactPrefix, degraded);
+            return csvStatus == ACLPTI_SUCCESS ?
+                       WriteSummaryJsonl(result, sections, config, metadata, sink, artifactPrefix) :
+                       csvStatus;
+        }
         const boost::filesystem::path root(config.outputDirectory);
         if (!root.is_absolute()) {
             return ACLPTI_ERROR_INVALID_PARAMETER;
@@ -51,7 +57,7 @@ aclptiResult WritePmuReport(
             outputConfig.mirrorOutputDirectory =
                 (boost::filesystem::path(config.mirrorOutputDirectory) / directory.filename()).string();
         }
-        const auto status = WritePmuCsv(result, sections, outputConfig);
+        const auto status = WritePmuCsv(result, sections, outputConfig, nullptr, {}, degraded);
         if (status != ACLPTI_SUCCESS) {
             return status;
         }

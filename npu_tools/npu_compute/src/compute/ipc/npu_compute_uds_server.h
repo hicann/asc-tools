@@ -7,23 +7,22 @@
  * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
  * See LICENSE in the root of the software repository for the full text of the License.
  */
-#include "npu_compute/npu_compute.h"
-#include "runtime/compute_service.h"
+#ifndef NPU_COMPUTE_INTERNAL_UDS_SERVER_H
+#define NPU_COMPUTE_INTERNAL_UDS_SERVER_H
+#include "ipc/ipc.h"
+namespace npucompute {
+class UdsServer {
+public:
+    ipc::Hello Accept();
+    void Ready();
+    void Fail(const std::string& message) noexcept;
+    void Fail(const ipc::Error& error) noexcept;
+    ipc::Deadline Deadline() const { return deadline_; }
+    ipc::Channel TakeChannel() { return std::move(channel_); }
 
-extern "C" NPU_COMPUTE_EXPORT int acltoolInitialize()
-{
-    try {
-        return npucompute::ComputeService::Instance().Initialize();
-    } catch (...) {
-        return -1;
-    }
-}
-
-extern "C" NPU_COMPUTE_EXPORT int acltoolShutdown()
-{
-    try {
-        return npucompute::ComputeService::Instance().Shutdown();
-    } catch (...) {
-        return -1;
-    }
-}
+private:
+    ipc::Channel channel_;
+    ipc::Deadline deadline_;
+};
+} // namespace npucompute
+#endif // NPU_COMPUTE_INTERNAL_UDS_SERVER_H

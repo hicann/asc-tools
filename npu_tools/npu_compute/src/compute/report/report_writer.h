@@ -12,19 +12,24 @@
 #include "aclpti/aclpti_data.h"
 #include "compute_types.h"
 
+#include <string_view>
 #include <vector>
 
 namespace npucompute {
 
+class ArtifactSink;
+
 aclptiResult WritePmuCsv(
-    const aclptiProfilingDataResult& result, const std::vector<std::string>& sections, const ReportConfig& config);
+    const aclptiProfilingDataResult& result, const std::vector<std::string>& sections, const ReportConfig& config,
+    ArtifactSink* sink = nullptr, std::string_view artifactPrefix = {}, bool* degraded = nullptr);
 
 aclptiResult WriteSummaryJsonl(
     const aclptiProfilingDataResult& result, const std::vector<std::string>& sections, const ReportConfig& config,
-    const KernelMetadata& metadata);
+    const KernelMetadata& metadata, ArtifactSink* sink = nullptr, std::string_view artifactPrefix = {});
 
 aclptiResult WritePmuReport(
     const aclptiProfilingDataResult& result, const std::vector<std::string>& sections, const ReportConfig& config,
-    const KernelMetadata& metadata = {});
+    const KernelMetadata& metadata = {}, ArtifactSink* sink = nullptr, std::string_view artifactPrefix = {},
+    bool* degraded = nullptr);
 
 } // namespace npucompute

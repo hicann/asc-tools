@@ -59,6 +59,7 @@ target_include_directories(injection_test_headers INTERFACE
 )
 
 add_library(npu_compute_test_headers INTERFACE)
+target_compile_definitions(npu_compute_test_headers INTERFACE _GLIBCXX_USE_CXX11_ABI=0)
 target_include_directories(npu_compute_test_headers INTERFACE
   "${NPU_COMPUTE_SOURCE_DIR}/include"
   "${NPU_TOOLS_TEST_ROOT}/injection/tests/stubs/runtime/include"

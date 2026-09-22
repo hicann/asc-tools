@@ -18,6 +18,7 @@
 #include <signal.h>
 #include <sys/wait.h>
 #include <unistd.h>
+#include <poll.h>
 
 #include <array>
 #include <cerrno>
@@ -34,6 +35,8 @@ constexpr int kProgramNotFoundExitCode = 127;
 constexpr std::array<int, 3> kForwardedSignals = {SIGINT, SIGTERM, SIGHUP};
 
 volatile sig_atomic_t g_app_process_group = 0;
+volatile sig_atomic_t g_pending_signal = 0;
+volatile sig_atomic_t g_defer_signal = 0;
 
 enum class ChildErrorStage : uint32_t {
     SetProcessGroup = 1,
@@ -55,6 +58,10 @@ struct SignalState {
 
 void ForwardSignal(int signal_number)
 {
+    g_pending_signal = signal_number;
+    if (g_defer_signal != 0) {
+        return;
+    }
     const sig_atomic_t process_group = g_app_process_group;
     if (process_group > 0) {
         kill(-static_cast<pid_t>(process_group), signal_number);
@@ -197,18 +204,18 @@ bool WaitForChild(pid_t child_pid, int* status, std::string* error)
     }
 }
 
-int ExitCodeFromStatus(int status, const std::string& program, std::string* error)
+int ExitCodeFromStatus(int status, std::string* error)
 {
     if (WIFEXITED(status)) {
         const int exit_code = WEXITSTATUS(status);
         if (exit_code != 0) {
-            SetError("target program '" + program + "' exited with code " + std::to_string(exit_code) + ".", error);
+            SetError("APP exited with status " + std::to_string(exit_code), error);
         }
         return exit_code;
     }
     if (WIFSIGNALED(status)) {
         const int signal_number = WTERMSIG(status);
-        SetError("target program '" + program + "' terminated by signal " + std::to_string(signal_number) + ".", error);
+        SetError("APP terminated by signal " + std::to_string(signal_number), error);
         return 128 + signal_number;
     }
     SetError("waitpid returned an unsupported APP status", error);
@@ -217,14 +224,55 @@ int ExitCodeFromStatus(int status, const std::string& program, std::string* erro
 
 } // namespace
 
-int LaunchProcessAndWait(const ProcessLaunchRequest& request, std::string* error)
+class ProcessHandle::Impl {
+public:
+    pid_t pid = -1;
+    SignalState signals;
+    bool reaped = false;
+    int exitCode = 0;
+    std::string exitError;
+    int termSignal = 0;
+};
+
+ProcessHandle::ProcessHandle() : impl_(std::make_unique<Impl>()) {}
+ProcessHandle::~ProcessHandle()
+{
+    if (impl_->pid > 0 && !impl_->reaped) {
+        Signal(SIGKILL);
+        std::string error;
+        Wait(&error);
+    }
+    if (impl_->signals.installed_actions != 0 || impl_->signals.signals_blocked) {
+        RestoreSignalState(&impl_->signals);
+        g_defer_signal = 0;
+    }
+}
+pid_t ProcessHandle::Pid() const { return impl_->pid; }
+void ProcessHandle::Signal(int number) const noexcept
+{
+    if (impl_->pid > 0 && !impl_->reaped) {
+        kill(-impl_->pid, number);
+    }
+}
+int ProcessHandle::PendingSignal() const noexcept { return g_pending_signal; }
+
+std::string ProcessHandle::ExitDescription() const
+{
+    if (!impl_->reaped) {
+        return "unknown";
+    }
+    return impl_->termSignal ? "signal:" + std::to_string(impl_->termSignal) : std::to_string(impl_->exitCode);
+}
+
+bool ProcessHandle::Start(
+    const ProcessLaunchRequest& request, std::string* error, std::chrono::steady_clock::time_point deadline)
 {
     if (error != nullptr) {
         error->clear();
     }
     if (request.program.empty()) {
         SetError("program is empty", error);
-        return kInternalErrorExitCode;
+        return false;
     }
 
     std::vector<std::string> argument_storage;
@@ -249,14 +297,16 @@ int LaunchProcessAndWait(const ProcessLaunchRequest& request, std::string* error
     int error_pipe[2];
     if (pipe2(error_pipe, O_CLOEXEC) != 0) {
         SetError(ErrnoMessage("pipe2", errno), error);
-        return kInternalErrorExitCode;
+        return false;
     }
 
-    SignalState signal_state;
+    SignalState& signal_state = impl_->signals;
+    g_pending_signal = 0;
+    g_defer_signal = 1;
     if (!PrepareSignalState(&signal_state, error)) {
         close(error_pipe[0]);
         close(error_pipe[1]);
-        return kInternalErrorExitCode;
+        return false;
     }
 
     const pid_t child_pid = fork();
@@ -266,7 +316,7 @@ int LaunchProcessAndWait(const ProcessLaunchRequest& request, std::string* error
         close(error_pipe[1]);
         RestoreSignalState(&signal_state);
         SetError(ErrnoMessage("fork", saved_errno), error);
-        return kInternalErrorExitCode;
+        return false;
     }
 
     if (child_pid == 0) {
@@ -284,6 +334,7 @@ int LaunchProcessAndWait(const ProcessLaunchRequest& request, std::string* error
     }
 
     close(error_pipe[1]);
+    impl_->pid = child_pid;
     std::string management_error;
     if (setpgid(child_pid, child_pid) != 0 && errno != EACCES && errno != ESRCH) {
         management_error = ErrnoMessage("setpgid", errno);
@@ -296,30 +347,104 @@ int LaunchProcessAndWait(const ProcessLaunchRequest& request, std::string* error
 
     ChildError child_error{};
     bool has_child_error = false;
+    for (;;) {
+        if (g_pending_signal != 0 || std::chrono::steady_clock::now() >= deadline) {
+            close(error_pipe[0]);
+            SetError("exec startup cancelled or timed out", error);
+            return false;
+        }
+        pollfd descriptor{error_pipe[0], POLLIN, 0};
+        const int ready = poll(&descriptor, 1, 20);
+        if (ready < 0 && errno == EINTR) {
+            continue;
+        }
+        if (ready < 0 || (descriptor.revents & (POLLERR | POLLNVAL))) {
+            close(error_pipe[0]);
+            SetError("exec startup pipe failed", error);
+            return false;
+        }
+        if (ready > 0) {
+            break;
+        }
+    }
     const bool pipe_read_success = ReadChildError(error_pipe[0], &child_error, &has_child_error, error);
     close(error_pipe[0]);
 
-    int child_status = 0;
-    const bool wait_success = WaitForChild(child_pid, &child_status, error);
-    RestoreSignalState(&signal_state);
-
     if (!management_error.empty()) {
         SetError(management_error, error);
-        return kInternalErrorExitCode;
+        return false;
     }
-    if (!pipe_read_success || !wait_success) {
-        return kInternalErrorExitCode;
+    if (!pipe_read_success) {
+        return false;
     }
     if (has_child_error) {
         if (child_error.stage == ChildErrorStage::SetProcessGroup) {
             SetError(ErrnoMessage("child setpgid", child_error.error_number), error);
+            impl_->exitCode = kInternalErrorExitCode;
+        } else {
+            SetError(
+                "failed to start program '" + request.program + "': " + std::strerror(child_error.error_number), error);
+            impl_->exitCode =
+                child_error.error_number == ENOENT ? kProgramNotFoundExitCode : kProgramNotExecutableExitCode;
+        }
+        impl_->exitError = error == nullptr ? "exec failed" : *error;
+    }
+    return true;
+}
+
+bool ProcessHandle::Poll(int* exitCode, std::string* error)
+{
+    if (!impl_->reaped) {
+        int status = 0;
+        const pid_t result = waitpid(impl_->pid, &status, WNOHANG);
+        if (result == 0 || (result < 0 && errno == EINTR)) {
+            return false;
+        }
+        if (result < 0) {
+            impl_->exitCode = kInternalErrorExitCode;
+            impl_->exitError = ErrnoMessage("waitpid", errno);
+        } else if (impl_->exitError.empty()) {
+            impl_->termSignal = WIFSIGNALED(status) ? WTERMSIG(status) : 0;
+            impl_->exitCode = ExitCodeFromStatus(status, &impl_->exitError);
+        }
+        impl_->reaped = true;
+        g_app_process_group = 0;
+    }
+    *exitCode = impl_->exitCode;
+    SetError(impl_->exitError, error);
+    return true;
+}
+
+int ProcessHandle::Wait(std::string* error)
+{
+    if (!impl_->reaped) {
+        int status = 0;
+        const bool success = WaitForChild(impl_->pid, &status, error);
+        if (!success) {
             return kInternalErrorExitCode;
         }
-        SetError(
-            "failed to start program '" + request.program + "': " + std::strerror(child_error.error_number), error);
-        return child_error.error_number == ENOENT ? kProgramNotFoundExitCode : kProgramNotExecutableExitCode;
+        if (impl_->exitError.empty()) {
+            impl_->termSignal = WIFSIGNALED(status) ? WTERMSIG(status) : 0;
+            impl_->exitCode = ExitCodeFromStatus(status, &impl_->exitError);
+        }
+        impl_->reaped = true;
+        g_app_process_group = 0;
     }
-    return ExitCodeFromStatus(child_status, request.program, error);
+    SetError(impl_->exitError, error);
+    return impl_->exitCode;
+}
+
+int LaunchProcessAndWait(const ProcessLaunchRequest& request, std::string* error)
+{
+    ProcessHandle child;
+    if (!child.Start(request, error)) {
+        return kInternalErrorExitCode;
+    }
+    g_defer_signal = 0;
+    if (g_pending_signal != 0) {
+        child.Signal(g_pending_signal);
+    }
+    return child.Wait(error);
 }
 
 } // namespace npucompute::cli

@@ -120,6 +120,7 @@ target_link_libraries(acl_runtime_backend INTERFACE injection_runtime_backend)
 target_link_libraries(acl_prof_api_backend INTERFACE injection_prof_api_backend)
 
 add_subdirectory(src/acl_pti)
+add_subdirectory(src/ipc)
 
 add_subdirectory(src/compute)
 add_subdirectory(src/cli)

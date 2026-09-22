@@ -55,6 +55,7 @@ public:
     HardwareInfoCollector& operator=(HardwareInfoCollector&&) = delete;
 
     bool Initialize(const boost::filesystem::path& outputDirectory, std::string* error);
+    bool Initialize(const boost::filesystem::path& probePath, HardwareInfoPublishFunction publish, std::string* error);
     void CollectOnKernelLaunch() noexcept;
     void Stop() noexcept;
     HardwareCollectionState State() const noexcept;

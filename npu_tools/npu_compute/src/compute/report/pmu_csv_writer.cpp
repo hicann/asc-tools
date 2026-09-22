@@ -8,6 +8,7 @@
  * See LICENSE in the root of the software repository for the full text of the License.
  */
 #include "report/report_writer.h"
+#include "artifact_sink.h"
 #include "pmu/pmu_metric_builder.h"
 
 #include "common/debug_log.h"
@@ -312,7 +313,8 @@ aclptiResult EnsureCsvOutputDirectory(const boost::filesystem::path& outputDirec
 } // namespace
 
 aclptiResult WritePmuCsv(
-    const aclptiProfilingDataResult& result, const std::vector<std::string>& sections, const ReportConfig& config)
+    const aclptiProfilingDataResult& result, const std::vector<std::string>& sections, const ReportConfig& config,
+    ArtifactSink* sink, std::string_view artifactPrefix, bool* degraded)
 {
     const std::string outputDirectory = ResolveOutputDirectory(config);
     const auto& pmuLogs = config.pmuDataLevel == PmuDataLevel::Task ? result.taskPmuLogs : result.pmuLogs;
@@ -354,9 +356,11 @@ aclptiResult WritePmuCsv(
     npucompute::detail::DebugLog(
         "npu-compute", "CSV operation duration: kernelType=%s valueUs=%f source=%s", kernelType,
         operationDurationUs.value_or(0.0), operationDurationUs.has_value() ? "task-log-median" : "pmu-cycles");
+    bool artifactStarted = false;
     try {
         const boost::filesystem::path rootDirectory(outputDirectory);
-        const aclptiResult outputDirectoryStatus = EnsureCsvOutputDirectory(rootDirectory);
+        const aclptiResult outputDirectoryStatus =
+            sink == nullptr ? EnsureCsvOutputDirectory(rootDirectory) : ACLPTI_SUCCESS;
         if (outputDirectoryStatus != ACLPTI_SUCCESS) {
             return outputDirectoryStatus;
         }
@@ -368,7 +372,7 @@ aclptiResult WritePmuCsv(
             }
         }
         const boost::filesystem::path writeDirectory =
-            config.fixedOutputDirectory ? rootDirectory : ResolveCsvWriteDirectory(rootDirectory);
+            sink != nullptr || config.fixedOutputDirectory ? rootDirectory : ResolveCsvWriteDirectory(rootDirectory);
         if (writeDirectory != rootDirectory) {
             npucompute::detail::DebugLog(
                 "npu-compute", "CSV write routed to collection directory: path=%s", writeDirectory.c_str());
@@ -378,8 +382,17 @@ aclptiResult WritePmuCsv(
             npucompute::detail::DebugLog(
                 "npu-compute", "CSV section write start: section=%s path=%s pmuLevel=%s rows=%zu", section.c_str(),
                 path.c_str(), pmuLevel, pmuLogs.size());
-            std::ofstream output(path.string(), std::ios::out | std::ios::trunc);
-            if (!output.is_open()) {
+            std::ofstream file;
+            std::unique_ptr<ArtifactStreamBuffer> sinkBuffer;
+            if (sink != nullptr) {
+                sink->Begin(std::string(artifactPrefix) + section + ".csv");
+                artifactStarted = true;
+                sinkBuffer = std::make_unique<ArtifactStreamBuffer>(*sink);
+            } else {
+                file.open(path.string(), std::ios::out | std::ios::trunc);
+            }
+            std::ostream output(sinkBuffer ? static_cast<std::streambuf*>(sinkBuffer.get()) : file.rdbuf());
+            if (sink == nullptr && !file.is_open()) {
                 const int errorNumber = errno;
                 npucompute::detail::DebugLog(
                     "npu-compute", "CSV section write failed: open path=%s errno=%d reason=%s", path.c_str(),
@@ -396,11 +409,22 @@ aclptiResult WritePmuCsv(
             }
             output.flush();
             if (!output.good()) {
+                if (artifactStarted) {
+                    sink->Abort();
+                    artifactStarted = false;
+                }
                 const int errorNumber = errno;
                 npucompute::detail::DebugLog(
                     "npu-compute", "CSV section write failed: flush path=%s errno=%d reason=%s", path.c_str(),
                     errorNumber, std::strerror(errorNumber));
                 return ACLPTI_ERROR_CSV_WRITE;
+            }
+            if (sink != nullptr) {
+                sink->Commit(stats.rows);
+                artifactStarted = false;
+            }
+            if (degraded != nullptr && (stats.missingFields != 0 || stats.mismatchedRows != 0)) {
+                *degraded = true;
             }
             const std::string missingColumns = FormatMissingColumns(stats.missingColumns);
             const std::string missingReasons = FormatMissingReasons(stats.missingReasons);
@@ -414,8 +438,13 @@ aclptiResult WritePmuCsv(
             npucompute::detail::DebugLog(
                 "npu-compute", "CSV section write complete: section=%s path=%s", section.c_str(), path.c_str());
         }
-        MirrorCsvFiles(rootDirectory, writeDirectory, sections, config.mirrorOutputDirectory);
+        if (sink == nullptr) {
+            MirrorCsvFiles(rootDirectory, writeDirectory, sections, config.mirrorOutputDirectory);
+        }
     } catch (const boost::filesystem::filesystem_error& error) {
+        if (artifactStarted) {
+            sink->Abort();
+        }
         const boost::filesystem::path errorPath =
             error.path1().empty() ? boost::filesystem::path(outputDirectory) : error.path1();
         npucompute::detail::DebugLog(
@@ -423,8 +452,17 @@ aclptiResult WritePmuCsv(
             error.code().value(), error.code().message().c_str(), error.what());
         return ACLPTI_ERROR_CSV_WRITE;
     } catch (const std::bad_alloc&) {
+        if (artifactStarted) {
+            sink->Abort();
+        }
         npucompute::detail::DebugLog("npu-compute", "CSV write failed: out of memory");
         return ACLPTI_ERROR_INTERNAL;
+    } catch (const std::exception& error) {
+        if (artifactStarted) {
+            sink->Abort();
+        }
+        npucompute::detail::DebugLog("npu-compute", "artifact write failed: %s", error.what());
+        return ACLPTI_ERROR_CSV_WRITE;
     }
     npucompute::detail::DebugLog("npu-compute", "CSV write complete");
     return ACLPTI_SUCCESS;

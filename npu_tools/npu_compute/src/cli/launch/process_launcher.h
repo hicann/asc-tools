@@ -12,6 +12,9 @@
 
 #include <string>
 #include <vector>
+#include <memory>
+#include <chrono>
+#include <sys/types.h>
 
 namespace npucompute::cli {
 
@@ -22,6 +25,27 @@ struct ProcessLaunchRequest {
 };
 
 int LaunchProcessAndWait(const ProcessLaunchRequest& request, std::string* error);
+
+class ProcessHandle {
+public:
+    ProcessHandle();
+    ~ProcessHandle();
+    ProcessHandle(const ProcessHandle&) = delete;
+    ProcessHandle& operator=(const ProcessHandle&) = delete;
+    bool Start(
+        const ProcessLaunchRequest& request, std::string* error,
+        std::chrono::steady_clock::time_point deadline = std::chrono::steady_clock::time_point::max());
+    std::string ExitDescription() const;
+    bool Poll(int* exitCode, std::string* error);
+    int Wait(std::string* error);
+    pid_t Pid() const;
+    void Signal(int number) const noexcept;
+    int PendingSignal() const noexcept;
+
+private:
+    class Impl;
+    std::unique_ptr<Impl> impl_;
+};
 
 } // namespace npucompute::cli
 

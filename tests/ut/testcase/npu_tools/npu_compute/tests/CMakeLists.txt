@@ -21,6 +21,22 @@ set(NPU_COMPUTE_ACLPTI_DSO_BACKENDS
   acl_runtime_stub
 )
 
+if(NOT TARGET npu_compute_ipc)
+  add_subdirectory(${NPU_COMPUTE_SOURCE_DIR}/src/ipc ${CMAKE_CURRENT_BINARY_DIR}/ipc)
+endif()
+add_executable(npu_compute_ipc_protocol_test ipc_protocol_test.cpp)
+target_link_libraries(npu_compute_ipc_protocol_test PRIVATE npu_compute_ipc Threads::Threads)
+add_test(NAME npu_compute.ipc_protocol COMMAND npu_compute_ipc_protocol_test)
+add_executable(npu_compute_uds_artifact_test
+  uds_artifact_test.cpp
+  ${NPU_COMPUTE_SOURCE_DIR}/src/cli/ipc/artifact_receiver.cpp
+  ${NPU_COMPUTE_SOURCE_DIR}/src/compute/ipc/artifact_publisher.cpp)
+target_link_libraries(npu_compute_uds_artifact_test
+  PRIVATE npu_compute_ipc Threads::Threads Boost::filesystem)
+target_include_directories(npu_compute_uds_artifact_test PRIVATE ${NPU_COMPUTE_SOURCE_DIR}/src/compute)
+add_test(NAME npu_compute.uds_artifact COMMAND npu_compute_uds_artifact_test)
+set_tests_properties(npu_compute.uds_artifact PROPERTIES TIMEOUT 60)
+
 # 最小 profapi 桩（"仅仅能跑"）：Msprof 场景函数由各用例 mock 定义，
 # 这里只补装载器入口；真实装载/场景由 DSO 集成用例覆盖。
 add_library(prof_api_min_stub STATIC prof_api_min_stub.cpp)
@@ -153,6 +169,8 @@ set(NPU_COMPUTE_TEST_RUNTIME_SOURCES
   ${NPU_COMPUTE_SOURCE_DIR}/src/compute/hardware/hardware_info_host.cpp
   ${NPU_COMPUTE_SOURCE_DIR}/src/compute/hardware/hardware_info_json.cpp
   ${NPU_COMPUTE_SOURCE_DIR}/src/compute/hardware/hardware_info_writer.cpp
+  ${NPU_COMPUTE_SOURCE_DIR}/src/compute/ipc/artifact_publisher.cpp
+  ${NPU_COMPUTE_SOURCE_DIR}/src/compute/ipc/uds_server.cpp
   ${NPU_COMPUTE_SOURCE_DIR}/src/compute/npu_compute.cpp
   ${NPU_COMPUTE_SOURCE_DIR}/src/compute/runtime/npu_compute_runtime.cpp
   ${NPU_COMPUTE_SOURCE_DIR}/src/compute/pmu/pmu_data_consumer.cpp
@@ -160,6 +178,7 @@ set(NPU_COMPUTE_TEST_RUNTIME_SOURCES
   ${NPU_COMPUTE_SOURCE_DIR}/src/compute/pmu/pmu_metric_builder.cpp
   ${NPU_COMPUTE_SOURCE_DIR}/src/compute/report/summary_jsonl_writer.cpp
   ${NPU_COMPUTE_SOURCE_DIR}/src/compute/report/report_writer.cpp
+  ${NPU_COMPUTE_SOURCE_DIR}/src/compute/runtime/compute_service.cpp
   ${NPU_COMPUTE_SOURCE_DIR}/src/compute/runtime/kernel_metadata_collector.cpp
   ${NPU_COMPUTE_SOURCE_DIR}/src/compute/runtime/section_config.cpp
 )
@@ -170,7 +189,7 @@ target_include_directories(npu_compute_test PRIVATE
 )
 target_link_libraries(npu_compute_test
   PUBLIC npu_compute_test_headers
-  PRIVATE acl_pti_test ${CMAKE_DL_LIBS} Threads::Threads Boost::filesystem
+  PRIVATE acl_pti_test ${CMAKE_DL_LIBS} Threads::Threads Boost::filesystem npu_compute_ipc
 )
 set(NPU_COMPUTE_TEST_VERSION_SCRIPT
   "${NPU_COMPUTE_SOURCE_DIR}/src/compute/libnpu_compute.map")
@@ -193,12 +212,15 @@ add_custom_command(TARGET npu_compute_test POST_BUILD
   COMMENT "Stage libnpu_compute_processor.so for CLI/launcher tests")
 
 add_library(npu_compute_launcher_core_test STATIC
+  ${NPU_COMPUTE_SOURCE_DIR}/src/cli/ipc/artifact_receiver.cpp
+  ${NPU_COMPUTE_SOURCE_DIR}/src/cli/ipc/uds_client.cpp
   ${NPU_COMPUTE_SOURCE_DIR}/src/cli/report/collection_file_validator.cpp
   ${NPU_COMPUTE_SOURCE_DIR}/src/cli/report/pipe_trace_finalizer.cpp
   ${NPU_COMPUTE_SOURCE_DIR}/src/cli/config/config.cpp
   ${NPU_COMPUTE_SOURCE_DIR}/src/cli/import/import_output_directory.cpp
   ${NPU_COMPUTE_SOURCE_DIR}/src/cli/import/imported_profile_results.cpp
   ${NPU_COMPUTE_SOURCE_DIR}/src/cli/launch/injection_path.cpp
+  ${NPU_COMPUTE_SOURCE_DIR}/src/cli/launch/collection_session.cpp
   ${NPU_COMPUTE_SOURCE_DIR}/src/cli/launch/launcher.cpp
   ${NPU_COMPUTE_SOURCE_DIR}/src/cli/launch/process_launcher.cpp
   ${NPU_COMPUTE_SOURCE_DIR}/src/cli/report/rep_decoder.cpp
@@ -212,6 +234,7 @@ target_include_directories(npu_compute_launcher_core_test PUBLIC
   "${NPU_COMPUTE_SOURCE_DIR}/src/cli")
 target_link_libraries(npu_compute_launcher_core_test
   PUBLIC npu_compute_test_headers Boost::filesystem)
+target_link_libraries(npu_compute_launcher_core_test PRIVATE npu_compute_ipc Threads::Threads)
 
 add_executable(npu_compute_cli_test_bin
   ${NPU_COMPUTE_SOURCE_DIR}/src/cli/main.cpp
@@ -259,10 +282,19 @@ npu_compute_set_test_output(npu_compute_launcher_test)
 add_test(NAME npu_compute.launcher COMMAND npu_compute_launcher_test)
 
 
-add_executable(npu_compute_rep_fixture_app rep_fixture_app.cpp)
-target_link_libraries(npu_compute_rep_fixture_app PRIVATE Boost::filesystem)
+add_executable(npu_compute_rep_fixture_app
+  rep_fixture_app.cpp
+  ${NPU_COMPUTE_SOURCE_DIR}/src/compute/ipc/artifact_publisher.cpp
+  ${NPU_COMPUTE_SOURCE_DIR}/src/compute/ipc/uds_server.cpp
+)
+target_include_directories(npu_compute_rep_fixture_app PRIVATE ${NPU_COMPUTE_SOURCE_DIR}/src/compute)
+target_link_libraries(npu_compute_rep_fixture_app PRIVATE npu_compute_ipc Threads::Threads)
 add_dependencies(npu_compute_rep_fixture_app npu_compute_cli_test_bin npu_compute_test)
 npu_compute_set_test_output(npu_compute_rep_fixture_app)
+target_compile_definitions(npu_compute_launcher_test PRIVATE
+  NPU_COMPUTE_REP_FIXTURE_PATH="$<TARGET_FILE:npu_compute_rep_fixture_app>")
+add_dependencies(npu_compute_launcher_test npu_compute_rep_fixture_app)
+set_tests_properties(npu_compute.launcher PROPERTIES TIMEOUT 60)
 
 add_executable(npu_compute_stub_demo_app stub_demo_app.cpp)
 target_link_libraries(npu_compute_stub_demo_app PRIVATE acl_runtime_stub)
@@ -482,6 +514,7 @@ add_test(NAME npu_compute.acl_pti_callback_stub
 )
 
 set(NPU_COMPUTE_RUNTIME_IMPLEMENTATION_SOURCES
+  ${CMAKE_CURRENT_SOURCE_DIR}/runtime_legacy_entry.cpp
   ${NPU_COMPUTE_SOURCE_DIR}/src/compute/biu/biu_pipeline.cpp
   ${NPU_COMPUTE_SOURCE_DIR}/src/compute/hardware/hardware_device_api.cpp
   ${NPU_COMPUTE_SOURCE_DIR}/src/compute/hardware/hardware_info_collector.cpp
@@ -489,7 +522,6 @@ set(NPU_COMPUTE_RUNTIME_IMPLEMENTATION_SOURCES
   ${NPU_COMPUTE_SOURCE_DIR}/src/compute/hardware/hardware_info_host.cpp
   ${NPU_COMPUTE_SOURCE_DIR}/src/compute/hardware/hardware_info_json.cpp
   ${NPU_COMPUTE_SOURCE_DIR}/src/compute/hardware/hardware_info_writer.cpp
-  ${NPU_COMPUTE_SOURCE_DIR}/src/compute/npu_compute.cpp
   ${NPU_COMPUTE_SOURCE_DIR}/src/compute/runtime/npu_compute_runtime.cpp
   ${NPU_COMPUTE_SOURCE_DIR}/src/compute/pmu/pmu_data_consumer.cpp
   ${NPU_COMPUTE_SOURCE_DIR}/src/compute/report/pmu_csv_writer.cpp

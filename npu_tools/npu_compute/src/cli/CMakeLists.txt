@@ -8,10 +8,13 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 # ----------------------------------------------------------------------------------------------------------
 add_library(npu_compute_launcher_core STATIC
+  ipc/artifact_receiver.cpp
+  ipc/uds_client.cpp
   config/config.cpp
   import/import_output_directory.cpp
   import/imported_profile_results.cpp
   launch/injection_path.cpp
+  launch/collection_session.cpp
   launch/launcher.cpp
   launch/process_launcher.cpp
   launch/staging_directory.cpp
@@ -24,7 +27,12 @@ add_library(npu_compute_launcher_core STATIC
   report/report_name.cpp
 )
 target_include_directories(npu_compute_launcher_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
-target_link_libraries(npu_compute_launcher_core PUBLIC npu_compute_headers Boost::filesystem)
+target_link_libraries(npu_compute_launcher_core PUBLIC
+  npu_compute_headers
+  npu_compute_ipc
+  Boost::filesystem
+  Threads::Threads
+)
 
 add_executable(npu_compute_cli main.cpp)
 target_link_libraries(npu_compute_cli PRIVATE npu_compute_launcher_core)

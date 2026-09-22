@@ -107,9 +107,12 @@ add_executable(npu_tools_utest
   ${NPU_TOOLS_LLT_ACL_SAN_INTERNAL_SOURCES}
   # npu_compute 产品源（launcher 核心 + hardware + pmu）
   "${NPU_TOOLS_LLT_COMPUTE_CLI_DIR}/config/config.cpp"
+  "${NPU_TOOLS_LLT_COMPUTE_CLI_DIR}/ipc/artifact_receiver.cpp"
+  "${NPU_TOOLS_LLT_COMPUTE_CLI_DIR}/ipc/uds_client.cpp"
   "${NPU_TOOLS_LLT_COMPUTE_CLI_DIR}/import/import_output_directory.cpp"
   "${NPU_TOOLS_LLT_COMPUTE_CLI_DIR}/import/imported_profile_results.cpp"
   "${NPU_TOOLS_LLT_COMPUTE_CLI_DIR}/launch/injection_path.cpp"
+  "${NPU_TOOLS_LLT_COMPUTE_CLI_DIR}/launch/collection_session.cpp"
   "${NPU_TOOLS_LLT_COMPUTE_CLI_DIR}/launch/launcher.cpp"
   "${NPU_TOOLS_LLT_COMPUTE_CLI_DIR}/launch/process_launcher.cpp"
   "${NPU_TOOLS_LLT_COMPUTE_CLI_DIR}/launch/staging_directory.cpp"
@@ -181,6 +184,7 @@ target_include_directories(npu_tools_utest PRIVATE
 
 target_link_libraries(npu_tools_utest PRIVATE
   npu_compute_headers
+  npu_compute_ipc
   npu_check_core
   npu_check_common
   acl_san

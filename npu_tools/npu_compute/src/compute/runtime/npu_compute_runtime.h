@@ -17,16 +17,21 @@
 #include "compute_types.h"
 #include "runtime/section_config.h"
 #include "runtime/kernel_metadata_collector.h"
+#include "runtime/runtime_config.h"
 
 #include <boost/filesystem/path.hpp>
 
 #include <cstddef>
+#include <atomic>
+#include <functional>
 #include <memory>
 #include <mutex>
 #include <string>
 #include <vector>
 
 namespace npucompute {
+
+class ArtifactSink;
 
 inline constexpr int kInitializeFailed = -1;
 
@@ -41,8 +46,13 @@ public:
     static NpuComputeRuntime& Instance();
 
     int Initialize();
+    int Initialize(const RuntimeConfig& config, ArtifactSink& sink, std::function<int(int)> onDrained);
     void Stop() noexcept;
     int ShutdownAfterPtiDrain();
+    std::uint64_t RowCount() const { return row_count_; }
+    std::uint64_t ErrorCount() const { return error_count_; }
+    std::uint64_t ReplayCount() const { return replay_count_; }
+    bool Degraded() const { return degraded_; }
 
 private:
     static void HardwareInfoTriggerCallback(
@@ -51,6 +61,7 @@ private:
 
     void DisableHardwareCallbacks() noexcept;
     aclptiResult ProcessPmuData(std::shared_ptr<const aclptiProfilingDataResult> result);
+    aclptiResult PublishPipelineArtifacts();
 
     std::mutex mutex_;
     std::shared_ptr<PmuDataConsumer> pmu_consumer_;
@@ -65,9 +76,19 @@ private:
     ReportConfig csv_config_;
     BiuClockConfig biu_clock_config_;
     boost::filesystem::path pipeline_process_directory_;
+    boost::filesystem::path pipeline_temporary_root_;
     std::vector<PipeTraceFragmentInfo> pipeline_fragments_;
     HardwareInfoCollector hardware_info_collector_;
     KernelMetadataCollector kernel_metadata_collector_;
+    const RuntimeConfig* initialization_config_ = nullptr;
+    ArtifactSink* artifact_sink_ = nullptr;
+    std::function<int(int)> on_drained_;
+    std::uint64_t row_count_ = 0;
+    std::uint64_t error_count_ = 0;
+    std::uint64_t replay_count_ = 0;
+    std::uint64_t report_sequence_ = 0;
+    bool degraded_ = false;
+    std::atomic<bool> initializing_{false};
 };
 
 } // namespace npucompute

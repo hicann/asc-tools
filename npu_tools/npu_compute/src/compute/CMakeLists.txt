@@ -15,6 +15,8 @@ add_library(npu_compute SHARED
   hardware/hardware_info_host.cpp
   hardware/hardware_info_json.cpp
   hardware/hardware_info_writer.cpp
+  ipc/artifact_publisher.cpp
+  ipc/uds_server.cpp
   npu_compute.cpp
   pmu/pmu_data_consumer.cpp
   report/pmu_csv_writer.cpp
@@ -22,6 +24,7 @@ add_library(npu_compute SHARED
   report/summary_jsonl_writer.cpp
   report/report_writer.cpp
   runtime/kernel_metadata_collector.cpp
+  runtime/compute_service.cpp
   runtime/npu_compute_runtime.cpp
   runtime/section_config.cpp
 )
@@ -37,7 +40,7 @@ else()
 endif()
 target_link_libraries(npu_compute
   PUBLIC ${NPU_COMPUTE_LIBRARY_HEADERS}
-  PRIVATE ${CMAKE_DL_LIBS} Threads::Threads Boost::filesystem
+  PRIVATE ${CMAKE_DL_LIBS} Threads::Threads Boost::filesystem npu_compute_ipc
 )
 if(TARGET acl_pti)
   target_link_libraries(npu_compute PRIVATE acl_pti)

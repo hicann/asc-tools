@@ -137,9 +137,18 @@ CliConfig ShellConfig(const std::string& command, const boost::filesystem::path&
     return config;
 }
 
-std::string ValidCollectionCommand()
+CliConfig FixtureConfig(const boost::filesystem::path& output = {}, const std::string& mode = {})
 {
-    return R"(test "$NPU_COMPUTE_CSV_OUTPUT_DIR" = "$NPU_COMPUTE_OUTPUT" && printf '{}\n{}\n{}\n{}\n{}\n' > "$NPU_COMPUTE_OUTPUT/HardwareInfo.jsonl" && printf 'name,value\npipe,1\n' > "$NPU_COMPUTE_OUTPUT/PipeUtilization.csv")";
+    CliConfig config;
+    config.sections = {"PipeUtilization"};
+    config.program = NPU_COMPUTE_REP_FIXTURE_PATH;
+    if (!output.empty()) {
+        config.export_path = output.string();
+    }
+    if (!mode.empty()) {
+        config.program_arguments = {"--mode", mode};
+    }
+    return config;
 }
 
 bool HasCollectionDirectoryIn(const boost::filesystem::path& parent)
@@ -158,9 +167,10 @@ int CheckReportContents(const boost::filesystem::path& report)
     std::vector<ImportedProfileEntry> results;
     std::string error;
     CHECK(ReadImportedProfileResults(report, &results, &error));
-    CHECK(results.size() == 2U);
+    CHECK(results.size() == 3U);
     CHECK(results[0].name == "HardwareInfo.jsonl");
     CHECK(results[1].name == "PipeUtilization.csv");
+    CHECK(results[2].name == "summary.jsonl");
     return 0;
 }
 
@@ -170,11 +180,15 @@ int TestWithoutExportPublishesReportInCurrentDirectory()
     CHECK(!workDirectory.Path().empty());
     const ScopedCurrentDirectory currentDirectory(workDirectory.Path());
     CHECK(currentDirectory.IsActive());
-    const CliConfig config = ShellConfig(ValidCollectionCommand());
+    const CliConfig config = FixtureConfig();
     std::string report;
     std::string error = "old error";
 
-    CHECK(LaunchTarget(config, &report, &error) == 0);
+    const int launchResult = LaunchTarget(config, &report, &error);
+    if (launchResult != 0) {
+        std::fprintf(stderr, "launch failed (%d): %s\n", launchResult, error.c_str());
+    }
+    CHECK(launchResult == 0);
     CHECK(error.empty());
     CHECK(!HasCollectionDirectoryIn(workDirectory.Path()));
     CHECK(boost::filesystem::path(report).parent_path() == workDirectory.Path());
@@ -191,7 +205,7 @@ int TestExplicitReportRemovesDataFromCurrentDirectory()
     const ScopedCurrentDirectory currentDirectory(workDirectory.Path());
     CHECK(currentDirectory.IsActive());
     const boost::filesystem::path output = workDirectory.Path() / "result.npu-rep";
-    const CliConfig config = ShellConfig(ValidCollectionCommand(), output);
+    const CliConfig config = FixtureConfig(output);
     std::string report;
     std::string error;
 
@@ -212,7 +226,7 @@ int TestExportDirectoryRemovesCollectionData()
     CHECK(!reportDirectory.Path().empty());
     const ScopedCurrentDirectory currentDirectory(workDirectory.Path());
     CHECK(currentDirectory.IsActive());
-    const CliConfig config = ShellConfig(ValidCollectionCommand(), reportDirectory.Path());
+    const CliConfig config = FixtureConfig(reportDirectory.Path());
     std::string report;
     std::string error;
 
@@ -231,7 +245,7 @@ int TestInvalidTmpdirDoesNotAffectCollection()
     const ScopedCurrentDirectory currentDirectory(workDirectory.Path());
     CHECK(currentDirectory.IsActive());
     const ScopedTmpdir tmpdir((workDirectory.Path() / "missing-tmpdir").string());
-    const CliConfig config = ShellConfig(ValidCollectionCommand(), workDirectory.Path() / "result.npu-rep");
+    const CliConfig config = FixtureConfig(workDirectory.Path() / "result.npu-rep");
     std::string report;
     std::string error;
 
@@ -270,7 +284,8 @@ int TestFailedAppRemovesEmptyDataAndDoesNotPublishReport()
     const ScopedCurrentDirectory currentDirectory(workDirectory.Path());
     CHECK(currentDirectory.IsActive());
     const boost::filesystem::path output = workDirectory.Path() / "result.npu-rep";
-    const CliConfig config = ShellConfig("exit 23", output);
+    CliConfig config = FixtureConfig(output);
+    config.program_arguments = {"--exit-code", "23"};
     std::string report = "old report";
     std::string error;
 
@@ -279,7 +294,7 @@ int TestFailedAppRemovesEmptyDataAndDoesNotPublishReport()
     CHECK(!HasCollectionDirectoryIn(workDirectory.Path()));
     CHECK(boost::filesystem::is_empty(workDirectory.Path()));
     CHECK(!boost::filesystem::exists(output));
-    CHECK(error.find("exited with code 23") != std::string::npos);
+    CHECK(error.find("APP exited with status 23") != std::string::npos);
     return 0;
 }
 
@@ -290,7 +305,7 @@ int TestMissingHardwareInfoRemovesEmptyDataAndDoesNotPublishReport()
     const ScopedCurrentDirectory currentDirectory(workDirectory.Path());
     CHECK(currentDirectory.IsActive());
     const boost::filesystem::path output = workDirectory.Path() / "result.npu-rep";
-    const CliConfig config = ShellConfig("true", output);
+    const CliConfig config = FixtureConfig(output, "empty");
     std::string report;
     std::string error;
 
@@ -299,7 +314,7 @@ int TestMissingHardwareInfoRemovesEmptyDataAndDoesNotPublishReport()
     CHECK(!HasCollectionDirectoryIn(workDirectory.Path()));
     CHECK(boost::filesystem::is_empty(workDirectory.Path()));
     CHECK(!boost::filesystem::exists(output));
-    CHECK(error.find("hardware information was not generated") != std::string::npos);
+    CHECK(error.find("required artifact missing") != std::string::npos);
     return 0;
 }
 
@@ -310,8 +325,7 @@ int TestMissingHardwareInfoRemovesDataAndDoesNotPublishReport()
     const ScopedCurrentDirectory currentDirectory(workDirectory.Path());
     CHECK(currentDirectory.IsActive());
     const boost::filesystem::path output = workDirectory.Path() / "result.npu-rep";
-    const CliConfig config =
-        ShellConfig(R"(printf 'name,value\npipe,1\n' > "$NPU_COMPUTE_OUTPUT/PipeUtilization.csv")", output);
+    const CliConfig config = FixtureConfig(output, "missing-hardware");
     std::string report;
     std::string error;
 
@@ -319,29 +333,26 @@ int TestMissingHardwareInfoRemovesDataAndDoesNotPublishReport()
     CHECK(report.empty());
     CHECK(!HasCollectionDirectoryIn(workDirectory.Path()));
     CHECK(!boost::filesystem::exists(output));
-    CHECK(error.find("hardware information was not generated") != std::string::npos);
+    CHECK(error.find("required artifact missing") != std::string::npos);
     return 0;
 }
 
-int TestPackingFailureRemovesDataAndDoesNotPublishReport()
+int TestIncompleteResultRemovesDataAndDoesNotPublishReport()
 {
     TestDirectory workDirectory;
     CHECK(!workDirectory.Path().empty());
     const ScopedCurrentDirectory currentDirectory(workDirectory.Path());
     CHECK(currentDirectory.IsActive());
     const boost::filesystem::path output = workDirectory.Path() / "result.npu-rep";
-    const std::string command =
-        ValidCollectionCommand() + R"( && printf 'unsupported\n' > "$NPU_COMPUTE_OUTPUT/notes.txt")";
-    const CliConfig config = ShellConfig(command, output);
+    const CliConfig config = FixtureConfig(output, "incomplete");
     std::string report;
     std::string error;
 
-    CHECK(LaunchTarget(config, &report, &error) == 4);
+    CHECK(LaunchTarget(config, &report, &error) == 3);
     CHECK(report.empty());
     CHECK(!HasCollectionDirectoryIn(workDirectory.Path()));
     CHECK(!boost::filesystem::exists(output));
-    CHECK(error.find("pack") != std::string::npos);
-    CHECK(error.find("notes.txt") != std::string::npos);
+    CHECK(error.find("incomplete result") != std::string::npos);
     return 0;
 }
 
@@ -353,7 +364,7 @@ int TestPublishingFailureRemovesCollectionDataDirectory()
     CHECK(currentDirectory.IsActive());
     const boost::filesystem::path output =
         boost::filesystem::path("/proc") / ("npu-compute-launcher-" + std::to_string(::getpid()) + ".npu-rep");
-    const CliConfig config = ShellConfig(ValidCollectionCommand(), output);
+    const CliConfig config = FixtureConfig(output);
     std::string report;
     std::string error;
 
@@ -376,7 +387,7 @@ int main()
         TestFailedAppRemovesEmptyDataAndDoesNotPublishReport() != 0 ||
         TestMissingHardwareInfoRemovesEmptyDataAndDoesNotPublishReport() != 0 ||
         TestMissingHardwareInfoRemovesDataAndDoesNotPublishReport() != 0 ||
-        TestPackingFailureRemovesDataAndDoesNotPublishReport() != 0 ||
+        TestIncompleteResultRemovesDataAndDoesNotPublishReport() != 0 ||
         TestPublishingFailureRemovesCollectionDataDirectory() != 0) {
         return 1;
     }

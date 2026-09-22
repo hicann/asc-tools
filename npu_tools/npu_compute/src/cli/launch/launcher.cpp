@@ -8,6 +8,7 @@
  * See LICENSE in the root of the software repository for the full text of the License.
  */
 #include "launch/launcher.h"
+#include "launch/collection_session.h"
 
 #include "launch/injection_path.h"
 #include "launch/process_launcher.h"
@@ -18,6 +19,7 @@
 #include "launch/staging_directory.h"
 
 #include <cerrno>
+#include <algorithm>
 #include <cstdlib>
 #include <cstring>
 #include <boost/filesystem.hpp>
@@ -35,7 +37,7 @@ namespace npucompute::cli {
 namespace {
 
 constexpr char kCollectionActiveEnvironment[] = "NPU_COMPUTE_COLLECTION_ACTIVE";
-constexpr char kCollectionOutputEnvironment[] = "NPU_COMPUTE_OUTPUT";
+constexpr char kNestedMarkerEnvironment[] = "NPU_COMPUTE_NESTED_MARKER_PATH";
 constexpr char kNestedCollectionMarker[] = ".npu-compute-nested-collection";
 constexpr char kNestedCollectionError[] = "nested npu-compute collection is not supported. The target program or "
                                           "script must not start another npu-compute collection.";
@@ -72,18 +74,6 @@ bool FailErrno(const std::string& message, int error_number, std::string* error)
     return Fail(message + ": " + std::string(std::strerror(error_number)), error);
 }
 
-std::string Join(const std::vector<std::string>& items)
-{
-    std::string result;
-    for (const std::string& item : items) {
-        if (!result.empty()) {
-            result += ",";
-        }
-        result += item;
-    }
-    return result;
-}
-
 void SetEnvironmentValue(const std::string& name, const std::string& value, std::vector<std::string>* environment)
 {
     const std::string prefix = name + "=";
@@ -98,8 +88,7 @@ void SetEnvironmentValue(const std::string& name, const std::string& value, std:
 }
 
 bool BuildChildEnvironment(
-    const CliConfig& config, const std::string& collection_data_directory, std::vector<std::string>* environment,
-    std::string* error)
+    const std::string& collection_data_directory, std::vector<std::string>* environment, std::string* error)
 {
     std::string injection_path;
     if (!ResolveInjectionLibraryPath(&injection_path, error)) {
@@ -109,13 +98,19 @@ bool BuildChildEnvironment(
     for (char** entry = environ; entry != nullptr && *entry != nullptr; ++entry) {
         environment->emplace_back(*entry);
     }
-    const std::string sections = Join(config.sections);
+    for (const char* name :
+         {"NPU_COMPUTE_SECTIONS", "NPU_COMPUTE_REPLAY_MODE", "NPU_COMPUTE_PIPELINE", "NPU_COMPUTE_OUTPUT",
+          "NPU_COMPUTE_CSV_OUTPUT_DIR", "NPU_COMPUTE_PMU_LEVEL"}) {
+        const std::string prefix = std::string(name) + "=";
+        environment->erase(
+            std::remove_if(
+                environment->begin(), environment->end(),
+                [&](const auto& entry) { return entry.compare(0, prefix.size(), prefix) == 0; }),
+            environment->end());
+    }
     SetEnvironmentValue("ACL_API_INJECTION", injection_path, environment);
-    SetEnvironmentValue("NPU_COMPUTE_SECTIONS", sections, environment);
-    SetEnvironmentValue("NPU_COMPUTE_REPLAY_MODE", ReplayModeName(config.replay_mode), environment);
-    SetEnvironmentValue("NPU_COMPUTE_PIPELINE", config.collect_pipeline ? "1" : "0", environment);
-    SetEnvironmentValue("NPU_COMPUTE_OUTPUT", collection_data_directory, environment);
-    SetEnvironmentValue("NPU_COMPUTE_CSV_OUTPUT_DIR", collection_data_directory, environment);
+    SetEnvironmentValue(
+        kNestedMarkerEnvironment, collection_data_directory + "/" + kNestedCollectionMarker, environment);
     SetEnvironmentValue(kCollectionActiveEnvironment, "1", environment);
     return true;
 }
@@ -128,12 +123,12 @@ bool IsNestedCollection()
 
 bool RecordNestedCollection(std::string* error)
 {
-    const char* collection_directory = std::getenv(kCollectionOutputEnvironment);
-    if (collection_directory == nullptr || collection_directory[0] == '\0') {
-        return Fail("nested collection detection failed: collection data directory is not set", error);
+    const char* markerPathValue = std::getenv(kNestedMarkerEnvironment);
+    if (markerPathValue == nullptr || markerPathValue[0] != '/') {
+        return Fail("nested collection detection failed: nested marker path is not set", error);
     }
 
-    const boost::filesystem::path marker_path = boost::filesystem::path(collection_directory) / kNestedCollectionMarker;
+    const boost::filesystem::path marker_path(markerPathValue);
     FileDescriptor marker(
         ::open(marker_path.c_str(), O_WRONLY | O_CREAT | O_CLOEXEC | O_NOFOLLOW | O_NONBLOCK, S_IRUSR | S_IWUSR));
     if (marker.Get() < 0) {
@@ -210,6 +205,14 @@ int LaunchTarget(const CliConfig& config, std::string* report_path, std::string*
         return kCollectionErrorExitCode;
     }
 
+    ipc::Config collectionConfig;
+    try {
+        collectionConfig = LoadCollectionConfig(config);
+    } catch (const std::exception& exception) {
+        Fail(exception.what(), error);
+        return kUsageErrorExitCode;
+    }
+
     std::string stage_error;
     ReportTarget target;
     if (!ResolveReportTarget(config.export_path, &target, &stage_error)) {
@@ -240,10 +243,11 @@ int LaunchTarget(const CliConfig& config, std::string* report_path, std::string*
     ProcessLaunchRequest request;
     request.program = config.program;
     request.arguments = config.program_arguments;
-    if (!BuildChildEnvironment(config, collection_data.Path(), &request.environment, error)) {
+    if (!BuildChildEnvironment(collection_data.Path(), &request.environment, error)) {
         return finishCollection(kInternalErrorExitCode);
     }
-    const int appResult = LaunchProcessAndWait(request, error);
+    CollectionSession session;
+    const int appResult = session.Run(std::move(request), collectionConfig, collection_data.Path(), error);
     bool nested_collection_detected = false;
     if (!ConsumeNestedCollectionMarker(collection_data.Path(), &nested_collection_detected, error)) {
         return finishCollection(kInternalErrorExitCode);

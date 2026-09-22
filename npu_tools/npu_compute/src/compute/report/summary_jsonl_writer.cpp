@@ -8,6 +8,7 @@
  * See LICENSE in the root of the software repository for the full text of the License.
  */
 #include "report/report_writer.h"
+#include "artifact_sink.h"
 #include "pmu/pmu_metric_builder.h"
 #include "common/debug_log.h"
 
@@ -256,8 +257,9 @@ bool Publish(const boost::filesystem::path& directory, const std::string& conten
 
 aclptiResult WriteSummaryJsonl(
     const aclptiProfilingDataResult& result, const std::vector<std::string>& sections, const ReportConfig& config,
-    const KernelMetadata& metadata)
+    const KernelMetadata& metadata, ArtifactSink* sink, std::string_view artifactPrefix)
 {
+    bool artifactStarted = false;
     try {
         std::ostringstream output;
         output.imbue(std::locale::classic());
@@ -272,13 +274,23 @@ aclptiResult WriteSummaryJsonl(
             }
         }
         OpInfo(output, result, sections, config, metadata, std::move(memory));
-        if (!Publish(config.outputDirectory, output.str())) {
+        const std::string content = output.str();
+        if (sink != nullptr) {
+            sink->Begin(std::string(artifactPrefix) + "summary.jsonl");
+            artifactStarted = true;
+            sink->Write(content);
+            sink->Commit(sections.size() + 1U);
+            artifactStarted = false;
+        } else if (!Publish(config.outputDirectory, content)) {
             detail::DebugLog(
                 "npu-compute", "summary publication failed: %s errno=%d", config.outputDirectory.c_str(), errno);
             return ACLPTI_ERROR_INTERNAL;
         }
         return ACLPTI_SUCCESS;
     } catch (const std::exception& error) {
+        if (artifactStarted) {
+            sink->Abort();
+        }
         detail::DebugLog("npu-compute", "summary failed: %s", error.what());
         return ACLPTI_ERROR_INTERNAL;
     }

@@ -7,23 +7,15 @@
  * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
  * See LICENSE in the root of the software repository for the full text of the License.
  */
-#include "npu_compute/npu_compute.h"
-#include "runtime/compute_service.h"
-
-extern "C" NPU_COMPUTE_EXPORT int acltoolInitialize()
-{
-    try {
-        return npucompute::ComputeService::Instance().Initialize();
-    } catch (...) {
-        return -1;
-    }
-}
-
-extern "C" NPU_COMPUTE_EXPORT int acltoolShutdown()
-{
-    try {
-        return npucompute::ComputeService::Instance().Shutdown();
-    } catch (...) {
-        return -1;
-    }
-}
+#ifndef NPU_COMPUTE_RUNTIME_CONFIG_H
+#define NPU_COMPUTE_RUNTIME_CONFIG_H
+#include "compute_types.h"
+#include <string>
+#include <vector>
+namespace npucompute {
+struct RuntimeConfig {
+    std::vector<std::string> sections;
+    PmuDataLevel pmuLevel = PmuDataLevel::Block;
+};
+} // namespace npucompute
+#endif

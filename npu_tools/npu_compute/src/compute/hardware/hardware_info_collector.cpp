@@ -224,6 +224,21 @@ bool HardwareInfoCollector::Initialize(const boost::filesystem::path& outputDire
 
 void HardwareInfoCollector::CollectOnKernelLaunch() noexcept { impl_->CollectOnKernelLaunch(); }
 
+bool HardwareInfoCollector::Initialize(
+    const boost::filesystem::path& probePath, HardwareInfoPublishFunction publish, std::string* error)
+{
+    if (State() != HardwareCollectionState::Created) {
+        if (error != nullptr) {
+            *error = "HardwareInfoCollector is already initialized";
+        }
+        return false;
+    }
+    auto dependencies = MakeDefaultDependencies();
+    dependencies.publish = std::move(publish);
+    impl_ = std::make_unique<Impl>(std::move(dependencies));
+    return impl_->Initialize(probePath, error);
+}
+
 void HardwareInfoCollector::Stop() noexcept { impl_->Stop(); }
 
 HardwareCollectionState HardwareInfoCollector::State() const noexcept { return impl_->State(); }

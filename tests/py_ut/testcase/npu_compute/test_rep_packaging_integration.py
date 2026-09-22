@@ -36,8 +36,7 @@ HARDWARE_INFO = (
     b'{"category":"Memory Information","hbm total(MB)":1}\n'
 )
 PIPE_CSV = b"block_id,pipe_utilization\n0,75\n"
-MEMORY_CSV = b"block_id,read_bytes\n0,128\n"
-L2_CACHE_CSV = b"block_id,hit_rate\n0,99\n"
+SUMMARY = b'{"category":"PipeUtilization"}\n{"category":"OpInfoSummary"}\n'
 
 
 @dataclass
@@ -164,15 +163,11 @@ def assert_imported_fixture_files(output: Path):
     assert files == [
         "HardwareInfo.jsonl",
         "PipeUtilization.csv",
-        "device_0/Memory.csv",
-        "device_0/details/L2Cache.csv",
+        "summary.jsonl",
     ]
     assert (output / "HardwareInfo.jsonl").read_bytes() == HARDWARE_INFO
     assert (output / "PipeUtilization.csv").read_bytes() == PIPE_CSV
-    assert (output / "device_0" / "Memory.csv").read_bytes() == MEMORY_CSV
-    assert (
-        output / "device_0" / "details" / "L2Cache.csv"
-    ).read_bytes() == L2_CACHE_CSV
+    assert (output / "summary.jsonl").read_bytes() == SUMMARY
     assert not (output / ".hardware_info.lock").exists()
 
 
@@ -194,31 +189,17 @@ def test_cli_recursively_packages_fixture_files(tmp_path):
     assert [entry.name for entry in top.entries] == [
         "HardwareInfo.jsonl",
         "PipeUtilization.csv",
-        "device_0.npu.rep",
+        "summary.jsonl",
     ]
     assert [entry.file_type for entry in top.entries] == [
         TYPE_JSONL,
         TYPE_CSV,
-        TYPE_NPU_REP,
+        TYPE_JSONL,
     ]
     assert top.entries[0].offset == HEAD.size + 3 * FILE_INFO.size
     assert top.entries[0].payload == HARDWARE_INFO
     assert top.entries[1].payload == PIPE_CSV
-
-    device = top.entries[2].child
-    assert device is not None
-    assert [entry.name for entry in device.entries] == [
-        "Memory.csv",
-        "details.npu.rep",
-    ]
-    assert device.entries[0].offset == HEAD.size + 2 * FILE_INFO.size
-    assert device.entries[0].payload == MEMORY_CSV
-
-    details = device.entries[1].child
-    assert details is not None
-    assert [entry.name for entry in details.entries] == ["L2Cache.csv"]
-    assert details.entries[0].offset == HEAD.size + FILE_INFO.size
-    assert details.entries[0].payload == L2_CACHE_CSV
+    assert top.entries[2].payload == SUMMARY
 
 
 def test_cli_uses_explicit_report_file_and_existing_report_directory(tmp_path):
@@ -311,7 +292,7 @@ def test_failed_app_does_not_publish_report(tmp_path):
     assert "npu-compute: report=" not in result.stderr
     assert list(work_directory.glob("*.npu-rep")) == []
     assert_no_temporary_report_files(work_directory)
-    assert "exited with code 17" in result.stderr
+    assert "APP exited with status 17" in result.stderr
 
 
 def test_sequential_collections_remove_data_directories_and_use_unique_reports(

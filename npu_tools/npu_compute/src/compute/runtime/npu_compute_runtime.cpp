@@ -9,6 +9,7 @@
  */
 #include "runtime/npu_compute_runtime.h"
 
+#include "artifact_sink.h"
 #include "common/debug_log.h"
 #include "hardware/hardware_device_api.h"
 #include "report/report_writer.h"
@@ -22,7 +23,12 @@
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
+#include <fstream>
+#include <iomanip>
 #include <memory>
+#include <sstream>
+#include <stdexcept>
 #include <set>
 #include <string>
 #include <string_view>
@@ -84,6 +90,28 @@ bool LoadOutputDirectory(boost::filesystem::path* outputDirectory, std::string* 
 
     *outputDirectory = std::move(candidate);
     return true;
+}
+
+bool CreatePrivatePipelineRoot(boost::filesystem::path* root, std::string* error)
+{
+    std::string path = "/tmp/npu-compute-pipeline-XXXXXX";
+    if (::mkdtemp(path.data()) == nullptr) {
+        *error = "create private Pipeline staging failed: " + std::string(std::strerror(errno));
+        return false;
+    }
+    *root = std::move(path);
+    return true;
+}
+
+std::string ReportPrefix(std::uint64_t sequence)
+{
+    if (sequence == 0) {
+        return {};
+    }
+    std::ostringstream output;
+    output << "collection-p" << static_cast<long long>(::getpid()) << '-' << std::setw(4) << std::setfill('0')
+           << sequence << '/';
+    return output.str();
 }
 
 std::string_view Trim(std::string_view value)
@@ -193,26 +221,45 @@ NpuComputeRuntime& NpuComputeRuntime::Instance()
     return instance;
 }
 
+int NpuComputeRuntime::Initialize(const RuntimeConfig& config, ArtifactSink& sink, std::function<int(int)> onDrained)
+{
+    initialization_config_ = &config;
+    artifact_sink_ = &sink;
+    on_drained_ = std::move(onDrained);
+    const int result = Initialize();
+    initialization_config_ = nullptr;
+    return result;
+}
+
 int NpuComputeRuntime::Initialize()
 {
+    initializing_ = true;
+    struct InitializationGuard {
+        std::atomic<bool>& value;
+        ~InitializationGuard() { value = false; }
+    } guard{initializing_};
     std::lock_guard<std::mutex> lock(mutex_);
     std::string error;
     boost::filesystem::path outputDirectory;
-    if (!LoadOutputDirectory(&outputDirectory, &error)) {
+    if (initialization_config_ == nullptr && !LoadOutputDirectory(&outputDirectory, &error)) {
         std::fprintf(stderr, "[libnpu-compute] invalid NPU_COMPUTE_OUTPUT: %s\n", error.c_str());
         return kInitializeFailed;
     }
-    if (!section_config_.LoadFromEnvironment("NPU_COMPUTE_SECTIONS", &error)) {
+    if (!(initialization_config_ != nullptr ? section_config_.Load(initialization_config_->sections, &error) :
+                                              section_config_.LoadFromEnvironment("NPU_COMPUTE_SECTIONS", &error))) {
         std::fprintf(stderr, "[libnpu-compute] invalid NPU_COMPUTE_SECTIONS: %s\n", error.c_str());
         return kInitializeFailed;
     }
-    if (!detail::LoadPmuDataLevelFromEnvironment("NPU_COMPUTE_PMU_LEVEL", &csv_config_.pmuDataLevel, &error)) {
+    if (initialization_config_ != nullptr) {
+        csv_config_.pmuDataLevel = initialization_config_->pmuLevel;
+    } else if (!detail::LoadPmuDataLevelFromEnvironment("NPU_COMPUTE_PMU_LEVEL", &csv_config_.pmuDataLevel, &error)) {
         std::fprintf(stderr, "[libnpu-compute] invalid PMU data level: %s\n", error.c_str());
         return kInitializeFailed;
     }
     csv_config_.outputDirectory = outputDirectory.string();
     csv_config_.mirrorOutputDirectory.clear();
-    if (const char* mirrorOutputDirectory = std::getenv("NPU_COMPUTE_CSV_OUTPUT_DIR");
+    if (const char* mirrorOutputDirectory =
+            initialization_config_ == nullptr ? std::getenv("NPU_COMPUTE_CSV_OUTPUT_DIR") : nullptr;
         mirrorOutputDirectory != nullptr && mirrorOutputDirectory[0] != '\0') {
         csv_config_.mirrorOutputDirectory = mirrorOutputDirectory;
     }
@@ -235,7 +282,15 @@ int NpuComputeRuntime::Initialize()
     }
     pipeline_enabled_ = section_config_.PipelineEnabled();
     if (pipeline_enabled_) {
-        if (CreatePipeTraceProcessStaging(outputDirectory, &pipeline_process_directory_, &error) != ACLPTI_SUCCESS ||
+        boost::filesystem::path pipelineRoot = outputDirectory;
+        if (artifact_sink_ != nullptr && !CreatePrivatePipelineRoot(&pipeline_temporary_root_, &error)) {
+            std::fprintf(stderr, "[libnpu-compute] initialize PipeTrace staging failed: %s\n", error.c_str());
+            return kInitializeFailed;
+        }
+        if (artifact_sink_ != nullptr) {
+            pipelineRoot = pipeline_temporary_root_;
+        }
+        if (CreatePipeTraceProcessStaging(pipelineRoot, &pipeline_process_directory_, &error) != ACLPTI_SUCCESS ||
             WritePipeTraceManifest(pipeline_process_directory_, "collecting", ACLPTI_SUCCESS, pipeline_fragments_) !=
                 ACLPTI_SUCCESS) {
             std::fprintf(stderr, "[libnpu-compute] initialize PipeTrace staging failed: %s\n", error.c_str());
@@ -268,7 +323,31 @@ int NpuComputeRuntime::Initialize()
     }
     pmu_consumer_ = std::move(consumer);
 
-    if (!hardware_info_collector_.Initialize(outputDirectory, &error)) {
+    bool hardwareInitialized = false;
+    if (artifact_sink_ != nullptr) {
+        hardwareInitialized = hardware_info_collector_.Initialize(
+            boost::filesystem::current_path(),
+            [this](const boost::filesystem::path&, std::string_view jsonl, std::string* publishError) {
+                bool artifactStarted = false;
+                try {
+                    artifact_sink_->Begin("HardwareInfo.jsonl");
+                    artifactStarted = true;
+                    artifact_sink_->Write(jsonl);
+                    artifact_sink_->Commit(1);
+                    return PublishResult::Published;
+                } catch (const std::exception& exception) {
+                    if (artifactStarted) {
+                        artifact_sink_->Abort();
+                    }
+                    *publishError = exception.what();
+                    return PublishResult::Failed;
+                }
+            },
+            &error);
+    } else {
+        hardwareInitialized = hardware_info_collector_.Initialize(outputDirectory, &error);
+    }
+    if (!hardwareInitialized) {
         std::fprintf(stderr, "[libnpu-compute] initialize HardwareInfo collector failed: %s\n", error.c_str());
         pmu_consumer_->ShutdownAndDrain();
         pmu_consumer_.reset();
@@ -347,6 +426,9 @@ void NpuComputeRuntime::DisableHardwareCallbacks() noexcept
 
 int NpuComputeRuntime::ShutdownAfterPtiDrain()
 {
+    if (initializing_) {
+        return 0;
+    }
     std::shared_ptr<PmuDataConsumer> consumer;
     {
         std::lock_guard<std::mutex> lock(mutex_);
@@ -368,9 +450,21 @@ int NpuComputeRuntime::ShutdownAfterPtiDrain()
         if (manifestStatus != ACLPTI_SUCCESS) {
             status = manifestStatus;
         }
+        if (status == ACLPTI_SUCCESS && artifact_sink_ != nullptr) {
+            status = PublishPipelineArtifacts();
+        }
         pipeline_finalized_ = true;
     }
-    return status == ACLPTI_SUCCESS ? 0 : kInitializeFailed;
+    if (!pipeline_temporary_root_.empty()) {
+        boost::system::error_code cleanupError;
+        boost::filesystem::remove_all(pipeline_temporary_root_, cleanupError);
+        pipeline_temporary_root_.clear();
+        if (cleanupError && status == ACLPTI_SUCCESS) {
+            status = ACLPTI_ERROR_TRACE_WRITE;
+        }
+    }
+    const int result = status == ACLPTI_SUCCESS ? 0 : kInitializeFailed;
+    return on_drained_ ? on_drained_(result) : result;
 }
 
 aclptiResult NpuComputeRuntime::ProcessPmuData(std::shared_ptr<const aclptiProfilingDataResult> result)
@@ -408,7 +502,26 @@ aclptiResult NpuComputeRuntime::ProcessPmuData(std::shared_ptr<const aclptiProfi
     if (ratedAiv != 0) {
         metadata.ratedAivFrequencyMhz = ratedAiv;
     }
-    const aclptiResult csvStatus = WritePmuReport(*result, section_config_.Sections(), csvConfig, metadata);
+    const auto& rows = csvConfig.pmuDataLevel == PmuDataLevel::Block ? result->pmuLogs : result->taskPmuLogs;
+    row_count_ += rows.size();
+    error_count_ += result->errorStats.failedRecordCount;
+    if (result->status != ACLPTI_SUCCESS && result->errorStats.failedRecordCount == 0) {
+        ++error_count_;
+    }
+    std::set<std::uint64_t> replayIds;
+    for (const auto& entry : result->taskLogs) {
+        for (const auto& row : entry.second) {
+            replayIds.insert(row.replayId);
+        }
+    }
+    replay_count_ += replayIds.size();
+    aclptiResult csvStatus = ACLPTI_SUCCESS;
+    if (!section_config_.Sections().empty()) {
+        csvStatus = WritePmuReport(
+            *result, section_config_.Sections(), csvConfig, metadata, artifact_sink_, ReportPrefix(report_sequence_),
+            &degraded_);
+        ++report_sequence_;
+    }
     aclptiResult firstStatus = result->status == ACLPTI_SUCCESS ? csvStatus : result->status;
 
     if (pipeline_enabled_) {
@@ -484,6 +597,60 @@ aclptiResult NpuComputeRuntime::ProcessPmuData(std::shared_ptr<const aclptiProfi
     }
     // Preserve the source failure while still writing data from successful replays.
     return firstStatus;
+}
+
+aclptiResult NpuComputeRuntime::PublishPipelineArtifacts()
+{
+    if (artifact_sink_ == nullptr || pipeline_process_directory_.empty()) {
+        return ACLPTI_ERROR_INVALID_STATE;
+    }
+    try {
+        std::vector<boost::filesystem::path> files;
+        for (boost::filesystem::directory_iterator iterator(pipeline_process_directory_), end; iterator != end;
+             ++iterator) {
+            boost::system::error_code statusError;
+            const auto status = boost::filesystem::symlink_status(iterator->path(), statusError);
+            if (statusError || boost::filesystem::is_symlink(status) || !boost::filesystem::is_regular_file(status)) {
+                return ACLPTI_ERROR_TRACE_WRITE;
+            }
+            files.push_back(iterator->path());
+        }
+        std::sort(files.begin(), files.end());
+        for (const auto& path : files) {
+            const std::string artifactName = ".biu-staging/process-uds/" + path.filename().string();
+            std::ifstream input(path.string(), std::ios::binary);
+            if (!input.is_open()) {
+                return ACLPTI_ERROR_TRACE_WRITE;
+            }
+            bool artifactStarted = false;
+            try {
+                artifact_sink_->Begin(artifactName);
+                artifactStarted = true;
+                std::array<char, 16384> buffer{};
+                while (input.good()) {
+                    input.read(buffer.data(), static_cast<std::streamsize>(buffer.size()));
+                    const auto count = input.gcount();
+                    if (count > 0) {
+                        artifact_sink_->Write(std::string_view(buffer.data(), static_cast<std::size_t>(count)));
+                    }
+                }
+                if (!input.eof()) {
+                    throw std::runtime_error("read Pipeline artifact failed");
+                }
+                artifact_sink_->Commit(0);
+                artifactStarted = false;
+            } catch (...) {
+                if (artifactStarted) {
+                    artifact_sink_->Abort();
+                }
+                throw;
+            }
+        }
+        return ACLPTI_SUCCESS;
+    } catch (const std::exception& error) {
+        detail::DebugLog("npu-compute", "Pipeline artifact publication failed: %s", error.what());
+        return ACLPTI_ERROR_TRACE_WRITE;
+    }
 }
 
 void NpuComputeRuntime::HardwareInfoTriggerCallback(

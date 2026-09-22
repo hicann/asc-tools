@@ -74,6 +74,32 @@ bool SectionConfig::LoadFromEnvironment(const char* name, std::string* error)
         start = separator + 1;
     }
 
+    if (!Load(parsed_sections, error)) {
+        return false;
+    }
+    const char* pipeline = std::getenv("NPU_COMPUTE_PIPELINE");
+    if (pipeline == nullptr || pipeline[0] == '\0') {
+        return true;
+    }
+    if (std::string(pipeline) == "0") {
+        params_.collectPipeline = false;
+    } else if (std::string(pipeline) == "1") {
+        params_.collectPipeline = true;
+    } else {
+        Reset();
+        return Fail("NPU_COMPUTE_PIPELINE must be 0 or 1", error);
+    }
+    return true;
+}
+
+bool SectionConfig::Load(const std::vector<std::string>& parsed_sections, std::string* error)
+{
+    Reset();
+    for (const auto& section : parsed_sections) {
+        if (!IsSupportedSection(section)) {
+            return Fail("unknown section: " + section, error);
+        }
+    }
     const std::size_t section_count = parsed_sections.size();
     if (section_count == 0 || section_count > kSupportedSections.size()) {
         return Fail("section count is out of range", error);
@@ -89,15 +115,7 @@ bool SectionConfig::LoadFromEnvironment(const char* name, std::string* error)
     params_.sections = section_pointers_.data();
     params_.numSections = section_pointers_.size();
     params_.blockResult = ACLPTI_BLOCK_RESULT_ALL;
-    const char* pipeline = std::getenv("NPU_COMPUTE_PIPELINE");
-    if (pipeline == nullptr || pipeline[0] == '\0' || std::string(pipeline) == "0") {
-        params_.collectPipeline = pipelineSection;
-    } else if (std::string(pipeline) == "1") {
-        params_.collectPipeline = true;
-    } else {
-        Reset();
-        return Fail("NPU_COMPUTE_PIPELINE must be 0 or 1", error);
-    }
+    params_.collectPipeline = pipelineSection;
     params_.collectPcSampling = false;
     return true;
 }
