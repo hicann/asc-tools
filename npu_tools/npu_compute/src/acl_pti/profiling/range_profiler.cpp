@@ -458,7 +458,7 @@ aclptiResult RangeProfiler::ReplayKernel(
                     ACL_ERROR_PROFILING_FAILURE, round, originalFunction);
                 launchStatus = ACL_ERROR_PROFILING_FAILURE;
             } else {
-                launchStatus = launchFunction(function);
+                launchStatus = launchFunction(function, pipeline);
             }
             npucompute::detail::DebugLog(
                 "aclpti", "launch replay kernel result round=%zu result=%d", round, launchStatus);

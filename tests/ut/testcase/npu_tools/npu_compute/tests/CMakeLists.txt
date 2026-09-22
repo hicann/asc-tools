@@ -119,6 +119,7 @@ add_test(NAME npu_compute.binary_registry COMMAND npu_compute_binary_registry_te
 
 add_executable(npu_compute_binary_instrumenter_test binary_instrumenter_test.cpp
   ${NPU_COMPUTE_SOURCE_DIR}/src/acl_pti/profiling/binary_instrumenter.cpp)
+target_compile_definitions(npu_compute_binary_instrumenter_test PRIVATE _GLIBCXX_USE_CXX11_ABI=0)
 target_include_directories(npu_compute_binary_instrumenter_test PRIVATE "${NPU_COMPUTE_SOURCE_DIR}/src")
 target_link_libraries(npu_compute_binary_instrumenter_test PRIVATE Boost::filesystem Threads::Threads ${CMAKE_DL_LIBS})
 add_test(NAME npu_compute.binary_instrumenter

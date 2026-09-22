@@ -16,6 +16,11 @@
 
 #include "aclpti/aclpti_runtime_api.h"
 
+#include <algorithm>
+#include <cstdint>
+#include <cstring>
+#include <limits>
+#include <vector>
 #include <utility>
 
 namespace aclpti::handler {
@@ -35,6 +40,129 @@ aclError MapProfilingResult(aclptiResult status)
         return ACL_SUCCESS;
     }
     return status == ACLPTI_ERROR_RESULT_UNRELIABLE ? ACL_ERROR_INTERNAL_ERROR : ACL_ERROR_PROFILING_FAILURE;
+}
+
+struct ReplayLaunchArguments {
+    // Kernel-end probe does not consume a trace buffer. The hidden argument must still
+    // exist in the ABI introduced by bisheng-tune, so its value is deliberately null.
+    void* hiddenArgument = nullptr;
+    std::vector<std::uint8_t> hostArguments;
+    std::vector<void*> argumentPointers;
+    std::vector<aclrtPlaceHolderInfo> placeholders;
+};
+
+aclError GetHiddenParameterInfo(
+    aclrtFuncHandle function, std::size_t& parameterCount, std::size_t& hiddenOffset, std::size_t& hiddenSize)
+{
+    if (function == nullptr) {
+        return ACL_ERROR_INVALID_PARAM;
+    }
+    const auto getCount = reinterpret_cast<aclrtFunctionGetParamCountFunc>(
+        acltoolGetOriginalRuntimeApi(ACL_RT_API_aclrtFunctionGetParamCount));
+    const auto getInfo = reinterpret_cast<aclrtFunctionGetParamInfoFunc>(
+        acltoolGetOriginalRuntimeApi(ACL_RT_API_aclrtFunctionGetParamInfo));
+    if (getCount == nullptr || getInfo == nullptr) {
+        return ACL_ERROR_INTERNAL_ERROR;
+    }
+    if (getCount(function, &parameterCount) != ACL_SUCCESS || parameterCount == 0) {
+        return ACL_ERROR_FEATURE_UNSUPPORTED;
+    }
+    if (getInfo(function, parameterCount - 1, &hiddenOffset, &hiddenSize) != ACL_SUCCESS ||
+        hiddenSize != sizeof(void*)) {
+        return ACL_ERROR_FEATURE_UNSUPPORTED;
+    }
+    return ACL_SUCCESS;
+}
+
+aclError BuildInstrumentedReplayArgsArray(
+    aclrtFuncHandle function, void* const* originalArgs, ReplayLaunchArguments& prepared)
+{
+    std::size_t parameterCount = 0;
+    std::size_t hiddenOffset = 0;
+    std::size_t hiddenSize = 0;
+    const aclError status = GetHiddenParameterInfo(function, parameterCount, hiddenOffset, hiddenSize);
+    if (status != ACL_SUCCESS) {
+        return status;
+    }
+    (void)hiddenOffset;
+    (void)hiddenSize;
+    const std::size_t originalCount = parameterCount - 1;
+    if (originalCount != 0 && originalArgs == nullptr) {
+        return ACL_ERROR_INVALID_PARAM;
+    }
+    prepared.argumentPointers.reserve(parameterCount);
+    for (std::size_t index = 0; index < originalCount; ++index) {
+        prepared.argumentPointers.push_back(originalArgs[index]);
+    }
+    prepared.argumentPointers.push_back(&prepared.hiddenArgument);
+    return ACL_SUCCESS;
+}
+
+aclError BuildInstrumentedReplayHostArgs(
+    aclrtFuncHandle function, const void* originalArgs, std::size_t argsSize,
+    const aclrtPlaceHolderInfo* originalPlaceholders, std::size_t placeholderCount, ReplayLaunchArguments& prepared)
+{
+    if ((argsSize != 0 && originalArgs == nullptr) || (placeholderCount != 0 && originalPlaceholders == nullptr)) {
+        return ACL_ERROR_INVALID_PARAM;
+    }
+    std::size_t parameterCount = 0;
+    std::size_t hiddenOffset = 0;
+    std::size_t hiddenSize = 0;
+    const aclError status = GetHiddenParameterInfo(function, parameterCount, hiddenOffset, hiddenSize);
+    if (status != ACL_SUCCESS) {
+        return status;
+    }
+    (void)parameterCount;
+
+    std::size_t insertionOffset = 0;
+    if (placeholderCount != 0) {
+        const std::uint32_t lastAddressOffset = originalPlaceholders[placeholderCount - 1].addrOffset;
+        if (lastAddressOffset > std::numeric_limits<std::uint32_t>::max() - sizeof(void*)) {
+            return ACL_ERROR_INVALID_PARAM;
+        }
+        insertionOffset = static_cast<std::size_t>(lastAddressOffset) + sizeof(void*);
+        if (insertionOffset > argsSize) {
+            return ACL_ERROR_INVALID_PARAM;
+        }
+    } else {
+        if (argsSize > std::numeric_limits<std::size_t>::max() - 7U) {
+            return ACL_ERROR_INVALID_PARAM;
+        }
+        insertionOffset = (argsSize + 7U) & ~static_cast<std::size_t>(7U);
+    }
+    if (insertionOffset > hiddenOffset || hiddenOffset > std::numeric_limits<std::size_t>::max() - hiddenSize) {
+        return ACL_ERROR_INVALID_PARAM;
+    }
+    const std::size_t paddingBytes = hiddenOffset - insertionOffset;
+    const std::size_t prefixSize = std::max(argsSize, insertionOffset);
+    if (prefixSize > std::numeric_limits<std::size_t>::max() - paddingBytes ||
+        prefixSize + paddingBytes > std::numeric_limits<std::size_t>::max() - hiddenSize) {
+        return ACL_ERROR_INVALID_PARAM;
+    }
+    const std::size_t expandedSize = prefixSize + paddingBytes + hiddenSize;
+    prepared.hostArguments.assign(expandedSize, 0);
+    if (insertionOffset != 0) {
+        std::memcpy(prepared.hostArguments.data(), originalArgs, std::min(argsSize, insertionOffset));
+    }
+    if (argsSize > insertionOffset) {
+        std::memcpy(
+            prepared.hostArguments.data() + hiddenOffset + hiddenSize,
+            static_cast<const std::uint8_t*>(originalArgs) + insertionOffset, argsSize - insertionOffset);
+    }
+    if (placeholderCount != 0) {
+        prepared.placeholders.assign(originalPlaceholders, originalPlaceholders + placeholderCount);
+        for (aclrtPlaceHolderInfo& placeholder : prepared.placeholders) {
+            if (placeholder.dataOffset >= insertionOffset) {
+                if (paddingBytes > std::numeric_limits<std::uint32_t>::max() - hiddenSize ||
+                    placeholder.dataOffset > std::numeric_limits<std::uint32_t>::max() - (paddingBytes + hiddenSize)) {
+                    return ACL_ERROR_INVALID_PARAM;
+                }
+                placeholder.dataOffset += static_cast<std::uint32_t>(paddingBytes + hiddenSize);
+            }
+        }
+    }
+    std::memcpy(prepared.hostArguments.data() + hiddenOffset, &prepared.hiddenArgument, hiddenSize);
+    return ACL_SUCCESS;
 }
 
 template <typename Function, typename Params, typename Operation>
@@ -78,8 +206,10 @@ aclError InvokeLaunch(
 {
     return InvokeRuntimeCallback<Function>(cbid, apiId, apiName, params, [&](Function original) -> aclError {
         const auto function = params.*functionMember;
-        const auto invoke = [&](aclrtFuncHandle selectedFunction) { return launch(original, selectedFunction); };
-        const aclError result = invoke(function);
+        const auto invoke = [&](aclrtFuncHandle selectedFunction, bool instrumented) {
+            return launch(original, selectedFunction, instrumented);
+        };
+        const aclError result = invoke(function, false);
         if (result != ACL_SUCCESS) {
             return result;
         }
@@ -98,10 +228,22 @@ aclError AclrtLaunchKernelWithHostArgsHandler(
     return InvokeLaunch<aclrtLaunchKernelWithHostArgsFunc>(
         ACLPTI_RUNTIME_CBID_aclrtLaunchKernelWithHostArgs, ACL_RT_API_aclrtLaunchKernelWithHostArgs,
         "aclrtLaunchKernelWithHostArgs", params, &aclptiAclrtLaunchKernelWithHostArgsParams::funcHandle,
-        [&params](auto launch, aclrtFuncHandle function) {
+        [&params](auto launch, aclrtFuncHandle function, bool instrumented) {
+            ReplayLaunchArguments prepared;
+            if (instrumented) {
+                const aclError status = BuildInstrumentedReplayHostArgs(
+                    function, params.hostArgs, params.argsSize, params.placeHolderArray, params.placeHolderNum,
+                    prepared);
+                if (status != ACL_SUCCESS) {
+                    return status;
+                }
+            }
             return launch(
-                function, params.numBlocks, params.stream, params.cfg, params.hostArgs, params.argsSize,
-                params.placeHolderArray, params.placeHolderNum);
+                function, params.numBlocks, params.stream, params.cfg,
+                instrumented ? prepared.hostArguments.data() : params.hostArgs,
+                instrumented ? prepared.hostArguments.size() : params.argsSize,
+                instrumented && !prepared.placeholders.empty() ? prepared.placeholders.data() : params.placeHolderArray,
+                instrumented ? prepared.placeholders.size() : params.placeHolderNum);
         });
 }
 
@@ -114,10 +256,22 @@ aclError AclrtLaunchSIMTKernelWithHostArgsHandler(
     return InvokeLaunch<aclrtLaunchSIMTKernelWithHostArgsFunc>(
         ACLPTI_RUNTIME_CBID_aclrtLaunchSIMTKernelWithHostArgs, ACL_RT_API_aclrtLaunchSIMTKernelWithHostArgs,
         "aclrtLaunchSIMTKernelWithHostArgs", params, &aclptiAclrtLaunchSIMTKernelWithHostArgsParams::func,
-        [&params](auto launch, aclrtFuncHandle function) {
+        [&params](auto launch, aclrtFuncHandle function, bool instrumented) {
+            ReplayLaunchArguments prepared;
+            if (instrumented) {
+                const aclError status = BuildInstrumentedReplayHostArgs(
+                    function, params.hostArgs, params.argsSize, params.placeHolderArray, params.placeHolderNum,
+                    prepared);
+                if (status != ACL_SUCCESS) {
+                    return status;
+                }
+            }
             return launch(
                 function, params.gridDim, params.blockDim, params.dynUbufSize, params.stream, params.cfg,
-                params.hostArgs, params.argsSize, params.placeHolderArray, params.placeHolderNum);
+                instrumented ? prepared.hostArguments.data() : params.hostArgs,
+                instrumented ? prepared.hostArguments.size() : params.argsSize,
+                instrumented && !prepared.placeholders.empty() ? prepared.placeholders.data() : params.placeHolderArray,
+                instrumented ? prepared.placeholders.size() : params.placeHolderNum);
         });
 }
 
@@ -128,8 +282,17 @@ aclError AclrtLaunchKernelWithArgsArrayHandler(
     return InvokeLaunch<aclrtLaunchKernelWithArgsArrayFunc>(
         ACLPTI_RUNTIME_CBID_aclrtLaunchKernelWithArgsArray, ACL_RT_API_aclrtLaunchKernelWithArgsArray,
         "aclrtLaunchKernelWithArgsArray", params, &aclptiAclrtLaunchKernelWithArgsArrayParams::func,
-        [&params](auto launch, aclrtFuncHandle function) {
-            return launch(function, params.numBlocks, params.stream, params.cfg, params.args);
+        [&params](auto launch, aclrtFuncHandle function, bool instrumented) {
+            ReplayLaunchArguments prepared;
+            if (instrumented) {
+                const aclError status = BuildInstrumentedReplayArgsArray(function, params.args, prepared);
+                if (status != ACL_SUCCESS) {
+                    return status;
+                }
+            }
+            return launch(
+                function, params.numBlocks, params.stream, params.cfg,
+                instrumented ? prepared.argumentPointers.data() : params.args);
         });
 }
 
@@ -141,9 +304,17 @@ aclError AclrtLaunchSIMTKernelWithArgsArrayHandler(
     return InvokeLaunch<aclrtLaunchSIMTKernelWithArgsArrayFunc>(
         ACLPTI_RUNTIME_CBID_aclrtLaunchSIMTKernelWithArgsArray, ACL_RT_API_aclrtLaunchSIMTKernelWithArgsArray,
         "aclrtLaunchSIMTKernelWithArgsArray", params, &aclptiAclrtLaunchSIMTKernelWithArgsArrayParams::func,
-        [&params](auto launch, aclrtFuncHandle function) {
+        [&params](auto launch, aclrtFuncHandle function, bool instrumented) {
+            ReplayLaunchArguments prepared;
+            if (instrumented) {
+                const aclError status = BuildInstrumentedReplayArgsArray(function, params.args, prepared);
+                if (status != ACL_SUCCESS) {
+                    return status;
+                }
+            }
             return launch(
-                function, params.gridDim, params.blockDim, params.dynUbufSize, params.stream, params.cfg, params.args);
+                function, params.gridDim, params.blockDim, params.dynUbufSize, params.stream, params.cfg,
+                instrumented ? prepared.argumentPointers.data() : params.args);
         });
 }
 
@@ -321,8 +492,19 @@ aclError AclrtLaunchKernelHandler(
     aclptiAclrtLaunchKernelParams params{function, blockCount, argsData, argsSize, stream};
     return InvokeLaunch<aclrtLaunchKernelFunc>(
         ACLPTI_RUNTIME_CBID_aclrtLaunchKernel, ACL_RT_API_aclrtLaunchKernel, "aclrtLaunchKernel", params,
-        &aclptiAclrtLaunchKernelParams::funcHandle, [&params](auto launch, aclrtFuncHandle function) {
-            return launch(function, params.numBlocks, params.argsData, params.argsSize, params.stream);
+        &aclptiAclrtLaunchKernelParams::funcHandle,
+        [&params](auto launch, aclrtFuncHandle function, bool instrumented) {
+            ReplayLaunchArguments prepared;
+            if (instrumented) {
+                const aclError status =
+                    BuildInstrumentedReplayHostArgs(function, params.argsData, params.argsSize, nullptr, 0, prepared);
+                if (status != ACL_SUCCESS) {
+                    return status;
+                }
+            }
+            return launch(
+                function, params.numBlocks, instrumented ? prepared.hostArguments.data() : params.argsData,
+                instrumented ? prepared.hostArguments.size() : params.argsSize, params.stream);
         });
 }
 

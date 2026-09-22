@@ -10,18 +10,27 @@
 #include "binary_instrumenter.h"
 #include "common/debug_log.h"
 
+#include <algorithm>
 #include <cerrno>
+#include <climits>
+#include <cstdint>
+#include <cstring>
 #include <cstdlib>
+#include <elf.h>
 #include <boost/filesystem.hpp>
 #include <boost/system/error_code.hpp>
 #include <fstream>
 #include <iterator>
+#include <limits>
+#include <map>
 #include <mutex>
 #include <spawn.h>
+#include <stdexcept>
 #include <string>
-#include <sys/utsname.h>
 #include <sys/wait.h>
+#include <type_traits>
 #include <unistd.h>
+#include <utility>
 #include <vector>
 
 extern char** environ;
@@ -35,7 +44,7 @@ namespace fs = boost::filesystem;
 // Keep this text in sync with the probe contract: bar.all, a fixed NOP/DFX_REGION sequence and the
 // three implicit Bisheng probe ABI parameters (which the probe does not dereference).
 constexpr char kKernelEndProbeSource[] =
-    R"PROBE(extern __attribute__((noinline, weak))[aicore] void __npu_compute_before_kernel_end(
+    R"PROBE(extern __attribute__((noinline)) __attribute__((weak)) __aicore__ void __npu_compute_before_kernel_end(
     __gm__ unsigned char*, unsigned long long, unsigned int)
 {
     asm volatile("bar.all" ::: "memory");
@@ -53,13 +62,25 @@ constexpr char kKernelEndProbeSource[] =
 }
 )PROBE";
 
-// Fixed version 0 control record binding instrId 397 to the probe symbol.
-// Layout (little endian): header<I H H H H> | binding<H H H> | names<I size + symbol + 4 zero bytes>.
-constexpr unsigned char kKernelEndControl[] = {
-    0x39, 0x00, 0x00, 0x00, 0x00, 0x00, 0x06, 0x00, 0x00, 0x00, 0x00, 0x00, 0x8d, 0x01, 0x00, 0x00, 0x00, 0x00, 0x23,
-    0x00, 0x00, 0x00, 0x5f, 0x5f, 0x6e, 0x70, 0x75, 0x5f, 0x63, 0x6f, 0x6d, 0x70, 0x75, 0x74, 0x65, 0x5f, 0x62, 0x65,
-    0x66, 0x6f, 0x72, 0x65, 0x5f, 0x6b, 0x65, 0x72, 0x6e, 0x65, 0x6c, 0x5f, 0x65, 0x6e, 0x64, 0x00, 0x00, 0x00, 0x00,
-};
+// Keep this name in sync with the symbol in kKernelEndProbeSource.
+constexpr char kKernelEndProbeSymbol[] = "__npu_compute_before_kernel_end";
+
+// Semantic fields for npu_compute's fixed probe record; its instruction ID is not shared with npu_check.
+constexpr std::uint16_t kControlRecordVersion = 0;
+constexpr std::uint16_t kKernelEndInstructionId = 397; // before kernel end
+constexpr std::uint16_t kKernelEndProbeFunctionIndex = 0;
+constexpr std::uint16_t kKernelEndProbeParameterCount = 0;
+constexpr std::uint16_t kControlRecordReservedValue = 0;
+constexpr std::size_t kKernelEndProbeSymbolSize = sizeof(kKernelEndProbeSymbol) - 1;
+constexpr std::size_t kFunctionNameListPaddingSize = sizeof(std::uint32_t);
+constexpr char kFunctionNameListPadding[kFunctionNameListPaddingSize] = {};
+
+constexpr std::size_t kControlRecordHeaderSize = sizeof(std::uint32_t) + 4 * sizeof(std::uint16_t);
+constexpr std::size_t kProbeBindingSize = 3 * sizeof(std::uint16_t);
+constexpr std::uint32_t kKernelEndFunctionNameListSize =
+    static_cast<std::uint32_t>(sizeof(std::uint32_t) + kKernelEndProbeSymbolSize);
+constexpr std::uint32_t kKernelEndControlSize = static_cast<std::uint32_t>(
+    kControlRecordHeaderSize + kProbeBindingSize + kKernelEndFunctionNameListSize + kFunctionNameListPaddingSize);
 
 constexpr const char* kProbeSourceName = "probe.cpp";
 constexpr const char* kProbeObjectName = "kernel_end.o";
@@ -71,6 +92,373 @@ struct KernelEndTools {
     fs::path compiler; // bisheng
 };
 
+constexpr std::uint16_t kParamSummary = 16;
+constexpr std::uint16_t kParamInfo = 17;
+constexpr std::size_t kSummarySize = 12;
+constexpr std::size_t kParamInfoSize = 36;
+constexpr std::uint32_t kPointerSize = 8;
+constexpr char kKernelMetadataPrefix[] = ".ascend.meta.";
+
+void Require(bool condition, const char* message)
+{
+    if (!condition) {
+        throw std::runtime_error(message);
+    }
+}
+
+bool InRange(std::size_t size, std::uint64_t offset, std::uint64_t length)
+{
+    return offset <= size && length <= static_cast<std::uint64_t>(size) - offset;
+}
+
+std::uint64_t ReadValue(const std::string& data, std::uint64_t offset, std::size_t size)
+{
+    Require(size <= sizeof(std::uint64_t), "ELF value is too large");
+    Require(InRange(data.size(), offset, size), "truncated ELF or parameter metadata");
+    std::uint64_t value = 0;
+    const auto start = static_cast<std::size_t>(offset);
+    for (std::size_t index = 0; index < size; ++index) {
+        value |= static_cast<std::uint64_t>(static_cast<unsigned char>(data[start + index])) << (index * 8);
+    }
+    return value;
+}
+
+void WriteValue(std::string& data, std::uint64_t offset, std::uint64_t value, std::size_t size)
+{
+    Require(size <= sizeof(std::uint64_t), "metadata value is too large");
+    Require(InRange(data.size(), offset, size), "invalid metadata write range");
+    const auto start = static_cast<std::size_t>(offset);
+    for (std::size_t index = 0; index < size; ++index) {
+        data[start + index] = static_cast<char>((value >> (index * 8)) & 0xffU);
+    }
+}
+
+struct ElfSection {
+    std::size_t header;
+    std::uint32_t type;
+    std::uint64_t offset;
+    std::uint64_t size;
+    std::uint64_t alignment;
+    std::string name;
+};
+
+struct ParsedElf {
+    std::vector<ElfSection> sections;
+    std::map<std::string, std::size_t> metadataSections;
+};
+
+ParsedElf ReadElfSections(const std::string& data)
+{
+    Require(data.size() >= sizeof(Elf64_Ehdr), "Device ELF header is missing");
+    Require(
+        data.compare(0, SELFMAG, ELFMAG) == 0 && ReadValue(data, EI_CLASS, 1) == ELFCLASS64 &&
+            ReadValue(data, EI_DATA, 1) == ELFDATA2LSB && ReadValue(data, EI_VERSION, 1) == EV_CURRENT &&
+            ReadValue(data, 20, 4) == EV_CURRENT && ReadValue(data, 52, 2) == sizeof(Elf64_Ehdr),
+        "expected ELF64 little-endian version 1");
+
+    const std::uint64_t sectionTable = ReadValue(data, 40, 8);
+    const std::uint64_t sectionCount = ReadValue(data, 60, 2);
+    const std::uint64_t sectionNamesIndex = ReadValue(data, 62, 2);
+    Require(
+        ReadValue(data, 58, 2) == sizeof(Elf64_Shdr) && sectionCount > 0 && sectionNamesIndex > 0 &&
+            sectionNamesIndex < sectionCount && sectionTable >= sizeof(Elf64_Ehdr) &&
+            InRange(data.size(), sectionTable, sectionCount * sizeof(Elf64_Shdr)),
+        "invalid or unsupported ELF section table");
+
+    const std::uint64_t sectionNamesHeader = sectionTable + sectionNamesIndex * sizeof(Elf64_Shdr);
+    const std::uint64_t sectionNamesOffset = ReadValue(data, sectionNamesHeader + 24, 8);
+    const std::uint64_t sectionNamesSize = ReadValue(data, sectionNamesHeader + 32, 8);
+    Require(
+        ReadValue(data, sectionNamesHeader + 4, 4) == SHT_STRTAB &&
+            InRange(data.size(), sectionNamesOffset, sectionNamesSize),
+        "invalid ELF section names");
+
+    ParsedElf elf;
+    const std::uint64_t sectionNamesEnd = sectionNamesOffset + sectionNamesSize;
+    for (std::uint64_t index = 0; index < sectionCount; ++index) {
+        const std::uint64_t headerOffset = sectionTable + index * sizeof(Elf64_Shdr);
+        const std::uint64_t nameOffset = ReadValue(data, headerOffset, 4);
+        const std::uint32_t type = static_cast<std::uint32_t>(ReadValue(data, headerOffset + 4, 4));
+        const auto flags = ReadValue(data, headerOffset + 8, 8);
+        ElfSection section{
+            static_cast<std::size_t>(headerOffset), type,
+            ReadValue(data, headerOffset + 24, 8),  ReadValue(data, headerOffset + 32, 8),
+            ReadValue(data, headerOffset + 48, 8),  {},
+        };
+        Require(
+            type == SHT_NOBITS || InRange(data.size(), section.offset, section.size),
+            "ELF section exceeds file bounds");
+        Require(nameOffset < sectionNamesSize, "invalid ELF section name offset");
+        const std::uint64_t nameStart = sectionNamesOffset + nameOffset;
+        const std::size_t nameEnd = data.find('\0', static_cast<std::size_t>(nameStart));
+        Require(
+            nameEnd != std::string::npos && static_cast<std::uint64_t>(nameEnd) < sectionNamesEnd,
+            "unterminated ELF section name");
+
+        section.name = data.substr(static_cast<std::size_t>(nameStart), nameEnd - static_cast<std::size_t>(nameStart));
+        if (section.name.compare(0, sizeof(kKernelMetadataPrefix) - 1, kKernelMetadataPrefix) == 0) {
+            Require(
+                type == SHT_NOTE && (flags & SHF_ALLOC) == 0, "kernel metadata must be a non-allocated NOTE section");
+            Require(
+                section.alignment == 0 ||
+                    ((section.alignment & (section.alignment - 1)) == 0 && section.alignment <= data.size()),
+                "invalid metadata alignment");
+            Require(
+                elf.metadataSections.emplace(section.name, elf.sections.size()).second,
+                "duplicate kernel metadata section");
+        }
+        elf.sections.push_back(std::move(section));
+    }
+    return elf;
+}
+
+struct Tlv {
+    std::uint16_t tag;
+    std::string value;
+};
+
+struct Metadata {
+    std::vector<Tlv> values;
+    std::vector<std::string> parameters;
+    bool hasParameterLayout;
+};
+
+Metadata ReadMetadata(const std::string& data, const ElfSection& section)
+{
+    Require(InRange(data.size(), section.offset, section.size), "kernel metadata section exceeds file bounds");
+    const std::string bytes =
+        data.substr(static_cast<std::size_t>(section.offset), static_cast<std::size_t>(section.size));
+    std::vector<Tlv> values;
+    std::size_t summaryCount = 0;
+    std::size_t infoCount = 0;
+    std::uint32_t parameterCount = 0;
+    for (std::size_t offset = 0; offset < bytes.size();) {
+        const auto tag = static_cast<std::uint16_t>(ReadValue(bytes, offset, 2));
+        const std::size_t length = static_cast<std::size_t>(ReadValue(bytes, offset + 2, 2));
+        offset += 4;
+        Require(InRange(bytes.size(), offset, length), "truncated parameter TLV");
+        if (tag == kParamSummary) {
+            Require(length == kSummarySize, "unsupported ParamSummary layout");
+            ++summaryCount;
+            parameterCount = static_cast<std::uint32_t>(ReadValue(bytes, offset, 4));
+        } else if (tag == kParamInfo) {
+            Require(length == kParamInfoSize, "unsupported ParamInfo layout");
+            ++infoCount;
+        }
+        values.push_back({tag, bytes.substr(offset, length)});
+        offset += length;
+    }
+    if (summaryCount == 0) {
+        Require(infoCount == 0, "parameter descriptions are missing ParamSummary");
+        return {std::move(values), {}, false};
+    }
+    Require(summaryCount == 1 && infoCount == parameterCount, "inconsistent parameter summary and descriptions");
+    std::vector<std::string> parameters(parameterCount);
+    std::vector<bool> seen(parameterCount, false);
+    for (const auto& item : values) {
+        if (item.tag != kParamInfo) {
+            continue;
+        }
+        const std::uint64_t ordinal = ReadValue(item.value, 4, 4);
+        Require(ordinal < parameterCount, "parameter ordinal is out of range");
+        Require(!seen[ordinal], "duplicate parameter ordinal");
+        seen[ordinal] = true;
+        parameters[ordinal] = item.value;
+    }
+    return {std::move(values), std::move(parameters), true};
+}
+
+using KernelMetadata = std::map<std::string, Metadata>;
+
+KernelMetadata ReadKernelMetadata(const std::string& data, const ParsedElf& elf)
+{
+    KernelMetadata metadata;
+    for (const auto& entry : elf.metadataSections) {
+        metadata.emplace(entry.first, ReadMetadata(data, elf.sections[entry.second]));
+    }
+    return metadata;
+}
+
+void GetMaximumKernelArgumentArea(const KernelMetadata& kernels, std::uint32_t& maximumArea, bool& found)
+{
+    maximumArea = 0;
+    found = false;
+    for (const auto& entry : kernels) {
+        const auto& metadata = entry.second;
+        if (!metadata.hasParameterLayout) {
+            continue;
+        }
+        std::uint32_t summaryArea = 0;
+        std::uint64_t parameterEnd = 0;
+        for (const auto& item : metadata.values) {
+            if (item.tag == kParamSummary) {
+                summaryArea = static_cast<std::uint32_t>(ReadValue(item.value, 4, 4));
+            }
+        }
+        for (const auto& parameter : metadata.parameters) {
+            const std::uint64_t parameterOffset = ReadValue(parameter, 8, 4);
+            const std::uint64_t parameterSize = ReadValue(parameter, 12, 4);
+            parameterEnd = std::max(parameterEnd, parameterOffset + parameterSize);
+        }
+        const std::uint64_t area = std::max<std::uint64_t>(summaryArea, parameterEnd);
+        Require(area <= std::numeric_limits<std::uint32_t>::max(), "kernel argument area exceeds 32-bit range");
+        maximumArea = std::max(maximumArea, static_cast<std::uint32_t>(area));
+        found = true;
+    }
+}
+
+void AppendTlv(std::string& output, std::uint16_t tag, const std::string& value)
+{
+    Require(value.size() <= std::numeric_limits<std::uint16_t>::max(), "parameter TLV is too large");
+    const std::size_t header = output.size();
+    output.resize(header + 4);
+    WriteValue(output, header, tag, 2);
+    WriteValue(output, header + 2, value.size(), 2);
+    output += value;
+}
+
+std::string NormalizeMetadata(const Metadata& original, const Metadata& patched, std::uint32_t traceArgumentOffset)
+{
+    Require(original.parameters.size() < std::numeric_limits<std::uint32_t>::max(), "too many kernel parameters");
+    for (const auto& item : original.values) {
+        if (item.tag == kParamSummary) {
+            Require(ReadValue(item.value, 4, 4) <= traceArgumentOffset, "original argument area exceeds trace offset");
+        }
+    }
+    std::vector<std::pair<std::uint64_t, std::uint64_t>> ranges;
+    for (const auto& parameter : original.parameters) {
+        const std::uint64_t offset = ReadValue(parameter, 8, 4);
+        const std::uint64_t size = ReadValue(parameter, 12, 4);
+        Require(
+            size > 0 && offset <= traceArgumentOffset && size <= traceArgumentOffset - offset,
+            "original parameter overlaps trace pointer");
+        ranges.emplace_back(offset, offset + size);
+    }
+    std::sort(ranges.begin(), ranges.end());
+    for (std::size_t index = 1; index < ranges.size(); ++index) {
+        Require(ranges[index - 1].second <= ranges[index].first, "original parameters overlap");
+    }
+
+    std::string pointer(kParamInfoSize, '\0');
+    WriteValue(pointer, 4, original.parameters.size(), 4);
+    WriteValue(pointer, 8, traceArgumentOffset, 4);
+    WriteValue(pointer, 12, kPointerSize, 4);
+    WriteValue(pointer, 16, kPointerSize, 2);
+    WriteValue(pointer, 18, 2, 2);
+
+    std::string output;
+    for (const auto& item : patched.values) {
+        if (item.tag == kParamInfo) {
+            continue;
+        }
+        if (item.tag != kParamSummary) {
+            AppendTlv(output, item.tag, item.value);
+            continue;
+        }
+        const std::uint64_t count = ReadValue(item.value, 0, 4);
+        Require(
+            count == original.parameters.size() || count == original.parameters.size() + 1,
+            "unexpected instrumented parameter count");
+        std::string summary = item.value;
+        WriteValue(summary, 0, original.parameters.size() + 1, 4);
+        WriteValue(summary, 4, traceArgumentOffset + kPointerSize, 4);
+        AppendTlv(output, kParamSummary, summary);
+        for (const auto& parameter : original.parameters) {
+            AppendTlv(output, kParamInfo, parameter);
+        }
+        AppendTlv(output, kParamInfo, pointer);
+    }
+    return output;
+}
+
+bool ResolveTraceArgumentOffset(
+    const void* data, std::size_t length, KernelMetadata& metadata, std::uint32_t& traceArgumentOffset,
+    std::string& diagnostic)
+{
+    if (data == nullptr || length < sizeof(Elf64_Ehdr)) {
+        diagnostic = "Device ELF header is missing";
+        return false;
+    }
+    try {
+        const std::string kernelElf(static_cast<const char*>(data), length);
+        const ParsedElf elf = ReadElfSections(kernelElf);
+        metadata = ReadKernelMetadata(kernelElf, elf);
+        bool hasKernelArgumentSize = false;
+        std::uint32_t maximumArgumentSize = 0;
+        for (const auto& section : elf.sections) {
+            if (section.name != "__CCE_KernelArgSize") {
+                continue;
+            }
+            Require(
+                section.size != 0 && section.size % sizeof(std::uint32_t) == 0 && section.type != SHT_NOBITS &&
+                    InRange(kernelElf.size(), section.offset, section.size),
+                "__CCE_KernelArgSize is malformed");
+            for (std::uint64_t offset = 0; offset < section.size; offset += sizeof(std::uint32_t)) {
+                const auto argumentSize = static_cast<std::uint32_t>(ReadValue(kernelElf, section.offset + offset, 4));
+                maximumArgumentSize = std::max(maximumArgumentSize, argumentSize);
+            }
+            hasKernelArgumentSize = true;
+        }
+
+        std::uint32_t metadataArgumentArea = 0;
+        bool hasParameterMetadata = false;
+        GetMaximumKernelArgumentArea(metadata, metadataArgumentArea, hasParameterMetadata);
+        if (!hasKernelArgumentSize && !hasParameterMetadata) {
+            diagnostic = "__CCE_KernelArgSize and kernel parameter metadata are missing";
+            return false;
+        }
+        maximumArgumentSize = std::max(maximumArgumentSize, metadataArgumentArea);
+        constexpr std::uint32_t kMinimumTraceArgumentOffset = sizeof(std::uint64_t);
+        maximumArgumentSize = std::max(maximumArgumentSize, kMinimumTraceArgumentOffset);
+        Require(
+            maximumArgumentSize <= std::numeric_limits<std::uint32_t>::max() - 7U,
+            "kernel argument area cannot be aligned");
+        traceArgumentOffset = (maximumArgumentSize + 7U) & ~7U;
+        diagnostic.clear();
+        return true;
+    } catch (const std::exception& error) {
+        diagnostic = error.what();
+        return false;
+    }
+}
+
+template <typename UInt>
+bool WriteLittleEndian(std::ostream& output, UInt value)
+{
+    static_assert(std::is_unsigned<UInt>::value, "control record fields must be unsigned");
+    for (std::size_t byteIndex = 0; byteIndex < sizeof(UInt); ++byteIndex) {
+        const auto byte = static_cast<std::uint8_t>(value);
+        if (!output.write(reinterpret_cast<const char*>(&byte), static_cast<std::streamsize>(sizeof(byte)))) {
+            return false;
+        }
+        value >>= CHAR_BIT;
+    }
+    return true;
+}
+
+bool WriteKernelEndControl(const fs::path& directory)
+{
+    std::ofstream file((directory / kControlRecordName).string(), std::ios::binary);
+    if (!file) {
+        return false;
+    }
+
+    if (!WriteLittleEndian(file, kKernelEndControlSize) || !WriteLittleEndian(file, kControlRecordVersion) ||
+        !WriteLittleEndian(file, static_cast<std::uint16_t>(kProbeBindingSize)) ||
+        !WriteLittleEndian(file, kControlRecordReservedValue) ||
+        !WriteLittleEndian(file, kControlRecordReservedValue) || !WriteLittleEndian(file, kKernelEndInstructionId) ||
+        !WriteLittleEndian(file, kKernelEndProbeFunctionIndex) ||
+        !WriteLittleEndian(file, kKernelEndProbeParameterCount) ||
+        !WriteLittleEndian(file, kKernelEndFunctionNameListSize)) {
+        return false;
+    }
+
+    file.write(kKernelEndProbeSymbol, static_cast<std::streamsize>(kKernelEndProbeSymbolSize));
+    file.write(kFunctionNameListPadding, sizeof(kFunctionNameListPadding));
+    file.close();
+    return static_cast<bool>(file);
+}
+
 bool WriteProbeFiles(const fs::path& directory)
 {
     const auto write = [&](const char* name, const void* bytes, std::size_t size) {
@@ -80,7 +468,7 @@ bool WriteProbeFiles(const fs::path& directory)
         return static_cast<bool>(file);
     };
     return write(kProbeSourceName, kKernelEndProbeSource, sizeof(kKernelEndProbeSource) - 1) &&
-           write(kControlRecordName, kKernelEndControl, sizeof(kKernelEndControl));
+           WriteKernelEndControl(directory);
 }
 
 bool Run(std::initializer_list<std::string> arguments)
@@ -130,38 +518,15 @@ bool ResolveTools(KernelEndTools& tools)
         npucompute::detail::DebugLog("aclpti", "kernel-end requires ASCEND_HOME_PATH");
         return false;
     }
-    const fs::path root(cann);
-    std::vector<fs::path> directories = {
-        root / "tools/bisheng_compiler/bin",
-        root.parent_path() / "tools/bisheng_compiler/bin",
-        root / "ccec_compiler/bin",
-    };
-    struct utsname machine {};
-    if (uname(&machine) == 0) {
-        directories.push_back(root / (std::string(machine.machine) + "-linux/ccec_compiler/bin"));
-    }
+    const fs::path directory = fs::path(cann) / "tools/bisheng_compiler/bin";
     const char* override = std::getenv("NPU_COMPUTE_BISHENG");
     if (override != nullptr && override[0] != '\0') {
         tools.compiler = override;
     }
-    for (const auto& directory : directories) {
-        if (tools.linker.empty()) {
-            FindTool(directory, "ld.lld", tools.linker);
-        }
-        if (tools.tuner.empty()) {
-            FindTool(directory, "bisheng-tune", tools.tuner);
-        }
-        if (tools.compiler.empty()) {
-            FindTool(directory, "bisheng", tools.compiler);
-        }
-    }
-    if (tools.linker.empty() || tools.tuner.empty()) {
-        npucompute::detail::DebugLog("aclpti", "kernel-end requires ld.lld and bisheng-tune under %s", cann);
+    if (!FindTool(directory, "ld.lld", tools.linker) || !FindTool(directory, "bisheng-tune", tools.tuner) ||
+        (tools.compiler.empty() && !FindTool(directory, "bisheng", tools.compiler))) {
+        npucompute::detail::DebugLog("aclpti", "kernel-end toolchain is incomplete under %s", directory.c_str());
         return false;
-    }
-    if (tools.compiler.empty()) {
-        // Fall back to PATH; posix_spawnp resolves the bare name.
-        tools.compiler = "bisheng";
     }
     return true;
 }
@@ -197,6 +562,60 @@ bool PrepareProbe(const KernelEndTools& tools, fs::path& assets)
     assets = cache.path;
     return true;
 }
+
+bool PatchKernelParamMetadata(
+    const KernelMetadata& sources, std::string& patched, std::uint32_t traceArgumentOffset, std::string& diagnostic)
+{
+    try {
+        Require(
+            traceArgumentOffset >= kPointerSize && traceArgumentOffset % kPointerSize == 0 &&
+                traceArgumentOffset <= std::numeric_limits<std::uint32_t>::max() - kPointerSize,
+            "invalid trace pointer offset");
+        const ParsedElf destinations = ReadElfSections(patched);
+        Require(!sources.empty(), "no kernel parameter metadata found");
+
+        std::string result = patched;
+        for (const auto& entry : sources) {
+            const auto destination = destinations.metadataSections.find(entry.first);
+            Require(
+                destination != destinations.metadataSections.end(), "instrumented kernel metadata section is missing");
+            const ElfSection& destinationSection = destinations.sections[destination->second];
+            const auto& sourceMetadata = entry.second;
+            const auto destinationMetadata = ReadMetadata(patched, destinationSection);
+            Require(
+                sourceMetadata.hasParameterLayout == destinationMetadata.hasParameterLayout,
+                "instrumented kernel metadata kind changed");
+            if (!sourceMetadata.hasParameterLayout) {
+                continue;
+            }
+            const auto metadata = NormalizeMetadata(sourceMetadata, destinationMetadata, traceArgumentOffset);
+            if (metadata == patched.substr(
+                                static_cast<std::size_t>(destinationSection.offset),
+                                static_cast<std::size_t>(destinationSection.size))) {
+                continue;
+            }
+            const std::size_t alignment =
+                static_cast<std::size_t>(std::max<std::uint64_t>(4, destinationSection.alignment));
+            const std::size_t padding = (alignment - result.size() % alignment) % alignment;
+            Require(
+                padding <= result.max_size() - result.size() &&
+                    metadata.size() <= result.max_size() - result.size() - padding,
+                "metadata output is too large");
+            result.append(padding, '\0');
+            const std::size_t offset = result.size();
+            result += metadata;
+            WriteValue(result, destinationSection.header + 24, offset, 8);
+            WriteValue(result, destinationSection.header + 32, metadata.size(), 8);
+        }
+        patched.swap(result);
+        diagnostic.clear();
+        return true;
+    } catch (const std::exception& error) {
+        diagnostic = error.what();
+        return false;
+    }
+}
+
 } // namespace
 
 bool InstrumentKernelEnd(const void* data, std::size_t size, std::vector<char>& output)
@@ -204,6 +623,13 @@ bool InstrumentKernelEnd(const void* data, std::size_t size, std::vector<char>& 
     output.clear();
     KernelEndTools tools;
     if (!ResolveTools(tools)) {
+        return false;
+    }
+    std::uint32_t traceArgumentOffset = 0;
+    KernelMetadata metadata;
+    std::string diagnostic;
+    if (!ResolveTraceArgumentOffset(data, size, metadata, traceArgumentOffset, diagnostic)) {
+        npucompute::detail::DebugLog("aclpti", "kernel-end argument metadata is invalid: %s", diagnostic.c_str());
         return false;
     }
     fs::path assets;
@@ -231,13 +657,24 @@ bool InstrumentKernelEnd(const void* data, std::size_t size, std::vector<char>& 
             {tools.linker.string(), "-m", "aicorelinux", "-Ttext=0", "-execute-probe",
              (assets / kProbeObjectName).string(), input.string(), "-static", "-q", "-o", linked.string()}) ||
         !Run(
-            {tools.tuner.string(), "--action=instru-probe", "--instru-memprobe", linked.string(),
-             "--dbi-config=" + (assets / kControlRecordName).string(), "-o=" + patched.string()})) {
+            {tools.tuner.string(), "--action=instru-probe", "--tune-argsize=" + std::to_string(traceArgumentOffset),
+             "--instru-memprobe", linked.string(), "--dbi-config=" + (assets / kControlRecordName).string(),
+             "-o=" + patched.string(), "--append-hbmout-paraminfo"})) {
         return false;
     }
     std::ifstream file(patched.string(), std::ios::binary);
-    output.assign(std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>());
-    return !file.bad() && output.size() >= 4 && output[0] == '\x7f' && output[1] == 'E' && output[2] == 'L' &&
-           output[3] == 'F';
+    if (!file) {
+        return false;
+    }
+    std::string patchedImage{std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>()};
+    if (file.bad()) {
+        return false;
+    }
+    if (!PatchKernelParamMetadata(metadata, patchedImage, traceArgumentOffset, diagnostic)) {
+        npucompute::detail::DebugLog("aclpti", "kernel-end parameter metadata update failed: %s", diagnostic.c_str());
+        return false;
+    }
+    output.assign(patchedImage.begin(), patchedImage.end());
+    return true;
 }
 } // namespace aclpti::profiling

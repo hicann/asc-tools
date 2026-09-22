@@ -53,6 +53,7 @@ elif tool == "ld.lld":
     shutil.copyfile(source, args[args.index("-o") + 1])
 else:
     config = pathlib.Path(next(a.split("=", 1)[1] for a in args if a.startswith("--dbi-config=")))
+    assert any(value in args for value in ("--tune-argsize=232", "--tune-argsize=48")), args
     name = b"__npu_compute_before_kernel_end"
     binding = struct.pack("<HHH", 397, 0, 0)
     names = struct.pack("<I", len(name) + 4) + name + bytes(4)
@@ -87,13 +88,13 @@ def main():
         calls = (root / "calls").read_text().splitlines()
         # The probe source is embedded in the library and compiled once by Bisheng on first use.
         assert calls.count("bisheng") == 1, calls
-        assert calls.count("ld.lld") == 6, calls
-        assert calls.count("bisheng-tune") == 5, calls
+        assert calls.count("ld.lld") == 7, calls
+        assert calls.count("bisheng-tune") == 6, calls
         caches = (root / "caches").read_text().splitlines()
         workdirs = (root / "workdirs").read_text().splitlines()
         probe_sources = (root / "probe_sources").read_text().splitlines()
         assert len(set(caches)) == 1
-        assert len(set(workdirs)) == 6
+        assert len(set(workdirs)) == 7
         # The probe is compiled in the shared cache directory, not in a per-kernel work directory.
         assert len(set(probe_sources)) == 1
         assert set(probe_sources) == set(caches)

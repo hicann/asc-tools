@@ -31,7 +31,7 @@ namespace aclpti::profiling {
 
 class BinaryRegistry;
 
-using ReplayLaunchFunction = std::function<aclError(aclrtFuncHandle)>;
+using ReplayLaunchFunction = std::function<aclError(aclrtFuncHandle, bool)>;
 
 class RangeProfiler {
 public:
