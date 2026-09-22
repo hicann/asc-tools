@@ -199,7 +199,8 @@ boost::filesystem::path AscendcDevkitRoot(const std::string& bisheng)
 #endif
 }
 
-std::vector<std::string> ProbeCompileFlags(const std::string& arch, const boost::filesystem::path& devkit)
+std::vector<std::string> ProbeCompileFlags(
+    const std::string& arch, const boost::filesystem::path& devkit, ProbeCoreType coreType)
 {
     std::vector<std::string> flags{
         "-xcce",
@@ -231,6 +232,11 @@ std::vector<std::string> ProbeCompileFlags(const std::string& arch, const boost:
         "-I",
         (devkit / "ascendc/include/highlevel_api").string(),
     };
+    if (coreType == ProbeCoreType::Aic) {
+        flags.emplace_back("-DNPU_CHECK_PROBE_CUBE_ONLY");
+    } else if (coreType == ProbeCoreType::Aiv) {
+        flags.emplace_back("-DNPU_CHECK_PROBE_VECTOR_ONLY");
+    }
     return flags;
 }
 
@@ -351,7 +357,7 @@ std::string GroupIdentity(const std::vector<ProbeGroup>& groups)
 
 std::string ArtifactManifest(
     const boost::filesystem::path& probeObject, const boost::filesystem::path& ctrlBin, const std::string& arch,
-    const std::vector<ProbeGroup>& groups, const std::string& objectIdentity)
+    const std::vector<ProbeGroup>& groups, ProbeCoreType coreType, const std::string& objectIdentity)
 {
     const std::string probeDigest = FileDigest(probeObject);
     const std::string ctrlDigest = FileDigest(ctrlBin);
@@ -359,14 +365,15 @@ std::string ArtifactManifest(
         return {};
     }
     std::ostringstream output;
-    output << "format=1\narch=" << arch << "\ngroups=" << GroupIdentity(groups) << "\nobjects=" << objectIdentity
-           << "\nprobe=" << probeDigest << "\nctrl=" << ctrlDigest << '\n';
+    output << "format=2\narch=" << arch << "\ncore=" << ProbeCoreTypeName(coreType)
+           << "\ngroups=" << GroupIdentity(groups) << "\nobjects=" << objectIdentity << "\nprobe=" << probeDigest
+           << "\nctrl=" << ctrlDigest << '\n';
     return output.str();
 }
 
 bool IsValidCachedArtifact(
     const boost::filesystem::path& directory, const std::string& arch, const std::vector<ProbeGroup>& groups,
-    const std::string& objectIdentity)
+    ProbeCoreType coreType, const std::string& objectIdentity)
 {
     boost::system::error_code error;
     const auto status = boost::filesystem::symlink_status(directory, error);
@@ -376,7 +383,7 @@ bool IsValidCachedArtifact(
     const auto probeObject = directory / "probe.o";
     const auto ctrlBin = directory / "ctrl.bin";
     const auto manifest = directory / "manifest";
-    const std::string expected = ArtifactManifest(probeObject, ctrlBin, arch, groups, objectIdentity);
+    const std::string expected = ArtifactManifest(probeObject, ctrlBin, arch, groups, coreType, objectIdentity);
     return !expected.empty() && ReadFile(manifest) == expected;
 }
 
@@ -440,8 +447,9 @@ bool RunChecked(
     return false;
 }
 
-std::string ParseFirstTextSymbol(const std::string& text, const std::string& property)
+std::vector<std::string> ParseTextSymbols(const std::string& text, const std::string& property)
 {
+    std::vector<std::string> symbols;
     std::istringstream lines(text);
     std::string line;
     while (std::getline(lines, line)) {
@@ -450,7 +458,33 @@ std::string ParseFirstTextSymbol(const std::string& text, const std::string& pro
             std::istream_iterator<std::string>(fields), std::istream_iterator<std::string>()};
         const bool textSection = items.size() > 3 && (items[3] == ".text" || items[3].compare(0, 6, ".text.") == 0);
         if (items.size() > 5 && items[1] == property && items[2] == "F" && textSection) {
-            return items[5];
+            symbols.push_back(items[5]);
+        }
+    }
+    return symbols;
+}
+
+bool EndsWith(const std::string& value, const std::string& suffix)
+{
+    return value.size() >= suffix.size() && value.compare(value.size() - suffix.size(), suffix.size(), suffix) == 0;
+}
+
+std::string SelectKernelTextSymbol(const std::string& text, const std::optional<uint64_t>& tilingKey)
+{
+    const auto symbols = ParseTextSymbols(text, "g");
+    if (!tilingKey.has_value()) {
+        return symbols.empty() ? std::string{} : symbols.front();
+    }
+
+    const std::string key = "_" + std::to_string(*tilingKey);
+    // ACLNN Mix kernels publish one symbol per tiling key and core half. Match the
+    // selected entry exactly and use the AIC half as the ordering anchor, as MS does.
+    for (const char* suffix : {"_mix_aic", "_aic", "", "_mix_aiv", "_aiv"}) {
+        const std::string expected = key + suffix;
+        const auto selected = std::find_if(
+            symbols.begin(), symbols.end(), [&](const std::string& symbol) { return EndsWith(symbol, expected); });
+        if (selected != symbols.end()) {
+            return *selected;
         }
     }
     return {};
@@ -480,7 +514,7 @@ struct GroupArtifact {
 };
 
 std::string GroupManifest(
-    const boost::filesystem::path& object, const std::string& arch, ProbeGroup group,
+    const boost::filesystem::path& object, const std::string& arch, ProbeCoreType coreType, ProbeGroup group,
     const GeneratedProbeSource& generated, const std::string& compilerIdentity)
 {
     const std::string digest = FileDigest(object);
@@ -488,14 +522,15 @@ std::string GroupManifest(
         return {};
     }
     std::ostringstream output;
-    output << "format=1\narch=" << arch << "\ngroup=" << ProbeGroupName(group) << "\nsource=" << generated.identity
+    output << "format=2\narch=" << arch << "\ncore=" << ProbeCoreTypeName(coreType)
+           << "\ngroup=" << ProbeGroupName(group) << "\nsource=" << generated.identity
            << "\ngenerator=" << ProbeGeneratorIdentity() << "\nresources=" << EmbeddedProbeResourceIdentity()
            << "\ncompiler=" << compilerIdentity << "\nobject=" << digest << '\n';
     return output.str();
 }
 
 bool IsValidGroupArtifact(
-    const boost::filesystem::path& directory, const std::string& arch, ProbeGroup group,
+    const boost::filesystem::path& directory, const std::string& arch, ProbeCoreType coreType, ProbeGroup group,
     const GeneratedProbeSource& generated, const std::string& compilerIdentity)
 {
     boost::system::error_code error;
@@ -504,7 +539,7 @@ bool IsValidGroupArtifact(
         return false;
     }
     const auto object = directory / "group.o";
-    const std::string expected = GroupManifest(object, arch, group, generated, compilerIdentity);
+    const std::string expected = GroupManifest(object, arch, coreType, group, generated, compilerIdentity);
     return !expected.empty() && ReadFile(directory / "manifest") == expected;
 }
 
@@ -543,18 +578,19 @@ bool GetOrBuildGroupArtifact(
         return false;
     }
     const auto devkit = AscendcDevkitRoot(tools.bisheng);
-    const auto compilerFlags = ProbeCompileFlags(request.arch, devkit);
+    const auto compilerFlags = ProbeCompileFlags(request.arch, devkit, request.coreType);
     const std::string compilerIdentity = FileIdentity(tools.bisheng) + ":" + TextIdentity(compilerFlags) + ":" +
                                          std::string(EmbeddedProbeResourceIdentity());
     const std::string cacheKey = MakeCacheKey(
-        request.arch, {group}, generated.identity + ":" + ProbeGeneratorIdentity() + ":" + compilerIdentity);
+        request.arch, {group}, generated.identity + ":" + ProbeGeneratorIdentity() + ":" + compilerIdentity,
+        request.coreType);
     const auto directory = groupsRoot / cacheKey;
     CacheLock lock;
     if (!lock.Acquire(groupsRoot / (cacheKey + ".lock"), result.diagnostic)) {
         result.stage = "group-cache-lock";
         return false;
     }
-    if (!IsValidGroupArtifact(directory, request.arch, group, generated, compilerIdentity)) {
+    if (!IsValidGroupArtifact(directory, request.arch, request.coreType, group, generated, compilerIdentity)) {
         const std::string buildId = std::to_string(static_cast<unsigned long long>(getpid())) + "-" +
                                     std::to_string(g_cacheBuildId.fetch_add(1));
         const auto staging = groupsRoot / (".build-" + cacheKey + "-" + buildId);
@@ -611,7 +647,8 @@ bool GetOrBuildGroupArtifact(
             }
             return false;
         }
-        const std::string manifest = GroupManifest(stagedObject, request.arch, group, generated, compilerIdentity);
+        const std::string manifest =
+            GroupManifest(stagedObject, request.arch, request.coreType, group, generated, compilerIdentity);
         if (manifest.empty() || !WriteExclusiveFile(staging / "manifest", manifest)) {
             result.stage = "publish-group-cache";
             result.diagnostic = "cannot create group manifest";
@@ -621,7 +658,7 @@ bool GetOrBuildGroupArtifact(
             return false;
         }
         stagingCleanup.Release();
-        if (!IsValidGroupArtifact(directory, request.arch, group, generated, compilerIdentity)) {
+        if (!IsValidGroupArtifact(directory, request.arch, request.coreType, group, generated, compilerIdentity)) {
             result.stage = "publish-group-cache";
             result.diagnostic = "published group artifact failed validation";
             return false;
@@ -633,6 +670,51 @@ bool GetOrBuildGroupArtifact(
 }
 
 } // namespace
+
+std::string ProbeCoreTypeName(ProbeCoreType coreType)
+{
+    switch (coreType) {
+        case ProbeCoreType::Aic:
+            return "aic";
+        case ProbeCoreType::Aiv:
+            return "aiv";
+        case ProbeCoreType::Mix:
+            return "mix";
+        case ProbeCoreType::Unknown:
+            return "unknown";
+    }
+    return "unknown";
+}
+
+ProbeCoreType DetectProbeCoreType(const std::string& kernelSymbols, const std::string& selectedKernelSymbol)
+{
+    if (selectedKernelSymbol.find("_mix_aic") != std::string::npos ||
+        selectedKernelSymbol.find("_mix_aiv") != std::string::npos) {
+        return ProbeCoreType::Mix;
+    }
+    if (EndsWith(selectedKernelSymbol, "_aic")) {
+        return ProbeCoreType::Aic;
+    }
+    if (EndsWith(selectedKernelSymbol, "_aiv")) {
+        return ProbeCoreType::Aiv;
+    }
+
+    const bool hasCubePipe = kernelSymbols.find("g_cubeTPipePtr") != std::string::npos;
+    const bool hasVectorPipe = kernelSymbols.find("g_vecTPipePtr") != std::string::npos;
+    if (hasCubePipe != hasVectorPipe) {
+        return hasCubePipe ? ProbeCoreType::Aic : ProbeCoreType::Aiv;
+    }
+    return ProbeCoreType::Mix;
+}
+
+std::vector<ProbeGroup> ResolveProbeGroups(
+    const std::vector<ProbeGroup>& requestedGroups, ProbeCoreType coreType, bool useCompleteProbeSet)
+{
+    if (useCompleteProbeSet && coreType == ProbeCoreType::Aic) {
+        return AllProbeGroups();
+    }
+    return NormalizeProbeGroups(requestedGroups);
+}
 
 bool ToolchainPaths::Complete() const
 {
@@ -701,10 +783,12 @@ std::string CannRootFromRuntimeLibrary(const std::string& runtimeLibrary)
 }
 
 std::string MakeCacheKey(
-    const std::string& arch, const std::vector<ProbeGroup>& groups, const std::string& objectIdentity)
+    const std::string& arch, const std::vector<ProbeGroup>& groups, const std::string& objectIdentity,
+    ProbeCoreType coreType)
 {
     uint64_t hash = 1469598103934665603ULL;
     hash = HashText(hash, arch);
+    hash = HashText(hash, ProbeCoreTypeName(coreType));
     for (const auto group : NormalizeProbeGroups(groups)) {
         hash = HashText(hash, ProbeGroupName(group));
     }
@@ -724,8 +808,8 @@ DbiResult RunDbiPipeline(const DbiRequest& request)
     if (!result.diagnostic.empty()) {
         return result;
     }
-    const auto groups = NormalizeProbeGroups(request.probeGroups);
-    if (!GenerateProbeSource(request.arch, groups.front()).success) {
+    const auto requestedGroups = NormalizeProbeGroups(request.probeGroups);
+    if (!GenerateProbeSource(request.arch, requestedGroups.front()).success) {
         result.stage = "architecture";
         result.diagnostic = "unsupported Probe architecture " + request.arch;
         return result;
@@ -740,6 +824,32 @@ DbiResult RunDbiPipeline(const DbiRequest& request)
                             " llvm-objdump=" + tools.llvmObjdump;
         return result;
     }
+
+    std::string kernelSymbols;
+    if (!RunChecked("inspect-kernel", {tools.llvmObjdump, "--syms", request.inputKernel}, result, &kernelSymbols)) {
+        return result;
+    }
+    const std::string kernelSymbol = SelectKernelTextSymbol(kernelSymbols, request.tilingKey);
+    if (kernelSymbol.empty()) {
+        result.stage = "symbol-ordering";
+        result.diagnostic = request.tilingKey.has_value() ? "cannot identify kernel text symbol for tiling key " +
+                                                                std::to_string(*request.tilingKey) :
+                                                            "cannot identify kernel text symbol";
+        return result;
+    }
+    DbiRequest resolvedRequest = request;
+    if (resolvedRequest.coreType == ProbeCoreType::Unknown) {
+        resolvedRequest.coreType = DetectProbeCoreType(kernelSymbols, kernelSymbol);
+    }
+    const auto groups =
+        ResolveProbeGroups(requestedGroups, resolvedRequest.coreType, resolvedRequest.useCompleteProbeSet);
+    const std::string tilingKeyText = request.tilingKey.has_value() ? std::to_string(*request.tilingKey) : "none";
+    LogToolOutput(
+        "kernel-selection", "selection",
+        "kernel=" + kernelSymbol + " tiling_key=" + tilingKeyText +
+            " core_type=" + ProbeCoreTypeName(resolvedRequest.coreType) +
+            " complete_probe_set=" + (groups == AllProbeGroups() ? "1" : "0"));
+
     // 准备本次流水线使用的工作目录和跨请求复用的缓存目录。
     boost::system::error_code error;
     boost::filesystem::create_directories(request.workDirectory, error);
@@ -765,7 +875,7 @@ DbiResult RunDbiPipeline(const DbiRequest& request)
     std::string groupIdentity;
     for (const ProbeGroup group : groups) {
         GroupArtifact artifact;
-        if (!GetOrBuildGroupArtifact(request, tools, groupsRoot, group, result, artifact)) {
+        if (!GetOrBuildGroupArtifact(resolvedRequest, tools, groupsRoot, group, result, artifact)) {
             return result;
         }
         groupIdentity.append(ProbeGroupName(group)).append(":").append(artifact.identity).append("\n");
@@ -773,10 +883,10 @@ DbiResult RunDbiPipeline(const DbiRequest& request)
     }
 
     // 聚合缓存把同一 normalized groups 的 probe.o 与 ctrl.bin 作为一个不可分割的产物发布。
-    const std::string artifactIdentity = groupIdentity + ":" + CtrlBinGeneratorIdentity() + ":" +
-                                         std::string(EmbeddedCtrlBinImplementationIdentity()) + ":" +
+    const std::string artifactIdentity = groupIdentity + ":probe-link-aicorelinux-v1:" + CtrlBinGeneratorIdentity() +
+                                         ":" + std::string(EmbeddedCtrlBinImplementationIdentity()) + ":" +
                                          FileIdentity(tools.ldLld);
-    const std::string cacheKey = MakeCacheKey(request.arch, groups, artifactIdentity);
+    const std::string cacheKey = MakeCacheKey(request.arch, groups, artifactIdentity, resolvedRequest.coreType);
     const auto artifactDirectory = aggregatesRoot / cacheKey;
     CacheLock cacheLock;
     if (!cacheLock.Acquire(aggregatesRoot / (cacheKey + ".lock"), result.diagnostic)) {
@@ -785,7 +895,7 @@ DbiResult RunDbiPipeline(const DbiRequest& request)
     }
     const auto probeObject = artifactDirectory / "probe.o";
     const auto ctrlBin = artifactDirectory / "ctrl.bin";
-    if (!IsValidCachedArtifact(artifactDirectory, request.arch, groups, artifactIdentity)) {
+    if (!IsValidCachedArtifact(artifactDirectory, request.arch, groups, resolvedRequest.coreType, artifactIdentity)) {
         const std::string buildId = std::to_string(static_cast<unsigned long long>(getpid())) + "-" +
                                     std::to_string(g_cacheBuildId.fetch_add(1));
         const auto stagingDirectory = aggregatesRoot / (".build-" + cacheKey + "-" + buildId);
@@ -802,7 +912,7 @@ DbiResult RunDbiPipeline(const DbiRequest& request)
 
         // 将已校验的 group objects 合并，保证后续只需向内核链接一个 probe.o。
         const auto stagedProbeObject = stagingDirectory / "probe.o";
-        std::vector<std::string> linkArguments{tools.ldLld, "-r"};
+        std::vector<std::string> linkArguments{tools.ldLld, "-r", "-m", "aicorelinux"};
         linkArguments.insert(linkArguments.end(), objectPaths.begin(), objectPaths.end());
         linkArguments.insert(linkArguments.end(), {"-o", stagedProbeObject.string()});
         if (!RunChecked("link-probe", linkArguments, result) || !IsNonEmptyFile(stagedProbeObject)) {
@@ -819,8 +929,8 @@ DbiResult RunDbiPipeline(const DbiRequest& request)
             result.stage = "generate-ctrlbin";
             return result;
         }
-        const std::string manifest =
-            ArtifactManifest(stagedProbeObject, stagedCtrlBin, request.arch, groups, artifactIdentity);
+        const std::string manifest = ArtifactManifest(
+            stagedProbeObject, stagedCtrlBin, request.arch, groups, resolvedRequest.coreType, artifactIdentity);
         if (manifest.empty() || !WriteExclusiveFile(stagingDirectory / "manifest", manifest)) {
             result.stage = "publish-cache";
             result.diagnostic = "cannot create Probe artifact manifest";
@@ -831,7 +941,8 @@ DbiResult RunDbiPipeline(const DbiRequest& request)
             return result;
         }
         stagingCleanup.Release();
-        if (!IsValidCachedArtifact(artifactDirectory, request.arch, groups, artifactIdentity)) {
+        if (!IsValidCachedArtifact(
+                artifactDirectory, request.arch, groups, resolvedRequest.coreType, artifactIdentity)) {
             result.stage = "publish-cache";
             result.diagnostic = "published Probe artifact failed validation";
             return result;
@@ -840,22 +951,22 @@ DbiResult RunDbiPipeline(const DbiRequest& request)
     // 缓存文件发布后不再修改，后续均为请求私有操作，因此提前释放缓存锁。
     cacheLock.Release();
 
-    // 读取原始内核和探针对象的符号表，提取待合并的内核全局符号与探针弱符号。
-    std::string kernelSymbols;
-    if (!RunChecked("inspect-kernel", {tools.llvmObjdump, "--syms", request.inputKernel}, result, &kernelSymbols)) {
-        return result;
-    }
+    // 读取探针对象的符号表，提取待合并的探针弱符号。
     std::string probeSymbols;
     if (!RunChecked("inspect-probe", {tools.llvmObjdump, "--syms", probeObject.string()}, result, &probeSymbols)) {
         return result;
     }
-    const std::string kernelSymbol = ParseFirstTextSymbol(kernelSymbols, "g");
-    const std::string probeSymbol = ParseFirstTextSymbol(probeSymbols, "w");
+    const auto probeTextSymbols = ParseTextSymbols(probeSymbols, "w");
+    const std::string probeSymbol = probeTextSymbols.empty() ? std::string{} : probeTextSymbols.front();
     if (kernelSymbol.empty() || probeSymbol.empty()) {
         result.stage = "symbol-ordering";
-        result.diagnostic = "cannot identify kernel or Probe text symbol";
+        result.diagnostic = "cannot identify Probe text symbol";
         return result;
     }
+    LogToolOutput(
+        "symbol-selection", "selection",
+        "kernel=" + kernelSymbol + " probe=" + probeSymbol + " tiling_key=" + tilingKeyText +
+            " core_type=" + ProbeCoreTypeName(resolvedRequest.coreType));
     // 生成符号排序文件，确保链接后原始内核正文位于探针入口之前。
     const auto orderingFile = boost::filesystem::path(request.workDirectory) / "symbol_ordering.txt";
     if (!WriteReplaceFile(orderingFile, kernelSymbol + "\n" + probeSymbol)) {
@@ -915,6 +1026,16 @@ DbiResult RunDbiPipeline(const DbiRequest& request)
         "--dbi-config=" + ctrlBin.string(),
         "-o=" + stagedOutput.string()};
     tuneArguments.insert(tuneArguments.end(), request.extraTuneArgs.begin(), request.extraTuneArgs.end());
+    if (request.tilingKey.has_value()) {
+        for (const auto& argument : request.extraTuneArgs) {
+            if (argument.rfind("--tiling-key", 0) == 0 || argument.rfind("--tune-argsize", 0) == 0) {
+                result.stage = "selection";
+                result.diagnostic = "extra tune arguments override the selected entry or trace offset";
+                return result;
+            }
+        }
+        tuneArguments.emplace_back("--tiling-key=" + std::to_string(*request.tilingKey));
+    }
     if (!RunChecked("bisheng-tune", tuneArguments, result) || !IsNonEmptyFile(stagedOutput)) {
         if (result.diagnostic.empty()) {
             result.stage = "bisheng-tune";
@@ -930,7 +1051,9 @@ DbiResult RunDbiPipeline(const DbiRequest& request)
         std::string patched = ReadFile(stagedOutput);
         std::string kernelBeforePatch = ReadFile(request.inputKernel);
         // 获取 整改插桩.o的meta段后的内容
-        if (!ModifyKernelParamMetadata(kernelBeforePatch, patched, request.traceArgumentOffset, result.diagnostic)) {
+        if (!ModifyKernelParamMetadata(
+                kernelBeforePatch, patched, request.traceArgumentOffset, result.diagnostic,
+                request.tilingKey ? &*request.tilingKey : nullptr)) {
             result.diagnostic = "cannot modify kernel ELF metadata: " + result.diagnostic;
             return result;
         }

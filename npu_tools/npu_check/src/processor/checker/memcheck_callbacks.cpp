@@ -19,6 +19,7 @@ const std::vector<CallbackSpec>& Memcheck::GetSubscribedID() const
         {ACLSAN_CB_DOMAIN_RESOURCE, ACLSAN_CBID_RESOURCE_MEMORY_ALLOC},
         {ACLSAN_CB_DOMAIN_RESOURCE, ACLSAN_CBID_RESOURCE_MEMORY_FREE},
         {ACLSAN_CB_DOMAIN_DEVICE_INSTRUCTION, ACLSAN_CBID_DEVICE_MEMORY_ACCESS},
+        {ACLSAN_CB_DOMAIN_LAUNCH, ACLSAN_CBID_LAUNCH_KERNEL},
         {ACLSAN_CB_DOMAIN_SYNCHRONIZE, ACLSAN_CBID_SYNCHRONIZE_STREAM_SYNC_END}};
     return callbacks;
 }
@@ -36,8 +37,16 @@ bool Memcheck::OnCallback(
     } else if (domain == ACLSAN_CB_DOMAIN_DEVICE_INSTRUCTION) {
         const auto* event = static_cast<const AclsanDeviceMemoryAccessData*>(data);
         QueueDeviceMemoryAccess(*event);
+    } else if (domain == ACLSAN_CB_DOMAIN_LAUNCH) {
+        const auto* event = static_cast<const AclsanLaunchData*>(data);
+        if (event->common.result != 0) {
+            ++stats_.failedLaunches;
+        }
     } else if (domain == ACLSAN_CB_DOMAIN_SYNCHRONIZE) {
         const auto* event = static_cast<const AclsanSynchronizeData*>(data);
+        if (event->common.result != 0) {
+            ++stats_.failedSynchronizations;
+        }
         auto completed = OnSynchronization();
         ASCTOOL_INFO("synchronization completed reports=%zu stream=%p", completed.size(), event->stream);
         AppendCheckerReports(std::move(completed), reports);
@@ -49,7 +58,8 @@ bool Memcheck::HasErrors() const { return Stats().errors != 0; }
 bool Memcheck::AnalysisComplete() const
 {
     const auto stats = Stats();
-    return stats.pendingDeviceOperations == 0 && stats.droppedDeviceOperations == 0;
+    return stats.pendingDeviceOperations == 0 && stats.droppedDeviceOperations == 0 && stats.failedLaunches == 0 &&
+           stats.failedSynchronizations == 0;
 }
 std::string Memcheck::Summary() const
 {
@@ -59,7 +69,9 @@ std::string Memcheck::Summary() const
            << " device_operations=" << stats.deviceOperations << " synchronizations=" << stats.synchronizationEvents
            << " errors=" << stats.errors << " warnings=" << stats.warnings
            << " pending_device_operations=" << stats.pendingDeviceOperations
-           << " dropped_device_operations=" << stats.droppedDeviceOperations;
+           << " dropped_device_operations=" << stats.droppedDeviceOperations
+           << " failed_launches=" << stats.failedLaunches
+           << " failed_synchronizations=" << stats.failedSynchronizations;
     return output.str();
 }
 } // namespace npucheck

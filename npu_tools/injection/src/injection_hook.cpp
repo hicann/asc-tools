@@ -15,6 +15,7 @@
 
 #include <mutex>
 #include <pthread.h>
+#include <array>
 
 namespace {
 
@@ -56,6 +57,8 @@ constexpr const char* kRuntimeApiNames[ACL_RT_API_MAX] = {
     "aclrtMallocAlign32",
     "aclrtFunctionGetParamCount",
     "aclrtFunctionGetParamInfo",
+    "aclrtMallocWithCfg",
+    "aclrtBinaryLoadFromFile",
 };
 
 std::mutex g_initMutex;
@@ -269,6 +272,32 @@ extern "C" aclError aclrtFreeHook(void* devPtr)
     }
     const aclError result = callback(devPtr);
     LogHookResult("aclrtFree", id, result);
+    return result;
+}
+
+extern "C" aclError aclrtMallocWithCfgHook(
+    void** ptr, size_t bytes, aclrtMemMallocPolicy policy, aclrtMallocConfig* cfg)
+{
+    constexpr auto id = ACL_RT_API_aclrtMallocWithCfg;
+    const auto callback = GetDispatchTarget<aclrtMallocWithCfgFunc>(id);
+    if (callback == nullptr) {
+        return ACL_ERROR_UNINITIALIZE;
+    }
+    const auto result = callback(ptr, bytes, policy, cfg);
+    LogHookResult("aclrtMallocWithCfg", id, result);
+    return result;
+}
+
+extern "C" aclError aclrtBinaryLoadFromFileHook(
+    const char* path, aclrtBinaryLoadOptions* options, aclrtBinHandle* binary)
+{
+    constexpr auto id = ACL_RT_API_aclrtBinaryLoadFromFile;
+    const auto callback = GetDispatchTarget<aclrtBinaryLoadFromFileFunc>(id);
+    if (callback == nullptr) {
+        return ACL_ERROR_UNINITIALIZE;
+    }
+    const auto result = callback(path, options, binary);
+    LogHookResult("aclrtBinaryLoadFromFile", id, result);
     return result;
 }
 
@@ -579,6 +608,8 @@ aclApiTable g_aclApiTable = {
         FunctionToAddress(&aclrtMallocAlign32Hook),
         FunctionToAddress(&aclrtFunctionGetParamCountHook),
         FunctionToAddress(&aclrtFunctionGetParamInfoHook),
+        FunctionToAddress(&aclrtMallocWithCfgHook),
+        FunctionToAddress(&aclrtBinaryLoadFromFileHook),
     },
     {},
     {},
@@ -608,12 +639,21 @@ extern "C" ACL_TOOL_INJECTION_EXPORT int32_t acltoolHookInit(void)
         return ACL_SUCCESS;
     }
 
+    std::array<aclrtApiFunc, ACL_RT_API_MAX> previous{};
+    auto rollback = [&previous]() {
+        for (size_t i = previous.size(); i != 0; --i) {
+            if (previous[i - 1]) {
+                (void)aclrtApiInjectionSetFunc(FindRuntimeApiName(static_cast<aclrtApiId>(i - 1)), previous[i - 1]);
+            }
+        }
+    };
     for (int32_t value = 0; value < static_cast<int32_t>(ACL_RT_API_MAX); ++value) {
         const auto id = static_cast<aclrtApiId>(value);
         const size_t index = static_cast<size_t>(id);
         const char* name = FindRuntimeApiName(id);
         const aclrtApiFunc hook = AddressToFunction<aclrtApiFunc>(g_aclApiTable.hook[index]);
         if (name == nullptr || hook == nullptr) {
+            rollback();
             injection::detail::DebugLog(
                 "tool_injection", "hook initialization failed: invalid entry id=%d name=%s hook=%p",
                 static_cast<int>(id), name == nullptr ? "unknown" : name, FunctionToAddress(hook));
@@ -622,21 +662,28 @@ extern "C" ACL_TOOL_INJECTION_EXPORT int32_t acltoolHookInit(void)
         aclrtApiFunc origin = nullptr;
         aclrtApiFunc current = nullptr;
         aclError ret = aclrtApiInjectionGetFunc(name, &origin, &current);
+        if ((id == ACL_RT_API_aclrtMallocWithCfg || id == ACL_RT_API_aclrtBinaryLoadFromFile) &&
+            (ret != ACL_SUCCESS || origin == nullptr || current == nullptr)) {
+            continue;
+        }
         injection::detail::DebugLog(
             "tool_injection", "get runtime entry: name=%s id=%d result=%d origin=%p current=%p", name,
             static_cast<int>(id), static_cast<int>(ret), FunctionToAddress(origin), FunctionToAddress(current));
         if (ret != ACL_SUCCESS) {
+            rollback();
             injection::detail::DebugLog(
                 "tool_injection", "hook initialization failed: get runtime entry name=%s result=%d", name,
                 static_cast<int>(ret));
             return ret;
         }
         if (origin == nullptr || current == nullptr) {
+            rollback();
             injection::detail::DebugLog(
                 "tool_injection", "hook initialization failed: empty runtime entry name=%s", name);
             return ACL_ERROR_UNINITIALIZE;
         }
         if (!SaveOriginalRuntimeEntry(id, FunctionToAddress(origin))) {
+            rollback();
             injection::detail::DebugLog(
                 "tool_injection", "hook initialization failed: save origin entry name=%s", name);
             return ACL_ERROR_INTERNAL_ERROR;
@@ -647,11 +694,13 @@ extern "C" ACL_TOOL_INJECTION_EXPORT int32_t acltoolHookInit(void)
             "tool_injection", "set runtime hook: name=%s id=%d hook=%p result=%d", name, static_cast<int>(id),
             FunctionToAddress(hook), static_cast<int>(ret));
         if (ret != ACL_SUCCESS) {
+            rollback();
             injection::detail::DebugLog(
                 "tool_injection", "hook initialization failed: set runtime hook name=%s result=%d", name,
                 static_cast<int>(ret));
             return ret;
         }
+        previous[index] = current;
     }
 
     g_hookInstalled = true;
@@ -843,4 +892,15 @@ extern "C" ACL_TOOL_INJECTION_EXPORT int32_t
 acltoolRegisterAclrtFunctionGetParamInfoCallbacks(aclrtFunctionGetParamInfoFunc callback)
 {
     return RegisterCallback(ACL_RT_API_aclrtFunctionGetParamInfo, FunctionToAddress(callback));
+}
+
+extern "C" ACL_TOOL_INJECTION_EXPORT int32_t acltoolRegisterAclrtMallocWithCfgCallbacks(aclrtMallocWithCfgFunc callback)
+{
+    return RegisterCallback(ACL_RT_API_aclrtMallocWithCfg, FunctionToAddress(callback));
+}
+
+extern "C" ACL_TOOL_INJECTION_EXPORT int32_t
+acltoolRegisterAclrtBinaryLoadFromFileCallbacks(aclrtBinaryLoadFromFileFunc callback)
+{
+    return RegisterCallback(ACL_RT_API_aclrtBinaryLoadFromFile, FunctionToAddress(callback));
 }

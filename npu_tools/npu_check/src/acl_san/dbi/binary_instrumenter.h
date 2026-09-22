@@ -22,7 +22,7 @@ namespace aclsan {
 
 struct BinaryInstrumentationConfig {
     std::string arch;
-    // 隐藏 trace buffer 指针的 kernel 参数偏移；为 0 时在 binary load 插桩阶段从 Device ELF 元数据计算。
+    // Runtime 观测到的 kernel 参数区下界；插桩阶段还会与 Device ELF 元数据边界取最大值。
     uint32_t traceArgumentOffset = 0;
     std::vector<ProbeGroup> probeGroups;
     std::string toolchainRoot;
@@ -30,6 +30,7 @@ struct BinaryInstrumentationConfig {
     std::string cacheDirectory;
     bool strict = false;
     bool keepTemp = false;
+    bool useCompleteProbeSet = false;
     std::vector<std::string> tuneArgs;
 };
 
@@ -61,7 +62,7 @@ static_assert(sizeof(RuntimeBinaryInstrumentationResult) == 16);
 
 bool BuildRuntimeInstrumentationConfig(
     const char* socName, const char* runtimeLibrary, uint32_t probeGroupMask, BinaryInstrumentationConfig& config,
-    std::string& diagnostic);
+    std::string& diagnostic, bool useCompleteProbeSet = false);
 BinaryInstrumentationResult InstrumentBinary(
     const BinaryInstrumentationConfig& config, const void* data, size_t length, DbiPipelineRunner runner,
     void* runnerData = nullptr);
@@ -69,12 +70,17 @@ BinaryInstrumentationResult InstrumentBinary(
     const BinaryInstrumentationConfig& config, const void* data, size_t length);
 RuntimeBinaryInstrumentationResult InstrumentRuntimeBinary(
     const void* data, size_t length, uint32_t probeGroupMask, const char* socName, const char* runtimeLibrary,
-    InstrumentedBinaryConsumer consumer, void* consumerData, DbiPipelineRunner runner,
-    void* runnerData = nullptr) noexcept;
+    InstrumentedBinaryConsumer consumer, void* consumerData, DbiPipelineRunner runner, void* runnerData = nullptr,
+    uint32_t traceOffset = 0, bool appendParamInfo = true, bool useCompleteProbeSet = false) noexcept;
 // Cross-target callers use this overload; the runner overload above is a same-ABI test seam.
 RuntimeBinaryInstrumentationResult InstrumentRuntimeBinary(
     const void* data, size_t length, uint32_t probeGroupMask, const char* socName, const char* runtimeLibrary,
     InstrumentedBinaryConsumer consumer, void* consumerData) noexcept;
+// Pointer presence distinguishes no selection from the valid tiling key zero.
+RuntimeBinaryInstrumentationResult InstrumentRuntimeBinaryForEntry(
+    const void* data, size_t length, uint32_t probeGroupMask, const char* socName, const char* runtimeLibrary,
+    InstrumentedBinaryConsumer consumer, void* consumerData, const uint64_t* entry, uint32_t traceOffset = 0,
+    bool appendParamInfo = true, bool useCompleteProbeSet = false) noexcept;
 
 } // namespace aclsan
 

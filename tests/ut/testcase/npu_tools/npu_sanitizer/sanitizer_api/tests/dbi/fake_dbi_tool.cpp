@@ -8,8 +8,7 @@
 
 #include <cctype>
 #include <cstdlib>
-#include <boost/filesystem.hpp>
-#include <boost/system/error_code.hpp>
+#include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <iterator>
@@ -42,7 +41,7 @@ int main(int argc, char** argv)
     if (argc < 1 || argv == nullptr || argv[0] == nullptr) {
         return 2;
     }
-    const std::string tool = boost::filesystem::path(argv[0]).filename().string();
+    const std::string tool = std::filesystem::path(argv[0]).filename().string();
     const char* logPath = std::getenv("DBI_FAKE_LOG");
     if (logPath == nullptr || logPath[0] == '\0') {
         return 2;
@@ -56,6 +55,11 @@ int main(int argc, char** argv)
         log << " <" << argv[index] << '>';
     }
     log << '\n';
+
+    const char* failTool = std::getenv("DBI_FAKE_FAIL");
+    if (failTool != nullptr && tool == failTool) {
+        return 7;
+    }
 
     if (tool == "llvm-objdump") {
         const std::string input = argc > 1 ? argv[argc - 1] : "";
@@ -80,15 +84,15 @@ int main(int argc, char** argv)
             output = argv[++index];
         } else if (argument.rfind("-o=", 0) == 0) {
             output = argument.substr(3);
-        } else if (boost::filesystem::is_regular_file(argument)) {
+        } else if (std::filesystem::is_regular_file(argument)) {
             inputs.push_back(argument);
         }
     }
     if (output.empty()) {
         return 2;
     }
-    boost::system::error_code error;
-    boost::filesystem::create_directories(boost::filesystem::path(output).parent_path(), error);
+    std::error_code error;
+    std::filesystem::create_directories(std::filesystem::path(output).parent_path(), error);
     if (error) {
         return 2;
     }

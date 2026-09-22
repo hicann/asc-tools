@@ -227,6 +227,8 @@ target_link_options(npu_tools_utest PRIVATE
   -Wl,--wrap=acltoolRegisterAclrtBinaryGetFunctionByEntryCallbacks
   -Wl,--wrap=acltoolRegisterAclrtLaunchKernelWithHostArgsCallbacks
   -Wl,--wrap=acltoolRegisterAclrtLaunchKernelWithArgsArrayCallbacks
+  -Wl,--wrap=acltoolRegisterAclrtMallocWithCfgCallbacks
+  -Wl,--wrap=acltoolRegisterAclrtBinaryLoadFromFileCallbacks
   -Wl,--wrap=aclsanSubscribe
   -Wl,--wrap=aclsanUnsubscribe
   -Wl,--wrap=aclsanEnableCallback

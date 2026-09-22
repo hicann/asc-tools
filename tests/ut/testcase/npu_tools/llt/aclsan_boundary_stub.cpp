@@ -195,3 +195,7 @@ ACLSAN_BOUNDARY_REGISTER_DEF(
 ACLSAN_BOUNDARY_REGISTER_DEF(
     acltoolRegisterAclrtLaunchKernelWithArgsArrayCallbacks, aclrtLaunchKernelWithArgsArrayFunc,
     ACL_RT_API_aclrtLaunchKernelWithArgsArray)
+ACLSAN_BOUNDARY_REGISTER_DEF(
+    acltoolRegisterAclrtMallocWithCfgCallbacks, aclrtMallocWithCfgFunc, ACL_RT_API_aclrtMallocWithCfg)
+ACLSAN_BOUNDARY_REGISTER_DEF(
+    acltoolRegisterAclrtBinaryLoadFromFileCallbacks, aclrtBinaryLoadFromFileFunc, ACL_RT_API_aclrtBinaryLoadFromFile)

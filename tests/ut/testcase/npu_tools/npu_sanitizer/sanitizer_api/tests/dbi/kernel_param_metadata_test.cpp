@@ -77,7 +77,7 @@ std::string ControlMetadata(uint32_t kernelType)
     return data;
 }
 
-std::string Elf(const std::vector<std::string>& metadata)
+std::string Elf(const std::vector<std::string>& metadata, const std::vector<std::string>& kernelNames = {})
 {
     const size_t count = metadata.size() + 3;
     std::string data(sizeof(Elf64_Ehdr) + count * sizeof(Elf64_Shdr), '\0');
@@ -108,7 +108,9 @@ std::string Elf(const std::vector<std::string>& metadata)
     };
     append(2, ".text", "executable-bytes", SHF_ALLOC | SHF_EXECINSTR);
     for (size_t i = 0; i < metadata.size(); ++i) {
-        append(i + 3, ".ascend.meta.kernel" + std::to_string(i), metadata[i], 0);
+        append(
+            i + 3, ".ascend.meta." + (kernelNames.empty() ? "kernel" + std::to_string(i) : kernelNames.at(i)),
+            metadata[i], 0);
     }
     Elf64_Shdr strings{};
     strings.sh_type = SHT_STRTAB;
@@ -254,9 +256,39 @@ void CheckRuntimeOrdinalSemantics()
 
 TEST(KernelParamMetadata, Main)
 {
+    {
+        const auto original =
+            Elf({Metadata(0, 0), Metadata(0, 0), Metadata(0, 0)}, {"kernel_0_mix_aic", "kernel_0_mix_aiv", "kernel_1"});
+        auto patched = Elf({Metadata(0, 0), Metadata(0, 0)}, {"kernel_0_mix_aic", "kernel_0_mix_aiv"});
+        std::string diagnostic;
+        const uint64_t key = 0;
+        assert(aclsan::ModifyKernelParamMetadata(original, patched, 16, diagnostic, &key));
+        auto missingHalf = Elf({Metadata(0, 0)}, {"kernel_0_mix_aic"});
+        const auto unchanged = missingHalf;
+        assert(!aclsan::ModifyKernelParamMetadata(original, missingHalf, 16, diagnostic, &key));
+        assert(missingHalf == unchanged);
+        const uint64_t missing = 2;
+        assert(!aclsan::ModifyKernelParamMetadata(original, patched, 16, diagnostic, &missing));
+        CheckRejected(original, patched, 16);
+    }
     CheckMixedAndIdempotent();
     CheckControlMetadataIsIgnoredAndPreserved();
     CheckRuntimeOrdinalSemantics();
+    // Old ACLNN binaries can carry tiling/shape TLVs without Runtime parameter descriptors.
+    const std::string legacy("\x01\x00\x04\x00\x03\x00\x00\x00", 8);
+    std::string legacyDiagnostic;
+    const auto legacyOriginal = Elf({legacy});
+    auto legacyPatched = legacyOriginal;
+    assert(aclsan::ModifyKernelParamMetadata(legacyOriginal, legacyPatched, 24, legacyDiagnostic));
+    assert(legacyPatched == legacyOriginal);
+    legacyPatched = Elf({legacy + Metadata(1, 24)});
+    assert(aclsan::ModifyKernelParamMetadata(legacyOriginal, legacyPatched, 24, legacyDiagnostic));
+    const auto legacySection = Get<Elf64_Shdr>(legacyPatched, 64 + 3 * 64);
+    assert(
+        legacyPatched.substr(legacySection.sh_offset, legacySection.sh_size) ==
+        legacy + std::string("\x63\x00\x03\x00xyz", 7));
+    CheckRejected(Elf({Metadata(1, 0).substr(16)}), legacyPatched, 24);
+    CheckRejected(Elf({Metadata(1, 0)}), Elf({legacy}), 24);
     const auto original = Elf({Metadata(0, 0)});
     auto patched = original;
     std::string diagnostic;

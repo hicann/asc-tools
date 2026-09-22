@@ -32,6 +32,8 @@ struct MemcheckStats {
     uint64_t warnings = 0;
     uint64_t pendingDeviceOperations = 0;
     uint64_t droppedDeviceOperations = 0;
+    uint64_t failedLaunches = 0;
+    uint64_t failedSynchronizations = 0;
 };
 
 class Memcheck final : public Checker {

@@ -85,6 +85,19 @@ if(ENABLE_TEST)
     WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/npu_tools/lib64")
 
   if(TARGET acl_runtime_stub)
+    add_executable(aclsan_multi_entry ${SANITIZER_API_TEST_DIR}/aclsan_multi_entry.cpp)
+    set_target_properties(aclsan_multi_entry PROPERTIES ENABLE_EXPORTS ON)
+    target_compile_options(aclsan_multi_entry PRIVATE -UNDEBUG)
+    target_include_directories(aclsan_multi_entry PRIVATE ${SANITIZER_API_TEST_DIR}/dbi)
+    target_link_libraries(aclsan_multi_entry PRIVATE
+      acl_san_test acl_tool_injection_test acl_runtime_stub acl_prof_api_stub Threads::Threads)
+
+    add_executable(aclsan_aclnn_runtime_hooks ${SANITIZER_API_TEST_DIR}/aclsan_aclnn_runtime_hooks.cpp)
+    target_compile_features(aclsan_aclnn_runtime_hooks PRIVATE cxx_std_17)
+    target_include_directories(aclsan_aclnn_runtime_hooks PRIVATE ${SANITIZER_API_TEST_DIR}/dbi)
+    target_link_libraries(aclsan_aclnn_runtime_hooks PRIVATE
+      acl_san_test acl_tool_injection_test acl_runtime_stub)
+
     add_executable(aclsan_trace_d2h_hook ${SANITIZER_API_TEST_DIR}/aclsan_trace_d2h_hook.cpp)
     target_compile_features(aclsan_trace_d2h_hook PRIVATE cxx_std_17)
     target_include_directories(aclsan_trace_d2h_hook PRIVATE
@@ -136,17 +149,31 @@ if(ENABLE_TEST)
       acl_san_test acl_tool_injection_test acl_runtime_stub Boost::filesystem)
 
     foreach(target IN ITEMS aclsan_symbolizer_api_test
+        aclsan_multi_entry
+        aclsan_aclnn_runtime_hooks
         aclsan_trace_d2h_hook
         aclsan_full_flow_host_sample)
       add_dependencies(${target} aclsan_full_flow_fake_dbi_tool)
     endforeach()
 
-    foreach(target IN ITEMS aclsan_symbolizer_api_test aclsan_trace_d2h_hook)
+    foreach(target IN ITEMS aclsan_symbolizer_api_test aclsan_trace_d2h_hook aclsan_aclnn_runtime_hooks)
       add_test(NAME ${target}
         COMMAND ${CMAKE_COMMAND}
           -DTEST_EXECUTABLE=$<TARGET_FILE:${target}>
           -DFAKE_TOOL=$<TARGET_FILE:aclsan_full_flow_fake_dbi_tool>
           -DTEST_ROOT=${CMAKE_CURRENT_BINARY_DIR}/${target}-dbi
+          -DRUNTIME_ROOT=${NPU_TOOLS_TEST_CANN_ROOT}
+          -DINJECTION_LIBRARY_DIR=$<TARGET_FILE_DIR:acl_san_test>
+          -P ${SANITIZER_API_TEST_DIR}/run_with_fake_dbi.cmake)
+    endforeach()
+
+    foreach(mode IN ITEMS data file)
+      add_test(NAME aclsan.multi_entry.${mode}
+        COMMAND ${CMAKE_COMMAND}
+          -DTEST_EXECUTABLE=$<TARGET_FILE:aclsan_multi_entry>
+          -DTEST_ARGUMENTS=$<$<STREQUAL:${mode},file>:--file>
+          -DFAKE_TOOL=$<TARGET_FILE:aclsan_full_flow_fake_dbi_tool>
+          -DTEST_ROOT=${CMAKE_CURRENT_BINARY_DIR}/multi-entry-${mode}
           -DRUNTIME_ROOT=${NPU_TOOLS_TEST_CANN_ROOT}
           -DINJECTION_LIBRARY_DIR=$<TARGET_FILE_DIR:acl_san_test>
           -P ${SANITIZER_API_TEST_DIR}/run_with_fake_dbi.cmake)
@@ -159,6 +186,16 @@ if(ENABLE_TEST)
         -DTEST_ROOT=${CMAKE_CURRENT_BINARY_DIR}/full-flow-host
         -DRUNTIME_ROOT=${NPU_TOOLS_TEST_CANN_ROOT}
         -P ${SANITIZER_API_TEST_DIR}/dbi/run_full_flow_host_sample.cmake)
+
+    add_test(NAME aclsan.file_load_trace_d2h
+      COMMAND ${CMAKE_COMMAND}
+        -DTEST_EXECUTABLE=$<TARGET_FILE:aclsan_trace_d2h_hook>
+        -DTEST_ARGUMENTS=--file
+        -DFAKE_TOOL=$<TARGET_FILE:aclsan_full_flow_fake_dbi_tool>
+        -DTEST_ROOT=${CMAKE_CURRENT_BINARY_DIR}/file-load-d2h
+        -DRUNTIME_ROOT=${NPU_TOOLS_TEST_CANN_ROOT}
+        -DINJECTION_LIBRARY_DIR=$<TARGET_FILE_DIR:acl_san_test>
+        -P ${SANITIZER_API_TEST_DIR}/run_with_fake_dbi.cmake)
   endif()
 endif()
 if(ENABLE_TEST OR NPU_CHECK_ENABLE_REAL_DBI_FLOW OR NPU_CHECK_ENABLE_REAL_DBI_TOOLCHAIN)

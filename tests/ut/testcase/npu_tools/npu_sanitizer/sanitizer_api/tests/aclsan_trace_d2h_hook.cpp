@@ -19,6 +19,10 @@
 #include <cstdlib>
 #include <cstring>
 #include <vector>
+#include <fstream>
+#include <iterator>
+#include <string>
+#include <unistd.h>
 
 namespace {
 
@@ -70,7 +74,19 @@ size_t g_expectedLaunchArgumentBytes = 24;
 uint32_t g_expectedPlaceholderDataOffset = 0;
 uint32_t g_expectedPaddingBegin = 0;
 bool g_checkPadding = false;
+bool g_expectMaterializedHostInput = false;
 size_t g_binaryLoadCalls = 0;
+bool g_loadFromFile = false;
+std::vector<std::string> g_patchedPaths;
+
+aclError OriginalFileLoad(const char* path, aclrtBinaryLoadOptions* options, aclrtBinHandle* binary)
+{
+    g_patchedPaths.emplace_back(path);
+    std::ifstream input(path, std::ios::binary);
+    const std::vector<uint8_t> image{std::istreambuf_iterator<char>(input), {}};
+    // Simulate File delegating to Data: the outer hook must remain the only DBI owner.
+    return aclrtBinaryLoadFromData(image.data(), image.size(), options, binary);
+}
 
 const auto kOffset16Binary = reinterpret_cast<aclrtBinHandle>(0x161);
 const auto kOffset8Binary = reinterpret_cast<aclrtBinHandle>(0x81);
@@ -123,6 +139,18 @@ bool LoadInstrumentedFunction(uint32_t argumentSize, const char* name, aclrtFunc
     const std::vector<uint8_t> image = aclsan::test::MakeKernelArgumentSizeElf(argumentSize);
     aclrtBinaryLoadOptions options{};
     aclrtBinHandle binary = nullptr;
+    if (g_loadFromFile) {
+        char path[] = "/tmp/aclsan-d2h-file-XXXXXX";
+        const int fd = mkstemp(path);
+        if (fd < 0)
+            return false;
+        const auto bytes = write(fd, image.data(), image.size());
+        (void)close(fd);
+        const bool loaded = bytes == static_cast<ssize_t>(image.size()) &&
+                            aclrtBinaryLoadFromFile(path, &options, &binary) == ACL_SUCCESS;
+        (void)unlink(path);
+        return loaded && aclrtBinaryGetFunction(binary, name, function) == ACL_SUCCESS;
+    }
     return aclrtBinaryLoadFromData(image.data(), image.size(), &options, &binary) == ACL_SUCCESS &&
            aclrtBinaryGetFunction(binary, name, function) == ACL_SUCCESS;
 }
@@ -166,6 +194,16 @@ aclError OriginalLaunch(
     if (g_expectedPlaceholderDataOffset != 0 && (placeholderCount != 1 || placeholders == nullptr ||
                                                  placeholders[0].dataOffset != g_expectedPlaceholderDataOffset)) {
         return ACL_ERROR_INVALID_PARAM;
+    }
+    if (g_expectMaterializedHostInput) {
+        if (placeholderCount != 0 || placeholders != nullptr) {
+            return ACL_ERROR_INVALID_PARAM;
+        }
+        void* input = nullptr;
+        std::memcpy(&input, hostArgs, sizeof(input));
+        if (input == nullptr || *static_cast<const uint64_t*>(input) != 2U) {
+            return ACL_ERROR_INVALID_PARAM;
+        }
     }
 
     void* deviceBuffer = nullptr;
@@ -376,8 +414,11 @@ aclError OriginalArrayLaunch(
     return OriginalLaunch(function, blocks, stream, config, packed, sizeof(packed), nullptr, 0);
 }
 
-int main()
+int main(int argc, char** argv)
 {
+    g_loadFromFile = argc == 2 && std::strcmp(argv[1], "--file") == 0;
+    CHECK(RuntimeStubSetOriginFunction("aclrtBinaryLoadFromFile", &OriginalFileLoad) == ACL_SUCCESS);
+    setenv("NPU_CHECK_TRACE_RECORDS_PER_BLOCK", "2", 1);
     CHECK(RuntimeStubSetSocName("Ascend950PR_9589") == ACL_SUCCESS);
     CHECK(RuntimeStubSetOriginFunction("aclrtMalloc", &OriginalMalloc) == ACL_SUCCESS);
     CHECK(RuntimeStubSetOriginFunction("aclrtFree", &OriginalFree) == ACL_SUCCESS);
@@ -485,6 +526,25 @@ int main()
     CHECK(g_d2hCalls == d2hBeforeTimedOutSync + 1);
     CHECK(g_freeCalls == freesBeforeTimedOutSync + 1);
 
+    const size_t recordsBeforeDbiCompletion = g_records.size();
+    const size_t d2hBeforeDbiCompletion = g_d2hCalls;
+    const size_t freesBeforeDbiCompletion = g_freeCalls;
+    g_syncResult = ACL_ERROR_RT_AICORE_EXCEPTION;
+    CHECK(
+        aclrtLaunchKernelWithHostArgs(function, 2, stream1, nullptr, arguments, sizeof(arguments), nullptr, 0) ==
+        ACL_SUCCESS);
+    CHECK(aclrtSynchronizeStream(stream1) == ACL_SUCCESS);
+    CHECK(g_records.size() == recordsBeforeDbiCompletion + 2);
+    CHECK(g_d2hCalls == d2hBeforeDbiCompletion + 1);
+    CHECK(g_freeCalls == freesBeforeDbiCompletion + 1);
+
+    g_writeRecord = false;
+    CHECK(
+        aclrtLaunchKernelWithHostArgs(function, 2, stream1, nullptr, arguments, sizeof(arguments), nullptr, 0) ==
+        ACL_SUCCESS);
+    CHECK(aclrtSynchronizeStream(stream1) == ACL_ERROR_RT_AICORE_EXCEPTION);
+    g_writeRecord = true;
+
     const size_t recordsBeforeGenericFailure = g_records.size();
     const size_t d2hBeforeGenericFailure = g_d2hCalls;
     const size_t freesBeforeGenericFailure = g_freeCalls;
@@ -511,13 +571,16 @@ int main()
     CHECK(LoadInstrumentedFunction(8, "Offset8", &function));
     CHECK(function == kFunction);
     g_expectedHiddenOffset = 8;
-    g_expectedPlaceholderDataOffset = 16;
+    g_expectedLaunchArgumentBytes = 16;
+    g_expectedPlaceholderDataOffset = 0;
+    g_expectMaterializedHostInput = true;
     aclrtPlaceHolderInfo placeholder{0, 8};
     CHECK(
         aclrtLaunchKernelWithHostArgs(function, 2, stream1, nullptr, arguments, sizeof(arguments), &placeholder, 1) ==
         ACL_SUCCESS);
     CHECK(placeholder.dataOffset == 8);
     CHECK(aclrtSynchronizeStream(stream1) == ACL_SUCCESS);
+    g_expectMaterializedHostInput = false;
 
     aclrtFuncHandle oneArgumentFunction = nullptr;
     aclrtFuncHandle zeroArgumentFunction = nullptr;
@@ -608,6 +671,16 @@ int main()
     CHECK(g_arrayOriginalCalls == 5);
     CHECK(g_mallocCalls == g_freeCalls);
 
+    if (g_loadFromFile) {
+        CHECK(g_patchedPaths.size() == 3);
+        for (const auto& path : g_patchedPaths)
+            CHECK(access(path.c_str(), F_OK) == 0);
+        for (auto binary : {kOffset16Binary, kOffset8Binary, kOffset24Binary}) {
+            CHECK(aclrtBinaryUnLoad(binary) == ACL_SUCCESS);
+        }
+        for (const auto& path : g_patchedPaths)
+            CHECK(access(path.c_str(), F_OK) != 0);
+    }
     CHECK(aclsanUnsubscribe(subscriber) == ACLSAN_STATUS_SUCCESS);
     return 0;
 }

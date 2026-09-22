@@ -29,6 +29,10 @@ typedef aclError (*aclrtCreateStreamFunc)(aclrtStream* stream);
 typedef aclError (*aclrtDestroyStreamFunc)(aclrtStream stream);
 typedef aclError (*aclrtMallocFunc)(void** devPtr, size_t size, aclrtMemMallocPolicy policy);
 typedef aclError (*aclrtMallocAlign32Func)(void** devPtr, size_t size, aclrtMemMallocPolicy policy);
+typedef aclError (*aclrtMallocWithCfgFunc)(
+    void** devPtr, size_t size, aclrtMemMallocPolicy policy, aclrtMallocConfig* cfg);
+typedef aclError (*aclrtBinaryLoadFromFileFunc)(
+    const char* path, aclrtBinaryLoadOptions* options, aclrtBinHandle* binary);
 typedef aclError (*aclrtFreeFunc)(void* devPtr);
 typedef aclError (*aclrtMemcpyFunc)(void* dst, size_t destMax, const void* src, size_t count, aclrtMemcpyKind kind);
 typedef aclError (*aclrtMemsetFunc)(void* devPtr, size_t maxCount, int32_t value, size_t count);
@@ -93,6 +97,8 @@ typedef enum {
     ACL_RT_API_aclrtMallocAlign32 = 25,
     ACL_RT_API_aclrtFunctionGetParamCount = 26,
     ACL_RT_API_aclrtFunctionGetParamInfo = 27,
+    ACL_RT_API_aclrtMallocWithCfg = 28,
+    ACL_RT_API_aclrtBinaryLoadFromFile = 29,
     ACL_RT_API_MAX
 } aclrtApiId;
 
@@ -111,6 +117,8 @@ ACL_TOOL_INJECTION_DECLARE_REGISTRATION(AclrtCreateStream, aclrtCreateStream);
 ACL_TOOL_INJECTION_DECLARE_REGISTRATION(AclrtDestroyStream, aclrtDestroyStream);
 ACL_TOOL_INJECTION_DECLARE_REGISTRATION(AclrtMalloc, aclrtMalloc);
 ACL_TOOL_INJECTION_DECLARE_REGISTRATION(AclrtMallocAlign32, aclrtMallocAlign32);
+ACL_TOOL_INJECTION_DECLARE_REGISTRATION(AclrtMallocWithCfg, aclrtMallocWithCfg);
+ACL_TOOL_INJECTION_DECLARE_REGISTRATION(AclrtBinaryLoadFromFile, aclrtBinaryLoadFromFile);
 ACL_TOOL_INJECTION_DECLARE_REGISTRATION(AclrtFree, aclrtFree);
 ACL_TOOL_INJECTION_DECLARE_REGISTRATION(AclrtMemcpy, aclrtMemcpy);
 ACL_TOOL_INJECTION_DECLARE_REGISTRATION(AclrtMemset, aclrtMemset);

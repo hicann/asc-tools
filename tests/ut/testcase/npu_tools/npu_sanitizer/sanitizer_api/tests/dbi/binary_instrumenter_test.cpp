@@ -111,6 +111,11 @@ TEST(DefaultBinaryInstrumentationConfigTest, BuildsRuntimeConfigWithoutDbiEnviro
         const std::string root = "/tmp/npu-check-" + std::to_string(static_cast<unsigned long long>(geteuid()));
         EXPECT_EQ(config.workDirectory, root + "/requests");
         EXPECT_EQ(config.cacheDirectory, root + "/cache");
+
+        ASSERT_TRUE(
+            BuildRuntimeInstrumentationConfig(socName, runtime.c_str(), PROBE_GROUP_MTE2, config, diagnostic, true));
+        EXPECT_EQ(config.probeGroups, (std::vector<ProbeGroup>{ProbeGroup::Mte2, ProbeGroup::Scalar}));
+        EXPECT_TRUE(config.useCompleteProbeSet);
     }
     boost::filesystem::remove_all(cannRoot);
 }
@@ -271,6 +276,32 @@ TEST_F(BinaryInstrumenterTest, UsesParameterMetadataForAggregateArguments)
 {
     state_.config.traceArgumentOffset = 0;
     const std::vector<uint8_t> original = MakeKernelArgumentSizeElf(16, {{0, 24}, {24, 24}});
+
+    const BinaryInstrumentationResult result =
+        InstrumentBinary(state_.config, original.data(), original.size(), &FakePatch, &state_);
+
+    EXPECT_EQ(result.status, BinaryInstrumentationStatus::Instrumented);
+    EXPECT_EQ(result.traceArgumentOffset, 48U);
+    EXPECT_EQ(state_.traceArgumentOffset, 48U);
+}
+
+TEST_F(BinaryInstrumenterTest, UsesElfArgumentAreaWhenItExceedsRuntimeHint)
+{
+    state_.config.traceArgumentOffset = 32;
+    const std::vector<uint8_t> original = MakeKernelArgumentSizeElf(40);
+
+    const BinaryInstrumentationResult result =
+        InstrumentBinary(state_.config, original.data(), original.size(), &FakePatch, &state_);
+
+    EXPECT_EQ(result.status, BinaryInstrumentationStatus::Instrumented);
+    EXPECT_EQ(result.traceArgumentOffset, 40U);
+    EXPECT_EQ(state_.traceArgumentOffset, 40U);
+}
+
+TEST_F(BinaryInstrumenterTest, KeepsRuntimeHintWhenItExceedsElfArgumentArea)
+{
+    state_.config.traceArgumentOffset = 48;
+    const std::vector<uint8_t> original = MakeKernelArgumentSizeElf(40);
 
     const BinaryInstrumentationResult result =
         InstrumentBinary(state_.config, original.data(), original.size(), &FakePatch, &state_);

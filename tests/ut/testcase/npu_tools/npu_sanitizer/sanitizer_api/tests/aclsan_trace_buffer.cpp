@@ -206,6 +206,23 @@ bool ParsesTwoPartPhysicalCoreTopology()
     return true;
 }
 
+bool ClassifiesAllDav3510PhysicalCores()
+{
+    constexpr uint32_t physicalCoreCount = 108;
+    constexpr uint32_t coresPerPart = physicalCoreCount / aclsan::ASCSAN_PHYSICAL_CORE_PART_COUNT;
+    for (uint32_t phyCoreId = 0; phyCoreId < physicalCoreCount; ++phyCoreId) {
+        const bool expectedAic = phyCoreId % coresPerPart < coresPerPart / aclsan::ASCSAN_AIC_CORE_RATIO_DENOMINATOR;
+        CHECK(aclsan::IsAicPhysicalCore(phyCoreId, physicalCoreCount) == expectedAic);
+    }
+    CHECK(aclsan::IsAicPhysicalCore(0, physicalCoreCount));
+    CHECK(!aclsan::IsAicPhysicalCore(18, physicalCoreCount));
+    CHECK(aclsan::IsAicPhysicalCore(54, physicalCoreCount));
+    CHECK(!aclsan::IsAicPhysicalCore(72, physicalCoreCount));
+    CHECK(!aclsan::IsAicPhysicalCore(physicalCoreCount, physicalCoreCount));
+    CHECK(!aclsan::IsAicPhysicalCore(2, 10));
+    return true;
+}
+
 bool SupportsFullAicBlockCountRange()
 {
     constexpr uint32_t maxBlockCount = std::numeric_limits<uint32_t>::max();
@@ -238,7 +255,7 @@ bool ReportsOverflowAndKeepsRecords()
     std::string error;
     CHECK(aclsan::InitializeTraceBuffer(buffer, 12, 1, 23, error));
     CHECK(PutRecord(buffer, 0, 0, 0, 0x500, ACLSAN_DEVICE_PIPE_FIXPIPE, 0));
-    auto* slice = reinterpret_cast<AclsanTraceSliceHeader*>(buffer.data() + sizeof(AclsanTraceBufferHeader));
+    auto* slice = SliceAt(buffer, 0);
     slice->overflowCount = 9;
 
     const auto parsed = aclsan::ParseTraceBuffer(buffer.data(), buffer.size(), 12, 1, 23, 0);
@@ -332,6 +349,7 @@ TEST(AclsanTraceBuffer, Main)
     ASSERT_TRUE(ParsesOneSegmentFromLargerStorage());
     ASSERT_TRUE(ParsesMultipleLogicalBlocksInOnePhysicalSlice());
     ASSERT_TRUE(ParsesTwoPartPhysicalCoreTopology());
+    ASSERT_TRUE(ClassifiesAllDav3510PhysicalCores());
     ASSERT_TRUE(SupportsFullAicBlockCountRange());
     ASSERT_TRUE(RejectsUnrepresentableLogicalBlockIds());
     ASSERT_TRUE(ReportsOverflowAndKeepsRecords());

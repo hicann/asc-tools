@@ -73,6 +73,7 @@ DbiRequest MakeRequest(
     request.cacheDirectory = config.cacheDirectory.empty() ? work + "/probe-cache" : config.cacheDirectory;
     request.strict = config.strict;
     request.keepTemp = config.keepTemp;
+    request.useCompleteProbeSet = config.useCompleteProbeSet;
     request.extraTuneArgs = config.tuneArgs;
     return request;
 }
@@ -191,7 +192,7 @@ void ReportInstrumentationFailure(const BinaryInstrumentationResult& result)
 
 bool BuildRuntimeInstrumentationConfig(
     const char* socName, const char* runtimeLibrary, uint32_t probeGroupMask, BinaryInstrumentationConfig& config,
-    std::string& diagnostic)
+    std::string& diagnostic, bool useCompleteProbeSet)
 {
     config = {};
     const std::optional<SocVersion> version = ResolveSocVersion(socName);
@@ -223,7 +224,9 @@ bool BuildRuntimeInstrumentationConfig(
         return false;
     }
     config.strict = true;
-    config.keepTemp = false;
+    config.useCompleteProbeSet = useCompleteProbeSet;
+    const char* keepTemp = std::getenv("NPU_CHECK_DBI_KEEP_TEMP");
+    config.keepTemp = keepTemp != nullptr && std::strcmp(keepTemp, "1") == 0;
     config.tuneArgs.emplace_back("--append-hbmout-paraminfo");
     return true;
 }
@@ -239,11 +242,12 @@ BinaryInstrumentationResult InstrumentBinary(
     std::string work;
     try {
         uint32_t traceArgumentOffset = config.traceArgumentOffset;
-        if (traceArgumentOffset == 0) {
-            std::string diagnostic;
-            if (!ResolveTraceArgumentOffset(data, length, traceArgumentOffset, diagnostic)) {
-                return {BinaryInstrumentationStatus::Failed, {}, "kernel-arg-offset", diagnostic, 0};
-            }
+        uint32_t metadataTraceArgumentOffset = 0;
+        std::string diagnostic;
+        if (ResolveTraceArgumentOffset(data, length, metadataTraceArgumentOffset, diagnostic)) {
+            traceArgumentOffset = std::max(traceArgumentOffset, metadataTraceArgumentOffset);
+        } else if (traceArgumentOffset == 0) {
+            return {BinaryInstrumentationStatus::Failed, {}, "kernel-arg-offset", diagnostic, 0};
         }
         work = RequestDirectory(config);
         const std::string inputPath = work + "/input.o";
@@ -293,7 +297,8 @@ BinaryInstrumentationResult InstrumentBinary(const BinaryInstrumentationConfig& 
 
 RuntimeBinaryInstrumentationResult InstrumentRuntimeBinary(
     const void* data, size_t length, uint32_t probeGroupMask, const char* socName, const char* runtimeLibrary,
-    InstrumentedBinaryConsumer consumer, void* consumerData, DbiPipelineRunner runner, void* runnerData) noexcept
+    InstrumentedBinaryConsumer consumer, void* consumerData, DbiPipelineRunner runner, void* runnerData,
+    uint32_t traceOffset, bool appendParamInfo, bool useCompleteProbeSet) noexcept
 {
     constexpr uint32_t strict = 1U;
     try {
@@ -302,13 +307,20 @@ RuntimeBinaryInstrumentationResult InstrumentRuntimeBinary(
         }
         BinaryInstrumentationConfig config;
         std::string diagnostic;
-        if (!BuildRuntimeInstrumentationConfig(socName, runtimeLibrary, probeGroupMask, config, diagnostic)) {
+        if (!BuildRuntimeInstrumentationConfig(
+                socName, runtimeLibrary, probeGroupMask, config, diagnostic, useCompleteProbeSet)) {
             const BinaryInstrumentationResult failure{
                 BinaryInstrumentationStatus::Failed, {}, "runtime-context", diagnostic, 0};
             ReportInstrumentationFailure(failure);
             return {failure.status, strict, 0, 0};
         }
-        ASCTOOL_INFO("DBI instrumentation started bytes=%zu probe_groups=%u", length, probeGroupMask);
+        config.traceArgumentOffset = traceOffset;
+        if (!appendParamInfo) {
+            config.tuneArgs.clear();
+        }
+        ASCTOOL_INFO(
+            "DBI instrumentation started bytes=%zu probe_groups=%u complete_probe_set=%u", length, probeGroupMask,
+            static_cast<unsigned>(useCompleteProbeSet));
         const BinaryInstrumentationResult result = InstrumentBinary(config, data, length, runner, runnerData);
         if (result.status == BinaryInstrumentationStatus::Failed) {
             ReportInstrumentationFailure(result);
@@ -345,6 +357,23 @@ RuntimeBinaryInstrumentationResult InstrumentRuntimeBinary(
 {
     return InstrumentRuntimeBinary(
         data, length, probeGroupMask, socName, runtimeLibrary, consumer, consumerData, &RunPipeline, nullptr);
+}
+
+RuntimeBinaryInstrumentationResult InstrumentRuntimeBinaryForEntry(
+    const void* data, size_t length, uint32_t probeGroupMask, const char* socName, const char* runtimeLibrary,
+    InstrumentedBinaryConsumer consumer, void* consumerData, const uint64_t* entry, uint32_t traceOffset,
+    bool appendParamInfo, bool useCompleteProbeSet) noexcept
+{
+    const auto selectedRunner = [](const DbiRequest& input, void* opaque) {
+        DbiRequest request = input;
+        if (opaque != nullptr) {
+            request.tilingKey = *static_cast<const uint64_t*>(opaque);
+        }
+        return RunDbiPipeline(request);
+    };
+    return InstrumentRuntimeBinary(
+        data, length, probeGroupMask, socName, runtimeLibrary, consumer, consumerData, selectedRunner,
+        const_cast<uint64_t*>(entry), traceOffset, appendParamInfo, useCompleteProbeSet);
 }
 
 } // namespace aclsan

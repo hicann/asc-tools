@@ -121,7 +121,7 @@ add_executable(npu_check_dbi_kernel_param_metadata_tests
   "${NPU_CHECK_DBI_SOURCE_DIR}/kernel_param_metadata.cpp"
 )
 target_compile_features(npu_check_dbi_kernel_param_metadata_tests PRIVATE cxx_std_17)
-target_compile_options(npu_check_dbi_kernel_param_metadata_tests PRIVATE -Wall -Wextra -Werror)
+target_compile_options(npu_check_dbi_kernel_param_metadata_tests PRIVATE -UNDEBUG -Wall -Wextra -Werror)
 target_compile_definitions(npu_check_dbi_kernel_param_metadata_tests PRIVATE _GLIBCXX_USE_CXX11_ABI=0)
 target_include_directories(npu_check_dbi_kernel_param_metadata_tests PRIVATE "${NPU_CHECK_DBI_INCLUDE_DIR}")
 target_link_libraries(npu_check_dbi_kernel_param_metadata_tests PRIVATE Threads::Threads GTest::gtest)

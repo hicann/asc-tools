@@ -15,6 +15,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -35,6 +36,12 @@ enum class TraceArgumentMode {
 };
 
 struct PreparedTraceLaunch {
+    struct HostInput {
+        void* address = nullptr;
+        size_t bytes = 0;
+    };
+    std::vector<HostInput> hostInputs;
+    std::shared_ptr<void> binaryLease;
     bool instrumented = false;
     uint64_t launchId = 0;
     uint32_t blockCount = 0;
@@ -55,8 +62,21 @@ struct PreparedTraceLaunch {
     std::vector<aclrtPlaceHolderInfo> placeholders;
 };
 
+struct TraceCollectionResult {
+    size_t launchCount = 0;
+    size_t completeLaunchCount = 0;
+    size_t recordCount = 0;
+    uint64_t droppedRecordCount = 0;
+
+    bool Complete() const noexcept
+    {
+        return launchCount != 0 && completeLaunchCount == launchCount && recordCount != 0 && droppedRecordCount == 0;
+    }
+};
+
 void DispatchTraceRecords(
-    const std::vector<ParsedTraceRecord>& records, const DeviceInstructionDecoder& decoder) noexcept;
+    const std::vector<ParsedTraceRecord>& records, const DeviceInstructionDecoder& decoder,
+    const std::vector<PreparedTraceLaunch::HostInput>* internalInputs = nullptr) noexcept;
 
 void RecordTraceBinaryLoadFromData(
     aclrtBinHandle binary, bool instrumented, uint32_t traceArgumentOffset, const void* image,
@@ -71,7 +91,8 @@ aclError PrepareTraceLaunch(
     PreparedTraceLaunch& prepared) noexcept;
 void CompleteTraceLaunch(
     PreparedTraceLaunch&& prepared, aclrtFuncHandle function, aclrtStream stream, aclError launchResult) noexcept;
-void CollectTraceStream(aclrtStream stream) noexcept;
+aclError MaterializeTraceHostInputs(PreparedTraceLaunch& prepared) noexcept;
+TraceCollectionResult CollectTraceStream(aclrtStream stream, bool executionComplete = true) noexcept;
 void ResetTraceRuntimeState() noexcept;
 bool GetTraceFunctionName(aclrtFuncHandle function, std::string& functionName) noexcept;
 device_runtime::CallStackResult ResolveTraceDeviceCallStack(uint64_t pc) noexcept;

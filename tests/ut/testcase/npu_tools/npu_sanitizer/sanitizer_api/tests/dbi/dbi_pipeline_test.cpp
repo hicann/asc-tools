@@ -189,8 +189,33 @@ TEST(DbiPipelineTest, CacheKeyChangesWithProbeSetAndObjectIdentity)
     const auto first = MakeCacheKey("dav-3510", {ProbeGroup::Mte2}, "objects-a");
     const auto second = MakeCacheKey("dav-3510", {ProbeGroup::Mte3}, "objects-a");
     const auto third = MakeCacheKey("dav-3510", {ProbeGroup::Mte2}, "objects-b");
+    const auto aic = MakeCacheKey("dav-3510", {ProbeGroup::Mte2}, "objects-a", ProbeCoreType::Aic);
+    const auto aiv = MakeCacheKey("dav-3510", {ProbeGroup::Mte2}, "objects-a", ProbeCoreType::Aiv);
     EXPECT_NE(first, second);
     EXPECT_NE(first, third);
+    EXPECT_NE(aic, aiv);
+}
+
+TEST(DbiPipelineTest, DetectsProbeCoreTypeFromSelectedKernelAndPipeSymbols)
+{
+    EXPECT_EQ(DetectProbeCoreType("g_cubeTPipePtr\n", "Dn2nzCustom_0"), ProbeCoreType::Aic);
+    EXPECT_EQ(DetectProbeCoreType("g_vecTPipePtr\n", "VectorCustom_0"), ProbeCoreType::Aiv);
+    EXPECT_EQ(DetectProbeCoreType("g_cubeTPipePtr\ng_vecTPipePtr\n", "MixCustom_3_mix_aic"), ProbeCoreType::Mix);
+    EXPECT_EQ(DetectProbeCoreType("", "Standalone_aic"), ProbeCoreType::Aic);
+    EXPECT_EQ(DetectProbeCoreType("", "Standalone_aiv"), ProbeCoreType::Aiv);
+    EXPECT_EQ(DetectProbeCoreType("", "UnknownCustom_0"), ProbeCoreType::Mix);
+}
+
+TEST(DbiPipelineTest, CompleteProbeSetIsLimitedToAicKernels)
+{
+    const std::vector<ProbeGroup> requested{ProbeGroup::Mte2};
+    EXPECT_EQ(ResolveProbeGroups(requested, ProbeCoreType::Aic, true), AllProbeGroups());
+    EXPECT_EQ(
+        ResolveProbeGroups(requested, ProbeCoreType::Mix, true),
+        (std::vector<ProbeGroup>{ProbeGroup::Mte2, ProbeGroup::Scalar}));
+    EXPECT_EQ(
+        ResolveProbeGroups(requested, ProbeCoreType::Aic, false),
+        (std::vector<ProbeGroup>{ProbeGroup::Mte2, ProbeGroup::Scalar}));
 }
 
 std::string ReadGeneratedFile(const boost::filesystem::path& path)

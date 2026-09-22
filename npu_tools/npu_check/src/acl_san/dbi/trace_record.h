@@ -39,6 +39,8 @@ __aicore__ inline void WriteTraceRecord(
     }
 
     const uint32_t blockId = static_cast<uint32_t>(AscendC::GetBlockIdx());
+    // Keep this expression local to Device code: calling the Host constexpr helper leaves an
+    // unresolved symbol in dav-3510 probe objects when Bisheng declines to inline it.
     const uint32_t coresPerPart = physicalCoreCount / aclsan::ASCSAN_PHYSICAL_CORE_PART_COUNT;
     const bool isAic = phyCoreId % coresPerPart < coresPerPart / aclsan::ASCSAN_AIC_CORE_RATIO_DENOMINATOR;
     const uint64_t blockLimit = isAic ? static_cast<uint64_t>(blockCount) : 2ULL * blockCount;

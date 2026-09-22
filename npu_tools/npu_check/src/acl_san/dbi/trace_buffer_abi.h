@@ -68,7 +68,7 @@ constexpr bool IsTraceBlockIdValid(uint64_t blockId, bool isAic, uint32_t blockC
 //   sliceOffset(sliceIndex) = sizeof(AclsanTraceBufferHeader) + sliceIndex * sliceBytes
 //
 // blockCount 保存 launch blockDim A，只用于校验 record 携带的逻辑 blockId。
-// 物理核分为两部分，每部分的前 1/3 为 AIC、后 2/3 为 AIV。
+// dav-3510 的物理核分为两部分，每部分的前 1/3 为 AIC、后 2/3 为 AIV。
 // sliceIndex 等于 get_coreid()。每个物理核执行的所有逻辑 block 共享一个 slice，
 // 有效记录下标范围为 [0, recordCount)。
 // recordCount 即该 slice 的有效结尾，不额外写入 record 或 launch 尾标志。

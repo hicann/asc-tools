@@ -99,12 +99,11 @@ int main()
     int functionStorage = 0;
     int streamStorage = 0;
     int configStorage = 0;
-    int hostArgsStorage = 0;
-    int placeholderStorage = 0;
+    unsigned char hostArgsStorage[64]{};
     const auto function = reinterpret_cast<aclrtFuncHandle>(&functionStorage);
     const auto stream = reinterpret_cast<aclrtStream>(&streamStorage);
     auto* config = reinterpret_cast<aclrtLaunchKernelCfg*>(&configStorage);
-    auto* placeholders = reinterpret_cast<aclrtPlaceHolderInfo*>(&placeholderStorage);
+    aclrtPlaceHolderInfo placeholders[] = {{0, 24}, {8, 32}, {16, 40}};
 
     CHECK(
         aclsanEnableCallback(1, subscriber, ACLSAN_CB_DOMAIN_LAUNCH, ACLSAN_CBID_LAUNCH_KERNEL) ==
@@ -132,7 +131,7 @@ int main()
         aclsanEnableCallback(1, subscriber, ACLSAN_CB_DOMAIN_DEVICE_INSTRUCTION, ACLSAN_CBID_DEVICE_MEMORY_ACCESS) ==
         ACLSAN_STATUS_SUCCESS);
 
-    CHECK(aclrtLaunchKernelWithHostArgs(function, 7, stream, config, &hostArgsStorage, 64, placeholders, 3) == 71);
+    CHECK(aclrtLaunchKernelWithHostArgs(function, 7, stream, config, hostArgsStorage, 64, placeholders, 3) == 71);
     CHECK(g_sentinelCalls == 1);
     CHECK(g_originalCalls == 1);
     CHECK(g_lastNumBlocks == 7);
@@ -141,13 +140,13 @@ int main()
     CHECK(g_forwarded.blocks == 7);
     CHECK(g_forwarded.stream == stream);
     CHECK(g_forwarded.config == config);
-    CHECK(g_forwarded.hostArgs == &hostArgsStorage);
+    CHECK(g_forwarded.hostArgs == hostArgsStorage);
     CHECK(g_forwarded.argsSize == 64);
     CHECK(g_forwarded.placeholders == placeholders);
     CHECK(g_forwarded.placeholderCount == 3);
 
     CHECK(aclsanUnsubscribe(subscriber) == ACLSAN_STATUS_SUCCESS);
-    CHECK(aclrtLaunchKernelWithHostArgs(function, 1, stream, config, &hostArgsStorage, 8, placeholders, 1) == 71);
+    CHECK(aclrtLaunchKernelWithHostArgs(function, 1, stream, config, hostArgsStorage, 8, placeholders, 1) == 71);
     CHECK(g_originalCalls == 2);
     CHECK(aclrtLaunchKernelWithArgsArray(function, 13, stream, config, arrayArgs) == 73);
     CHECK(g_launchCallbacks == 1);

@@ -111,6 +111,23 @@ TEST(MemcheckTest, ReportsOutOfBoundsReadAtSynchronization)
     EXPECT_TRUE(checker.OnSynchronization().empty());
 }
 
+TEST(MemcheckTest, FailedLaunchOrSynchronizationMakesAnalysisIncomplete)
+{
+    CheckerReportList reports;
+    Memcheck launchChecker;
+    AclsanLaunchData launch{};
+    InitCommon(launch, 0, 500001);
+    ASSERT_TRUE(launchChecker.OnCallback(ACLSAN_CB_DOMAIN_LAUNCH, ACLSAN_CBID_LAUNCH_KERNEL, &launch, reports));
+    EXPECT_FALSE(launchChecker.AnalysisComplete());
+    EXPECT_EQ(launchChecker.Stats().failedLaunches, 1U);
+    Memcheck syncChecker;
+    AclsanSynchronizeData sync{};
+    InitCommon(sync, 0, 507015);
+    ASSERT_TRUE(
+        syncChecker.OnCallback(ACLSAN_CB_DOMAIN_SYNCHRONIZE, ACLSAN_CBID_SYNCHRONIZE_STREAM_SYNC_END, &sync, reports));
+    EXPECT_FALSE(syncChecker.AnalysisComplete());
+}
+
 TEST(MemcheckTest, IgnoresHostResourceEvents)
 {
     Memcheck checker;

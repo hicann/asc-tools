@@ -23,7 +23,7 @@
 
 namespace {
 
-constexpr std::size_t kRuntimeApiCount = 28;
+constexpr std::size_t kRuntimeApiCount = 30;
 constexpr std::size_t kSocNameCapacity = 64;
 
 struct KernelArgs {
@@ -92,6 +92,16 @@ aclError RealAclrtMalloc(void** devPtr, std::size_t size, aclrtMemMallocPolicy)
     }
     *devPtr = std::malloc(size);
     return *devPtr == nullptr ? ACL_ERROR_BAD_ALLOC : ACL_SUCCESS;
+}
+
+aclError RealAclrtMallocWithCfg(void** ptr, size_t size, aclrtMemMallocPolicy policy, aclrtMallocConfig*)
+{
+    return RealAclrtMalloc(ptr, size, policy);
+}
+
+aclError RealAclrtBinaryLoadFromFile(const char*, aclrtBinaryLoadOptions*, aclrtBinHandle* binary)
+{
+    return RealAclrtBinaryLoadFromData(nullptr, 0, nullptr, binary);
 }
 
 aclError RealAclrtMemset(void* devPtr, std::size_t maxCount, std::int32_t value, std::size_t count)
@@ -290,6 +300,9 @@ std::array<RuntimeEntry, kRuntimeApiCount> g_runtimeEntries = {{
      ToGenericFunction(&RealAclrtFunctionGetParamCount)},
     {"aclrtFunctionGetParamInfo", ToGenericFunction(&RealAclrtFunctionGetParamInfo),
      ToGenericFunction(&RealAclrtFunctionGetParamInfo)},
+    {"aclrtMallocWithCfg", ToGenericFunction(&RealAclrtMallocWithCfg), ToGenericFunction(&RealAclrtMallocWithCfg)},
+    {"aclrtBinaryLoadFromFile", ToGenericFunction(&RealAclrtBinaryLoadFromFile),
+     ToGenericFunction(&RealAclrtBinaryLoadFromFile)},
 }};
 
 std::mutex g_runtimeMutex;
@@ -509,19 +522,31 @@ extern "C" aclError aclrtBinaryGetFunction(
         "aclrtBinaryGetFunction", binHandle, kernelName, funcHandle);
 }
 
+extern "C" aclError aclrtBinaryLoadFromFile(const char* path, aclrtBinaryLoadOptions* options, aclrtBinHandle* binary)
+{
+    return CallCurrent<aclError (*)(const char*, aclrtBinaryLoadOptions*, aclrtBinHandle*)>(
+        "aclrtBinaryLoadFromFile", path, options, binary);
+}
+
 extern "C" aclError aclrtFunctionGetBinary(aclrtFuncHandle, aclrtBinHandle*) { return ACL_ERROR_INVALID_PARAM; }
 
 extern "C" aclError aclrtGetFunctionName(aclrtFuncHandle, uint32_t, char*) { return ACL_ERROR_INVALID_PARAM; }
-
-extern "C" aclError aclrtGetFuncBySymbol(const void* symbol, aclrtFuncHandle* funcHandle)
-{
-    return CallCurrent<aclError (*)(const void*, aclrtFuncHandle*)>("aclrtGetFuncBySymbol", symbol, funcHandle);
-}
 
 extern "C" aclError aclrtBinaryGetFunctionByEntry(aclrtBinHandle binary, uint64_t entry, aclrtFuncHandle* function)
 {
     return CallCurrent<aclError (*)(aclrtBinHandle, uint64_t, aclrtFuncHandle*)>(
         "aclrtBinaryGetFunctionByEntry", binary, entry, function);
+}
+
+extern "C" aclError aclrtMallocWithCfg(void** ptr, size_t bytes, aclrtMemMallocPolicy policy, aclrtMallocConfig* cfg)
+{
+    return CallCurrent<aclError (*)(void**, size_t, aclrtMemMallocPolicy, aclrtMallocConfig*)>(
+        "aclrtMallocWithCfg", ptr, bytes, policy, cfg);
+}
+
+extern "C" aclError aclrtGetFuncBySymbol(const void* symbol, aclrtFuncHandle* funcHandle)
+{
+    return CallCurrent<aclError (*)(const void*, aclrtFuncHandle*)>("aclrtGetFuncBySymbol", symbol, funcHandle);
 }
 
 extern "C" aclError aclrtBinaryUnLoad(aclrtBinHandle binHandle)

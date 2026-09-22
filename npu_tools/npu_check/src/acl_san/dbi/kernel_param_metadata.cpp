@@ -183,6 +183,18 @@ void AppendTlv(std::string& output, uint16_t tag, const std::string& value)
 
 std::string NormalizeMetadata(const Metadata& original, const Metadata& patched, uint32_t traceOffset)
 {
+    if (!original.hasParameterLayout) {
+        std::string output;
+        for (const auto& item : patched.values) {
+            // Legacy HostArgs metadata has no Runtime parameter layout. Keep the
+            // tuned non-parameter TLVs, but do not expose a synthetic ArgsArray ABI.
+            if (item.tag != PARAM_SUMMARY && item.tag != PARAM_INFO) {
+                AppendTlv(output, item.tag, item.value);
+            }
+        }
+        return output;
+    }
+    Require(patched.hasParameterLayout, "instrumented parameter summary is missing");
     for (const auto& item : original.values) {
         if (item.tag == PARAM_SUMMARY) {
             Require(Read(item.value, 4, 4) <= traceOffset, "original argument area exceeds trace offset");
@@ -271,7 +283,8 @@ bool GetMaximumKernelArgumentArea(
 }
 
 bool ModifyKernelParamMetadata(
-    const std::string& original, std::string& patched, uint32_t traceOffset, std::string& diagnostic)
+    const std::string& original, std::string& patched, uint32_t traceOffset, std::string& diagnostic,
+    const uint64_t* tilingKey)
 {
     try {
         Require(
@@ -282,18 +295,24 @@ bool ModifyKernelParamMetadata(
         const auto destinations = ReadSections(patched);
         Require(!sources.empty(), "no kernel parameter metadata found");
         std::string result = patched;
+        size_t selected = 0;
         for (const auto& entry : sources) {
+            if (tilingKey != nullptr) {
+                const auto endsWith = [&](const std::string& suffix) {
+                    return entry.first.size() >= suffix.size() &&
+                           entry.first.compare(entry.first.size() - suffix.size(), suffix.size(), suffix) == 0;
+                };
+                const std::string suffix = "_" + std::to_string(*tilingKey);
+                if (!endsWith(suffix) && !endsWith(suffix + "_mix_aic") && !endsWith(suffix + "_mix_aiv")) {
+                    continue;
+                }
+            }
+            ++selected;
             const auto destination = destinations.find(entry.first);
             Require(destination != destinations.end(), "instrumented kernel metadata section is missing");
             const Section& section = destination->second;
             const auto sourceMetadata = ReadMetadata(original, entry.second);
             const auto destinationMetadata = ReadMetadata(patched, section);
-            Require(
-                sourceMetadata.hasParameterLayout == destinationMetadata.hasParameterLayout,
-                "instrumented kernel metadata kind changed");
-            if (!sourceMetadata.hasParameterLayout) {
-                continue;
-            }
             const auto metadata = NormalizeMetadata(sourceMetadata, destinationMetadata, traceOffset);
             if (metadata == patched.substr(section.offset, section.size)) {
                 continue;
@@ -311,6 +330,7 @@ bool ModifyKernelParamMetadata(
             Write(result, section.header + 24, offset, 8);
             Write(result, section.header + 32, metadata.size(), 8);
         }
+        Require(selected != 0, "selected entry has no matching kernel metadata");
         patched.swap(result);
         diagnostic.clear();
         return true;

@@ -89,6 +89,10 @@ bool RendersControlledMte2Definition()
     const GeneratedProbeSource generated = GenerateProbeSource("dav-3510", ProbeGroup::Mte2);
     CHECK(generated.success);
     CHECK(generated.source.find("#include \"trace_record.h\"") != std::string::npos);
+    CHECK(generated.source.find("NPU_CHECK_PROBE_CUBE_ONLY") != std::string::npos);
+    CHECK(generated.source.find("NPU_CHECK_PROBE_VECTOR_ONLY") != std::string::npos);
+    CHECK(generated.source.find("defined(__DAV_CUBE__)") != std::string::npos);
+    CHECK(generated.source.find("defined(__DAV_VEC__)") != std::string::npos);
     CHECK(generated.source.find("__sanitizer_report_copy_gm_to_cbuf_align_v2_b8") != std::string::npos);
     CHECK(generated.source.find("static_cast<uint16_t>(PIPE_MTE2), 74") != std::string::npos);
     CHECK(generated.source.find("// probe-definition: 0074") != std::string::npos);

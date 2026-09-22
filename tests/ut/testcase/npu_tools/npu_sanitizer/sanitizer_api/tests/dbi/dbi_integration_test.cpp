@@ -51,7 +51,13 @@ if [ "$name" = llvm-objdump ]; then
       done
       ;;
     *probe.o) printf '00000000 w F .text.probe 00000010 __sanitizer_report_probe\n' ;;
-    *) printf '00000000 g F .text.kernel 00000010 kernel_main\n' ;;
+    *)
+      if [ -n "$DBI_FAKE_KERNEL_SYMBOLS" ]; then
+        printf '%b' "$DBI_FAKE_KERNEL_SYMBOLS"
+      else
+        printf '00000000 g F .text.kernel 00000010 kernel_main\n'
+      fi
+      ;;
   esac
   exit 0
 fi
@@ -122,6 +128,9 @@ TEST(DbiIntegrationTest, CompilesLinksAndPatchesSelectedProbeSet)
     std::istringstream records(logs);
     std::string record;
     while (std::getline(records, record)) {
+        if (record.empty()) {
+            continue;
+        }
         EXPECT_LT(record.size(), 1024U);
         EXPECT_NE(record.find("DBI stage="), std::string::npos) << record;
     }
@@ -139,6 +148,7 @@ TEST(DbiIntegrationTest, CompilesLinksAndPatchesSelectedProbeSet)
         commands.find("<" + (root / "toolchain/x86_64-linux/asc/impl/basic_api").string() + ">"), std::string::npos)
         << commands;
     EXPECT_NE(commands.find("ld.lld <-r>"), std::string::npos) << commands;
+    EXPECT_NE(commands.find("ld.lld <-r> <-m> <aicorelinux>"), std::string::npos) << commands;
     EXPECT_NE(commands.find("generated-mte2.cpp"), std::string::npos) << commands;
     EXPECT_NE(commands.find("generated-scalar.cpp"), std::string::npos) << commands;
     EXPECT_NE(commands.find("llvm-objdump <--syms>"), std::string::npos) << commands;
@@ -149,6 +159,50 @@ TEST(DbiIntegrationTest, CompilesLinksAndPatchesSelectedProbeSet)
     EXPECT_EQ(CountOccurrences(commands, "bisheng <-xcce>"), 2U) << commands;
     EXPECT_EQ(CountOccurrences(commands, "ld.lld <-r>"), 1U) << commands;
     EXPECT_EQ(CountOccurrences(commands, "bisheng-tune <--action=instru-probe>"), 2U) << commands;
+    unsetenv("DBI_FAKE_LOG");
+    boost::filesystem::remove_all(root);
+}
+
+TEST(DbiIntegrationTest, OrdersTheKernelSymbolForTheSelectedTilingKey)
+{
+    const auto root = boost::filesystem::temp_directory_path() / "dbi_pipeline_tiling_symbol";
+    boost::filesystem::remove_all(root);
+    const auto toolBin = root / "toolchain/tools/bisheng_compiler/bin";
+    for (const char* name : {"bisheng", "bisheng-tune", "ld.lld", "llvm-objdump"}) {
+        InstallFakeTool(toolBin / name);
+    }
+    WriteFile(root / "input.o", "kernel\n");
+    WriteFile(root / "commands.log", "");
+    ASSERT_EQ(setenv("DBI_FAKE_LOG", (root / "commands.log").c_str(), 1), 0);
+    ASSERT_EQ(
+        setenv(
+            "DBI_FAKE_KERNEL_SYMBOLS",
+            "00000000 g F .text.kernel 00000010 Multi_1_mix_aic\\n"
+            "00000010 g F .text.kernel 00000010 Multi_1_mix_aiv\\n"
+            "00000020 g F .text.kernel 00000010 Multi_3_mix_aiv\\n"
+            "00000030 g F .text.kernel 00000010 Multi_3_mix_aic\\n",
+            1),
+        0);
+
+    DbiRequest request{};
+    request.inputKernel = (root / "input.o").string();
+    request.outputKernel = (root / "patched.o").string();
+    request.arch = "dav-3510";
+    request.traceArgumentOffset = 40;
+    request.probeGroups = {ProbeGroup::Mte2};
+    request.toolchainRoot = (root / "toolchain").string();
+    request.workDirectory = (root / "work").string();
+    request.cacheDirectory = (root / "cache").string();
+    request.keepTemp = true;
+    request.tilingKey = 3;
+
+    const DbiResult result = RunDbiPipeline(request);
+    ASSERT_TRUE(result.success) << result.stage << ": " << result.diagnostic;
+    const std::string ordering = ReadFile(root / "work/symbol_ordering.txt");
+    EXPECT_EQ(ordering.substr(0, ordering.find('\n')), "Multi_3_mix_aic");
+    EXPECT_NE(ReadFile(root / "commands.log").find("<--tiling-key=3>"), std::string::npos);
+
+    unsetenv("DBI_FAKE_KERNEL_SYMBOLS");
     unsetenv("DBI_FAKE_LOG");
     boost::filesystem::remove_all(root);
 }

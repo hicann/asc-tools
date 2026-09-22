@@ -77,7 +77,7 @@ TEST(CheckerTest, CallbackUnionAndIndependentTools)
 {
     auto checkers = Both();
     const auto callbacks = RequiredCallbacks(checkers);
-    EXPECT_EQ(callbacks.size(), 6U);
+    EXPECT_EQ(callbacks.size(), 8U);
     EXPECT_EQ(
         std::count_if(
             callbacks.begin(), callbacks.end(),
@@ -86,7 +86,7 @@ TEST(CheckerTest, CallbackUnionAndIndependentTools)
                 return domain == ACLSAN_CB_DOMAIN_SYNCHRONIZE;
             }),
         1);
-    EXPECT_FALSE(checkers[0]->IsSubscribed(ACLSAN_CB_DOMAIN_LAUNCH, ACLSAN_CBID_LAUNCH_KERNEL));
+    EXPECT_TRUE(checkers[0]->IsSubscribed(ACLSAN_CB_DOMAIN_LAUNCH, ACLSAN_CBID_LAUNCH_KERNEL));
     EXPECT_TRUE(checkers[1]->IsSubscribed(ACLSAN_CB_DOMAIN_LAUNCH, ACLSAN_CBID_LAUNCH_KERNEL));
     EXPECT_EQ(CreateChecker(static_cast<npucheck::ipc::ToolId>(0xffff)), nullptr);
 }
@@ -141,7 +141,7 @@ TEST(CheckerTest, FailedSynchronizationAnalyzesPendingRecords)
     const auto sync = Sync(1);
     EXPECT_TRUE(
         Dispatch(checkers, ACLSAN_CB_DOMAIN_SYNCHRONIZE, ACLSAN_CBID_SYNCHRONIZE_STREAM_SYNC_END, &sync, reports));
-    EXPECT_TRUE(checkers[0]->AnalysisComplete());
+    EXPECT_FALSE(checkers[0]->AnalysisComplete());
     EXPECT_TRUE(checkers[1]->AnalysisComplete());
     EXPECT_TRUE(checkers[1]->HasErrors());
     EXPECT_TRUE(checkers[0]->HasErrors());

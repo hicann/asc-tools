@@ -46,6 +46,11 @@ struct PendingTrace {
     uint32_t deviceId = 0;
     const aclsan::DeviceInstructionDecoder* decoder = nullptr;
     std::vector<uint8_t> hostBuffer;
+    std::shared_ptr<void> binaryLease;
+    std::vector<uint8_t> arguments;
+    std::vector<aclrtPlaceHolderInfo> placeholders;
+    std::vector<PreparedTraceLaunch::HostInput> hostInputs;
+    std::vector<uint32_t> dispatchedRecordCounts;
 };
 
 struct TraceRuntimeState {
@@ -107,7 +112,10 @@ aclError ExpandArguments(
 
     size_t insertionOffset = 0;
     if (placeholderCount != 0) {
-        const uint32_t lastAddressOffset = placeholders[placeholderCount - 1].addrOffset;
+        uint32_t lastAddressOffset = 0;
+        for (size_t i = 0; i < placeholderCount; ++i) {
+            lastAddressOffset = std::max(lastAddressOffset, placeholders[i].addrOffset);
+        }
         if (lastAddressOffset > std::numeric_limits<uint32_t>::max() - sizeof(void*)) {
             return ACL_ERROR_INVALID_PARAM;
         }
@@ -177,6 +185,92 @@ void ReleaseDeviceBuffer(void* buffer) noexcept
     }
 }
 
+void ReleaseHostInputs(std::vector<PreparedTraceLaunch::HostInput>& inputs) noexcept
+{
+    for (const auto& input : inputs) {
+        ReleaseDeviceBuffer(input.address);
+    }
+    inputs.clear();
+}
+
+bool DispatchTraceSnapshot(PendingTrace& pending, bool executionComplete, TraceCollectionResult& collection)
+{
+    const auto memcpyFunction = GetOriginalRuntimeFunction<aclrtMemcpyFunc>(ACL_RT_API_aclrtMemcpy, "aclrtMemcpy");
+    if (memcpyFunction(
+            pending.hostBuffer.data(), pending.hostBuffer.size(), pending.deviceBuffer, pending.hostBuffer.size(),
+            ACL_MEMCPY_DEVICE_TO_HOST) != ACL_SUCCESS) {
+        ASCTOOL_ERROR("acl_san trace: D2H failed for launch=%llu", static_cast<unsigned long long>(pending.launchId));
+        return false;
+    }
+
+    TraceBufferParseResult parsed = ParseTraceBuffer(
+        pending.hostBuffer.data(), pending.hostBuffer.size(), pending.physicalCoreCount, pending.blockCount,
+        pending.launchId, pending.deviceId);
+    if (!parsed.ok) {
+        ASCTOOL_ERROR(
+            "acl_san trace: malformed buffer for launch=%llu: %s", static_cast<unsigned long long>(pending.launchId),
+            parsed.error.c_str());
+        return false;
+    }
+
+    collection.recordCount += parsed.records.size();
+    collection.droppedRecordCount += parsed.overflowCount;
+    if (executionComplete && !parsed.records.empty() && parsed.overflowCount == 0) {
+        ++collection.completeLaunchCount;
+    }
+
+    if (pending.dispatchedRecordCounts.size() != pending.physicalCoreCount) {
+        pending.dispatchedRecordCounts.assign(pending.physicalCoreCount, 0U);
+    }
+    std::vector<uint32_t> observedRecordCounts(pending.physicalCoreCount, 0U);
+    std::vector<ParsedTraceRecord> newRecords;
+    try {
+        newRecords.reserve(parsed.records.size());
+        for (const ParsedTraceRecord& record : parsed.records) {
+            if (record.phyCoreId >= observedRecordCounts.size()) {
+                ASCTOOL_ERROR(
+                    "acl_san trace: launch=%llu produced out-of-range physical core ID %u",
+                    static_cast<unsigned long long>(pending.launchId), record.phyCoreId);
+                return false;
+            }
+            const uint32_t recordIndex = observedRecordCounts[record.phyCoreId]++;
+            if (recordIndex >= pending.dispatchedRecordCounts[record.phyCoreId]) {
+                newRecords.push_back(record);
+            }
+        }
+    } catch (...) {
+        ASCTOOL_ERROR(
+            "acl_san trace: failed to stage records for launch=%llu",
+            static_cast<unsigned long long>(pending.launchId));
+        return false;
+    }
+    for (uint32_t phyCoreId = 0; phyCoreId < pending.physicalCoreCount; ++phyCoreId) {
+        if (observedRecordCounts[phyCoreId] < pending.dispatchedRecordCounts[phyCoreId]) {
+            ASCTOOL_ERROR(
+                "acl_san trace: launch=%llu physical core %u record count regressed from %u to %u",
+                static_cast<unsigned long long>(pending.launchId), phyCoreId, pending.dispatchedRecordCounts[phyCoreId],
+                observedRecordCounts[phyCoreId]);
+            return false;
+        }
+    }
+    pending.dispatchedRecordCounts = std::move(observedRecordCounts);
+
+    ASCTOOL_INFO(
+        "acl_san trace: launch=%llu status=%s records=%zu newRecords=%zu dropped=%llu physicalCores=%u blocks=%u",
+        static_cast<unsigned long long>(pending.launchId), executionComplete ? "complete" : "snapshot",
+        parsed.records.size(), newRecords.size(), static_cast<unsigned long long>(parsed.overflowCount),
+        pending.physicalCoreCount, pending.blockCount);
+    if (!newRecords.empty() && pending.decoder != nullptr) {
+        DispatchTraceRecords(newRecords, *pending.decoder, &pending.hostInputs);
+    }
+    if (parsed.overflowCount != 0) {
+        ASCTOOL_ERROR(
+            "acl_san trace: launch=%llu dropped %llu records", static_cast<unsigned long long>(pending.launchId),
+            static_cast<unsigned long long>(parsed.overflowCount));
+    }
+    return true;
+}
+
 aclError ResolveLaunchContext(PreparedTraceLaunch& prepared) noexcept
 {
     const auto getSocName =
@@ -210,10 +304,93 @@ aclError ResolveLaunchContext(PreparedTraceLaunch& prepared) noexcept
     return ACL_SUCCESS;
 }
 
+bool AddLayoutAxis(uint64_t count, int64_t stride, __int128& minimum, __int128& maximum) noexcept
+{
+    if (count == 0) {
+        return false;
+    }
+    __int128 extent = 0;
+    if (__builtin_mul_overflow(static_cast<__int128>(count - 1), static_cast<__int128>(stride), &extent)) {
+        return false;
+    }
+    __int128* bound = extent < 0 ? &minimum : &maximum;
+    return !__builtin_add_overflow(*bound, extent, bound);
+}
+
+bool AccessBounds(const AclsanDeviceMemoryAccessData& access, __int128& begin, __int128& end) noexcept
+{
+    __int128 minimum = 0;
+    __int128 maximum = 0;
+    uint64_t elementBytes = 0;
+    switch (access.layoutKind) {
+        case ACLSAN_MEM_LAYOUT_SCALAR:
+            elementBytes = access.layout.scalar.bytes;
+            break;
+        case ACLSAN_MEM_LAYOUT_RANGE:
+            elementBytes = access.layout.range.bytes;
+            break;
+        case ACLSAN_MEM_LAYOUT_BLOCK_REPEAT:
+            elementBytes = access.layout.blockRepeat.blockSize;
+            if (!AddLayoutAxis(
+                    access.layout.blockRepeat.blockNum, access.layout.blockRepeat.blockStride, minimum, maximum) ||
+                !AddLayoutAxis(
+                    access.layout.blockRepeat.repeatTimes, access.layout.blockRepeat.repeatStride, minimum, maximum)) {
+                return false;
+            }
+            break;
+        case ACLSAN_MEM_LAYOUT_ND_AFFINE:
+            elementBytes = access.layout.ndAffine.elementBytes;
+            if (access.layout.ndAffine.rank == 0 || access.layout.ndAffine.rank > 5) {
+                return false;
+            }
+            for (uint32_t axis = 0; axis < access.layout.ndAffine.rank; ++axis) {
+                if (!AddLayoutAxis(
+                        access.layout.ndAffine.dims[axis], access.layout.ndAffine.strides[axis], minimum, maximum)) {
+                    return false;
+                }
+            }
+            break;
+        default:
+            return false;
+    }
+    if (elementBytes == 0 || __builtin_add_overflow(static_cast<__int128>(access.address), minimum, &begin) ||
+        __builtin_add_overflow(static_cast<__int128>(access.address), maximum, &end) ||
+        __builtin_add_overflow(end, static_cast<__int128>(elementBytes), &end)) {
+        return false;
+    }
+    const __int128 addressLimit = static_cast<__int128>(1) << 64U;
+    return begin >= 0 && end >= begin && end <= addressLimit;
+}
+
+bool IsInternalHostInputAccess(
+    const AclsanDeviceMemoryAccessData& access,
+    const std::vector<PreparedTraceLaunch::HostInput>* internalInputs) noexcept
+{
+    if (internalInputs == nullptr || internalInputs->empty() || access.memorySpace != ACLSAN_DEVICE_MEMORY_SPACE_GM) {
+        return false;
+    }
+    __int128 accessBegin = 0;
+    __int128 accessEnd = 0;
+    if (!AccessBounds(access, accessBegin, accessEnd)) {
+        return false;
+    }
+    for (const auto& input : *internalInputs) {
+        const __int128 inputBegin = reinterpret_cast<uintptr_t>(input.address);
+        __int128 inputEnd = 0;
+        if (input.address != nullptr && input.bytes != 0 &&
+            !__builtin_add_overflow(inputBegin, static_cast<__int128>(input.bytes), &inputEnd) &&
+            accessBegin >= inputBegin && accessEnd <= inputEnd) {
+            return true;
+        }
+    }
+    return false;
+}
+
 } // namespace
 
 void DispatchTraceRecords(
-    const std::vector<ParsedTraceRecord>& records, const aclsan::DeviceInstructionDecoder& decoder) noexcept
+    const std::vector<ParsedTraceRecord>& records, const aclsan::DeviceInstructionDecoder& decoder,
+    const std::vector<PreparedTraceLaunch::HostInput>* internalInputs) noexcept
 {
     if (records.empty()) {
         return;
@@ -279,6 +456,9 @@ void DispatchTraceRecords(
         }
         if (const auto* memory = std::get_if<DeviceMemoryAccessDataList>(&*callbackData)) {
             for (const AclsanDeviceMemoryAccessData& access : *memory) {
+                if (IsInternalHostInputAccess(access, internalInputs)) {
+                    continue;
+                }
                 AclsanCallbackDispatcher::DispatchDeviceMemoryAccess(access);
             }
         } else if (const auto* sync = std::get_if<AclsanDeviceSyncData>(&*callbackData)) {
@@ -400,6 +580,84 @@ aclError PrepareTraceLaunch(
     }
 }
 
+aclError MaterializeTraceHostInputs(PreparedTraceLaunch& prepared) noexcept
+{
+    if (!prepared.instrumented || prepared.placeholders.empty()) {
+        return ACL_SUCCESS;
+    }
+    std::vector<PreparedTraceLaunch::HostInput> inputs;
+    const auto fail = [&](aclError status) {
+        ReleaseHostInputs(inputs);
+        return status;
+    };
+    try {
+        const auto allocate = GetOriginalRuntimeFunction<aclrtMallocFunc>(ACL_RT_API_aclrtMalloc, "aclrtMalloc");
+        const auto copy = GetOriginalRuntimeFunction<aclrtMemcpyFunc>(ACL_RT_API_aclrtMemcpy, "aclrtMemcpy");
+        inputs.reserve(prepared.placeholders.size());
+        for (size_t index = 0; index < prepared.placeholders.size(); ++index) {
+            const auto& placeholder = prepared.placeholders[index];
+            if (placeholder.addrOffset % sizeof(void*) != 0 || placeholder.addrOffset > prepared.traceArgumentOffset ||
+                prepared.traceArgumentOffset - placeholder.addrOffset < sizeof(void*) ||
+                placeholder.dataOffset < prepared.traceArgumentOffset + sizeof(void*) ||
+                placeholder.dataOffset >= prepared.arguments.size()) {
+                return fail(ACL_ERROR_INVALID_PARAM);
+            }
+            bool alias = false;
+            for (size_t previous = 0; previous < index; ++previous) {
+                const auto& earlier = prepared.placeholders[previous];
+                if (earlier.addrOffset == placeholder.addrOffset) {
+                    return fail(ACL_ERROR_INVALID_PARAM);
+                }
+                if (earlier.dataOffset == placeholder.dataOffset) {
+                    std::memcpy(
+                        prepared.arguments.data() + placeholder.addrOffset,
+                        prepared.arguments.data() + earlier.addrOffset, sizeof(void*));
+                    alias = true;
+                }
+            }
+            if (alias) {
+                continue;
+            }
+            size_t end = prepared.arguments.size();
+            for (const auto& next : prepared.placeholders) {
+                if (next.dataOffset > placeholder.dataOffset) {
+                    end = std::min(end, static_cast<size_t>(next.dataOffset));
+                }
+            }
+            const size_t bytes = end - placeholder.dataOffset;
+            if (bytes > SIZE_MAX - 31U) {
+                return fail(ACL_ERROR_INVALID_PARAM);
+            }
+            std::vector<uint8_t> payload((bytes + 31U) & ~size_t(31U), 0);
+            ASCTOOL_DEBUG(
+                "acl_san HostInput: launch=%llu index=%zu addrOffset=%u dataOffset=%u payloadBytes=%zu "
+                "allocationBytes=%zu",
+                static_cast<unsigned long long>(prepared.launchId), index, placeholder.addrOffset,
+                placeholder.dataOffset, bytes, payload.size());
+            std::memcpy(payload.data(), prepared.arguments.data() + placeholder.dataOffset, bytes);
+            void* address = nullptr;
+            aclError status = allocate(&address, payload.size(), ACL_MEM_MALLOC_HUGE_FIRST);
+            if (status != ACL_SUCCESS) {
+                return fail(status);
+            }
+            inputs.push_back({address, payload.size()});
+            status = copy(address, payload.size(), payload.data(), payload.size(), ACL_MEMCPY_HOST_TO_DEVICE);
+            if (status != ACL_SUCCESS) {
+                return fail(status);
+            }
+            std::memcpy(prepared.arguments.data() + placeholder.addrOffset, &address, sizeof(address));
+        }
+        prepared.arguments.resize(prepared.traceArgumentOffset + sizeof(void*));
+        prepared.placeholders.clear();
+        prepared.hostInputs = std::move(inputs);
+        return ACL_SUCCESS;
+    } catch (const std::bad_alloc&) {
+        return fail(ACL_ERROR_BAD_ALLOC);
+    } catch (...) {
+        return fail(ACL_ERROR_FAILURE);
+    }
+}
+
 void CompleteTraceLaunch(
     PreparedTraceLaunch&& prepared, aclrtFuncHandle function, aclrtStream stream, aclError launchResult) noexcept
 {
@@ -408,91 +666,80 @@ void CompleteTraceLaunch(
     }
     if (launchResult != ACL_SUCCESS) {
         ReleaseDeviceBuffer(prepared.deviceBuffer);
+        ReleaseHostInputs(prepared.hostInputs);
         return;
     }
 
     try {
-        PendingTrace pending{prepared.launchId,
-                             function,
-                             stream,
-                             prepared.deviceBuffer,
-                             prepared.blockCount,
-                             prepared.physicalCoreCount,
-                             prepared.deviceId,
-                             prepared.decoder,
-                             std::move(prepared.hostBuffer)};
+        PendingTrace pending{
+            prepared.launchId,
+            function,
+            stream,
+            prepared.deviceBuffer,
+            prepared.blockCount,
+            prepared.physicalCoreCount,
+            prepared.deviceId,
+            prepared.decoder,
+            std::move(prepared.hostBuffer),
+            std::move(prepared.binaryLease),
+            std::move(prepared.arguments),
+            std::move(prepared.placeholders),
+            std::move(prepared.hostInputs),
+            std::vector<uint32_t>(prepared.physicalCoreCount, 0U)};
         TraceRuntimeState& state = State();
         std::lock_guard<std::mutex> lock(state.mutex);
         state.pending.push_back(std::move(pending));
     } catch (...) {
         ASCTOOL_ERROR(
             "acl_san trace: failed to retain launch=%llu", static_cast<unsigned long long>(prepared.launchId));
-        ReleaseDeviceBuffer(prepared.deviceBuffer);
+        AbortHookFailure("launch", "retain_trace", "cannot retain resources for an in-flight kernel");
     }
 }
 
-void CollectTraceStream(aclrtStream stream) noexcept
+TraceCollectionResult CollectTraceStream(aclrtStream stream, bool executionComplete) noexcept
 {
+    TraceCollectionResult collection;
     std::vector<PendingTrace> completed;
     try {
         {
             TraceRuntimeState& state = State();
             std::lock_guard<std::mutex> lock(state.mutex);
             for (auto it = state.pending.begin(); it != state.pending.end();) {
-                if (it->stream == stream) {
+                if (it->stream != stream) {
+                    ++it;
+                    continue;
+                }
+                // A timed-out deferred kernel may still own HostInput and variant resources. Read a trace snapshot so
+                // diagnostics emitted before the blocking instruction are visible, but keep all launch resources
+                // until Runtime confirms completion or resets the Device.
+                if (!executionComplete && it->binaryLease) {
+                    ++collection.launchCount;
+                    (void)DispatchTraceSnapshot(*it, false, collection);
+                    ++it;
+                } else {
                     completed.push_back(std::move(*it));
                     it = state.pending.erase(it);
-                } else {
-                    ++it;
                 }
             }
         }
     } catch (...) {
         ASCTOOL_ERROR("acl_san trace: failed to detach completed launches for stream=%p", stream);
-        return;
+        return collection;
     }
 
-    if (completed.empty()) {
-        return;
-    }
-
-    const auto memcpyFunction = GetOriginalRuntimeFunction<aclrtMemcpyFunc>(ACL_RT_API_aclrtMemcpy, "aclrtMemcpy");
+    collection.launchCount += completed.size();
     for (PendingTrace& pending : completed) {
         try {
-            if (memcpyFunction(
-                    pending.hostBuffer.data(), pending.hostBuffer.size(), pending.deviceBuffer,
-                    pending.hostBuffer.size(), ACL_MEMCPY_DEVICE_TO_HOST) != ACL_SUCCESS) {
-                ASCTOOL_ERROR(
-                    "acl_san trace: D2H failed for launch=%llu", static_cast<unsigned long long>(pending.launchId));
-                ReleaseDeviceBuffer(pending.deviceBuffer);
-                continue;
-            }
-
-            TraceBufferParseResult parsed = ParseTraceBuffer(
-                pending.hostBuffer.data(), pending.hostBuffer.size(), pending.physicalCoreCount, pending.blockCount,
-                pending.launchId, pending.deviceId);
-            if (!parsed.ok) {
-                ASCTOOL_ERROR(
-                    "acl_san trace: malformed buffer for launch=%llu: %s",
-                    static_cast<unsigned long long>(pending.launchId), parsed.error.c_str());
-            } else {
-                if (!parsed.records.empty() && pending.decoder != nullptr) {
-                    DispatchTraceRecords(parsed.records, *pending.decoder);
-                }
-                if (parsed.overflowCount != 0) {
-                    ASCTOOL_ERROR(
-                        "acl_san trace: launch=%llu dropped %llu records",
-                        static_cast<unsigned long long>(pending.launchId),
-                        static_cast<unsigned long long>(parsed.overflowCount));
-                }
-            }
+            (void)DispatchTraceSnapshot(pending, true, collection);
         } catch (...) {
             ASCTOOL_ERROR(
                 "acl_san trace: unexpected D2H processing failure for launch=%llu",
                 static_cast<unsigned long long>(pending.launchId));
         }
         ReleaseDeviceBuffer(pending.deviceBuffer);
+        ReleaseHostInputs(pending.hostInputs);
     }
+    return collection;
 }
 
 void ResetTraceRuntimeState() noexcept

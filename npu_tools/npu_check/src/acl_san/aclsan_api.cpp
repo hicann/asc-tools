@@ -76,24 +76,27 @@ struct CallbackKey {
 
 // 记录每组 domain + callback id 需要开启 Hook 的 Runtime API。
 const std::map<CallbackKey, std::vector<aclrtApiId>> g_callbackRoutes = {
-    {{ACLSAN_CB_DOMAIN_RESOURCE, ACLSAN_CBID_RESOURCE_MEMORY_ALLOC}, {ACL_RT_API_aclrtMalloc}},
+    {{ACLSAN_CB_DOMAIN_RESOURCE, ACLSAN_CBID_RESOURCE_MEMORY_ALLOC},
+     {ACL_RT_API_aclrtMalloc, ACL_RT_API_aclrtMallocWithCfg}},
     {{ACLSAN_CB_DOMAIN_RESOURCE, ACLSAN_CBID_RESOURCE_MEMORY_FREE}, {ACL_RT_API_aclrtFree}},
     {{ACLSAN_CB_DOMAIN_DEVICE_INSTRUCTION, ACLSAN_CBID_DEVICE_MEMORY_ACCESS},
      {ACL_RT_API_aclrtBinaryLoadFromData, ACL_RT_API_aclrtBinaryGetFunction, ACL_RT_API_aclrtBinaryGetFunctionByEntry,
       ACL_RT_API_aclrtLaunchKernelWithHostArgs, ACL_RT_API_aclrtLaunchKernelWithArgsArray,
       ACL_RT_API_aclrtSynchronizeStream, ACL_RT_API_aclrtSynchronizeStreamWithTimeout, ACL_RT_API_aclrtGetFuncBySymbol,
-      ACL_RT_API_aclrtBinaryUnLoad, ACL_RT_API_aclrtResetDevice, ACL_RT_API_aclrtMalloc}},
+      ACL_RT_API_aclrtBinaryUnLoad, ACL_RT_API_aclrtResetDevice, ACL_RT_API_aclrtMalloc, ACL_RT_API_aclrtMallocWithCfg,
+      ACL_RT_API_aclrtBinaryLoadFromFile}},
     {{ACLSAN_CB_DOMAIN_DEVICE_INSTRUCTION, ACLSAN_CBID_DEVICE_SYNC},
      {ACL_RT_API_aclrtBinaryLoadFromData, ACL_RT_API_aclrtBinaryGetFunction, ACL_RT_API_aclrtBinaryGetFunctionByEntry,
       ACL_RT_API_aclrtLaunchKernelWithHostArgs, ACL_RT_API_aclrtLaunchKernelWithArgsArray,
       ACL_RT_API_aclrtSynchronizeStream, ACL_RT_API_aclrtSynchronizeStreamWithTimeout, ACL_RT_API_aclrtGetFuncBySymbol,
-      ACL_RT_API_aclrtBinaryUnLoad, ACL_RT_API_aclrtResetDevice}},
+      ACL_RT_API_aclrtBinaryUnLoad, ACL_RT_API_aclrtResetDevice, ACL_RT_API_aclrtBinaryLoadFromFile}},
     {{ACLSAN_CB_DOMAIN_SYNCHRONIZE, ACLSAN_CBID_SYNCHRONIZE_STREAM_SYNC_END},
      {ACL_RT_API_aclrtSynchronizeStream, ACL_RT_API_aclrtSynchronizeStreamWithTimeout}},
     {{ACLSAN_CB_DOMAIN_LAUNCH, ACLSAN_CBID_LAUNCH_KERNEL},
      {ACL_RT_API_aclrtBinaryLoadFromData, ACL_RT_API_aclrtBinaryGetFunction, ACL_RT_API_aclrtBinaryGetFunctionByEntry,
       ACL_RT_API_aclrtGetFuncBySymbol, ACL_RT_API_aclrtLaunchKernelWithHostArgs,
-      ACL_RT_API_aclrtLaunchKernelWithArgsArray, ACL_RT_API_aclrtBinaryUnLoad, ACL_RT_API_aclrtResetDevice}},
+      ACL_RT_API_aclrtLaunchKernelWithArgsArray, ACL_RT_API_aclrtBinaryUnLoad, ACL_RT_API_aclrtResetDevice,
+      ACL_RT_API_aclrtBinaryLoadFromFile}},
 };
 
 } // namespace

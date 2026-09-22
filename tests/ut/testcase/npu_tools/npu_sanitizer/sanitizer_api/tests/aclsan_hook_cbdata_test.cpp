@@ -23,6 +23,7 @@
 #include <type_traits>
 #include <unistd.h>
 #include <utility>
+#include <vector>
 
 #include "acl_san/aclsan_api.h"
 #include "acl_san/aclsan_cbdata.h"
@@ -72,6 +73,10 @@ aclError g_getDeviceResult = ACL_SUCCESS;
 int32_t g_clearCallbackResult = 0;
 int32_t g_registerMallocResult = 0;
 size_t g_lastMallocSize = 0;
+bool g_hostInputAllocation = false;
+aclError g_hostInputMallocResult = ACL_SUCCESS;
+aclError g_hostInputMemcpyResult = ACL_SUCCESS;
+std::array<uint8_t, 64> g_hostInputStorage{};
 
 void ResetCapture()
 {
@@ -89,6 +94,9 @@ void ResetCapture()
     g_registerMallocResult = 0;
     g_lastMallocSize = 0;
     g_functionAttributeQueryCalls = 0;
+    g_hostInputAllocation = false;
+    g_hostInputMallocResult = ACL_SUCCESS;
+    g_hostInputMemcpyResult = ACL_SUCCESS;
 }
 
 void* Address(uintptr_t value) { return reinterpret_cast<void*>(value); }
@@ -114,7 +122,10 @@ aclError FakeAclrtMalloc(void** deviceAddress, size_t size, aclrtMemMallocPolicy
     if (deviceAddress == nullptr) {
         return ACL_ERROR_INVALID_PARAM;
     }
-    *deviceAddress = Address(0x12340000U);
+    if (g_hostInputAllocation && g_hostInputMallocResult != ACL_SUCCESS) {
+        return g_hostInputMallocResult;
+    }
+    *deviceAddress = g_hostInputAllocation ? g_hostInputStorage.data() : Address(0x12340000U);
     return ACL_SUCCESS;
 }
 
@@ -527,6 +538,12 @@ void TestNdDmaPadCountStatePreservesExactGmFootprint()
     assert(access.layout.ndAffine.strides[0] == 1);
     assert(access.layout.ndAffine.strides[1] == 8);
     assert(logs.find("type=NdDmaPadCountParamField left=[1,3,5,7] right=[2,4,6,8]") != std::string::npos);
+
+    ResetCapture();
+    const std::vector<aclsan::PreparedTraceLaunch::HostInput> internalInputs{{Address(0x4000), 32}};
+    aclsan::DispatchTraceRecords(
+        {padding, loop0Stride, loop1Stride, loop2Stride, loop3Stride, loop4Stride, memory}, *decoder, &internalInputs);
+    assert(g_deviceMemoryCallbackCount == 0);
 }
 
 void TestDmaOuterLoopStateReachesMemoryCallback()
@@ -868,6 +885,9 @@ namespace {
 aclError FakeAclrtMemcpy(void* destination, size_t capacity, const void* source, size_t bytes, aclrtMemcpyKind)
 {
     assert(bytes <= capacity);
+    if (g_hostInputAllocation && g_hostInputMemcpyResult != ACL_SUCCESS) {
+        return g_hostInputMemcpyResult;
+    }
     if (destination == Address(0x12340000U)) {
         return ACL_SUCCESS;
     }
@@ -922,6 +942,69 @@ void* CaptureGetOriginalRuntimeApi(aclrtApiId apiId)
 // 原 13 个 acltoolRegister*/ClearCallback 内联桩已收敛到 llt/aclsan_boundary_stub
 // （默认转发注入库真实实现；本用例在 TEST 内经 BoundaryGuard 安装受控版本）。
 
+void TestHostInputMaterialization()
+{
+    aclsan::PreparedTraceLaunch prepared;
+    prepared.instrumented = true;
+    prepared.traceArgumentOffset = 16;
+    prepared.deviceBuffer = Address(0x12340000U);
+    prepared.arguments.assign(40, 0);
+    std::fill(prepared.arguments.begin() + 24, prepared.arguments.end(), 0xab);
+    prepared.placeholders = {{8, 24}, {0, 24}};
+    g_hostInputAllocation = true;
+    ASSERT_EQ(aclsan::MaterializeTraceHostInputs(prepared), ACL_SUCCESS);
+    ASSERT_EQ(prepared.arguments.size(), 24U);
+    ASSERT_TRUE(prepared.placeholders.empty());
+    ASSERT_EQ(prepared.hostInputs.size(), 1U);
+    ASSERT_EQ(prepared.hostInputs[0].bytes, 32U);
+    void* first = nullptr;
+    void* second = nullptr;
+    std::memcpy(&first, prepared.arguments.data(), sizeof(first));
+    std::memcpy(&second, prepared.arguments.data() + 8, sizeof(second));
+    ASSERT_EQ(first, g_hostInputStorage.data());
+    ASSERT_EQ(first, second);
+    for (size_t i = 0; i < 32; ++i) {
+        ASSERT_EQ(g_hostInputStorage[i], i < 16 ? 0xab : 0);
+    }
+    aclsan::CompleteTraceLaunch(std::move(prepared), nullptr, nullptr, ACL_ERROR_FAILURE);
+    ASSERT_EQ(g_lastFreedAddress, g_hostInputStorage.data());
+
+    aclsan::PreparedTraceLaunch failed;
+    failed.instrumented = true;
+    failed.traceArgumentOffset = 16;
+    failed.arguments.assign(40, 0xcd);
+    failed.placeholders = {{0, 24}, {8, 16}};
+    g_lastFreedAddress = nullptr;
+    ASSERT_EQ(aclsan::MaterializeTraceHostInputs(failed), ACL_ERROR_INVALID_PARAM);
+    ASSERT_TRUE(failed.hostInputs.empty());
+    ASSERT_EQ(g_lastFreedAddress, g_hostInputStorage.data());
+
+    aclsan::PreparedTraceLaunch mallocFailed;
+    mallocFailed.instrumented = true;
+    mallocFailed.traceArgumentOffset = 16;
+    mallocFailed.arguments.assign(40, 0xef);
+    mallocFailed.placeholders = {{0, 24}};
+    g_lastFreedAddress = nullptr;
+    g_hostInputMallocResult = ACL_ERROR_BAD_ALLOC;
+    ASSERT_EQ(aclsan::MaterializeTraceHostInputs(mallocFailed), ACL_ERROR_BAD_ALLOC);
+    ASSERT_TRUE(mallocFailed.hostInputs.empty());
+    ASSERT_EQ(g_lastFreedAddress, nullptr);
+    g_hostInputMallocResult = ACL_SUCCESS;
+
+    aclsan::PreparedTraceLaunch copyFailed;
+    copyFailed.instrumented = true;
+    copyFailed.traceArgumentOffset = 16;
+    copyFailed.arguments.assign(40, 0xef);
+    copyFailed.placeholders = {{0, 24}};
+    g_lastFreedAddress = nullptr;
+    g_hostInputMemcpyResult = ACL_ERROR_FAILURE;
+    ASSERT_EQ(aclsan::MaterializeTraceHostInputs(copyFailed), ACL_ERROR_FAILURE);
+    ASSERT_TRUE(copyFailed.hostInputs.empty());
+    ASSERT_EQ(g_lastFreedAddress, g_hostInputStorage.data());
+    g_hostInputMemcpyResult = ACL_SUCCESS;
+    g_hostInputAllocation = false;
+}
+
 TEST(AclsanHookCbdata, Main)
 {
     aclsan_test::Boundary boundary;
@@ -932,6 +1015,7 @@ TEST(AclsanHookCbdata, Main)
         return id == ACL_RT_API_aclrtMalloc ? g_registerMallocResult : 0;
     };
     const aclsan_test::BoundaryGuard boundaryGuard{boundary};
+    TestHostInputMaterialization();
     TestMallocCallbackData();
     TestMallocCallbackDataRoundsSizeUpTo32Bytes();
     TestMallocPreservesOriginalRuntimeError();

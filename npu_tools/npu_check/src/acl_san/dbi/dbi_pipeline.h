@@ -12,12 +12,15 @@
 #define NPU_TOOLS_NPU_CHECK_SRC_ACL_SAN_DBI_DBI_PIPELINE_H
 
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <vector>
 
 namespace aclsan {
 
 enum class ProbeGroup : uint8_t { Mte1, Mte2, Mte3, Fixpipe, Scalar, Sync, Matrix, Vector };
+
+enum class ProbeCoreType : uint8_t { Unknown, Aic, Aiv, Mix };
 
 enum ProbeGroupMask : uint32_t {
     PROBE_GROUP_MTE1 = 1U << 0U,
@@ -54,6 +57,9 @@ struct DbiRequest {
     bool strict = false;
     bool keepTemp = false;
     std::vector<std::string> extraTuneArgs;
+    std::optional<uint64_t> tilingKey = std::nullopt;
+    ProbeCoreType coreType = ProbeCoreType::Unknown;
+    bool useCompleteProbeSet = false;
 };
 
 struct DbiResult {
@@ -68,11 +74,16 @@ struct DbiResult {
 std::vector<ProbeGroup> NormalizeProbeGroups(const std::vector<ProbeGroup>& groups);
 std::vector<ProbeGroup> ProbeGroupsFromMask(uint32_t mask);
 std::string ProbeGroupName(ProbeGroup group);
+std::string ProbeCoreTypeName(ProbeCoreType coreType);
+ProbeCoreType DetectProbeCoreType(const std::string& kernelSymbols, const std::string& selectedKernelSymbol);
+std::vector<ProbeGroup> ResolveProbeGroups(
+    const std::vector<ProbeGroup>& requestedGroups, ProbeCoreType coreType, bool useCompleteProbeSet);
 std::string ValidateRequest(const DbiRequest& request);
 ToolchainPaths ResolveToolchain(const std::string& cannRoot);
 std::string CannRootFromRuntimeLibrary(const std::string& runtimeLibrary);
 std::string MakeCacheKey(
-    const std::string& arch, const std::vector<ProbeGroup>& groups, const std::string& objectIdentity);
+    const std::string& arch, const std::vector<ProbeGroup>& groups, const std::string& objectIdentity,
+    ProbeCoreType coreType = ProbeCoreType::Mix);
 DbiResult RunDbiPipeline(const DbiRequest& request);
 
 } // namespace aclsan

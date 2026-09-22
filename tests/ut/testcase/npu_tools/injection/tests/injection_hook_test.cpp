@@ -243,7 +243,9 @@ TEST(AclInjectionHook, Main)
     static_assert(ACL_RT_API_aclrtMallocAlign32 == 25);
     static_assert(ACL_RT_API_aclrtFunctionGetParamCount == 26);
     static_assert(ACL_RT_API_aclrtFunctionGetParamInfo == 27);
-    static_assert(ACL_RT_API_MAX == 28);
+    static_assert(ACL_RT_API_aclrtMallocWithCfg == 28);
+    static_assert(ACL_RT_API_aclrtBinaryLoadFromFile == 29);
+    static_assert(ACL_RT_API_MAX == 30);
     CHECK(RuntimeStubSetOriginFunction("aclrtFunctionGetParamCount", &OriginalGetParamCount) == 0);
     CHECK(RuntimeStubSetOriginFunction("aclrtFunctionGetParamInfo", &OriginalGetParamInfo) == 0);
 
@@ -280,6 +282,14 @@ TEST(AclInjectionHook, Main)
         &OriginalGetDeviceInfo);
     CHECK(acltoolClearCallback(ACL_RT_API_aclrtMalloc) == 0);
 
+    CHECK(RuntimeStubClearOrigin("aclrtFunctionGetParamInfo") == ACL_SUCCESS);
+    CHECK(acltoolHookInit() != ACL_SUCCESS);
+    aclrtApiFunc restored = nullptr;
+    CHECK(aclrtApiInjectionGetFunc("aclrtMalloc", nullptr, &restored) == ACL_SUCCESS);
+    CHECK(restored == reinterpret_cast<aclrtApiFunc>(&OriginalMalloc));
+    CHECK(RuntimeStubSetOriginFunction("aclrtFunctionGetParamInfo", &OriginalGetParamInfo) == ACL_SUCCESS);
+    CHECK(RuntimeStubClearOrigin("aclrtMallocWithCfg") == ACL_SUCCESS);
+    CHECK(RuntimeStubClearOrigin("aclrtBinaryLoadFromFile") == ACL_SUCCESS);
     CHECK(acltoolHookInit() == 0);
     CHECK(acltoolHookInit() == 0);
 
