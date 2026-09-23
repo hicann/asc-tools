@@ -55,6 +55,7 @@ struct MemoryAccessDescriptor {
     uint32_t accessMode;
     uint32_t dataBits;
     MemoryLayoutDescriptor layout;
+    bool preloadTarget = false;
 };
 
 struct MemoryInstructionProfile {
@@ -320,7 +321,7 @@ public:
         if (status_ != MemoryCbdataStatus::SUCCESS) {
             return false;
         }
-        if (!IsRepresentable(descriptor)) {
+        if (!descriptor.preloadTarget && !IsRepresentable(descriptor)) {
             Fail(MemoryCbdataStatus::ARITHMETIC_OVERFLOW);
             return false;
         }
@@ -430,6 +431,9 @@ private:
     {
         AclsanDeviceMemoryAccessData data{};
         data.header = header;
+        if (descriptor.preloadTarget) {
+            data.header.flags = ACLSAN_DEVICE_EVENT_FLAG_ESTIMATED;
+        }
         data.address = descriptor.address;
         data.memorySpace = ACLSAN_DEVICE_MEMORY_SPACE_GM;
         data.accessMode = descriptor.accessMode;
@@ -473,6 +477,108 @@ public:
     MemoryFieldVisitor(MemoryCbdataContext context, const MemoryRegisterState& registerState) noexcept
         : context_(context), registerState_(registerState)
     {}
+
+    MemoryCbdataResult operator()(const ScalarDevParamField& field) const noexcept
+    {
+        const auto firstStore = static_cast<uint32_t>(InstructionId::StDevB64);
+        const auto lastStore = static_cast<uint32_t>(InstructionId::StDevB8);
+        const auto firstLoad = static_cast<uint32_t>(InstructionId::LdDevB64);
+        const auto lastLoad = static_cast<uint32_t>(InstructionId::LdDevB8);
+        const bool isStore = field.instrId >= firstStore && field.instrId <= lastStore;
+        const bool isLoad = field.instrId >= firstLoad && field.instrId <= lastLoad;
+        if (!isStore && !isLoad) {
+            return {MemoryCbdataStatus::INVALID_FIELD, {}};
+        }
+        const uint32_t dataBits = 64U >> (field.instrId - (isStore ? firstStore : firstLoad));
+        if (field.dataBits != dataBits) {
+            return {MemoryCbdataStatus::INVALID_FIELD, {}};
+        }
+        // Widen before adding so negative offsets (including INT64_MIN) cannot wrap.
+        const __int128 address = static_cast<__int128>(field.addr) + field.offset;
+        if (address < 0 || address > std::numeric_limits<uint64_t>::max()) {
+            return {MemoryCbdataStatus::ARITHMETIC_OVERFLOW, {}};
+        }
+        const MemoryInstructionProfile profile{
+            dataBits, isStore ? ACLSAN_DEVICE_SOURCE_ST : ACLSAN_DEVICE_SOURCE_LD, context_.blockType};
+        MemoryCbdataBuilder builder{context_, profile};
+        (void)builder.Add(
+            {static_cast<uint64_t>(address),
+             isStore ? ACLSAN_DEVICE_MEMORY_ACCESS_WRITE : ACLSAN_DEVICE_MEMORY_ACCESS_READ, dataBits,
+             RangeDescriptor{dataBits / 8U}});
+        return std::move(builder).Build();
+    }
+
+    MemoryCbdataResult operator()(const ScalarAtomicParamField& field) const noexcept
+    {
+        const auto firstStAtomic = static_cast<uint32_t>(InstructionId::StAtomicB32);
+        const auto lastStAtomic = static_cast<uint32_t>(InstructionId::StAtomicB8);
+        const auto firstStiAtomic = static_cast<uint32_t>(InstructionId::StiAtomicB32);
+        const auto lastStiAtomic = static_cast<uint32_t>(InstructionId::StiAtomicB8);
+        const bool isStAtomic = field.instrId >= firstStAtomic && field.instrId <= lastStAtomic;
+        const bool isStiAtomic = field.instrId >= firstStiAtomic && field.instrId <= lastStiAtomic;
+        if (!isStAtomic && !isStiAtomic) {
+            return {MemoryCbdataStatus::INVALID_FIELD, {}};
+        }
+        const uint32_t dataBits = 32U >> (field.instrId - (isStAtomic ? firstStAtomic : firstStiAtomic));
+        if (field.dataBits != dataBits) {
+            return {MemoryCbdataStatus::INVALID_FIELD, {}};
+        }
+        // post == 1 uses the captured base for this access, without adding offset.
+        if (field.post > 1U) {
+            return {MemoryCbdataStatus::INVALID_FIELD, {}};
+        }
+        if (field.addressContext != ASCSAN_SCALAR_ADDRESS_CONTEXT_V1) {
+            return {MemoryCbdataStatus::MISSING_ADDRESS_CONTEXT, {}};
+        }
+        // ST_ATOMIC keeps an element offset; STI_ATOMIC keeps a byte offset.
+        const int64_t elementBytes = static_cast<int64_t>(dataBits / 8U);
+        const __int128 offset =
+            field.post == 1U ? 0 : static_cast<__int128>(field.offset) * (isStAtomic ? elementBytes : 1);
+        const __int128 address = static_cast<__int128>(field.addr) + offset;
+        if (address < 0 || address > std::numeric_limits<uint64_t>::max()) {
+            return {MemoryCbdataStatus::ARITHMETIC_OVERFLOW, {}};
+        }
+        // Match dav-3510 RemapAddress after effective-address calculation.
+        // Stack backing is irrelevant here: local spaces are outside this GM-only scope.
+        const uint64_t effective = static_cast<uint64_t>(address);
+        constexpr uint64_t windowMask = (UINT64_C(1) << 24) - 1;
+        const bool systemWindow = ((effective >> 25) & windowMask) == ((field.sysVaBase >> 25) & windowMask);
+        if (systemWindow && ((effective >> 24) & 1U) == 0) {
+            const bool ub = ((effective >> 20) & 0x1fU) == 0 && ((effective >> 19) & 1U) != 0;
+            const bool stack = ((effective >> 20) & 0xfU) != 0;
+            return {
+                ub || stack ? MemoryCbdataStatus::UNSUPPORTED_ADDRESS_SPACE : MemoryCbdataStatus::INVALID_ADDRESS_SPACE,
+                {}};
+        }
+        constexpr uint64_t gmLimit = UINT64_C(1) << 48;
+        const uint64_t gmAddress = effective & (gmLimit - 1);
+        if (dataBits / 8U > gmLimit - gmAddress) {
+            return {MemoryCbdataStatus::ARITHMETIC_OVERFLOW, {}};
+        }
+        const MemoryInstructionProfile profile{dataBits, ACLSAN_DEVICE_SOURCE_ST, context_.blockType};
+        MemoryCbdataBuilder builder{context_, profile};
+        (void)builder.Add({gmAddress, ACLSAN_DEVICE_MEMORY_ACCESS_WRITE, dataBits, RangeDescriptor{dataBits / 8U}});
+        return std::move(builder).Build();
+    }
+
+    MemoryCbdataResult operator()(const ScalarPreloadParamField& field) const noexcept
+    {
+        if (field.instrId != static_cast<uint32_t>(InstructionId::DcPreload) &&
+            field.instrId != static_cast<uint32_t>(InstructionId::DcPreloadI)) {
+            return {MemoryCbdataStatus::INVALID_FIELD, {}};
+        }
+        const __int128 address = static_cast<__int128>(field.addr) + field.offset;
+        if (address < 0 || address > std::numeric_limits<uint64_t>::max()) {
+            return {MemoryCbdataStatus::ARITHMETIC_OVERFLOW, {}};
+        }
+        MemoryInstructionProfile profile{0, ACLSAN_DEVICE_SOURCE_SCALAR, context_.blockType};
+        MemoryCbdataBuilder builder{context_, profile};
+        if (!builder.Add(
+                {static_cast<uint64_t>(address), ACLSAN_DEVICE_MEMORY_ACCESS_READ, 0, RangeDescriptor{0}, true})) {
+            return std::move(builder).Build();
+        }
+        return std::move(builder).Build();
+    }
 
     MemoryCbdataResult operator()(const CopyGmToUbufAlignV2ParamField& field) const noexcept
     {

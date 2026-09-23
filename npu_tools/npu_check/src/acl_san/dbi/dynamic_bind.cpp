@@ -48,8 +48,8 @@ aclsan::ProbeGroup BindingGroup(const BindingSpec& binding)
     if ((id >= 174 && id <= 178) || (id >= 417 && id <= 421)) {
         return ProbeGroup::Vector;
     }
-    if (id == 58 || (id >= 62 && id <= 63) || id == 90 || id == 123 || (id >= 124 && id <= 136) ||
-        (id >= 160 && id <= 164) || (id >= 386 && id <= 387) || (id >= 390 && id <= 399)) {
+    if ((id >= 56 && id <= 71) || id == 90 || id == 123 || (id >= 124 && id <= 136) || (id >= 160 && id <= 164) ||
+        (id >= 386 && id <= 387) || (id >= 390 && id <= 399)) {
         return ProbeGroup::Scalar;
     }
     if ((id >= 72 && id <= 82) || (id >= 84 && id <= 89) || id == 149 || id == 150) {
@@ -262,6 +262,19 @@ const std::vector<BindingSpec>& AllBindings()
         {InstrType::VMRGSORT_F16, 420, "__sanitizer_report_vmrgsort4_f16", {0, 1, 2, 3}},
         {InstrType::VMRGSORT_F32, 421, "__sanitizer_report_vmrgsort4_f32", {0, 1, 2, 3}},
         {InstrType::ST_ATOMIC_B8, 58, "__sanitizer_report_st_atomic_b8", {1, 2, 3}},
+        {InstrType::ST_ATOMIC_B32, 56, "__sanitizer_report_st_atomic_b32", {1, 2, 3}},
+        {InstrType::ST_ATOMIC_B16, 57, "__sanitizer_report_st_atomic_b16", {1, 2, 3}},
+        {InstrType::STI_ATOMIC_B32, 59, "__sanitizer_report_sti_atomic_b32", {1, 2, 3}},
+        {InstrType::STI_ATOMIC_B16, 60, "__sanitizer_report_sti_atomic_b16", {1, 2, 3}},
+        {InstrType::STI_ATOMIC_B8, 61, "__sanitizer_report_sti_atomic_b8", {1, 2, 3}},
+        {InstrType::ST_DEV_B64, 64, "__sanitizer_report_st_dev_b64", {1, 2}},
+        {InstrType::ST_DEV_B32, 65, "__sanitizer_report_st_dev_b32", {1, 2}},
+        {InstrType::ST_DEV_B16, 66, "__sanitizer_report_st_dev_b16", {1, 2}},
+        {InstrType::ST_DEV_B8, 67, "__sanitizer_report_st_dev_b8", {1, 2}},
+        {InstrType::LD_DEV_B64, 68, "__sanitizer_report_ld_dev_b64", {1, 2}},
+        {InstrType::LD_DEV_B32, 69, "__sanitizer_report_ld_dev_b32", {1, 2}},
+        {InstrType::LD_DEV_B16, 70, "__sanitizer_report_ld_dev_b16", {1, 2}},
+        {InstrType::LD_DEV_B8, 71, "__sanitizer_report_ld_dev_b8", {1, 2}},
         {InstrType::DC_PRELOAD, 62, "__sanitizer_report_dc_preload", {0, 1}},
         {InstrType::DC_PRELOADI, 63, "__sanitizer_report_dc_preloadi", {0, 1}},
         {InstrType::CHANNEL_PARA, 123, "__sanitizer_report_set_channel_para", {0}},

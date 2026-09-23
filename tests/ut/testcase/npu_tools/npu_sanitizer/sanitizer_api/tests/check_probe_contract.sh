@@ -156,9 +156,32 @@ grep -Fq 'registerState.Update(key, *value);' "${trace_runtime}" || \
     Fail 'trace runtime does not update SET_PADDING state by block type and block ID'
 
 binding_source="${dbi_source_dir}/dynamic_bind.cpp"
+
+scalar_dev_id=64
+for scalar_dev_op in st ld; do
+    for scalar_dev_bits in 64 32 16 8; do
+        scalar_dev_type="${scalar_dev_op^^}_DEV_B${scalar_dev_bits}"
+        scalar_dev_symbol="__sanitizer_report_${scalar_dev_op}_dev_b${scalar_dev_bits}"
+        grep -Fq "{InstrType::${scalar_dev_type}, ${scalar_dev_id}, \"${scalar_dev_symbol}\", {1, 2}}" \
+            "${binding_source}" || Fail "incorrect address/offset binding for ${scalar_dev_symbol}"
+        scalar_dev_id=$((scalar_dev_id + 1))
+    done
+done
+
+scalar_atomic_id=56
+for scalar_atomic_spec in 'ST_ATOMIC_B32:st_atomic_b32' 'ST_ATOMIC_B16:st_atomic_b16' 'ST_ATOMIC_B8:st_atomic_b8' \
+    'STI_ATOMIC_B32:sti_atomic_b32' 'STI_ATOMIC_B16:sti_atomic_b16' 'STI_ATOMIC_B8:sti_atomic_b8'; do
+    scalar_atomic_type="${scalar_atomic_spec%%:*}"
+    scalar_atomic_symbol="__sanitizer_report_${scalar_atomic_spec##*:}"
+    grep -Fq "{InstrType::${scalar_atomic_type}, ${scalar_atomic_id}, \"${scalar_atomic_symbol}\", {1, 2, 3}}" \
+        "${binding_source}" || Fail "incorrect address/offset/post binding for ${scalar_atomic_symbol}"
+    scalar_atomic_id=$((scalar_atomic_id + 1))
+done
+
 probe_generator="${dbi_source_dir}/probe_source_generator.cpp"
 ctrlbin_bindings="${dbi_source_dir}/ctrlbin/ctrlbin_bindings.h"
 binding_catalog=$(tr '\n\r\t' ' ' < "${binding_source}" | tr -s ' ')
+probe_catalog=$(tr '\n\r\t' ' ' < "${probe_generator}" | tr -s ' ')
 grep -Fq 'enum class InstrType' "${ctrlbin_bindings}" || Fail 'ctrlbin instruction type is not named InstrType'
 if rg -n '\bCtrlbinInstructionType\b' "${binding_source}" "${ctrlbin_bindings}"; then
     Fail 'CtrlbinInstructionType alias remains in the binding path'
@@ -169,12 +192,12 @@ grep -Fq '{InstrType::SET_PADDING, 392, "__sanitizer_report_set_padding", {0}}' 
 grep -Fq 'return ProbeGroup::Matrix;' "${binding_source}" || Fail 'PIPE_M instruction IDs are not assigned to the Matrix group'
 grep -Fq 'return ProbeGroup::Vector;' "${binding_source}" || Fail 'PIPE_V instruction IDs are not assigned to the Vector group'
 binding_count=$(grep -Ec '^[[:space:]]+\{InstrType::' "${binding_source}")
-[[ "${binding_count}" -eq 141 ]] || Fail "expected 141 DBI bindings, found ${binding_count}"
+[[ "${binding_count}" -eq 154 ]] || Fail "expected 154 DBI bindings, found ${binding_count}"
 grep -Fq '{392, ProbeGroup::Scalar, "__sanitizer_report_set_padding"' "${probe_generator}" || \
     Fail 'Scalar SET_PADDING ProbeDefinition is missing'
-grep -Fq '"RegisterState", "PIPE_S"' "${probe_generator}" || \
+grep -Fq '"RegisterState", "PIPE_S"' <<< "${probe_catalog}" || \
     Fail 'SET_PADDING ProbeDefinition does not record PIPE_S'
-grep -Fq 'R"ARGS(value, 0UL, 0UL, 0UL, 0UL)ARGS"' "${probe_generator}" || \
+grep -Fq 'R"ARGS(value, 0UL, 0UL, 0UL, 0UL)ARGS"' <<< "${probe_catalog}" || \
     Fail 'SET_PADDING ProbeDefinition does not preserve value in raw argument 0'
 grep -Fq '{149, ProbeGroup::Mte2, "__sanitizer_report_set_l1_2d_b16"' "${probe_generator}" || \
     Fail 'MTE2 SET_L1_2D.b16 ProbeDefinition is missing'

@@ -87,7 +87,124 @@ extern __attribute__((noinline)) __attribute__((weak)) __aicore__ void __sanitiz
 {
     aclsan::WriteTraceRecord(
         memInfo, pc, bid, aclsan::DeviceInstructionCategory::MemoryAccess, static_cast<uint16_t>(PIPE_S), 58, addr,
-        static_cast<uint64_t>(offset), post, 0UL, 0UL);
+        static_cast<uint64_t>(offset), post, __cce_scalar::get_sys_va_base(), aclsan::ASCSAN_SCALAR_ADDRESS_CONTEXT_V1);
+}
+
+// ST_ATOMIC.b32, API ID 56. Offset is an element count; post=1 uses the captured base without adding offset.
+extern __attribute__((noinline)) __attribute__((weak)) __aicore__ void __sanitizer_report_st_atomic_b32(
+    __gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, uint64_t addr, int64_t offset, uint64_t post)
+{
+    aclsan::WriteTraceRecord(
+        memInfo, pc, bid, aclsan::DeviceInstructionCategory::MemoryAccess, static_cast<uint16_t>(PIPE_S), 56, addr,
+        static_cast<uint64_t>(offset), post, __cce_scalar::get_sys_va_base(), aclsan::ASCSAN_SCALAR_ADDRESS_CONTEXT_V1);
+}
+
+// ST_ATOMIC.b16, API ID 57. Offset is an element count.
+extern __attribute__((noinline)) __attribute__((weak)) __aicore__ void __sanitizer_report_st_atomic_b16(
+    __gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, uint64_t addr, int64_t offset, uint64_t post)
+{
+    aclsan::WriteTraceRecord(
+        memInfo, pc, bid, aclsan::DeviceInstructionCategory::MemoryAccess, static_cast<uint16_t>(PIPE_S), 57, addr,
+        static_cast<uint64_t>(offset), post, __cce_scalar::get_sys_va_base(), aclsan::ASCSAN_SCALAR_ADDRESS_CONTEXT_V1);
+}
+
+// STI_ATOMIC.b32, API ID 59. Offset is a byte count.
+extern __attribute__((noinline)) __attribute__((weak)) __aicore__ void __sanitizer_report_sti_atomic_b32(
+    __gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, uint64_t addr, int64_t offset, uint64_t post)
+{
+    aclsan::WriteTraceRecord(
+        memInfo, pc, bid, aclsan::DeviceInstructionCategory::MemoryAccess, static_cast<uint16_t>(PIPE_S), 59, addr,
+        static_cast<uint64_t>(offset), post, __cce_scalar::get_sys_va_base(), aclsan::ASCSAN_SCALAR_ADDRESS_CONTEXT_V1);
+}
+
+// STI_ATOMIC.b16, API ID 60. Offset is a byte count.
+extern __attribute__((noinline)) __attribute__((weak)) __aicore__ void __sanitizer_report_sti_atomic_b16(
+    __gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, uint64_t addr, int64_t offset, uint64_t post)
+{
+    aclsan::WriteTraceRecord(
+        memInfo, pc, bid, aclsan::DeviceInstructionCategory::MemoryAccess, static_cast<uint16_t>(PIPE_S), 60, addr,
+        static_cast<uint64_t>(offset), post, __cce_scalar::get_sys_va_base(), aclsan::ASCSAN_SCALAR_ADDRESS_CONTEXT_V1);
+}
+
+// STI_ATOMIC.b8, API ID 61. Offset is a byte count.
+extern __attribute__((noinline)) __attribute__((weak)) __aicore__ void __sanitizer_report_sti_atomic_b8(
+    __gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, uint64_t addr, int64_t offset, uint64_t post)
+{
+    aclsan::WriteTraceRecord(
+        memInfo, pc, bid, aclsan::DeviceInstructionCategory::MemoryAccess, static_cast<uint16_t>(PIPE_S), 61, addr,
+        static_cast<uint64_t>(offset), post, __cce_scalar::get_sys_va_base(), aclsan::ASCSAN_SCALAR_ADDRESS_CONTEXT_V1);
+}
+
+// ST_DEV.b64, API ID 64. Offset is in bytes.
+extern __attribute__((noinline)) __attribute__((weak)) __aicore__ void __sanitizer_report_st_dev_b64(
+    __gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, uint64_t addr, int64_t offset)
+{
+    aclsan::WriteTraceRecord(
+        memInfo, pc, bid, aclsan::DeviceInstructionCategory::MemoryAccess, static_cast<uint16_t>(PIPE_S), 64, addr,
+        static_cast<uint64_t>(offset), 0UL, 0UL, 0UL);
+}
+
+// ST_DEV.b32, API ID 65. Offset is in bytes.
+extern __attribute__((noinline)) __attribute__((weak)) __aicore__ void __sanitizer_report_st_dev_b32(
+    __gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, uint64_t addr, int64_t offset)
+{
+    aclsan::WriteTraceRecord(
+        memInfo, pc, bid, aclsan::DeviceInstructionCategory::MemoryAccess, static_cast<uint16_t>(PIPE_S), 65, addr,
+        static_cast<uint64_t>(offset), 0UL, 0UL, 0UL);
+}
+
+// ST_DEV.b16, API ID 66. Offset is in bytes.
+extern __attribute__((noinline)) __attribute__((weak)) __aicore__ void __sanitizer_report_st_dev_b16(
+    __gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, uint64_t addr, int64_t offset)
+{
+    aclsan::WriteTraceRecord(
+        memInfo, pc, bid, aclsan::DeviceInstructionCategory::MemoryAccess, static_cast<uint16_t>(PIPE_S), 66, addr,
+        static_cast<uint64_t>(offset), 0UL, 0UL, 0UL);
+}
+
+// ST_DEV.b8, API ID 67. Offset is in bytes.
+extern __attribute__((noinline)) __attribute__((weak)) __aicore__ void __sanitizer_report_st_dev_b8(
+    __gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, uint64_t addr, int64_t offset)
+{
+    aclsan::WriteTraceRecord(
+        memInfo, pc, bid, aclsan::DeviceInstructionCategory::MemoryAccess, static_cast<uint16_t>(PIPE_S), 67, addr,
+        static_cast<uint64_t>(offset), 0UL, 0UL, 0UL);
+}
+
+// LD_DEV.b64, API ID 68. Offset is in bytes.
+extern __attribute__((noinline)) __attribute__((weak)) __aicore__ void __sanitizer_report_ld_dev_b64(
+    __gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, uint64_t addr, int64_t offset)
+{
+    aclsan::WriteTraceRecord(
+        memInfo, pc, bid, aclsan::DeviceInstructionCategory::MemoryAccess, static_cast<uint16_t>(PIPE_S), 68, addr,
+        static_cast<uint64_t>(offset), 0UL, 0UL, 0UL);
+}
+
+// LD_DEV.b32, API ID 69. Offset is in bytes.
+extern __attribute__((noinline)) __attribute__((weak)) __aicore__ void __sanitizer_report_ld_dev_b32(
+    __gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, uint64_t addr, int64_t offset)
+{
+    aclsan::WriteTraceRecord(
+        memInfo, pc, bid, aclsan::DeviceInstructionCategory::MemoryAccess, static_cast<uint16_t>(PIPE_S), 69, addr,
+        static_cast<uint64_t>(offset), 0UL, 0UL, 0UL);
+}
+
+// LD_DEV.b16, API ID 70. Offset is in bytes.
+extern __attribute__((noinline)) __attribute__((weak)) __aicore__ void __sanitizer_report_ld_dev_b16(
+    __gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, uint64_t addr, int64_t offset)
+{
+    aclsan::WriteTraceRecord(
+        memInfo, pc, bid, aclsan::DeviceInstructionCategory::MemoryAccess, static_cast<uint16_t>(PIPE_S), 70, addr,
+        static_cast<uint64_t>(offset), 0UL, 0UL, 0UL);
+}
+
+// LD_DEV.b8, API ID 71. Offset is in bytes.
+extern __attribute__((noinline)) __attribute__((weak)) __aicore__ void __sanitizer_report_ld_dev_b8(
+    __gm__ uint8_t* memInfo, int64_t pc, uint32_t bid, uint64_t addr, int64_t offset)
+{
+    aclsan::WriteTraceRecord(
+        memInfo, pc, bid, aclsan::DeviceInstructionCategory::MemoryAccess, static_cast<uint16_t>(PIPE_S), 71, addr,
+        static_cast<uint64_t>(offset), 0UL, 0UL, 0UL);
 }
 
 extern __attribute__((noinline)) __attribute__((weak)) __aicore__ void __sanitizer_report_dc_preload(

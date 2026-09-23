@@ -16,6 +16,7 @@
 
 #include <cassert>
 #include <cstdint>
+#include <limits>
 
 namespace {
 
@@ -105,4 +106,169 @@ TEST(CceInstructionPipeline, Main)
     TestMemoryCallbackUsesRawRecordPipeline();
     TestLocalOnlyInstructionReturnsEmptyGmAccessList();
     TestUnknownInstructionReturnsNoDecodedResult();
+}
+
+TEST(CceInstructionPipeline, ScalarDevWidthsAndSignedByteOffsets)
+{
+    const auto* decoder = aclsan::FindDeviceInstructionDecoder(aclsan::SocVersion::DAV_3510);
+    ASSERT_NE(decoder, nullptr);
+    for (uint32_t id = 64; id <= 71; ++id) {
+        for (int64_t offset : {int64_t{0}, int64_t{3}, int64_t{-3}}) {
+            SCOPED_TRACE(::testing::Message() << "id=" << id << " offset=" << offset);
+            aclsan::ParsedTraceRecord parsed{};
+            parsed.record.instrId = id;
+            parsed.record.pipeline = ACLSAN_DEVICE_PIPE_SCALAR;
+            parsed.record.pc = 0x1234;
+            parsed.record.siteId = 17;
+            parsed.record.args[0] = 0x1000;
+            parsed.record.args[1] = static_cast<uint64_t>(offset);
+            parsed.record.args[2] = 1; // No post-index flag for ST_DEV/LD_DEV.
+            parsed.launchId = 7;
+            parsed.deviceId = 2;
+            const auto decoded = decoder->decode(parsed.record);
+            ASSERT_TRUE(decoded.has_value());
+            const auto callback = aclsan::TranslateDecodedTraceToCallbackData(parsed, *decoded);
+            ASSERT_TRUE(callback.has_value());
+            const auto* accesses = std::get_if<aclsan::DeviceMemoryAccessDataList>(&*callback);
+            ASSERT_NE(accesses, nullptr);
+            ASSERT_EQ(accesses->size(), 1U);
+            const auto& access = accesses->front();
+            EXPECT_EQ(access.address, static_cast<uint64_t>(0x1000 + offset));
+            EXPECT_EQ(access.memorySpace, ACLSAN_DEVICE_MEMORY_SPACE_GM);
+            EXPECT_EQ(
+                access.accessMode, id < 68 ? ACLSAN_DEVICE_MEMORY_ACCESS_WRITE : ACLSAN_DEVICE_MEMORY_ACCESS_READ);
+            EXPECT_EQ(access.dataBits, 64U >> ((id - 64) % 4));
+            EXPECT_EQ(access.layoutKind, ACLSAN_MEM_LAYOUT_RANGE);
+            EXPECT_EQ(access.layout.range.bytes, 8U >> ((id - 64) % 4));
+            EXPECT_EQ(access.header.sourceKind, id < 68 ? ACLSAN_DEVICE_SOURCE_ST : ACLSAN_DEVICE_SOURCE_LD);
+            EXPECT_EQ(access.header.pipeline, ACLSAN_DEVICE_PIPE_SCALAR);
+            EXPECT_EQ(access.header.pc, parsed.record.pc);
+            EXPECT_EQ(access.header.siteId, parsed.record.siteId);
+            EXPECT_EQ(access.header.launchId, parsed.launchId);
+            EXPECT_EQ(access.header.deviceId, parsed.deviceId);
+            EXPECT_EQ(access.accessIndex, 0U);
+            EXPECT_EQ(access.accessCount, 1U);
+        }
+    }
+}
+
+TEST(CceInstructionPipeline, ScalarDevRejectsAddressOverflow)
+{
+    const auto* decoder = aclsan::FindDeviceInstructionDecoder(aclsan::SocVersion::DAV_3510);
+    ASSERT_NE(decoder, nullptr);
+    struct Case {
+        uint64_t address;
+        int64_t offset;
+    };
+    const Case cases[] = {
+        {UINT64_MAX, 1},
+        {0, -1},
+        {0, INT64_MIN},
+        {UINT64_MAX - 3, 0},
+    };
+    for (uint32_t id : {64U, 68U}) {
+        for (const auto& test : cases) {
+            aclsan::ParsedTraceRecord parsed{};
+            parsed.record.instrId = id;
+            parsed.record.args[0] = test.address;
+            parsed.record.args[1] = static_cast<uint64_t>(test.offset);
+            const auto decoded = decoder->decode(parsed.record);
+            ASSERT_TRUE(decoded.has_value());
+            EXPECT_FALSE(aclsan::TranslateDecodedTraceToCallbackData(parsed, *decoded).has_value());
+        }
+    }
+}
+
+TEST(CceInstructionPipeline, ScalarDevExplicitGmAndMinimumOffset)
+{
+    const auto* decoder = aclsan::FindDeviceInstructionDecoder(aclsan::SocVersion::DAV_3510);
+    ASSERT_NE(decoder, nullptr);
+    for (uint32_t id = 64; id <= 71; ++id) {
+        aclsan::ParsedTraceRecord parsed{};
+        parsed.record.instrId = id;
+        parsed.record.args[0] = (UINT64_C(1) << 63) + 0x10;
+        parsed.record.args[1] = static_cast<uint64_t>(INT64_MIN);
+        const auto decoded = decoder->decode(parsed.record);
+        ASSERT_TRUE(decoded.has_value());
+        const auto callback = aclsan::TranslateDecodedTraceToCallbackData(parsed, *decoded);
+        ASSERT_TRUE(callback.has_value());
+        const auto* accesses = std::get_if<aclsan::DeviceMemoryAccessDataList>(&*callback);
+        ASSERT_NE(accesses, nullptr);
+        ASSERT_EQ(accesses->size(), 1U);
+        EXPECT_EQ(accesses->front().address, 0x10U);
+        EXPECT_EQ(accesses->front().memorySpace, ACLSAN_DEVICE_MEMORY_SPACE_GM);
+    }
+}
+
+TEST(CceInstructionPipeline, ScalarAtomicUsesWidthAndFamilyOffset)
+{
+    const auto* decoder = aclsan::FindDeviceInstructionDecoder(aclsan::SocVersion::DAV_3510);
+    ASSERT_NE(decoder, nullptr);
+    struct Case {
+        uint32_t id;
+        uint32_t bits;
+        bool elementOffset;
+    };
+    const Case cases[] = {
+        {56, 32, true}, {57, 16, true}, {58, 8, true}, {59, 32, false}, {60, 16, false}, {61, 8, false},
+    };
+    for (const auto& test : cases) {
+        for (uint64_t post : {0UL, 1UL}) {
+            SCOPED_TRACE(::testing::Message() << "id=" << test.id << " post=" << post);
+            aclsan::ParsedTraceRecord parsed{};
+            parsed.record.instrId = test.id;
+            parsed.record.pipeline = ACLSAN_DEVICE_PIPE_SCALAR;
+            parsed.record.args[0] = 0x1000;
+            parsed.record.args[1] = static_cast<uint64_t>(int64_t{3});
+            parsed.record.args[2] = post;
+            parsed.record.args[3] = UINT64_C(0x100000000);
+            parsed.record.args[4] = aclsan::ASCSAN_SCALAR_ADDRESS_CONTEXT_V1;
+            const auto decoded = decoder->decode(parsed.record);
+            ASSERT_TRUE(decoded.has_value());
+            const auto callback = aclsan::TranslateDecodedTraceToCallbackData(parsed, *decoded);
+            ASSERT_TRUE(callback.has_value());
+            const auto* accesses = std::get_if<aclsan::DeviceMemoryAccessDataList>(&*callback);
+            ASSERT_NE(accesses, nullptr);
+            ASSERT_EQ(accesses->size(), 1U);
+            const auto& access = accesses->front();
+            const uint64_t scaled = test.elementOffset ? 3U * (test.bits / 8U) : 3U;
+            EXPECT_EQ(access.address, post == 1U ? 0x1000U : 0x1000U + scaled);
+            EXPECT_EQ(access.memorySpace, ACLSAN_DEVICE_MEMORY_SPACE_GM);
+            EXPECT_EQ(access.accessMode, ACLSAN_DEVICE_MEMORY_ACCESS_WRITE);
+            EXPECT_EQ(access.dataBits, test.bits);
+            EXPECT_EQ(access.layoutKind, ACLSAN_MEM_LAYOUT_RANGE);
+            EXPECT_EQ(access.layout.range.bytes, test.bits / 8U);
+            EXPECT_EQ(access.header.sourceKind, ACLSAN_DEVICE_SOURCE_ST);
+            EXPECT_EQ(access.header.pipeline, ACLSAN_DEVICE_PIPE_SCALAR);
+        }
+    }
+}
+
+TEST(CceInstructionPipeline, ScalarAtomicRejectsUnsupportedPostAndOverflow)
+{
+    const auto* decoder = aclsan::FindDeviceInstructionDecoder(aclsan::SocVersion::DAV_3510);
+    ASSERT_NE(decoder, nullptr);
+    struct Case {
+        uint64_t address;
+        int64_t offset;
+        uint64_t post;
+    };
+    const Case rejected[] = {
+        {0x1000, 1, 2}, {0x1000, 1, UINT64_MAX}, {UINT64_MAX, 1, 0}, {0, -1, 0}, {0, INT64_MIN, 0},
+    };
+    for (uint32_t id = 56; id <= 61; ++id) {
+        for (const auto& test : rejected) {
+            SCOPED_TRACE(::testing::Message() << "id=" << id << " post=" << test.post);
+            aclsan::ParsedTraceRecord parsed{};
+            parsed.record.instrId = id;
+            parsed.record.args[0] = test.address;
+            parsed.record.args[1] = static_cast<uint64_t>(test.offset);
+            parsed.record.args[2] = test.post;
+            parsed.record.args[3] = UINT64_C(0x100000000);
+            parsed.record.args[4] = aclsan::ASCSAN_SCALAR_ADDRESS_CONTEXT_V1;
+            const auto decoded = decoder->decode(parsed.record);
+            ASSERT_TRUE(decoded.has_value());
+            EXPECT_FALSE(aclsan::TranslateDecodedTraceToCallbackData(parsed, *decoded).has_value());
+        }
+    }
 }

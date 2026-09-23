@@ -319,7 +319,8 @@ std::vector<NpuCheckMemcheckReport> Memcheck::CheckAccess(
     const AclsanDeviceMemoryAccessData& data, NpuCheckReportAccessMode accessMode, uint64_t address, uint64_t bytes,
     uint64_t groupId)
 {
-    const RangeResult range = allocations_.Classify(data.header.deviceId, address, bytes);
+    const bool preload = (data.header.flags & ACLSAN_DEVICE_EVENT_FLAG_ESTIMATED) != 0 && bytes == 0;
+    const RangeResult range = allocations_.Classify(data.header.deviceId, address, preload ? 1 : bytes);
     if (range.status == RangeStatus::VALID) {
         return {};
     }
@@ -373,6 +374,12 @@ std::vector<NpuCheckMemcheckReport> Memcheck::CheckDeviceMemoryAccess(
         ++stats_.droppedDeviceOperations;
         return std::vector<NpuCheckMemcheckReport>{};
     };
+
+    if ((data.header.flags & ACLSAN_DEVICE_EVENT_FLAG_ESTIMATED) != 0 &&
+        data.accessMode == ACLSAN_DEVICE_MEMORY_ACCESS_READ && data.dataBits == 0 &&
+        data.layoutKind == ACLSAN_MEM_LAYOUT_RANGE && data.layout.range.bytes == 0) {
+        return CheckAccess(data, NpuCheckReportAccessMode::READ, data.address, 0, groupId);
+    }
 
     std::vector<NpuCheckReportAccessMode> accessModes;
     switch (data.accessMode) {

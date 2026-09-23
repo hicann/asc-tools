@@ -938,3 +938,162 @@ TEST(AclsanMemoryCbdata, Main)
     TestFixpipeNzRejectsUnsupportedNSizeRemainders();
     TestFixpipePacked4ConversionModeUsesLoop3State();
 }
+
+TEST(AclsanMemoryCbdata, ScalarDevRejectsInconsistentFields)
+{
+    aclsan::ScalarDevParamField field{64, 32, 0x1000, 0};
+    const aclsan::MemoryFieldToCbdataConverter converter{{}};
+    EXPECT_EQ(converter.Convert(field).status, aclsan::MemoryCbdataStatus::INVALID_FIELD);
+    field.instrId = 63;
+    EXPECT_EQ(converter.Convert(field).status, aclsan::MemoryCbdataStatus::INVALID_FIELD);
+    field.instrId = 72;
+    EXPECT_EQ(converter.Convert(field).status, aclsan::MemoryCbdataStatus::INVALID_FIELD);
+}
+
+TEST(AclsanMemoryCbdata, ScalarDevAddressOverflowIsExplicit)
+{
+    const aclsan::MemoryFieldToCbdataConverter converter{{}};
+    for (uint32_t id = 64; id <= 71; ++id) {
+        const uint32_t bits = 64U >> ((id - 64) % 4);
+        for (const auto& field :
+             {aclsan::ScalarDevParamField{id, bits, UINT64_MAX, 1}, aclsan::ScalarDevParamField{id, bits, 0, -1},
+              aclsan::ScalarDevParamField{id, bits, 0, INT64_MIN}}) {
+            const auto result = converter.Convert(field);
+            EXPECT_EQ(result.status, aclsan::MemoryCbdataStatus::ARITHMETIC_OVERFLOW);
+            EXPECT_TRUE(result.data.empty());
+        }
+    }
+}
+
+TEST(AclsanMemoryCbdata, ScalarAtomicUsesWidthAndOffsetFamily)
+{
+    const aclsan::MemoryFieldToCbdataConverter converter{{}};
+    struct Case {
+        uint32_t id;
+        uint32_t bits;
+        bool elementOffset;
+    };
+    const Case cases[] = {
+        {56, 32, true}, {57, 16, true}, {58, 8, true}, {59, 32, false}, {60, 16, false}, {61, 8, false},
+    };
+    for (const auto& test : cases) {
+        for (uint64_t post : {0UL, 1UL}) {
+            SCOPED_TRACE(::testing::Message() << "id=" << test.id << " post=" << post);
+            const aclsan::ScalarAtomicParamField field{
+                test.id, test.bits, 0x1000, 3, post, UINT64_C(0x100000000), aclsan::ASCSAN_SCALAR_ADDRESS_CONTEXT_V1};
+            const auto result = converter.Convert(field);
+            ASSERT_EQ(result.status, aclsan::MemoryCbdataStatus::SUCCESS);
+            ASSERT_EQ(result.data.size(), 1U);
+            const uint64_t scaled = test.elementOffset ? 3U * (test.bits / 8U) : 3U;
+            const auto& access = result.data.front();
+            EXPECT_EQ(access.address, post == 1U ? 0x1000U : 0x1000U + scaled);
+            EXPECT_EQ(access.memorySpace, ACLSAN_DEVICE_MEMORY_SPACE_GM);
+            EXPECT_EQ(access.accessMode, ACLSAN_DEVICE_MEMORY_ACCESS_WRITE);
+            EXPECT_EQ(access.dataBits, test.bits);
+            EXPECT_EQ(access.layoutKind, ACLSAN_MEM_LAYOUT_RANGE);
+            EXPECT_EQ(access.layout.range.bytes, test.bits / 8U);
+            EXPECT_EQ(access.header.sourceKind, ACLSAN_DEVICE_SOURCE_ST);
+        }
+    }
+}
+
+TEST(AclsanMemoryCbdata, ScalarAtomicMapsEffectiveAddressAndRejectsLocalWindows)
+{
+    const aclsan::MemoryFieldToCbdataConverter converter{{}};
+    for (uint32_t id = 56; id <= 61; ++id) {
+        const uint32_t bits = 32U >> ((id - 56) % 3);
+        aclsan::ScalarAtomicParamField field{id,
+                                             bits,
+                                             UINT64_C(0x8000000200001000),
+                                             0,
+                                             0,
+                                             UINT64_C(0x100000000),
+                                             aclsan::ASCSAN_SCALAR_ADDRESS_CONTEXT_V1};
+        auto result = converter.Convert(field);
+        ASSERT_EQ(result.status, aclsan::MemoryCbdataStatus::SUCCESS);
+        ASSERT_EQ(result.data.size(), 1U);
+        EXPECT_EQ(result.data[0].address, UINT64_C(0x200001000));
+        for (uint64_t local : {UINT64_C(0x100080040), UINT64_C(0x100100040)}) {
+            field.addr = local;
+            result = converter.Convert(field);
+            EXPECT_EQ(result.status, aclsan::MemoryCbdataStatus::UNSUPPORTED_ADDRESS_SPACE);
+            EXPECT_TRUE(result.data.empty());
+        }
+        field.addr = UINT64_C(0x100000040);
+        EXPECT_EQ(converter.Convert(field).status, aclsan::MemoryCbdataStatus::INVALID_ADDRESS_SPACE);
+        // Classification must happen after offset calculation: cross bit 24 into GM.
+        field.addr = UINT64_C(0x100fffffc);
+        field.offset = id <= 58 ? 4 / (bits / 8) : 4;
+        result = converter.Convert(field);
+        ASSERT_EQ(result.status, aclsan::MemoryCbdataStatus::SUCCESS);
+        EXPECT_EQ(result.data[0].address, UINT64_C(0x101000000));
+        field.addressContext = 0;
+        EXPECT_EQ(converter.Convert(field).status, aclsan::MemoryCbdataStatus::MISSING_ADDRESS_CONTEXT);
+        field.addressContext = aclsan::ASCSAN_SCALAR_ADDRESS_CONTEXT_V1 + 1;
+        EXPECT_EQ(converter.Convert(field).status, aclsan::MemoryCbdataStatus::MISSING_ADDRESS_CONTEXT);
+    }
+    aclsan::ScalarAtomicParamField tail{
+        56, 32, UINT64_C(0xfffffffffffe), 0, 0, UINT64_C(0x100000000), aclsan::ASCSAN_SCALAR_ADDRESS_CONTEXT_V1};
+    EXPECT_EQ(converter.Convert(tail).status, aclsan::MemoryCbdataStatus::ARITHMETIC_OVERFLOW);
+    // A zero SYS_VA_BASE is valid when the protocol marker is present.
+    tail.sysVaBase = 0;
+    tail.addr = 0x1000000;
+    EXPECT_EQ(converter.Convert(tail).status, aclsan::MemoryCbdataStatus::SUCCESS);
+    tail.addr = 0x1000004;
+    tail.offset = -1;
+    EXPECT_EQ(converter.Convert(tail).data.front().address, 0x1000000U);
+}
+
+TEST(AclsanMemoryCbdata, ScalarAtomicRejectsInconsistentFieldsAndPost)
+{
+    const aclsan::MemoryFieldToCbdataConverter converter{{}};
+    for (uint32_t id : {55U, 62U}) {
+        EXPECT_EQ(
+            converter
+                .Convert(aclsan::ScalarAtomicParamField{
+                    id, 32, 0x1000, 0, 0, UINT64_C(0x100000000), aclsan::ASCSAN_SCALAR_ADDRESS_CONTEXT_V1})
+                .status,
+            aclsan::MemoryCbdataStatus::INVALID_FIELD);
+    }
+    // Width must match the instruction family.
+    EXPECT_EQ(
+        converter
+            .Convert(aclsan::ScalarAtomicParamField{
+                56, 16, 0x1000, 0, 0, UINT64_C(0x100000000), aclsan::ASCSAN_SCALAR_ADDRESS_CONTEXT_V1})
+            .status,
+        aclsan::MemoryCbdataStatus::INVALID_FIELD);
+    EXPECT_EQ(
+        converter
+            .Convert(aclsan::ScalarAtomicParamField{
+                61, 32, 0x1000, 0, 0, UINT64_C(0x100000000), aclsan::ASCSAN_SCALAR_ADDRESS_CONTEXT_V1})
+            .status,
+        aclsan::MemoryCbdataStatus::INVALID_FIELD);
+    // Only post == 0 and post == 1 are supported.
+    for (uint64_t post : {2UL, UINT64_MAX}) {
+        EXPECT_EQ(
+            converter
+                .Convert(aclsan::ScalarAtomicParamField{
+                    58, 8, 0x1000, 0, post, UINT64_C(0x100000000), aclsan::ASCSAN_SCALAR_ADDRESS_CONTEXT_V1})
+                .status,
+            aclsan::MemoryCbdataStatus::INVALID_FIELD);
+    }
+}
+
+TEST(AclsanMemoryCbdata, ScalarAtomicAddressOverflowIsExplicit)
+{
+    const aclsan::MemoryFieldToCbdataConverter converter{{}};
+    for (uint32_t id = 56; id <= 61; ++id) {
+        const uint32_t bits = 32U >> ((id - 56) % 3);
+        for (const auto& field :
+             {aclsan::ScalarAtomicParamField{
+                  id, bits, UINT64_MAX, 1, 0, UINT64_C(0x100000000), aclsan::ASCSAN_SCALAR_ADDRESS_CONTEXT_V1},
+              aclsan::ScalarAtomicParamField{
+                  id, bits, 0, -1, 0, UINT64_C(0x100000000), aclsan::ASCSAN_SCALAR_ADDRESS_CONTEXT_V1},
+              aclsan::ScalarAtomicParamField{
+                  id, bits, 0, INT64_MIN, 0, UINT64_C(0x100000000), aclsan::ASCSAN_SCALAR_ADDRESS_CONTEXT_V1}}) {
+            const auto result = converter.Convert(field);
+            EXPECT_EQ(result.status, aclsan::MemoryCbdataStatus::ARITHMETIC_OVERFLOW);
+            EXPECT_TRUE(result.data.empty());
+        }
+    }
+}

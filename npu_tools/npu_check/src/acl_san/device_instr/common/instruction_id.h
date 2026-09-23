@@ -19,6 +19,25 @@ namespace aclsan {
 // “已完成”表示搬运指令已完成 RawData -> ParamField -> CBData 转换，或 SET 指令已作为独立状态被后续
 // 搬运指令的 CBData 转换消费。
 enum class InstructionId : uint32_t {
+    // Scalar atomic stores. ST_ATOMIC offsets are element counts; STI_ATOMIC offsets are bytes.
+    StAtomicB32 = 56,
+    StAtomicB16 = 57,
+    StAtomicB8 = 58,
+    StiAtomicB32 = 59,
+    StiAtomicB16 = 60,
+    StiAtomicB8 = 61,
+    DcPreload = 62,
+    DcPreloadI = 63,
+    // Scalar GM load/store; offsets are signed bytes.
+    StDevB64 = 64,
+    StDevB32 = 65,
+    StDevB16 = 66,
+    StDevB8 = 67,
+    LdDevB64 = 68,
+    LdDevB32 = 69,
+    LdDevB16 = 70,
+    LdDevB8 = 71,
+
     // MTE2
     LoadGmToCbuf2DV2 = 72,          // 已完成：LoadGmToCbuf2DV2ParamField（decompMode 0；非零跳过）
     CopyGmToCbufV2 = 73,            // 已完成：CopyGmToCbufV2ParamField
@@ -96,6 +115,22 @@ enum class InstructionId : uint32_t {
 constexpr bool IsDefinedInstructionId(uint32_t instructionId) noexcept
 {
     switch (static_cast<InstructionId>(instructionId)) {
+        case InstructionId::StAtomicB32:
+        case InstructionId::StAtomicB16:
+        case InstructionId::StAtomicB8:
+        case InstructionId::StiAtomicB32:
+        case InstructionId::StiAtomicB16:
+        case InstructionId::StiAtomicB8:
+        case InstructionId::DcPreload:
+        case InstructionId::DcPreloadI:
+        case InstructionId::StDevB64:
+        case InstructionId::StDevB32:
+        case InstructionId::StDevB16:
+        case InstructionId::StDevB8:
+        case InstructionId::LdDevB64:
+        case InstructionId::LdDevB32:
+        case InstructionId::LdDevB16:
+        case InstructionId::LdDevB8:
         case InstructionId::LoadGmToCbuf2DV2:
         case InstructionId::CopyGmToCbufV2:
         case InstructionId::CopyGmToCbufAlignV2B8:

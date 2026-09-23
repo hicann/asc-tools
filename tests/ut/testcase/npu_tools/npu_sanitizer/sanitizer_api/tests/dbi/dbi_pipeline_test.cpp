@@ -227,7 +227,7 @@ std::string ReadGeneratedFile(const boost::filesystem::path& path)
 TEST(CtrlbinGeneratorTest, FiltersBindingsToSelectedProbeGroups)
 {
     const auto symbols = BindingSymbols({ProbeGroup::Mte2});
-    EXPECT_EQ(symbols.size(), 52U);
+    EXPECT_EQ(symbols.size(), 65U);
     for (const auto& symbol : symbols) {
         EXPECT_NE(symbol.find("sanitizer_report_"), std::string::npos);
     }
@@ -243,7 +243,7 @@ TEST(CtrlbinGeneratorTest, FiltersBindingsToSelectedProbeGroups)
     EXPECT_EQ(std::find(mte1Symbols.begin(), mte1Symbols.end(), "__sanitizer_report_set_padding"), mte1Symbols.end());
 
     const auto scalarSymbols = BindingSymbols({ProbeGroup::Scalar});
-    ASSERT_EQ(scalarSymbols.size(), 33U);
+    ASSERT_EQ(scalarSymbols.size(), 46U);
     EXPECT_NE(
         std::find(scalarSymbols.begin(), scalarSymbols.end(), "__sanitizer_report_set_padding"), scalarSymbols.end());
     EXPECT_NE(
@@ -270,7 +270,7 @@ TEST(CtrlbinGeneratorTest, IncludesScalarStateBindingsForMte3AndFixpipeConsumers
         fixpipeSymbols.end());
 }
 
-TEST(CtrlbinGeneratorTest, AllGroupsPreserveBindingCount) { EXPECT_EQ(BindingSymbols(AllProbeGroups()).size(), 141U); }
+TEST(CtrlbinGeneratorTest, AllGroupsPreserveBindingCount) { EXPECT_EQ(BindingSymbols(AllProbeGroups()).size(), 154U); }
 
 TEST(CtrlbinGeneratorTest, ExposesStableBindingIdentity) { EXPECT_EQ(CtrlBinGeneratorIdentity().size(), 16U); }
 

@@ -19,6 +19,7 @@ namespace {
 constexpr uint32_t DATA_BITS_B8 = 8;
 constexpr uint32_t DATA_BITS_B16 = 16;
 constexpr uint32_t DATA_BITS_B32 = 32;
+constexpr uint32_t DATA_BITS_B64 = 64;
 
 constexpr uint32_t RawId(InstructionId instructionId) noexcept { return static_cast<uint32_t>(instructionId); }
 
@@ -312,9 +313,65 @@ std::optional<DecodedInstruction> DecodeBuffer(
     return DecodedInstruction{kind, params};
 }
 
+DecodedInstruction DecodeScalarDev(
+    const aclsan::AclsanRawTraceRecord& record, DeviceInstructionKind kind, uint32_t dataBits) noexcept
+{
+    const ScalarDevParamField params{record.instrId, dataBits, record.args[0], static_cast<int64_t>(record.args[1])};
+    return DecodedInstruction{kind, params};
+}
+
+DecodedInstruction DecodeScalarPreload(const aclsan::AclsanRawTraceRecord& record) noexcept
+{
+    const int64_t offset = record.instrId == static_cast<uint32_t>(InstructionId::DcPreloadI) ?
+                               static_cast<int64_t>(static_cast<int16_t>(record.args[1])) :
+                               static_cast<int64_t>(record.args[1]);
+    return DecodedInstruction{
+        DeviceInstructionKind::ScalarPreload, ScalarPreloadParamField{record.instrId, record.args[0], offset}};
+}
+
+DecodedInstruction DecodeScalarAtomic(const aclsan::AclsanRawTraceRecord& record, uint32_t dataBits) noexcept
+{
+    const ScalarAtomicParamField params{
+        record.instrId, dataBits,       record.args[0], static_cast<int64_t>(record.args[1]),
+        record.args[2], record.args[3], record.args[4]};
+    return DecodedInstruction{DeviceInstructionKind::ScalarAtomic, params};
+}
+
 std::optional<DecodedInstruction> Decode(const aclsan::AclsanRawTraceRecord& record) noexcept
 {
     switch (record.instrId) {
+        case RawId(InstructionId::StAtomicB32):
+            return DecodeScalarAtomic(record, DATA_BITS_B32);
+        case RawId(InstructionId::StAtomicB16):
+            return DecodeScalarAtomic(record, DATA_BITS_B16);
+        case RawId(InstructionId::StAtomicB8):
+            return DecodeScalarAtomic(record, DATA_BITS_B8);
+        case RawId(InstructionId::StiAtomicB32):
+            return DecodeScalarAtomic(record, DATA_BITS_B32);
+        case RawId(InstructionId::StiAtomicB16):
+            return DecodeScalarAtomic(record, DATA_BITS_B16);
+        case RawId(InstructionId::StiAtomicB8):
+            return DecodeScalarAtomic(record, DATA_BITS_B8);
+        case RawId(InstructionId::DcPreload):
+        case RawId(InstructionId::DcPreloadI):
+            return DecodeScalarPreload(record);
+        case RawId(InstructionId::StDevB64):
+            return DecodeScalarDev(record, DeviceInstructionKind::StDev, DATA_BITS_B64);
+        case RawId(InstructionId::StDevB32):
+            return DecodeScalarDev(record, DeviceInstructionKind::StDev, DATA_BITS_B32);
+        case RawId(InstructionId::StDevB16):
+            return DecodeScalarDev(record, DeviceInstructionKind::StDev, DATA_BITS_B16);
+        case RawId(InstructionId::StDevB8):
+            return DecodeScalarDev(record, DeviceInstructionKind::StDev, DATA_BITS_B8);
+        case RawId(InstructionId::LdDevB64):
+            return DecodeScalarDev(record, DeviceInstructionKind::LdDev, DATA_BITS_B64);
+        case RawId(InstructionId::LdDevB32):
+            return DecodeScalarDev(record, DeviceInstructionKind::LdDev, DATA_BITS_B32);
+        case RawId(InstructionId::LdDevB16):
+            return DecodeScalarDev(record, DeviceInstructionKind::LdDev, DATA_BITS_B16);
+        case RawId(InstructionId::LdDevB8):
+            return DecodeScalarDev(record, DeviceInstructionKind::LdDev, DATA_BITS_B8);
+
         case RawId(InstructionId::LoadGmToCbuf2DV2):
             return DecodeLoadGmToCbuf2DV2(record);
         case RawId(InstructionId::CopyGmToCbufV2):

@@ -65,8 +65,8 @@ foreach(required_record_token IN ITEMS
 endforeach()
 string(REGEX MATCHALL "DeviceInstructionCategory::MemoryAccess" memory_access_categories "${probe_content}")
 list(LENGTH memory_access_categories memory_access_category_count)
-if(NOT memory_access_category_count EQUAL 80)
-  message(FATAL_ERROR "expected 80 memory-access probe categories, found ${memory_access_category_count}")
+if(NOT memory_access_category_count EQUAL 93)
+  message(FATAL_ERROR "expected 93 memory-access probe categories, found ${memory_access_category_count}")
 endif()
 string(REGEX MATCHALL "DeviceInstructionCategory::Synchronization" synchronization_categories "${probe_content}")
 list(LENGTH synchronization_categories synchronization_category_count)
@@ -105,8 +105,8 @@ string(REGEX MATCHALL
   "__sanitizer_report_[A-Za-z0-9_]+[ \t\r\n]*\\("
   probe_definitions "${probe_content}")
 list(LENGTH probe_definitions probe_count)
-if(NOT probe_count EQUAL 141)
-  message(FATAL_ERROR "expected 141 probe definitions, found ${probe_count}")
+if(NOT probe_count EQUAL 154)
+  message(FATAL_ERROR "expected 154 probe definitions, found ${probe_count}")
 endif()
 
 string(REGEX MATCHALL "__sanitizer_report_[A-Za-z0-9_]+" probe_symbols "${probe_content}")
@@ -126,8 +126,8 @@ string(CONCAT explicit_declaration
   "__sanitizer_report_[A-Za-z0-9_]+[ \t\r\n]*\\(")
 string(REGEX MATCHALL "${explicit_declaration}" explicit_probes "${probe_content}")
 list(LENGTH explicit_probes explicit_probe_count)
-if(NOT explicit_probe_count EQUAL 141)
-  message(FATAL_ERROR "expected 141 explicit probe declarations, found ${explicit_probe_count}")
+if(NOT explicit_probe_count EQUAL 154)
+  message(FATAL_ERROR "expected 154 explicit probe declarations, found ${explicit_probe_count}")
 endif()
 
 # Vector synchronization instructions omit PIPE_V from their explicit operands.

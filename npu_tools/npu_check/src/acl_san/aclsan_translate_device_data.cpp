@@ -38,6 +38,12 @@ const char* MemoryCbdataStatusName(MemoryCbdataStatus status) noexcept
             return "ARITHMETIC_OVERFLOW";
         case MemoryCbdataStatus::RESOURCE_EXHAUSTED:
             return "RESOURCE_EXHAUSTED";
+        case MemoryCbdataStatus::MISSING_ADDRESS_CONTEXT:
+            return "MISSING_ADDRESS_CONTEXT";
+        case MemoryCbdataStatus::UNSUPPORTED_ADDRESS_SPACE:
+            return "UNSUPPORTED_ADDRESS_SPACE";
+        case MemoryCbdataStatus::INVALID_ADDRESS_SPACE:
+            return "INVALID_ADDRESS_SPACE";
     }
     return "UNKNOWN";
 }
@@ -53,7 +59,10 @@ constexpr bool IsMemoryAccessParamField() noexcept
            std::is_same_v<ParamField, aclsan::CopyGmToCbufV2ParamField> ||
            std::is_same_v<ParamField, aclsan::NdDmaParamField> ||
            std::is_same_v<ParamField, aclsan::LoadGmToCbuf2DV2ParamField> ||
-           std::is_same_v<ParamField, aclsan::FixL0cToOutParamField>;
+           std::is_same_v<ParamField, aclsan::FixL0cToOutParamField> ||
+           std::is_same_v<ParamField, aclsan::ScalarDevParamField> ||
+           std::is_same_v<ParamField, aclsan::ScalarPreloadParamField> ||
+           std::is_same_v<ParamField, aclsan::ScalarAtomicParamField>;
 }
 
 template <typename ParamField>

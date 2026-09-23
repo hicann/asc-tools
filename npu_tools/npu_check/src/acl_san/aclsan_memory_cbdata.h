@@ -13,6 +13,7 @@
 
 #include "acl_san/aclsan_cbdata_device.h"
 #include "device_instr/common/device_instr_struct_dma.h"
+#include "device_instr/common/device_instr_struct_scalar.h"
 #include "device_instr/common/device_instr_struct_register.h"
 
 #include <array>
@@ -24,18 +25,22 @@
 namespace aclsan {
 
 enum class MemoryCbdataStatus : uint8_t {
-    SUCCESS,
-    NO_ACCESS,
-    INVALID_FIELD,
-    MISSING_REGISTER_STATE,
-    ARITHMETIC_OVERFLOW,
-    RESOURCE_EXHAUSTED,
+    SUCCESS,   // 转换成功，已生成访存 cbdata；不代表访问已通过 Memcheck 边界检查。
+    NO_ACCESS, // 本次转换不生成访存 cbdata，如零长度、零次数或当前实现直接跳过的模式。
+    INVALID_FIELD, // 指令 ID、位宽、控制字段或字段组合非法，或当前转换器不支持该模式。
+    MISSING_REGISTER_STATE, // 缺少还原访问所需的 SET 配置寄存器状态，如 DMA loop、MTE2 或 FIXPIPE 配置。
+    ARITHMETIC_OVERFLOW, // 地址、长度或步长计算溢出，或访问布局不满足内部描述的可表示性约束。
+    RESOURCE_EXHAUSTED, // 展开的访问记录数超过内部上限，或容器分配失败、容量超限。
+    MISSING_ADDRESS_CONTEXT, // 地址映射协议标记缺失或不匹配，无法确认采集的 SYS_VA_BASE 上下文有效。
+    UNSUPPORTED_ADDRESS_SPACE, // 已识别为 UB 或 PRIVATE，但当前转换路径仅支持 GM。
+    INVALID_ADDRESS_SPACE,     // 地址编码未匹配到已知的存储空间，无法完成地址映射。
 };
 
 using MemoryInstructionField = std::variant<
     CopyGmToUbufAlignV2ParamField, CopyGmToCbufAlignV2ParamField, CopyGmToCbufMultiNd2NzParamField,
     CopyGmToCbufMultiDn2NzParamField, CopyGmToCbufV2ParamField, CopyUbufToGmAlignV2ParamField, FixL0cToOutParamField,
-    LoadGmToCbuf2DV2ParamField, NdDmaOutToUbufParamField>;
+    LoadGmToCbuf2DV2ParamField, NdDmaOutToUbufParamField, ScalarDevParamField, ScalarPreloadParamField,
+    ScalarAtomicParamField>;
 
 struct MemoryRegisterState {
     std::optional<Mte2SourceParamField> mte2Source;

@@ -16,6 +16,9 @@
 
 namespace aclsan {
 
+// args[3] carries SYS_VA_BASE when args[4] carries this protocol marker.
+constexpr uint64_t ASCSAN_SCALAR_ADDRESS_CONTEXT_V1 = 0x5343414C41520001ULL;
+
 constexpr uint64_t ASCSAN_TRACE_BUFFER_MAGIC = 0x41534353414E3037ULL;
 constexpr size_t ASCSAN_TRACE_BYTES_PER_CORE = 1024U * 1024U;
 constexpr uint32_t ASCSAN_PHYSICAL_CORE_PART_COUNT = 2U;

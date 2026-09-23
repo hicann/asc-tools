@@ -67,6 +67,85 @@ AclsanDeviceMemoryAccessData Access(
     return data;
 }
 
+AclsanDeviceMemoryAccessData ScalarAccess(uint32_t instrId, uint64_t address, uint64_t bytes, uint32_t deviceId = 0)
+{
+    AclsanDeviceMemoryAccessData data{};
+    data.header.version = ACLSAN_API_VERSION;
+    data.header.size = sizeof(data);
+    data.header.pipeline = ACLSAN_DEVICE_PIPE_SCALAR;
+    data.header.sourceKind = instrId < 68 ? ACLSAN_DEVICE_SOURCE_ST : ACLSAN_DEVICE_SOURCE_LD;
+    data.header.siteId = 7;
+    data.header.blockId = 3;
+    data.header.deviceId = deviceId;
+    data.header.pc = 0x170;
+    data.address = address;
+    data.memorySpace = ACLSAN_DEVICE_MEMORY_SPACE_GM;
+    data.accessMode = instrId < 68 ? ACLSAN_DEVICE_MEMORY_ACCESS_WRITE : ACLSAN_DEVICE_MEMORY_ACCESS_READ;
+    data.accessCount = 1;
+    data.dataBits = static_cast<uint32_t>(bytes * 8U);
+    data.layoutKind = ACLSAN_MEM_LAYOUT_RANGE;
+    data.layout.range.bytes = bytes;
+    return data;
+}
+
+TEST(MemcheckTest, ScalarDevAccessChecksWholeAllocationRangeAndUseAfterFree)
+{
+    for (uint32_t id = 64; id <= 71; ++id) {
+        SCOPED_TRACE(id);
+        const uint64_t bytes = 8U >> ((id - 64) % 4);
+        Memcheck checker;
+        const auto allocation = AllocationEvent(0x1000, 32, 1);
+        checker.OnAllocation(allocation);
+        for (bool invalid : {false, true}) {
+            const uint64_t address = 0x1020 - bytes + (invalid ? 1U : 0U);
+            const auto access = ScalarAccess(id, address, bytes);
+            checker.QueueDeviceMemoryAccess(access);
+            const auto reports = checker.OnSynchronization();
+            if (!invalid) {
+                EXPECT_TRUE(reports.empty());
+            } else {
+                ASSERT_EQ(reports.size(), 1U);
+                EXPECT_EQ(reports.front().common.pattern, NpuCheckReportPattern::MEMCHECK_INVALID_ACCESS);
+                EXPECT_EQ(
+                    reports.front().access.accessMode,
+                    id < 68 ? NpuCheckReportAccessMode::WRITE : NpuCheckReportAccessMode::READ);
+            }
+            if (!invalid) {
+                checker.OnFree(allocation);
+                checker.QueueDeviceMemoryAccess(access);
+                const auto freedReports = checker.OnSynchronization();
+                ASSERT_EQ(freedReports.size(), 1U);
+                EXPECT_EQ(freedReports.front().common.pattern, NpuCheckReportPattern::MEMCHECK_USE_AFTER_FREE);
+                checker.OnAllocation(allocation);
+            }
+        }
+    }
+}
+
+TEST(MemcheckTest, ScalarAtomicAccessChecksEveryWidthAndDirection)
+{
+    for (uint32_t id = 56; id <= 61; ++id) {
+        SCOPED_TRACE(id);
+        const uint64_t bytes = (32U >> ((id - 56) % 3)) / 8U;
+        Memcheck checker;
+        const auto allocation = AllocationEvent(0x1000, 32, 1);
+        checker.OnAllocation(allocation);
+        for (bool invalid : {false, true}) {
+            const uint64_t address = invalid ? 0x1020 : 0x1020 - bytes;
+            const auto access = ScalarAccess(id, address, bytes);
+            checker.QueueDeviceMemoryAccess(access);
+            const auto reports = checker.OnSynchronization();
+            if (!invalid) {
+                EXPECT_TRUE(reports.empty());
+            } else {
+                ASSERT_EQ(reports.size(), 1U);
+                EXPECT_EQ(reports.front().common.pattern, NpuCheckReportPattern::MEMCHECK_INVALID_ACCESS);
+                EXPECT_EQ(reports.front().access.accessMode, NpuCheckReportAccessMode::WRITE);
+            }
+        }
+    }
+}
+
 TEST(MemcheckTest, ReportsOutOfBoundsReadAtSynchronization)
 {
     Memcheck checker;

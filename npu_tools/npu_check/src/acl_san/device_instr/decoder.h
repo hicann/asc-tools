@@ -12,6 +12,7 @@
 #define NPU_TOOLS_NPU_CHECK_SRC_ACL_SAN_DEVICE_INSTR_DECODER_H
 
 #include "device_instr/common/device_instr_struct_dma.h"
+#include "device_instr/common/device_instr_struct_scalar.h"
 #include "device_instr/common/device_instr_struct_register.h"
 #include "device_instr/common/device_instr_struct_sync.h"
 #include "device_instr/common/device_instr_next_iter.h"
@@ -45,6 +46,11 @@ enum class DeviceInstructionKind : uint32_t {
     LocalMemoryTransfer, // InstructionId::CopyCbufToFbuf/FixL0cTo*/CopyUbufToCbuf -> LocalMemoryTransferParamField
     SetPadding,          // InstructionId::SetPadding                    -> SetPaddingParamField
 
+    StDev, // InstructionId::StDevB64/B32/B16/B8 -> ScalarDevParamField
+    LdDev, // InstructionId::LdDevB64/B32/B16/B8 -> ScalarDevParamField
+    ScalarPreload,
+    ScalarAtomic, // InstructionId::StAtomicB*/StiAtomicB* -> ScalarAtomicParamField
+
     SetFlag,  // InstructionId::SetFlag/SetFlagI/SetFlagV/SetFlagIV     -> FlagParamField
     WaitFlag, // InstructionId::WaitFlag/WaitFlagI/WaitFlagV/WaitFlagIV -> FlagParamField
     GetBuf,   // InstructionId::GetBuf/GetBufI/GetBufV/GetBufIV         -> SyncBufParamField
@@ -57,7 +63,8 @@ using DeviceInstructionParamField = std::variant<
     CopyGmToCbufMultiDn2NzParamField, CopyGmToCbufMultiNd2NzParamField, CopyGmToCbufV2ParamField, Mte2SourceParamField,
     NdDmaPadCountParamField, NdDmaLoopStrideParamField, Mte2NzParamField, Loop3ParamField, DmaLoopSizeParamField,
     DmaLoopStrideParamField, LoadGmToCbuf2DV2ParamField, NdDmaOutToUbufParamField, SetL12DParamField,
-    FixL0cToOutParamField, LocalMemoryTransferParamField, SetPaddingParamField, FlagParamField, SyncBufParamField>;
+    FixL0cToOutParamField, LocalMemoryTransferParamField, SetPaddingParamField, FlagParamField, SyncBufParamField,
+    ScalarDevParamField, ScalarPreloadParamField, ScalarAtomicParamField>;
 
 struct DecodedInstruction {
     DeviceInstructionKind kind = DeviceInstructionKind::InvalidInstruction;

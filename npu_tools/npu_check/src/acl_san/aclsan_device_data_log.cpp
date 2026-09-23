@@ -31,6 +31,9 @@ constexpr bool HasParamFieldLogger() noexcept
            std::is_same_v<ParamField, aclsan::NdDmaParamField> ||
            std::is_same_v<ParamField, aclsan::FixL0cToOutParamField> ||
            std::is_same_v<ParamField, aclsan::LocalMemoryTransferParamField> ||
+           std::is_same_v<ParamField, aclsan::ScalarDevParamField> ||
+           std::is_same_v<ParamField, aclsan::ScalarPreloadParamField> ||
+           std::is_same_v<ParamField, aclsan::ScalarAtomicParamField> ||
            std::is_same_v<ParamField, aclsan::NdDmaPadCountParamField> ||
            std::is_same_v<ParamField, aclsan::Mte2SourceParamField> ||
            std::is_same_v<ParamField, aclsan::NdDmaLoopStrideParamField> ||
@@ -201,6 +204,30 @@ void LogParamField(const aclsan::LocalMemoryTransferParamField& value) noexcept
         value.instrId, static_cast<unsigned long long>(value.dstAddr), static_cast<unsigned long long>(value.srcAddr),
         static_cast<unsigned long long>(value.config0), static_cast<unsigned long long>(value.config1),
         static_cast<unsigned int>(value.kind));
+}
+
+void LogParamField(const aclsan::ScalarDevParamField& value) noexcept
+{
+    ASCTOOL_DEBUG(
+        "[param] type=ScalarDevParamField instrId=%u dataBits=%u addr=0x%llx offset=%lld", value.instrId,
+        value.dataBits, static_cast<unsigned long long>(value.addr), static_cast<long long>(value.offset));
+}
+
+void LogParamField(const aclsan::ScalarPreloadParamField& value) noexcept
+{
+    ASCTOOL_DEBUG(
+        "[param] type=ScalarPreloadParamField instrId=%u addr=0x%llx offset=%lld", value.instrId,
+        static_cast<unsigned long long>(value.addr), static_cast<long long>(value.offset));
+}
+
+void LogParamField(const aclsan::ScalarAtomicParamField& value) noexcept
+{
+    ASCTOOL_DEBUG(
+        "[param] type=ScalarAtomicParamField instrId=%u dataBits=%u addr=0x%llx offset=%lld post=%llu "
+        "sysVaBase=0x%llx addressContext=0x%llx",
+        value.instrId, value.dataBits, static_cast<unsigned long long>(value.addr),
+        static_cast<long long>(value.offset), static_cast<unsigned long long>(value.post),
+        static_cast<unsigned long long>(value.sysVaBase), static_cast<unsigned long long>(value.addressContext));
 }
 
 void LogParamField(const aclsan::FlagParamField& value) noexcept

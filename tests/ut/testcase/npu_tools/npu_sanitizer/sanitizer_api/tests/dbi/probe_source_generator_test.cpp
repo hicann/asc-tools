@@ -37,7 +37,7 @@ bool GeneratesCompleteDeterministicGroupSources()
 {
     const std::vector<std::pair<ProbeGroup, std::size_t>> expected{
         {ProbeGroup::Mte1, 25U},   {ProbeGroup::Mte2, 19U}, {ProbeGroup::Mte3, 2U},    {ProbeGroup::Fixpipe, 7U},
-        {ProbeGroup::Scalar, 33U}, {ProbeGroup::Sync, 29U}, {ProbeGroup::Matrix, 16U}, {ProbeGroup::Vector, 10U},
+        {ProbeGroup::Scalar, 46U}, {ProbeGroup::Sync, 29U}, {ProbeGroup::Matrix, 16U}, {ProbeGroup::Vector, 10U},
     };
     for (const auto& [group, symbolCount] : expected) {
         const GeneratedProbeSource first = GenerateProbeSource("dav-3510", group);
@@ -72,7 +72,9 @@ bool RendersNewPipelineDefinitions()
     const GeneratedProbeSource scalar = GenerateProbeSource("dav-3510", ProbeGroup::Scalar);
     CHECK(scalar.success);
     CHECK(scalar.source.find("__sanitizer_report_st_atomic_b8") != std::string::npos);
-    CHECK(scalar.source.find("addr, static_cast<uint64_t>(offset), post, 0UL, 0UL") != std::string::npos);
+    CHECK(
+        scalar.source.find("addr, static_cast<uint64_t>(offset), post, __cce_scalar::get_sys_va_base(), "
+                           "aclsan::ASCSAN_SCALAR_ADDRESS_CONTEXT_V1") != std::string::npos);
     const std::string_view mte2Nz = FindProbeDefinition(scalar.source, "__sanitizer_report_set_mte2_nz_para");
     CHECK(!mte2Nz.empty());
     CHECK(mte2Nz.find("config, 0UL, 0UL, 0UL, 0UL") != std::string_view::npos);
@@ -167,8 +169,8 @@ bool EmbedsPrivateProbeHeaders()
 bool ValidatesCompleteBindingCatalog()
 {
     CHECK(BindingSymbols({ProbeGroup::Mte1}).size() == 25U);
-    CHECK(BindingSymbols({ProbeGroup::Mte2}).size() == 52U);
-    CHECK(BindingSymbols({ProbeGroup::Scalar}).size() == 33U);
+    CHECK(BindingSymbols({ProbeGroup::Mte2}).size() == 65U);
+    CHECK(BindingSymbols({ProbeGroup::Scalar}).size() == 46U);
     CHECK(BindingSymbols({ProbeGroup::Sync}).size() == 29U);
     CHECK(BindingSymbols({ProbeGroup::Matrix}).size() == 16U);
     CHECK(BindingSymbols({ProbeGroup::Vector}).size() == 10U);
@@ -183,7 +185,7 @@ bool ValidatesCompleteBindingCatalog()
     std::sort(generatedSymbols.begin(), generatedSymbols.end());
     std::sort(bindingSymbols.begin(), bindingSymbols.end());
     CHECK(generatedSymbols == bindingSymbols);
-    CHECK(bindingSymbols.size() == 141U);
+    CHECK(bindingSymbols.size() == 154U);
 
     const std::filesystem::path ctrlBin = std::filesystem::temp_directory_path() / "aclsan-all-probes.ctrl.bin";
     std::filesystem::remove(ctrlBin);
@@ -207,4 +209,58 @@ TEST(ProbeSourceGenerator, Main)
     ASSERT_TRUE(aclsan::RejectsUnsupportedRequests());
     ASSERT_TRUE(aclsan::EmbedsPrivateProbeHeaders());
     ASSERT_TRUE(aclsan::ValidatesCompleteBindingCatalog());
+}
+
+TEST(ProbeSourceGeneratorScalarDev, IncludesAllWidthsAndByteOffsets)
+{
+    const auto generated = aclsan::GenerateProbeSource("dav-3510", aclsan::ProbeGroup::Scalar);
+    ASSERT_TRUE(generated.success);
+    const auto bindings = aclsan::BindingSymbols({aclsan::ProbeGroup::Scalar});
+    uint32_t id = 64;
+    for (const char* op : {"st", "ld"}) {
+        for (uint32_t bits : {64U, 32U, 16U, 8U}) {
+            const std::string symbol = std::string("__sanitizer_report_") + op + "_dev_b" + std::to_string(bits);
+            SCOPED_TRACE(symbol);
+            EXPECT_NE(std::find(bindings.begin(), bindings.end(), symbol), bindings.end());
+            EXPECT_NE(
+                generated.sourceMap.find("apiId=" + std::to_string(id++) + " symbol=" + symbol), std::string::npos);
+            const auto start = generated.source.find(symbol + "(");
+            ASSERT_NE(start, std::string::npos);
+            const auto definition = generated.source.substr(start, generated.source.find("\n}", start) - start);
+            EXPECT_NE(definition.find("uint64_t addr, int64_t offset)"), std::string::npos);
+            EXPECT_NE(definition.find("addr, static_cast<uint64_t>(offset), 0UL, 0UL, 0UL"), std::string::npos);
+            EXPECT_NE(definition.find("PIPE_S"), std::string::npos);
+        }
+    }
+}
+
+TEST(ProbeSourceGeneratorScalarAtomic, IncludesAllWidthsAndPostArgument)
+{
+    const auto generated = aclsan::GenerateProbeSource("dav-3510", aclsan::ProbeGroup::Scalar);
+    ASSERT_TRUE(generated.success);
+    const auto bindings = aclsan::BindingSymbols({aclsan::ProbeGroup::Scalar});
+    struct Case {
+        uint32_t id;
+        const char* symbol;
+    };
+    const Case cases[] = {
+        {56, "__sanitizer_report_st_atomic_b32"},  {57, "__sanitizer_report_st_atomic_b16"},
+        {58, "__sanitizer_report_st_atomic_b8"},   {59, "__sanitizer_report_sti_atomic_b32"},
+        {60, "__sanitizer_report_sti_atomic_b16"}, {61, "__sanitizer_report_sti_atomic_b8"},
+    };
+    for (const auto& test : cases) {
+        SCOPED_TRACE(test.symbol);
+        EXPECT_NE(std::find(bindings.begin(), bindings.end(), test.symbol), bindings.end());
+        EXPECT_NE(
+            generated.sourceMap.find("apiId=" + std::to_string(test.id) + " symbol=" + test.symbol), std::string::npos);
+        const auto start = generated.source.find(std::string(test.symbol) + "(");
+        ASSERT_NE(start, std::string::npos);
+        const auto definition = generated.source.substr(start, generated.source.find("\n}", start) - start);
+        EXPECT_NE(definition.find("uint64_t addr, int64_t offset, uint64_t post)"), std::string::npos);
+        EXPECT_NE(
+            definition.find("addr, static_cast<uint64_t>(offset), post, __cce_scalar::get_sys_va_base(), "
+                            "aclsan::ASCSAN_SCALAR_ADDRESS_CONTEXT_V1"),
+            std::string::npos);
+        EXPECT_NE(definition.find("PIPE_S"), std::string::npos);
+    }
 }
