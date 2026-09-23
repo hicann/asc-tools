@@ -226,7 +226,6 @@ target_link_options(acl_san PRIVATE "LINKER:--exclude-libs,ALL")
 set(ACLSAN_VERSION_SCRIPT "${CMAKE_CURRENT_SOURCE_DIR}/cmake/acl_san.map")
 target_link_options(acl_san PRIVATE
   "LINKER:--version-script=${ACLSAN_VERSION_SCRIPT}"
-  "LINKER:-rpath,$ORIGIN"
 )
 set_property(TARGET acl_san APPEND PROPERTY
   LINK_DEPENDS "${ACLSAN_VERSION_SCRIPT}"
@@ -236,6 +235,4 @@ set_target_properties(acl_san PROPERTIES
   OUTPUT_NAME acl_san
   CXX_VISIBILITY_PRESET hidden
   VISIBILITY_INLINES_HIDDEN YES
-  BUILD_WITH_INSTALL_RPATH YES
-  INSTALL_RPATH "$ORIGIN"
 )

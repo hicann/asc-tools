@@ -463,18 +463,33 @@ def test_npu_check_wrapper_is_installed_to_arch_bin():
     assert wrapper_install.search(sanitizer_cmake)
 
 
-def test_npu_check_library_keeps_origin_rpath_for_packaged_dependency():
+def test_npu_check_uses_wrapper_library_path_instead_of_rpath():
     repo_root = Path(__file__).parents[4]
-    top_level_cmake = (repo_root / "CMakeLists.txt").read_text(encoding="utf-8")
-    npu_check_cmake = (
-        repo_root / "npu_tools" / "npu_check" / "src" / "processor" / "CMakeLists.txt"
-    ).read_text(encoding="utf-8")
+    npu_check_root = repo_root / "npu_tools" / "npu_check"
+    npu_check_cmake = (npu_check_root / "CMakeLists.txt").read_text(encoding="utf-8")
+    wrapper = (npu_check_root / "src" / "cli" / "npu_check.sh").read_text(
+        encoding="utf-8"
+    )
+    library_cmake_files = (
+        npu_check_root / "src" / "processor" / "CMakeLists.txt",
+        npu_check_root / "src" / "acl_san" / "CMakeLists.txt",
+    )
 
-    assert "set(CMAKE_SKIP_RPATH TRUE)" in top_level_cmake
-    assert '"LINKER:-rpath,$ORIGIN"' in npu_check_cmake
+    assert "set(CMAKE_SKIP_RPATH FALSE)" not in npu_check_cmake
+    assert 'NPU_TOOLS_LIB_DIR="${CANN_ROOT}/tools/npu_tools/lib64"' in wrapper
+    assert 'export LD_LIBRARY_PATH="${NPU_TOOLS_LIB_DIR}' in wrapper
+    for cmake_file in library_cmake_files:
+        library_cmake = cmake_file.read_text(encoding="utf-8")
+        assert '"LINKER:-rpath,$ORIGIN"' not in library_cmake
+        assert "BUILD_RPATH" not in library_cmake
+        assert "INSTALL_RPATH" not in library_cmake
+        assert "BUILD_WITH_INSTALL_RPATH" not in library_cmake
+        assert "SKIP_BUILD_RPATH" not in library_cmake
+        assert "SKIP_INSTALL_RPATH" not in library_cmake
 
 
-def test_npu_check_wrapper_executes_real_binary(tmp_path):
+@pytest.mark.parametrize("existing_library_path", [None, "/existing/lib64"])
+def test_npu_check_wrapper_executes_real_binary(tmp_path, existing_library_path):
     repo_root = Path(__file__).parents[4]
     wrapper_source = (
         repo_root / "npu_tools" / "npu_check" / "src" / "cli" / "npu_check.sh"
@@ -482,19 +497,31 @@ def test_npu_check_wrapper_executes_real_binary(tmp_path):
     install_root = tmp_path / "cann"
     arch_bin = install_root / ARCH_ROOT / "bin"
     wrapper = arch_bin / "npu-check"
-    real_binary = install_root / SANITIZER_ROOT / "bin" / "npu-check"
+    tool_root = install_root / "tools" / "npu_tools"
+    real_binary = tool_root / "bin" / "npu-check"
+    tool_library = tool_root / "lib64"
     arch_bin.mkdir(parents=True)
     real_binary.parent.mkdir(parents=True)
+    tool_library.mkdir(parents=True)
     (install_root / "bin").symlink_to(f"{ARCH_ROOT}/bin", target_is_directory=True)
 
     shutil.copy2(wrapper_source, wrapper)
     wrapper.chmod(0o750)
     real_binary.write_text(
-        "#!/bin/sh\nprintf 'pid=%s\\n' \"$$\"\nprintf 'arg=<%s>\\n' \"$@\"\nexit 23\n",
+        "#!/bin/sh\n"
+        "printf 'pid=%s\\n' \"$$\"\n"
+        "printf 'library_path=<%s>\\n' \"$LD_LIBRARY_PATH\"\n"
+        "printf 'arg=<%s>\\n' \"$@\"\n"
+        "exit 23\n",
         encoding="utf-8",
     )
     real_binary.chmod(0o750)
 
+    environment = os.environ.copy()
+    if existing_library_path is None:
+        environment.pop("LD_LIBRARY_PATH", None)
+    else:
+        environment["LD_LIBRARY_PATH"] = existing_library_path
     process = subprocess.Popen(
         [
             str(install_root / "bin" / "npu-check"),
@@ -504,13 +531,18 @@ def test_npu_check_wrapper_executes_real_binary(tmp_path):
         text=True,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
+        env=environment,
     )
     stdout, stderr = process.communicate()
 
     assert process.returncode == 23
     assert stderr == ""
+    expected_library_path = str(tool_library)
+    if existing_library_path is not None:
+        expected_library_path += f":{existing_library_path}"
     assert stdout.splitlines() == [
         f"pid={process.pid}",
+        f"library_path=<{expected_library_path}>",
         "arg=<argument with spaces>",
         "arg=<--flag=value>",
     ]

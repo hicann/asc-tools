@@ -14,4 +14,6 @@ set -e
 
 SCRIPT_DIR=$(dirname -- "$(readlink -f -- "$0")")    # absolute path of current script directory.  xx-linux/bin/xxx
 CANN_ROOT=$(readlink -f -- "${SCRIPT_DIR}/../..")    # cann path                                   cann
+NPU_TOOLS_LIB_DIR="${CANN_ROOT}/tools/npu_tools/lib64"
+export LD_LIBRARY_PATH="${NPU_TOOLS_LIB_DIR}${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
 exec "${CANN_ROOT}/tools/npu_tools/bin/npu-check" "$@"

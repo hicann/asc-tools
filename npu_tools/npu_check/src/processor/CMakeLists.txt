@@ -82,14 +82,9 @@ target_compile_options(npu_check PRIVATE -Wall -Wextra -Wpedantic)
 target_link_options(npu_check PRIVATE
   "LINKER:--version-script=${CMAKE_CURRENT_SOURCE_DIR}/cmake/npu_check.map"
   "LINKER:-z,nodelete"
-  "LINKER:-rpath,$ORIGIN"
 )
 set_target_properties(npu_check PROPERTIES
   OUTPUT_NAME npu_check_processor
   CXX_VISIBILITY_PRESET hidden
   VISIBILITY_INLINES_HIDDEN YES
-  BUILD_RPATH "\$ORIGIN"
-  INSTALL_RPATH "\$ORIGIN"
-  SKIP_BUILD_RPATH FALSE
-  SKIP_INSTALL_RPATH FALSE
 )
