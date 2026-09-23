@@ -76,7 +76,7 @@ To locate source files and line numbers directly from a report, preserve line in
 ### 3.1 Syntax
 
 ```text
-npu-check [--tool <name>]... [--log-file <path>] [--] <application> [args...]
+npu-check [--tool <name>]... [--log-file <filepath>] [--] <application> [args...]
 ```
 
 ### 3.2 Option Reference
@@ -84,7 +84,7 @@ npu-check [--tool <name>]... [--log-file <path>] [--] <application> [args...]
 | Option | Input | Default Behavior | Description |
 | --- | --- | --- | --- |
 | `--tool <name>` | `memcheck`, `synccheck` | Enables `memcheck` when omitted | Can be specified multiple times to enable both tools; repeating the same tool does not repeat the check |
-| `--log-file <path>` | A file path | Displays the report in the terminal | Saves diagnostic information |
+| `--log-file <filepath>` | A file path | Displays the report in the terminal | Saves diagnostic information |
 | `-h`, `--help` | None | Does not display help | Displays command help |
 | `--` | None | Optional | Separates tool options from application arguments |
 
@@ -109,7 +109,7 @@ mkdir -p reports
 npu-check --tool memcheck --log-file reports/memcheck.log ./my_app
 ```
 
-When `--log-file` is specified, the report is written to the file and is not also displayed in the terminal. The application's own output is still displayed in the terminal and recorded in the file.
+When `--log-file` is specified, the report is written to the file and is not also displayed in the terminal. The application's console output is not affected.
 
 ## 4. Limitations of the Current Version
 

@@ -450,6 +450,9 @@ TEST(OptionsTest, UsageListsOnlyPublicOptions)
 
     EXPECT_NE(usage.find("Usage: npu-check"), std::string::npos);
     EXPECT_EQ(usage.find("Usage: npu_check"), std::string::npos);
+    // usage 行保留本工具原有的展开写法；Options 段沿用 compute-sanitizer 的排版。
+    EXPECT_NE(usage.find("[--tool <name>]..."), std::string::npos);
+    EXPECT_NE(usage.find("Options:"), std::string::npos);
     EXPECT_NE(usage.find("--tool"), std::string::npos);
     EXPECT_EQ(usage.find("--tools"), std::string::npos);
     EXPECT_NE(usage.find("--log-file"), std::string::npos);

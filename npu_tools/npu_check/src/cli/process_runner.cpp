@@ -183,10 +183,16 @@ private:
     bool active_ = false;
 };
 
-// 报告出口。三条流各有去向，但都必须串行化 —— 否则应用输出与检查报告会在字节级交错。
+// infra_failed 具体原因的统一落盘出口：不打屏。这类细节（握手缺失、报告不完整等）
+// 只能说明流程断在哪一环，说不了根因是谁 —— 打在终端上容易被当成结论（例如目标程序
+// 根本不是 ACL 应用、或应用自身中途被杀，都会表现为"工具侧失败"）。告知由 ScreenNotice
+// 的通用提示承担，细节进 plog 与 --log-file 供排查。
+void LogInfraDetail(const std::string& message) { ASCTOOL_ERROR("[INFRA] %s", message.c_str()); }
+
+// 报告出口。四条流各有去向，但都必须串行化 —— 否则应用输出与工具消息会在字节级交错。
 //
-// 旧实现还往会话目录里写一份 console.log。那个出口已经取消：会话目录随抽象命名空间
-// 的改造失去了载体，而它承载的内容与 --log-file 完全重复。
+// --log-file 只收工具自身的输出（报告与工具消息），不转录应用输出：应用是子进程，
+// 其打印直接写继承来的终端流
 class OutputSink {
 public:
     explicit OutputSink(const std::string& logPath) : logRequired_(!logPath.empty())
@@ -200,15 +206,12 @@ public:
 
     bool Good() const { return !logRequired_ || log_.is_open(); }
 
-    // 应用自身的 stdout/stderr：原样转发，不加任何前缀，不改写。
+    // 应用自身的 stdout/stderr：原样转发到终端，不加任何前缀，不改写。打屏行为不受
+    // --log-file 影响，该文件也只收工具自身的输出。
     void Console(const char* data, size_t size)
     {
         std::lock_guard<std::mutex> lock(mutex_);
         WriteFd(STDOUT_FILENO, data, size);
-        if (log_.is_open()) {
-            log_.write(data, static_cast<std::streamsize>(size));
-            log_.flush();
-        }
     }
 
     // 权威报告的输出通道：原样写出，不加 "npu_check: " 前缀，也不拆行。报告是给人读的
@@ -246,6 +249,21 @@ public:
         }
         std::lock_guard<std::mutex> lock(mutex_);
         WriteFd(error ? STDERR_FILENO : STDOUT_FILENO, line.data(), line.size());
+        if (log_.is_open()) {
+            log_.write(line.data(), static_cast<std::streamsize>(line.size()));
+            log_.flush();
+        }
+    }
+
+    // infra_failed 的具体原因：不进终端，只落 plog 与 --log-file（见 LogInfraDetail）。
+    void Detail(const std::string& message)
+    {
+        LogInfraDetail(message);
+        std::string line = "npu_check: " + message;
+        if (line.back() != '\n') {
+            line.push_back('\n');
+        }
+        std::lock_guard<std::mutex> lock(mutex_);
         if (log_.is_open()) {
             log_.write(line.data(), static_cast<std::streamsize>(line.size()));
             log_.flush();
@@ -435,20 +453,68 @@ std::string FormatResultSummary(const ResultSummary& summary)
            " exit=" + std::to_string(summary.exit);
 }
 
+void LogResultSummary(const ResultSummary& summary)
+{
+    // 摘要行是给工具维护者看的机器格式，常态化落 plog；终端上只允许出现 ScreenNotice
+    // 给出的人类可读提示，两套输出不得混用。
+    const std::string line = FormatResultSummary(summary);
+    switch (summary.outcome) {
+        case Outcome::FORWARDED:
+            ASCTOOL_INFO("%s", line.c_str());
+            break;
+        case Outcome::APP_FAILED:
+            ASCTOOL_WARNING("%s", line.c_str());
+            break;
+        case Outcome::INFRA_FAILED:
+            ASCTOOL_ERROR("%s", line.c_str());
+            break;
+    }
+}
+
+// 只有能给出明确说法的结果才允许打屏：infra_failed 告知工具侧失败并指向 plog，
+// app_failed 告知应用退出状态。forwarded 一切正常，has_errors 的结论已随报告本身
+// 输出，都不需要额外提示。
+std::string ScreenNotice(const ResultSummary& summary)
+{
+    switch (summary.outcome) {
+        case Outcome::INFRA_FAILED:
+            return "npu_check: tool execution failed; check the plog for details";
+        case Outcome::APP_FAILED:
+            if (summary.childExit.rfind("signal:", 0) == 0) {
+                return "npu_check: application terminated by signal " + summary.childExit.substr(7);
+            }
+            if (summary.childExit != "none" && summary.childExit != "unknown") {
+                return "npu_check: application exited with non-zero status (exit=" + summary.childExit + ")";
+            }
+            return "npu_check: application exited with non-zero status";
+        case Outcome::FORWARDED:
+            break;
+    }
+    return {};
+}
+
 int RunApplication(const Options& options, const std::string& libraryPath)
 {
-    // 摘要行必须在任何返回路径上都输出一次，因此用一个 RAII 守卫兜住，而不是在每个
-    // return 前手写一遍 —— 后者只要漏掉一处，脚本就会在那条路径上什么都读不到。
+    // 摘要必须在任何返回路径上都落一次 plog、终端提示也只在这一处统一给出，因此用
+    // RAII 守卫兜住，而不是在每个 return 前手写一遍 —— 后者只要漏掉一处，那条路径
+    // 就既没有落盘记录、用户也得不到任何提示。
     ResultSummary summary;
     struct SummaryGuard {
         const ResultSummary& summary;
-        ~SummaryGuard() { std::cerr << FormatResultSummary(summary) << '\n'; }
+        ~SummaryGuard()
+        {
+            LogResultSummary(summary);
+            const std::string notice = ScreenNotice(summary);
+            if (!notice.empty()) {
+                std::cerr << notice << '\n';
+            }
+        }
     } summaryGuard{summary};
 
     std::string sessionDirectory;
     std::string error;
     if (!CreateSessionDirectory(sessionDirectory, error)) {
-        std::cerr << "npu_check: " << error << '\n';
+        LogInfraDetail(error);
         return summary.exit = 125;
     }
 
@@ -456,20 +522,20 @@ int RunApplication(const Options& options, const std::string& libraryPath)
     // 因此 nonce 已删除（见 wire_protocol.h 的说明）。
     uint64_t sessionId = 0;
     if (!RandomBytes(&sessionId, sizeof(sessionId)) || sessionId == 0) {
-        std::cerr << "npu_check: cannot generate session identity\n";
+        LogInfraDetail("cannot generate session identity");
         return summary.exit = 125;
     }
 
     // --work-dir 只控制 CLI 会话日志。DBI 使用自己管理的私有 runtime/cache 目录。
     const std::string workDir = options.workDir.empty() ? sessionDirectory : options.workDir;
     if (!EnsureDirectory(workDir, error)) {
-        std::cerr << "npu_check: " << error << '\n';
+        LogInfraDetail(error);
         return summary.exit = 125;
     }
 
     const std::string& logPath = options.logFile;
     if (!logPath.empty() && !ValidateLogFilePath(logPath, error)) {
-        std::cerr << "npu_check: " << error << '\n';
+        LogInfraDetail(error);
         return summary.exit = 125;
     }
 
@@ -479,12 +545,12 @@ int RunApplication(const Options& options, const std::string& libraryPath)
     // 身份校验完全由 SO_PEERCRED 承担。
     const std::string udsName = "@npu_check-" + HexRandom();
     if (udsName.size() <= 11) {
-        std::cerr << "npu_check: cannot generate a UDS address\n";
+        LogInfraDetail("cannot generate a UDS address");
         return summary.exit = 125;
     }
     OutputSink output(logPath);
     if (!output.Good()) {
-        std::cerr << "npu_check: cannot open '" << logPath << "' for writing\n";
+        LogInfraDetail("cannot open '" + logPath + "' for writing");
         return summary.exit = 125;
     }
 
@@ -498,14 +564,14 @@ int RunApplication(const Options& options, const std::string& libraryPath)
 
     int consolePipe[2] = {-1, -1};
     if (pipe2(consolePipe, O_CLOEXEC) != 0) {
-        output.Sanitizer(std::string("pipe2: ") + std::strerror(errno), true);
+        output.Detail(std::string("pipe2: ") + std::strerror(errno));
         return summary.exit = 125;
     }
     UniqueFd consoleRead(consolePipe[0]);
     UniqueFd consoleWrite(consolePipe[1]);
     SignalBlocker signalBlocker(error);
     if (!signalBlocker.Good()) {
-        output.Sanitizer(error, true);
+        output.Detail(error);
         return summary.exit = 125;
     }
 
@@ -518,7 +584,7 @@ int RunApplication(const Options& options, const std::string& libraryPath)
 
     const pid_t child = fork();
     if (child < 0) {
-        output.Sanitizer(std::string("fork: ") + std::strerror(errno), true);
+        output.Detail(std::string("fork: ") + std::strerror(errno));
         return summary.exit = 125;
     }
     if (child == 0) {
@@ -553,14 +619,14 @@ int RunApplication(const Options& options, const std::string& libraryPath)
     }
     consoleWrite.Reset();
     if (setpgid(child, child) != 0 && errno != EACCES && errno != ESRCH) {
-        output.Sanitizer(std::string("setpgid: ") + std::strerror(errno), true);
+        output.Detail(std::string("setpgid: ") + std::strerror(errno));
         (void)kill(child, SIGKILL);
         (void)waitpid(child, nullptr, 0);
         return summary.exit = 125;
     }
     SignalForwarder signalForwarder(child, error);
     if (!signalForwarder.Good()) {
-        output.Sanitizer(error, true);
+        output.Detail(error);
         if (kill(-child, SIGKILL) != 0) {
             (void)kill(child, SIGKILL);
         }
@@ -568,7 +634,7 @@ int RunApplication(const Options& options, const std::string& libraryPath)
         return summary.exit = 125;
     }
     if (!signalBlocker.Restore(error)) {
-        output.Sanitizer(error, true);
+        output.Detail(error);
         if (kill(-child, SIGKILL) != 0) {
             (void)kill(child, SIGKILL);
         }
@@ -647,20 +713,20 @@ int RunApplication(const Options& options, const std::string& libraryPath)
                 }
                 if (status != npucheck::ipc::IoStatus::OK) {
                     protocolComplete = false;
-                    output.Sanitizer("UDS receive failed: " + receiveError, true);
+                    output.Detail("UDS receive failed: " + receiveError);
                     break;
                 }
                 if (frame.type == npucheck::ipc::MessageType::RESULT) {
                     std::string message;
                     if (!npucheck::ipc::DecodeText(frame.payload, message, receiveError)) {
                         protocolComplete = false;
-                        output.Sanitizer("UDS payload failed: " + receiveError, true);
+                        output.Detail("UDS payload failed: " + receiveError);
                         break;
                     }
                     // 上限与注入库侧共用同一个常量：对端异常时不能让 CLI 一直吃内存。
                     if (result.size() + message.size() > npucheck::ipc::kMaxResultBytes) {
                         protocolComplete = false;
-                        output.Sanitizer("result exceeds the maximum report size", true);
+                        output.Detail("result exceeds the maximum report size");
                         break;
                     }
                     result.append(message);
@@ -681,7 +747,7 @@ int RunApplication(const Options& options, const std::string& libraryPath)
                     npucheck::ipc::ErrorPayload failure{};
                     std::string decodeError;
                     if (!npucheck::ipc::DecodeError(frame.payload, failure, decodeError)) {
-                        output.Sanitizer("ERROR malformed error payload: " + decodeError, true);
+                        output.Detail("ERROR malformed error payload: " + decodeError);
                         break;
                     }
                     // domain/code 是稳定取值进结构化日志，message 只原样转述给人看，
@@ -689,7 +755,7 @@ int RunApplication(const Options& options, const std::string& libraryPath)
                     ASCTOOL_DEBUG(
                         "[UDS] phase=error domain=%u code=%u", static_cast<unsigned>(failure.domain),
                         static_cast<unsigned>(failure.code));
-                    output.Sanitizer("ERROR " + failure.message, true);
+                    output.Detail("ERROR " + failure.message);
                     break;
                 }
                 // 其余都是 must-ignore 的实时诊断，收到即打印，不进拼接缓冲。
@@ -705,7 +771,7 @@ int RunApplication(const Options& options, const std::string& libraryPath)
     } else {
         protocolComplete = false;
         ASCTOOL_DEBUG("[UDS] phase=handshake result=failed");
-        output.Sanitizer("handshake=missing reason=\"" + error + "\"", true);
+        output.Detail("handshake=missing reason=\"" + error + "\"");
     }
 
     int childStatus = 0;
@@ -739,7 +805,7 @@ int RunApplication(const Options& options, const std::string& libraryPath)
         ASCTOOL_DEBUG(
             "[UDS] phase=result frames=%llu bytes=%zu truncated=unknown has_errors=unknown",
             static_cast<unsigned long long>(resultFrames.load()), result.size());
-        output.Sanitizer("result missing or truncated; the partial report was discarded", true);
+        output.Detail("result missing or truncated; the partial report was discarded");
     }
 
     summary.truncated = resultTruncated;

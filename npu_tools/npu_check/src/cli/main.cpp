@@ -17,19 +17,23 @@ int main(int argc, char** argv)
 {
     npucheck::Options options{};
     std::string error;
-    // 结果摘要行在任何路径下都必须输出，包括还没开始跑检查的这些早期失败：
-    // 脚本读到的是同一行格式，不必为不同失败阶段各写一套解析。
-    const auto reportEarlyFailure = [](int exitCode) {
+    // 早期失败不再向终端打机器格式的结果摘要，只落 plog。用法错误已有专属报错和用法
+    // 说明，再补一句"工具执行失败"反而会把用户引去翻 plog 找不存在的故障；环境类失败
+    // 属于工具内部流程失败，按 infra_failed 的打屏规则补一句人类可读提示。
+    const auto reportEarlyFailure = [](int exitCode, bool withScreenNotice) {
         npucheck::ResultSummary summary;
         summary.outcome = npucheck::Outcome::INFRA_FAILED;
         summary.exit = exitCode;
-        std::cerr << npucheck::FormatResultSummary(summary) << '\n';
+        npucheck::LogResultSummary(summary);
+        if (withScreenNotice) {
+            std::cerr << npucheck::ScreenNotice(summary) << '\n';
+        }
         return exitCode;
     };
 
     if (!npucheck::ParseOptions(argc, argv, options, error)) {
         std::cerr << "npu_check: " << error << "\n\n" << npucheck::Usage();
-        return reportEarlyFailure(64);
+        return reportEarlyFailure(64, false);
     }
     if (options.showHelp) {
         std::cout << npucheck::Usage();
@@ -43,7 +47,7 @@ int main(int argc, char** argv)
     std::string libraryPath;
     if (!npucheck::ResolveLibraryPath(std::string{}, libraryPath, error)) {
         std::cerr << "npu_check: " << error << '\n';
-        return reportEarlyFailure(125);
+        return reportEarlyFailure(125, true);
     }
     return npucheck::RunApplication(options, libraryPath);
 }

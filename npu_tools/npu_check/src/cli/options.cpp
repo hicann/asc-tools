@@ -376,23 +376,21 @@ bool ResolveLibraryPath(const std::string& requested, std::string& resolved, std
 
 std::string Usage()
 {
-    // 只列对外命令行契约：--tool、--log-file、--help/-h 以及 -- 边界规则。
-    // 内部调测选项（--work-dir、--handshake-timeout-ms、--error-exitcode）不对外承诺
-    // 兼容性，可随时变更或删除，因此不得出现在这里 —— 一旦印进帮助，用户就会按对外
-    // 契约来依赖它。它们仍然照常解析，只是不做广告。
-    return "Usage: npu-check [--tool <name>]... [--log-file <path>]\n"
+    return "Usage: npu-check [--tool <name>]... [--log-file <filepath>]\n"
            "                 [--] <application> [args...]\n"
+           "\n"
            "Options:\n"
-           "  --tool <memcheck|synccheck> enable a checker; repeatable and idempotent.\n"
-           "                              Defaults to memcheck when no tool is given.\n"
-           "  --log-file <path>            file receiving the report and application output;\n"
-           "                               parent directory must exist; overwrites existing files\n"
-           "  -h, --help                   show this help and exit\n"
-           "\n"
-           "Example: npu-check --tool memcheck --tool synccheck ./app\n"
-           "\n"
-           "Pass -- before <application> when the application path or its arguments start\n"
-           "with '-'.\n";
+           "  --tool <name> (=memcheck)\n"
+           "      Set the tool to use. Can be specified multiple times to run several tools.\n"
+           "        memcheck  : The memory access error and leak detection tool.\n"
+           "        synccheck : The kernel synchronization pairing detection tool.\n"
+           "  --log-file <filepath>\n"
+           "      Save the check report to the file instead of printing output to stdout.\n"
+           "  -h, --help\n"
+           "      Produce this help message.\n"
+           "  --\n"
+           "      End the tool options; needed when the application path or its arguments begin "
+           "with '-'\n";
 }
 
 } // namespace npucheck

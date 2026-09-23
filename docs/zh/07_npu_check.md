@@ -76,7 +76,7 @@ npu-check ./my_app
 ### 3.1 语法
 
 ```text
-npu-check [--tool <name>]... [--log-file <path>] [--] <application> [args...]
+npu-check [--tool <name>]... [--log-file <filepath>] [--] <application> [args...]
 ```
 
 ### 3.2 选项参考
@@ -84,7 +84,7 @@ npu-check [--tool <name>]... [--log-file <path>] [--] <application> [args...]
 | 选项 | 输入 | 默认行为 | 说明 |
 | --- | --- | --- | --- |
 | `--tool <name>` | `memcheck`、`synccheck` | 未指定时启用 `memcheck` | 可多次指定，用于同时启用两个工具；重复指定同一工具不会重复检查 |
-| `--log-file <path>` | 文件路径 | 报告显示在终端 | 保存检查诊断信息 |
+| `--log-file <filepath>` | 文件路径 | 报告显示在终端 | 保存检查诊断信息 |
 | `-h`、`--help` | 无 | 不显示帮助 | 显示命令帮助 |
 | `--` | 无 | 可选添加 | 用于分隔工具参数和应用参数 |
 
@@ -109,7 +109,7 @@ mkdir -p reports
 npu-check --tool memcheck --log-file reports/memcheck.log ./my_app
 ```
 
-指定 `--log-file` 后，检查报告写入文件，不再在终端重复显示。应用自身的输出仍会显示在终端，并同时记录到文件。
+指定 `--log-file` 后，检查报告写入文件，不再在终端重复显示。应用程序的打屏行为不受影响。
 
 ## 4. 当前版本的约束
 
