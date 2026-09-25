@@ -29,6 +29,7 @@ struct ParsedTraceRecord {
     uint32_t blockType = ACLSAN_DEVICE_BLOCK_TYPE_AICORE;
     uint32_t phyCoreId = 0;
     uint32_t deviceId = 0;
+    uint64_t parameterBytes = 0; // Filled from the owning launch, never inferred from an access.
 };
 
 struct TraceBufferParseResult {

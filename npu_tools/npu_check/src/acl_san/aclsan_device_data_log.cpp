@@ -31,6 +31,7 @@ constexpr bool HasParamFieldLogger() noexcept
            std::is_same_v<ParamField, aclsan::NdDmaParamField> ||
            std::is_same_v<ParamField, aclsan::FixL0cToOutParamField> ||
            std::is_same_v<ParamField, aclsan::LocalMemoryTransferParamField> ||
+           std::is_same_v<ParamField, aclsan::ScalarGmParamField> ||
            std::is_same_v<ParamField, aclsan::ScalarDevParamField> ||
            std::is_same_v<ParamField, aclsan::ScalarPreloadParamField> ||
            std::is_same_v<ParamField, aclsan::ScalarAtomicParamField> ||
@@ -213,6 +214,16 @@ void LogParamField(const aclsan::ScalarDevParamField& value) noexcept
         value.dataBits, static_cast<unsigned long long>(value.addr), static_cast<long long>(value.offset));
 }
 
+void LogParamField(const aclsan::ScalarGmParamField& value) noexcept
+{
+    ASCTOOL_DEBUG(
+        "[param] type=ScalarGmParamField instrId=%u dataBits=%u addr=0x%llx offset=%lld post=%llu "
+        "sysVaBase=0x%llx addressContext=0x%llx",
+        value.instrId, value.dataBits, static_cast<unsigned long long>(value.addr),
+        static_cast<long long>(value.offset), static_cast<unsigned long long>(value.post),
+        static_cast<unsigned long long>(value.sysVaBase), static_cast<unsigned long long>(value.addressContext));
+}
+
 void LogParamField(const aclsan::ScalarPreloadParamField& value) noexcept
 {
     ASCTOOL_DEBUG(
@@ -299,13 +310,14 @@ void LogRawRecord(const ParsedTraceRecord& parsed) noexcept
     ASCTOOL_DEBUG(
         "[raw] deviceId=%u phyCoreId=%u blockId=%u blockType=%s  instrExecId=%llu launchId=%llu  "
         "type=AclsanRawTraceRecord pc=0x%llx instrId=%u siteId=%u category=%u pipeline=%u "
-        "args=[0x%llx,0x%llx,0x%llx,0x%llx,0x%llx]",
+        "args=[0x%llx,0x%llx,0x%llx,0x%llx,0x%llx] parameterBase=0x%llx parameterBytes=%llu",
         parsed.deviceId, parsed.phyCoreId, parsed.blockId, BlockTypeName(parsed.blockType),
         static_cast<unsigned long long>(parsed.instrExecId), static_cast<unsigned long long>(parsed.launchId),
         static_cast<unsigned long long>(record.pc), record.instrId, record.siteId,
         static_cast<uint32_t>(record.category), record.pipeline, static_cast<unsigned long long>(record.args[0]),
         static_cast<unsigned long long>(record.args[1]), static_cast<unsigned long long>(record.args[2]),
-        static_cast<unsigned long long>(record.args[3]), static_cast<unsigned long long>(record.args[4]));
+        static_cast<unsigned long long>(record.args[3]), static_cast<unsigned long long>(record.args[4]),
+        static_cast<unsigned long long>(record.parameterBase), static_cast<unsigned long long>(parsed.parameterBytes));
 }
 
 void LogParamField(const aclsan::DeviceInstructionParamField& params) noexcept

@@ -39,8 +39,8 @@ enum class MemoryCbdataStatus : uint8_t {
 using MemoryInstructionField = std::variant<
     CopyGmToUbufAlignV2ParamField, CopyGmToCbufAlignV2ParamField, CopyGmToCbufMultiNd2NzParamField,
     CopyGmToCbufMultiDn2NzParamField, CopyGmToCbufV2ParamField, CopyUbufToGmAlignV2ParamField, FixL0cToOutParamField,
-    LoadGmToCbuf2DV2ParamField, NdDmaOutToUbufParamField, ScalarDevParamField, ScalarPreloadParamField,
-    ScalarAtomicParamField>;
+    LoadGmToCbuf2DV2ParamField, NdDmaOutToUbufParamField, ScalarGmParamField, ScalarDevParamField,
+    ScalarPreloadParamField, ScalarAtomicParamField>;
 
 struct MemoryRegisterState {
     std::optional<Mte2SourceParamField> mte2Source;
@@ -50,6 +50,11 @@ struct MemoryRegisterState {
     std::optional<Loop3ParamField> loop3;
     std::array<std::optional<DmaLoopSizeParamField>, 3> dmaLoopSizes{};
     std::array<std::array<std::optional<DmaLoopStrideParamField>, 2>, 3> dmaLoopStrides{};
+};
+
+struct InternalMemoryRange {
+    void* address = nullptr;
+    size_t bytes = 0;
 };
 
 struct MemoryCbdataContext {
@@ -63,6 +68,9 @@ struct MemoryCbdataContext {
     uint64_t launchId = 0;
     uint32_t deviceId = 0;
     uint32_t blockType = ACLSAN_DEVICE_BLOCK_TYPE_AICORE;
+    uint64_t parameterBase = 0;
+    uint64_t parameterBytes = 0;
+    const std::vector<InternalMemoryRange>* internalInputs = nullptr;
 };
 
 using MemoryCbdata = std::vector<AclsanDeviceMemoryAccessData>;

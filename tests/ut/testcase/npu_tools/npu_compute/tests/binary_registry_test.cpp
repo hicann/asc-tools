@@ -95,14 +95,19 @@ extern "C" void* acltoolGetOriginalRuntimeApi(aclrtApiId id)
             return nullptr;
     }
 }
-extern "C" aclError aclrtFunctionGetBinary(aclrtFuncHandle function, aclrtBinHandle* binary)
+extern "C" aclError BinaryRegistryTestFunctionGetBinary(aclrtFuncHandle function, aclrtBinHandle* binary) __asm__(
+    "aclrtFunctionGetBinary");
+
+extern "C" aclError BinaryRegistryTestFunctionGetBinary(aclrtFuncHandle function, aclrtBinHandle* binary)
 {
     if (failBinary)
         return ACL_ERROR_RT_FAILURE;
     *binary = &binaryTokens[static_cast<int*>(function) - functionTokens];
     return ACL_SUCCESS;
 }
-extern "C" aclError aclrtGetFunctionName(aclrtFuncHandle, uint32_t, char* name)
+extern "C" aclError BinaryRegistryTestGetFunctionName(aclrtFuncHandle, uint32_t, char*) __asm__("aclrtGetFunctionName");
+
+extern "C" aclError BinaryRegistryTestGetFunctionName(aclrtFuncHandle, uint32_t, char* name)
 {
     if (failName)
         return ACL_ERROR_RT_FAILURE;

@@ -249,6 +249,22 @@ void TestMallocCallbackDataRoundsSizeUpTo32Bytes()
     }
 }
 
+void TestMallocAlign32CallbackData()
+{
+    ResetCapture();
+    void* deviceAddress = nullptr;
+
+    assert(aclrtMallocAlign32Hook(&deviceAddress, 33, ACL_MEM_MALLOC_HUGE_FIRST) == ACL_SUCCESS);
+    assert(g_callbackCapture.calls == 1);
+    assert(g_callbackCapture.domain == ACLSAN_CB_DOMAIN_RESOURCE);
+    assert(g_callbackCapture.callbackId == ACLSAN_CBID_RESOURCE_MEMORY_ALLOC);
+    CheckCommonData(g_callbackCapture.resource.common, sizeof(AclsanResourceData), "aclrtMallocAlign32");
+    assert(g_callbackCapture.resource.ptr == deviceAddress);
+    assert(g_callbackCapture.resource.bytes == 64);
+    assert(g_callbackCapture.resource.memorySpace == ACLSAN_MEMORY_SPACE_DEVICE);
+    assert(g_callbackCapture.resource.deviceId == 3);
+}
+
 void TestMallocPreservesOriginalRuntimeError()
 {
     ResetCapture();
@@ -905,6 +921,8 @@ void* CaptureGetOriginalRuntimeApi(aclrtApiId apiId)
                 return nullptr;
             }
             return reinterpret_cast<void*>(reinterpret_cast<uintptr_t>(&FakeAclrtMalloc));
+        case ACL_RT_API_aclrtMallocAlign32:
+            return reinterpret_cast<void*>(reinterpret_cast<uintptr_t>(&FakeAclrtMalloc));
         case ACL_RT_API_aclrtFree:
             if (!g_freeOriginalAvailable) {
                 return nullptr;
@@ -944,6 +962,7 @@ void* CaptureGetOriginalRuntimeApi(aclrtApiId apiId)
 
 void TestHostInputMaterialization()
 {
+    ResetCapture();
     aclsan::PreparedTraceLaunch prepared;
     prepared.instrumented = true;
     prepared.traceArgumentOffset = 16;
@@ -957,6 +976,7 @@ void TestHostInputMaterialization()
     ASSERT_TRUE(prepared.placeholders.empty());
     ASSERT_EQ(prepared.hostInputs.size(), 1U);
     ASSERT_EQ(prepared.hostInputs[0].bytes, 32U);
+    EXPECT_EQ(g_callbackCapture.calls, 0U);
     void* first = nullptr;
     void* second = nullptr;
     std::memcpy(&first, prepared.arguments.data(), sizeof(first));
@@ -968,6 +988,7 @@ void TestHostInputMaterialization()
     }
     aclsan::CompleteTraceLaunch(std::move(prepared), nullptr, nullptr, ACL_ERROR_FAILURE);
     ASSERT_EQ(g_lastFreedAddress, g_hostInputStorage.data());
+    EXPECT_EQ(g_callbackCapture.calls, 0U);
 
     aclsan::PreparedTraceLaunch failed;
     failed.instrumented = true;
@@ -1003,6 +1024,35 @@ void TestHostInputMaterialization()
     ASSERT_EQ(g_lastFreedAddress, g_hostInputStorage.data());
     g_hostInputMemcpyResult = ACL_SUCCESS;
     g_hostInputAllocation = false;
+    EXPECT_EQ(g_callbackCapture.calls, 0U);
+}
+
+void TestParameterAccessStaysInternal()
+{
+    ResetCapture();
+    const auto* decoder = aclsan::FindDeviceInstructionDecoder(aclsan::SocVersion::DAV_3510);
+    ASSERT_NE(decoder, nullptr);
+    aclsan::ParsedTraceRecord record{};
+    record.launchId = 101;
+    record.record.instrId = static_cast<uint32_t>(aclsan::InstructionId::LdDevB64);
+    record.record.category = aclsan::DeviceInstructionCategory::MemoryAccess;
+    record.record.parameterBase = 0x4000;
+    record.parameterBytes = 32;
+    record.record.args[0] = 0x4018;
+    aclsan::DispatchTraceRecords({record}, *decoder);
+    EXPECT_EQ(g_deviceMemoryCallbackCount, 0U);
+    EXPECT_EQ(g_callbackCapture.calls, 0U);
+    record.record.args[0] = 0x4019;
+    aclsan::DispatchTraceRecords({record}, *decoder);
+    ASSERT_EQ(g_deviceMemoryCallbackCount, 1U);
+    EXPECT_EQ(g_deviceMemoryCallbacks[0].address, 0x4019U);
+    // A later launch must not inherit the previous launch's parameter range.
+    record.launchId = 102;
+    record.record.parameterBase = 0x8000;
+    record.record.args[0] = 0x4018;
+    aclsan::DispatchTraceRecords({record}, *decoder);
+    ASSERT_EQ(g_deviceMemoryCallbackCount, 2U);
+    EXPECT_EQ(g_deviceMemoryCallbacks[1].address, 0x4018U);
 }
 
 TEST(AclsanHookCbdata, Main)
@@ -1015,9 +1065,11 @@ TEST(AclsanHookCbdata, Main)
         return id == ACL_RT_API_aclrtMalloc ? g_registerMallocResult : 0;
     };
     const aclsan_test::BoundaryGuard boundaryGuard{boundary};
+    TestParameterAccessStaysInternal();
     TestHostInputMaterialization();
     TestMallocCallbackData();
     TestMallocCallbackDataRoundsSizeUpTo32Bytes();
+    TestMallocAlign32CallbackData();
     TestMallocPreservesOriginalRuntimeError();
     TestMallocSkipsCallbackWhenGetDeviceFails();
     TestMissingOriginalMallocAborts();

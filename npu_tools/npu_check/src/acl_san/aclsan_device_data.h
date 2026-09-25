@@ -29,7 +29,8 @@ using DeviceCallbackData = std::variant<DeviceMemoryAccessDataList, AclsanDevice
 // 根据 ParsedTraceRecord 和 paramField 提取最终返回的 cbdata，配上对应的日志
 std::optional<DeviceCallbackData> TranslateDecodedTraceToCallbackData(
     const ParsedTraceRecord& parsed, const aclsan::DecodedInstruction& decoded,
-    const MemoryRegisterState& registerState = {}) noexcept;
+    const MemoryRegisterState& registerState = {},
+    const std::vector<InternalMemoryRange>* internalInputs = nullptr) noexcept;
 
 } // namespace aclsan
 

@@ -39,10 +39,14 @@ __aicore__ inline void WriteTraceRecord(
     }
 
     const uint32_t blockId = static_cast<uint32_t>(AscendC::GetBlockIdx());
-    // Keep this expression local to Device code: calling the Host constexpr helper leaves an
-    // unresolved symbol in dav-3510 probe objects when Bisheng declines to inline it.
-    const uint32_t coresPerPart = physicalCoreCount / aclsan::ASCSAN_PHYSICAL_CORE_PART_COUNT;
-    const bool isAic = phyCoreId % coresPerPart < coresPerPart / aclsan::ASCSAN_AIC_CORE_RATIO_DENOMINATOR;
+    // dav-3510 numbers each die as one AIC partition followed by two AIV
+    // partitions. Keep this expression local to Device code because calling
+    // the Host constexpr helper can leave an unresolved symbol in the probe
+    // object.
+    const uint32_t coresPerDie = physicalCoreCount / aclsan::ASCSAN_PHYSICAL_CORE_PART_COUNT;
+    const uint32_t aicCoresPerDie = coresPerDie / aclsan::ASCSAN_AIC_CORE_RATIO_DENOMINATOR;
+    const uint32_t dieLocalCoreId = phyCoreId % coresPerDie;
+    const bool isAic = dieLocalCoreId < aicCoresPerDie;
     const uint64_t blockLimit = isAic ? static_cast<uint64_t>(blockCount) : 2ULL * blockCount;
     if (static_cast<uint64_t>(blockId) >= blockLimit) {
         return;
@@ -81,6 +85,7 @@ __aicore__ inline void WriteTraceRecord(
     record->pipeline = pipeline;
     record->blockId = blockId;
     record->reserved = 0U;
+    record->parameterBase = static_cast<uint64_t>(get_para_base());
     dcci(record, cache_line_t::ENTIRE_DATA_CACHE, dcci_dst_t::CACHELINE_OUT);
     slice->phyCoreId = phyCoreId;
     slice->recordCount = index + 1U;

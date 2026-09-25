@@ -163,7 +163,7 @@ TEST(DbiIntegrationTest, CompilesLinksAndPatchesSelectedProbeSet)
     boost::filesystem::remove_all(root);
 }
 
-TEST(DbiIntegrationTest, OrdersTheKernelSymbolForTheSelectedTilingKey)
+TEST(DbiIntegrationTest, KeepsFirstKernelAsOrderingAnchorAndPassesSelectedTilingKeyToTune)
 {
     const auto root = boost::filesystem::temp_directory_path() / "dbi_pipeline_tiling_symbol";
     boost::filesystem::remove_all(root);
@@ -199,7 +199,7 @@ TEST(DbiIntegrationTest, OrdersTheKernelSymbolForTheSelectedTilingKey)
     const DbiResult result = RunDbiPipeline(request);
     ASSERT_TRUE(result.success) << result.stage << ": " << result.diagnostic;
     const std::string ordering = ReadFile(root / "work/symbol_ordering.txt");
-    EXPECT_EQ(ordering.substr(0, ordering.find('\n')), "Multi_3_mix_aic");
+    EXPECT_EQ(ordering.substr(0, ordering.find('\n')), "Multi_1_mix_aic");
     EXPECT_NE(ReadFile(root / "commands.log").find("<--tiling-key=3>"), std::string::npos);
 
     unsetenv("DBI_FAKE_KERNEL_SYMBOLS");

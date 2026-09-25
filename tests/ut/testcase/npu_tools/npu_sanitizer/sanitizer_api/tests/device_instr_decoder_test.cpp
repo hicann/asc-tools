@@ -604,6 +604,37 @@ void TestDecodesDav3510SyncInstruction()
     assert(params->eventId == 7);
 }
 
+void TestDecodesDav3510ScalarGmInstructions()
+{
+    const aclsan::DeviceInstructionDecoder* decoder =
+        aclsan::FindDeviceInstructionDecoder(aclsan::SocVersion::DAV_3510);
+    assert(decoder != nullptr);
+
+    for (uint32_t instructionId = 24; instructionId <= 55; ++instructionId) {
+        aclsan::AclsanRawTraceRecord record{};
+        record.instrId = instructionId;
+        record.args[0] = UINT64_C(0x8000000200001000);
+        record.args[1] = static_cast<uint64_t>(-8);
+        record.args[2] = 1;
+        record.args[3] = UINT64_C(0x100000000);
+        record.args[4] = aclsan::ASCSAN_SCALAR_ADDRESS_CONTEXT_V1;
+
+        const std::optional<aclsan::DecodedInstruction> decoded = decoder->decode(record);
+
+        assert(decoded.has_value());
+        assert(decoded->kind == aclsan::DeviceInstructionKind::ScalarGm);
+        const auto* params = std::get_if<aclsan::ScalarGmParamField>(&decoded->params);
+        assert(params != nullptr);
+        assert(params->instrId == instructionId);
+        assert(params->dataBits == (64U >> ((instructionId - 24U) % 4U)));
+        assert(params->addr == record.args[0]);
+        assert(params->offset == -8);
+        assert(params->post == 1);
+        assert(params->sysVaBase == record.args[3]);
+        assert(params->addressContext == record.args[4]);
+    }
+}
+
 void TestDecodesDav3510BufferInstruction()
 {
     const aclsan::DeviceInstructionDecoder* decoder =
@@ -680,6 +711,10 @@ void TestClassifiesCurrentDav3510InstructionSet()
         aclsan::DeviceInstructionKind kind;
     };
     const ExpectedInstruction expectedInstructions[] = {
+        {24, aclsan::DeviceInstructionKind::ScalarGm},
+        {43, aclsan::DeviceInstructionKind::ScalarGm},
+        {44, aclsan::DeviceInstructionKind::ScalarGm},
+        {55, aclsan::DeviceInstructionKind::ScalarGm},
         {72, aclsan::DeviceInstructionKind::LoadGmToCbuf2DV2},
         {73, aclsan::DeviceInstructionKind::CopyGmToCbufV2},
         {77, aclsan::DeviceInstructionKind::CopyGmToCbufMulti},
@@ -782,6 +817,7 @@ TEST(DeviceInstrDecoder, Main)
     TestDecodesDav3510FixpipeQuantPreHighBit();
     TestDecodesDav3510LocalMemoryTransfersWithoutLosingRawConfig();
     TestDecodesDav3510S4FixpipeUsesSourceIntrinsicId();
+    TestDecodesDav3510ScalarGmInstructions();
     TestDecodesDav3510SyncInstruction();
     TestDecodesDav3510BufferInstruction();
     TestRejectsUnknownDav3510Instruction();

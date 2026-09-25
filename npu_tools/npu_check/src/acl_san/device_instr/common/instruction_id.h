@@ -19,6 +19,40 @@ namespace aclsan {
 // “已完成”表示搬运指令已完成 RawData -> ParamField -> CBData 转换，或 SET 指令已作为独立状态被后续
 // 搬运指令的 CBData 转换消费。
 enum class InstructionId : uint32_t {
+    // A5 scalar GM load/store. REG offsets are element counts; IMM and pair offsets are signed bytes.
+    StB64Imm = 24,
+    StB32Imm = 25,
+    StB16Imm = 26,
+    StB8Imm = 27,
+    StB64Reg = 28,
+    StB32Reg = 29,
+    StB16Reg = 30,
+    StB8Reg = 31,
+    StpB64 = 32,
+    StpB32 = 33,
+    StpB16 = 34,
+    StpB8 = 35,
+    StiB64Imm = 36,
+    StiB32Imm = 37,
+    StiB16Imm = 38,
+    StiB8Imm = 39,
+    StiB64Reg = 40,
+    StiB32Reg = 41,
+    StiB16Reg = 42,
+    StiB8Reg = 43,
+    LdB64Imm = 44,
+    LdB32Imm = 45,
+    LdB16Imm = 46,
+    LdB8Imm = 47,
+    LdB64Reg = 48,
+    LdB32Reg = 49,
+    LdB16Reg = 50,
+    LdB8Reg = 51,
+    LdpB64 = 52,
+    LdpB32 = 53,
+    LdpB16 = 54,
+    LdpB8 = 55,
+
     // Scalar atomic stores. ST_ATOMIC offsets are element counts; STI_ATOMIC offsets are bytes.
     StAtomicB32 = 56,
     StAtomicB16 = 57,
@@ -114,6 +148,10 @@ enum class InstructionId : uint32_t {
 
 constexpr bool IsDefinedInstructionId(uint32_t instructionId) noexcept
 {
+    if (instructionId >= static_cast<uint32_t>(InstructionId::StB64Imm) &&
+        instructionId <= static_cast<uint32_t>(InstructionId::LdpB8)) {
+        return true;
+    }
     switch (static_cast<InstructionId>(instructionId)) {
         case InstructionId::StAtomicB32:
         case InstructionId::StAtomicB16:

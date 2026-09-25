@@ -19,8 +19,11 @@ namespace aclsan {
 // args[3] carries SYS_VA_BASE when args[4] carries this protocol marker.
 constexpr uint64_t ASCSAN_SCALAR_ADDRESS_CONTEXT_V1 = 0x5343414C41520001ULL;
 
-constexpr uint64_t ASCSAN_TRACE_BUFFER_MAGIC = 0x41534353414E3037ULL;
+constexpr uint64_t ASCSAN_TRACE_BUFFER_MAGIC = 0x41534353414E3038ULL;
 constexpr size_t ASCSAN_TRACE_BYTES_PER_CORE = 1024U * 1024U;
+// dav-3510 has two dies.  Each die numbers its physical cores as one AIC
+// partition followed by two AIV partitions.  The global order is therefore
+// AIC:AIV | AIC:AIV, with a 1:2 ratio inside each die.
 constexpr uint32_t ASCSAN_PHYSICAL_CORE_PART_COUNT = 2U;
 constexpr uint32_t ASCSAN_AIC_CORE_RATIO_DENOMINATOR = 3U;
 constexpr uint32_t ASCSAN_PHYSICAL_CORE_TOPOLOGY_UNIT =
@@ -43,8 +46,10 @@ constexpr bool IsAicPhysicalCore(uint32_t phyCoreId, uint32_t physicalCoreCount)
     if (!IsTracePhysicalCoreTopologyValid(physicalCoreCount) || phyCoreId >= physicalCoreCount) {
         return false;
     }
-    const uint32_t coresPerPart = physicalCoreCount / ASCSAN_PHYSICAL_CORE_PART_COUNT;
-    return phyCoreId % coresPerPart < coresPerPart / ASCSAN_AIC_CORE_RATIO_DENOMINATOR;
+    const uint32_t coresPerDie = physicalCoreCount / ASCSAN_PHYSICAL_CORE_PART_COUNT;
+    const uint32_t aicCoresPerDie = coresPerDie / ASCSAN_AIC_CORE_RATIO_DENOMINATOR;
+    const uint32_t dieLocalCoreId = phyCoreId % coresPerDie;
+    return dieLocalCoreId < aicCoresPerDie;
 }
 
 constexpr bool IsTraceBlockIdValid(uint64_t blockId, bool isAic, uint32_t blockCount)
@@ -71,7 +76,8 @@ constexpr bool IsTraceBlockIdValid(uint64_t blockId, bool isAic, uint32_t blockC
 //   sliceOffset(sliceIndex) = sizeof(AclsanTraceBufferHeader) + sliceIndex * sliceBytes
 //
 // blockCount 保存 launch blockDim A，只用于校验 record 携带的逻辑 blockId。
-// dav-3510 的物理核分为两部分，每部分的前 1/3 为 AIC、后 2/3 为 AIV。
+// dav-3510 的物理核按两个 die 分段排列：每个 die 内前 1/3 为 AIC、后 2/3 为 AIV，
+// 即 AIC、AIV | AIC、AIV。
 // sliceIndex 等于 get_coreid()。每个物理核执行的所有逻辑 block 共享一个 slice，
 // 有效记录下标范围为 [0, recordCount)。
 // recordCount 即该 slice 的有效结尾，不额外写入 record 或 launch 尾标志。
@@ -94,9 +100,10 @@ struct AclsanTraceSliceHeader {
     uint32_t reserved;      // 保持后续 AclsanRawTraceRecord 的 64 位对齐，固定写 0。
 };
 
-// Device probe 生成的一条原始 trace 记录，固定占用 72 字节。record 不重复保存 launchId；Host 解析时
+// Device probe 生成的一条原始 trace 记录，固定占用 80 字节。record 不重复保存 launchId；Host 解析时
 // 从所属 AclsanTraceBufferHeader 取得 launchId，并附加到 ParsedTraceRecord。
-//   [pc: 8][args[0..4]: 40][instrId: 4][siteId: 4][category: 2][pipeline: 2][blockId: 4][reserved: 4][padding: 4]
+//   [pc: 8][args[0..4]: 40][instrId: 4][siteId: 4][category: 2][pipeline: 2][blockId: 4][reserved: 4][padding:
+//   4][parameterBase: 8]
 struct AclsanRawTraceRecord {
     uint64_t pc;                        // 被插桩指令的 PC。
     uint64_t args[5];                   // Probe 捕获的指令参数，具体含义由对应指令协议定义。
@@ -106,6 +113,7 @@ struct AclsanRawTraceRecord {
     uint16_t pipeline;                  // 指令实际执行的 Device PIPE_* 值。
     uint32_t blockId;                   // AscendC::GetBlockIdx() 返回的逻辑 block ID。
     uint32_t reserved;                  // 显式保留字段，固定写 0。
+    uint64_t parameterBase;             // Internal launch parameter region, captured on the executing core.
 };
 
 constexpr uint32_t ASCSAN_TRACE_RECORDS_PER_CORE = static_cast<uint32_t>(

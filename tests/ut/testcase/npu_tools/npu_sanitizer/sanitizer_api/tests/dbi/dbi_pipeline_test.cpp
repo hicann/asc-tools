@@ -206,12 +206,13 @@ TEST(DbiPipelineTest, DetectsProbeCoreTypeFromSelectedKernelAndPipeSymbols)
     EXPECT_EQ(DetectProbeCoreType("", "UnknownCustom_0"), ProbeCoreType::Mix);
 }
 
-TEST(DbiPipelineTest, CompleteProbeSetIsLimitedToAicKernels)
+TEST(DbiPipelineTest, CompleteProbeSetCoversAicAndMixKernels)
 {
     const std::vector<ProbeGroup> requested{ProbeGroup::Mte2};
     EXPECT_EQ(ResolveProbeGroups(requested, ProbeCoreType::Aic, true), AllProbeGroups());
+    EXPECT_EQ(ResolveProbeGroups(requested, ProbeCoreType::Mix, true), AllProbeGroups());
     EXPECT_EQ(
-        ResolveProbeGroups(requested, ProbeCoreType::Mix, true),
+        ResolveProbeGroups(requested, ProbeCoreType::Aiv, true),
         (std::vector<ProbeGroup>{ProbeGroup::Mte2, ProbeGroup::Scalar}));
     EXPECT_EQ(
         ResolveProbeGroups(requested, ProbeCoreType::Aic, false),

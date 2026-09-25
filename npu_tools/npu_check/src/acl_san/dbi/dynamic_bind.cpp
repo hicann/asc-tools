@@ -48,7 +48,7 @@ aclsan::ProbeGroup BindingGroup(const BindingSpec& binding)
     if ((id >= 174 && id <= 178) || (id >= 417 && id <= 421)) {
         return ProbeGroup::Vector;
     }
-    if ((id >= 56 && id <= 71) || id == 90 || id == 123 || (id >= 124 && id <= 136) || (id >= 160 && id <= 164) ||
+    if ((id >= 24 && id <= 71) || id == 90 || id == 123 || (id >= 124 && id <= 136) || (id >= 160 && id <= 164) ||
         (id >= 386 && id <= 387) || (id >= 390 && id <= 399)) {
         return ProbeGroup::Scalar;
     }
@@ -261,6 +261,39 @@ const std::vector<BindingSpec>& AllBindings()
         {InstrType::VBS32_F32, 419, "__sanitizer_report_vbs32_f32", {0, 1, 2, 3}},
         {InstrType::VMRGSORT_F16, 420, "__sanitizer_report_vmrgsort4_f16", {0, 1, 2, 3}},
         {InstrType::VMRGSORT_F32, 421, "__sanitizer_report_vmrgsort4_f32", {0, 1, 2, 3}},
+        // A5 scalar LD/ST instructions share the scalar GM address ABI.
+        {InstrType::ST_B64_IMM, 24, "__sanitizer_report_st_b64_imm", {1, 2, 3}},
+        {InstrType::ST_B32_IMM, 25, "__sanitizer_report_st_b32_imm", {1, 2, 3}},
+        {InstrType::ST_B16_IMM, 26, "__sanitizer_report_st_b16_imm", {1, 2, 3}},
+        {InstrType::ST_B8_IMM, 27, "__sanitizer_report_st_b8_imm", {1, 2, 3}},
+        {InstrType::ST_B64_REG, 28, "__sanitizer_report_st_b64_reg", {1, 2, 3}},
+        {InstrType::ST_B32_REG, 29, "__sanitizer_report_st_b32_reg", {1, 2, 3}},
+        {InstrType::ST_B16_REG, 30, "__sanitizer_report_st_b16_reg", {1, 2, 3}},
+        {InstrType::ST_B8_REG, 31, "__sanitizer_report_st_b8_reg", {1, 2, 3}},
+        {InstrType::STP_B64, 32, "__sanitizer_report_stp_b64", {2, 3}},
+        {InstrType::STP_B32, 33, "__sanitizer_report_stp_b32", {2, 3}},
+        {InstrType::STP_B16, 34, "__sanitizer_report_stp_b16", {2, 3}},
+        {InstrType::STP_B8, 35, "__sanitizer_report_stp_b8", {2, 3}},
+        {InstrType::STI_B64_IMM, 36, "__sanitizer_report_sti_b64_imm", {1, 2, 3}},
+        {InstrType::STI_B32_IMM, 37, "__sanitizer_report_sti_b32_imm", {1, 2, 3}},
+        {InstrType::STI_B16_IMM, 38, "__sanitizer_report_sti_b16_imm", {1, 2, 3}},
+        {InstrType::STI_B8_IMM, 39, "__sanitizer_report_sti_b8_imm", {1, 2, 3}},
+        {InstrType::STI_B64_REG, 40, "__sanitizer_report_sti_b64_reg", {1, 2, 3}},
+        {InstrType::STI_B32_REG, 41, "__sanitizer_report_sti_b32_reg", {1, 2, 3}},
+        {InstrType::STI_B16_REG, 42, "__sanitizer_report_sti_b16_reg", {1, 2, 3}},
+        {InstrType::STI_B8_REG, 43, "__sanitizer_report_sti_b8_reg", {1, 2, 3}},
+        {InstrType::LD_B64_IMM, 44, "__sanitizer_report_ld_b64_imm", {1, 2, 3}},
+        {InstrType::LD_B32_IMM, 45, "__sanitizer_report_ld_b32_imm", {1, 2, 3}},
+        {InstrType::LD_B16_IMM, 46, "__sanitizer_report_ld_b16_imm", {1, 2, 3}},
+        {InstrType::LD_B8_IMM, 47, "__sanitizer_report_ld_b8_imm", {1, 2, 3}},
+        {InstrType::LD_B64_REG, 48, "__sanitizer_report_ld_b64_reg", {1, 2, 3}},
+        {InstrType::LD_B32_REG, 49, "__sanitizer_report_ld_b32_reg", {1, 2, 3}},
+        {InstrType::LD_B16_REG, 50, "__sanitizer_report_ld_b16_reg", {1, 2, 3}},
+        {InstrType::LD_B8_REG, 51, "__sanitizer_report_ld_b8_reg", {1, 2, 3}},
+        {InstrType::LDP_B64, 52, "__sanitizer_report_ldp_b64", {2, 3}},
+        {InstrType::LDP_B32, 53, "__sanitizer_report_ldp_b32", {2, 3}},
+        {InstrType::LDP_B16, 54, "__sanitizer_report_ldp_b16", {2, 3}},
+        {InstrType::LDP_B8, 55, "__sanitizer_report_ldp_b8", {2, 3}},
         {InstrType::ST_ATOMIC_B8, 58, "__sanitizer_report_st_atomic_b8", {1, 2, 3}},
         {InstrType::ST_ATOMIC_B32, 56, "__sanitizer_report_st_atomic_b32", {1, 2, 3}},
         {InstrType::ST_ATOMIC_B16, 57, "__sanitizer_report_st_atomic_b16", {1, 2, 3}},

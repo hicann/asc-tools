@@ -950,6 +950,57 @@ TEST(AclsanMemoryCbdata, ScalarDevRejectsInconsistentFields)
     EXPECT_EQ(converter.Convert(field).status, aclsan::MemoryCbdataStatus::INVALID_FIELD);
 }
 
+TEST(AclsanMemoryCbdata, InternalParameterRangeSuppressesOnlyFullyContainedAccesses)
+{
+    aclsan::MemoryCbdataContext context{};
+    context.parameterBase = 0x4000;
+    context.parameterBytes = 32;
+    for (uint32_t id : {64U, 68U}) { // ST_DEV.b64 and LD_DEV.b64.
+        for (uint64_t address : {0x4000UL, 0x4018UL}) {
+            const auto result =
+                aclsan::MemoryFieldToCbdataConverter{context}.Convert(aclsan::ScalarDevParamField{id, 64, address, 0});
+            EXPECT_EQ(result.status, aclsan::MemoryCbdataStatus::NO_ACCESS);
+            EXPECT_TRUE(result.data.empty());
+        }
+        for (uint64_t address : {0x3fffUL, 0x4019UL, 0x4020UL, 0x8000UL}) {
+            const auto result =
+                aclsan::MemoryFieldToCbdataConverter{context}.Convert(aclsan::ScalarDevParamField{id, 64, address, 0});
+            ASSERT_EQ(result.status, aclsan::MemoryCbdataStatus::SUCCESS);
+            ASSERT_EQ(result.data.size(), 1U);
+            EXPECT_EQ(result.data.front().address, address);
+        }
+    }
+    context.parameterBytes = 0;
+    EXPECT_EQ(
+        aclsan::MemoryFieldToCbdataConverter{context}.Convert(aclsan::ScalarDevParamField{68, 64, 0x4000, 0}).status,
+        aclsan::MemoryCbdataStatus::SUCCESS);
+    context.parameterBytes = UINT64_MAX;
+    EXPECT_EQ(
+        aclsan::MemoryFieldToCbdataConverter{context}.Convert(aclsan::ScalarDevParamField{68, 64, 0x4000, 0}).status,
+        aclsan::MemoryCbdataStatus::SUCCESS);
+}
+
+TEST(AclsanMemoryCbdata, InternalRangeUsesEntireStridedFootprintAndLaunchContext)
+{
+    CopyGmToUbufAlignV2ParamField field{};
+    field.instrId = RawInstructionId(InstructionId::CopyGmToUbufAlignV2B16);
+    field.dataBits = 16;
+    field.srcAddr = 0x4000;
+    field.burstNum = 3;
+    field.burstLen = 32;
+    field.burstSrcStride = 64;
+    const auto original = aclsan::MemoryFieldToCbdataConverter{{}}.Convert(field);
+    ASSERT_EQ(original.status, aclsan::MemoryCbdataStatus::SUCCESS);
+    aclsan::MemoryCbdataContext context{};
+    context.parameterBase = 0x4000;
+    context.parameterBytes = 256;
+    EXPECT_EQ(
+        aclsan::MemoryFieldToCbdataConverter{context}.Convert(field).status, aclsan::MemoryCbdataStatus::NO_ACCESS);
+    context.parameterBytes = 32;
+    EXPECT_EQ(aclsan::MemoryFieldToCbdataConverter{context}.Convert(field).status, aclsan::MemoryCbdataStatus::SUCCESS);
+    EXPECT_EQ(aclsan::MemoryFieldToCbdataConverter{{}}.Convert(field).status, aclsan::MemoryCbdataStatus::SUCCESS);
+}
+
 TEST(AclsanMemoryCbdata, ScalarDevAddressOverflowIsExplicit)
 {
     const aclsan::MemoryFieldToCbdataConverter converter{{}};
@@ -963,6 +1014,106 @@ TEST(AclsanMemoryCbdata, ScalarDevAddressOverflowIsExplicit)
             EXPECT_TRUE(result.data.empty());
         }
     }
+}
+
+TEST(AclsanMemoryCbdata, ScalarPreloadDoesNotProduceMemoryAccessCbdata)
+{
+    const aclsan::MemoryFieldToCbdataConverter converter{{}};
+    const std::array<uint32_t, 2> instructionIds{
+        RawInstructionId(InstructionId::DcPreload), RawInstructionId(InstructionId::DcPreloadI)};
+    for (const uint32_t id : instructionIds) {
+        const auto result = converter.Convert(aclsan::ScalarPreloadParamField{id, UINT64_MAX, INT64_MAX});
+        EXPECT_EQ(result.status, aclsan::MemoryCbdataStatus::NO_ACCESS);
+        EXPECT_TRUE(result.data.empty());
+    }
+
+    const auto invalid = converter.Convert(aclsan::ScalarPreloadParamField{0, 0x1000, 0});
+    EXPECT_EQ(invalid.status, aclsan::MemoryCbdataStatus::INVALID_FIELD);
+    EXPECT_TRUE(invalid.data.empty());
+}
+
+TEST(AclsanMemoryCbdata, ScalarGmUsesWidthDirectionOffsetFamilyPairAndPost)
+{
+    const aclsan::MemoryFieldToCbdataConverter converter{{}};
+    for (uint32_t id = 24; id <= 55; ++id) {
+        const uint32_t bits = 64U >> ((id - 24U) % 4U);
+        const bool isStore = id <= 43;
+        const bool isPair = (id >= 32 && id <= 35) || (id >= 52 && id <= 55);
+        const bool hasRegisterOffset = (id >= 28 && id <= 31) || (id >= 40 && id <= 43) || (id >= 48 && id <= 51);
+        const std::array<uint64_t, 2> postModes{0UL, isPair ? 0UL : 1UL};
+        for (uint64_t post : postModes) {
+            SCOPED_TRACE(::testing::Message() << "id=" << id << " post=" << post);
+            const aclsan::ScalarGmParamField field{
+                id, bits, 0x1000, 3, post, UINT64_C(0x100000000), aclsan::ASCSAN_SCALAR_ADDRESS_CONTEXT_V1};
+            const auto result = converter.Convert(field);
+            ASSERT_EQ(result.status, aclsan::MemoryCbdataStatus::SUCCESS);
+            ASSERT_EQ(result.data.size(), 1U);
+            const auto& access = result.data.front();
+            const uint64_t scaledOffset = hasRegisterOffset ? 3U * (bits / 8U) : 3U;
+            EXPECT_EQ(access.address, post == 1U ? 0x1000U : 0x1000U + scaledOffset);
+            EXPECT_EQ(
+                access.accessMode, isStore ? ACLSAN_DEVICE_MEMORY_ACCESS_WRITE : ACLSAN_DEVICE_MEMORY_ACCESS_READ);
+            EXPECT_EQ(access.dataBits, bits);
+            EXPECT_EQ(access.layoutKind, ACLSAN_MEM_LAYOUT_RANGE);
+            EXPECT_EQ(access.layout.range.bytes, (bits / 8U) * (isPair ? 2U : 1U));
+            EXPECT_EQ(access.header.sourceKind, isStore ? ACLSAN_DEVICE_SOURCE_ST : ACLSAN_DEVICE_SOURCE_LD);
+        }
+    }
+
+    const aclsan::ScalarGmParamField pairWithPost{
+        32, 64, 0x1000, 3, 1, UINT64_C(0x100000000), aclsan::ASCSAN_SCALAR_ADDRESS_CONTEXT_V1};
+    EXPECT_EQ(converter.Convert(pairWithPost).status, aclsan::MemoryCbdataStatus::INVALID_FIELD);
+}
+
+TEST(AclsanMemoryCbdata, ScalarGmValidatesAddressContextAndBounds)
+{
+    const aclsan::MemoryFieldToCbdataConverter converter{{}};
+    aclsan::ScalarGmParamField field{
+        24, 64, UINT64_C(0x8000000200001000), 0, 0, UINT64_C(0x100000000), aclsan::ASCSAN_SCALAR_ADDRESS_CONTEXT_V1};
+    auto result = converter.Convert(field);
+    ASSERT_EQ(result.status, aclsan::MemoryCbdataStatus::SUCCESS);
+    ASSERT_EQ(result.data.size(), 1U);
+    EXPECT_EQ(result.data.front().address, UINT64_C(0x200001000));
+
+    field.dataBits = 32;
+    EXPECT_EQ(converter.Convert(field).status, aclsan::MemoryCbdataStatus::INVALID_FIELD);
+    field.dataBits = 64;
+    field.post = 2;
+    EXPECT_EQ(converter.Convert(field).status, aclsan::MemoryCbdataStatus::INVALID_FIELD);
+    field.post = 0;
+    field.addressContext = 0;
+    EXPECT_EQ(converter.Convert(field).status, aclsan::MemoryCbdataStatus::MISSING_ADDRESS_CONTEXT);
+    field.addressContext = aclsan::ASCSAN_SCALAR_ADDRESS_CONTEXT_V1;
+    field.addr = UINT64_MAX;
+    field.offset = 1;
+    EXPECT_EQ(converter.Convert(field).status, aclsan::MemoryCbdataStatus::ARITHMETIC_OVERFLOW);
+
+    field = {32, 64, UINT64_C(0xfffffffffff8), 0, 0, UINT64_C(0x100000000), aclsan::ASCSAN_SCALAR_ADDRESS_CONTEXT_V1};
+    EXPECT_EQ(converter.Convert(field).status, aclsan::MemoryCbdataStatus::ARITHMETIC_OVERFLOW);
+}
+
+TEST(AclsanMemoryCbdata, ParameterFilteringUsesResolvedScalarAddressAndPairWidth)
+{
+    aclsan::MemoryCbdataContext context{};
+    context.parameterBase = 0x4000;
+    context.parameterBytes = 32;
+    const aclsan::MemoryFieldToCbdataConverter converter{context};
+    aclsan::ScalarGmParamField field{RawInstructionId(InstructionId::LdB64Reg), 64, 0x4000, 3, 0, UINT64_C(0x100000000),
+                                     aclsan::ASCSAN_SCALAR_ADDRESS_CONTEXT_V1};
+    EXPECT_EQ(converter.Convert(field).status, aclsan::MemoryCbdataStatus::NO_ACCESS);
+    field.offset = 4;
+    EXPECT_EQ(converter.Convert(field).status, aclsan::MemoryCbdataStatus::SUCCESS);
+    field.post = 1;
+    EXPECT_EQ(converter.Convert(field).status, aclsan::MemoryCbdataStatus::NO_ACCESS);
+    field.post = 0;
+    field.instrId = RawInstructionId(InstructionId::LdpB64);
+    field.offset = 16;
+    EXPECT_EQ(converter.Convert(field).status, aclsan::MemoryCbdataStatus::NO_ACCESS);
+    field.offset = 17;
+    const auto crossing = converter.Convert(field);
+    ASSERT_EQ(crossing.status, aclsan::MemoryCbdataStatus::SUCCESS);
+    ASSERT_EQ(crossing.data.size(), 1U);
+    EXPECT_EQ(crossing.data[0].layout.range.bytes, 16U);
 }
 
 TEST(AclsanMemoryCbdata, ScalarAtomicUsesWidthAndOffsetFamily)

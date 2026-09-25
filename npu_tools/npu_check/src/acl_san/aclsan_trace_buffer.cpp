@@ -134,6 +134,7 @@ TraceBufferParseResult ParseTraceBuffer(
             parsed.record.pipeline = wire.pipeline;
             parsed.record.blockId = wire.blockId;
             parsed.record.reserved = wire.reserved;
+            parsed.record.parameterBase = wire.parameterBase;
             if (!aclsan::IsTraceBlockIdValid(wire.blockId, isAic, expectedBlockCount)) {
                 result.records.clear();
                 result.error = "raw trace logical block ID exceeds the launch-owned range";

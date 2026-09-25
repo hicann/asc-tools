@@ -528,9 +528,13 @@ extern "C" aclError aclrtBinaryLoadFromFile(const char* path, aclrtBinaryLoadOpt
         "aclrtBinaryLoadFromFile", path, options, binary);
 }
 
-extern "C" aclError aclrtFunctionGetBinary(aclrtFuncHandle, aclrtBinHandle*) { return ACL_ERROR_INVALID_PARAM; }
+extern "C" aclError RuntimeStubFunctionGetBinary(aclrtFuncHandle, aclrtBinHandle*) __asm__("aclrtFunctionGetBinary");
 
-extern "C" aclError aclrtGetFunctionName(aclrtFuncHandle, uint32_t, char*) { return ACL_ERROR_INVALID_PARAM; }
+extern "C" aclError RuntimeStubFunctionGetBinary(aclrtFuncHandle, aclrtBinHandle*) { return ACL_ERROR_INVALID_PARAM; }
+
+extern "C" aclError RuntimeStubGetFunctionName(aclrtFuncHandle, uint32_t, char*) __asm__("aclrtGetFunctionName");
+
+extern "C" aclError RuntimeStubGetFunctionName(aclrtFuncHandle, uint32_t, char*) { return ACL_ERROR_INVALID_PARAM; }
 
 extern "C" aclError aclrtBinaryGetFunctionByEntry(aclrtBinHandle binary, uint64_t entry, aclrtFuncHandle* function)
 {
@@ -560,7 +564,11 @@ extern "C" aclError aclrtBinaryGetGlobal(aclrtBinHandle binHandle, const char* n
         "aclrtBinaryGetGlobal", binHandle, name, address, bytes);
 }
 
-extern "C" aclError aclrtGetFunctionAttribute(
+extern "C" aclError RuntimeStubGetFunctionAttribute(
+    aclrtFuncHandle funcHandle, aclrtFuncAttribute attrType,
+    std::int64_t* attrValue) __asm__("aclrtGetFunctionAttribute");
+
+extern "C" aclError RuntimeStubGetFunctionAttribute(
     aclrtFuncHandle funcHandle, aclrtFuncAttribute attrType, std::int64_t* attrValue)
 {
     return CallCurrent<aclError (*)(aclrtFuncHandle, aclrtFuncAttribute, std::int64_t*)>(

@@ -15,6 +15,18 @@
 
 namespace aclsan {
 
+// A5 ST/STI/STP/LD/LDP scalar access. REG offsets are element counts; IMM and pair offsets are bytes.
+// post == 1 uses the captured base for this access without adding the offset.
+struct ScalarGmParamField {
+    uint32_t instrId = 0;
+    uint32_t dataBits = 0;
+    uint64_t addr = 0;           // args[0]: base address
+    int64_t offset = 0;          // args[1]: signed element or byte offset, per instruction family
+    uint64_t post = 0;           // args[2]: post-index flag
+    uint64_t sysVaBase = 0;      // args[3]: captured on the executing core
+    uint64_t addressContext = 0; // args[4]: protocol marker; zero means missing
+};
+
 // ST_DEV/LD_DEV.b64/b32/b16/b8 always access GM and have no post-index flag.
 struct ScalarDevParamField {
     uint32_t instrId = 0;

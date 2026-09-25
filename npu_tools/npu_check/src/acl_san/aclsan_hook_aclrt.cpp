@@ -338,6 +338,7 @@ aclError aclrtMallocHook(void** deviceAddress, std::size_t size, aclrtMemMallocP
 {
     const auto original = GetOriginalRuntimeFunction<aclrtMallocFunc>(ACL_RT_API_aclrtMalloc, "aclrtMalloc");
     if (g_mallocInProgress) {
+        ASCTOOL_DEBUG("acl_san resource alloc skipped: api=aclrtMalloc reason=reentrant allocation");
         return original(deviceAddress, size, policy);
     }
     uint32_t deviceId;
@@ -348,6 +349,7 @@ aclError aclrtMallocHook(void** deviceAddress, std::size_t size, aclrtMemMallocP
         result = original(deviceAddress, size, policy);
     }
     if (!hasDeviceId) {
+        ASCTOOL_DEBUG("acl_san resource alloc skipped: api=aclrtMalloc reason=no current device");
         return result;
     }
     void* allocatedAddress = nullptr;
@@ -360,11 +362,41 @@ aclError aclrtMallocHook(void** deviceAddress, std::size_t size, aclrtMemMallocP
     return result;
 }
 
+aclError aclrtMallocAlign32Hook(void** deviceAddress, std::size_t size, aclrtMemMallocPolicy policy) noexcept
+{
+    const auto original =
+        GetOriginalRuntimeFunction<aclrtMallocAlign32Func>(ACL_RT_API_aclrtMallocAlign32, "aclrtMallocAlign32");
+    if (g_mallocInProgress) {
+        ASCTOOL_DEBUG("acl_san resource alloc skipped: api=aclrtMallocAlign32 reason=reentrant allocation");
+        return original(deviceAddress, size, policy);
+    }
+    uint32_t deviceId;
+    const bool hasDeviceId = GetCurrentDeviceId(deviceId);
+    aclError result;
+    {
+        MallocGuard guard;
+        result = original(deviceAddress, size, policy);
+    }
+    if (!hasDeviceId) {
+        ASCTOOL_DEBUG("acl_san resource alloc skipped: api=aclrtMallocAlign32 reason=no current device");
+        return result;
+    }
+    void* allocatedAddress = nullptr;
+    if (result == ACL_SUCCESS && deviceAddress != nullptr) {
+        allocatedAddress = *deviceAddress;
+    }
+    const AclsanResourceData callbackData = MakeDeviceResourceData(
+        "aclrtMallocAlign32", result, allocatedAddress, AlignDeviceMemorySize(static_cast<uint64_t>(size)), deviceId);
+    aclsan::AclsanCallbackDispatcher::DispatchResource(ACLSAN_CBID_RESOURCE_MEMORY_ALLOC, callbackData);
+    return result;
+}
+
 aclError aclrtMallocWithCfgHook(void** ptr, size_t bytes, aclrtMemMallocPolicy policy, aclrtMallocConfig* cfg) noexcept
 {
     const auto original =
         GetOriginalRuntimeFunction<aclrtMallocWithCfgFunc>(ACL_RT_API_aclrtMallocWithCfg, "aclrtMallocWithCfg");
     if (g_mallocInProgress) {
+        ASCTOOL_DEBUG("acl_san resource alloc skipped: api=aclrtMallocWithCfg reason=reentrant allocation");
         return original(ptr, bytes, policy, cfg);
     }
     uint32_t device = 0;
@@ -378,6 +410,8 @@ aclError aclrtMallocWithCfgHook(void** ptr, size_t bytes, aclrtMemMallocPolicy p
         const auto callback = MakeDeviceResourceData(
             "aclrtMallocWithCfg", result, result == ACL_SUCCESS && ptr != nullptr ? *ptr : nullptr, bytes, device);
         aclsan::AclsanCallbackDispatcher::DispatchResource(ACLSAN_CBID_RESOURCE_MEMORY_ALLOC, callback);
+    } else {
+        ASCTOOL_DEBUG("acl_san resource alloc skipped: api=aclrtMallocWithCfg reason=no current device");
     }
     return result;
 }
@@ -1118,7 +1152,7 @@ constexpr RuntimeHookBinding MakeRuntimeHookBinding(const char* hookName) noexce
 }
 
 // aclrtApiId + acl_tool_inject提供的注册aclrt的函数 + 我们实现的hook函数
-const std::array<RuntimeHookBinding, 14> g_runtimeHookBindings = {{
+const std::array<RuntimeHookBinding, 15> g_runtimeHookBindings = {{
     MakeRuntimeHookBinding<
         ACL_RT_API_aclrtMallocWithCfg, acltoolRegisterAclrtMallocWithCfgCallbacks, aclrtMallocWithCfgHook>(
         "aclrtMallocWithCfg"),
@@ -1141,6 +1175,9 @@ const std::array<RuntimeHookBinding, 14> g_runtimeHookBindings = {{
         ACL_RT_API_aclrtBinaryGetFunctionByEntry, acltoolRegisterAclrtBinaryGetFunctionByEntryCallbacks,
         aclrtBinaryGetFunctionByEntryHook>("aclrtBinaryGetFunctionByEntry"),
     MakeRuntimeHookBinding<ACL_RT_API_aclrtMalloc, acltoolRegisterAclrtMallocCallbacks, aclrtMallocHook>("aclrtMalloc"),
+    MakeRuntimeHookBinding<
+        ACL_RT_API_aclrtMallocAlign32, acltoolRegisterAclrtMallocAlign32Callbacks, aclrtMallocAlign32Hook>(
+        "aclrtMallocAlign32"),
     MakeRuntimeHookBinding<ACL_RT_API_aclrtFree, acltoolRegisterAclrtFreeCallbacks, aclrtFreeHook>("aclrtFree"),
     MakeRuntimeHookBinding<
         ACL_RT_API_aclrtSynchronizeStream, acltoolRegisterAclrtSynchronizeStreamCallbacks, aclrtSynchronizeStreamHook>(

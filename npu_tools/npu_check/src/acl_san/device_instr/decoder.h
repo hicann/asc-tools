@@ -46,8 +46,9 @@ enum class DeviceInstructionKind : uint32_t {
     LocalMemoryTransfer, // InstructionId::CopyCbufToFbuf/FixL0cTo*/CopyUbufToCbuf -> LocalMemoryTransferParamField
     SetPadding,          // InstructionId::SetPadding                    -> SetPaddingParamField
 
-    StDev, // InstructionId::StDevB64/B32/B16/B8 -> ScalarDevParamField
-    LdDev, // InstructionId::LdDevB64/B32/B16/B8 -> ScalarDevParamField
+    ScalarGm, // InstructionId::St*/Sti*/Stp*/Ld*/Ldp* -> ScalarGmParamField
+    StDev,    // InstructionId::StDevB64/B32/B16/B8 -> ScalarDevParamField
+    LdDev,    // InstructionId::LdDevB64/B32/B16/B8 -> ScalarDevParamField
     ScalarPreload,
     ScalarAtomic, // InstructionId::StAtomicB*/StiAtomicB* -> ScalarAtomicParamField
 
@@ -64,7 +65,7 @@ using DeviceInstructionParamField = std::variant<
     NdDmaPadCountParamField, NdDmaLoopStrideParamField, Mte2NzParamField, Loop3ParamField, DmaLoopSizeParamField,
     DmaLoopStrideParamField, LoadGmToCbuf2DV2ParamField, NdDmaOutToUbufParamField, SetL12DParamField,
     FixL0cToOutParamField, LocalMemoryTransferParamField, SetPaddingParamField, FlagParamField, SyncBufParamField,
-    ScalarDevParamField, ScalarPreloadParamField, ScalarAtomicParamField>;
+    ScalarGmParamField, ScalarDevParamField, ScalarPreloadParamField, ScalarAtomicParamField>;
 
 struct DecodedInstruction {
     DeviceInstructionKind kind = DeviceInstructionKind::InvalidInstruction;

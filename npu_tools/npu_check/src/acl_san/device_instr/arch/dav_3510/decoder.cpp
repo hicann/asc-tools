@@ -337,8 +337,21 @@ DecodedInstruction DecodeScalarAtomic(const aclsan::AclsanRawTraceRecord& record
     return DecodedInstruction{DeviceInstructionKind::ScalarAtomic, params};
 }
 
+DecodedInstruction DecodeScalarGm(const aclsan::AclsanRawTraceRecord& record) noexcept
+{
+    constexpr uint32_t kWidthsPerFamily = 4;
+    const uint32_t dataBits = DATA_BITS_B64 >> ((record.instrId - RawId(InstructionId::StB64Imm)) % kWidthsPerFamily);
+    const ScalarGmParamField params{
+        record.instrId, dataBits,       record.args[0], static_cast<int64_t>(record.args[1]),
+        record.args[2], record.args[3], record.args[4]};
+    return DecodedInstruction{DeviceInstructionKind::ScalarGm, params};
+}
+
 std::optional<DecodedInstruction> Decode(const aclsan::AclsanRawTraceRecord& record) noexcept
 {
+    if (record.instrId >= RawId(InstructionId::StB64Imm) && record.instrId <= RawId(InstructionId::LdpB8)) {
+        return DecodeScalarGm(record);
+    }
     switch (record.instrId) {
         case RawId(InstructionId::StAtomicB32):
             return DecodeScalarAtomic(record, DATA_BITS_B32);

@@ -710,7 +710,11 @@ ProbeCoreType DetectProbeCoreType(const std::string& kernelSymbols, const std::s
 std::vector<ProbeGroup> ResolveProbeGroups(
     const std::vector<ProbeGroup>& requestedGroups, ProbeCoreType coreType, bool useCompleteProbeSet)
 {
-    if (useCompleteProbeSet && coreType == ProbeCoreType::Aic) {
+    // ACLNN Mix kernels contain both the Cube and Vector halves.  MS builds
+    // the control table from the complete probe catalog for this path; using
+    // only the active memory groups leaves scalar/control callsites absent
+    // from the selected tiling-key variant.
+    if (useCompleteProbeSet && (coreType == ProbeCoreType::Aic || coreType == ProbeCoreType::Mix)) {
         return AllProbeGroups();
     }
     return NormalizeProbeGroups(requestedGroups);
@@ -829,24 +833,32 @@ DbiResult RunDbiPipeline(const DbiRequest& request)
     if (!RunChecked("inspect-kernel", {tools.llvmObjdump, "--syms", request.inputKernel}, result, &kernelSymbols)) {
         return result;
     }
-    const std::string kernelSymbol = SelectKernelTextSymbol(kernelSymbols, request.tilingKey);
-    if (kernelSymbol.empty()) {
+    const std::string selectedKernelSymbol = SelectKernelTextSymbol(kernelSymbols, request.tilingKey);
+    if (selectedKernelSymbol.empty()) {
         result.stage = "symbol-ordering";
         result.diagnostic = request.tilingKey.has_value() ? "cannot identify kernel text symbol for tiling key " +
                                                                 std::to_string(*request.tilingKey) :
                                                             "cannot identify kernel text symbol";
         return result;
     }
+    // The launch tiling key selects the executable entry for Tune and core-type detection. The linker ordering file
+    // follows the original ELF layout and must remain anchored at its first kernel entry for multi-entry Mix kernels.
+    const std::string orderingKernelSymbol = SelectKernelTextSymbol(kernelSymbols, std::nullopt);
+    if (orderingKernelSymbol.empty()) {
+        result.stage = "symbol-ordering";
+        result.diagnostic = "cannot identify kernel ordering anchor";
+        return result;
+    }
     DbiRequest resolvedRequest = request;
     if (resolvedRequest.coreType == ProbeCoreType::Unknown) {
-        resolvedRequest.coreType = DetectProbeCoreType(kernelSymbols, kernelSymbol);
+        resolvedRequest.coreType = DetectProbeCoreType(kernelSymbols, selectedKernelSymbol);
     }
     const auto groups =
         ResolveProbeGroups(requestedGroups, resolvedRequest.coreType, resolvedRequest.useCompleteProbeSet);
     const std::string tilingKeyText = request.tilingKey.has_value() ? std::to_string(*request.tilingKey) : "none";
     LogToolOutput(
         "kernel-selection", "selection",
-        "kernel=" + kernelSymbol + " tiling_key=" + tilingKeyText +
+        "kernel=" + selectedKernelSymbol + " ordering_anchor=" + orderingKernelSymbol + " tiling_key=" + tilingKeyText +
             " core_type=" + ProbeCoreTypeName(resolvedRequest.coreType) +
             " complete_probe_set=" + (groups == AllProbeGroups() ? "1" : "0"));
 
@@ -958,18 +970,18 @@ DbiResult RunDbiPipeline(const DbiRequest& request)
     }
     const auto probeTextSymbols = ParseTextSymbols(probeSymbols, "w");
     const std::string probeSymbol = probeTextSymbols.empty() ? std::string{} : probeTextSymbols.front();
-    if (kernelSymbol.empty() || probeSymbol.empty()) {
+    if (probeSymbol.empty()) {
         result.stage = "symbol-ordering";
         result.diagnostic = "cannot identify Probe text symbol";
         return result;
     }
     LogToolOutput(
         "symbol-selection", "selection",
-        "kernel=" + kernelSymbol + " probe=" + probeSymbol + " tiling_key=" + tilingKeyText +
-            " core_type=" + ProbeCoreTypeName(resolvedRequest.coreType));
+        "kernel=" + selectedKernelSymbol + " ordering_anchor=" + orderingKernelSymbol + " probe=" + probeSymbol +
+            " tiling_key=" + tilingKeyText + " core_type=" + ProbeCoreTypeName(resolvedRequest.coreType));
     // 生成符号排序文件，确保链接后原始内核正文位于探针入口之前。
     const auto orderingFile = boost::filesystem::path(request.workDirectory) / "symbol_ordering.txt";
-    if (!WriteReplaceFile(orderingFile, kernelSymbol + "\n" + probeSymbol)) {
+    if (!WriteReplaceFile(orderingFile, orderingKernelSymbol + "\n" + probeSymbol)) {
         result.stage = "symbol-ordering";
         result.diagnostic = "cannot write " + orderingFile.string();
         return result;

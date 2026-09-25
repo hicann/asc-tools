@@ -77,7 +77,7 @@ TEST(CheckerTest, CallbackUnionAndIndependentTools)
 {
     auto checkers = Both();
     const auto callbacks = RequiredCallbacks(checkers);
-    EXPECT_EQ(callbacks.size(), 8U);
+    EXPECT_EQ(callbacks.size(), 6U);
     EXPECT_EQ(
         std::count_if(
             callbacks.begin(), callbacks.end(),

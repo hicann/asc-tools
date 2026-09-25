@@ -51,6 +51,10 @@ constexpr uint32_t GET_BUF_V_ID = 460;
 constexpr uint32_t GET_BUF_IV_ID = 461;
 constexpr uint32_t RLS_BUF_V_ID = 462;
 constexpr uint32_t RLS_BUF_IV_ID = 463;
+constexpr uint32_t DC_PRELOAD_ID = 62;
+constexpr uint32_t DC_PRELOAD_I_ID = 63;
+constexpr uint32_t ST_B64_IMM_ID = 24;
+constexpr uint32_t LDP_B32_ID = 53;
 
 static_assert(std::is_same_v<aclsan::DeviceMemoryAccessDataList, std::vector<AclsanDeviceMemoryAccessData>>);
 
@@ -768,6 +772,66 @@ void TestTranslatesLocalMemoryTransfersToExplicitEmptyGmAccessList()
     assert(logs.find("unsupported") == std::string::npos);
 }
 
+void TestKeepsScalarPreloadInTraceWithoutMemoryAccessCbdata()
+{
+    const aclsan::ParsedTraceRecord parsed = MakeParsedTraceRecord(15, 2, ACLSAN_DEVICE_BLOCK_TYPE_AICORE, 4, 3);
+    for (const uint32_t instructionId : {DC_PRELOAD_ID, DC_PRELOAD_I_ID}) {
+        aclsan::AclsanRawTraceRecord record{};
+        record.instrId = instructionId;
+        record.pipeline = ACLSAN_DEVICE_PIPE_SCALAR;
+        record.args[0] = UINT64_C(0x123456789abcdef0);
+        record.args[1] = UINT64_C(0xffffffffffffffff);
+
+        const auto callback = TranslateRecordToCallbackData(record, parsed);
+        ASSERT_TRUE(callback.has_value());
+        const auto* accesses = std::get_if<aclsan::DeviceMemoryAccessDataList>(&*callback);
+        ASSERT_NE(accesses, nullptr);
+        EXPECT_TRUE(accesses->empty());
+
+        const std::string logs = CaptureTranslateDebugLogs(record, parsed);
+        EXPECT_NE(logs.find("type=ScalarPreloadParamField"), std::string::npos);
+        EXPECT_EQ(logs.find("DEVICE_MEMORY_ACCESS"), std::string::npos);
+    }
+}
+
+void TestTranslatesScalarGmInstructionsToMemoryAccessCbdata()
+{
+    const aclsan::ParsedTraceRecord parsed = MakeParsedTraceRecord(16, 0, ACLSAN_DEVICE_BLOCK_TYPE_AICORE_CUBE, 2, 3);
+    struct Case {
+        uint32_t instructionId;
+        uint32_t accessMode;
+        uint32_t dataBits;
+        uint64_t bytes;
+    };
+    for (const Case& test :
+         {Case{ST_B64_IMM_ID, ACLSAN_DEVICE_MEMORY_ACCESS_WRITE, 64, 8},
+          Case{LDP_B32_ID, ACLSAN_DEVICE_MEMORY_ACCESS_READ, 32, 8}}) {
+        aclsan::AclsanRawTraceRecord record{};
+        record.instrId = test.instructionId;
+        record.pipeline = ACLSAN_DEVICE_PIPE_SCALAR;
+        record.args[0] = UINT64_C(0x8000000200001000);
+        record.args[1] = 8;
+        record.args[2] = 0;
+        record.args[3] = UINT64_C(0x100000000);
+        record.args[4] = aclsan::ASCSAN_SCALAR_ADDRESS_CONTEXT_V1;
+
+        const auto callback = TranslateRecordToCallbackData(record, parsed);
+        ASSERT_TRUE(callback.has_value());
+        const auto* accesses = std::get_if<aclsan::DeviceMemoryAccessDataList>(&*callback);
+        ASSERT_NE(accesses, nullptr);
+        ASSERT_EQ(accesses->size(), 1U);
+        EXPECT_EQ(accesses->front().address, UINT64_C(0x200001008));
+        EXPECT_EQ(accesses->front().accessMode, test.accessMode);
+        EXPECT_EQ(accesses->front().dataBits, test.dataBits);
+        EXPECT_EQ(accesses->front().layoutKind, ACLSAN_MEM_LAYOUT_RANGE);
+        EXPECT_EQ(accesses->front().layout.range.bytes, test.bytes);
+
+        const std::string logs = CaptureTranslateDebugLogs(record, parsed);
+        EXPECT_NE(logs.find("type=ScalarGmParamField"), std::string::npos);
+        EXPECT_NE(logs.find("type=AclsanDeviceMemoryAccessData"), std::string::npos);
+    }
+}
+
 void TestRejectsUnsupportedCallbackParamField()
 {
     aclsan::ParsedTraceRecord parsed{};
@@ -806,6 +870,8 @@ TEST(AclsanTranslateDeviceData, Main)
     TestTranslateCopyGmToCbufV2ToCallbackData();
     TestTranslateStateDependentDmaFieldsToCallbackData();
     TestTranslatesLocalMemoryTransfersToExplicitEmptyGmAccessList();
+    TestKeepsScalarPreloadInTraceWithoutMemoryAccessCbdata();
+    TestTranslatesScalarGmInstructionsToMemoryAccessCbdata();
     TestRejectsUnsupportedCallbackParamField();
     TestRejectsUnknownInstruction();
 }

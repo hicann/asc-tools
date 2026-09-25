@@ -321,7 +321,10 @@ extern "C" aclError aclrtGetDevice(std::int32_t* deviceId)
     return ACL_SUCCESS;
 }
 
-extern "C" aclError aclrtFunctionGetBinary(aclrtFuncHandle function, aclrtBinHandle* binary)
+extern "C" aclError ReplayTestFunctionGetBinary(aclrtFuncHandle function, aclrtBinHandle* binary) __asm__(
+    "aclrtFunctionGetBinary");
+
+extern "C" aclError ReplayTestFunctionGetBinary(aclrtFuncHandle function, aclrtBinHandle* binary)
 {
     if (function != &g_function_tokens[0])
         return ACL_ERROR_INVALID_PARAM;
@@ -329,7 +332,9 @@ extern "C" aclError aclrtFunctionGetBinary(aclrtFuncHandle function, aclrtBinHan
     return ACL_SUCCESS;
 }
 
-extern "C" aclError aclrtGetFunctionName(aclrtFuncHandle, uint32_t, char* name)
+extern "C" aclError ReplayTestGetFunctionName(aclrtFuncHandle, uint32_t, char*) __asm__("aclrtGetFunctionName");
+
+extern "C" aclError ReplayTestGetFunctionName(aclrtFuncHandle, uint32_t, char* name)
 {
     std::strcpy(name, "sample");
     return ACL_SUCCESS;

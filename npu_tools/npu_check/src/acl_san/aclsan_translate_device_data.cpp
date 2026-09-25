@@ -60,6 +60,7 @@ constexpr bool IsMemoryAccessParamField() noexcept
            std::is_same_v<ParamField, aclsan::NdDmaParamField> ||
            std::is_same_v<ParamField, aclsan::LoadGmToCbuf2DV2ParamField> ||
            std::is_same_v<ParamField, aclsan::FixL0cToOutParamField> ||
+           std::is_same_v<ParamField, aclsan::ScalarGmParamField> ||
            std::is_same_v<ParamField, aclsan::ScalarDevParamField> ||
            std::is_same_v<ParamField, aclsan::ScalarPreloadParamField> ||
            std::is_same_v<ParamField, aclsan::ScalarAtomicParamField>;
@@ -75,14 +76,14 @@ class Translator final {
 public:
     static std::optional<DeviceCallbackData> TranslateToCallbackData(
         const ParsedTraceRecord& parsed, const aclsan::DecodedInstruction& decoded,
-        const MemoryRegisterState& registerState) noexcept
+        const MemoryRegisterState& registerState, const std::vector<InternalMemoryRange>* internalInputs) noexcept
     {
         const auto pipeline = static_cast<AclsanDevicePipeline>(parsed.record.pipeline);
         return std::visit(
             [&](const auto& value) noexcept -> std::optional<DeviceCallbackData> {
                 using ParamField = std::decay_t<decltype(value)>;
                 if constexpr (IsMemoryAccessParamField<ParamField>()) {
-                    return MakeDeviceMemoryAccessCallbackData(parsed, pipeline, value, registerState);
+                    return MakeDeviceMemoryAccessCallbackData(parsed, pipeline, value, registerState, internalInputs);
                 } else if constexpr (std::is_same_v<ParamField, aclsan::LocalMemoryTransferParamField>) {
                     ASCTOOL_DEBUG(
                         "[cbdata] no GM access for local-only memory instruction instrId=%u kind=%u", value.instrId,
@@ -121,7 +122,7 @@ private:
     template <typename ParamField>
     static std::optional<DeviceCallbackData> MakeDeviceMemoryAccessCallbackData(
         const ParsedTraceRecord& parsed, AclsanDevicePipeline pipeline, const ParamField& params,
-        const MemoryRegisterState& registerState) noexcept
+        const MemoryRegisterState& registerState, const std::vector<InternalMemoryRange>* internalInputs) noexcept
     {
         const MemoryCbdataContext context{
             parsed.record.pc,
@@ -133,7 +134,10 @@ private:
             static_cast<uint32_t>(pipeline),
             parsed.launchId,
             parsed.deviceId,
-            parsed.blockType};
+            parsed.blockType,
+            parsed.record.parameterBase,
+            parsed.parameterBytes,
+            internalInputs};
         MemoryCbdataResult result =
             MemoryFieldToCbdataConverter{context, registerState}.Convert(MemoryInstructionField{params});
         if (result.status == MemoryCbdataStatus::SUCCESS || result.status == MemoryCbdataStatus::NO_ACCESS) {
@@ -189,7 +193,7 @@ private:
 
 std::optional<DeviceCallbackData> TranslateDecodedTraceToCallbackData(
     const ParsedTraceRecord& parsed, const aclsan::DecodedInstruction& decoded,
-    const MemoryRegisterState& registerState) noexcept
+    const MemoryRegisterState& registerState, const std::vector<InternalMemoryRange>* internalInputs) noexcept
 {
     LogRawRecord(parsed);
     // 判断是否找到对应的paramfield  raw data -> param field
@@ -199,7 +203,8 @@ std::optional<DeviceCallbackData> TranslateDecodedTraceToCallbackData(
     }
     LogParamField(decoded.params);
 
-    std::optional<DeviceCallbackData> cbdata = Translator::TranslateToCallbackData(parsed, decoded, registerState);
+    std::optional<DeviceCallbackData> cbdata =
+        Translator::TranslateToCallbackData(parsed, decoded, registerState, internalInputs);
     // 判断 param field -> cbdata 的转换是否成功
     if (cbdata == std::nullopt) {
         ASCTOOL_DEBUG("[cbdata] paramField -> cbdata translation failed instrId=%u", parsed.record.instrId);

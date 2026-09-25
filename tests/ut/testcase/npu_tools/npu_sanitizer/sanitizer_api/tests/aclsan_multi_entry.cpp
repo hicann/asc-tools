@@ -163,14 +163,19 @@ extern "C" aclError aclrtGetCurrentContext(aclrtContext* context)
     return ACL_SUCCESS;
 }
 
-extern "C" aclError aclrtFunctionGetBinary(aclrtFuncHandle function, aclrtBinHandle* binary)
+extern "C" aclError AclsanMultiEntryFunctionGetBinary(aclrtFuncHandle function, aclrtBinHandle* binary) __asm__(
+    "aclrtFunctionGetBinary");
+
+extern "C" aclError AclsanMultiEntryFunctionGetBinary(aclrtFuncHandle function, aclrtBinHandle* binary)
 {
     std::lock_guard<std::mutex> lock(mutex);
     *binary = functions.at(function).first;
     return ACL_SUCCESS;
 }
 
-extern "C" aclError aclrtGetFunctionName(aclrtFuncHandle, uint32_t bytes, char* name)
+extern "C" aclError AclsanMultiEntryGetFunctionName(aclrtFuncHandle, uint32_t, char*) __asm__("aclrtGetFunctionName");
+
+extern "C" aclError AclsanMultiEntryGetFunctionName(aclrtFuncHandle, uint32_t bytes, char* name)
 {
     assert(bytes >= 4);
     std::memcpy(name, "K_0", 4);

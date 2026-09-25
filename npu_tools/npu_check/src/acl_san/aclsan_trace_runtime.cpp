@@ -51,6 +51,7 @@ struct PendingTrace {
     std::vector<aclrtPlaceHolderInfo> placeholders;
     std::vector<PreparedTraceLaunch::HostInput> hostInputs;
     std::vector<uint32_t> dispatchedRecordCounts;
+    uint64_t parameterBytes = 0;
 };
 
 struct TraceRuntimeState {
@@ -236,6 +237,7 @@ bool DispatchTraceSnapshot(PendingTrace& pending, bool executionComplete, TraceC
             const uint32_t recordIndex = observedRecordCounts[record.phyCoreId]++;
             if (recordIndex >= pending.dispatchedRecordCounts[record.phyCoreId]) {
                 newRecords.push_back(record);
+                newRecords.back().parameterBytes = pending.parameterBytes;
             }
         }
     } catch (...) {
@@ -304,88 +306,6 @@ aclError ResolveLaunchContext(PreparedTraceLaunch& prepared) noexcept
     return ACL_SUCCESS;
 }
 
-bool AddLayoutAxis(uint64_t count, int64_t stride, __int128& minimum, __int128& maximum) noexcept
-{
-    if (count == 0) {
-        return false;
-    }
-    __int128 extent = 0;
-    if (__builtin_mul_overflow(static_cast<__int128>(count - 1), static_cast<__int128>(stride), &extent)) {
-        return false;
-    }
-    __int128* bound = extent < 0 ? &minimum : &maximum;
-    return !__builtin_add_overflow(*bound, extent, bound);
-}
-
-bool AccessBounds(const AclsanDeviceMemoryAccessData& access, __int128& begin, __int128& end) noexcept
-{
-    __int128 minimum = 0;
-    __int128 maximum = 0;
-    uint64_t elementBytes = 0;
-    switch (access.layoutKind) {
-        case ACLSAN_MEM_LAYOUT_SCALAR:
-            elementBytes = access.layout.scalar.bytes;
-            break;
-        case ACLSAN_MEM_LAYOUT_RANGE:
-            elementBytes = access.layout.range.bytes;
-            break;
-        case ACLSAN_MEM_LAYOUT_BLOCK_REPEAT:
-            elementBytes = access.layout.blockRepeat.blockSize;
-            if (!AddLayoutAxis(
-                    access.layout.blockRepeat.blockNum, access.layout.blockRepeat.blockStride, minimum, maximum) ||
-                !AddLayoutAxis(
-                    access.layout.blockRepeat.repeatTimes, access.layout.blockRepeat.repeatStride, minimum, maximum)) {
-                return false;
-            }
-            break;
-        case ACLSAN_MEM_LAYOUT_ND_AFFINE:
-            elementBytes = access.layout.ndAffine.elementBytes;
-            if (access.layout.ndAffine.rank == 0 || access.layout.ndAffine.rank > 5) {
-                return false;
-            }
-            for (uint32_t axis = 0; axis < access.layout.ndAffine.rank; ++axis) {
-                if (!AddLayoutAxis(
-                        access.layout.ndAffine.dims[axis], access.layout.ndAffine.strides[axis], minimum, maximum)) {
-                    return false;
-                }
-            }
-            break;
-        default:
-            return false;
-    }
-    if (elementBytes == 0 || __builtin_add_overflow(static_cast<__int128>(access.address), minimum, &begin) ||
-        __builtin_add_overflow(static_cast<__int128>(access.address), maximum, &end) ||
-        __builtin_add_overflow(end, static_cast<__int128>(elementBytes), &end)) {
-        return false;
-    }
-    const __int128 addressLimit = static_cast<__int128>(1) << 64U;
-    return begin >= 0 && end >= begin && end <= addressLimit;
-}
-
-bool IsInternalHostInputAccess(
-    const AclsanDeviceMemoryAccessData& access,
-    const std::vector<PreparedTraceLaunch::HostInput>* internalInputs) noexcept
-{
-    if (internalInputs == nullptr || internalInputs->empty() || access.memorySpace != ACLSAN_DEVICE_MEMORY_SPACE_GM) {
-        return false;
-    }
-    __int128 accessBegin = 0;
-    __int128 accessEnd = 0;
-    if (!AccessBounds(access, accessBegin, accessEnd)) {
-        return false;
-    }
-    for (const auto& input : *internalInputs) {
-        const __int128 inputBegin = reinterpret_cast<uintptr_t>(input.address);
-        __int128 inputEnd = 0;
-        if (input.address != nullptr && input.bytes != 0 &&
-            !__builtin_add_overflow(inputBegin, static_cast<__int128>(input.bytes), &inputEnd) &&
-            accessBegin >= inputBegin && accessEnd <= inputEnd) {
-            return true;
-        }
-    }
-    return false;
-}
-
 } // namespace
 
 void DispatchTraceRecords(
@@ -450,15 +370,17 @@ void DispatchTraceRecords(
             memoryState.dmaLoopStrides = state->dmaLoopStrides;
         }
 
-        const auto callbackData = TranslateDecodedTraceToCallbackData(parsed, *decoded, memoryState);
+        const auto callbackData = TranslateDecodedTraceToCallbackData(parsed, *decoded, memoryState, internalInputs);
         if (!callbackData.has_value()) {
             continue;
         }
         if (const auto* memory = std::get_if<DeviceMemoryAccessDataList>(&*callbackData)) {
+            if (memory->empty()) {
+                ASCTOOL_DEBUG(
+                    "acl_san trace cbdata skipped: launch=%llu instrId=%u reason=no GM access",
+                    static_cast<unsigned long long>(parsed.launchId), parsed.record.instrId);
+            }
             for (const AclsanDeviceMemoryAccessData& access : *memory) {
-                if (IsInternalHostInputAccess(access, internalInputs)) {
-                    continue;
-                }
                 AclsanCallbackDispatcher::DispatchDeviceMemoryAccess(access);
             }
         } else if (const auto* sync = std::get_if<AclsanDeviceSyncData>(&*callbackData)) {
@@ -671,6 +593,9 @@ void CompleteTraceLaunch(
     }
 
     try {
+        const uint64_t parameterBytes = prepared.arguments.empty() ?
+                                            static_cast<uint64_t>(prepared.traceArgumentOffset) + sizeof(void*) :
+                                            prepared.arguments.size();
         PendingTrace pending{
             prepared.launchId,
             function,
@@ -685,7 +610,8 @@ void CompleteTraceLaunch(
             std::move(prepared.arguments),
             std::move(prepared.placeholders),
             std::move(prepared.hostInputs),
-            std::vector<uint32_t>(prepared.physicalCoreCount, 0U)};
+            std::vector<uint32_t>(prepared.physicalCoreCount, 0U),
+            parameterBytes};
         TraceRuntimeState& state = State();
         std::lock_guard<std::mutex> lock(state.mutex);
         state.pending.push_back(std::move(pending));

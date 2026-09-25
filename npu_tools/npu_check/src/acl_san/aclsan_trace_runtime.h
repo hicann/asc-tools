@@ -12,6 +12,7 @@
 #define NPU_TOOLS_NPU_CHECK_SRC_ACL_SAN_ACLSAN_TRACE_RUNTIME_H
 
 #include "acl/acl_rt.h"
+#include "aclsan_memory_cbdata.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -36,10 +37,7 @@ enum class TraceArgumentMode {
 };
 
 struct PreparedTraceLaunch {
-    struct HostInput {
-        void* address = nullptr;
-        size_t bytes = 0;
-    };
+    using HostInput = InternalMemoryRange;
     std::vector<HostInput> hostInputs;
     std::shared_ptr<void> binaryLease;
     bool instrumented = false;
