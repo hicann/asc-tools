@@ -72,8 +72,50 @@ enum class InstructionId : uint32_t {
     LdDevB16 = 70,
     LdDevB8 = 71,
 
+    LoadCbufToCbTransposeB8 = 137,
+    LoadCbufToCbTransposeB16 = 138,
+    LoadCbufToCbTransposeB32 = 139,
+    LoadCbufToCbTransposeB4 = 140,
+    LoadCbufToCaB4 = 141,
+    LoadCbufToCaB16 = 142,
+    LoadCbufToCaB8 = 143,
+    LoadCbufToCaB32 = 144,
+    LoadCbufToCbB16 = 145,
+    LoadCbufToCbB4 = 146,
+    LoadCbufToCbB8 = 147,
+    LoadCbufToCbB32 = 148,
+    Img2ColCbufToCaB16 = 153,
+    Img2ColCbufToCaB8 = 154,
+    Img2ColCbufToCbB16 = 155,
+    Img2ColCbufToCbB8 = 156,
+    Img2ColCbufToCbB32 = 157,
+    Img2ColCbufToCaB32 = 422,
+    SetFmatrix = 386,
+    SetFmatrixB = 387,
+    SetL3dRpt = 390,
+    SetL3dRptB = 391,
+    // Cube matrix and MX source accesses.
+    LoadCbufToCaMx = 151,
+    LoadCbufToCbMx = 152,
+    CopyCbufToUbuf = 158,
+    MadS8 = 400,
+    MadF16F32 = 401,
+    MadBf16F32 = 402,
+    MadF32F32 = 403,
+    MadE4m3E4m3 = 404,
+    MadE4m3E5m2 = 405,
+    MadE5m2E4m3 = 406,
+    MadE5m2E5m2 = 407,
+    MadMxE1m2E1m2 = 408,
+    MadMxE1m2E2m1 = 409,
+    MadMxE2m1E1m2 = 410,
+    MadMxE2m1E2m1 = 411,
+    MadMxE4m3E4m3 = 412,
+    MadMxE4m3E5m2 = 413,
+    MadMxE5m2E4m3 = 414,
+    MadMxE5m2E5m2 = 415,
     // MTE2
-    LoadGmToCbuf2DV2 = 72,          // 已完成：LoadGmToCbuf2DV2ParamField（decompMode 0；非零跳过）
+    LoadGmToCbuf2DV2 = 72,          // decompMode 0；非零跳过
     CopyGmToCbufV2 = 73,            // 已完成：CopyGmToCbufV2ParamField
     CopyGmToCbufAlignV2B8 = 74,     // 已完成：CopyGmToCbufAlignV2ParamField
     CopyGmToCbufAlignV2B16 = 75,    // 已完成：CopyGmToCbufAlignV2ParamField
@@ -110,16 +152,16 @@ enum class InstructionId : uint32_t {
 
     // MTE3
     CopyUbufToGmAlignV2 = 83, // 已完成：CopyUbufToGmAlignV2ParamField
-    CopyUbufToCbuf = 173, // 已完成：LocalMemoryTransferParamField（仅访问片上存储，不生成 GM CBData）
+    CopyUbufToCbuf = 173,     // LocalMemoryTransferParamField：L1 WRITE
 
     // FIX
     FixL0cToOutF32 = 91,   // 已完成：FixL0cToOutParamField
     FixL0cToOutS32 = 92,   // 已完成：FixL0cToOutParamField
     CopyCbufToFbuf = 167,  // 已完成：LocalMemoryTransferParamField（仅访问片上存储，不生成 GM CBData）
-    FixL0cToCbufF32 = 168, // 已完成：LocalMemoryTransferParamField（仅访问片上存储，不生成 GM CBData）
-    FixL0cToCbufS32 = 169, // 已完成：LocalMemoryTransferParamField（仅访问片上存储，不生成 GM CBData）
-    FixL0cToUbufF32 = 170, // 已完成：LocalMemoryTransferParamField（仅访问片上存储，不生成 GM CBData）
-    FixL0cToUbufS32 = 171, // 已完成：LocalMemoryTransferParamField（仅访问片上存储，不生成 GM CBData）
+    FixL0cToCbufF32 = 168, // LocalMemoryTransferParamField：L0C READ、L1 WRITE
+    FixL0cToCbufS32 = 169, // LocalMemoryTransferParamField：L0C READ、L1 WRITE
+    FixL0cToUbufF32 = 170, // LocalMemoryTransferParamField：L0C READ
+    FixL0cToUbufS32 = 171, // LocalMemoryTransferParamField：L0C READ
 
     // REGISTER
     SetPadding = 392,          // SET_PADDING
@@ -148,8 +190,12 @@ enum class InstructionId : uint32_t {
 
 constexpr bool IsDefinedInstructionId(uint32_t instructionId) noexcept
 {
-    if (instructionId >= static_cast<uint32_t>(InstructionId::StB64Imm) &&
-        instructionId <= static_cast<uint32_t>(InstructionId::LdpB8)) {
+    if ((instructionId >= static_cast<uint32_t>(InstructionId::StB64Imm) &&
+         instructionId <= static_cast<uint32_t>(InstructionId::LdpB8)) ||
+        (instructionId >= 137 && instructionId <= 148) || (instructionId >= 153 && instructionId <= 157) ||
+        instructionId == 422 || instructionId == 386 || instructionId == 387 || instructionId == 390 ||
+        instructionId == 391 || instructionId == 151 || instructionId == 152 || instructionId == 158 ||
+        (instructionId >= 400 && instructionId <= 415)) {
         return true;
     }
     switch (static_cast<InstructionId>(instructionId)) {

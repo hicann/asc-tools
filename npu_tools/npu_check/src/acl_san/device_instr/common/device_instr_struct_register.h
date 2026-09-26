@@ -16,6 +16,27 @@
 
 namespace aclsan {
 
+// SET_FMATRIX / SET_FMATRIX_B. Bit ranges refer to the raw config operand.
+struct FmatrixParamField {
+    uint32_t instrId = 0;
+    uint16_t width = 0;        // config [15:0], pixels
+    uint16_t height = 0;       // config [31:16], pixels
+    uint8_t paddingLeft = 0;   // config [39:32], pixels
+    uint8_t paddingRight = 0;  // config [47:40], pixels
+    uint8_t paddingTop = 0;    // config [55:48], pixels
+    uint8_t paddingBottom = 0; // config [63:56], pixels
+};
+
+// SET_L3D_RPT / SET_L3D_RPT_B.
+struct L3dRptParamField {
+    uint32_t instrId = 0;
+    uint16_t repeatStride = 0; // config [15:0], encoded iteration stride
+    uint8_t repeatTimes = 0;   // config [23:16]
+    bool repeatAlongK = false; // config [24]: false = M, true = K
+    uint8_t dstStride = 0;     // config [39:32], 512-byte fractals
+    uint8_t dstOffset = 0;     // config [55:48], 512-byte fractals
+};
+
 enum class DmaLoopDirection : uint8_t {
     UBUF_TO_GM = 0,
     GM_TO_UBUF = 1,

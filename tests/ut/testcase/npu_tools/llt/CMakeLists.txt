@@ -193,7 +193,9 @@ target_link_libraries(npu_tools_utest PRIVATE
   npu_check_dbi_engine
   injection_headers
   injection_test_headers
-  acl_rt_headers
+  # Some CANN packages expose this imported headers target only in the injection directory.
+  # injection_headers already propagates its include directories in that case.
+  "$<TARGET_NAME_IF_EXISTS:acl_rt_headers>"
   Threads::Threads
   GTest::gtest
   Boost::filesystem

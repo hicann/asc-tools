@@ -331,7 +331,11 @@ void DispatchTraceRecords(
 
         const dav3510::Dav3510CoreKey key{parsed.blockType, parsed.blockId};
         bool stateInstruction = true;
-        if (const auto* value = std::get_if<Mte2SourceParamField>(&decoded->params)) {
+        if (const auto* value = std::get_if<FmatrixParamField>(&decoded->params)) {
+            registerState.Update(key, *value);
+        } else if (const auto* value = std::get_if<L3dRptParamField>(&decoded->params)) {
+            registerState.Update(key, *value);
+        } else if (const auto* value = std::get_if<Mte2SourceParamField>(&decoded->params)) {
             registerState.Update(key, *value);
         } else if (const auto* value = std::get_if<NdDmaPadCountParamField>(&decoded->params)) {
             registerState.Update(key, *value);
@@ -347,8 +351,6 @@ void DispatchTraceRecords(
             registerState.Update(key, *value);
         } else if (const auto* value = std::get_if<SetPaddingParamField>(&decoded->params)) {
             registerState.Update(key, *value);
-        } else if (std::holds_alternative<SetL12DParamField>(decoded->params)) {
-            // SET_L1_2D is a local L1 write instruction, not persistent register state and not a GM access.
         } else {
             stateInstruction = false;
         }
@@ -361,6 +363,8 @@ void DispatchTraceRecords(
         const std::optional<dav3510::Dav3510CoreRegisterState> state = registerState.Get(key);
         MemoryRegisterState memoryState{};
         if (state.has_value()) {
+            memoryState.fmatrix = state->fmatrix;
+            memoryState.l3dRpt = state->l3dRpt;
             memoryState.mte2Source = state->mte2Source;
             memoryState.ndDmaPadCount = state->ndDmaPadCount;
             memoryState.ndDmaLoopStrides = state->ndDmaLoopStrides;

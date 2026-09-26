@@ -35,7 +35,7 @@ const PatternCatalog& Catalog()
             "=========     {{location}}\n"
             "=========     by aicore ({{coreId}}) type ({{blockType}}) block ({{blockId}}) pipe ({{pipeName}}) "
             "in launch ({{launchId}})\n"
-            "=========     Address 0x{{address}} is out of bounds\n"),
+            "=========     Address 0x{{address}} is out of bounds{{capacityContext}}\n"),
         MakePattern(
             ReportTool::MEMCHECK, NpuCheckReportPattern::MEMCHECK_MISALIGNED_ACCESS, "misaligned_access",
             "========= {{Severity}}:[MEMCHECK] Invalid {{space}} {{access}} of size {{accessBytes}} bytes\n"

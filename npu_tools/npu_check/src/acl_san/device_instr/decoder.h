@@ -26,6 +26,12 @@ namespace aclsan {
 // 将不同的指令合并，例如CopyGmToUbufAlignB16/B32/B8合并为一个
 enum class DeviceInstructionKind : uint32_t {
     InvalidInstruction, // 默认值，错误场景
+    Mmad,
+    LoadL1Mx,
+    LoadL1ToL0,
+    LoadL1Transpose,
+    Img2Col,
+    Img2ColRegister,
 
     CopyGmToUbufAlignV2, // InstructionId::CopyGmToUbufAlignV2B8/B16/B32 -> CopyGmToUbufAlignV2ParamField
     CopyGmToCbufAlignV2, // InstructionId::CopyGmToCbufAlignV2B8/B16/B32 -> CopyGmToCbufAlignV2ParamField
@@ -65,7 +71,9 @@ using DeviceInstructionParamField = std::variant<
     NdDmaPadCountParamField, NdDmaLoopStrideParamField, Mte2NzParamField, Loop3ParamField, DmaLoopSizeParamField,
     DmaLoopStrideParamField, LoadGmToCbuf2DV2ParamField, NdDmaOutToUbufParamField, SetL12DParamField,
     FixL0cToOutParamField, LocalMemoryTransferParamField, SetPaddingParamField, FlagParamField, SyncBufParamField,
-    ScalarGmParamField, ScalarDevParamField, ScalarPreloadParamField, ScalarAtomicParamField>;
+    ScalarDevParamField, ScalarPreloadParamField, ScalarAtomicParamField, MmadParamField, LoadL1MxParamField,
+    LoadCbufToL0ParamField, LoadCbufToCbTransposeParamField, Img2ColParamField, FmatrixParamField, L3dRptParamField,
+    ScalarGmParamField>;
 
 struct DecodedInstruction {
     DeviceInstructionKind kind = DeviceInstructionKind::InvalidInstruction;

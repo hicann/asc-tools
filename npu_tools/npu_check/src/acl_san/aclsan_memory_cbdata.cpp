@@ -12,6 +12,7 @@
 
 #include "acl_san/aclsan_api.h"
 #include "device_instr/common/instruction_id.h"
+#include "device_instr/arch/dav_3510/decoder.h"
 
 #include <algorithm>
 #include <array>
@@ -55,6 +56,8 @@ struct MemoryAccessDescriptor {
     uint32_t accessMode;
     uint32_t dataBits;
     MemoryLayoutDescriptor layout;
+    bool preloadTarget = false;
+    uint32_t memorySpace = ACLSAN_DEVICE_MEMORY_SPACE_GM;
 };
 
 struct MemoryInstructionProfile {
@@ -446,8 +449,11 @@ private:
     {
         AclsanDeviceMemoryAccessData data{};
         data.header = header;
+        if (descriptor.preloadTarget) {
+            data.header.flags = ACLSAN_DEVICE_EVENT_FLAG_ESTIMATED;
+        }
         data.address = descriptor.address;
-        data.memorySpace = ACLSAN_DEVICE_MEMORY_SPACE_GM;
+        data.memorySpace = descriptor.memorySpace;
         data.accessMode = descriptor.accessMode;
         data.accessIndex = accessIndex;
         data.accessCount = accessCount;
@@ -527,6 +533,11 @@ ScalarGmAddressResult ResolveScalarGmAddress(
 
 class MemoryFieldVisitor final {
 public:
+    template <typename Field>
+    MemoryCbdataResult operator()(const Field&) const noexcept
+    {
+        return {MemoryCbdataStatus::NO_ACCESS, {}};
+    }
     MemoryFieldVisitor(MemoryCbdataContext context, const MemoryRegisterState& registerState) noexcept
         : context_(context), registerState_(registerState)
     {}
@@ -1120,6 +1131,502 @@ private:
     const MemoryRegisterState& registerState_;
 };
 
+// Local accesses are kept separate from the existing GM conversion so that enabling
+// Cube checks does not change the GM address sets or quantization rules.
+class CubeMemoryFieldVisitor final {
+public:
+    CubeMemoryFieldVisitor(MemoryCbdataContext context, const MemoryRegisterState& state)
+        : context_(context), state_(state)
+    {}
+
+    template <typename Field>
+    MemoryCbdataResult operator()(const Field&) const noexcept
+    {
+        return {MemoryCbdataStatus::NO_ACCESS, {}};
+    }
+
+    MemoryCbdataResult operator()(const SetL12DParamField& f) const noexcept
+    {
+        return Linear(
+            f.dstAddr, ACLSAN_DEVICE_MEMORY_SPACE_L1, ACLSAN_DEVICE_MEMORY_ACCESS_WRITE, f.repeatTimes,
+            uint64_t(f.blockNum) * 32, uint64_t(f.repeatGap) * 32, f.dataBits);
+    }
+
+    MemoryCbdataResult operator()(const LoadL1MxParamField& f) const noexcept
+    {
+        const uint64_t offset = (uint64_t(f.xStart) * f.srcStride + f.yStart) * 32;
+        if (f.srcAddr > UINT64_MAX - offset) {
+            return {MemoryCbdataStatus::ARITHMETIC_OVERFLOW, {}};
+        }
+        return Linear(
+            f.srcAddr + offset, ACLSAN_DEVICE_MEMORY_SPACE_L1, ACLSAN_DEVICE_MEMORY_ACCESS_READ, f.xStep,
+            uint64_t(f.yStep) * 32, uint64_t(f.srcStride) * 32);
+    }
+
+    MemoryCbdataResult operator()(const MmadParamField& f) const noexcept
+    {
+        if (f.instrId < 400 || f.instrId > 415) {
+            return {MemoryCbdataStatus::INVALID_FIELD, {}};
+        }
+        if (f.m == 0 || f.n == 0 || f.k == 0) {
+            return {MemoryCbdataStatus::NO_ACCESS, {}};
+        }
+        const uint32_t bits = f.instrId == 403                       ? 32 :
+                              (f.instrId == 401 || f.instrId == 402) ? 16 :
+                              (f.instrId >= 408 && f.instrId <= 411) ? 4 :
+                                                                       8;
+        const uint64_t m = CeilDiv(f.m, 16), n = CeilDiv(f.n, 16), k = CeilDiv(f.k, 256 / bits);
+        uint64_t aFractals = m * k;
+        if (f.m == 1 && !f.disableGemv) {
+            // The reference packs GEMV's A into 16-row fractals. Do not silently
+            // truncate a partial fractal where the instruction constraints are unknown.
+            if (aFractals % 16 != 0) {
+                return {MemoryCbdataStatus::PARTIAL_COVERAGE, {}};
+            }
+            aFractals /= 16;
+        }
+        MemoryCbdataBuilder builder(context_, {bits, ACLSAN_DEVICE_SOURCE_CUBE, kBlockTypeAic});
+        if (!Add(
+                builder, f.src0Addr, ACLSAN_DEVICE_MEMORY_SPACE_L0A, ACLSAN_DEVICE_MEMORY_ACCESS_READ, 1,
+                aFractals * 512, 0, bits) ||
+            !Add(
+                builder, f.src1Addr, ACLSAN_DEVICE_MEMORY_SPACE_L0B, ACLSAN_DEVICE_MEMORY_ACCESS_READ, 1, n * k * 512,
+                0, bits) ||
+            !Add(
+                builder, f.dstAddr, ACLSAN_DEVICE_MEMORY_SPACE_L0C, ACLSAN_DEVICE_MEMORY_ACCESS_WRITE, 1, m * n * 1024,
+                0, 32)) {
+            return std::move(builder).Build();
+        }
+        if (!f.cmatrixSource && !f.cmatrixInitVal &&
+            !Add(
+                builder, f.dstAddr, ACLSAN_DEVICE_MEMORY_SPACE_L0C, ACLSAN_DEVICE_MEMORY_ACCESS_READ, 1, m * n * 1024,
+                0, 32)) {
+            return std::move(builder).Build();
+        }
+        return std::move(builder).Build();
+    }
+
+    MemoryCbdataResult operator()(const LoadCbufToL0ParamField& f) const noexcept
+    {
+        if (f.instrId < 141 || f.instrId > 148) {
+            return {MemoryCbdataStatus::INVALID_FIELD, {}};
+        }
+        if (f.mStep == 0 || f.kStep == 0) {
+            return {MemoryCbdataStatus::NO_ACCESS, {}};
+        }
+        const uint32_t bits = (f.instrId == 141 || f.instrId == 146) ? 4 :
+                              (f.instrId == 142 || f.instrId == 145) ? 16 :
+                              (f.instrId == 143 || f.instrId == 147) ? 8 :
+                                                                       32;
+        uint64_t dstBlocks = f.mStep, dstRepeats = f.kStep;
+        if (f.transpose) {
+            if ((bits == 4 && f.mStep % 4) || (bits == 8 && f.mStep % 2) || (bits == 32 && f.kStep % 2)) {
+                return {MemoryCbdataStatus::PARTIAL_COVERAGE, {}};
+            }
+            dstBlocks = uint64_t(f.kStep) * 16 / bits;
+            dstRepeats = uint64_t(f.mStep) * bits / 16;
+        }
+        const uint64_t offset = (uint64_t(f.kStartPosition) * f.srcStride + f.mStartPosition) * 512;
+        if (f.srcAddr > UINT64_MAX - offset) {
+            return {MemoryCbdataStatus::ARITHMETIC_OVERFLOW, {}};
+        }
+        MemoryCbdataBuilder builder(context_, {bits, ACLSAN_DEVICE_SOURCE_CUBE, kBlockTypeAic});
+        if (!Add(
+                builder, f.srcAddr + offset, ACLSAN_DEVICE_MEMORY_SPACE_L1, ACLSAN_DEVICE_MEMORY_ACCESS_READ, f.kStep,
+                uint64_t(f.mStep) * 512, uint64_t(f.srcStride) * 512, bits) ||
+            !Add(
+                builder, f.dstAddr, f.instrId <= 144 ? ACLSAN_DEVICE_MEMORY_SPACE_L0A : ACLSAN_DEVICE_MEMORY_SPACE_L0B,
+                ACLSAN_DEVICE_MEMORY_ACCESS_WRITE, dstRepeats, dstBlocks * 512, uint64_t(f.dstStride) * 512, bits)) {
+            return std::move(builder).Build();
+        }
+        return std::move(builder).Build();
+    }
+
+    MemoryCbdataResult operator()(const LoadCbufToCbTransposeParamField& f) const noexcept
+    {
+        if (f.instrId < 137 || f.instrId > 140) {
+            return {MemoryCbdataStatus::INVALID_FIELD, {}};
+        }
+        if (f.repeat == 0) {
+            return {MemoryCbdataStatus::NO_ACCESS, {}};
+        }
+        // The dav-3510 reference does not restore index/decrement addressing.
+        // Do not pretend those modes use the same source base as index zero.
+        if (f.indexId != 0 || f.decrement) {
+            return {MemoryCbdataStatus::PARTIAL_COVERAGE, {}};
+        }
+        const uint32_t bits = f.instrId == 137 ? 8 : f.instrId == 138 ? 16 : f.instrId == 139 ? 32 : 4;
+        const uint64_t fractals = bits == 4 ? 4 : bits == 16 ? 1 : 2;
+        const uint64_t srcFracStride = bits == 16 ? 1 : uint64_t(f.srcFracGap) + 1;
+        const uint64_t dstFracStride = bits == 16 ? 1 : uint64_t(f.dstFracGap) + 1;
+        auto read = MemoryAccessDescriptorFactory::NdRead(
+            f.srcAddr, bits, 512, std::array<uint64_t, 2>{fractals, f.repeat},
+            std::array<uint64_t, 2>{srcFracStride * 512, uint64_t(f.srcStride) * 512});
+        auto write = MemoryAccessDescriptorFactory::NdWrite(
+            f.dstAddr, bits, 512, {fractals, f.repeat}, {dstFracStride * 512, (uint64_t(f.dstGap) + 1) * 512});
+        return Merge(
+            Build(std::move(read), ACLSAN_DEVICE_MEMORY_SPACE_L1),
+            Build(std::move(write), ACLSAN_DEVICE_MEMORY_SPACE_L0B));
+    }
+
+    MemoryCbdataResult operator()(const Img2ColParamField& f) const noexcept
+    {
+        if (!((f.instrId >= 153 && f.instrId <= 157) || f.instrId == 422)) {
+            return {MemoryCbdataStatus::INVALID_FIELD, {}};
+        }
+        if (f.mExtension == 0 || f.kExtension == 0) {
+            return {MemoryCbdataStatus::NO_ACCESS, {}};
+        }
+        const size_t bank = f.fMatrixControl ? 1 : 0;
+        if (!state_.fmatrix[bank]) {
+            return {MemoryCbdataStatus::MISSING_REGISTER_STATE, {}, 386 + bank};
+        }
+        if (!state_.l3dRpt[bank]) {
+            return {MemoryCbdataStatus::MISSING_REGISTER_STATE, {}, 390 + bank};
+        }
+        const uint32_t bits = (f.instrId == 153 || f.instrId == 155) ? 16 :
+                              (f.instrId == 154 || f.instrId == 156) ? 8 :
+                                                                       32;
+        const uint64_t c0 = 256 / bits;
+        const auto& rpt = *state_.l3dRpt[bank];
+        // For one full C0, NC1HWC0 and NHWC share the same byte layout. Other
+        // channel packing and repeated-window modes need separate validation.
+        if (f.channelSize != c0 || rpt.repeatTimes != 1 || f.mExtension % 16 || f.kExtension % c0 ||
+            f.kStartPoint % c0 || (f.transpose && (f.mExtension % c0 || f.kExtension % 16))) {
+            return {MemoryCbdataStatus::PARTIAL_COVERAGE, {}};
+        }
+        const auto& fm = *state_.fmatrix[bank];
+        const uint64_t width = fm.width, height = fm.height;
+        const int64_t left = fm.paddingLeft, right = fm.paddingRight;
+        const int64_t top = fm.paddingTop, bottom = fm.paddingBottom;
+        const uint64_t fw = uint64_t(f.filterWidth) + (f.filterSizeWidth ? 256 : 0);
+        const uint64_t fh = uint64_t(f.filterHeight) + (f.filterSizeHeight ? 256 : 0);
+        if (width == 0 || height == 0 || fw == 0 || fh == 0 || f.strideWidth == 0 || f.strideHeight == 0 ||
+            f.dilationFilterWidth == 0 || f.dilationFilterHeight == 0) {
+            return {MemoryCbdataStatus::INVALID_FIELD, {}};
+        }
+        const int64_t availableW = int64_t(width) + left + right - int64_t((fw - 1) * f.dilationFilterWidth + 1);
+        const int64_t availableH = int64_t(height) + top + bottom - int64_t((fh - 1) * f.dilationFilterHeight + 1);
+        if (availableW < 0 || availableH < 0) {
+            return {MemoryCbdataStatus::PARTIAL_COVERAGE, {}};
+        }
+        const uint64_t outputW = uint64_t(availableW) / f.strideWidth + 1;
+        const uint64_t outputH = uint64_t(availableH) / f.strideHeight + 1;
+        if (uint64_t(f.mStartPoint) + f.mExtension > outputW * outputH ||
+            uint64_t(f.kStartPoint) + f.kExtension > fw * fh * c0) {
+            return {MemoryCbdataStatus::PARTIAL_COVERAGE, {}};
+        }
+        if (uint64_t(f.mExtension) * (f.kExtension / c0) >= kMaxExpandedMemoryAccessesPerInstruction) {
+            return {MemoryCbdataStatus::RESOURCE_EXHAUSTED, {}};
+        }
+        MemoryCbdataBuilder builder(context_, {bits, ACLSAN_DEVICE_SOURCE_CUBE, kBlockTypeAic});
+        for (uint64_t m = f.mStartPoint; m < uint64_t(f.mStartPoint) + f.mExtension; ++m) {
+            for (uint64_t k = f.kStartPoint / c0; k < (uint64_t(f.kStartPoint) + f.kExtension) / c0; ++k) {
+                const int64_t y = int64_t((m / outputW) * f.strideHeight + (k / fw) * f.dilationFilterHeight) - top;
+                const int64_t x = int64_t((m % outputW) * f.strideWidth + (k % fw) * f.dilationFilterWidth) - left;
+                // Padding synthesizes values: it does not read outside the feature map.
+                if (y < 0 || x < 0 || uint64_t(y) >= height || uint64_t(x) >= width) {
+                    continue;
+                }
+                const uint64_t offset = (uint64_t(y) * width + uint64_t(x)) * 32;
+                if (f.srcAddr > UINT64_MAX - offset) {
+                    return {MemoryCbdataStatus::ARITHMETIC_OVERFLOW, {}};
+                }
+                if (!Add(
+                        builder, f.srcAddr + offset, ACLSAN_DEVICE_MEMORY_SPACE_L1, ACLSAN_DEVICE_MEMORY_ACCESS_READ, 1,
+                        32, 0, bits)) {
+                    return std::move(builder).Build();
+                }
+            }
+        }
+        const uint64_t dstOffset = uint64_t(rpt.dstOffset) * 512;
+        if (f.dstAddr > UINT64_MAX - dstOffset) {
+            return {MemoryCbdataStatus::ARITHMETIC_OVERFLOW, {}};
+        }
+        const uint64_t rows = f.transpose ? f.kExtension / 16 : f.mExtension / 16;
+        const uint64_t columns = f.transpose ? f.mExtension / c0 : f.kExtension / c0;
+        const uint32_t space = (f.instrId == 153 || f.instrId == 154 || f.instrId == 422) ?
+                                   ACLSAN_DEVICE_MEMORY_SPACE_L0A :
+                                   ACLSAN_DEVICE_MEMORY_SPACE_L0B;
+        if (!Add(
+                builder, f.dstAddr + dstOffset, space, ACLSAN_DEVICE_MEMORY_ACCESS_WRITE, columns, rows * 512,
+                uint64_t(rpt.dstStride) * 512, bits)) {
+            return std::move(builder).Build();
+        }
+        return std::move(builder).Build();
+    }
+
+    MemoryCbdataResult operator()(const CopyGmToCbufV2ParamField& f) const noexcept
+    {
+        if (f.burstNum == 0 || f.burstLen == 0) {
+            return {MemoryCbdataStatus::NO_ACCESS, {}};
+        }
+        if (f.padFunctionMode != 0) {
+            return {MemoryCbdataStatus::PARTIAL_COVERAGE, {}};
+        }
+        return DmaWrite(f.dstAddr, f.burstNum, uint64_t(f.burstLen) * 32, (uint64_t(f.burstLen) + f.dstStride) * 32, 0);
+    }
+
+    MemoryCbdataResult operator()(const CopyGmToCbufAlignV2ParamField& f) const noexcept
+    {
+        if (f.burstLen == 0 || f.burstNum == 0) {
+            return {MemoryCbdataStatus::NO_ACCESS, {}};
+        }
+        const uint64_t padding = uint64_t(f.leftPaddingCount + f.rightPaddingCount) * (f.dataBits / 8);
+        if (f.dataSelectBit || f.leftPaddingCount * (f.dataBits / 8) > 32 ||
+            f.rightPaddingCount * (f.dataBits / 8) > 32) {
+            return {MemoryCbdataStatus::PARTIAL_COVERAGE, {}};
+        }
+        const auto& loops = state_.dmaLoopSizes[static_cast<size_t>(DmaLoopDirection::GM_TO_CBUF)];
+        if (padding && loops && (loops->loop1Size > 1 || loops->loop2Size > 1)) {
+            return {MemoryCbdataStatus::PARTIAL_COVERAGE, {}};
+        }
+        const bool compact = f.burstDstStride == f.burstLen;
+        if (!compact && f.burstDstStride % 32 != 0) {
+            return {MemoryCbdataStatus::PARTIAL_COVERAGE, {}};
+        }
+        const uint64_t bytes = CeilDiv((uint64_t(f.burstLen) + padding) * (compact ? f.burstNum : 1), 32) * 32;
+        return DmaWrite(f.dstAddr, compact ? 1 : f.burstNum, bytes, f.burstDstStride, f.dataBits);
+    }
+
+    MemoryCbdataResult operator()(const LoadGmToCbuf2DV2ParamField& f) const noexcept
+    {
+        if (f.decompMode != 0) {
+            return {MemoryCbdataStatus::PARTIAL_COVERAGE, {}};
+        }
+        return Linear(
+            f.dstAddr, ACLSAN_DEVICE_MEMORY_SPACE_L1, ACLSAN_DEVICE_MEMORY_ACCESS_WRITE, f.kStep,
+            uint64_t(f.mStep) * 512, uint64_t(f.dstStride) * 512);
+    }
+
+    template <NdNzConversionMode Mode>
+    MemoryCbdataResult operator()(const CopyGmToCbufMultiParamField<Mode>& f) const noexcept
+    {
+        if (!state_.mte2Nz) {
+            return {MemoryCbdataStatus::MISSING_REGISTER_STATE, {}, uint64_t(InstructionId::SetMte2NzPara)};
+        }
+        if (f.smallC0Enable) {
+            return {MemoryCbdataStatus::PARTIAL_COVERAGE, {}};
+        }
+        const auto& s = *state_.mte2Nz;
+        if (f.nValue == 0 || f.dValue == 0 || s.matrixNum == 0) {
+            return {MemoryCbdataStatus::NO_ACCESS, {}};
+        }
+        auto d = MemoryAccessDescriptorFactory::DmaAffine(
+            f.dstAddr, ACLSAN_DEVICE_MEMORY_ACCESS_WRITE, f.dataBits, 32,
+            {f.nValue, CeilDiv(uint64_t(f.dValue) * (f.dataBits / 8), 32), s.matrixNum},
+            {uint64_t(s.loop2DstStride) * 32, uint64_t(s.loop3DstStride) * 32, uint64_t(s.loop4DstStride) * 32});
+        return Build(std::move(d), ACLSAN_DEVICE_MEMORY_SPACE_L1);
+    }
+
+    MemoryCbdataResult operator()(const FixL0cToOutParamField& f) const noexcept { return FixRead(f, 64); }
+
+    MemoryCbdataResult operator()(const LocalMemoryTransferParamField& f) const noexcept
+    {
+        if (f.kind == LocalMemoryTransferKind::CopyCbufToFbuf) {
+            return {MemoryCbdataStatus::NO_ACCESS, {}};
+        }
+        if (f.kind == LocalMemoryTransferKind::CopyUbufToCbuf || f.kind == LocalMemoryTransferKind::CopyCbufToUbuf) {
+            const bool write = f.kind == LocalMemoryTransferKind::CopyUbufToCbuf;
+            const uint64_t count = (f.config0 >> 4) & 0xfff;
+            const uint64_t length = (f.config0 >> 16) & 0xffff;
+            const uint64_t gap = (f.config0 >> (write ? 48 : 32)) & 0xffff;
+            return Linear(
+                write ? f.dstAddr : f.srcAddr, ACLSAN_DEVICE_MEMORY_SPACE_L1,
+                write ? ACLSAN_DEVICE_MEMORY_ACCESS_WRITE : ACLSAN_DEVICE_MEMORY_ACCESS_READ, count, length * 32,
+                (length + gap) * 32);
+        }
+        // FIX's common fields have the same encoding. Decode through the existing
+        // architecture decoder; bits 16..19 describe local destinations, not L2.
+        AclsanRawTraceRecord raw{};
+        raw.instrId = (f.instrId == 168 || f.instrId == 170) ? 91 : 92;
+        raw.args[0] = f.dstAddr;
+        raw.args[1] = f.srcAddr;
+        raw.args[2] = f.config0;
+        raw.args[3] = f.config1 & ~(uint64_t(0xf) << 16);
+        const auto decoded = dav3510::GetDeviceInstructionDecoder().decode(raw);
+        if (!decoded) {
+            return {MemoryCbdataStatus::INVALID_FIELD, {}};
+        }
+        const auto& fix = std::get<FixL0cToOutParamField>(decoded->params);
+        // L0C stores 32-bit accumulators: an N=16 row occupies 64 bytes,
+        // independent of the destination type or destination memory space.
+        auto read = FixRead(fix, 64);
+        if (read.status != MemoryCbdataStatus::SUCCESS || f.instrId == 170 || f.instrId == 171) {
+            return read;
+        }
+        if ((f.config1 & (uint64_t(0xf) << 16)) != 0 || fix.splitEnable) {
+            read.status = MemoryCbdataStatus::PARTIAL_COVERAGE;
+            return read;
+        }
+        auto write = MemoryFieldVisitor(context_, state_)(fix);
+        if (write.status != MemoryCbdataStatus::SUCCESS) {
+            read.status = MemoryCbdataStatus::PARTIAL_COVERAGE;
+            return read;
+        }
+        for (auto& access : write.data) {
+            access.memorySpace = ACLSAN_DEVICE_MEMORY_SPACE_L1;
+        }
+        return Merge(std::move(read), std::move(write));
+    }
+
+    static MemoryCbdataResult Merge(MemoryCbdataResult first, MemoryCbdataResult second) noexcept
+    {
+        if (first.data.size() + second.data.size() > kMaxExpandedMemoryAccessesPerInstruction) {
+            return {MemoryCbdataStatus::RESOURCE_EXHAUSTED, {}};
+        }
+        try {
+            first.data.insert(first.data.end(), second.data.begin(), second.data.end());
+        } catch (const std::bad_alloc&) {
+            return {MemoryCbdataStatus::RESOURCE_EXHAUSTED, {}};
+        } catch (const std::length_error&) {
+            return {MemoryCbdataStatus::RESOURCE_EXHAUSTED, {}};
+        }
+        const auto ok = [](MemoryCbdataStatus s) {
+            return s == MemoryCbdataStatus::SUCCESS || s == MemoryCbdataStatus::NO_ACCESS;
+        };
+        if (!ok(first.status) || !ok(second.status)) {
+            first.status = MemoryCbdataStatus::PARTIAL_COVERAGE;
+            if (second.requiredRegisterInstructionId) {
+                first.requiredRegisterInstructionId = second.requiredRegisterInstructionId;
+            }
+        } else {
+            first.status = first.data.empty() ? MemoryCbdataStatus::NO_ACCESS : MemoryCbdataStatus::SUCCESS;
+        }
+        for (size_t i = 0; i < first.data.size(); ++i) {
+            first.data[i].accessIndex = static_cast<uint32_t>(i);
+            first.data[i].accessCount = static_cast<uint32_t>(first.data.size());
+        }
+        return first;
+    }
+
+private:
+    static uint64_t CeilDiv(uint64_t n, uint64_t d) noexcept { return n / d + (n % d != 0); }
+
+    static bool Add(
+        MemoryCbdataBuilder& builder, uint64_t address, uint32_t space, uint32_t mode, uint64_t count, uint64_t bytes,
+        uint64_t stride, uint32_t bits = 0) noexcept
+    {
+        auto d = MemoryAccessDescriptorFactory::Linear(address, mode, bits, count, bytes, stride);
+        d.memorySpace = space;
+        return builder.Add(std::move(d));
+    }
+
+    MemoryCbdataResult Build(MemoryAccessDescriptor d, uint32_t space) const noexcept
+    {
+        d.memorySpace = space;
+        const auto source = context_.pipeline == ACLSAN_DEVICE_PIPE_FIXPIPE ? ACLSAN_DEVICE_SOURCE_FIXPIPE :
+                            context_.pipeline == ACLSAN_DEVICE_PIPE_MTE3    ? ACLSAN_DEVICE_SOURCE_MTE3 :
+                            context_.pipeline == ACLSAN_DEVICE_PIPE_MTE2    ? ACLSAN_DEVICE_SOURCE_MTE2 :
+                                                                              ACLSAN_DEVICE_SOURCE_CUBE;
+        MemoryCbdataBuilder builder(context_, {d.dataBits, source, kBlockTypeAic});
+        if (!builder.Add(std::move(d))) {
+            return std::move(builder).Build();
+        }
+        return std::move(builder).Build();
+    }
+
+    MemoryCbdataResult Linear(
+        uint64_t address, uint32_t space, uint32_t mode, uint64_t count, uint64_t bytes, uint64_t stride,
+        uint32_t bits = 0) const noexcept
+    {
+        if (count == 0 || bytes == 0) {
+            return {MemoryCbdataStatus::NO_ACCESS, {}};
+        }
+        return Build(MemoryAccessDescriptorFactory::Linear(address, mode, bits, count, bytes, stride), space);
+    }
+
+    MemoryCbdataResult DmaWrite(
+        uint64_t address, uint64_t count, uint64_t bytes, uint64_t stride, uint32_t bits) const noexcept
+    {
+        if (count == 0 || bytes == 0) {
+            return {MemoryCbdataStatus::NO_ACCESS, {}};
+        }
+        const size_t direction = static_cast<size_t>(DmaLoopDirection::GM_TO_CBUF);
+        const auto& size = state_.dmaLoopSizes[direction];
+        const std::array<uint64_t, 3> counts{count, size ? size->loop1Size : 1, size ? size->loop2Size : 1};
+        if (counts[1] == 0 || counts[2] == 0) {
+            return {MemoryCbdataStatus::NO_ACCESS, {}};
+        }
+        std::array<uint64_t, 3> strides{stride, 0, 0};
+        for (size_t i = 0; i < 2; ++i) {
+            if (counts[i + 1] > 1) {
+                if (!state_.dmaLoopStrides[direction][i]) {
+                    return {
+                        MemoryCbdataStatus::MISSING_REGISTER_STATE,
+                        {},
+                        uint64_t(InstructionId::Loop1StrideGmToCbuf) + i};
+                }
+                strides[i + 1] = state_.dmaLoopStrides[direction][i]->dstStride;
+            }
+        }
+        if (counts[1] == 1 && counts[2] == 1) {
+            return Linear(
+                address, ACLSAN_DEVICE_MEMORY_SPACE_L1, ACLSAN_DEVICE_MEMORY_ACCESS_WRITE, count, bytes, stride, bits);
+        }
+        return Build(
+            MemoryAccessDescriptorFactory::DmaAffine(
+                address, ACLSAN_DEVICE_MEMORY_ACCESS_WRITE, bits, bytes, counts, strides),
+            ACLSAN_DEVICE_MEMORY_SPACE_L1);
+    }
+
+    MemoryCbdataResult FixRead(const FixL0cToOutParamField& f, uint64_t rowBytes) const noexcept
+    {
+        if (f.nSize == 0 || f.mSize == 0) {
+            return {MemoryCbdataStatus::NO_ACCESS, {}};
+        }
+        if ((f.nz2ndEnable || f.nz2dnEnable) && state_.loop3 && state_.loop3->loopCount == 0) {
+            return {MemoryCbdataStatus::NO_ACCESS, {}};
+        }
+        // NZ2DN additionally needs CHANNEL_PARA, which is not captured yet.
+        if (f.nz2dnEnable || f.quantPost || f.reluPost || f.clipReluPost || f.loopEnhanceEnable ||
+            f.loopEnhanceMergeEnable || f.eltwiseOp || f.eltwiseAntqEnable || f.winoPostEnable || f.brcbEnable ||
+            f.c0PadEnable) {
+            return {MemoryCbdataStatus::PARTIAL_COVERAGE, {}};
+        }
+        if (!f.nz2ndEnable) {
+            return Linear(
+                f.srcAddr, ACLSAN_DEVICE_MEMORY_SPACE_L0C, ACLSAN_DEVICE_MEMORY_ACCESS_READ, CeilDiv(f.nSize, 16),
+                uint64_t(f.mSize) * rowBytes, uint64_t(f.loopSrtStride) * rowBytes, 32);
+        }
+        if (!state_.loop3) {
+            return {MemoryCbdataStatus::MISSING_REGISTER_STATE, {}, uint64_t(InstructionId::Loop3Param)};
+        }
+        if (state_.loop3->loopCount == 0) {
+            return {MemoryCbdataStatus::NO_ACCESS, {}};
+        }
+        MemoryCbdataBuilder builder(context_, {32, ACLSAN_DEVICE_SOURCE_FIXPIPE, kBlockTypeAic});
+        for (uint64_t matrix = 0; matrix < state_.loop3->loopCount; ++matrix) {
+            const uint64_t offset = matrix * state_.loop3->srcStride * rowBytes;
+            if (f.srcAddr > UINT64_MAX - offset) {
+                return {MemoryCbdataStatus::ARITHMETIC_OVERFLOW, {}};
+            }
+            const uint64_t base = f.srcAddr + offset;
+            if (f.nSize / 16 &&
+                !Add(
+                    builder, base, ACLSAN_DEVICE_MEMORY_SPACE_L0C, ACLSAN_DEVICE_MEMORY_ACCESS_READ, f.nSize / 16,
+                    uint64_t(f.mSize) * rowBytes, uint64_t(f.loopSrtStride) * rowBytes, 32)) {
+                return std::move(builder).Build();
+            }
+            if (f.nSize % 16) {
+                const uint64_t tailOffset = uint64_t(f.nSize / 16) * f.loopSrtStride * rowBytes;
+                if (base > UINT64_MAX - tailOffset) {
+                    return {MemoryCbdataStatus::ARITHMETIC_OVERFLOW, {}};
+                }
+                if (!Add(
+                        builder, base + tailOffset, ACLSAN_DEVICE_MEMORY_SPACE_L0C, ACLSAN_DEVICE_MEMORY_ACCESS_READ,
+                        f.mSize, uint64_t(f.nSize % 16) * 4, 64, 32)) {
+                    return std::move(builder).Build();
+                }
+            }
+        }
+        return std::move(builder).Build();
+    }
+
+    MemoryCbdataContext context_;
+    const MemoryRegisterState& state_;
+};
+
 } // namespace
 
 MemoryFieldToCbdataConverter::MemoryFieldToCbdataConverter(
@@ -1129,7 +1636,15 @@ MemoryFieldToCbdataConverter::MemoryFieldToCbdataConverter(
 
 MemoryCbdataResult MemoryFieldToCbdataConverter::Convert(const MemoryInstructionField& field) const noexcept
 {
-    return std::visit(MemoryFieldVisitor{context_, registerState_}, field);
+    auto gm = std::visit(MemoryFieldVisitor{context_, registerState_}, field);
+    if (gm.status != MemoryCbdataStatus::SUCCESS && gm.status != MemoryCbdataStatus::NO_ACCESS) {
+        return gm;
+    }
+    auto local = std::visit(CubeMemoryFieldVisitor{context_, registerState_}, field);
+    if (local.status == MemoryCbdataStatus::NO_ACCESS) {
+        return gm;
+    }
+    return CubeMemoryFieldVisitor::Merge(std::move(gm), std::move(local));
 }
 
 } // namespace aclsan

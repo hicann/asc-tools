@@ -35,6 +35,14 @@ constexpr bool HasParamFieldLogger() noexcept
            std::is_same_v<ParamField, aclsan::ScalarDevParamField> ||
            std::is_same_v<ParamField, aclsan::ScalarPreloadParamField> ||
            std::is_same_v<ParamField, aclsan::ScalarAtomicParamField> ||
+           std::is_same_v<ParamField, aclsan::MmadParamField> ||
+           std::is_same_v<ParamField, aclsan::LoadL1MxParamField> ||
+           std::is_same_v<ParamField, aclsan::SetL12DParamField> ||
+           std::is_same_v<ParamField, aclsan::LoadCbufToL0ParamField> ||
+           std::is_same_v<ParamField, aclsan::LoadCbufToCbTransposeParamField> ||
+           std::is_same_v<ParamField, aclsan::Img2ColParamField> ||
+           std::is_same_v<ParamField, aclsan::FmatrixParamField> ||
+           std::is_same_v<ParamField, aclsan::L3dRptParamField> ||
            std::is_same_v<ParamField, aclsan::NdDmaPadCountParamField> ||
            std::is_same_v<ParamField, aclsan::Mte2SourceParamField> ||
            std::is_same_v<ParamField, aclsan::NdDmaLoopStrideParamField> ||
@@ -63,6 +71,77 @@ const char* BlockTypeName(uint32_t blockType) noexcept
 void LogParamField(const aclsan::SetPaddingParamField& value) noexcept
 {
     ASCTOOL_DEBUG("[param] type=SetPaddingParamField value=0x%llx", static_cast<unsigned long long>(value.value));
+}
+
+void LogParamField(const aclsan::LoadCbufToL0ParamField& f) noexcept
+{
+    ASCTOOL_DEBUG(
+        "[param] load2d id=%u dst=0x%llx src=0x%llx mStart=%u kStart=%u mStep=%u kStep=%u "
+        "srcStride=%u dstStride=%u transpose=%u",
+        f.instrId, static_cast<unsigned long long>(f.dstAddr), static_cast<unsigned long long>(f.srcAddr),
+        f.mStartPosition, f.kStartPosition, f.mStep, f.kStep, f.srcStride, f.dstStride, f.transpose);
+}
+
+void LogParamField(const aclsan::LoadCbufToCbTransposeParamField& f) noexcept
+{
+    ASCTOOL_DEBUG(
+        "[param] load_transpose id=%u dst=0x%llx src=0x%llx index=%u repeat=%u "
+        "srcStride=%u dstGap=%u srcFracGap=%u dstFracGap=%u decrement=%u",
+        f.instrId, static_cast<unsigned long long>(f.dstAddr), static_cast<unsigned long long>(f.srcAddr), f.indexId,
+        f.repeat, f.srcStride, f.dstGap, f.srcFracGap, f.dstFracGap, f.decrement);
+}
+
+void LogParamField(const aclsan::Img2ColParamField& f) noexcept
+{
+    ASCTOOL_DEBUG(
+        "[param] img2col id=%u dst=0x%llx src=0x%llx m=%u k=%u mStart=%u kStart=%u "
+        "channels=%u bank=%u transpose=%u",
+        f.instrId, static_cast<unsigned long long>(f.dstAddr), static_cast<unsigned long long>(f.srcAddr), f.mExtension,
+        f.kExtension, f.mStartPoint, f.kStartPoint, f.channelSize, f.fMatrixControl, f.transpose);
+}
+
+void LogParamField(const aclsan::FmatrixParamField& value) noexcept
+{
+    ASCTOOL_DEBUG(
+        "[param] type=FmatrixParamField instrId=%u width=%u height=%u "
+        "paddingLeft=%u paddingRight=%u paddingTop=%u paddingBottom=%u",
+        value.instrId, value.width, value.height, value.paddingLeft, value.paddingRight, value.paddingTop,
+        value.paddingBottom);
+}
+
+void LogParamField(const aclsan::L3dRptParamField& value) noexcept
+{
+    ASCTOOL_DEBUG(
+        "[param] type=L3dRptParamField instrId=%u repeatStride=%u repeatTimes=%u "
+        "repeatAlongK=%u dstStride=%u dstOffset=%u",
+        value.instrId, value.repeatStride, value.repeatTimes, value.repeatAlongK ? 1U : 0U, value.dstStride,
+        value.dstOffset);
+}
+
+void LogParamField(const aclsan::MmadParamField& value) noexcept
+{
+    ASCTOOL_DEBUG(
+        "[param] type=MmadParamField instrId=%u c=0x%llx a=0x%llx b=0x%llx "
+        "m=%u k=%u n=%u disableGemv=%u cmatrixSource=%u cmatrixInitVal=%u",
+        value.instrId, static_cast<unsigned long long>(value.dstAddr), static_cast<unsigned long long>(value.src0Addr),
+        static_cast<unsigned long long>(value.src1Addr), value.m, value.k, value.n, value.disableGemv,
+        value.cmatrixSource, value.cmatrixInitVal);
+}
+
+void LogParamField(const aclsan::LoadL1MxParamField& value) noexcept
+{
+    ASCTOOL_DEBUG(
+        "[param] type=LoadL1MxParamField instrId=%u src=0x%llx xStart=%u yStart=%u "
+        "xStep=%u yStep=%u srcStride=%u",
+        value.instrId, static_cast<unsigned long long>(value.srcAddr), value.xStart, value.yStart, value.xStep,
+        value.yStep, value.srcStride);
+}
+
+void LogParamField(const aclsan::SetL12DParamField& value) noexcept
+{
+    ASCTOOL_DEBUG(
+        "[param] type=SetL12DParamField instrId=%u dst=0x%llx repeat=%u blocks=%u stride=%u", value.instrId,
+        static_cast<unsigned long long>(value.dstAddr), value.repeatTimes, value.blockNum, value.repeatGap);
 }
 
 void LogParamField(const aclsan::NdDmaPadCountParamField& value) noexcept

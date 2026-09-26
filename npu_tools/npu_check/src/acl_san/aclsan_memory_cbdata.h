@@ -15,6 +15,7 @@
 #include "device_instr/common/device_instr_struct_dma.h"
 #include "device_instr/common/device_instr_struct_scalar.h"
 #include "device_instr/common/device_instr_struct_register.h"
+#include "device_instr/common/device_instr_next_iter.h"
 
 #include <array>
 #include <cstdint>
@@ -34,15 +35,19 @@ enum class MemoryCbdataStatus : uint8_t {
     MISSING_ADDRESS_CONTEXT, // 地址映射协议标记缺失或不匹配，无法确认采集的 SYS_VA_BASE 上下文有效。
     UNSUPPORTED_ADDRESS_SPACE, // 已识别为 UB 或 PRIVATE，但当前转换路径仅支持 GM。
     INVALID_ADDRESS_SPACE,     // 地址编码未匹配到已知的存储空间，无法完成地址映射。
+    PARTIAL_COVERAGE,          // 已知指令的部分模式尚未确认实际访问集合。
 };
 
 using MemoryInstructionField = std::variant<
     CopyGmToUbufAlignV2ParamField, CopyGmToCbufAlignV2ParamField, CopyGmToCbufMultiNd2NzParamField,
     CopyGmToCbufMultiDn2NzParamField, CopyGmToCbufV2ParamField, CopyUbufToGmAlignV2ParamField, FixL0cToOutParamField,
-    LoadGmToCbuf2DV2ParamField, NdDmaOutToUbufParamField, ScalarGmParamField, ScalarDevParamField,
-    ScalarPreloadParamField, ScalarAtomicParamField>;
+    LoadGmToCbuf2DV2ParamField, NdDmaOutToUbufParamField, SetL12DParamField, MmadParamField, LoadL1MxParamField,
+    LocalMemoryTransferParamField, LoadCbufToL0ParamField, LoadCbufToCbTransposeParamField, Img2ColParamField,
+    ScalarGmParamField, ScalarDevParamField, ScalarPreloadParamField, ScalarAtomicParamField>;
 
 struct MemoryRegisterState {
+    std::array<std::optional<FmatrixParamField>, 2> fmatrix{}; // normal / _B register banks
+    std::array<std::optional<L3dRptParamField>, 2> l3dRpt{};
     std::optional<Mte2SourceParamField> mte2Source;
     std::optional<NdDmaPadCountParamField> ndDmaPadCount;
     std::array<std::optional<NdDmaLoopStrideParamField>, 5> ndDmaLoopStrides{};

@@ -88,6 +88,84 @@ AclsanDeviceMemoryAccessData ScalarAccess(uint32_t instrId, uint64_t address, ui
     return data;
 }
 
+TEST(MemcheckTest, CubeLocalBoundsUseDav3510CapacityAndPreserveContext)
+{
+    const std::array<std::pair<uint32_t, uint64_t>, 4> spaces{
+        {{ACLSAN_DEVICE_MEMORY_SPACE_L1, 512 * 1024},
+         {ACLSAN_DEVICE_MEMORY_SPACE_L0A, 64 * 1024},
+         {ACLSAN_DEVICE_MEMORY_SPACE_L0B, 64 * 1024},
+         {ACLSAN_DEVICE_MEMORY_SPACE_L0C, 256 * 1024}}};
+    for (const auto& [space, capacity] : spaces) {
+        SCOPED_TRACE(space);
+        Memcheck checker;
+        auto access = Access(DeviceSourceKind::MTE2, capacity - 32, 32);
+        access.memorySpace = space;
+        access.header.launchId = 42;
+        checker.QueueDeviceMemoryAccess(access);
+        EXPECT_TRUE(checker.OnSynchronization().empty());
+        ++access.address;
+        checker.QueueDeviceMemoryAccess(access);
+        const auto reports = checker.OnSynchronization();
+        ASSERT_EQ(reports.size(), 1U);
+        EXPECT_EQ(reports[0].allocation.base, 0U);
+        EXPECT_EQ(reports[0].allocation.bytes, capacity);
+        EXPECT_EQ(reports[0].common.exec.launchId, 42U);
+        EXPECT_EQ(reports[0].common.exec.siteId, 7U);
+        EXPECT_EQ(reports[0].common.exec.pc, 0x170U);
+        EXPECT_EQ(reports[0].distanceBytes, 1);
+        std::string rendered;
+        ASSERT_EQ(
+            RenderNpuCheckReportRecord(NpuCheckReportRecord::From(reports[0]), {}, &rendered),
+            ReportRenderStatus::SUCCESS);
+        EXPECT_NE(rendered.find("capacity " + std::to_string(capacity) + " bytes"), std::string::npos);
+        EXPECT_TRUE(checker.AnalysisComplete());
+    }
+}
+
+TEST(MemcheckTest, CubeLocalBoundsDoNotConsultGlobalAllocationsAndDetectOverflow)
+{
+    Memcheck checker;
+    checker.OnAllocation(AllocationEvent(65536, 128, 1));
+    for (uint64_t address : {uint64_t{65536}, std::numeric_limits<uint64_t>::max() - 3}) {
+        auto access = Access(DeviceSourceKind::MTE2, address, 16);
+        access.memorySpace = ACLSAN_DEVICE_MEMORY_SPACE_L0A;
+        checker.QueueDeviceMemoryAccess(access);
+    }
+    EXPECT_EQ(checker.OnSynchronization().size(), 2U);
+}
+
+TEST(MemcheckTest, CubeLocalBoundsDoNotRequireMemoryFlags)
+{
+    Memcheck checker;
+    auto access = Access(DeviceSourceKind::MTE2, 65536, 16);
+    access.memorySpace = ACLSAN_DEVICE_MEMORY_SPACE_L0A;
+    EXPECT_EQ(access.memoryFlags, 0U);
+    checker.QueueDeviceMemoryAccess(access);
+    const auto reports = checker.OnSynchronization();
+    ASSERT_EQ(reports.size(), 1U);
+    EXPECT_EQ(reports[0].access.memorySpace, NpuCheckReportMemorySpace::L0_A);
+    EXPECT_TRUE(checker.AnalysisComplete());
+}
+
+TEST(MemcheckTest, CubeAffineBoundsVisitStridedSegments)
+{
+    Memcheck checker;
+    auto access = Access(DeviceSourceKind::MTE2, 65536 - 64, 0);
+    access.memorySpace = ACLSAN_DEVICE_MEMORY_SPACE_L0A;
+    access.layoutKind = ACLSAN_MEM_LAYOUT_ND_AFFINE;
+    access.layout.ndAffine.rank = 1;
+    access.layout.ndAffine.elementBytes = 16;
+    access.layout.ndAffine.dims[0] = 2;
+    access.layout.ndAffine.strides[0] = 32;
+    checker.QueueDeviceMemoryAccess(access);
+    EXPECT_TRUE(checker.OnSynchronization().empty());
+    access.layout.ndAffine.dims[0] = 3;
+    checker.QueueDeviceMemoryAccess(access);
+    const auto reports = checker.OnSynchronization();
+    ASSERT_EQ(reports.size(), 1U);
+    EXPECT_EQ(reports[0].access.address, 65536U);
+}
+
 TEST(MemcheckTest, ScalarDevAccessChecksWholeAllocationRangeAndUseAfterFree)
 {
     for (uint32_t id = 64; id <= 71; ++id) {

@@ -30,6 +30,8 @@ struct Dav3510CoreKey {
 };
 
 struct Dav3510CoreRegisterState {
+    std::array<std::optional<FmatrixParamField>, 2> fmatrix{}; // normal / _B register banks
+    std::array<std::optional<L3dRptParamField>, 2> l3dRpt{};
     std::optional<VectorMaskParamField> vectorMask;
     std::optional<Mte2SourceParamField> mte2Source;
     std::optional<NdDmaPadCountParamField> ndDmaPadCount;
@@ -46,6 +48,8 @@ public:
     explicit Dav3510RegisterStateManager(uint64_t launchId) noexcept;
 
     void Update(const Dav3510CoreKey& key, const VectorMaskParamField& params) noexcept;
+    void Update(const Dav3510CoreKey& key, const FmatrixParamField& params) noexcept;
+    void Update(const Dav3510CoreKey& key, const L3dRptParamField& params) noexcept;
     void Update(const Dav3510CoreKey& key, const Mte2SourceParamField& params) noexcept;
     void Update(const Dav3510CoreKey& key, const NdDmaPadCountParamField& params) noexcept;
     void Update(const Dav3510CoreKey& key, const NdDmaLoopStrideParamField& params) noexcept;

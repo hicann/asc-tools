@@ -22,6 +22,28 @@ bool Dav3510CoreKey::operator==(const Dav3510CoreKey& other) const noexcept
 
 Dav3510RegisterStateManager::Dav3510RegisterStateManager(uint64_t launchId) noexcept : launchId_(launchId) {}
 
+void Dav3510RegisterStateManager::Update(const Dav3510CoreKey& key, const FmatrixParamField& params) noexcept
+{
+    if (params.instrId != 386 && params.instrId != 387) {
+        return;
+    }
+    states_[key].fmatrix[params.instrId - 386] = params;
+    ASCTOOL_DEBUG(
+        "[register] fmatrix instrId=%u blockType=%u blockId=%u width=%u height=%u", params.instrId, key.blockType,
+        key.blockId, params.width, params.height);
+}
+
+void Dav3510RegisterStateManager::Update(const Dav3510CoreKey& key, const L3dRptParamField& params) noexcept
+{
+    if (params.instrId != 390 && params.instrId != 391) {
+        return;
+    }
+    states_[key].l3dRpt[params.instrId - 390] = params;
+    ASCTOOL_DEBUG(
+        "[register] l3dRpt instrId=%u blockType=%u blockId=%u repeatTimes=%u dstStride=%u dstOffset=%u", params.instrId,
+        key.blockType, key.blockId, params.repeatTimes, params.dstStride, params.dstOffset);
+}
+
 void Dav3510RegisterStateManager::Update(const Dav3510CoreKey& key, const VectorMaskParamField& params) noexcept
 {
     states_[key].vectorMask = params;

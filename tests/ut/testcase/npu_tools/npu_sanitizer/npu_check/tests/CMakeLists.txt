@@ -50,6 +50,23 @@ target_link_libraries(npu_check_unit_tests PRIVATE
   npu_check_core acl_san npu_sanitizer_plog Threads::Threads GTest::gtest Boost::filesystem)
 add_test(NAME npu_check_unit_tests COMMAND npu_check_unit_tests)
 
+add_executable(npu_check_cube_memory_tests
+  gtest_main.cpp cube_memory_test.cpp
+  "${NPU_CHECK_DBI_ROOT}/aclsan_memory_cbdata.cpp"
+  "${NPU_CHECK_DBI_ROOT}/aclsan_translate_device_data.cpp"
+  "${NPU_CHECK_DBI_ROOT}/aclsan_device_data_log.cpp"
+  "${NPU_CHECK_DBI_ROOT}/aclsan_active_probe_plan.cpp"
+  "${NPU_CHECK_DBI_ROOT}/device_instr/arch/dav_3510/register_state_manager.cpp"
+  ${NPU_CHECK_TEST_REPORT_RENDERER_SOURCES}
+  "${NPU_CHECK_DBI_ROOT}/device_instr/arch/dav_3510/decoder.cpp")
+target_compile_features(npu_check_cube_memory_tests PRIVATE cxx_std_17)
+target_compile_definitions(npu_check_cube_memory_tests PRIVATE _GLIBCXX_USE_CXX11_ABI=0)
+target_include_directories(npu_check_cube_memory_tests PRIVATE
+  "${NPU_CHECK_SOURCE_DIR}" "${NPU_CHECK_DBI_INCLUDE_DIR}" "${NPU_CHECK_DBI_ROOT}/../../include")
+target_link_libraries(npu_check_cube_memory_tests PRIVATE
+  npu_check_core npu_sanitizer_plog Threads::Threads GTest::gtest)
+add_test(NAME npu_check_cube_memory_tests COMMAND npu_check_cube_memory_tests)
+
 add_executable(npu_check_tool_manager_test
   gtest_main.cpp
   tool_manager_test.cpp

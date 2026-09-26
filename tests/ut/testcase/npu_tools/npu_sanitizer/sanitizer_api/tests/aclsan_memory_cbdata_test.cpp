@@ -18,8 +18,36 @@
 #include <array>
 #include <cstdint>
 #include <limits>
+#include <algorithm>
 
 namespace {
+
+// This suite specifies the pre-existing GM address sets. Cube's complete
+// multi-space results and incomplete modes are tested in cube_memory_test.cpp.
+class GmProjectionConverter {
+public:
+    GmProjectionConverter(aclsan::MemoryCbdataContext c, aclsan::MemoryRegisterState s = {}) : converter_(c, s) {}
+    aclsan::MemoryCbdataResult Convert(const aclsan::MemoryInstructionField& f) const
+    {
+        auto r = converter_.Convert(f);
+        r.data.erase(
+            std::remove_if(
+                r.data.begin(), r.data.end(),
+                [](const auto& d) { return d.memorySpace != ACLSAN_DEVICE_MEMORY_SPACE_GM; }),
+            r.data.end());
+        if (r.status == aclsan::MemoryCbdataStatus::PARTIAL_COVERAGE && !r.data.empty()) {
+            r.status = aclsan::MemoryCbdataStatus::SUCCESS;
+        }
+        for (size_t i = 0; i < r.data.size(); ++i) {
+            r.data[i].accessIndex = i;
+            r.data[i].accessCount = r.data.size();
+        }
+        return r;
+    }
+
+private:
+    aclsan::MemoryFieldToCbdataConverter converter_;
+};
 
 using aclsan::CopyGmToUbufAlignV2ParamField;
 using aclsan::InstructionId;
@@ -32,7 +60,7 @@ void TestEmptyFieldProducesNoCbdata()
     field.instrId = RawInstructionId(InstructionId::CopyGmToUbufAlignV2B16);
     field.dataBits = 16;
 
-    const auto result = aclsan::MemoryFieldToCbdataConverter{{}}.Convert(aclsan::MemoryInstructionField{field});
+    const auto result = GmProjectionConverter{{}}.Convert(aclsan::MemoryInstructionField{field});
     assert(result.status == aclsan::MemoryCbdataStatus::NO_ACCESS);
     assert(result.data.empty());
 }
@@ -48,7 +76,7 @@ void TestFieldAndContextProduceCbdata()
     field.burstSrcStride = 64;
     const aclsan::MemoryCbdataContext context{0x2000, 41, 40, 7, 2, 3, ACLSAN_DEVICE_PIPE_MTE2};
 
-    const auto result = aclsan::MemoryFieldToCbdataConverter{context}.Convert(aclsan::MemoryInstructionField{field});
+    const auto result = GmProjectionConverter{context}.Convert(aclsan::MemoryInstructionField{field});
     assert(result.status == aclsan::MemoryCbdataStatus::SUCCESS);
     assert(result.data.size() == 1);
     const AclsanDeviceMemoryAccessData& access = result.data.front();
@@ -80,7 +108,7 @@ void TestCubeAndMultiFieldsUseDecodedDataBits()
     cubeField.srcAddr = 0x2000;
     cubeField.burstNum = 1;
     cubeField.burstLen = 8;
-    const auto cubeResult = aclsan::MemoryFieldToCbdataConverter{{}}.Convert(aclsan::MemoryInstructionField{cubeField});
+    const auto cubeResult = GmProjectionConverter{{}}.Convert(aclsan::MemoryInstructionField{cubeField});
     assert(cubeResult.status == aclsan::MemoryCbdataStatus::SUCCESS);
     assert(cubeResult.data.size() == 1);
     assert(cubeResult.data.front().dataBits == cubeField.dataBits);
@@ -93,8 +121,7 @@ void TestCubeAndMultiFieldsUseDecodedDataBits()
     multiField.dValue = 1;
     aclsan::MemoryRegisterState state{};
     state.mte2Nz = aclsan::Mte2NzParamField{1};
-    const auto multiResult =
-        aclsan::MemoryFieldToCbdataConverter{{}, state}.Convert(aclsan::MemoryInstructionField{multiField});
+    const auto multiResult = GmProjectionConverter{{}, state}.Convert(aclsan::MemoryInstructionField{multiField});
     assert(multiResult.status == aclsan::MemoryCbdataStatus::SUCCESS);
     assert(multiResult.data.size() == 1);
     assert(multiResult.data.front().dataBits == multiField.dataBits);
@@ -116,7 +143,7 @@ void TestNdDmaFieldUsesDecodedDataBits()
     for (uint32_t index = 0; index < state.ndDmaLoopStrides.size(); ++index) {
         state.ndDmaLoopStrides[index] = aclsan::NdDmaLoopStrideParamField{index, 0};
     }
-    const auto result = aclsan::MemoryFieldToCbdataConverter{{}, state}.Convert(aclsan::MemoryInstructionField{field});
+    const auto result = GmProjectionConverter{{}, state}.Convert(aclsan::MemoryInstructionField{field});
     assert(result.status == aclsan::MemoryCbdataStatus::SUCCESS);
     assert(result.data.size() == 1);
     assert(result.data.front().dataBits == field.dataBits);
@@ -136,7 +163,7 @@ void TestOneFieldCanProduceMultipleCbdataRecords()
     field.loopDstStride = 64;
     field.quantPre = 24;
 
-    const auto result = aclsan::MemoryFieldToCbdataConverter{{}}.Convert(aclsan::MemoryInstructionField{field});
+    const auto result = GmProjectionConverter{{}}.Convert(aclsan::MemoryInstructionField{field});
     assert(result.status == aclsan::MemoryCbdataStatus::SUCCESS);
     assert(result.data.size() == 2);
     assert(result.data[0].address == field.dstAddr);
@@ -158,7 +185,7 @@ void TestInvalidFieldIsRejected()
     field.burstNum = 1;
     field.burstLen = 32;
 
-    const auto result = aclsan::MemoryFieldToCbdataConverter{{}}.Convert(aclsan::MemoryInstructionField{field});
+    const auto result = GmProjectionConverter{{}}.Convert(aclsan::MemoryInstructionField{field});
     assert(result.status == aclsan::MemoryCbdataStatus::INVALID_FIELD);
     assert(result.data.empty());
 }
@@ -172,7 +199,7 @@ void TestUnsupportedDataBitsIsRejected()
     field.burstNum = 1;
     field.burstLen = 32;
 
-    const auto result = aclsan::MemoryFieldToCbdataConverter{{}}.Convert(aclsan::MemoryInstructionField{field});
+    const auto result = GmProjectionConverter{{}}.Convert(aclsan::MemoryInstructionField{field});
     assert(result.status == aclsan::MemoryCbdataStatus::INVALID_FIELD);
     assert(result.data.empty());
 }
@@ -200,8 +227,7 @@ void TestNdDmaPaddingDoesNotExpandGmReadFootprint()
         state.ndDmaLoopStrides[2] = aclsan::NdDmaLoopStrideParamField{2, 0};
         state.ndDmaLoopStrides[3] = aclsan::NdDmaLoopStrideParamField{3, 0};
         state.ndDmaLoopStrides[4] = aclsan::NdDmaLoopStrideParamField{4, 0};
-        const auto result =
-            aclsan::MemoryFieldToCbdataConverter{{}, state}.Convert(aclsan::MemoryInstructionField{field});
+        const auto result = GmProjectionConverter{{}, state}.Convert(aclsan::MemoryInstructionField{field});
         assert(result.status == aclsan::MemoryCbdataStatus::SUCCESS);
         assert(result.data.size() == 1);
         const auto& access = result.data.front();
@@ -226,7 +252,7 @@ void TestCopyGmToCbufV2UsesUnifiedConverter()
     field.burstLen = 3;
     field.srcStride = 5;
 
-    const auto result = aclsan::MemoryFieldToCbdataConverter{{}}.Convert(aclsan::MemoryInstructionField{field});
+    const auto result = GmProjectionConverter{{}}.Convert(aclsan::MemoryInstructionField{field});
     assert(result.status == aclsan::MemoryCbdataStatus::SUCCESS);
     assert(result.data.size() == 1);
     const auto& access = result.data.front();
@@ -251,7 +277,7 @@ void TestCopyGmToCbufV2ModelsPaddingSourceFootprint()
         field.burstLen = 1;
         field.padFunctionMode = mode;
 
-        const auto result = aclsan::MemoryFieldToCbdataConverter{{}}.Convert(aclsan::MemoryInstructionField{field});
+        const auto result = GmProjectionConverter{{}}.Convert(aclsan::MemoryInstructionField{field});
         assert(result.status == aclsan::MemoryCbdataStatus::SUCCESS);
         assert(result.data.size() == 1);
         const auto& access = result.data.front();
@@ -268,7 +294,7 @@ void TestCopyGmToCbufV2ModelsPaddingSourceFootprint()
         field.padFunctionMode = mode;
         field.srcStride = 3;
 
-        const auto result = aclsan::MemoryFieldToCbdataConverter{{}}.Convert(aclsan::MemoryInstructionField{field});
+        const auto result = GmProjectionConverter{{}}.Convert(aclsan::MemoryInstructionField{field});
         assert(result.status == aclsan::MemoryCbdataStatus::SUCCESS);
         assert(result.data.size() == 1);
         const auto& access = result.data.front();
@@ -282,11 +308,11 @@ void TestCopyGmToCbufV2ModelsPaddingSourceFootprint()
     invalid.burstNum = 1;
     invalid.burstLen = 2;
     invalid.padFunctionMode = 1;
-    auto result = aclsan::MemoryFieldToCbdataConverter{{}}.Convert(aclsan::MemoryInstructionField{invalid});
+    auto result = GmProjectionConverter{{}}.Convert(aclsan::MemoryInstructionField{invalid});
     assert(result.status == aclsan::MemoryCbdataStatus::INVALID_FIELD);
     invalid.burstLen = 1;
     invalid.padFunctionMode = 9;
-    result = aclsan::MemoryFieldToCbdataConverter{{}}.Convert(aclsan::MemoryInstructionField{invalid});
+    result = GmProjectionConverter{{}}.Convert(aclsan::MemoryInstructionField{invalid});
     assert(result.status == aclsan::MemoryCbdataStatus::INVALID_FIELD);
 }
 
@@ -300,7 +326,7 @@ void TestContiguousBurstStrideProducesOneRange()
     field.burstLen = 32;
     field.burstSrcStride = 32;
 
-    const auto result = aclsan::MemoryFieldToCbdataConverter{{}}.Convert(aclsan::MemoryInstructionField{field});
+    const auto result = GmProjectionConverter{{}}.Convert(aclsan::MemoryInstructionField{field});
     assert(result.status == aclsan::MemoryCbdataStatus::SUCCESS);
     assert(result.data.size() == 1);
     assert(result.data.front().layoutKind == ACLSAN_MEM_LAYOUT_RANGE);
@@ -317,7 +343,7 @@ void TestAddressExtentOverflowIsRejected()
     field.burstLen = 32;
     field.burstSrcStride = 32;
 
-    const auto result = aclsan::MemoryFieldToCbdataConverter{{}}.Convert(aclsan::MemoryInstructionField{field});
+    const auto result = GmProjectionConverter{{}}.Convert(aclsan::MemoryInstructionField{field});
     assert(result.status == aclsan::MemoryCbdataStatus::ARITHMETIC_OVERFLOW);
     assert(result.data.empty());
 }
@@ -339,7 +365,7 @@ void TestDmaOuterLoopsProduceAffineLayout()
     state.dmaLoopStrides[directionIndex][0] = aclsan::DmaLoopStrideParamField{direction, 0, 0x200, 0x20};
     state.dmaLoopStrides[directionIndex][1] = aclsan::DmaLoopStrideParamField{direction, 1, 0x1000, 0x40};
 
-    const auto result = aclsan::MemoryFieldToCbdataConverter{{}, state}.Convert(aclsan::MemoryInstructionField{field});
+    const auto result = GmProjectionConverter{{}, state}.Convert(aclsan::MemoryInstructionField{field});
     assert(result.status == aclsan::MemoryCbdataStatus::SUCCESS);
     assert(result.data.size() == 1);
     const auto& layout = result.data.front().layout.ndAffine;
@@ -368,8 +394,7 @@ void TestDmaOuterLoopsUseTheGmStrideForEveryDirection()
         state.dmaLoopStrides[directionIndex][0] = aclsan::DmaLoopStrideParamField{direction, 0, 0x20, 0x300};
         state.dmaLoopStrides[directionIndex][1] = aclsan::DmaLoopStrideParamField{direction, 1, 0x40, 0x1000};
 
-        const auto result =
-            aclsan::MemoryFieldToCbdataConverter{{}, state}.Convert(aclsan::MemoryInstructionField{field});
+        const auto result = GmProjectionConverter{{}, state}.Convert(aclsan::MemoryInstructionField{field});
         assert(result.status == aclsan::MemoryCbdataStatus::SUCCESS);
         const auto& access = result.data.front();
         assert(access.accessMode == ACLSAN_DEVICE_MEMORY_ACCESS_WRITE);
@@ -394,8 +419,7 @@ void TestDmaOuterLoopsUseTheGmStrideForEveryDirection()
         state.dmaLoopStrides[directionIndex][0] = aclsan::DmaLoopStrideParamField{direction, 0, 0x400, 0x20};
         state.dmaLoopStrides[directionIndex][1] = aclsan::DmaLoopStrideParamField{direction, 1, 0x2000, 0x40};
 
-        const auto result =
-            aclsan::MemoryFieldToCbdataConverter{{}, state}.Convert(aclsan::MemoryInstructionField{field});
+        const auto result = GmProjectionConverter{{}, state}.Convert(aclsan::MemoryInstructionField{field});
         assert(result.status == aclsan::MemoryCbdataStatus::SUCCESS);
         const auto& access = result.data.front();
         assert(access.accessMode == ACLSAN_DEVICE_MEMORY_ACCESS_READ);
@@ -420,15 +444,15 @@ void TestDmaOuterLoopStateDistinguishesDefaultZeroAndMissingStride()
     constexpr auto direction = aclsan::DmaLoopDirection::GM_TO_UBUF;
     const auto directionIndex = static_cast<std::size_t>(direction);
     state.dmaLoopSizes[directionIndex] = aclsan::DmaLoopSizeParamField{direction, 2, 1};
-    auto result = aclsan::MemoryFieldToCbdataConverter{{}, state}.Convert(aclsan::MemoryInstructionField{field});
+    auto result = GmProjectionConverter{{}, state}.Convert(aclsan::MemoryInstructionField{field});
     assert(result.status == aclsan::MemoryCbdataStatus::MISSING_REGISTER_STATE);
     assert(result.requiredRegisterInstructionId == RawInstructionId(InstructionId::Loop1StrideGmToUbuf));
 
     state.dmaLoopSizes[directionIndex] = aclsan::DmaLoopSizeParamField{direction, 0, 1};
-    result = aclsan::MemoryFieldToCbdataConverter{{}, state}.Convert(aclsan::MemoryInstructionField{field});
+    result = GmProjectionConverter{{}, state}.Convert(aclsan::MemoryInstructionField{field});
     assert(result.status == aclsan::MemoryCbdataStatus::NO_ACCESS);
 
-    result = aclsan::MemoryFieldToCbdataConverter{{}}.Convert(aclsan::MemoryInstructionField{field});
+    result = GmProjectionConverter{{}}.Convert(aclsan::MemoryInstructionField{field});
     assert(result.status == aclsan::MemoryCbdataStatus::SUCCESS);
     assert(result.data.front().layoutKind == ACLSAN_MEM_LAYOUT_RANGE);
 }
@@ -444,13 +468,13 @@ void TestFixpipeConversionModesConsumeIndependentLoop3State()
     field.quantPre = 0;
     field.nz2ndEnable = true;
 
-    auto result = aclsan::MemoryFieldToCbdataConverter{{}}.Convert(aclsan::MemoryInstructionField{field});
+    auto result = GmProjectionConverter{{}}.Convert(aclsan::MemoryInstructionField{field});
     assert(result.status == aclsan::MemoryCbdataStatus::MISSING_REGISTER_STATE);
     assert(result.requiredRegisterInstructionId == RawInstructionId(InstructionId::Loop3Param));
 
     aclsan::MemoryRegisterState state{};
     state.loop3 = aclsan::Loop3ParamField{2, 7, 100};
-    result = aclsan::MemoryFieldToCbdataConverter{{}, state}.Convert(aclsan::MemoryInstructionField{field});
+    result = GmProjectionConverter{{}, state}.Convert(aclsan::MemoryInstructionField{field});
     assert(result.status == aclsan::MemoryCbdataStatus::SUCCESS);
     const auto& rowMajor = result.data.front();
     assert(rowMajor.layoutKind == ACLSAN_MEM_LAYOUT_ND_AFFINE);
@@ -463,7 +487,7 @@ void TestFixpipeConversionModesConsumeIndependentLoop3State()
     field.nSize = 5;
     field.mSize = 32;
     state.loop3 = aclsan::Loop3ParamField{3, 9, 200};
-    result = aclsan::MemoryFieldToCbdataConverter{{}, state}.Convert(aclsan::MemoryInstructionField{field});
+    result = GmProjectionConverter{{}, state}.Convert(aclsan::MemoryInstructionField{field});
     assert(result.status == aclsan::MemoryCbdataStatus::SUCCESS);
     const auto& columnMajor = result.data.front();
     assert(columnMajor.layoutKind == ACLSAN_MEM_LAYOUT_BLOCK_REPEAT);
@@ -472,7 +496,7 @@ void TestFixpipeConversionModesConsumeIndependentLoop3State()
     assert(columnMajor.layout.blockRepeat.repeatStride == 160);
 
     state.loop3 = aclsan::Loop3ParamField{0, 9, 200};
-    result = aclsan::MemoryFieldToCbdataConverter{{}, state}.Convert(aclsan::MemoryInstructionField{field});
+    result = GmProjectionConverter{{}, state}.Convert(aclsan::MemoryInstructionField{field});
     assert(result.status == aclsan::MemoryCbdataStatus::NO_ACCESS);
 }
 
@@ -486,7 +510,7 @@ void TestFixpipeZeroDestinationStrideStillWritesGm()
     field.loopDstStride = 0;
     field.quantPre = 24;
 
-    const auto result = aclsan::MemoryFieldToCbdataConverter{{}}.Convert(aclsan::MemoryInstructionField{field});
+    const auto result = GmProjectionConverter{{}}.Convert(aclsan::MemoryInstructionField{field});
     assert(result.status == aclsan::MemoryCbdataStatus::SUCCESS);
     assert(result.data.size() == 2);
     assert(result.data[0].address == field.dstAddr);
@@ -507,7 +531,7 @@ void TestFixpipeUnprovenLowLevelModeIsRejected()
     field.quantPre = 0;
     field.loopEnhanceEnable = true;
 
-    const auto result = aclsan::MemoryFieldToCbdataConverter{{}}.Convert(aclsan::MemoryInstructionField{field});
+    const auto result = GmProjectionConverter{{}}.Convert(aclsan::MemoryInstructionField{field});
     assert(result.status == aclsan::MemoryCbdataStatus::INVALID_FIELD);
 }
 
@@ -522,7 +546,7 @@ void TestFixpipeDumpTensorC0PaddingUsesRawNzFootprint()
     field.loopSrtStride = 16;
     field.c0PadEnable = true;
 
-    auto result = aclsan::MemoryFieldToCbdataConverter{{}}.Convert(aclsan::MemoryInstructionField{field});
+    auto result = GmProjectionConverter{{}}.Convert(aclsan::MemoryInstructionField{field});
     assert(result.status == aclsan::MemoryCbdataStatus::SUCCESS);
     assert(result.data.size() == 1);
     assert(result.data.front().dataBits == 32);
@@ -531,13 +555,13 @@ void TestFixpipeDumpTensorC0PaddingUsesRawNzFootprint()
     assert(result.data.front().layout.range.bytes == 2048);
 
     field.nSize = 16;
-    result = aclsan::MemoryFieldToCbdataConverter{{}}.Convert(aclsan::MemoryInstructionField{field});
+    result = GmProjectionConverter{{}}.Convert(aclsan::MemoryInstructionField{field});
     assert(result.status == aclsan::MemoryCbdataStatus::SUCCESS);
     assert(result.data.size() == 1);
     assert(result.data.front().layout.range.bytes == 1024);
 
     field.quantPre = 1;
-    result = aclsan::MemoryFieldToCbdataConverter{{}}.Convert(aclsan::MemoryInstructionField{field});
+    result = GmProjectionConverter{{}}.Convert(aclsan::MemoryInstructionField{field});
     assert(result.status == aclsan::MemoryCbdataStatus::INVALID_FIELD);
 }
 
@@ -552,13 +576,13 @@ void TestMultiStateDistinguishesMissingAndObservedZero()
     field.loop1SrcStride = 32;
     field.loop4SrcStride = 128;
 
-    auto result = aclsan::MemoryFieldToCbdataConverter{{}}.Convert(aclsan::MemoryInstructionField{field});
+    auto result = GmProjectionConverter{{}}.Convert(aclsan::MemoryInstructionField{field});
     assert(result.status == aclsan::MemoryCbdataStatus::MISSING_REGISTER_STATE);
     assert(result.requiredRegisterInstructionId == RawInstructionId(InstructionId::SetMte2NzPara));
 
     aclsan::MemoryRegisterState state{};
     state.mte2Nz = aclsan::Mte2NzParamField{0, 3, 4, 5};
-    result = aclsan::MemoryFieldToCbdataConverter{{}, state}.Convert(aclsan::MemoryInstructionField{field});
+    result = GmProjectionConverter{{}, state}.Convert(aclsan::MemoryInstructionField{field});
     assert(result.status == aclsan::MemoryCbdataStatus::NO_ACCESS);
 }
 
@@ -575,7 +599,7 @@ void TestLargeMultiAccessRemainsNdAffineInsteadOfTruncatingRepeatCount()
 
     aclsan::MemoryRegisterState state{};
     state.mte2Nz = aclsan::Mte2NzParamField{UINT16_MAX};
-    const auto result = aclsan::MemoryFieldToCbdataConverter{{}, state}.Convert(aclsan::MemoryInstructionField{field});
+    const auto result = GmProjectionConverter{{}, state}.Convert(aclsan::MemoryInstructionField{field});
     assert(result.status == aclsan::MemoryCbdataStatus::SUCCESS);
     assert(result.data.size() == 1);
     assert(result.data.front().layoutKind == ACLSAN_MEM_LAYOUT_ND_AFFINE);
@@ -595,37 +619,37 @@ void TestNdDmaRequiresAllStrideStates()
     field.loop4Size = 1;
 
     aclsan::MemoryRegisterState state{};
-    auto result = aclsan::MemoryFieldToCbdataConverter{{}, state}.Convert(aclsan::MemoryInstructionField{field});
+    auto result = GmProjectionConverter{{}, state}.Convert(aclsan::MemoryInstructionField{field});
     assert(result.status == aclsan::MemoryCbdataStatus::MISSING_REGISTER_STATE);
     assert(result.requiredRegisterInstructionId == RawInstructionId(InstructionId::NdDmaLoop0Stride));
 
     state.ndDmaLoopStrides[0] = aclsan::NdDmaLoopStrideParamField{0, 0};
-    result = aclsan::MemoryFieldToCbdataConverter{{}, state}.Convert(aclsan::MemoryInstructionField{field});
+    result = GmProjectionConverter{{}, state}.Convert(aclsan::MemoryInstructionField{field});
     assert(result.status == aclsan::MemoryCbdataStatus::MISSING_REGISTER_STATE);
     assert(result.requiredRegisterInstructionId == RawInstructionId(InstructionId::NdDmaLoop1Stride));
     state.ndDmaLoopStrides[1] = aclsan::NdDmaLoopStrideParamField{1, 8};
-    result = aclsan::MemoryFieldToCbdataConverter{{}, state}.Convert(aclsan::MemoryInstructionField{field});
+    result = GmProjectionConverter{{}, state}.Convert(aclsan::MemoryInstructionField{field});
     assert(result.status == aclsan::MemoryCbdataStatus::MISSING_REGISTER_STATE);
     assert(result.requiredRegisterInstructionId == RawInstructionId(InstructionId::NdDmaLoop2Stride));
     state.ndDmaLoopStrides[2] = aclsan::NdDmaLoopStrideParamField{2, 0};
-    result = aclsan::MemoryFieldToCbdataConverter{{}, state}.Convert(aclsan::MemoryInstructionField{field});
+    result = GmProjectionConverter{{}, state}.Convert(aclsan::MemoryInstructionField{field});
     assert(result.status == aclsan::MemoryCbdataStatus::MISSING_REGISTER_STATE);
     assert(result.requiredRegisterInstructionId == RawInstructionId(InstructionId::NdDmaLoop3Stride));
     state.ndDmaLoopStrides[3] = aclsan::NdDmaLoopStrideParamField{3, 0};
-    result = aclsan::MemoryFieldToCbdataConverter{{}, state}.Convert(aclsan::MemoryInstructionField{field});
+    result = GmProjectionConverter{{}, state}.Convert(aclsan::MemoryInstructionField{field});
     assert(result.status == aclsan::MemoryCbdataStatus::MISSING_REGISTER_STATE);
     assert(result.requiredRegisterInstructionId == RawInstructionId(InstructionId::NdDmaLoop4Stride));
     state.ndDmaLoopStrides[4] = aclsan::NdDmaLoopStrideParamField{4, 0};
-    result = aclsan::MemoryFieldToCbdataConverter{{}, state}.Convert(aclsan::MemoryInstructionField{field});
+    result = GmProjectionConverter{{}, state}.Convert(aclsan::MemoryInstructionField{field});
     assert(result.status == aclsan::MemoryCbdataStatus::SUCCESS);
 
     field.loop4Size = 0;
     state.ndDmaLoopStrides[4].reset();
-    result = aclsan::MemoryFieldToCbdataConverter{{}, state}.Convert(aclsan::MemoryInstructionField{field});
+    result = GmProjectionConverter{{}, state}.Convert(aclsan::MemoryInstructionField{field});
     assert(result.status == aclsan::MemoryCbdataStatus::MISSING_REGISTER_STATE);
     assert(result.requiredRegisterInstructionId == RawInstructionId(InstructionId::NdDmaLoop4Stride));
     state.ndDmaLoopStrides[4] = aclsan::NdDmaLoopStrideParamField{4, 0};
-    result = aclsan::MemoryFieldToCbdataConverter{{}, state}.Convert(aclsan::MemoryInstructionField{field});
+    result = GmProjectionConverter{{}, state}.Convert(aclsan::MemoryInstructionField{field});
     assert(result.status == aclsan::MemoryCbdataStatus::NO_ACCESS);
 }
 
@@ -641,7 +665,7 @@ void TestLoadGmToCbuf2DV2UsesModeZeroFractalSize()
     aclsan::MemoryRegisterState state{};
     state.mte2Source = aclsan::Mte2SourceParamField{4};
 
-    const auto result = aclsan::MemoryFieldToCbdataConverter{{}, state}.Convert(aclsan::MemoryInstructionField{field});
+    const auto result = GmProjectionConverter{{}, state}.Convert(aclsan::MemoryInstructionField{field});
     assert(result.status == aclsan::MemoryCbdataStatus::SUCCESS);
     assert(result.data.size() == 1);
     const auto& access = result.data.front();
@@ -662,8 +686,8 @@ void TestLoadGmToCbuf2DV2SkipsNonzeroModes()
 
     for (uint8_t mode = 1; mode <= 7; ++mode) {
         field.decompMode = mode;
-        const auto result = aclsan::MemoryFieldToCbdataConverter{{}}.Convert(aclsan::MemoryInstructionField{field});
-        assert(result.status == aclsan::MemoryCbdataStatus::NO_ACCESS);
+        const auto result = GmProjectionConverter{{}}.Convert(aclsan::MemoryInstructionField{field});
+        assert(result.status == aclsan::MemoryCbdataStatus::PARTIAL_COVERAGE);
         assert(result.data.empty());
         assert(result.requiredRegisterInstructionId == 0);
     }
@@ -680,7 +704,7 @@ void TestLoadGmToCbuf2DV2SupportsNegativeAndZeroSourceStride()
     field.kStep = 3;
     aclsan::MemoryRegisterState state{};
     state.mte2Source = aclsan::Mte2SourceParamField{-4};
-    auto result = aclsan::MemoryFieldToCbdataConverter{{}, state}.Convert(aclsan::MemoryInstructionField{field});
+    auto result = GmProjectionConverter{{}, state}.Convert(aclsan::MemoryInstructionField{field});
     assert(result.status == aclsan::MemoryCbdataStatus::SUCCESS);
     assert(result.data.size() == 1);
     assert(result.data.front().address == field.srcAddr + 6 * 512);
@@ -690,7 +714,7 @@ void TestLoadGmToCbuf2DV2SupportsNegativeAndZeroSourceStride()
     assert(result.data.front().layout.blockRepeat.repeatStride == 4 * 512);
 
     state.mte2Source = aclsan::Mte2SourceParamField{0};
-    result = aclsan::MemoryFieldToCbdataConverter{{}, state}.Convert(aclsan::MemoryInstructionField{field});
+    result = GmProjectionConverter{{}, state}.Convert(aclsan::MemoryInstructionField{field});
     assert(result.status == aclsan::MemoryCbdataStatus::SUCCESS);
     assert(result.data.size() == 1);
     assert(result.data.front().address == field.srcAddr + 2 * 512);
@@ -709,20 +733,20 @@ void TestLoadGmToCbuf2DV2RejectsAddressOverflow()
     state.mte2Source = aclsan::Mte2SourceParamField{1};
     field.kStep = 2;
     state.mte2Source = aclsan::Mte2SourceParamField{-1};
-    auto result = aclsan::MemoryFieldToCbdataConverter{{}, state}.Convert(aclsan::MemoryInstructionField{field});
+    auto result = GmProjectionConverter{{}, state}.Convert(aclsan::MemoryInstructionField{field});
     assert(result.status == aclsan::MemoryCbdataStatus::ARITHMETIC_OVERFLOW);
 
     field.kStep = 1;
     field.mStartPosition = 1;
     field.srcAddr = std::numeric_limits<uint64_t>::max();
     state.mte2Source = aclsan::Mte2SourceParamField{0};
-    result = aclsan::MemoryFieldToCbdataConverter{{}, state}.Convert(aclsan::MemoryInstructionField{field});
+    result = GmProjectionConverter{{}, state}.Convert(aclsan::MemoryInstructionField{field});
     assert(result.status == aclsan::MemoryCbdataStatus::ARITHMETIC_OVERFLOW);
 
     field.srcAddr = 0;
     field.mStartPosition = 0;
     state.mte2Source = aclsan::Mte2SourceParamField{std::numeric_limits<int64_t>::min()};
-    result = aclsan::MemoryFieldToCbdataConverter{{}, state}.Convert(aclsan::MemoryInstructionField{field});
+    result = GmProjectionConverter{{}, state}.Convert(aclsan::MemoryInstructionField{field});
     assert(result.status == aclsan::MemoryCbdataStatus::ARITHMETIC_OVERFLOW);
 }
 
@@ -734,23 +758,23 @@ void TestLoadGmToCbuf2DV2HandlesMissingStateEmptyStepsAndTailOverflow()
     field.mStep = 1;
     field.kStep = 1;
 
-    auto result = aclsan::MemoryFieldToCbdataConverter{{}}.Convert(aclsan::MemoryInstructionField{field});
+    auto result = GmProjectionConverter{{}}.Convert(aclsan::MemoryInstructionField{field});
     assert(result.status == aclsan::MemoryCbdataStatus::MISSING_REGISTER_STATE);
     assert(result.requiredRegisterInstructionId == RawInstructionId(InstructionId::Mte2SrcPara));
 
     aclsan::MemoryRegisterState state{};
     state.mte2Source = aclsan::Mte2SourceParamField{1};
     field.mStep = 0;
-    result = aclsan::MemoryFieldToCbdataConverter{{}, state}.Convert(aclsan::MemoryInstructionField{field});
+    result = GmProjectionConverter{{}, state}.Convert(aclsan::MemoryInstructionField{field});
     assert(result.status == aclsan::MemoryCbdataStatus::NO_ACCESS);
     field.mStep = 1;
     field.kStep = 0;
-    result = aclsan::MemoryFieldToCbdataConverter{{}, state}.Convert(aclsan::MemoryInstructionField{field});
+    result = GmProjectionConverter{{}, state}.Convert(aclsan::MemoryInstructionField{field});
     assert(result.status == aclsan::MemoryCbdataStatus::NO_ACCESS);
 
     field.kStep = 2;
     field.srcAddr = std::numeric_limits<uint64_t>::max() - 511;
-    result = aclsan::MemoryFieldToCbdataConverter{{}, state}.Convert(aclsan::MemoryInstructionField{field});
+    result = GmProjectionConverter{{}, state}.Convert(aclsan::MemoryInstructionField{field});
     assert(result.status == aclsan::MemoryCbdataStatus::ARITHMETIC_OVERFLOW);
 }
 
@@ -764,7 +788,7 @@ void TestFixpipePacked4ProducesExactByteRanges()
     field.loopDstStride = 1200;
     field.quantPre = 25;
 
-    auto result = aclsan::MemoryFieldToCbdataConverter{{}}.Convert(aclsan::MemoryInstructionField{field});
+    auto result = GmProjectionConverter{{}}.Convert(aclsan::MemoryInstructionField{field});
     assert(result.status == aclsan::MemoryCbdataStatus::SUCCESS);
     assert(result.data.size() == 2);
     assert(result.data[0].dataBits == 4 && result.data[0].address == 0x1000);
@@ -776,19 +800,19 @@ void TestFixpipePacked4ProducesExactByteRanges()
     }
 
     field.quantPre = 21;
-    result = aclsan::MemoryFieldToCbdataConverter{{}}.Convert(aclsan::MemoryInstructionField{field});
+    result = GmProjectionConverter{{}}.Convert(aclsan::MemoryInstructionField{field});
     assert(result.status == aclsan::MemoryCbdataStatus::INVALID_FIELD);
 
     field.instrId = RawInstructionId(InstructionId::FixL0cToOutF32);
     field.quantPre = 25;
     field.nSize = 48;
-    result = aclsan::MemoryFieldToCbdataConverter{{}}.Convert(aclsan::MemoryInstructionField{field});
+    result = GmProjectionConverter{{}}.Convert(aclsan::MemoryInstructionField{field});
     assert(result.status == aclsan::MemoryCbdataStatus::INVALID_FIELD);
 
     field.nSize = 64;
     field.quantPre = 25;
     field.splitEnable = true;
-    result = aclsan::MemoryFieldToCbdataConverter{{}}.Convert(aclsan::MemoryInstructionField{field});
+    result = GmProjectionConverter{{}}.Convert(aclsan::MemoryInstructionField{field});
     assert(result.status == aclsan::MemoryCbdataStatus::INVALID_FIELD);
 }
 
@@ -802,7 +826,7 @@ void TestFixpipeB8ChannelMergeUsesThirtyTwoChannelGroups()
     field.loopDstStride = 1024;
     field.quantPre = 24;
 
-    const auto result = aclsan::MemoryFieldToCbdataConverter{{}}.Convert(aclsan::MemoryInstructionField{field});
+    const auto result = GmProjectionConverter{{}}.Convert(aclsan::MemoryInstructionField{field});
     assert(result.status == aclsan::MemoryCbdataStatus::SUCCESS);
     assert(result.data.size() == 2);
     assert(result.data[0].dataBits == 8 && result.data[0].address == 0x1800);
@@ -816,7 +840,7 @@ void TestFixpipeB8ChannelMergeUsesThirtyTwoChannelGroups()
     field.mSize = 16;
     field.loopDstStride = 32;
     field.nz2ndEnable = true;
-    auto converted = aclsan::MemoryFieldToCbdataConverter{{}, state}.Convert(aclsan::MemoryInstructionField{field});
+    auto converted = GmProjectionConverter{{}, state}.Convert(aclsan::MemoryInstructionField{field});
     assert(converted.status == aclsan::MemoryCbdataStatus::SUCCESS);
     assert(converted.data.size() == 1);
     assert(converted.data.front().layoutKind == ACLSAN_MEM_LAYOUT_BLOCK_REPEAT);
@@ -826,7 +850,7 @@ void TestFixpipeB8ChannelMergeUsesThirtyTwoChannelGroups()
 
     field.nz2ndEnable = false;
     field.nz2dnEnable = true;
-    converted = aclsan::MemoryFieldToCbdataConverter{{}, state}.Convert(aclsan::MemoryInstructionField{field});
+    converted = GmProjectionConverter{{}, state}.Convert(aclsan::MemoryInstructionField{field});
     assert(converted.status == aclsan::MemoryCbdataStatus::SUCCESS);
     assert(converted.data.size() == 1);
     assert(converted.data.front().layoutKind == ACLSAN_MEM_LAYOUT_BLOCK_REPEAT);
@@ -845,11 +869,11 @@ void TestFixpipeNzRejectsUnsupportedNSizeRemainders()
 
     field.splitEnable = true;
     field.nSize = 9;
-    auto result = aclsan::MemoryFieldToCbdataConverter{{}}.Convert(aclsan::MemoryInstructionField{field});
+    auto result = GmProjectionConverter{{}}.Convert(aclsan::MemoryInstructionField{field});
     assert(result.status == aclsan::MemoryCbdataStatus::INVALID_FIELD);
 
     field.nSize = 8;
-    result = aclsan::MemoryFieldToCbdataConverter{{}}.Convert(aclsan::MemoryInstructionField{field});
+    result = GmProjectionConverter{{}}.Convert(aclsan::MemoryInstructionField{field});
     assert(result.status == aclsan::MemoryCbdataStatus::SUCCESS);
     assert(result.data.size() == 1);
     assert(result.data.front().layoutKind == ACLSAN_MEM_LAYOUT_RANGE);
@@ -857,11 +881,11 @@ void TestFixpipeNzRejectsUnsupportedNSizeRemainders()
 
     field.splitEnable = false;
     field.nSize = 17;
-    result = aclsan::MemoryFieldToCbdataConverter{{}}.Convert(aclsan::MemoryInstructionField{field});
+    result = GmProjectionConverter{{}}.Convert(aclsan::MemoryInstructionField{field});
     assert(result.status == aclsan::MemoryCbdataStatus::INVALID_FIELD);
 
     field.nSize = 16;
-    result = aclsan::MemoryFieldToCbdataConverter{{}}.Convert(aclsan::MemoryInstructionField{field});
+    result = GmProjectionConverter{{}}.Convert(aclsan::MemoryInstructionField{field});
     assert(result.status == aclsan::MemoryCbdataStatus::SUCCESS);
     assert(result.data.size() == 1);
     assert(result.data.front().layoutKind == ACLSAN_MEM_LAYOUT_RANGE);
@@ -879,13 +903,13 @@ void TestFixpipePacked4ConversionModeUsesLoop3State()
     field.quantPre = 21;
     field.nz2ndEnable = true;
 
-    auto result = aclsan::MemoryFieldToCbdataConverter{{}}.Convert(aclsan::MemoryInstructionField{field});
+    auto result = GmProjectionConverter{{}}.Convert(aclsan::MemoryInstructionField{field});
     assert(result.status == aclsan::MemoryCbdataStatus::MISSING_REGISTER_STATE);
     assert(result.requiredRegisterInstructionId == RawInstructionId(InstructionId::Loop3Param));
 
     aclsan::MemoryRegisterState state{};
     state.loop3 = aclsan::Loop3ParamField{2, 16, 20};
-    result = aclsan::MemoryFieldToCbdataConverter{{}, state}.Convert(aclsan::MemoryInstructionField{field});
+    result = GmProjectionConverter{{}, state}.Convert(aclsan::MemoryInstructionField{field});
     assert(result.status == aclsan::MemoryCbdataStatus::SUCCESS);
     assert(result.data.size() == 4);
     assert(result.data[0].address == 0x2000 && result.data[0].layout.range.bytes == 3);
@@ -895,7 +919,7 @@ void TestFixpipePacked4ConversionModeUsesLoop3State()
 
     field.nz2ndEnable = false;
     field.nz2dnEnable = true;
-    result = aclsan::MemoryFieldToCbdataConverter{{}, state}.Convert(aclsan::MemoryInstructionField{field});
+    result = GmProjectionConverter{{}, state}.Convert(aclsan::MemoryInstructionField{field});
     assert(result.status == aclsan::MemoryCbdataStatus::SUCCESS);
     assert(result.data.size() == 10);
     assert(result.data.front().address == 0x2000 && result.data.front().layout.range.bytes == 1);

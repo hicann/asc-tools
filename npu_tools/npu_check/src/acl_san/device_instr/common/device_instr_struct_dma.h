@@ -19,6 +19,29 @@
 
 namespace aclsan {
 
+struct MmadParamField {
+    uint32_t instrId = 0;
+    uint64_t dstAddr = 0;
+    uint64_t src0Addr = 0;
+    uint64_t src1Addr = 0;
+    uint16_t m = 0;              // config [0:11]
+    uint16_t k = 0;              // config [12:23]
+    uint16_t n = 0;              // config [24:35]
+    bool disableGemv = false;    // config [61]
+    bool cmatrixSource = false;  // config [62]
+    bool cmatrixInitVal = false; // config [63]
+};
+
+struct LoadL1MxParamField {
+    uint32_t instrId = 0;
+    uint64_t srcAddr = 0;
+    uint16_t xStart = 0;    // config0 [0:15]
+    uint16_t yStart = 0;    // config0 [16:31]
+    uint8_t xStep = 0;      // config0 [32:39]
+    uint8_t yStep = 0;      // config0 [40:47]
+    uint16_t srcStride = 0; // config1 [0:15], unit: 32B
+};
+
 // 位域注释规则：
 // 1. bit index 从 0 开始。
 // 2. [begin:end] 是闭区间，读取 begin 到 end；例如 [0:3] 读取 bit 0~3，取值范围为 0~15。

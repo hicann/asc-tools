@@ -62,6 +62,14 @@ ReportRecord ToReportRecord(const NpuCheckMemcheckReport& report)
     PutAccessFields(report.access, &fields);
     PutAllocationFields(report.allocation, &fields);
     PutDefaultHostFields(&fields);
+    fields["capacityContext"] = "";
+    const auto space = report.access.memorySpace;
+    if (space == NpuCheckReportMemorySpace::L1 || space == NpuCheckReportMemorySpace::L0_A ||
+        space == NpuCheckReportMemorySpace::L0_B || space == NpuCheckReportMemorySpace::L0_C) {
+        fields["capacityContext"] = " (" + std::string(MemorySpaceName(space)) + " capacity " +
+                                    std::to_string(report.allocation.bytes) + " bytes, valid offsets [0, " +
+                                    std::to_string(report.allocation.bytes) + "))";
+    }
     fields["apiName"] = report.apiName;
     fields["apiErrorName"] = report.apiErrorName;
     fields["apiErrorCode"] = std::to_string(report.apiErrorCode);

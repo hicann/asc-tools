@@ -48,6 +48,7 @@ enum class LocalMemoryTransferKind : uint32_t {
     FixL0cToUbufF32,
     FixL0cToUbufS32,
     CopyUbufToCbuf,
+    CopyCbufToUbuf,
 };
 
 // These CCE intrinsics transfer data only between on-chip memory spaces:
@@ -121,7 +122,7 @@ struct LoadCbufToL0ParamField {
     uint16_t kStartPosition = 0;
     uint8_t mStep = 0;
     uint8_t kStep = 0;
-    int16_t srcStride = 0;
+    uint16_t srcStride = 0;
     uint16_t dstStride = 0;
     bool transpose = false;
 };
@@ -151,6 +152,7 @@ struct LoadCbufToCbTransposeParamField {
     uint16_t dstGap = 0;
     uint16_t dstFracGap = 0;
     uint16_t srcFracGap = 0;
+    bool decrement = false; // config0 [63]
 };
 
 // 对应 CCE 指令：FIX_L0C_TO_L1.<f32/s32>

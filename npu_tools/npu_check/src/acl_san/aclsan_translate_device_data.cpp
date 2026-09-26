@@ -44,6 +44,8 @@ const char* MemoryCbdataStatusName(MemoryCbdataStatus status) noexcept
             return "UNSUPPORTED_ADDRESS_SPACE";
         case MemoryCbdataStatus::INVALID_ADDRESS_SPACE:
             return "INVALID_ADDRESS_SPACE";
+        case MemoryCbdataStatus::PARTIAL_COVERAGE:
+            return "PARTIAL_COVERAGE";
     }
     return "UNKNOWN";
 }
@@ -63,7 +65,14 @@ constexpr bool IsMemoryAccessParamField() noexcept
            std::is_same_v<ParamField, aclsan::ScalarGmParamField> ||
            std::is_same_v<ParamField, aclsan::ScalarDevParamField> ||
            std::is_same_v<ParamField, aclsan::ScalarPreloadParamField> ||
-           std::is_same_v<ParamField, aclsan::ScalarAtomicParamField>;
+           std::is_same_v<ParamField, aclsan::ScalarAtomicParamField> ||
+           std::is_same_v<ParamField, aclsan::SetL12DParamField> ||
+           std::is_same_v<ParamField, aclsan::MmadParamField> ||
+           std::is_same_v<ParamField, aclsan::LoadL1MxParamField> ||
+           std::is_same_v<ParamField, aclsan::LocalMemoryTransferParamField> ||
+           std::is_same_v<ParamField, aclsan::LoadCbufToL0ParamField> ||
+           std::is_same_v<ParamField, aclsan::LoadCbufToCbTransposeParamField> ||
+           std::is_same_v<ParamField, aclsan::Img2ColParamField>;
 }
 
 template <typename ParamField>
@@ -144,11 +153,15 @@ private:
             return DeviceCallbackData{std::move(result.data)};
         }
         ASCTOOL_ERROR(
-            "acl_san trace: cannot resolve GM memory access status=%s instrId=%llu pc=0x%llx blockType=%u "
+            "acl_san trace: incomplete memory access status=%s instrId=%llu pc=0x%llx blockType=%u "
             "blockId=%u requiredSetInstrId=%llu",
             MemoryCbdataStatusName(result.status), static_cast<unsigned long long>(parsed.record.instrId),
             static_cast<unsigned long long>(parsed.record.pc), parsed.blockType, parsed.blockId,
             static_cast<unsigned long long>(result.requiredRegisterInstructionId));
+        // Keep proven accesses, but do not synthesize an event for conversion failure.
+        if (!result.data.empty()) {
+            return DeviceCallbackData{std::move(result.data)};
+        }
         return std::nullopt;
     }
 

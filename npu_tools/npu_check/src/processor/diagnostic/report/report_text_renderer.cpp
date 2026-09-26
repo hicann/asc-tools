@@ -249,6 +249,7 @@ ReportRenderStatus RenderReportRecord(
     }
 
     ReportFields fields = record.fields;
+    fields.try_emplace("capacityContext", "");
     PutDerivedLocations(&fields);
     fields["Severity"] = ReportSeverityName(record.severity);
     fields["pattern"] = record.key.pattern;

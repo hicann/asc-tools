@@ -352,6 +352,105 @@ std::optional<DecodedInstruction> Decode(const aclsan::AclsanRawTraceRecord& rec
     if (record.instrId >= RawId(InstructionId::StB64Imm) && record.instrId <= RawId(InstructionId::LdpB8)) {
         return DecodeScalarGm(record);
     }
+    if (record.instrId == 386 || record.instrId == 387) {
+        const uint64_t config = record.args[0];
+        FmatrixParamField fields{};
+        fields.instrId = record.instrId;
+        fields.width = static_cast<uint16_t>(config);
+        fields.height = static_cast<uint16_t>(config >> 16);
+        fields.paddingLeft = static_cast<uint8_t>(config >> 32);
+        fields.paddingRight = static_cast<uint8_t>(config >> 40);
+        fields.paddingTop = static_cast<uint8_t>(config >> 48);
+        fields.paddingBottom = static_cast<uint8_t>(config >> 56);
+        return DecodedInstruction{DeviceInstructionKind::Img2ColRegister, fields};
+    }
+    if (record.instrId == 390 || record.instrId == 391) {
+        const uint64_t config = record.args[0];
+        L3dRptParamField fields{};
+        fields.instrId = record.instrId;
+        fields.repeatStride = static_cast<uint16_t>(config);
+        fields.repeatTimes = static_cast<uint8_t>(config >> 16);
+        fields.repeatAlongK = ((config >> 24) & 1) != 0;
+        fields.dstStride = static_cast<uint8_t>(config >> 32);
+        fields.dstOffset = static_cast<uint8_t>(config >> 48);
+        return DecodedInstruction{DeviceInstructionKind::Img2ColRegister, fields};
+    }
+    if (record.instrId >= 141 && record.instrId <= 148) {
+        LoadCbufToL0ParamField f{};
+        f.instrId = record.instrId;
+        f.dstAddr = record.args[0];
+        f.srcAddr = record.args[1];
+        f.mStartPosition = static_cast<uint16_t>(record.args[2]);
+        f.kStartPosition = static_cast<uint16_t>(record.args[2] >> 16);
+        f.mStep = static_cast<uint8_t>(record.args[2] >> 32);
+        f.kStep = static_cast<uint8_t>(record.args[2] >> 40);
+        f.srcStride = static_cast<uint16_t>(record.args[3]);
+        f.dstStride = static_cast<uint16_t>(record.args[3] >> 16);
+        f.transpose = record.args[4] != 0;
+        return DecodedInstruction{DeviceInstructionKind::LoadL1ToL0, f};
+    }
+    if (record.instrId >= 137 && record.instrId <= 140) {
+        LoadCbufToCbTransposeParamField f{};
+        f.instrId = record.instrId;
+        f.dstAddr = record.args[0];
+        f.srcAddr = record.args[1];
+        f.indexId = static_cast<uint16_t>(record.args[2]);
+        f.repeat = static_cast<uint8_t>(record.args[2] >> 16);
+        f.srcStride = static_cast<uint16_t>(record.args[2] >> 24);
+        f.dstGap = static_cast<uint16_t>(record.args[2] >> 44);
+        f.dstFracGap = static_cast<uint16_t>(record.args[3]);
+        f.srcFracGap = static_cast<uint16_t>(record.args[3] >> 16);
+        f.decrement = (record.args[2] >> 63) != 0;
+        return DecodedInstruction{DeviceInstructionKind::LoadL1Transpose, f};
+    }
+    if ((record.instrId >= 153 && record.instrId <= 157) || record.instrId == 422) {
+        Img2ColParamField f{};
+        f.instrId = record.instrId;
+        f.dstAddr = record.args[0];
+        f.srcAddr = static_cast<uint32_t>(record.args[1]);
+        f.kExtension = static_cast<uint16_t>(record.args[2]);
+        f.mExtension = static_cast<uint16_t>(record.args[2] >> 16);
+        f.kStartPoint = static_cast<uint16_t>(record.args[2] >> 32);
+        f.mStartPoint = static_cast<uint16_t>(record.args[2] >> 48);
+        f.strideWidth = record.args[3] & 63;
+        f.strideHeight = (record.args[3] >> 6) & 63;
+        f.filterWidth = static_cast<uint8_t>(record.args[3] >> 12);
+        f.filterHeight = static_cast<uint8_t>(record.args[3] >> 20);
+        f.dilationFilterWidth = static_cast<uint8_t>(record.args[3] >> 28);
+        f.dilationFilterHeight = static_cast<uint8_t>(record.args[3] >> 36);
+        f.filterSizeWidth = (record.args[3] >> 44) & 1;
+        f.filterSizeHeight = (record.args[3] >> 45) & 1;
+        f.transpose = (record.args[3] >> 46) & 1;
+        f.fMatrixControl = (record.args[3] >> 47) & 1;
+        f.channelSize = static_cast<uint16_t>(record.args[3] >> 48);
+        return DecodedInstruction{DeviceInstructionKind::Img2Col, f};
+    }
+    if (record.instrId >= 400 && record.instrId <= 415) {
+        const uint64_t config = record.args[3];
+        return DecodedInstruction{
+            DeviceInstructionKind::Mmad,
+            MmadParamField{
+                record.instrId, static_cast<uint32_t>(record.args[0]), record.args[1], record.args[2],
+                static_cast<uint16_t>(config & 0xfff), static_cast<uint16_t>((config >> 12) & 0xfff),
+                static_cast<uint16_t>((config >> 24) & 0xfff), bool((config >> 61) & 1), bool((config >> 62) & 1),
+                bool((config >> 63) & 1)}};
+    }
+    if (record.instrId == 151 || record.instrId == 152) {
+        const uint64_t config = record.args[2];
+        return DecodedInstruction{
+            DeviceInstructionKind::LoadL1Mx,
+            LoadL1MxParamField{
+                record.instrId, record.args[1], static_cast<uint16_t>(config), static_cast<uint16_t>(config >> 16),
+                static_cast<uint8_t>(config >> 32), static_cast<uint8_t>(config >> 40),
+                static_cast<uint16_t>(record.args[3])}};
+    }
+    if (record.instrId == 158) {
+        return DecodedInstruction{
+            DeviceInstructionKind::LocalMemoryTransfer,
+            LocalMemoryTransferParamField{
+                record.instrId, record.args[0], record.args[1], record.args[2], record.args[3],
+                LocalMemoryTransferKind::CopyCbufToUbuf}};
+    }
     switch (record.instrId) {
         case RawId(InstructionId::StAtomicB32):
             return DecodeScalarAtomic(record, DATA_BITS_B32);
