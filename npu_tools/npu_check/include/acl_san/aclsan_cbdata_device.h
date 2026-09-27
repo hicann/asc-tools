@@ -153,7 +153,42 @@ typedef struct AclsanDeviceMemoryAccessData {
         AclsanMemBlockRepeatLayout blockRepeat;
         AclsanMemNdAffineLayout ndAffine;
     } layout;
+    uint32_t instructionId;
+    uint32_t reserved;
+    uint64_t regDependencyMask0;
+    uint64_t regDependencyMask1;
 } AclsanDeviceMemoryAccessData;
+
+typedef enum AclsanDeviceRegisterId {
+    ACLSAN_DEVICE_REGISTER_VECTOR_MASK = 0,
+    ACLSAN_DEVICE_REGISTER_MTE2_SOURCE = 1,
+    ACLSAN_DEVICE_REGISTER_NDDMA_PAD_COUNT = 2,
+    ACLSAN_DEVICE_REGISTER_NDDMA_LOOP0_STRIDE = 3,
+    ACLSAN_DEVICE_REGISTER_NDDMA_LOOP1_STRIDE = 4,
+    ACLSAN_DEVICE_REGISTER_NDDMA_LOOP2_STRIDE = 5,
+    ACLSAN_DEVICE_REGISTER_NDDMA_LOOP3_STRIDE = 6,
+    ACLSAN_DEVICE_REGISTER_NDDMA_LOOP4_STRIDE = 7,
+    ACLSAN_DEVICE_REGISTER_MTE2_NZ = 8,
+    ACLSAN_DEVICE_REGISTER_LOOP3 = 9,
+    ACLSAN_DEVICE_REGISTER_DMA_LOOP_SIZE_UBUF_TO_GM = 10,
+    ACLSAN_DEVICE_REGISTER_DMA_LOOP_SIZE_GM_TO_UBUF = 11,
+    ACLSAN_DEVICE_REGISTER_DMA_LOOP_SIZE_GM_TO_CBUF = 12,
+    ACLSAN_DEVICE_REGISTER_DMA_LOOP1_STRIDE_UBUF_TO_GM = 13,
+    ACLSAN_DEVICE_REGISTER_DMA_LOOP2_STRIDE_UBUF_TO_GM = 14,
+    ACLSAN_DEVICE_REGISTER_DMA_LOOP1_STRIDE_GM_TO_UBUF = 15,
+    ACLSAN_DEVICE_REGISTER_DMA_LOOP2_STRIDE_GM_TO_UBUF = 16,
+    ACLSAN_DEVICE_REGISTER_DMA_LOOP1_STRIDE_GM_TO_CBUF = 17,
+    ACLSAN_DEVICE_REGISTER_DMA_LOOP2_STRIDE_GM_TO_CBUF = 18,
+    ACLSAN_DEVICE_REGISTER_SET_PADDING = 19,
+    ACLSAN_DEVICE_REGISTER_COUNT = 20
+} AclsanDeviceRegisterId;
+
+typedef struct AclsanDeviceRegisterStateData {
+    AclsanDeviceEventHeader header;
+    uint32_t regId; // AclsanDeviceRegisterId
+    uint32_t reserved;
+    uint64_t value;
+} AclsanDeviceRegisterStateData;
 
 // ==========================================
 // ===========     SYNC CHECK      ==========

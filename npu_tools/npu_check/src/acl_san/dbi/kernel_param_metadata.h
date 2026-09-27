@@ -13,8 +13,16 @@
 
 #include <cstdint>
 #include <string>
+#include <vector>
 
 namespace aclsan {
+struct BinarySectionRange {
+    uint64_t offset = 0;
+    uint64_t bytes = 0;
+};
+
+bool GetReadOnlyBinarySections(
+    const std::string& elf, std::vector<BinarySectionRange>& ranges, std::string& diagnostic);
 // 更新插桩后.o的.ascend.meta的section段，使得该内容与dbi的统一偏移保持一致
 // original: 插桩前原始device elf的完整二进制内容     patched: bisheng-tune插桩后devce elf的完整二进制内容
 bool ModifyKernelParamMetadata(

@@ -200,6 +200,26 @@ ReportRecord MakeInitcheckRecord()
         }};
 }
 
+NpuCheckInitcheckReport MakeRegisterInitcheckReport()
+{
+    NpuCheckInitcheckReport report{};
+    report.common.tool = ReportTool::INITCHECK;
+    report.common.pattern = NpuCheckReportPattern::INITCHECK_UNINITIALIZED_REGISTER_USE;
+    report.common.severity = ReportSeverity::ERROR;
+    report.common.flags = npucheck::kNpuCheckReportCommonHasExecContext;
+    report.common.exec.pc = 0x180;
+    report.common.exec.phyCoreId = 5;
+    report.common.exec.blockType = ACLSAN_DEVICE_BLOCK_TYPE_AICORE_VECTOR;
+    report.common.exec.blockId = 2;
+    report.common.exec.pipeName = "MTE2";
+    report.common.exec.launchId = 43;
+    report.registerId = ACLSAN_DEVICE_REGISTER_MTE2_SOURCE;
+    report.registerName = "mte2_source";
+    report.setterInstruction = "set_mte2_src_para";
+    report.consumerInstruction = "load_gm_to_cbuf_2dv2";
+    return report;
+}
+
 ReportRecord MakeRaceRecord()
 {
     return ReportRecord{
@@ -428,6 +448,15 @@ TEST(ReportRendererTest, ListsAndRendersBuiltinTemplates)
     EXPECT_NE(
         rendered.find("========= ERROR:[INITCHECK] Uninitialized GM memory read of size 32 bytes"), std::string::npos);
 
+    const auto registerReport = MakeRegisterInitcheckReport();
+    EXPECT_EQ(
+        npucheck::RenderNpuCheckReportRecord(NpuCheckReportRecord::From(registerReport), {}, &rendered),
+        ReportRenderStatus::SUCCESS);
+    EXPECT_NE(rendered.find("Register mte2_source was used before initialization"), std::string::npos);
+    EXPECT_NE(
+        rendered.find("load_gm_to_cbuf_2dv2 requires initializing register mte2_source before execution"),
+        std::string::npos);
+
     EXPECT_EQ(npucheck::RenderReportRecord(MakeRaceRecord(), {}, &rendered), ReportRenderStatus::SUCCESS);
     EXPECT_NE(
         rendered.find("========= WARNING:[RACECHECK] Potential RAW hazard detected at UB 0x2000 in block (8) :"),
@@ -485,7 +514,7 @@ TEST(ReportRendererTest, CatalogOwnsCompletePatternMetadata)
     EXPECT_FALSE(unused->reportTemplate.text.empty());
 
     const auto& catalog = GetPatternCatalog();
-    EXPECT_EQ(catalog.size(), 34U);
+    EXPECT_EQ(catalog.size(), 35U);
     std::set<NpuCheckReportPattern> patternValues;
     for (const auto& [key, descriptor] : catalog) {
         EXPECT_FALSE(key.pattern.empty());

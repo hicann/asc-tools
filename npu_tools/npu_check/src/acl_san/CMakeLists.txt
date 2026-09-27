@@ -195,6 +195,7 @@ add_library(acl_san SHARED
   device_instr/arch/dav_3510/register_state_manager.cpp
   aclsan_active_probe_plan.cpp
   aclsan_memory_cbdata.cpp
+  aclsan_register_dependency.cpp
   aclsan_trace_buffer.cpp
   aclsan_trace_runtime.cpp
   aclsan_api.cpp

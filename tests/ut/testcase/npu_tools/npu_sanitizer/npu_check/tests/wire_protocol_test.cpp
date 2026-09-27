@@ -17,7 +17,7 @@
 namespace npucheck::ipc {
 namespace {
 
-// 构造一个双工具、每个工具带一个子选项的规范化请求。
+// 构造一个三工具请求；已有工具各带一个子选项，initcheck 不带专属选项。
 ConfigureRequest SampleConfigure()
 {
     ConfigureRequest request;
@@ -27,8 +27,11 @@ ConfigureRequest SampleConfigure()
     ToolRequest synccheck;
     synccheck.toolId = ToolId::SYNCCHECK;
     synccheck.options.push_back({OptionId::SYNCCHECK_MISSING_BARRIER_INIT_IS_FATAL, {0x01}});
+    ToolRequest initcheck;
+    initcheck.toolId = ToolId::INITCHECK;
     request.tools.push_back(std::move(memcheck));
     request.tools.push_back(std::move(synccheck));
+    request.tools.push_back(std::move(initcheck));
     return request;
 }
 
@@ -54,18 +57,31 @@ TEST(WireProtocolTest, RoundTripsHelloAndToolConfiguration)
     const ConfigureRequest request = SampleConfigure();
     ConfigureRequest decoded{};
     ASSERT_TRUE(DecodeConfigure(EncodeConfigure(request), decoded, error)) << error;
-    ASSERT_EQ(decoded.tools.size(), 2U);
+    ASSERT_EQ(decoded.tools.size(), 3U);
     EXPECT_EQ(decoded.globalFlags, 0U);
     EXPECT_EQ(decoded.tools[0].toolId, ToolId::MEMCHECK);
     EXPECT_EQ(decoded.tools[1].toolId, ToolId::SYNCCHECK);
+    EXPECT_EQ(decoded.tools[2].toolId, ToolId::INITCHECK);
     ASSERT_EQ(decoded.tools[0].options.size(), 1U);
     EXPECT_EQ(decoded.tools[0].options[0].optionId, OptionId::MEMCHECK_CHECK_CACHE_CONTROL);
     EXPECT_EQ(decoded.tools[0].options[0].value, std::vector<uint8_t>{0x01});
     ASSERT_EQ(decoded.tools[1].options.size(), 1U);
     EXPECT_EQ(decoded.tools[1].options[0].optionId, OptionId::SYNCCHECK_MISSING_BARRIER_INIT_IS_FATAL);
+    EXPECT_TRUE(decoded.tools[2].options.empty());
 
     // 线路上不出现任何原始命令行字符串：布局是 4 字节头 + 每工具 4 字节 + 每选项 5 字节。
-    EXPECT_EQ(EncodeConfigure(request).size(), 4U + 2U * (4U + 5U));
+    EXPECT_EQ(EncodeConfigure(request).size(), 4U + 3U * 4U + 2U * 5U);
+}
+
+TEST(WireProtocolTest, ResolvesInitcheckToolNameWithoutChangingExistingIds)
+{
+    EXPECT_EQ(static_cast<uint16_t>(ToolId::MEMCHECK), 1U);
+    EXPECT_EQ(static_cast<uint16_t>(ToolId::SYNCCHECK), 2U);
+    EXPECT_EQ(static_cast<uint16_t>(ToolId::INITCHECK), 3U);
+    EXPECT_STREQ(ToolName(ToolId::INITCHECK), "initcheck");
+    ToolId id = ToolId::MEMCHECK;
+    ASSERT_TRUE(LookupTool("initcheck", id));
+    EXPECT_EQ(id, ToolId::INITCHECK);
 }
 
 // 规范化编码唯一：未排序或重复的 tool_id / option_id 必须被拒绝。接受了非规范编码，

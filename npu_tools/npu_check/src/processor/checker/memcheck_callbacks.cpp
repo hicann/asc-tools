@@ -10,6 +10,9 @@
 
 #include "checker/memcheck.h"
 #include "npu_tool_log.h"
+#include <algorithm>
+#include <cstddef>
+#include <cstring>
 #include <sstream>
 
 namespace npucheck {
@@ -36,7 +39,13 @@ bool Memcheck::OnCallback(
         }
     } else if (domain == ACLSAN_CB_DOMAIN_DEVICE_INSTRUCTION) {
         const auto* event = static_cast<const AclsanDeviceMemoryAccessData*>(data);
-        QueueDeviceMemoryAccess(*event);
+        constexpr size_t kLegacyMemoryAccessSize = offsetof(AclsanDeviceMemoryAccessData, instructionId);
+        if (event->header.size < kLegacyMemoryAccessSize) {
+            return false;
+        }
+        AclsanDeviceMemoryAccessData compatible{};
+        std::memcpy(&compatible, event, std::min<size_t>(event->header.size, sizeof(compatible)));
+        QueueDeviceMemoryAccess(compatible);
     } else if (domain == ACLSAN_CB_DOMAIN_LAUNCH) {
         const auto* event = static_cast<const AclsanLaunchData*>(data);
         if (event->common.result != 0) {
@@ -72,6 +81,7 @@ std::string Memcheck::Summary() const
            << " dropped_device_operations=" << stats.droppedDeviceOperations
            << " failed_launches=" << stats.failedLaunches
            << " failed_synchronizations=" << stats.failedSynchronizations;
+    output << " inexact_device_operations=" << stats.inexactDeviceOperations;
     return output.str();
 }
 } // namespace npucheck

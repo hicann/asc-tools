@@ -123,6 +123,7 @@ enum class NpuCheckReportPattern : std::uint32_t {
     INITCHECK_PARTIAL_UNINITIALIZED_READ = 0x0202,
     INITCHECK_UNUSED_MEMORY = 0x0203,
     INITCHECK_API_READ_UNINITIALIZED = 0x0204,
+    INITCHECK_UNINITIALIZED_REGISTER_USE = 0x0205,
 
     RACECHECK_ANALYSIS = 0x0301,
     RACECHECK_HAZARD_RAW = 0x0302,
@@ -343,6 +344,11 @@ struct NpuCheckInitcheckReport {
     std::uint64_t unusedBytes = 0;
     std::uint32_t unusedPercent = 0; // Integer percentage of allocation bytes never initialized.
     std::uint32_t flags = 0;         // Checker-defined initcheck metadata bit mask.
+
+    std::uint32_t registerId = 0;
+    std::string registerName;
+    std::string setterInstruction;
+    std::string consumerInstruction;
 };
 
 struct NpuCheckRacecheckReport {

@@ -22,7 +22,8 @@
 
 namespace npucheck {
 using CallbackSpec = std::pair<AclsanCallbackDomain, AclsanCallbackId>;
-using CheckerReport = std::variant<npucheck::NpuCheckMemcheckReport, npucheck::NpuCheckSynccheckReport>;
+using CheckerReport = std::variant<
+    npucheck::NpuCheckMemcheckReport, npucheck::NpuCheckInitcheckReport, npucheck::NpuCheckSynccheckReport>;
 using CheckerReportList = std::vector<CheckerReport>;
 
 // Checkers declare their own events and state. ToolManager serializes callbacks,

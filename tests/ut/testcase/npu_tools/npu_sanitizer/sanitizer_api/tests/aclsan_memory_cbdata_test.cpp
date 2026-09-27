@@ -54,6 +54,13 @@ using aclsan::InstructionId;
 
 uint32_t RawInstructionId(InstructionId instruction) { return static_cast<uint32_t>(instruction); }
 
+aclsan::MemoryRegisterState SingletonDmaState(aclsan::DmaLoopDirection direction)
+{
+    aclsan::MemoryRegisterState state{};
+    state.dmaLoopSizes[static_cast<std::size_t>(direction)] = aclsan::DmaLoopSizeParamField{direction, 1, 1};
+    return state;
+}
+
 void TestEmptyFieldProducesNoCbdata()
 {
     CopyGmToUbufAlignV2ParamField field{};
@@ -74,9 +81,17 @@ void TestFieldAndContextProduceCbdata()
     field.burstNum = 3;
     field.burstLen = 32;
     field.burstSrcStride = 64;
-    const aclsan::MemoryCbdataContext context{0x2000, 41, 40, 7, 2, 3, ACLSAN_DEVICE_PIPE_MTE2};
+    aclsan::MemoryCbdataContext context{};
+    context.pc = 0x2000;
+    context.instrExecId = 41;
+    context.serialNo = 40;
+    context.siteId = 7;
+    context.coreId = 2;
+    context.blockId = 3;
+    context.pipeline = ACLSAN_DEVICE_PIPE_MTE2;
 
-    const auto result = GmProjectionConverter{context}.Convert(aclsan::MemoryInstructionField{field});
+    const auto state = SingletonDmaState(aclsan::DmaLoopDirection::GM_TO_UBUF);
+    const auto result = GmProjectionConverter{context, state}.Convert(aclsan::MemoryInstructionField{field});
     assert(result.status == aclsan::MemoryCbdataStatus::SUCCESS);
     assert(result.data.size() == 1);
     const AclsanDeviceMemoryAccessData& access = result.data.front();
@@ -108,7 +123,8 @@ void TestCubeAndMultiFieldsUseDecodedDataBits()
     cubeField.srcAddr = 0x2000;
     cubeField.burstNum = 1;
     cubeField.burstLen = 8;
-    const auto cubeResult = GmProjectionConverter{{}}.Convert(aclsan::MemoryInstructionField{cubeField});
+    const auto cubeState = SingletonDmaState(aclsan::DmaLoopDirection::GM_TO_CBUF);
+    const auto cubeResult = GmProjectionConverter{{}, cubeState}.Convert(aclsan::MemoryInstructionField{cubeField});
     assert(cubeResult.status == aclsan::MemoryCbdataStatus::SUCCESS);
     assert(cubeResult.data.size() == 1);
     assert(cubeResult.data.front().dataBits == cubeField.dataBits);
@@ -139,10 +155,7 @@ void TestNdDmaFieldUsesDecodedDataBits()
     field.loop4Size = 1;
 
     aclsan::MemoryRegisterState state{};
-    // NDDMA requires all five stride registers, including singleton dimensions.
-    for (uint32_t index = 0; index < state.ndDmaLoopStrides.size(); ++index) {
-        state.ndDmaLoopStrides[index] = aclsan::NdDmaLoopStrideParamField{index, 0};
-    }
+    // Singleton NDDMA dimensions do not consume their stride registers.
     const auto result = GmProjectionConverter{{}, state}.Convert(aclsan::MemoryInstructionField{field});
     assert(result.status == aclsan::MemoryCbdataStatus::SUCCESS);
     assert(result.data.size() == 1);
@@ -252,7 +265,8 @@ void TestCopyGmToCbufV2UsesUnifiedConverter()
     field.burstLen = 3;
     field.srcStride = 5;
 
-    const auto result = GmProjectionConverter{{}}.Convert(aclsan::MemoryInstructionField{field});
+    const auto state = SingletonDmaState(aclsan::DmaLoopDirection::GM_TO_CBUF);
+    const auto result = GmProjectionConverter{{}, state}.Convert(aclsan::MemoryInstructionField{field});
     assert(result.status == aclsan::MemoryCbdataStatus::SUCCESS);
     assert(result.data.size() == 1);
     const auto& access = result.data.front();
@@ -277,7 +291,8 @@ void TestCopyGmToCbufV2ModelsPaddingSourceFootprint()
         field.burstLen = 1;
         field.padFunctionMode = mode;
 
-        const auto result = GmProjectionConverter{{}}.Convert(aclsan::MemoryInstructionField{field});
+        const auto state = SingletonDmaState(aclsan::DmaLoopDirection::GM_TO_CBUF);
+        const auto result = GmProjectionConverter{{}, state}.Convert(aclsan::MemoryInstructionField{field});
         assert(result.status == aclsan::MemoryCbdataStatus::SUCCESS);
         assert(result.data.size() == 1);
         const auto& access = result.data.front();
@@ -294,7 +309,8 @@ void TestCopyGmToCbufV2ModelsPaddingSourceFootprint()
         field.padFunctionMode = mode;
         field.srcStride = 3;
 
-        const auto result = GmProjectionConverter{{}}.Convert(aclsan::MemoryInstructionField{field});
+        const auto state = SingletonDmaState(aclsan::DmaLoopDirection::GM_TO_CBUF);
+        const auto result = GmProjectionConverter{{}, state}.Convert(aclsan::MemoryInstructionField{field});
         assert(result.status == aclsan::MemoryCbdataStatus::SUCCESS);
         assert(result.data.size() == 1);
         const auto& access = result.data.front();
@@ -326,7 +342,8 @@ void TestContiguousBurstStrideProducesOneRange()
     field.burstLen = 32;
     field.burstSrcStride = 32;
 
-    const auto result = GmProjectionConverter{{}}.Convert(aclsan::MemoryInstructionField{field});
+    const auto state = SingletonDmaState(aclsan::DmaLoopDirection::GM_TO_UBUF);
+    const auto result = GmProjectionConverter{{}, state}.Convert(aclsan::MemoryInstructionField{field});
     assert(result.status == aclsan::MemoryCbdataStatus::SUCCESS);
     assert(result.data.size() == 1);
     assert(result.data.front().layoutKind == ACLSAN_MEM_LAYOUT_RANGE);
@@ -343,7 +360,8 @@ void TestAddressExtentOverflowIsRejected()
     field.burstLen = 32;
     field.burstSrcStride = 32;
 
-    const auto result = GmProjectionConverter{{}}.Convert(aclsan::MemoryInstructionField{field});
+    const auto state = SingletonDmaState(aclsan::DmaLoopDirection::GM_TO_UBUF);
+    const auto result = GmProjectionConverter{{}, state}.Convert(aclsan::MemoryInstructionField{field});
     assert(result.status == aclsan::MemoryCbdataStatus::ARITHMETIC_OVERFLOW);
     assert(result.data.empty());
 }
@@ -453,8 +471,8 @@ void TestDmaOuterLoopStateDistinguishesDefaultZeroAndMissingStride()
     assert(result.status == aclsan::MemoryCbdataStatus::NO_ACCESS);
 
     result = GmProjectionConverter{{}}.Convert(aclsan::MemoryInstructionField{field});
-    assert(result.status == aclsan::MemoryCbdataStatus::SUCCESS);
-    assert(result.data.front().layoutKind == ACLSAN_MEM_LAYOUT_RANGE);
+    assert(result.status == aclsan::MemoryCbdataStatus::MISSING_REGISTER_STATE);
+    assert(result.requiredRegisterInstructionId == RawInstructionId(InstructionId::LoopSizeGmToUbuf));
 }
 
 void TestFixpipeConversionModesConsumeIndependentLoop3State()
@@ -606,7 +624,7 @@ void TestLargeMultiAccessRemainsNdAffineInsteadOfTruncatingRepeatCount()
     assert(result.data.front().layout.ndAffine.rank == 2);
 }
 
-void TestNdDmaRequiresAllStrideStates()
+void TestNdDmaRequiresOnlyActiveStrideStates()
 {
     aclsan::NdDmaOutToUbufParamField field{};
     field.instrId = RawInstructionId(InstructionId::NdDmaOutToUbufB8);
@@ -621,34 +639,12 @@ void TestNdDmaRequiresAllStrideStates()
     aclsan::MemoryRegisterState state{};
     auto result = GmProjectionConverter{{}, state}.Convert(aclsan::MemoryInstructionField{field});
     assert(result.status == aclsan::MemoryCbdataStatus::MISSING_REGISTER_STATE);
-    assert(result.requiredRegisterInstructionId == RawInstructionId(InstructionId::NdDmaLoop0Stride));
-
-    state.ndDmaLoopStrides[0] = aclsan::NdDmaLoopStrideParamField{0, 0};
-    result = GmProjectionConverter{{}, state}.Convert(aclsan::MemoryInstructionField{field});
-    assert(result.status == aclsan::MemoryCbdataStatus::MISSING_REGISTER_STATE);
     assert(result.requiredRegisterInstructionId == RawInstructionId(InstructionId::NdDmaLoop1Stride));
     state.ndDmaLoopStrides[1] = aclsan::NdDmaLoopStrideParamField{1, 8};
-    result = GmProjectionConverter{{}, state}.Convert(aclsan::MemoryInstructionField{field});
-    assert(result.status == aclsan::MemoryCbdataStatus::MISSING_REGISTER_STATE);
-    assert(result.requiredRegisterInstructionId == RawInstructionId(InstructionId::NdDmaLoop2Stride));
-    state.ndDmaLoopStrides[2] = aclsan::NdDmaLoopStrideParamField{2, 0};
-    result = GmProjectionConverter{{}, state}.Convert(aclsan::MemoryInstructionField{field});
-    assert(result.status == aclsan::MemoryCbdataStatus::MISSING_REGISTER_STATE);
-    assert(result.requiredRegisterInstructionId == RawInstructionId(InstructionId::NdDmaLoop3Stride));
-    state.ndDmaLoopStrides[3] = aclsan::NdDmaLoopStrideParamField{3, 0};
-    result = GmProjectionConverter{{}, state}.Convert(aclsan::MemoryInstructionField{field});
-    assert(result.status == aclsan::MemoryCbdataStatus::MISSING_REGISTER_STATE);
-    assert(result.requiredRegisterInstructionId == RawInstructionId(InstructionId::NdDmaLoop4Stride));
-    state.ndDmaLoopStrides[4] = aclsan::NdDmaLoopStrideParamField{4, 0};
     result = GmProjectionConverter{{}, state}.Convert(aclsan::MemoryInstructionField{field});
     assert(result.status == aclsan::MemoryCbdataStatus::SUCCESS);
 
     field.loop4Size = 0;
-    state.ndDmaLoopStrides[4].reset();
-    result = GmProjectionConverter{{}, state}.Convert(aclsan::MemoryInstructionField{field});
-    assert(result.status == aclsan::MemoryCbdataStatus::MISSING_REGISTER_STATE);
-    assert(result.requiredRegisterInstructionId == RawInstructionId(InstructionId::NdDmaLoop4Stride));
-    state.ndDmaLoopStrides[4] = aclsan::NdDmaLoopStrideParamField{4, 0};
     result = GmProjectionConverter{{}, state}.Convert(aclsan::MemoryInstructionField{field});
     assert(result.status == aclsan::MemoryCbdataStatus::NO_ACCESS);
 }
@@ -951,7 +947,7 @@ TEST(AclsanMemoryCbdata, Main)
     TestFixpipeDumpTensorC0PaddingUsesRawNzFootprint();
     TestMultiStateDistinguishesMissingAndObservedZero();
     TestLargeMultiAccessRemainsNdAffineInsteadOfTruncatingRepeatCount();
-    TestNdDmaRequiresAllStrideStates();
+    TestNdDmaRequiresOnlyActiveStrideStates();
     TestLoadGmToCbuf2DV2UsesModeZeroFractalSize();
     TestLoadGmToCbuf2DV2SkipsNonzeroModes();
     TestLoadGmToCbuf2DV2SupportsNegativeAndZeroSourceStride();
@@ -1013,16 +1009,19 @@ TEST(AclsanMemoryCbdata, InternalRangeUsesEntireStridedFootprintAndLaunchContext
     field.burstNum = 3;
     field.burstLen = 32;
     field.burstSrcStride = 64;
-    const auto original = aclsan::MemoryFieldToCbdataConverter{{}}.Convert(field);
+    const auto state = SingletonDmaState(aclsan::DmaLoopDirection::GM_TO_UBUF);
+    const auto original = aclsan::MemoryFieldToCbdataConverter{{}, state}.Convert(field);
     ASSERT_EQ(original.status, aclsan::MemoryCbdataStatus::SUCCESS);
     aclsan::MemoryCbdataContext context{};
     context.parameterBase = 0x4000;
     context.parameterBytes = 256;
-    EXPECT_EQ(
-        aclsan::MemoryFieldToCbdataConverter{context}.Convert(field).status, aclsan::MemoryCbdataStatus::NO_ACCESS);
+    const auto contained = aclsan::MemoryFieldToCbdataConverter{context, state}.Convert(field);
+    EXPECT_EQ(contained.status, aclsan::MemoryCbdataStatus::NO_ACCESS);
     context.parameterBytes = 32;
-    EXPECT_EQ(aclsan::MemoryFieldToCbdataConverter{context}.Convert(field).status, aclsan::MemoryCbdataStatus::SUCCESS);
-    EXPECT_EQ(aclsan::MemoryFieldToCbdataConverter{{}}.Convert(field).status, aclsan::MemoryCbdataStatus::SUCCESS);
+    const auto partial = aclsan::MemoryFieldToCbdataConverter{context, state}.Convert(field);
+    EXPECT_EQ(partial.status, aclsan::MemoryCbdataStatus::SUCCESS);
+    const auto withoutContext = aclsan::MemoryFieldToCbdataConverter{{}, state}.Convert(field);
+    EXPECT_EQ(withoutContext.status, aclsan::MemoryCbdataStatus::SUCCESS);
 }
 
 TEST(AclsanMemoryCbdata, ScalarDevAddressOverflowIsExplicit)
@@ -1252,6 +1251,35 @@ TEST(AclsanMemoryCbdata, ScalarAtomicRejectsInconsistentFieldsAndPost)
                 .status,
             aclsan::MemoryCbdataStatus::INVALID_FIELD);
     }
+}
+
+TEST(AclsanMemoryCbdata, ReadOnlyBinaryFilteringPreservesWritesAtomicsAndCrossBoundaryReads)
+{
+    const std::vector<aclsan::InternalMemoryRange> ranges{{reinterpret_cast<void*>(0x4000), 32}};
+    aclsan::MemoryCbdataContext context{};
+    context.readOnlyBinaryRanges = &ranges;
+    const aclsan::MemoryFieldToCbdataConverter converter{context};
+    for (uint64_t address : {0x4000UL, 0x4018UL}) {
+        const auto result = converter.Convert(aclsan::ScalarDevParamField{68, 64, address, 0});
+        EXPECT_EQ(result.status, aclsan::MemoryCbdataStatus::NO_ACCESS);
+        EXPECT_TRUE(result.data.empty());
+        const auto write = converter.Convert(aclsan::ScalarDevParamField{64, 64, address, 0});
+        ASSERT_EQ(write.data.size(), 1U);
+        EXPECT_EQ(write.data[0].accessMode, ACLSAN_DEVICE_MEMORY_ACCESS_WRITE);
+    }
+    for (uint64_t address : {0x3fffUL, 0x4019UL, 0x4020UL, 0x8000UL}) {
+        const auto result = converter.Convert(aclsan::ScalarDevParamField{68, 64, address, 0});
+        ASSERT_EQ(result.data.size(), 1U);
+        EXPECT_EQ(result.data[0].address, address);
+        EXPECT_EQ(result.data[0].layout.range.bytes, 8U);
+    }
+    const auto atomic = converter.Convert(aclsan::ScalarAtomicParamField{
+        56, 32, 0x4000, 0, 0, UINT64_C(0x100000000), aclsan::ASCSAN_SCALAR_ADDRESS_CONTEXT_V1});
+    EXPECT_EQ(atomic.status, aclsan::MemoryCbdataStatus::SUCCESS);
+    EXPECT_FALSE(atomic.data.empty());
+    EXPECT_EQ(
+        aclsan::MemoryFieldToCbdataConverter{{}}.Convert(aclsan::ScalarDevParamField{68, 64, 0x4000, 0}).status,
+        aclsan::MemoryCbdataStatus::SUCCESS);
 }
 
 TEST(AclsanMemoryCbdata, ScalarAtomicAddressOverflowIsExplicit)

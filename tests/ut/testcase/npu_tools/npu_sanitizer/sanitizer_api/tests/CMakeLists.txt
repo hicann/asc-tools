@@ -37,6 +37,7 @@ if(ENABLE_TEST)
     ${SANITIZER_API_SOURCE_DIR}/device_instr/arch/dav_3510/register_state_manager.cpp
     ${SANITIZER_API_SOURCE_DIR}/aclsan_active_probe_plan.cpp
     ${SANITIZER_API_SOURCE_DIR}/aclsan_memory_cbdata.cpp
+    ${SANITIZER_API_SOURCE_DIR}/aclsan_register_dependency.cpp
     ${SANITIZER_API_SOURCE_DIR}/aclsan_trace_buffer.cpp
     ${SANITIZER_API_SOURCE_DIR}/aclsan_trace_runtime.cpp
     ${SANITIZER_API_SOURCE_DIR}/aclsan_api.cpp

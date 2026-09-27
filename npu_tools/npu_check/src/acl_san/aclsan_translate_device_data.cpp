@@ -12,6 +12,7 @@
 #include "aclsan_device_data_log.h"
 #include "npu_tool_log.h"
 #include "aclsan_memory_cbdata.h"
+#include "aclsan_register_dependency.h"
 
 #include <cstdint>
 #include <optional>
@@ -85,14 +86,16 @@ class Translator final {
 public:
     static std::optional<DeviceCallbackData> TranslateToCallbackData(
         const ParsedTraceRecord& parsed, const aclsan::DecodedInstruction& decoded,
-        const MemoryRegisterState& registerState, const std::vector<InternalMemoryRange>* internalInputs) noexcept
+        const MemoryRegisterState& registerState, const std::vector<InternalMemoryRange>* internalInputs,
+        const std::vector<InternalMemoryRange>* readOnlyBinaryRanges) noexcept
     {
         const auto pipeline = static_cast<AclsanDevicePipeline>(parsed.record.pipeline);
         return std::visit(
             [&](const auto& value) noexcept -> std::optional<DeviceCallbackData> {
                 using ParamField = std::decay_t<decltype(value)>;
                 if constexpr (IsMemoryAccessParamField<ParamField>()) {
-                    return MakeDeviceMemoryAccessCallbackData(parsed, pipeline, value, registerState, internalInputs);
+                    return MakeDeviceMemoryAccessCallbackData(
+                        parsed, pipeline, value, registerState, internalInputs, readOnlyBinaryRanges);
                 } else if constexpr (std::is_same_v<ParamField, aclsan::LocalMemoryTransferParamField>) {
                     ASCTOOL_DEBUG(
                         "[cbdata] no GM access for local-only memory instruction instrId=%u kind=%u", value.instrId,
@@ -131,7 +134,8 @@ private:
     template <typename ParamField>
     static std::optional<DeviceCallbackData> MakeDeviceMemoryAccessCallbackData(
         const ParsedTraceRecord& parsed, AclsanDevicePipeline pipeline, const ParamField& params,
-        const MemoryRegisterState& registerState, const std::vector<InternalMemoryRange>* internalInputs) noexcept
+        const MemoryRegisterState& registerState, const std::vector<InternalMemoryRange>* internalInputs,
+        const std::vector<InternalMemoryRange>* readOnlyBinaryRanges) noexcept
     {
         const MemoryCbdataContext context{
             parsed.record.pc,
@@ -146,11 +150,34 @@ private:
             parsed.blockType,
             parsed.record.parameterBase,
             parsed.parameterBytes,
-            internalInputs};
+            internalInputs,
+            readOnlyBinaryRanges,
+            parsed.record.instrId};
         MemoryCbdataResult result =
             MemoryFieldToCbdataConverter{context, registerState}.Convert(MemoryInstructionField{params});
-        if (result.status == MemoryCbdataStatus::SUCCESS || result.status == MemoryCbdataStatus::NO_ACCESS) {
+        const RegisterDependencyMask dependencies =
+            ResolveRegisterDependencies(MemoryInstructionField{params}, registerState);
+        // Partial conversion can still contain proven GM or on-chip accesses.
+        for (AclsanDeviceMemoryAccessData& access : result.data) {
+            access.regDependencyMask0 = dependencies.mask0;
+            access.regDependencyMask1 = dependencies.mask1;
+        }
+        if (result.status == MemoryCbdataStatus::SUCCESS) {
             return DeviceCallbackData{std::move(result.data)};
+        }
+        if (result.status == MemoryCbdataStatus::NO_ACCESS) {
+            return DeviceCallbackData{DeviceMemoryAccessDataList{}};
+        }
+        if (result.status == MemoryCbdataStatus::MISSING_REGISTER_STATE &&
+            (dependencies.mask0 != 0 || dependencies.mask1 != 0)) {
+            AclsanDeviceMemoryAccessData estimated{};
+            estimated.header =
+                MakeDeviceEventHeader(parsed, pipeline, 0, static_cast<uint32_t>(sizeof(AclsanDeviceMemoryAccessData)));
+            estimated.header.flags = ACLSAN_DEVICE_EVENT_FLAG_ESTIMATED;
+            estimated.instructionId = parsed.record.instrId;
+            estimated.regDependencyMask0 = dependencies.mask0;
+            estimated.regDependencyMask1 = dependencies.mask1;
+            return DeviceCallbackData{DeviceMemoryAccessDataList{estimated}};
         }
         ASCTOOL_ERROR(
             "acl_san trace: incomplete memory access status=%s instrId=%llu pc=0x%llx blockType=%u "
@@ -206,7 +233,8 @@ private:
 
 std::optional<DeviceCallbackData> TranslateDecodedTraceToCallbackData(
     const ParsedTraceRecord& parsed, const aclsan::DecodedInstruction& decoded,
-    const MemoryRegisterState& registerState, const std::vector<InternalMemoryRange>* internalInputs) noexcept
+    const MemoryRegisterState& registerState, const std::vector<InternalMemoryRange>* internalInputs,
+    const std::vector<InternalMemoryRange>* readOnlyBinaryRanges) noexcept
 {
     LogRawRecord(parsed);
     // 判断是否找到对应的paramfield  raw data -> param field
@@ -217,7 +245,7 @@ std::optional<DeviceCallbackData> TranslateDecodedTraceToCallbackData(
     LogParamField(decoded.params);
 
     std::optional<DeviceCallbackData> cbdata =
-        Translator::TranslateToCallbackData(parsed, decoded, registerState, internalInputs);
+        Translator::TranslateToCallbackData(parsed, decoded, registerState, internalInputs, readOnlyBinaryRanges);
     // 判断 param field -> cbdata 的转换是否成功
     if (cbdata == std::nullopt) {
         ASCTOOL_DEBUG("[cbdata] paramField -> cbdata translation failed instrId=%u", parsed.record.instrId);

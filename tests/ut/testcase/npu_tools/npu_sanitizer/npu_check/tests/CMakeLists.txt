@@ -31,6 +31,7 @@ add_executable(npu_check_unit_tests
   gtest_main.cpp
   allocation_registry_test.cpp
   memcheck_test.cpp
+  initcheck_test.cpp
   checker_test.cpp
   report_buffer_test.cpp
   synccheck_test.cpp
@@ -52,6 +53,7 @@ add_test(NAME npu_check_unit_tests COMMAND npu_check_unit_tests)
 
 add_executable(npu_check_cube_memory_tests
   gtest_main.cpp cube_memory_test.cpp
+  "${NPU_CHECK_DBI_ROOT}/aclsan_register_dependency.cpp"
   "${NPU_CHECK_DBI_ROOT}/aclsan_memory_cbdata.cpp"
   "${NPU_CHECK_DBI_ROOT}/aclsan_translate_device_data.cpp"
   "${NPU_CHECK_DBI_ROOT}/aclsan_device_data_log.cpp"

@@ -330,7 +330,11 @@ struct InstrumentedBinaryLoadContext {
 int32_t LoadInstrumentedBinary(const void* data, size_t length, void* userdata)
 {
     auto& context = *static_cast<InstrumentedBinaryLoadContext*>(userdata);
-    return context.original(data, length, context.options, context.binHandle);
+    const auto status = context.original(data, length, context.options, context.binHandle);
+    if (status == ACL_SUCCESS && context.binHandle != nullptr && *context.binHandle != nullptr) {
+        aclsan::RecordTraceLoadedImage(*context.binHandle, data, length);
+    }
+    return status;
 }
 
 // DONE
@@ -548,7 +552,11 @@ int32_t LoadInstrumentedFile(const void* data, size_t bytes, void* opaque)
     if (close(fd) != 0) {
         return ACL_ERROR_FAILURE;
     }
-    return context.original(context.file.path.c_str(), context.options, context.binary);
+    const auto status = context.original(context.file.path.c_str(), context.options, context.binary);
+    if (status == ACL_SUCCESS && context.binary != nullptr && *context.binary != nullptr) {
+        aclsan::RecordTraceLoadedImage(*context.binary, data, bytes);
+    }
+    return status;
 }
 
 aclError aclrtBinaryLoadFromFileHook(const char* path, aclrtBinaryLoadOptions* options, aclrtBinHandle* binary) noexcept
@@ -750,6 +758,7 @@ aclError PrepareDeferredLaunch(
                     const auto unload = GetOriginalRuntimeFunction<aclrtBinaryUnLoadFunc>(
                         ACL_RT_API_aclrtBinaryUnLoad, "aclrtBinaryUnLoad");
                     if (unload(variant.binary) == ACL_SUCCESS) {
+                        aclsan::RecordTraceBinaryUnload(variant.binary);
                         variant.binary = nullptr;
                         if (!variant.file.path.empty()) {
                             (void)unlink(variant.file.path.c_str());

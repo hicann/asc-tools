@@ -95,9 +95,12 @@ void AppendToolSummary(ReportTool tool, const ToolSummary& summary, std::string*
         case ReportTool::INITCHECK:
             out->append("========= INITCHECK SUMMARY: ");
             AppendSeverityCounts(summary, out);
-            out->append(", ");
-            out->append(std::to_string(summary.unused));
-            out->append(" unused memory reports\n");
+            if (summary.unused != 0) {
+                out->append(", ");
+                out->append(std::to_string(summary.unused));
+                out->append(" unused memory reports");
+            }
+            out->push_back('\n');
             return;
         case ReportTool::RACECHECK:
             out->append("========= RACECHECK SUMMARY: ");

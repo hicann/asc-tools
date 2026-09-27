@@ -22,6 +22,7 @@ public:
     static void DispatchResource(AclsanCallbackId callbackId, const AclsanResourceData& callbackData) noexcept;
     static void DispatchSynchronizeEnd(const AclsanSynchronizeData& callbackData) noexcept;
     static void DispatchDeviceMemoryAccess(const AclsanDeviceMemoryAccessData& callbackData) noexcept;
+    static void DispatchDeviceState(const AclsanDeviceRegisterStateData& callbackData) noexcept;
     static void DispatchDeviceSync(const AclsanDeviceSyncData& callbackData) noexcept;
     static void DispatchLaunch(const AclsanLaunchData& callbackData) noexcept;
 

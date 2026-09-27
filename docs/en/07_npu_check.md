@@ -19,10 +19,11 @@ When using this tool through an Agent, refer to the [tool-npu-check Skill](../..
 
 | Feature | Purpose | Issues Checked |
 | --- | --- | --- |
-| `memcheck` | Checks reads and writes to device global memory (GM) | Out-of-bounds accesses, accesses to addresses not recognized as valid allocations, and accesses to memory recorded as freed |
+| `memcheck` | Checks GM reads and writes and supported L1, L0A, L0B, and L0C accesses | GM allocation bounds, invalid addresses, use after free, and on-chip memory capacity bounds |
 | `synccheck` | Checks whether device synchronization operations are correctly paired | Repeated event notifications, waits for events that have not been notified, notifications without corresponding waits, and mismatched notification/wait pairs |
+| `initcheck` | Checks whether persistent registers are set before their first dependent use | Data-transfer or compute instructions using persistent registers before they are set, or registers set only after use |
 
-The two features can be used separately or enabled together for the same application run.
+The three features can be used separately or enabled together for the same application run.
 
 ### 1.2 Usage Scenarios
 
@@ -83,7 +84,7 @@ npu-check [--tool <name>]... [--log-file <filepath>] [--] <application> [args...
 
 | Option | Input | Default Behavior | Description |
 | --- | --- | --- | --- |
-| `--tool <name>` | `memcheck`, `synccheck` | Enables `memcheck` when omitted | Can be specified multiple times to enable both tools; repeating the same tool does not repeat the check |
+| `--tool <name>` | `memcheck`, `synccheck`, `initcheck` | Enables `memcheck` when omitted | Can be specified multiple times to enable multiple tools; repeating the same tool does not repeat the check |
 | `--log-file <filepath>` | A file path | Displays the report in the terminal | Saves diagnostic information |
 | `-h`, `--help` | None | Does not display help | Displays command help |
 | `--` | None | Optional | Separates tool options from application arguments |
@@ -94,10 +95,10 @@ Run synchronization checking only:
 npu-check --tool synccheck ./my_app
 ```
 
-Enable both checks:
+Enable all checks:
 
 ```bash
-npu-check --tool memcheck --tool synccheck ./my_app
+npu-check --tool memcheck --tool synccheck --tool initcheck ./my_app
 ```
 
 ### 3.3 Saving to a File
@@ -115,9 +116,10 @@ When `--log-file` is specified, the report is written to the file and is not als
 
 - Device checking currently covers Ascend 950 (dav-3510).
 - This tool can only be used in the environment of the CANN package version that contains it.
-- Only a single invocation of a single operator using `<<<>>>` is currently supported.
-- `memcheck` currently checks only GM accesses made by supported data transfer instructions. Scalar single-element memory access checking is not currently supported.
+- A single invocation of a single operator through either `<<<>>>` or ACLNN is currently supported.
+- `memcheck` checks GM accesses from supported instructions and accesses beyond buffer boundaries in L1, L0A, L0B, and L0C.
 - `synccheck` checks intra-core synchronization pairing issues and repeated synchronization setting issues.
+- `initcheck` checks only currently supported data-transfer and Fixpipe instructions and their explicit persistent-register dependencies.
 - The target program must be able to run independently without `npu-check`.
 - The target program must be an executable file.
 - Multi-process and multi-threaded execution are not supported.

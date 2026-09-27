@@ -16,6 +16,7 @@
 namespace npucheck {
 std::string FormatCallStackReport(AclsanStatus status, const AclsanDeviceCallStack& callStack);
 void PopulateDeviceCallStack(NpuCheckMemcheckReport& report) noexcept;
+void PopulateDeviceCallStack(NpuCheckInitcheckReport& report) noexcept;
 void PopulateDeviceCallStack(NpuCheckSynccheckReport& report) noexcept;
 } // namespace npucheck
 

@@ -19,10 +19,11 @@ npu-check 是面向昇腾 NPU 的运行时正确性检查工具，帮助客户�
 
 | 功能 | 主要用途 | 适合检查的问题 |
 | --- | --- | --- |
-| `memcheck` | 检查设备全局内存（GM）的读写访问 | 访问范围越界、访问未被工具识别为有效分配的地址，以及访问已记录为释放的内存 |
+| `memcheck` | 检查 GM 读写访问及受支持的 L1、L0A、L0B、L0C 访问 | GM 分配范围越界、无效地址、释放后访问，以及片上内存容量越界 |
 | `synccheck` | 检查设备同步操作是否正确配对 | 重复设置事件、等待未设置的事件、设置事件后未等待，事件设置和等待不配对问题 |
+| `initcheck` | 检查持久化寄存器在首次依赖使用前是否已被设置 | 搬运或计算指令依赖的持久化寄存器尚未设置，或者仅在使用后设置 |
 
-两种功能可以分别运行，也可以在同一次应用执行中同时启用。
+三种功能可以分别运行，也可以在同一次应用执行中同时启用。
 
 ### 1.2 使用场景
 
@@ -83,7 +84,7 @@ npu-check [--tool <name>]... [--log-file <filepath>] [--] <application> [args...
 
 | 选项 | 输入 | 默认行为 | 说明 |
 | --- | --- | --- | --- |
-| `--tool <name>` | `memcheck`、`synccheck` | 未指定时启用 `memcheck` | 可多次指定，用于同时启用两个工具；重复指定同一工具不会重复检查 |
+| `--tool <name>` | `memcheck`、`synccheck`、`initcheck` | 未指定时启用 `memcheck` | 可多次指定，用于同时启用多个工具；重复指定同一工具不会重复检查 |
 | `--log-file <filepath>` | 文件路径 | 报告显示在终端 | 保存检查诊断信息 |
 | `-h`、`--help` | 无 | 不显示帮助 | 显示命令帮助 |
 | `--` | 无 | 可选添加 | 用于分隔工具参数和应用参数 |
@@ -94,10 +95,10 @@ npu-check [--tool <name>]... [--log-file <filepath>] [--] <application> [args...
 npu-check --tool synccheck ./my_app
 ```
 
-使能多个检查：
+使能全部检查：
 
 ```bash
-npu-check --tool memcheck --tool synccheck ./my_app
+npu-check --tool memcheck --tool synccheck --tool initcheck ./my_app
 ```
 
 ### 3.3 保存到文件
@@ -115,9 +116,10 @@ npu-check --tool memcheck --log-file reports/memcheck.log ./my_app
 
 - 当前设备检查范围为 Ascend 950（dav-3510）
 - 本工具仅支持在包含该工具的CANN包版本环境下使用
-- 当前仅支持<<<>>>单算子单次调用
-- `memcheck` 当前仅检查受支持操作搬运指令的 GM 访问，当前不支持scalar单点访问检测
+- 当前支持<<<>>>和aclnn的单算子单次调用
+- `memcheck` 检查已支持指令的 GM 访问，以及 L1、L0A、L0B、L0C 的超出buffer边界的访问
 - `synccheck` 的检查范围是核内同步配对问题和重复设置同步问题
+- `initcheck` 仅检查当前已支持的搬运、Fixpipe 指令及其明确的持久化寄存器依赖
 - 目标程序必须能在未使用 `npu-check` 时独立运行
 - 目标程序必须是可执行文件
 - 不支持多进程和多线程运行

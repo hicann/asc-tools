@@ -85,6 +85,7 @@ struct DeviceBinaryRegistry::Impl {
     std::unordered_map<uintptr_t, BinaryEntry> binaries;
     std::unordered_map<uintptr_t, uintptr_t> functionBinaries;
     std::unordered_map<uintptr_t, std::string> functionNames;
+    std::unordered_map<uintptr_t, std::vector<BinarySectionRange>> readOnlySections;
 
     uint64_t AllocateBinaryId() noexcept
     {
@@ -164,6 +165,9 @@ bool DeviceBinaryRegistry::RecordBinaryLoadFromData(
             impl_->RemoveOwnedFunctions(binary);
         }
         impl_->binaries[binary] = std::move(entry);
+        if (!instrumented) {
+            impl_->readOnlySections.erase(binary);
+        }
         impl_->latestBinary = binary;
         return impl_->binaries[binary].symbolizer != nullptr || !instrumented;
     } catch (...) {
@@ -178,6 +182,7 @@ void DeviceBinaryRegistry::RecordBinaryUnload(uintptr_t binary) noexcept
     }
     try {
         std::lock_guard<std::mutex> lock(impl_->mutex);
+        impl_->readOnlySections.erase(binary);
         const auto found = impl_->binaries.find(binary);
         if (found == impl_->binaries.end()) {
             return;
@@ -226,6 +231,45 @@ void DeviceBinaryRegistry::RecordLatestBinaryFunctionLookup(uintptr_t function) 
         }
     } catch (...) {
     }
+}
+
+bool DeviceBinaryRegistry::RecordLoadedImage(uintptr_t binary, const void* image, size_t bytes) noexcept
+{
+    try {
+        std::lock_guard<std::mutex> lock(impl_->mutex);
+        impl_->readOnlySections.erase(binary);
+        if (binary == 0 || image == nullptr || bytes == 0) {
+            return false;
+        }
+        std::vector<BinarySectionRange> sections;
+        std::string diagnostic;
+        if (!GetReadOnlyBinarySections(std::string(static_cast<const char*>(image), bytes), sections, diagnostic)) {
+            return false;
+        }
+        impl_->readOnlySections[binary] = std::move(sections);
+        return true;
+    } catch (...) {
+        return false;
+    }
+}
+
+bool DeviceBinaryRegistry::GetFunctionReadOnlySections(
+    uintptr_t function, uintptr_t& binary, std::vector<BinarySectionRange>& sections) const
+{
+    binary = 0;
+    sections.clear();
+    std::lock_guard<std::mutex> lock(impl_->mutex);
+    const auto owner = impl_->functionBinaries.find(function);
+    if (owner == impl_->functionBinaries.end()) {
+        return false;
+    }
+    const auto found = impl_->readOnlySections.find(owner->second);
+    if (found == impl_->readOnlySections.end()) {
+        return false;
+    }
+    binary = owner->second;
+    sections = found->second;
+    return true;
 }
 
 bool DeviceBinaryRegistry::GetFunctionName(uintptr_t function, std::string& functionName) const noexcept
@@ -281,6 +325,7 @@ void DeviceBinaryRegistry::Reset() noexcept
             RemoveDirectory(entry.sessionDirectory);
         }
         impl_->binaries.clear();
+        impl_->readOnlySections.clear();
         impl_->functionBinaries.clear();
         impl_->latestBinary = 0;
     } catch (...) {

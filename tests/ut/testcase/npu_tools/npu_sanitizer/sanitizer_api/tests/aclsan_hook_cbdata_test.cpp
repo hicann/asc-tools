@@ -27,6 +27,7 @@
 
 #include "acl_san/aclsan_api.h"
 #include "acl_san/aclsan_cbdata.h"
+#include "device_instr/arch/dav_3510/register_state_manager.h"
 #include "device_instr/common/instruction_id.h"
 #include "device_instr/decoder_registry.h"
 #include "aclsan_trace_buffer.h"
@@ -59,9 +60,11 @@ struct CallbackCapture {
 CallbackCapture g_callbackCapture{};
 bool g_callbackEnabled = true;
 uint32_t g_deviceMemoryCallbackCount = 0;
+uint32_t g_deviceStateCallbackCount = 0;
 uint32_t g_deviceSyncCallbackCount = 0;
 uint32_t g_decoderCallCount = 0;
 std::array<AclsanDeviceMemoryAccessData, 16> g_deviceMemoryCallbacks{};
+std::array<AclsanDeviceRegisterStateData, 16> g_deviceStateCallbacks{};
 std::array<AclsanDeviceSyncData, 3> g_deviceSyncCallbacks{};
 void* g_lastFreedAddress = nullptr;
 int32_t g_lastSynchronizeTimeout = 0;
@@ -83,8 +86,10 @@ void ResetCapture()
     g_callbackCapture = {};
     g_callbackEnabled = true;
     g_deviceMemoryCallbackCount = 0;
+    g_deviceStateCallbackCount = 0;
     g_deviceSyncCallbackCount = 0;
     g_deviceMemoryCallbacks = {};
+    g_deviceStateCallbacks = {};
     g_deviceSyncCallbacks = {};
     g_lastFreedAddress = nullptr;
     g_lastSynchronizeTimeout = 0;
@@ -400,7 +405,7 @@ void TestSynchronizeStreamWithTimeoutCallbackData()
     assert(g_callbackCapture.synchronize.stream == stream);
 }
 
-void TestSetPaddingRecordsUpdateLaunchStateWithoutCallback()
+void TestSetPaddingRecordsUpdateLaunchStateAndCallback()
 {
     ResetCapture();
     const aclsan::DeviceInstructionDecoder* decoder =
@@ -424,7 +429,11 @@ void TestSetPaddingRecordsUpdateLaunchStateWithoutCallback()
     const std::string logs = CaptureDebugLogs([&] { aclsan::DispatchTraceRecords({first, second}, *decoder); });
 
     assert(g_deviceMemoryCallbackCount == 0);
+    assert(g_deviceStateCallbackCount == 2);
     assert(g_deviceSyncCallbackCount == 0);
+    assert(g_deviceStateCallbacks[0].regId == ACLSAN_DEVICE_REGISTER_SET_PADDING);
+    assert(g_deviceStateCallbacks[0].value == UINT64_C(0x1111222233334444));
+    assert(g_deviceStateCallbacks[1].value == UINT64_C(0xfedcba9876543210));
     assert(
         logs.find("[raw] deviceId=3 phyCoreId=5 blockId=3 blockType=AIC  instrExecId=1 launchId=27  "
                   "type=AclsanRawTraceRecord pc=0x0 instrId=392 siteId=0 category=3 pipeline=0 "
@@ -441,6 +450,107 @@ void TestSetPaddingRecordsUpdateLaunchStateWithoutCallback()
     assert(
         logs.find("[register] action=update register=set_padding launchId=27 blockType=2 blockId=3 "
                   "value=0xfedcba9876543210") != std::string::npos);
+}
+
+void TestRegisterStateCallbackPreservesPackedValue()
+{
+    ResetCapture();
+    const aclsan::DeviceInstructionDecoder* decoder =
+        aclsan::FindDeviceInstructionDecoder(aclsan::SocVersion::DAV_3510);
+    assert(decoder != nullptr);
+
+    aclsan::ParsedTraceRecord state{};
+    state.record.instrId = 124;
+    state.record.category = aclsan::DeviceInstructionCategory::RegisterState;
+    state.record.args[0] = UINT64_C(0xfedcba9887654321);
+    state.record.pipeline = ACLSAN_DEVICE_PIPE_SCALAR;
+    state.blockType = ACLSAN_DEVICE_BLOCK_TYPE_AICORE_VECTOR;
+    state.blockId = 2;
+    state.phyCoreId = 7;
+    state.instrExecId = 3;
+    state.launchId = 41;
+    state.deviceId = 4;
+
+    aclsan::DispatchTraceRecords({state}, *decoder);
+
+    assert(g_deviceStateCallbackCount == 1);
+    const auto& callback = g_deviceStateCallbacks[0];
+    assert(callback.header.size == sizeof(AclsanDeviceRegisterStateData));
+    assert(callback.header.flags == ACLSAN_DEVICE_EVENT_FLAG_EXACT);
+    assert(callback.header.launchId == 41);
+    assert(callback.header.blockId == 2);
+    assert(callback.regId == ACLSAN_DEVICE_REGISTER_MTE2_SOURCE);
+    assert(callback.value == UINT64_C(0xfedcba9887654321));
+}
+
+void TestSetL12DDoesNotPublishPersistentRegisterState()
+{
+    ResetCapture();
+    const aclsan::DeviceInstructionDecoder* decoder =
+        aclsan::FindDeviceInstructionDecoder(aclsan::SocVersion::DAV_3510);
+    assert(decoder != nullptr);
+
+    aclsan::ParsedTraceRecord record{};
+    record.record.instrId = 149;
+    record.record.category = aclsan::DeviceInstructionCategory::RegisterState;
+    record.record.pipeline = ACLSAN_DEVICE_PIPE_MTE2;
+    record.record.args[0] = 0x2000;
+    record.record.args[1] = 1;
+    record.blockType = ACLSAN_DEVICE_BLOCK_TYPE_AICORE_CUBE;
+    record.blockId = 1;
+    record.launchId = 42;
+
+    aclsan::DispatchTraceRecords({record}, *decoder);
+
+    assert(g_deviceStateCallbackCount == 0);
+    assert(g_deviceMemoryCallbackCount == 0);
+}
+
+void TestRegisterStatePersistsAcrossTraceSnapshots()
+{
+    ResetCapture();
+    const aclsan::DeviceInstructionDecoder* decoder =
+        aclsan::FindDeviceInstructionDecoder(aclsan::SocVersion::DAV_3510);
+    assert(decoder != nullptr);
+    aclsan::dav3510::Dav3510RegisterStateManager registerState{42};
+
+    aclsan::ParsedTraceRecord state{};
+    state.record.instrId = 124;
+    state.record.category = aclsan::DeviceInstructionCategory::RegisterState;
+    state.record.args[0] = 64;
+    state.blockType = ACLSAN_DEVICE_BLOCK_TYPE_AICORE_CUBE;
+    state.blockId = 3;
+    state.launchId = 42;
+    aclsan::DispatchTraceRecords({state}, *decoder, nullptr, &registerState);
+    assert(g_deviceStateCallbackCount == 1);
+
+    ResetCapture();
+    aclsan::ParsedTraceRecord memory = state;
+    memory.record = {};
+    memory.record.instrId = 72;
+    memory.record.pipeline = ACLSAN_DEVICE_PIPE_MTE2;
+    memory.record.args[0] = 0x2000;
+    memory.record.args[1] = 0x4000;
+    memory.record.args[3] = (UINT64_C(1) << 12U) | (UINT64_C(1) << 24U);
+    memory.instrExecId = 1;
+    aclsan::DispatchTraceRecords({memory}, *decoder, nullptr, &registerState);
+
+    assert(g_deviceMemoryCallbackCount == 2);
+    const auto& callback = g_deviceMemoryCallbacks[0];
+    assert(callback.header.flags == ACLSAN_DEVICE_EVENT_FLAG_EXACT);
+    assert(callback.regDependencyMask0 == (UINT64_C(1) << ACLSAN_DEVICE_REGISTER_MTE2_SOURCE));
+    const std::vector<aclsan::InternalMemoryRange> readOnlyRanges{{reinterpret_cast<void*>(0x4000), 512}};
+    ResetCapture();
+    aclsan::DispatchTraceRecords({memory}, *decoder, nullptr, &registerState, &readOnlyRanges);
+    ASSERT_EQ(g_deviceMemoryCallbackCount, 1U);
+    EXPECT_EQ(g_deviceMemoryCallbacks[0].memorySpace, ACLSAN_DEVICE_MEMORY_SPACE_L1);
+    ResetCapture();
+    memory.record.args[1] = 0x8000;
+    aclsan::DispatchTraceRecords({memory}, *decoder, nullptr, &registerState, &readOnlyRanges);
+    ASSERT_EQ(g_deviceMemoryCallbackCount, 2U);
+    EXPECT_EQ(g_deviceMemoryCallbacks[0].header.flags, ACLSAN_DEVICE_EVENT_FLAG_EXACT);
+    EXPECT_EQ(g_deviceMemoryCallbacks[0].instructionId, 72U);
+    EXPECT_EQ(g_deviceMemoryCallbacks[0].regDependencyMask0, UINT64_C(1) << ACLSAN_DEVICE_REGISTER_MTE2_SOURCE);
 }
 
 void TestUndefinedInstructionIdsSkipDecoder()
@@ -950,6 +1060,11 @@ bool CaptureInvokeCallback(AclsanCallbackDomain domain, AclsanCallbackId callbac
         g_deviceMemoryCallbacks[g_deviceMemoryCallbackCount] =
             *static_cast<const AclsanDeviceMemoryAccessData*>(callbackData);
         ++g_deviceMemoryCallbackCount;
+    } else if (domain == ACLSAN_CB_DOMAIN_DEVICE_INSTRUCTION && callbackId == ACLSAN_CBID_DEVICE_STATE) {
+        assert(g_deviceStateCallbackCount < g_deviceStateCallbacks.size());
+        g_deviceStateCallbacks[g_deviceStateCallbackCount] =
+            *static_cast<const AclsanDeviceRegisterStateData*>(callbackData);
+        ++g_deviceStateCallbackCount;
     } else if (domain == ACLSAN_CB_DOMAIN_DEVICE_INSTRUCTION && callbackId == ACLSAN_CBID_DEVICE_SYNC) {
         assert(g_deviceSyncCallbackCount < g_deviceSyncCallbacks.size());
         g_deviceSyncCallbacks[g_deviceSyncCallbackCount] = *static_cast<const AclsanDeviceSyncData*>(callbackData);
@@ -1146,7 +1261,10 @@ TEST(AclsanHookCbdata, Main)
     TestRuntimeHookClearingFailureAborts();
     TestSynchronizeStreamCallbackData();
     TestSynchronizeStreamWithTimeoutCallbackData();
-    TestSetPaddingRecordsUpdateLaunchStateWithoutCallback();
+    TestSetPaddingRecordsUpdateLaunchStateAndCallback();
+    TestRegisterStateCallbackPreservesPackedValue();
+    TestSetL12DDoesNotPublishPersistentRegisterState();
+    TestRegisterStatePersistsAcrossTraceSnapshots();
     TestUndefinedInstructionIdsSkipDecoder();
     TestDefinedInstructionIdUsesDecoder();
     TestCubeLoadAndUnsupportedModeReachMemoryCallback();

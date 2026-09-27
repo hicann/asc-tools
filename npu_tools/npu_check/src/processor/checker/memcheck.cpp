@@ -400,6 +400,10 @@ std::vector<NpuCheckMemcheckReport> Memcheck::CheckAccess(
 
 void Memcheck::QueueDeviceMemoryAccess(const AclsanDeviceMemoryAccessData& data)
 {
+    if ((data.header.flags & ACLSAN_DEVICE_EVENT_FLAG_ESTIMATED) != 0) {
+        ++stats_.inexactDeviceOperations;
+        return;
+    }
     if (data.memorySpace != ACLSAN_DEVICE_MEMORY_SPACE_GM && CubeCapacity(data.memorySpace) == 0) {
         return;
     }

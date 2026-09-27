@@ -13,6 +13,8 @@
 #include "device_runtime/device_binary_registry.h"
 
 #include <cassert>
+#include <cstring>
+#include <elf.h>
 #include <boost/filesystem.hpp>
 #include <boost/system/error_code.hpp>
 #include <fstream>
@@ -155,6 +157,64 @@ void TestFunctionLookupReplacesPreviousBinaryOwnership()
 }
 
 } // namespace
+
+TEST(DeviceBinaryRegistry, ReadOnlySectionsRemainLaunchScopedAcrossUnloadAndReuse)
+{
+    Elf64_Ehdr header{};
+    std::memcpy(header.e_ident, ELFMAG, SELFMAG);
+    header.e_ident[EI_CLASS] = ELFCLASS64;
+    header.e_ident[EI_DATA] = ELFDATA2LSB;
+    header.e_ident[EI_VERSION] = EV_CURRENT;
+    header.e_version = EV_CURRENT;
+    header.e_ehsize = sizeof(header);
+    header.e_shoff = sizeof(header);
+    header.e_shentsize = sizeof(Elf64_Shdr);
+    header.e_shnum = 3;
+    header.e_shstrndx = 1;
+    Elf64_Shdr names{};
+    names.sh_type = SHT_STRTAB;
+    names.sh_offset = sizeof(header) + 3 * sizeof(Elf64_Shdr);
+    names.sh_size = 9;
+    Elf64_Shdr rodata{};
+    rodata.sh_name = 1;
+    rodata.sh_type = SHT_PROGBITS;
+    rodata.sh_flags = SHF_ALLOC;
+    rodata.sh_offset = names.sh_offset + names.sh_size;
+    rodata.sh_addr = 0x9000;
+    rodata.sh_size = 16;
+    std::string image(rodata.sh_offset + rodata.sh_size, '\0');
+    std::memcpy(image.data(), &header, sizeof(header));
+    std::memcpy(image.data() + header.e_shoff + sizeof(Elf64_Shdr), &names, sizeof(names));
+    std::memcpy(image.data() + header.e_shoff + 2 * sizeof(Elf64_Shdr), &rodata, sizeof(rodata));
+    std::memcpy(image.data() + names.sh_offset, "\0.rodata\0", names.sh_size);
+
+    aclsan::device_runtime::DeviceBinaryRegistry registry;
+    ASSERT_TRUE(registry.RecordLoadedImage(1, image.data(), image.size()));
+    auto originalImage = image;
+    rodata.sh_addr = 0x1000;
+    std::memcpy(originalImage.data() + header.e_shoff + 2 * sizeof(Elf64_Shdr), &rodata, sizeof(rodata));
+    ASSERT_TRUE(registry.RecordBinaryLoadFromData(1, true, 0, originalImage.data(), originalImage.size()));
+    registry.RecordBinaryFunctionLookup(1, 2, "kernel");
+    uintptr_t binary = 0;
+    std::vector<aclsan::BinarySectionRange> snapshot;
+    ASSERT_TRUE(registry.GetFunctionReadOnlySections(2, binary, snapshot));
+    ASSERT_EQ(snapshot.size(), 1U);
+    EXPECT_EQ(binary, 1U);
+    EXPECT_EQ(snapshot[0].offset, 0x9000U);
+    registry.RecordBinaryUnload(1);
+    std::vector<aclsan::BinarySectionRange> next;
+    EXPECT_FALSE(registry.GetFunctionReadOnlySections(2, binary, next));
+    EXPECT_EQ(snapshot.size(), 1U);
+    ASSERT_TRUE(registry.RecordBinaryLoadFromData(1, false, 0, image.data(), image.size()));
+    registry.RecordBinaryFunctionLookup(1, 2, "kernel");
+    EXPECT_FALSE(registry.GetFunctionReadOnlySections(2, binary, next));
+    ASSERT_TRUE(registry.RecordLoadedImage(1, image.data(), image.size()));
+    EXPECT_FALSE(registry.RecordLoadedImage(1, "invalid", 7));
+    EXPECT_FALSE(registry.GetFunctionReadOnlySections(2, binary, next));
+    ASSERT_TRUE(registry.RecordLoadedImage(1, image.data(), image.size()));
+    registry.Reset();
+    EXPECT_FALSE(registry.GetFunctionReadOnlySections(2, binary, next));
+}
 
 TEST(DeviceBinaryRegistry, Main)
 {

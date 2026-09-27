@@ -17,6 +17,7 @@
 #include "aclsan_device_data.h"
 #include "aclsan_device_data_log.h"
 #include "aclsan_dispatch.h"
+#include "aclsan_register_dependency.h"
 #include "npu_tool_log.h"
 #include "aclsan_runtime_hook.h"
 #include "aclsan_trace_buffer.h"
@@ -26,6 +27,7 @@
 #include <algorithm>
 #include <climits>
 #include <cstring>
+#include <dlfcn.h>
 #include <limits>
 #include <mutex>
 #include <new>
@@ -50,8 +52,10 @@ struct PendingTrace {
     std::vector<uint8_t> arguments;
     std::vector<aclrtPlaceHolderInfo> placeholders;
     std::vector<PreparedTraceLaunch::HostInput> hostInputs;
+    std::unique_ptr<dav3510::Dav3510RegisterStateManager> registerState;
     std::vector<uint32_t> dispatchedRecordCounts;
     uint64_t parameterBytes = 0;
+    std::vector<InternalMemoryRange> readOnlyBinaryRanges;
 };
 
 struct TraceRuntimeState {
@@ -70,6 +74,47 @@ device_runtime::DeviceBinaryRegistry& DeviceBinaries()
 {
     static device_runtime::DeviceBinaryRegistry binaries;
     return binaries;
+}
+
+std::vector<InternalMemoryRange> ResolveReadOnlyBinaryRanges(aclrtFuncHandle function)
+{
+    uintptr_t binary = 0;
+    std::vector<BinarySectionRange> sections;
+    if (!DeviceBinaries().GetFunctionReadOnlySections(reinterpret_cast<uintptr_t>(function), binary, sections) ||
+        sections.empty()) {
+        return {};
+    }
+    // This read-only query is not hooked and needs no public callback/API-table entry.
+    void* library = dlopen("libacl_rt.so", RTLD_NOW | RTLD_NOLOAD);
+    using GetAddress = aclError (*)(aclrtBinHandle, void**, size_t*);
+    const auto query =
+        library == nullptr ? nullptr : reinterpret_cast<GetAddress>(dlsym(library, "aclrtBinaryGetDevAddress"));
+    void* address = nullptr;
+    size_t bytes = 0;
+    const aclError status =
+        query == nullptr ? ACL_ERROR_FAILURE : query(reinterpret_cast<aclrtBinHandle>(binary), &address, &bytes);
+    if (library != nullptr) {
+        dlclose(library);
+    }
+    const auto base = reinterpret_cast<uintptr_t>(address);
+    if (status != ACL_SUCCESS || base == 0 || bytes > UINTPTR_MAX - base) {
+        ASCTOOL_WARNING(
+            "acl_san binary ranges unavailable: binary=%p result=%d", reinterpret_cast<void*>(binary), status);
+        return {};
+    }
+    std::vector<InternalMemoryRange> ranges;
+    for (const auto& section : sections) {
+        if (section.offset > bytes || section.bytes > bytes - section.offset) {
+            ASCTOOL_WARNING(
+                "acl_san read-only section exceeds binary mapping: binary=%p", reinterpret_cast<void*>(binary));
+            return {};
+        }
+        ranges.push_back({reinterpret_cast<void*>(base + section.offset), static_cast<size_t>(section.bytes)});
+        ASCTOOL_DEBUG(
+            "acl_san read-only section: binary=%p base=%p offset=%llu bytes=%llu", reinterpret_cast<void*>(binary),
+            address, static_cast<unsigned long long>(section.offset), static_cast<unsigned long long>(section.bytes));
+    }
+    return ranges;
 }
 
 constexpr bool StrictModeEnabled() { return true; }
@@ -263,7 +308,9 @@ bool DispatchTraceSnapshot(PendingTrace& pending, bool executionComplete, TraceC
         parsed.records.size(), newRecords.size(), static_cast<unsigned long long>(parsed.overflowCount),
         pending.physicalCoreCount, pending.blockCount);
     if (!newRecords.empty() && pending.decoder != nullptr) {
-        DispatchTraceRecords(newRecords, *pending.decoder, &pending.hostInputs);
+        DispatchTraceRecords(
+            newRecords, *pending.decoder, &pending.hostInputs, pending.registerState.get(),
+            &pending.readOnlyBinaryRanges);
     }
     if (parsed.overflowCount != 0) {
         ASCTOOL_ERROR(
@@ -310,13 +357,17 @@ aclError ResolveLaunchContext(PreparedTraceLaunch& prepared) noexcept
 
 void DispatchTraceRecords(
     const std::vector<ParsedTraceRecord>& records, const aclsan::DeviceInstructionDecoder& decoder,
-    const std::vector<PreparedTraceLaunch::HostInput>* internalInputs) noexcept
+    const std::vector<PreparedTraceLaunch::HostInput>* internalInputs,
+    dav3510::Dav3510RegisterStateManager* retainedRegisterState,
+    const std::vector<InternalMemoryRange>* readOnlyBinaryRanges) noexcept
 {
     if (records.empty()) {
         return;
     }
 
-    dav3510::Dav3510RegisterStateManager registerState(records.front().launchId);
+    dav3510::Dav3510RegisterStateManager localRegisterState(records.front().launchId);
+    dav3510::Dav3510RegisterStateManager& registerState =
+        retainedRegisterState != nullptr ? *retainedRegisterState : localRegisterState;
     for (const ParsedTraceRecord& parsed : records) {
         if (!IsDefinedInstructionId(parsed.record.instrId)) {
             continue;
@@ -357,6 +408,9 @@ void DispatchTraceRecords(
         if (stateInstruction) {
             LogRawRecord(parsed);
             LogParamField(decoded->params);
+            if (const auto stateData = MakeRegisterStateData(parsed, *decoded); stateData.has_value()) {
+                AclsanCallbackDispatcher::DispatchDeviceState(*stateData);
+            }
             continue;
         }
 
@@ -374,7 +428,8 @@ void DispatchTraceRecords(
             memoryState.dmaLoopStrides = state->dmaLoopStrides;
         }
 
-        const auto callbackData = TranslateDecodedTraceToCallbackData(parsed, *decoded, memoryState, internalInputs);
+        const auto callbackData =
+            TranslateDecodedTraceToCallbackData(parsed, *decoded, memoryState, internalInputs, readOnlyBinaryRanges);
         if (!callbackData.has_value()) {
             continue;
         }
@@ -390,6 +445,13 @@ void DispatchTraceRecords(
         } else if (const auto* sync = std::get_if<AclsanDeviceSyncData>(&*callbackData)) {
             AclsanCallbackDispatcher::DispatchDeviceSync(*sync);
         }
+    }
+}
+
+void RecordTraceLoadedImage(aclrtBinHandle binary, const void* image, size_t bytes) noexcept
+{
+    if (!DeviceBinaries().RecordLoadedImage(reinterpret_cast<uintptr_t>(binary), image, bytes)) {
+        ASCTOOL_WARNING("acl_san cannot preserve read-only sections for binary=%p", binary);
     }
 }
 
@@ -460,6 +522,7 @@ aclError PrepareTraceLaunch(
         prepared.instrumented = true;
         prepared.blockCount = blockCount;
         ACLSAN_RETURN_IF_ACL_ERROR(ResolveLaunchContext(prepared), "Failed to resolve trace launch context");
+        prepared.readOnlyBinaryRanges = ResolveReadOnlyBinaryRanges(function);
 
         if (argumentMode == TraceArgumentMode::HOST_ARGS) {
             ACLSAN_RETURN_IF_ACL_ERROR(
@@ -614,8 +677,10 @@ void CompleteTraceLaunch(
             std::move(prepared.arguments),
             std::move(prepared.placeholders),
             std::move(prepared.hostInputs),
+            std::make_unique<dav3510::Dav3510RegisterStateManager>(prepared.launchId),
             std::vector<uint32_t>(prepared.physicalCoreCount, 0U),
-            parameterBytes};
+            parameterBytes,
+            std::move(prepared.readOnlyBinaryRanges)};
         TraceRuntimeState& state = State();
         std::lock_guard<std::mutex> lock(state.mutex);
         state.pending.push_back(std::move(pending));

@@ -12,6 +12,7 @@
 #define NPU_TOOLS_NPU_CHECK_SRC_ACL_SAN_DEVICE_RUNTIME_DEVICE_BINARY_REGISTRY_H
 
 #include "device_symbolizer.h"
+#include "dbi/kernel_param_metadata.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -32,6 +33,9 @@ public:
         uintptr_t binary, bool instrumented, uint32_t traceArgumentOffset, const void* image,
         size_t imageBytes) noexcept;
     void RecordBinaryUnload(uintptr_t binary) noexcept;
+    bool RecordLoadedImage(uintptr_t binary, const void* image, size_t bytes) noexcept;
+    bool GetFunctionReadOnlySections(
+        uintptr_t function, uintptr_t& binary, std::vector<BinarySectionRange>& sections) const;
     void RecordBinaryFunctionLookup(uintptr_t binary, uintptr_t function, const char* functionName = nullptr) noexcept;
     void RecordLatestBinaryFunctionLookup(uintptr_t function) noexcept;
     bool GetFunctionTraceArgumentOffset(uintptr_t function, uint32_t& traceArgumentOffset) const noexcept;

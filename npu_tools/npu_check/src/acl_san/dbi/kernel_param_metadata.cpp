@@ -62,7 +62,7 @@ struct Section {
     uint64_t flags;
 };
 
-std::map<std::string, Section> ReadSections(const std::string& data)
+std::map<std::string, Section> ReadSections(const std::string& data, bool readOnly = false)
 {
     Require(
         data.size() >= sizeof(Elf64_Ehdr) && data.compare(0, SELFMAG, ELFMAG) == 0 &&
@@ -103,6 +103,13 @@ std::map<std::string, Section> ReadSections(const std::string& data)
                 "allocated ELF section overlaps section table");
         }
         const std::string name = data.substr(namesOffset + nameOffset, end - namesOffset - nameOffset);
+        if (readOnly) {
+            if (type == SHT_PROGBITS && (section.flags & SHF_ALLOC) != 0 &&
+                (section.flags & (SHF_WRITE | SHF_TLS)) == 0 && section.size != 0) {
+                Require(sections.emplace(name, section).second, "duplicate read-only section");
+            }
+            continue;
+        }
         if (name.compare(0, 13, ".ascend.meta.") != 0) {
             continue;
         }
@@ -332,6 +339,25 @@ bool ModifyKernelParamMetadata(
         }
         Require(selected != 0, "selected entry has no matching kernel metadata");
         patched.swap(result);
+        diagnostic.clear();
+        return true;
+    } catch (const std::exception& error) {
+        diagnostic = error.what();
+        return false;
+    }
+}
+bool GetReadOnlyBinarySections(const std::string& elf, std::vector<BinarySectionRange>& ranges, std::string& diagnostic)
+{
+    ranges.clear();
+    try {
+        std::vector<BinarySectionRange> result;
+        for (const auto& entry : ReadSections(elf, true)) {
+            const auto& section = entry.second;
+            const uint64_t address = Read(elf, section.header + 16, 8);
+            Require(section.size <= UINT64_MAX - address, "read-only section address overflow");
+            result.push_back({address, section.size});
+        }
+        ranges.swap(result);
         diagnostic.clear();
         return true;
     } catch (const std::exception& error) {

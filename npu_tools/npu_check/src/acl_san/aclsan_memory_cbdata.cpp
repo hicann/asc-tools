@@ -344,6 +344,13 @@ public:
                 }
             }
         }
+        if (descriptor.accessMode == ACLSAN_DEVICE_MEMORY_ACCESS_READ && context_.readOnlyBinaryRanges != nullptr) {
+            for (const auto& range : *context_.readOnlyBinaryRanges) {
+                if (contains(reinterpret_cast<uintptr_t>(range.address), range.bytes)) {
+                    return true;
+                }
+            }
+        }
         if (descriptors_.size() >= kMaxExpandedMemoryAccessesPerInstruction) {
             Fail(MemoryCbdataStatus::RESOURCE_EXHAUSTED);
             return false;
@@ -375,7 +382,7 @@ public:
             const AclsanDeviceEventHeader header = MakeHeader();
             const uint32_t accessCount = static_cast<uint32_t>(descriptors_.size());
             for (uint32_t index = 0; index < accessCount; ++index) {
-                data.push_back(MakeCbdata(header, descriptors_[index], index, accessCount));
+                data.push_back(MakeCbdata(header, descriptors_[index], index, accessCount, context_.instructionId));
             }
         } catch (const std::bad_alloc&) {
             return {MemoryCbdataStatus::RESOURCE_EXHAUSTED, {}};
@@ -445,7 +452,7 @@ private:
 
     static AclsanDeviceMemoryAccessData MakeCbdata(
         const AclsanDeviceEventHeader& header, const MemoryAccessDescriptor& descriptor, uint32_t accessIndex,
-        uint32_t accessCount) noexcept
+        uint32_t accessCount, uint32_t instructionId) noexcept
     {
         AclsanDeviceMemoryAccessData data{};
         data.header = header;
@@ -458,6 +465,7 @@ private:
         data.accessIndex = accessIndex;
         data.accessCount = accessCount;
         data.dataBits = descriptor.dataBits;
+        data.instructionId = instructionId;
         std::visit(
             [&data](const auto& layout) noexcept {
                 using Layout = std::decay_t<decltype(layout)>;
@@ -843,16 +851,20 @@ public:
         }
         const std::array<uint64_t, 5> counts{
             field.loop0Size, field.loop1Size, field.loop2Size, field.loop3Size, field.loop4Size};
+        if (std::any_of(counts.begin(), counts.end(), [](uint64_t count) { return count == 0; })) {
+            return {MemoryCbdataStatus::NO_ACCESS, {}};
+        }
+        if (field.paddingMode && !registerState_.ndDmaPadCount.has_value()) {
+            return {
+                MemoryCbdataStatus::MISSING_REGISTER_STATE, {}, static_cast<uint64_t>(InstructionId::NdDmaPadCount)};
+        }
         for (std::size_t index = 0; index < counts.size(); ++index) {
-            if (!registerState_.ndDmaLoopStrides[index].has_value()) {
+            if (counts[index] > 1 && !registerState_.ndDmaLoopStrides[index].has_value()) {
                 return {
                     MemoryCbdataStatus::MISSING_REGISTER_STATE,
                     {},
                     static_cast<uint64_t>(InstructionId::NdDmaLoop0Stride) + index};
             }
-        }
-        if (std::any_of(counts.begin(), counts.end(), [](uint64_t count) { return count == 0; })) {
-            return {MemoryCbdataStatus::NO_ACCESS, {}};
         }
 
         const uint64_t elementBytes = profile->dataBits / 8U;
@@ -910,11 +922,14 @@ private:
             return {MemoryCbdataStatus::INVALID_FIELD, {}};
         }
 
-        std::array<uint64_t, 2> loopCounts{1, 1};
-        if (registerState_.dmaLoopSizes[directionIndex].has_value()) {
-            const DmaLoopSizeParamField& size = *registerState_.dmaLoopSizes[directionIndex];
-            loopCounts = {size.loop1Size, size.loop2Size};
+        if (!registerState_.dmaLoopSizes[directionIndex].has_value()) {
+            return {
+                MemoryCbdataStatus::MISSING_REGISTER_STATE,
+                {},
+                static_cast<uint64_t>(InstructionId::LoopSizeUbufToGm) + directionIndex * 3};
         }
+        const DmaLoopSizeParamField& size = *registerState_.dmaLoopSizes[directionIndex];
+        const std::array<uint64_t, 2> loopCounts{size.loop1Size, size.loop2Size};
         if (loopCounts[0] == 0 || loopCounts[1] == 0) {
             return {MemoryCbdataStatus::NO_ACCESS, {}};
         }
@@ -961,12 +976,15 @@ private:
         const uint64_t elementBytes = profile->dataBits / 8U;
         const uint64_t rowCount = ConversionMode == NdNzConversionMode::ND2NZ ? field.nValue : field.dValue;
         const uint64_t rowElements = ConversionMode == NdNzConversionMode::ND2NZ ? field.dValue : field.nValue;
+        if (rowCount == 0 || rowElements == 0) {
+            return {MemoryCbdataStatus::NO_ACCESS, {}};
+        }
         if (!registerState_.mte2Nz.has_value()) {
             return {
                 MemoryCbdataStatus::MISSING_REGISTER_STATE, {}, static_cast<uint64_t>(InstructionId::SetMte2NzPara)};
         }
         const uint16_t matrixNum = registerState_.mte2Nz->matrixNum;
-        if (matrixNum == 0 || rowCount == 0 || rowElements == 0) {
+        if (matrixNum == 0) {
             return {MemoryCbdataStatus::NO_ACCESS, {}};
         }
         if (rowElements > std::numeric_limits<uint64_t>::max() / elementBytes) {

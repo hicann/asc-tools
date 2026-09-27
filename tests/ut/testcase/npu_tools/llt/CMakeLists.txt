@@ -31,6 +31,7 @@ set(NPU_TOOLS_LLT_ACL_SAN_INTERNAL_SOURCES
   "${NPU_TOOLS_LLT_ACL_SAN_DIR}/aclsan_trace_buffer.cpp"
   "${NPU_TOOLS_LLT_ACL_SAN_DIR}/aclsan_trace_runtime.cpp"
   "${NPU_TOOLS_LLT_ACL_SAN_DIR}/aclsan_memory_cbdata.cpp"
+  "${NPU_TOOLS_LLT_ACL_SAN_DIR}/aclsan_register_dependency.cpp"
   "${NPU_TOOLS_LLT_ACL_SAN_DIR}/aclsan_device_data_log.cpp"
   "${NPU_TOOLS_LLT_ACL_SAN_DIR}/aclsan_translate_device_data.cpp"
   "${NPU_TOOLS_LLT_ACL_SAN_DIR}/device_runtime/device_binary_registry.cpp"

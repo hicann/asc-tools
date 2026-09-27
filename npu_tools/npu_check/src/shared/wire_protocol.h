@@ -151,6 +151,7 @@ struct ErrorPayload {
 enum class ToolId : uint16_t {
     MEMCHECK = 1,  // 内存访问与生命周期检查
     SYNCCHECK = 2, // 同步原语及 barrier 使用检查
+    INITCHECK = 3, // 持久化寄存器首次使用前初始化检查
 };
 
 // TODO: 作用是什么，没用是否应该删除

@@ -111,6 +111,15 @@ const PatternCatalog& Catalog()
             ReportTool::INITCHECK, NpuCheckReportPattern::INITCHECK_API_READ_UNINITIALIZED, "api_read_uninitialized",
             "========= {{Severity}}:[INITCHECK] Uninitialized {{space}} memory read by ACL runtime API\n"
             "=========     Address 0x{{address}}, size {{accessBytes}} bytes\n"),
+        MakePattern(
+            ReportTool::INITCHECK, NpuCheckReportPattern::INITCHECK_UNINITIALIZED_REGISTER_USE,
+            "uninitialized_register_use",
+            "========= {{Severity}}:[INITCHECK] Register {{registerName}} was used "
+            "before initialization\n"
+            "=========     {{consumerInstruction}} requires initializing register {{registerName}} before execution\n"
+            "=========     {{location}}\n"
+            "=========     by aicore ({{coreId}}) type ({{blockType}}) block ({{blockId}}) pipe ({{pipeName}}) "
+            "in launch ({{launchId}})\n"),
 
         MakePattern(
             ReportTool::RACECHECK, NpuCheckReportPattern::RACECHECK_ANALYSIS, "analysis",

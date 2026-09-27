@@ -76,6 +76,8 @@ struct MemoryCbdataContext {
     uint64_t parameterBase = 0;
     uint64_t parameterBytes = 0;
     const std::vector<InternalMemoryRange>* internalInputs = nullptr;
+    const std::vector<InternalMemoryRange>* readOnlyBinaryRanges = nullptr;
+    uint32_t instructionId = 0;
 };
 
 using MemoryCbdata = std::vector<AclsanDeviceMemoryAccessData>;

@@ -98,6 +98,10 @@ ReportRecord ToReportRecord(const NpuCheckInitcheckReport& report)
     fields["initializedBytes"] = std::to_string(report.initializedBytes);
     fields["unusedBytes"] = std::to_string(report.unusedBytes);
     fields["unusedPercent"] = std::to_string(report.unusedPercent);
+    fields["registerId"] = std::to_string(report.registerId);
+    fields["registerName"] = report.registerName;
+    fields["setterInstruction"] = report.setterInstruction;
+    fields["consumerInstruction"] = report.consumerInstruction;
     if (report.common.pattern == NpuCheckReportPattern::INITCHECK_UNUSED_MEMORY) {
         fields["space"] = MemorySpaceName(report.allocation.memorySpace);
     }

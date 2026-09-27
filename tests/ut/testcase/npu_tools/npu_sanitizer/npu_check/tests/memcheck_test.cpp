@@ -11,6 +11,7 @@
 #include <gtest/gtest.h>
 
 #include <array>
+#include <cstddef>
 #include <cstdint>
 #include <limits>
 #include <string>
@@ -266,6 +267,52 @@ TEST(MemcheckTest, ReportsOutOfBoundsReadAtSynchronization)
     EXPECT_EQ(checker.Stats().pendingDeviceOperations, 0U);
     EXPECT_EQ(checker.Stats().errors, 1U);
     EXPECT_TRUE(checker.OnSynchronization().empty());
+}
+
+TEST(MemcheckTest, SkipsEstimatedAccessWithoutInterpretingItsLayout)
+{
+    Memcheck checker;
+    auto estimated = Access(DeviceSourceKind::MTE2, 0, 0);
+    estimated.header.flags = ACLSAN_DEVICE_EVENT_FLAG_ESTIMATED;
+    estimated.layoutKind = 0;
+    estimated.regDependencyMask0 = UINT64_C(1) << ACLSAN_DEVICE_REGISTER_MTE2_SOURCE;
+
+    checker.QueueDeviceMemoryAccess(estimated);
+
+    EXPECT_TRUE(checker.OnSynchronization().empty());
+    EXPECT_EQ(checker.Stats().deviceOperations, 0U);
+    EXPECT_EQ(checker.Stats().inexactDeviceOperations, 1U);
+    EXPECT_EQ(checker.Stats().droppedDeviceOperations, 0U);
+}
+
+TEST(MemcheckTest, AcceptsLegacyMemoryCallbackWithoutReadingExtendedTail)
+{
+    Memcheck checker;
+    CheckerReportList reports;
+    auto legacy = Access(DeviceSourceKind::MTE2, 0x9000, 16);
+    legacy.header.size = offsetof(AclsanDeviceMemoryAccessData, instructionId);
+    legacy.instructionId = 0xffffffffU;
+    legacy.regDependencyMask0 = std::numeric_limits<uint64_t>::max();
+
+    ASSERT_TRUE(
+        checker.OnCallback(ACLSAN_CB_DOMAIN_DEVICE_INSTRUCTION, ACLSAN_CBID_DEVICE_MEMORY_ACCESS, &legacy, reports));
+    EXPECT_EQ(checker.Stats().pendingDeviceOperations, 1U);
+    const auto diagnostics = checker.OnSynchronization();
+    ASSERT_EQ(diagnostics.size(), 1U);
+    EXPECT_EQ(diagnostics.front().access.address, 0x9000U);
+    EXPECT_EQ(checker.Stats().inexactDeviceOperations, 0U);
+}
+
+TEST(MemcheckTest, RejectsTruncatedLegacyMemoryCallback)
+{
+    Memcheck checker;
+    CheckerReportList reports;
+    auto truncated = Access(DeviceSourceKind::MTE2, 0x9000, 16);
+    truncated.header.size = offsetof(AclsanDeviceMemoryAccessData, instructionId) - 1;
+
+    EXPECT_FALSE(
+        checker.OnCallback(ACLSAN_CB_DOMAIN_DEVICE_INSTRUCTION, ACLSAN_CBID_DEVICE_MEMORY_ACCESS, &truncated, reports));
+    EXPECT_EQ(checker.Stats().pendingDeviceOperations, 0U);
 }
 
 TEST(MemcheckTest, FailedLaunchOrSynchronizationMakesAnalysisIncomplete)

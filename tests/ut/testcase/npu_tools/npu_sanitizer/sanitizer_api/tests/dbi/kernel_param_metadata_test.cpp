@@ -254,6 +254,37 @@ void CheckRuntimeOrdinalSemantics()
 }
 } // namespace
 
+TEST(KernelParamMetadata, ReadOnlySectionsUseDeviceOffsetsAndExcludeWritableStorage)
+{
+    auto elf = Elf({Metadata(1, 0)});
+    const size_t textHeader = sizeof(Elf64_Ehdr) + 2 * sizeof(Elf64_Shdr);
+    auto section = Get<Elf64_Shdr>(elf, textHeader);
+    section.sh_addr = 0x9000;
+    Put(elf, textHeader, section);
+    std::vector<aclsan::BinarySectionRange> ranges;
+    std::string diagnostic;
+    ASSERT_TRUE(aclsan::GetReadOnlyBinarySections(elf, ranges, diagnostic));
+    ASSERT_EQ(ranges.size(), 1U);
+    EXPECT_EQ(ranges[0].offset, 0x9000U);
+    EXPECT_EQ(ranges[0].bytes, section.sh_size);
+    for (uint64_t flags : {uint64_t(SHF_ALLOC | SHF_WRITE), uint64_t(SHF_ALLOC | SHF_TLS), uint64_t(0)}) {
+        section.sh_flags = flags;
+        Put(elf, textHeader, section);
+        ASSERT_TRUE(aclsan::GetReadOnlyBinarySections(elf, ranges, diagnostic));
+        EXPECT_TRUE(ranges.empty());
+    }
+    section.sh_flags = SHF_ALLOC;
+    section.sh_addr = UINT64_MAX;
+    Put(elf, textHeader, section);
+    EXPECT_FALSE(aclsan::GetReadOnlyBinarySections(elf, ranges, diagnostic));
+    EXPECT_TRUE(ranges.empty());
+    section.sh_addr = 0;
+    section.sh_offset = elf.size();
+    Put(elf, textHeader, section);
+    EXPECT_FALSE(aclsan::GetReadOnlyBinarySections(elf, ranges, diagnostic));
+    EXPECT_TRUE(ranges.empty());
+}
+
 TEST(KernelParamMetadata, Main)
 {
     {

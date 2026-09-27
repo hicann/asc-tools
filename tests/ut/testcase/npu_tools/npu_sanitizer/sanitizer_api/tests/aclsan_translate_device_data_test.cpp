@@ -24,6 +24,7 @@
 
 #include "aclsan_device_data.h"
 #include "aclsan_device_data_log.h"
+#include "aclsan_register_dependency.h"
 #include "device_instr/decoder_registry.h"
 
 namespace {
@@ -107,7 +108,10 @@ std::optional<aclsan::DeviceCallbackData> TranslateRecordToCallbackData(
             accesses->erase(
                 std::remove_if(
                     accesses->begin(), accesses->end(),
-                    [](const auto& d) { return d.memorySpace != ACLSAN_DEVICE_MEMORY_SPACE_GM; }),
+                    [](const auto& d) {
+                        return d.memorySpace != ACLSAN_DEVICE_MEMORY_SPACE_GM &&
+                               (d.header.flags & ACLSAN_DEVICE_EVENT_FLAG_ESTIMATED) == 0;
+                    }),
                 accesses->end());
             for (size_t i = 0; i < accesses->size(); ++i) {
                 (*accesses)[i].accessIndex = i;
@@ -116,6 +120,13 @@ std::optional<aclsan::DeviceCallbackData> TranslateRecordToCallbackData(
         }
     }
     return callback;
+}
+
+aclsan::MemoryRegisterState SingletonDmaState(aclsan::DmaLoopDirection direction)
+{
+    aclsan::MemoryRegisterState state{};
+    state.dmaLoopSizes[static_cast<std::size_t>(direction)] = aclsan::DmaLoopSizeParamField{direction, 1, 1};
+    return state;
 }
 
 void TestTranslateMovOutToL1AlignV2()
@@ -311,7 +322,8 @@ void TestMakesRangeLayoutForAtMostOneBurst()
     assert(emptyAccesses != nullptr);
     assert(emptyAccesses->empty());
 
-    const auto callback = TranslateRecordToCallbackData(MakePaddedCopyGmToCbufAlignV2Record(96, 96, 1), parsed);
+    const auto state = SingletonDmaState(aclsan::DmaLoopDirection::GM_TO_CBUF);
+    const auto callback = TranslateRecordToCallbackData(MakePaddedCopyGmToCbufAlignV2Record(96, 96, 1), parsed, state);
     assert(callback.has_value());
     const auto* accesses = std::get_if<aclsan::DeviceMemoryAccessDataList>(&*callback);
     assert(accesses != nullptr);
@@ -324,7 +336,8 @@ void TestMakesRangeLayoutsFromContinuousParamFieldData()
     const aclsan::AclsanRawTraceRecord record = MakePaddedCopyGmToCbufAlignV2Record(64, 70);
     const aclsan::ParsedTraceRecord parsed = MakeParsedTraceRecord(1, 1, ACLSAN_DEVICE_BLOCK_TYPE_AICORE_CUBE, 0, 3);
 
-    const auto callback = TranslateRecordToCallbackData(record, parsed);
+    const auto state = SingletonDmaState(aclsan::DmaLoopDirection::GM_TO_CBUF);
+    const auto callback = TranslateRecordToCallbackData(record, parsed, state);
 
     assert(callback.has_value());
     const auto* accesses = std::get_if<aclsan::DeviceMemoryAccessDataList>(&*callback);
@@ -338,7 +351,8 @@ void TestMakesBlockRepeatOnlyForNonContinuousSource()
     const aclsan::AclsanRawTraceRecord record = MakePaddedCopyGmToCbufAlignV2Record(96, 70);
     const aclsan::ParsedTraceRecord parsed = MakeParsedTraceRecord(1, 1, ACLSAN_DEVICE_BLOCK_TYPE_AICORE_CUBE, 0, 3);
 
-    const auto callback = TranslateRecordToCallbackData(record, parsed);
+    const auto state = SingletonDmaState(aclsan::DmaLoopDirection::GM_TO_CBUF);
+    const auto callback = TranslateRecordToCallbackData(record, parsed, state);
 
     assert(callback.has_value());
     const auto* accesses = std::get_if<aclsan::DeviceMemoryAccessDataList>(&*callback);
@@ -352,7 +366,8 @@ void TestIgnoresNonGmDestinationStride()
     const aclsan::AclsanRawTraceRecord record = MakePaddedCopyGmToCbufAlignV2Record(64, 96);
     const aclsan::ParsedTraceRecord parsed = MakeParsedTraceRecord(1, 1, ACLSAN_DEVICE_BLOCK_TYPE_AICORE_CUBE, 0, 3);
 
-    const auto callback = TranslateRecordToCallbackData(record, parsed);
+    const auto state = SingletonDmaState(aclsan::DmaLoopDirection::GM_TO_CBUF);
+    const auto callback = TranslateRecordToCallbackData(record, parsed, state);
 
     assert(callback.has_value());
     const auto* accesses = std::get_if<aclsan::DeviceMemoryAccessDataList>(&*callback);
@@ -374,7 +389,8 @@ void TestTranslateRawTraceToCallbackData()
     const aclsan::ParsedTraceRecord parsed =
         MakeParsedTraceRecord(1002, 1, ACLSAN_DEVICE_BLOCK_TYPE_AICORE_CUBE, 0, 3, 17);
 
-    const auto memoryCallback = TranslateRecordToCallbackData(record, parsed);
+    const auto gmToCbufState = SingletonDmaState(aclsan::DmaLoopDirection::GM_TO_CBUF);
+    const auto memoryCallback = TranslateRecordToCallbackData(record, parsed, gmToCbufState);
     assert(memoryCallback.has_value());
     const auto* accesses = std::get_if<aclsan::DeviceMemoryAccessDataList>(&*memoryCallback);
     assert(accesses != nullptr);
@@ -400,7 +416,8 @@ void TestTranslateRawTraceToCallbackData()
     record.pipeline = ACLSAN_DEVICE_PIPE_MTE3;
     record.args[0] = 0x300040;
     record.args[1] = 0x400040;
-    const auto ubToGmCallback = TranslateRecordToCallbackData(record, parsed);
+    const auto ubToGmState = SingletonDmaState(aclsan::DmaLoopDirection::UBUF_TO_GM);
+    const auto ubToGmCallback = TranslateRecordToCallbackData(record, parsed, ubToGmState);
     assert(ubToGmCallback.has_value());
     const auto* ubToGmAccesses = std::get_if<aclsan::DeviceMemoryAccessDataList>(&*ubToGmCallback);
     assert(ubToGmAccesses != nullptr);
@@ -639,7 +656,8 @@ void TestTranslateCopyGmToCbufV2ToCallbackData()
     record.args[3] = 11ULL | (11ULL << 40);
     const aclsan::ParsedTraceRecord parsed = MakeParsedTraceRecord(12, 6, ACLSAN_DEVICE_BLOCK_TYPE_AICORE_CUBE, 4, 3);
 
-    const auto callback = TranslateRecordToCallbackData(record, parsed);
+    const auto state = SingletonDmaState(aclsan::DmaLoopDirection::GM_TO_CBUF);
+    const auto callback = TranslateRecordToCallbackData(record, parsed, state);
 
     assert(callback.has_value());
     const auto* accesses = std::get_if<aclsan::DeviceMemoryAccessDataList>(&*callback);
@@ -749,6 +767,61 @@ void TestTranslateStateDependentDmaFieldsToCallbackData()
     assert(fixAccesses->size() == 1);
     AssertSingleGmAccess(fixAccesses->front(), record.args[0], ACLSAN_DEVICE_MEMORY_ACCESS_WRITE, 32);
     AssertRangeLayout(fixAccesses->front(), 256);
+}
+
+void TestMissingRegisterStateProducesEstimatedDependencyEvent()
+{
+    aclsan::AclsanRawTraceRecord record{};
+    record.instrId = LOAD_GM_TO_CBUF_2D_V2_ID;
+    record.pipeline = ACLSAN_DEVICE_PIPE_MTE2;
+    record.pc = 0x1234;
+    record.args[1] = 0x8000;
+    record.args[3] = (2ULL << 12U) | (3ULL << 24U);
+    const auto parsed = MakeParsedTraceRecord(21, 4, ACLSAN_DEVICE_BLOCK_TYPE_AICORE_CUBE, 2, 1, 9);
+
+    const auto estimated = TranslateRecordToCallbackData(record, parsed);
+    assert(estimated.has_value());
+    const auto* accesses = std::get_if<aclsan::DeviceMemoryAccessDataList>(&*estimated);
+    assert(accesses != nullptr);
+    assert(accesses->size() == 1);
+    const auto& access = accesses->front();
+    assert(access.header.flags == ACLSAN_DEVICE_EVENT_FLAG_ESTIMATED);
+    assert(access.header.size == sizeof(AclsanDeviceMemoryAccessData));
+    assert(access.instructionId == LOAD_GM_TO_CBUF_2D_V2_ID);
+    assert(access.regDependencyMask0 == (UINT64_C(1) << ACLSAN_DEVICE_REGISTER_MTE2_SOURCE));
+    assert(access.regDependencyMask1 == 0);
+
+    aclsan::MemoryRegisterState state{};
+    state.mte2Source = aclsan::Mte2SourceParamField{0};
+    const auto exact = TranslateRecordToCallbackData(record, parsed, state);
+    assert(exact.has_value());
+    const auto* exactAccesses = std::get_if<aclsan::DeviceMemoryAccessDataList>(&*exact);
+    assert(exactAccesses != nullptr);
+    assert(exactAccesses->size() == 1);
+    assert(exactAccesses->front().header.flags == ACLSAN_DEVICE_EVENT_FLAG_EXACT);
+    assert(exactAccesses->front().regDependencyMask0 == (UINT64_C(1) << ACLSAN_DEVICE_REGISTER_MTE2_SOURCE));
+}
+
+void TestConditionalRegisterDependencies()
+{
+    aclsan::MemoryRegisterState state{};
+    aclsan::CopyGmToCbufV2ParamField copy{};
+    copy.burstNum = 1;
+    copy.burstLen = 1;
+    copy.padFunctionMode = 2;
+    const auto missingLoopAndPadding = aclsan::ResolveRegisterDependencies(aclsan::MemoryInstructionField{copy}, state);
+    assert(
+        missingLoopAndPadding.mask0 == ((UINT64_C(1) << ACLSAN_DEVICE_REGISTER_DMA_LOOP_SIZE_GM_TO_CBUF) |
+                                        (UINT64_C(1) << ACLSAN_DEVICE_REGISTER_SET_PADDING)));
+
+    copy.padFunctionMode = 0;
+    const auto withoutPadding = aclsan::ResolveRegisterDependencies(aclsan::MemoryInstructionField{copy}, state);
+    assert(withoutPadding.mask0 == (UINT64_C(1) << ACLSAN_DEVICE_REGISTER_DMA_LOOP_SIZE_GM_TO_CBUF));
+
+    copy.burstNum = 0;
+    copy.padFunctionMode = 2;
+    const auto noAccess = aclsan::ResolveRegisterDependencies(aclsan::MemoryInstructionField{copy}, state);
+    assert(noAccess.mask0 == 0);
 }
 
 void TestTranslatesLocalMemoryTransfersToExplicitEmptyGmAccessList()
@@ -888,6 +961,8 @@ TEST(AclsanTranslateDeviceData, Main)
     TestTranslateDebugLogsShowUbufToGmConversion();
     TestTranslateCopyGmToCbufV2ToCallbackData();
     TestTranslateStateDependentDmaFieldsToCallbackData();
+    TestMissingRegisterStateProducesEstimatedDependencyEvent();
+    TestConditionalRegisterDependencies();
     TestTranslatesLocalMemoryTransfersToExplicitEmptyGmAccessList();
     TestKeepsScalarPreloadInTraceWithoutMemoryAccessCbdata();
     TestTranslatesScalarGmInstructionsToMemoryAccessCbdata();

@@ -10,6 +10,7 @@
 
 #include "checker/checker.h"
 #include "checker/memcheck.h"
+#include "checker/initcheck.h"
 #include "checker/synccheck.h"
 #include <algorithm>
 #include <set>
@@ -31,6 +32,8 @@ std::unique_ptr<Checker> CreateChecker(npucheck::ipc::ToolId tool)
             return std::make_unique<Memcheck>();
         case ipc::ToolId::SYNCCHECK:
             return std::make_unique<Synccheck>();
+        case ipc::ToolId::INITCHECK:
+            return std::make_unique<Initcheck>();
         default:
             return nullptr;
     }

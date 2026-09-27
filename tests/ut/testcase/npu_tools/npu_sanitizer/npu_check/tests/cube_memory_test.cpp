@@ -17,6 +17,14 @@
 namespace {
 using namespace aclsan;
 
+MemoryRegisterState SingleGmToL1Iteration()
+{
+    MemoryRegisterState state{};
+    state.dmaLoopSizes[static_cast<size_t>(DmaLoopDirection::GM_TO_CBUF)] =
+        DmaLoopSizeParamField{DmaLoopDirection::GM_TO_CBUF, 1, 1};
+    return state;
+}
+
 MemoryCbdataResult ConvertRaw(
     uint32_t id, std::array<uint64_t, 4> args, MemoryRegisterState state = {}, uint64_t arg4 = 0)
 {
@@ -41,7 +49,7 @@ MemoryCbdataResult ConvertRaw(
 
 TEST(CubeMemory, AllRequestedIdsProduceLocalAccesses)
 {
-    MemoryRegisterState state{};
+    auto state = SingleGmToL1Iteration();
     state.mte2Source = Mte2SourceParamField{1};
     state.mte2Nz = Mte2NzParamField{1, 1, 16, 16};
     for (uint32_t id : {72u,  73u,  74u,  75u,  76u,  77u,  78u,  79u,  80u,  81u,  82u,  149u, 150u,
@@ -155,7 +163,7 @@ TEST(CubeMemory, CapacityBoundariesAndOverflowAreIndependentOfGmAllocations)
 
 TEST(CubeMemory, UnsupportedModesRetainKnownGmAccesses)
 {
-    auto r = ConvertRaw(73, {0, 0, (1ULL << 4) | (1ULL << 25) | (1ULL << 56), 0});
+    auto r = ConvertRaw(73, {0, 0, (1ULL << 4) | (1ULL << 25) | (1ULL << 56), 0}, SingleGmToL1Iteration());
     EXPECT_EQ(r.status, MemoryCbdataStatus::PARTIAL_COVERAGE);
     ASSERT_FALSE(r.data.empty()); // Existing GM coverage is retained.
     EXPECT_EQ(r.data[0].memorySpace, ACLSAN_DEVICE_MEMORY_SPACE_GM);
@@ -176,7 +184,7 @@ TEST(CubeMemory, CallbackToCheckerReportsLocalBoundsAndRetainsInstructionContext
     parsed.blockType = ACLSAN_DEVICE_BLOCK_TYPE_AICORE_CUBE;
     auto decoded = dav3510::GetDeviceInstructionDecoder().decode(parsed.record);
     ASSERT_TRUE(decoded);
-    auto callback = TranslateDecodedTraceToCallbackData(parsed, *decoded);
+    auto callback = TranslateDecodedTraceToCallbackData(parsed, *decoded, SingleGmToL1Iteration());
     ASSERT_TRUE(callback);
     const auto& accesses = std::get<DeviceMemoryAccessDataList>(*callback);
     ASSERT_EQ(accesses.size(), 2u);
@@ -207,11 +215,15 @@ TEST(CubeMemory, CallbackToCheckerReportsLocalBoundsAndRetainsInstructionContext
     // memory/error callback is emitted, so completeness is not signaled here.
     parsed.record.args[2] |= 1ULL << 56;
     decoded = dav3510::GetDeviceInstructionDecoder().decode(parsed.record);
-    callback = TranslateDecodedTraceToCallbackData(parsed, *decoded);
+    callback = TranslateDecodedTraceToCallbackData(parsed, *decoded, SingleGmToL1Iteration());
     ASSERT_TRUE(callback);
     const auto& knownAccesses = std::get<DeviceMemoryAccessDataList>(*callback);
     ASSERT_EQ(knownAccesses.size(), 1u);
     EXPECT_EQ(knownAccesses[0].memorySpace, ACLSAN_DEVICE_MEMORY_SPACE_GM);
+    EXPECT_EQ(knownAccesses[0].instructionId, 73U);
+    EXPECT_EQ(
+        knownAccesses[0].regDependencyMask0, (UINT64_C(1) << ACLSAN_DEVICE_REGISTER_DMA_LOOP_SIZE_GM_TO_CBUF) |
+                                                 (UINT64_C(1) << ACLSAN_DEVICE_REGISTER_SET_PADDING));
     checker.QueueDeviceMemoryAccess(knownAccesses[0]);
     checker.OnSynchronization();
     EXPECT_TRUE(checker.AnalysisComplete());
@@ -303,8 +315,9 @@ TEST(CubeMemory, FixpipeNz2NdReadsOnlyTailElementsAndMatrixStride)
 
 TEST(CubeMemory, AlignedCopyChecksPaddedWriteLengthInsteadOfGmReadLength)
 {
-    const auto r =
-        ConvertRaw(75, {0x7ffe0, 0x100000, (1ULL << 4) | (20ULL << 25) | (8ULL << 46) | (8ULL << 52), 64ULL << 40});
+    const auto r = ConvertRaw(
+        75, {0x7ffe0, 0x100000, (1ULL << 4) | (20ULL << 25) | (8ULL << 46) | (8ULL << 52), 64ULL << 40},
+        SingleGmToL1Iteration());
     ASSERT_EQ(r.status, MemoryCbdataStatus::SUCCESS);
     ASSERT_EQ(r.data.size(), 2u);
     EXPECT_EQ(r.data[0].layout.range.bytes, 20u);
@@ -600,7 +613,7 @@ TEST(CubeMemory, L0LoadFailuresDoNotProduceSyntheticCallbacks)
 
 TEST(CubeMemoryRegression, CopyV2DestinationStrideIsGapAfterBurst)
 {
-    const auto result = ConvertRaw(73, {0x7ffe0, 0x100000, (2ULL << 4) | (1ULL << 25), 0});
+    const auto result = ConvertRaw(73, {0x7ffe0, 0x100000, (2ULL << 4) | (1ULL << 25), 0}, SingleGmToL1Iteration());
     ASSERT_EQ(result.status, aclsan::MemoryCbdataStatus::SUCCESS);
     npucheck::Memcheck checker;
     for (const auto& access : result.data) {

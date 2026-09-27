@@ -36,7 +36,8 @@ struct Session {
 };
 
 Session RunSession(
-    std::vector<std::string> args, bool memoryError, bool syncError, bool failSync = false, bool nullCallback = false)
+    std::vector<std::string> args, bool memoryError, bool syncError, bool failSync = false, bool nullCallback = false,
+    bool initError = false)
 {
     enabled.clear();
     enableCalls = 0;
@@ -99,6 +100,11 @@ Session RunSession(
         memory.accessCount = 1;
         memory.layoutKind = ACLSAN_MEM_LAYOUT_RANGE;
         memory.layout.range.bytes = 16;
+        if (initError) {
+            memory.header.instrExecId = 1;
+            memory.instructionId = 72;
+            memory.regDependencyMask0 = UINT64_C(1) << ACLSAN_DEVICE_REGISTER_MTE2_SOURCE;
+        }
         Emit(ACLSAN_CB_DOMAIN_DEVICE_INSTRUCTION, ACLSAN_CBID_DEVICE_MEMORY_ACCESS, &memory);
         if (syncError) {
             AclsanDeviceSyncData sync{};
@@ -172,6 +178,22 @@ TEST(ToolManagerTest, CombinedToolsReportBothAndSubscribeSharedCallbackOnce)
     EXPECT_NE(result.flags & npucheck::ipc::kFlagHasErrors, 0U);
 }
 
+TEST(ToolManagerTest, ThreeToolsReportIndependentlyAndShareCallbacks)
+{
+    const auto result = RunSession(
+        {"npu-check", "--tool", "memcheck", "--tool", "synccheck", "--tool", "initcheck", "/bin/true"}, false, false,
+        false, false, true);
+    ASSERT_EQ(result.initialized, 0);
+    ASSERT_TRUE(result.error.empty()) << result.error;
+    EXPECT_EQ(enableCalls, 7U);
+    EXPECT_EQ(enabled.size(), 7U);
+    EXPECT_NE(result.text.find("tool=memcheck"), std::string::npos);
+    EXPECT_NE(result.text.find("tool=synccheck"), std::string::npos);
+    EXPECT_NE(result.text.find("tool=initcheck"), std::string::npos);
+    EXPECT_NE(result.text.find("Register mte2_source"), std::string::npos);
+    EXPECT_NE(result.flags & npucheck::ipc::kFlagHasErrors, 0U);
+}
+
 TEST(ToolManagerTest, ErrorFlagAggregatesEitherTool)
 {
     for (auto errors : {std::pair{false, false}, std::pair{true, false}, std::pair{false, true}}) {
@@ -194,7 +216,7 @@ TEST(ToolManagerTest, SingleCheckerAndFailedSyncRetainIndependentState)
     const auto incomplete =
         RunSession({"npu-check", "--tool", "memcheck", "--tool", "synccheck", "/bin/true"}, true, true, true);
     ASSERT_TRUE(incomplete.error.empty()) << incomplete.error;
-    EXPECT_NE(incomplete.text.find("status=complete"), std::string::npos);
+    EXPECT_NE(incomplete.text.find("status=incomplete"), std::string::npos);
     EXPECT_NE(incomplete.text.find("pending_device_operations=0"), std::string::npos);
     EXPECT_NE(incomplete.text.find("MEMCHECK SUMMARY: 1 errors"), std::string::npos);
     EXPECT_NE(incomplete.flags & npucheck::ipc::kFlagHasErrors, 0U);

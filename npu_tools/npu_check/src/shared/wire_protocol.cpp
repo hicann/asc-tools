@@ -515,6 +515,8 @@ const char* ToolName(ToolId id)
             return "memcheck";
         case ToolId::SYNCCHECK:
             return "synccheck";
+        case ToolId::INITCHECK:
+            return "initcheck";
     }
     return "unknown";
 }
@@ -527,6 +529,10 @@ bool LookupTool(const std::string& name, ToolId& id)
     }
     if (name == "synccheck") {
         id = ToolId::SYNCCHECK;
+        return true;
+    }
+    if (name == "initcheck") {
+        id = ToolId::INITCHECK;
         return true;
     }
     return false;
@@ -569,6 +575,7 @@ bool IsKnownTool(uint16_t toolId)
     switch (static_cast<ToolId>(toolId)) {
         case ToolId::MEMCHECK:
         case ToolId::SYNCCHECK:
+        case ToolId::INITCHECK:
             return true;
     }
     return false;

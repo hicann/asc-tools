@@ -90,6 +90,11 @@ const std::map<CallbackKey, std::vector<aclrtApiId>> g_callbackRoutes = {
       ACL_RT_API_aclrtLaunchKernelWithHostArgs, ACL_RT_API_aclrtLaunchKernelWithArgsArray,
       ACL_RT_API_aclrtSynchronizeStream, ACL_RT_API_aclrtSynchronizeStreamWithTimeout, ACL_RT_API_aclrtGetFuncBySymbol,
       ACL_RT_API_aclrtBinaryUnLoad, ACL_RT_API_aclrtResetDevice, ACL_RT_API_aclrtBinaryLoadFromFile}},
+    {{ACLSAN_CB_DOMAIN_DEVICE_INSTRUCTION, ACLSAN_CBID_DEVICE_STATE},
+     {ACL_RT_API_aclrtBinaryLoadFromData, ACL_RT_API_aclrtBinaryGetFunction, ACL_RT_API_aclrtBinaryGetFunctionByEntry,
+      ACL_RT_API_aclrtLaunchKernelWithHostArgs, ACL_RT_API_aclrtLaunchKernelWithArgsArray,
+      ACL_RT_API_aclrtSynchronizeStream, ACL_RT_API_aclrtSynchronizeStreamWithTimeout, ACL_RT_API_aclrtGetFuncBySymbol,
+      ACL_RT_API_aclrtBinaryUnLoad, ACL_RT_API_aclrtResetDevice, ACL_RT_API_aclrtBinaryLoadFromFile}},
     {{ACLSAN_CB_DOMAIN_SYNCHRONIZE, ACLSAN_CBID_SYNCHRONIZE_STREAM_SYNC_END},
      {ACL_RT_API_aclrtSynchronizeStream, ACL_RT_API_aclrtSynchronizeStreamWithTimeout}},
     {{ACLSAN_CB_DOMAIN_LAUNCH, ACLSAN_CBID_LAUNCH_KERNEL},
@@ -154,7 +159,7 @@ bool AclsanSubscriber::IsValidCallbackId(AclsanCallbackDomain domain, AclsanCall
         case ACLSAN_CB_DOMAIN_RESOURCE:
             return callbackId >= ACLSAN_CBID_RESOURCE_MEMORY_ALLOC && callbackId <= ACLSAN_CBID_RESOURCE_MEMORY_FREE;
         case ACLSAN_CB_DOMAIN_DEVICE_INSTRUCTION:
-            return callbackId >= ACLSAN_CBID_DEVICE_MEMORY_ACCESS && callbackId <= ACLSAN_CBID_DEVICE_SYNC;
+            return callbackId >= ACLSAN_CBID_DEVICE_MEMORY_ACCESS && callbackId <= ACLSAN_CBID_DEVICE_STATE;
         case ACLSAN_CB_DOMAIN_SYNCHRONIZE:
             return callbackId == ACLSAN_CBID_SYNCHRONIZE_STREAM_SYNC_END;
         case ACLSAN_CB_DOMAIN_LAUNCH:

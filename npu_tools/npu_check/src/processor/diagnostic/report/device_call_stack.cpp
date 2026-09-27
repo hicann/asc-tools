@@ -111,6 +111,11 @@ void PopulateDeviceCallStack(NpuCheckMemcheckReport& report) noexcept
     PopulateStack(report.common, report.common.exec, ReportStackRole::FAULT_DEVICE);
 }
 
+void PopulateDeviceCallStack(NpuCheckInitcheckReport& report) noexcept
+{
+    PopulateStack(report.common, report.common.exec, ReportStackRole::FAULT_DEVICE);
+}
+
 void PopulateDeviceCallStack(NpuCheckSynccheckReport& report) noexcept
 {
     if (report.triggerPoint.hasExecContext) {

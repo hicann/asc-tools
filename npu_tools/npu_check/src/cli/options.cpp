@@ -196,7 +196,7 @@ bool ParseOptions(int argc, char** argv, Options& options, std::string& error)
             }
             npucheck::ipc::ToolId toolId{};
             if (!npucheck::ipc::LookupTool(value, toolId)) {
-                error = "unknown tool '" + value + "'; supported tools are memcheck and synccheck";
+                error = "unknown tool '" + value + "'; supported tools are memcheck, synccheck, and initcheck";
                 return false;
             }
             explicitTools.insert(toolId);
@@ -383,7 +383,8 @@ std::string Usage()
            "  --tool <name> (=memcheck)\n"
            "      Set the tool to use. Can be specified multiple times to run several tools.\n"
            "        memcheck  : The memory access error and leak detection tool.\n"
-           "        synccheck : The kernel synchronization pairing detection tool.\n"
+           "        synccheck : The thread synchronization hazard detection tool.\n"
+           "        initcheck : The persistent register initialization check tool.\n"
            "  --log-file <filepath>\n"
            "      Save the check report to the file instead of printing output to stdout.\n"
            "  -h, --help\n"

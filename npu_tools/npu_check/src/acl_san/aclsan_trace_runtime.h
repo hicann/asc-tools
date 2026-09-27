@@ -23,6 +23,9 @@
 namespace aclsan {
 struct DeviceInstructionDecoder;
 struct ParsedTraceRecord;
+namespace dav3510 {
+class Dav3510RegisterStateManager;
+}
 } // namespace aclsan
 
 namespace aclsan {
@@ -39,6 +42,7 @@ enum class TraceArgumentMode {
 struct PreparedTraceLaunch {
     using HostInput = InternalMemoryRange;
     std::vector<HostInput> hostInputs;
+    std::vector<InternalMemoryRange> readOnlyBinaryRanges;
     std::shared_ptr<void> binaryLease;
     bool instrumented = false;
     uint64_t launchId = 0;
@@ -74,7 +78,11 @@ struct TraceCollectionResult {
 
 void DispatchTraceRecords(
     const std::vector<ParsedTraceRecord>& records, const DeviceInstructionDecoder& decoder,
-    const std::vector<PreparedTraceLaunch::HostInput>* internalInputs = nullptr) noexcept;
+    const std::vector<PreparedTraceLaunch::HostInput>* internalInputs = nullptr,
+    dav3510::Dav3510RegisterStateManager* retainedRegisterState = nullptr,
+    const std::vector<InternalMemoryRange>* readOnlyBinaryRanges = nullptr) noexcept;
+
+void RecordTraceLoadedImage(aclrtBinHandle binary, const void* image, size_t bytes) noexcept;
 
 void RecordTraceBinaryLoadFromData(
     aclrtBinHandle binary, bool instrumented, uint32_t traceArgumentOffset, const void* image,

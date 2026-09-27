@@ -43,6 +43,7 @@ add_library(npu_check_core STATIC
   diagnostic/report/device_call_stack.cpp
   checker/allocation_registry.cpp
   checker/memcheck.cpp
+  checker/initcheck.cpp
   checker/synccheck.cpp
   diagnostic/report_buffer.cpp
   ipc/uds_server.cpp

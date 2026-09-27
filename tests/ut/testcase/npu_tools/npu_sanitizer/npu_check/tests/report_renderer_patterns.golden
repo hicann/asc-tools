@@ -68,6 +68,12 @@
 =========     by aicore (<coreId>) type (<blockType>) block (<blockId>) pipe (<pipeName>) in launch (<launchId>)
 =========     Address 0x<address>
 
+===== initcheck.uninitialized_register_use =====
+========= ERROR:[INITCHECK] Register <registerName> was used before initialization
+=========     <consumerInstruction> requires initializing register <registerName> before execution
+=========     <location>
+=========     by aicore (<coreId>) type (<blockType>) block (<blockId>) pipe (<pipeName>) in launch (<launchId>)
+
 ===== initcheck.unused_memory =====
 ========= ERROR:[INITCHECK] Unused <space> memory in allocation 0x<base> of size <bytes> bytes
 =========     Not written <unusedBytes> bytes at offset 0x<firstUninitOffset> (0x<firstUninitAddress>)
