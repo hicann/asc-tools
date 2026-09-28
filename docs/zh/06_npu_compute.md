@@ -38,7 +38,7 @@ npu-compute --help
 ## 命令格式
 
 ```text
-npu-compute [options] [program] [program-arguments]
+npu-compute [options] [--] [program] [program-arguments]
 ```
 
 `program` 是待采集的目标程序，可以通过绝对路径、相对路径或命令名指定。使用命令名时，该程序必须能够通过 `PATH` 环境变量找到。目标程序可以是编译生成的可执行文件，也可以是具有执行权限的脚本。目标程序后的所有内容均作为目标程序参数传递。
@@ -51,7 +51,7 @@ npu-compute [options] [program] [program-arguments]
 npu-compute --section PipeUtilization ./application --input input.bin
 ```
 
-工具选项必须位于目标程序之前。
+工具选项必须位于目标程序之前。目标程序名称以 `-` 开头时，在目标程序前添加 `--`。
 
 目标程序必须具有执行权限。脚本没有执行权限时，应显式调用对应解释器，例如：
 
@@ -71,6 +71,7 @@ npu-compute --section PipeUtilization bash ./run.sh
 | `--replay-mode arg` | Kernel 重放模式，当前仅支持 `kernel`，默认值为 `kernel`。 |
 | `-o arg`、`--export arg` | 采集时指定报告文件路径或已有目录；导入时指定保存解包结果的已有目录，工具会在其中创建新的结果子目录。未指定时，报告或解包结果保存在当前目录。 |
 | `-i arg`、`--import arg` | 导入并解包 npu-compute 生成的 `.npu-rep` 报告，可配合 `--export` 指定保存位置。 |
+| `--` | 可选分隔符，放在目标程序前，用于分隔工具选项和目标程序及其参数。 |
 
 同一个 `--section` 重复指定时只采集一次。`--replay-mode`、`--import` 和 `--export` 每条命令只能指定一次。
 

@@ -13,6 +13,7 @@
 #include "launch/launcher.h"
 
 #include <cstdio>
+#include <sstream>
 #include <string>
 #include <vector>
 
@@ -132,7 +133,7 @@ int TestImportExportParsing()
     CHECK(config.import_path == "old.npu-rep");
     CHECK(!config.export_path);
     CHECK(!Parse({"npu-compute", "--import", ""}, &config, &errors));
-    CHECK(errors == std::vector<std::string>({"--import requires a non-empty input report file path."}));
+    CHECK(errors == std::vector<std::string>({"--import requires a non-empty input report file."}));
     CHECK(!config.import_path);
     return 0;
 }
@@ -400,6 +401,18 @@ int TestSets()
         &config, &errors));
     CHECK(config.sections == full);
     CHECK(config.program_arguments == std::vector<std::string>({"--set", "full"}));
+    CHECK(Parse({"npu-compute", "--set", "full", "--", "--app", "--set", "basic"}, &config, &errors));
+    CHECK(config.sections == full && config.program == "--app");
+    CHECK(config.program_arguments == std::vector<std::string>({"--set", "basic"}));
+    CHECK(Parse({"npu-compute", "--", "--app"}, &config, &errors));
+    CHECK(config.sections == basic && config.program == "--app");
+    CHECK(!Parse({"npu-compute", "--set", "--", "--app"}, &config, &errors));
+    CHECK(errors == std::vector<std::string>{"--set requires a set name. Use --list-sets to see supported names."});
+    CHECK(config.program == "--app" && config.sections.empty());
+    CHECK(Parse({"npu-compute", "--list-sets", "--"}, &config, &errors));
+    CHECK(config.list_sets && config.program.empty());
+    CHECK(!Parse({"npu-compute", "--list-sets", "--", "--app"}, &config, &errors));
+    CHECK(errors == std::vector<std::string>{"use --list-sets as a standalone command."});
     CHECK(Parse({"npu-compute", "--list-sets"}, &config, &errors));
     for (const auto& args : std::vector<std::vector<std::string>>{
              {"--set"},
@@ -429,6 +442,164 @@ int TestSets()
     return 0;
 }
 
+int TestSeparatorBoundary()
+{
+    CliConfig config;
+    std::vector<std::string> errors;
+    const std::vector<std::string> app_arguments = {"--help", "-h", "--section", "Pipeline", "--export",
+                                                    "x",      "--", "",          "two words"};
+    for (const std::string program : {"./app", "--app", "-app", "--help", "-h", "--", "-"}) {
+        std::vector<std::string> arguments = {"npu-compute", "--section", "Memory", "--", program};
+        arguments.insert(arguments.end(), app_arguments.begin(), app_arguments.end());
+        CHECK(Parse(arguments, &config, &errors));
+        CHECK(errors.empty());
+        CHECK(config.program == program);
+        CHECK(config.program_arguments == app_arguments);
+        CHECK(config.sections == std::vector<std::string>{"Memory"});
+        CHECK(!config.show_help && !config.list_sections && !config.collect_pipeline);
+        CHECK(!config.export_path && !config.import_path && !config.replay_mode_specified);
+    }
+    for (bool separator : {false, true}) {
+        std::vector<std::string> arguments = {
+            "npu-compute", "--section", "Memory", "--export=result.npu-rep", "--replay-mode=kernel"};
+        if (separator) {
+            arguments.push_back("--");
+        }
+        arguments.push_back("./app");
+        arguments.insert(arguments.end(), app_arguments.begin(), app_arguments.end());
+        CHECK(Parse(arguments, &config, &errors));
+        CHECK(errors.empty());
+        CHECK(config.program == "./app" && config.program_arguments == app_arguments);
+        CHECK(config.sections == std::vector<std::string>{"Memory"});
+        CHECK(config.export_path == "result.npu-rep" && !config.import_path);
+        CHECK(config.replay_mode_specified && config.replay_mode == npucompute::cli::ReplayMode::Kernel);
+        CHECK(!config.show_help && !config.list_sections && !config.collect_pipeline);
+    }
+    CHECK(Parse({"npu-compute", "--help"}, &config, &errors));
+    CHECK(config.show_help && config.program.empty() && config.program_arguments.empty());
+    CHECK(config.sections.empty() && !config.export_path && !config.replay_mode_specified);
+    return 0;
+}
+
+int TestSeparatorMissingValues()
+{
+    struct MissingValueCase {
+        const char* option;
+        const char* error;
+    };
+    const MissingValueCase cases[] = {
+        {"--section", "--section requires a section name. Use --list-sections to see supported names."},
+        {"--replay-mode", "--replay-mode requires a mode. Supported value: kernel."},
+        {"--import", "--import requires an input report file."},
+        {"-i", "--import requires an input report file."},
+        {"--export", "--export requires an output path: a report file or directory."},
+        {"-o", "--export requires an output path: a report file or directory."},
+    };
+    for (const auto& test : cases) {
+        CliConfig config;
+        std::vector<std::string> errors;
+        CHECK(!Parse({"npu-compute", test.option, "--", "--app", "--help"}, &config, &errors));
+        CHECK(errors == std::vector<std::string>{test.error});
+        CHECK(config.program == "--app");
+        CHECK(config.program_arguments == std::vector<std::string>{"--help"});
+        CHECK(!config.show_help && !config.import_path && !config.export_path && config.sections.empty());
+        CHECK(config.replay_mode_specified == (std::string(test.option) == "--replay-mode"));
+        CHECK(!Parse({"npu-compute", test.option, "--"}, &config, &errors));
+        CHECK(errors == std::vector<std::string>{test.error});
+        CHECK(config.program.empty() && config.program_arguments.empty());
+    }
+    return 0;
+}
+
+int TestSeparatorValidation()
+{
+    CliConfig config;
+    std::vector<std::string> errors;
+    for (const std::vector<std::string> arguments :
+         {std::vector<std::string>{"npu-compute", "--section", "Memory", "--"},
+          std::vector<std::string>{"npu-compute", "--section", "Memory", "--", "", "--help"}}) {
+        CHECK(!Parse(arguments, &config, &errors));
+        CHECK(errors == std::vector<std::string>{"collection requires a target program after the tool options."});
+        CHECK(!config.show_help && config.program.empty());
+    }
+    CHECK(config.program_arguments == std::vector<std::string>{"--help"});
+    CHECK(!Parse({"npu-compute", "--import", "report.npu-rep", "--", "./app"}, &config, &errors));
+    CHECK(
+        errors == std::vector<std::string>{
+                      "--import cannot be combined with --set, --section, --replay-mode or a target program."});
+    CHECK(!Parse({"npu-compute", "--list-sections", "--", "./app"}, &config, &errors));
+    CHECK(errors == std::vector<std::string>{"use --list-sections as a standalone command."});
+    CHECK(Parse({"npu-compute", "--list-sections", "--"}, &config, &errors));
+    CHECK(config.list_sections && config.program.empty());
+    CHECK(Parse({"npu-compute", "--help", "--"}, &config, &errors));
+    CHECK(config.show_help && config.program.empty());
+    CHECK(Parse({"npu-compute", "--import", "report.npu-rep", "--"}, &config, &errors));
+    CHECK(config.import_path == "report.npu-rep" && config.program.empty());
+    for (const std::string option : {"--bad", "---"}) {
+        CHECK(!Parse({"npu-compute", option, "--", "./app", "--help"}, &config, &errors));
+        CHECK(
+            errors ==
+            std::vector<std::string>{"unknown option '" + option + "'. Use --help to see supported options."});
+        CHECK(config.program == "./app" && !config.show_help);
+        CHECK(config.program_arguments == std::vector<std::string>{"--help"});
+    }
+    CHECK(!Parse({"npu-compute", "--bad", "--help", "--", "./app"}, &config, &errors));
+    CHECK(config.show_help && errors.size() == 1 && config.program == "./app");
+    return 0;
+}
+
+int TestSeparatorLiteralValues()
+{
+    CliConfig config;
+    std::vector<std::string> errors;
+    for (const std::string option : {"--export=--", "-o--"}) {
+        CHECK(Parse({"npu-compute", "--section", "Memory", option, "--", "./app"}, &config, &errors));
+        CHECK(config.export_path == "--" && config.program == "./app");
+    }
+    for (const std::string option : {"--import=--", "-i--"}) {
+        CHECK(Parse({"npu-compute", option, "--"}, &config, &errors));
+        CHECK(config.import_path == "--" && config.program.empty());
+    }
+    CHECK(Parse({"npu-compute", "--section", "Memory", "--export", "./--", "--", "./app"}, &config, &errors));
+    CHECK(config.export_path == "./--");
+    CHECK(!Parse({"npu-compute", "--section=--", "--", "./app"}, &config, &errors));
+    CHECK(
+        errors ==
+        std::vector<std::string>{
+            "unsupported section name '--'. Names are case-sensitive; use --list-sections to see supported names."});
+    CHECK(!Parse({"npu-compute", "--replay-mode=--", "--", "./app"}, &config, &errors));
+    CHECK(errors == std::vector<std::string>{"unsupported replay mode '--'. Supported value: kernel."});
+    return 0;
+}
+
+int TestCombinationValidationOrder()
+{
+    CliConfig config;
+    std::vector<std::string> errors;
+    CHECK(!Parse({"npu-compute", "--export", "result.npu-rep"}, &config, &errors));
+    CHECK(errors == std::vector<std::string>{"--export requires a collection command or --import."});
+    CHECK(!Parse({"npu-compute"}, &config, &errors));
+    CHECK(
+        errors == std::vector<std::string>(
+                      {"collection requires at least one --set or --section before the program.",
+                       "collection requires a target program after the tool options."}));
+    CHECK(!Parse({"npu-compute", "--section", "Memory"}, &config, &errors));
+    CHECK(errors == std::vector<std::string>{"collection requires a target program after the tool options."});
+    CHECK(!Parse({"npu-compute", "--list-sections", "--import", "report.npu-rep", "./app"}, &config, &errors));
+    CHECK(errors == std::vector<std::string>{"use --list-sections as a standalone command."});
+    CHECK(!Parse({"npu-compute", "--import", "report.npu-rep", "./app"}, &config, &errors));
+    CHECK(
+        errors == std::vector<std::string>{
+                      "--import cannot be combined with --set, --section, --replay-mode or a target program."});
+    CHECK(Parse({"npu-compute", "--import", "report.npu-rep"}, &config, &errors));
+    CHECK(errors.empty());
+    CHECK(Parse({"npu-compute", "--help", "--export", "result.npu-rep"}, &config, &errors));
+    CHECK(errors.empty());
+    CHECK(!Parse({"npu-compute", "--bad", "--export", "result.npu-rep"}, &config, &errors));
+    CHECK(errors == std::vector<std::string>{"unknown option '--bad'. Use --help to see supported options."});
+    return 0;
+}
+
 int TestHelpText()
 {
     FILE* stream = std::tmpfile();
@@ -437,6 +608,10 @@ int TestHelpText()
     CHECK(std::fflush(stream) == 0);
     const std::string usage = ReadStream(stream);
     CHECK(std::fclose(stream) == 0);
+    CHECK(usage.find("[options] [--] [program] [program-arguments]") != std::string::npos);
+    CHECK(usage.find("Optional '--' separates") == std::string::npos);
+    CHECK(usage.find("Optional separator between npu-compute options and the program.") != std::string::npos);
+    CHECK(usage.find("Required if the program name starts with '-'.") != std::string::npos);
     CHECK(usage.find("force-overwrite") == std::string::npos);
     CHECK(usage.find("-o, --export") != std::string::npos);
     CHECK(usage.find("-i, --import") != std::string::npos);
@@ -447,7 +622,9 @@ int TestHelpText()
 
 static int RunSuiteMain()
 {
-    if (TestSets() != 0 || TestBusinessExitCodes() != 0 || TestCollectionExport() != 0 || TestPipelineOption() != 0 ||
+    if (TestSets() != 0 || TestCombinationValidationOrder() != 0 || TestSeparatorBoundary() != 0 ||
+        TestSeparatorMissingValues() != 0 || TestSeparatorValidation() != 0 || TestSeparatorLiteralValues() != 0 ||
+        TestBusinessExitCodes() != 0 || TestCollectionExport() != 0 || TestPipelineOption() != 0 ||
         TestImportExportParsing() != 0 || TestInlineLongOptionValues() != 0 || TestForceOptionsAreRejected() != 0 ||
         TestExistingCliBehavior() != 0 || TestHelpWithoutErrors() != 0 || TestHelpReportsAllOptionErrors() != 0 ||
         TestHelpAcceptsListSectionsCombination() != 0 || TestHelpMatchingAndProgramBoundary() != 0 ||
@@ -458,3 +635,82 @@ static int RunSuiteMain()
 }
 
 TEST(NpuComputeCli, Main) { ASSERT_EQ(RunSuiteMain(), 0) << "NpuComputeCli reported failure"; }
+
+TEST(NpuComputeCli, HelpDefinesEachOptionOnce)
+{
+    FILE* stream = std::tmpfile();
+    ASSERT_NE(stream, nullptr);
+    PrintUsage(stream, "npu-compute");
+    ASSERT_EQ(std::fflush(stream), 0);
+    const std::string usage = ReadStream(stream);
+    EXPECT_EQ(std::fclose(stream), 0);
+    for (const char* option :
+         {"--help", "--list-sections", "--list-sets", "--set", "--section", "--replay-mode", "--import", "--export"}) {
+        std::istringstream lines(usage);
+        std::string line;
+        unsigned definitions = 0;
+        while (std::getline(lines, line)) {
+            const auto start = line.find_first_not_of(' ');
+            if (start != 2 && start != 6) {
+                continue;
+            }
+            std::istringstream words(line);
+            std::string name;
+            words >> name;
+            if (name.size() == 3 && name.front() == '-' && name.back() == ',') {
+                words >> name;
+            }
+            if (name == option) {
+                ++definitions;
+            }
+        }
+        EXPECT_EQ(definitions, 1U) << option;
+    }
+    EXPECT_EQ(usage.find("No section is selected by default"), std::string::npos);
+    EXPECT_EQ(usage.find("Required for collection."), std::string::npos);
+    EXPECT_EQ(usage.find("file path"), std::string::npos);
+    EXPECT_NE(usage.find("Defaults to basic when no set or section is given."), std::string::npos);
+    EXPECT_NE(usage.find("Import a valid report file generated by npu-compute."), std::string::npos);
+    EXPECT_NE(usage.find("file or directory"), std::string::npos);
+
+    CliConfig config;
+    std::vector<std::string> errors;
+    ASSERT_TRUE(Parse({"npu-compute", "./app"}, &config, &errors));
+    EXPECT_EQ(config.sets, std::vector<std::string>{"basic"});
+    EXPECT_FALSE(config.sections.empty());
+}
+
+TEST(NpuComputeCli, ImportReportsMissingAndEmptyFile)
+{
+    CliConfig config;
+    std::vector<std::string> errors;
+    for (const char* option : {"--import", "-i"}) {
+        EXPECT_FALSE(Parse({"npu-compute", option}, &config, &errors));
+        EXPECT_EQ(errors, std::vector<std::string>{"--import requires an input report file."});
+        EXPECT_FALSE(Parse({"npu-compute", option, ""}, &config, &errors));
+        EXPECT_EQ(errors, std::vector<std::string>{"--import requires a non-empty input report file."});
+    }
+    EXPECT_FALSE(Parse({"npu-compute", "--import="}, &config, &errors));
+    EXPECT_EQ(errors, std::vector<std::string>{"--import requires a non-empty input report file."});
+}
+
+TEST(NpuComputeCli, FlagValuesReportSpecificErrors)
+{
+    CliConfig config;
+    std::vector<std::string> errors;
+    for (const std::string option : {"--help", "--list-sets", "--list-sections"}) {
+        for (const std::string suffix : {"=", "=value"}) {
+            EXPECT_FALSE(Parse({"npu-compute", option + suffix, "--import"}, &config, &errors));
+            EXPECT_EQ(
+                errors, (std::vector<std::string>{
+                            option + " does not take a value.", "--import requires an input report file."}));
+            EXPECT_FALSE(config.show_help);
+            EXPECT_FALSE(config.list_sets);
+            EXPECT_FALSE(config.list_sections);
+        }
+    }
+    EXPECT_FALSE(Parse({"npu-compute", "--list-sets", "--list-sets=x"}, &config, &errors));
+    EXPECT_EQ(errors, std::vector<std::string>{"--list-sets does not take a value."});
+    EXPECT_TRUE(Parse({"npu-compute", "app", "--help=x"}, &config, &errors));
+    EXPECT_EQ(config.program_arguments, std::vector<std::string>{"--help=x"});
+}

@@ -11,6 +11,7 @@ add_library(npu_compute_launcher_core STATIC
   ipc/artifact_receiver.cpp
   ipc/uds_client.cpp
   config/config.cpp
+  config/option_registry.cpp
   import/import_output_directory.cpp
   import/imported_profile_results.cpp
   launch/injection_path.cpp

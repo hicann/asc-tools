@@ -8,11 +8,13 @@
  * See LICENSE in the root of the software repository for the full text of the License.
  */
 #include "config/config.h"
+#include "config/option_registry.h"
 
 #include <algorithm>
 #include <array>
 #include <cstdio>
 #include <string>
+#include <utility>
 
 namespace npucompute::cli {
 namespace {
@@ -48,34 +50,6 @@ bool IsSupportedSection(const std::string& section)
     return std::find(kSupportedSections.begin(), kSupportedSections.end(), section) != kSupportedSections.end();
 }
 
-bool IsHelpOption(const std::string& argument) { return argument == "-h" || argument == "--help"; }
-
-bool MatchValueOption(
-    const std::string& argument, const std::string& long_option, char short_option, bool* inline_value,
-    std::string* value)
-{
-    if (argument == long_option || (short_option != '\0' && argument == std::string("-") + short_option)) {
-        *inline_value = false;
-        value->clear();
-        return true;
-    }
-    const std::string long_prefix = long_option + "=";
-    if (argument.rfind(long_prefix, 0) == 0) {
-        *inline_value = true;
-        *value = argument.substr(long_prefix.size());
-        return true;
-    }
-    if (short_option != '\0') {
-        const std::string short_prefix = std::string("-") + short_option;
-        if (argument.rfind(short_prefix, 0) == 0 && argument.size() > short_prefix.size()) {
-            *inline_value = true;
-            *value = argument.substr(short_prefix.size());
-            return true;
-        }
-    }
-    return false;
-}
-
 void AddSection(
     const std::string& section, const char* missing_message, CliConfig* config, std::vector<std::string>* errors)
 {
@@ -94,9 +68,64 @@ void AddSection(
     }
 }
 
+bool SkipCombinationValidation(const CliConfig& config, const std::vector<std::string>& errors)
+{
+    return config.show_help || !errors.empty();
+}
+
+bool ValidateListSectionsMode(const CliConfig& config, std::vector<std::string>* errors)
+{
+    if (!config.list_sections) {
+        return false;
+    }
+    if (config.replay_mode_specified || config.import_path.has_value() || config.export_path.has_value() ||
+        !config.sections.empty() || !config.program.empty()) {
+        AddError("use --list-sections as a standalone command.", errors);
+    }
+    return true;
+}
+
+bool ValidateImportMode(const CliConfig& config, std::vector<std::string>* errors)
+{
+    if (!config.import_path.has_value()) {
+        return false;
+    }
+    if (config.replay_mode_specified || !config.sections.empty() || !config.program.empty()) {
+        AddError("--import cannot be combined with --set, --section, --replay-mode or a target program.", errors);
+    }
+    return true;
+}
+
+void ValidateExportRequirement(const CliConfig& config, std::vector<std::string>* errors)
+{
+    if (config.export_path.has_value() && config.sections.empty() && config.program.empty()) {
+        AddError("--export requires a collection command or --import.", errors);
+    }
+}
+
+void ValidateCollectionSections(const CliConfig& config, std::vector<std::string>* errors)
+{
+    if (!config.sections.empty()) {
+        return;
+    }
+    if (config.program.empty()) {
+        AddError("collection requires at least one --set or --section before the program.", errors);
+    } else {
+        AddError(
+            "collection requires at least one --set or --section before program '" + config.program + "'.", errors);
+    }
+}
+
+void ValidateTargetProgram(const CliConfig& config, std::vector<std::string>* errors)
+{
+    if (config.program.empty()) {
+        AddError("collection requires a target program after the tool options.", errors);
+    }
+}
+
 void ValidateCombinations(const CliConfig& config, std::vector<std::string>* errors)
 {
-    if (config.show_help || !errors->empty()) {
+    if (SkipCombinationValidation(config, *errors)) {
         return;
     }
     if (config.list_sets) {
@@ -106,235 +135,145 @@ void ValidateCombinations(const CliConfig& config, std::vector<std::string>* err
         }
         return;
     }
-    if (config.list_sections) {
-        if (config.replay_mode_specified || config.import_path.has_value() || config.export_path.has_value() ||
-            !config.sections.empty() || !config.program.empty()) {
-            AddError("use --list-sections as a standalone command.", errors);
-        }
+    if (ValidateListSectionsMode(config, errors)) {
         return;
     }
-    if (config.import_path.has_value()) {
-        if (config.replay_mode_specified || !config.sections.empty() || !config.program.empty()) {
-            AddError("--import cannot be combined with --set, --section, --replay-mode or a target program.", errors);
-        }
+    if (ValidateImportMode(config, errors)) {
         return;
     }
-    if (config.export_path.has_value() && config.sections.empty() && config.program.empty()) {
-        AddError("--export requires a collection command or --import.", errors);
+    ValidateExportRequirement(config, errors);
+    if (!errors->empty()) {
         return;
     }
-    if (config.sections.empty()) {
-        if (config.program.empty()) {
-            AddError("collection requires at least one --set or --section before the program.", errors);
-        } else {
-            AddError(
-                "collection requires at least one --set or --section before program '" + config.program + "'.", errors);
-        }
-    }
-    if (config.program.empty()) {
-        AddError("collection requires a target program after the tool options.", errors);
-    }
+    // Both collection requirements can fail; report them in section/program order.
+    ValidateCollectionSections(config, errors);
+    ValidateTargetProgram(config, errors);
 }
 
-enum class OptionArity { Flag, RequiredValue };
-enum class ValueState { None, Missing, Present };
-struct OptionValue {
-    ValueState state = ValueState::None;
-    std::string text;
-};
-struct ParseContext {
-    CliConfig* config;
-    std::vector<std::string>* errors;
-    bool list_sections_specified = false;
-    bool import_specified = false;
-    bool export_specified = false;
-};
-struct OptionSpec {
-    const char* long_name;
-    char short_name;
-    OptionArity arity;
-    const char* missing_message;
-    void (*handler)(const OptionSpec&, const OptionValue&, ParseContext&);
-};
-void HandleHelp(const OptionSpec&, const OptionValue&, ParseContext& context) { context.config->show_help = true; }
-void HandleSet(const OptionSpec& spec, const OptionValue& value, ParseContext& context)
+OptionSpec FlagOption(std::string name, char alias, bool CliConfig::*field, RepeatPolicy repeat)
 {
-    if (value.state == ValueState::Missing) {
-        return;
-    }
-    if (value.text.empty()) {
-        AddError(spec.missing_message, context.errors);
-        return;
-    }
-    if (std::find(kSupportedSets.begin(), kSupportedSets.end(), value.text) == kSupportedSets.end()) {
-        const std::string hint = value.text.find(',') != std::string::npos ?
-                                     "Specify each set separately, for example: --set basic --set full." :
-                                     "Names are case-sensitive; use --list-sets to see supported names.";
-        AddError("unsupported set name '" + value.text + "'. " + hint, context.errors);
-        return;
-    }
-    auto& sets = context.config->sets;
-    if (std::find(sets.begin(), sets.end(), value.text) != sets.end()) {
-        return;
-    }
-    sets.push_back(value.text);
-    for (const auto& section : SetSections(value.text)) {
-        AddSection(section, spec.missing_message, context.config, context.errors);
-    }
-}
-void HandleListSets(const OptionSpec&, const OptionValue&, ParseContext& context)
-{
-    if (context.config->list_sets) {
-        AddError("--list-sets may only be specified once", context.errors);
-    } else {
-        context.config->list_sets = true;
-    }
-}
-void HandleSection(const OptionSpec& spec, const OptionValue& value, ParseContext& context)
-{
-    if (value.state != ValueState::Missing) {
-        AddSection(value.text, spec.missing_message, context.config, context.errors);
-    }
-}
-void HandleListSections(const OptionSpec&, const OptionValue&, ParseContext& context)
-{
-    if (context.list_sections_specified) {
-        AddError("--list-sections may only be specified once", context.errors);
-    } else {
-        context.list_sections_specified = true;
-        context.config->list_sections = true;
-    }
+    OptionSpec option;
+    option.long_name = std::move(name);
+    option.short_name = alias;
+    option.repeat = repeat;
+    option.apply = [field](const std::string&, CliConfig& config, std::vector<std::string>&) { config.*field = true; };
+    return option;
 }
 
-void HandleReplayMode(const OptionSpec& spec, const OptionValue& value, ParseContext& context)
+OptionRegistry RegisterOptions()
 {
-    if (value.state == ValueState::Missing) {
-        context.config->replay_mode_specified = true;
-        return;
-    }
-    if (context.config->replay_mode_specified) {
-        AddError("--replay-mode may only be specified once", context.errors);
-        return;
-    }
-    context.config->replay_mode_specified = true;
-    if (value.text != "kernel") {
-        if (value.text.empty()) {
-            AddError(spec.missing_message, context.errors);
-        } else {
-            AddError("unsupported replay mode '" + value.text + "'. Supported value: kernel.", context.errors);
+    OptionRegistryBuilder builder;
+    auto help = FlagOption("--help", 'h', &CliConfig::show_help, RepeatPolicy::Allow);
+    help.protect_from_value = true;
+    help.help = "Show help information.";
+    builder.Add(std::move(help));
+    auto list = FlagOption("--list-sections", '\0', &CliConfig::list_sections, RepeatPolicy::Once);
+    list.help = "List supported section names.";
+    builder.Add(std::move(list));
+
+    auto list_sets = FlagOption("--list-sets", '\0', &CliConfig::list_sets, RepeatPolicy::Once);
+    list_sets.help = "List supported section sets and their sections.";
+    builder.Add(std::move(list_sets));
+    OptionSpec set;
+    set.long_name = "--set";
+    set.arity = OptionArity::RequiredValue;
+    set.missing_message = "--set requires a set name. Use --list-sets to see supported names.";
+    set.apply = [missing = set.missing_message](
+                    const std::string& value, CliConfig& config, std::vector<std::string>& errors) {
+        if (value.empty()) {
+            AddError(missing.c_str(), &errors);
+            return;
         }
-    }
-}
-
-void HandleImport(const OptionSpec&, const OptionValue& value, ParseContext& context)
-{
-    if (value.state == ValueState::Missing) {
-        context.import_specified = true;
-        return;
-    }
-    if (context.import_specified) {
-        AddError("--import may only be specified once", context.errors);
-    } else if (value.text.empty()) {
-        AddError("--import requires a non-empty input report file path.", context.errors);
-    } else {
-        context.config->import_path = value.text;
-    }
-    context.import_specified = true;
-}
-
-void HandleExport(const OptionSpec&, const OptionValue& value, ParseContext& context)
-{
-    if (value.state == ValueState::Missing) {
-        context.export_specified = true;
-        return;
-    }
-    if (context.export_specified) {
-        AddError("--export may only be specified once", context.errors);
-    } else if (value.text.empty()) {
-        AddError("--export requires a non-empty output path.", context.errors);
-    } else {
-        context.config->export_path = value.text;
-    }
-    context.export_specified = true;
-}
-
-const std::array<OptionSpec, 8> kOptions = {{
-    {"--set", '\0', OptionArity::RequiredValue, "--set requires a set name. Use --list-sets to see supported names.",
-     HandleSet},
-    {"--list-sets", '\0', OptionArity::Flag, nullptr, HandleListSets},
-    {"--help", 'h', OptionArity::Flag, nullptr, HandleHelp},
-    {"--list-sections", '\0', OptionArity::Flag, nullptr, HandleListSections},
-    {"--section", '\0', OptionArity::RequiredValue,
-     "--section requires a section name. Use --list-sections to see supported names.", HandleSection},
-    {"--replay-mode", '\0', OptionArity::RequiredValue, "--replay-mode requires a mode. Supported value: kernel.",
-     HandleReplayMode},
-    {"--import", 'i', OptionArity::RequiredValue, "--import requires an input report file path.", HandleImport},
-    {"--export", 'o', OptionArity::RequiredValue, "--export requires an output path: a report file or directory.",
-     HandleExport},
-}};
-class CliParser {
-public:
-    CliParser(CliConfig* config, std::vector<std::string>* errors) : context_{config, errors} {}
-    void Parse(int argc, char** argv)
-    {
-        for (int index = 1; index < argc; ++index) {
-            const std::string argument = Argument(argv[index]);
-            if (argument.rfind("--list-sets=", 0) == 0) {
-                AddError("--list-sets does not take a value.", context_.errors);
-                continue;
-            }
-            bool inline_value = false;
-            OptionValue value;
-            const OptionSpec* spec = FindOption(argument, &inline_value, &value.text);
-            if (spec != nullptr) {
-                if (spec->arity == OptionArity::RequiredValue) {
-                    value.state = ValueState::Present;
-                    if (!inline_value) {
-                        if (index + 1 >= argc || IsHelpOption(Argument(argv[index + 1]))) {
-                            value.state = ValueState::Missing;
-                            AddError(spec->missing_message, context_.errors);
-                        } else {
-                            value.text = Argument(argv[++index]);
-                        }
-                    }
-                }
-                spec->handler(*spec, value, context_);
-                continue;
-            }
-            if (argument == "--") {
-                AddError("-- is not supported; place the program directly after tool options", context_.errors);
-                continue;
-            }
-            if (argument.size() > 1 && argument[0] == '-') {
-                AddError("unknown option '" + argument + "'. Use --help to see supported options.", context_.errors);
-                continue;
-            }
-            context_.config->program = argument;
-            while (++index < argc) {
-                context_.config->program_arguments.emplace_back(Argument(argv[index]));
-            }
-            break;
+        if (std::find(kSupportedSets.begin(), kSupportedSets.end(), value) == kSupportedSets.end()) {
+            const std::string hint = value.find(',') != std::string::npos ?
+                                         "Specify each set separately, for example: --set basic --set full." :
+                                         "Names are case-sensitive; use --list-sets to see supported names.";
+            AddError("unsupported set name '" + value + "'. " + hint, &errors);
+            return;
         }
-    }
-
-private:
-    static std::string Argument(const char* value) { return value == nullptr ? "" : value; }
-    static const OptionSpec* FindOption(const std::string& argument, bool* inline_value, std::string* value)
-    {
-        for (const auto& spec : kOptions) {
-            if (spec.arity == OptionArity::Flag) {
-                if (argument == spec.long_name ||
-                    (spec.short_name != '\0' && argument == std::string("-") + spec.short_name)) {
-                    return &spec;
-                }
-            } else if (MatchValueOption(argument, spec.long_name, spec.short_name, inline_value, value)) {
-                return &spec;
-            }
+        auto& sets = config.sets;
+        if (std::find(sets.begin(), sets.end(), value) != sets.end()) {
+            return;
         }
-        return nullptr;
-    }
-    ParseContext context_;
-};
+        sets.push_back(value);
+        for (const auto& section : SetSections(value)) {
+            AddSection(section, missing.c_str(), &config, &errors);
+        }
+    };
+    set.help = "Select a predefined section set: basic or full.\n"
+               "May be repeated or combined with --section.\n"
+               "Sections are deduplicated in first-occurrence order.\n"
+               "Defaults to basic when no set or section is given.";
+    builder.Add(std::move(set));
+
+    OptionSpec section;
+    section.long_name = "--section";
+    section.arity = OptionArity::RequiredValue;
+    section.missing_message = "--section requires a section name. Use --list-sections to see supported names.";
+    section.apply = [missing = section.missing_message](
+                        const std::string& value, CliConfig& config, std::vector<std::string>& errors) {
+        AddSection(value, missing.c_str(), &config, &errors);
+    };
+    section.help = "Select a metric group by name (case-sensitive).\n"
+                   "Use --list-sections to see supported names.\n"
+                   "May be combined with --set.\n"
+                   "Defaults to basic when no set or section is given.\n"
+                   "Specify different groups separately:\n"
+                   "  --section Memory --section L2Cache";
+    builder.Add(std::move(section));
+
+    OptionSpec replay;
+    replay.long_name = "--replay-mode";
+    replay.arity = OptionArity::RequiredValue;
+    replay.repeat = RepeatPolicy::Once;
+    replay.missing_message = "--replay-mode requires a mode. Supported value: kernel.";
+    replay.on_seen = [](CliConfig& config) { config.replay_mode_specified = true; };
+    replay.apply = [missing = replay.missing_message](
+                       const std::string& value, CliConfig&, std::vector<std::string>& errors) {
+        if (value != "kernel") {
+            errors.push_back(
+                value.empty() ? missing : "unsupported replay mode '" + value + "'. Supported value: kernel.");
+        }
+    };
+    replay.help = "Kernel replay mode.\n"
+                  "Value: kernel. Default: kernel.";
+    builder.Add(std::move(replay));
+
+    auto add_path = [&builder](
+                        const char* name, char alias, const char* missing, const char* empty,
+                        std::optional<std::string> CliConfig::*field, const char* help_text) {
+        OptionSpec option;
+        option.long_name = name;
+        option.short_name = alias;
+        option.arity = OptionArity::RequiredValue;
+        option.repeat = RepeatPolicy::Once;
+        option.missing_message = missing;
+        option.help = help_text;
+        option.apply = [field, empty](const std::string& value, CliConfig& config, std::vector<std::string>& errors) {
+            if (value.empty()) {
+                errors.push_back(empty);
+            } else {
+                config.*field = value;
+            }
+        };
+        builder.Add(std::move(option));
+    };
+    add_path(
+        "--import", 'i', "--import requires an input report file.", "--import requires a non-empty input report file.",
+        &CliConfig::import_path,
+        "Import a valid report file generated by npu-compute.\n"
+        "Use alone or with --export; no target program.");
+    add_path(
+        "--export", 'o', "--export requires an output path: a report file or directory.",
+        "--export requires a non-empty output path.", &CliConfig::export_path,
+        "Specify the output file or directory.\n"
+        "Collection: a new .npu-rep file or an existing\n"
+        "  directory. The parent directory must exist.\n"
+        "Import: an existing directory for unpacking.\n"
+        "Default location: current directory.\n"
+        "Existing files are not overwritten.");
+    return builder.Build();
+}
 
 void ApplyDefaultSet(CliConfig* config, std::vector<std::string>* errors)
 {
@@ -360,10 +299,8 @@ bool ParseCli(int argc, char** argv, CliConfig* config, std::vector<std::string>
         AddError("internal error: config is null", errors);
         return false;
     }
-    *config = CliConfig{};
-
-    CliParser parser(config, errors);
-    parser.Parse(argc, argv);
+    const auto registry = RegisterOptions();
+    registry.Parse(argc, argv, *config, *errors);
 
     ApplyDefaultSet(config, errors);
     ValidateCombinations(*config, errors);
@@ -386,41 +323,16 @@ void PrintUsage(FILE* stream, const char* program)
     }
     std::fprintf(
         stream,
-        "Usage: %s [options] [program] [program-arguments]\n"
-        "\n"
-        "Options:\n"
-        "  -h, --help                 Show help information.\n"
-        "\n"
-        "      --set arg              Select a predefined section set: basic or full.\n"
-        "                             May be repeated or combined with --section.\n"
-        "                             Sections are deduplicated in first-occurrence order.\n"
-        "                             Defaults to basic when no set or section is given.\n"
-        "\n"
-        "      --list-sets            List predefined sets and their section names.\n"
-        "                             Use as a standalone command.\n"
-        "\n"
-        "      --list-sections        List supported section names.\n"
-        "\n"
-        "      --section arg          Select a metric group by name (case-sensitive).\n"
-        "                             Use --list-sections to see supported names.\n"
-        "                             Collection requires --section or --set.\n"
-        "                             Defaults to basic when no set or section is given.\n"
-        "                             Specify different groups separately:\n"
-        "                               --section Memory --section L2Cache\n"
-        "\n"
-        "      --replay-mode arg      Kernel replay mode.\n"
-        "                             Value: kernel. Default: kernel.\n"
-        "\n"
-        "  -i, --import arg           Unpack a npu-compute report file (.npu-rep).\n"
-        "                             Use alone or with --export; no target program.\n"
-        "\n"
-        "  -o, --export arg           Specify the output path.\n"
-        "                             Collection: a new .npu-rep file or an existing\n"
-        "                              directory. The parent directory must exist.\n"
-        "                             Import: an existing directory for unpacking.\n"
-        "                             Default location: current directory.\n"
-        "                             Existing files are not overwritten.\n",
+        "Usage: %s [options] [--] [program] [program-arguments]\n"
+        "\n",
         program == nullptr ? "npu-compute" : program);
+    const auto registry = RegisterOptions();
+    std::fputs(registry.HelpText().c_str(), stream);
+    std::fputs(
+        "\n"
+        "      --                     Optional separator between npu-compute options and the program.\n"
+        "                             Required if the program name starts with '-'.\n\n",
+        stream);
 }
 
 void PrintSections(FILE* stream)

@@ -71,6 +71,7 @@ add_executable(npu_tools_utest
   "${NPU_TOOLS_TEST_ROOT}/injection/tests/injection_hook_test.cpp"
   # npu_compute 纯逻辑用例（.so 边界/进程类用例保留在 npu_compute/tests 独立目标）
   "${NPU_TOOLS_LLT_COMPUTE_TESTS_DIR}/cli_test.cpp"
+  "${NPU_TOOLS_LLT_COMPUTE_TESTS_DIR}/option_registry_test.cpp"
   "${NPU_TOOLS_LLT_COMPUTE_TESTS_DIR}/collection_file_validator_test.cpp"
   "${NPU_TOOLS_LLT_COMPUTE_TESTS_DIR}/import_output_directory_test.cpp"
   "${NPU_TOOLS_LLT_COMPUTE_TESTS_DIR}/rep_test_decoder.cpp"
@@ -108,6 +109,7 @@ add_executable(npu_tools_utest
   ${NPU_TOOLS_LLT_ACL_SAN_INTERNAL_SOURCES}
   # npu_compute 产品源（launcher 核心 + hardware + pmu）
   "${NPU_TOOLS_LLT_COMPUTE_CLI_DIR}/config/config.cpp"
+  "${NPU_TOOLS_LLT_COMPUTE_CLI_DIR}/config/option_registry.cpp"
   "${NPU_TOOLS_LLT_COMPUTE_CLI_DIR}/ipc/artifact_receiver.cpp"
   "${NPU_TOOLS_LLT_COMPUTE_CLI_DIR}/ipc/uds_client.cpp"
   "${NPU_TOOLS_LLT_COMPUTE_CLI_DIR}/import/import_output_directory.cpp"

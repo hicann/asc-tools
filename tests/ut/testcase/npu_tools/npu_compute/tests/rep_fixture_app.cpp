@@ -17,6 +17,7 @@
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <vector>
 
 namespace {
 
@@ -51,7 +52,14 @@ int main(int argc, char** argv)
 {
     int exit_code = 0;
     std::string mode;
+    std::vector<std::string> applicationArguments;
     for (int index = 1; index < argc; ++index) {
+        if (mode == "cli-echo" && std::strcmp(argv[index], "--") == 0) {
+            while (++index < argc) {
+                applicationArguments.emplace_back(argv[index]);
+            }
+            break;
+        }
         if (std::strcmp(argv[index], "--mode") == 0 && index + 1 < argc) {
             mode = argv[++index];
             continue;
@@ -72,6 +80,20 @@ int main(int argc, char** argv)
         }
         npucompute::UdsServer server;
         const auto hello = server.Accept();
+        if (mode == "cli-echo") {
+            std::printf("sections=");
+            for (std::size_t index = 0; index < hello.config.sections.size(); ++index) {
+                std::printf("%s%s", index == 0 ? "" : ",", hello.config.sections[index].c_str());
+            }
+            std::printf("\nreplay=%s\n", hello.config.replayMode.c_str());
+            for (const auto& argument : applicationArguments) {
+                std::printf("argument=");
+                for (unsigned char byte : argument) {
+                    std::printf("%02x", static_cast<unsigned>(byte));
+                }
+                std::printf("\n");
+            }
+        }
         npucompute::ArtifactPublisher publisher(server.TakeChannel(), server.Deadline());
         const auto publish = [&](const std::string& name, std::string_view bytes) {
             publisher.Begin(name);
@@ -84,6 +106,14 @@ int main(int argc, char** argv)
             }
             for (const auto& section : hello.config.sections) {
                 if (section == "Pipeline") {
+                    if (mode == "cli-echo") {
+                        publish(
+                            ".biu-staging/process-uds/manifest.json",
+                            R"({"version":1,"state":"complete","status":0,"fragments":[{"resultSequence":"0","replayId":"0","deviceId":0,"file":"result-0.json","eventCount":"1"}]})");
+                        publish(
+                            ".biu-staging/process-uds/result-0.json",
+                            R"({"displayTimeUnit":"ns","profilingType":"op","schemaVersion":1,"traceEvents":[{"cname":"startup","dur":0.5,"name":"SCALAR","ph":"X","pid":"group0.cubecore","tid":"SCALAR","ts":1.0}]})");
+                    }
                     continue;
                 }
                 publish(

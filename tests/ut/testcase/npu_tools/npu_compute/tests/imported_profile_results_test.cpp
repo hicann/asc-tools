@@ -8,8 +8,10 @@
  * See LICENSE in the root of the software repository for the full text of the License.
  */
 #include "import/imported_profile_results.h"
+#include "import/import_output_directory.h"
 
 #include <sys/wait.h>
+#include <sys/stat.h>
 #include <unistd.h>
 
 #include <algorithm>
@@ -322,6 +324,74 @@ int TestRejectsInvalidInputAndChildRep()
     CHECK(WriteFile(input, parent));
     CHECK(!ReadImportedProfileResults(input, &results, &error));
     CHECK(error.find("broken.npu.rep") != std::string::npos);
+    CHECK(error.find("Please provide a valid npu-compute report file.") != std::string::npos);
+    CHECK(results.empty());
+    return 0;
+}
+
+int TestInputDiagnosticsAndCompatibleNames()
+{
+    TempDirectory temporary;
+    CHECK(!temporary.Path().empty());
+    const std::string hint = "Please provide a valid npu-compute report file.";
+    std::vector<ImportedProfileEntry> results;
+    std::string error;
+    const auto missing = temporary.Path() / "app";
+    CHECK(!ReadImportedProfileResults(missing, &results, &error));
+    CHECK(error == "Invalid input '" + missing.string() + "': file does not exist. " + hint);
+    CHECK(!ReadImportedProfileResults(temporary.Path(), &results, &error));
+    CHECK(error.find("directory") != std::string::npos && error.find(hint) != std::string::npos);
+    const auto input = temporary.Path() / "invalid.npu-rep";
+    CHECK(WriteFile(input, {}));
+    CHECK(!ReadImportedProfileResults(input, &results, &error));
+    CHECK(error.find("shorter than its header") != std::string::npos && error.find(hint) != std::string::npos);
+    CHECK(WriteFile(input, std::vector<uint8_t>(128, 0)));
+    CHECK(!ReadImportedProfileResults(input, &results, &error));
+    CHECK(error.find("invalid rep header magic") != std::string::npos && error.find(hint) != std::string::npos);
+    CHECK(results.empty());
+    boost::filesystem::create_symlink(input, temporary.Path() / "link.npu-rep");
+    CHECK(!ReadImportedProfileResults(temporary.Path() / "link.npu-rep", &results, &error));
+    CHECK(error.find("symbolic links are not supported") != std::string::npos);
+    CHECK(error.find(hint) != std::string::npos);
+
+    std::vector<uint8_t> encoded;
+    CHECK(BuildNestedRep(&encoded));
+    for (const char* name : {"input.npu-rep", "input.npu.rep", "input.rep"}) {
+        const auto file = temporary.Path() / name;
+        CHECK(WriteFile(file, encoded));
+        CHECK(ReadImportedProfileResults(file, &results, &error));
+        npucompute::cli::ImportOutputDirectory directory;
+        CHECK(npucompute::cli::ImportOutputDirectory::Create(file, temporary.Path().string(), &directory, &error));
+        CHECK(UnpackImportedProfileResults(results, directory.TemporaryPath(), &error));
+        CHECK(boost::filesystem::exists(directory.TemporaryPath() / "device_0" / "Memory.csv"));
+    }
+    CHECK(WriteFile(input, encoded));
+    CHECK(::chmod(temporary.Path().c_str(), 0755) == 0);
+    CHECK(::chmod(input.c_str(), 0000) == 0);
+    const pid_t child = ::fork();
+    CHECK(child >= 0);
+    if (child == 0) {
+        if (::geteuid() == 0 && (::setgid(65534) != 0 || ::setuid(65534) != 0)) {
+            std::perror("drop test privileges");
+            ::_exit(2);
+        }
+        const bool rejected = !ReadImportedProfileResults(input, &results, &error);
+        if (!rejected || error.find("cannot open file") == std::string::npos) {
+            std::fprintf(stderr, "unreadable input result: %s\n", error.c_str());
+        }
+        ::_exit(
+            rejected && error.find("cannot open file") != std::string::npos && error.find(hint) != std::string::npos ?
+                0 :
+                1);
+    }
+    int status = 0;
+    CHECK(::waitpid(child, &status, 0) == child);
+    CHECK(WIFEXITED(status) && WEXITSTATUS(status) == 0);
+    CHECK(::chmod(input.c_str(), 0600) == 0);
+    // Linux exposes this as a regular file, but reading unmapped address zero fails.
+    CHECK(!ReadImportedProfileResults("/proc/self/mem", &results, &error));
+    CHECK(error.find("cannot read file") != std::string::npos);
+    CHECK(error.find(hint) != std::string::npos);
     CHECK(results.empty());
     return 0;
 }
@@ -514,10 +584,10 @@ int main(int argc, char** argv)
         std::fprintf(stderr, "usage: %s <npu-compute>\n", argv[0]);
         return 2;
     }
-    if (TestReadsNestedProfileResults() != 0 || TestUnpacksRecursiveProfileResults() != 0 ||
-        TestUnpacksShortRepSuffix() != 0 || TestRejectsExistingOutputWithoutPartialWrites() != 0 ||
-        TestRejectsUnsafeAndConflictingOutputModel() != 0 || TestRejectsInvalidInputAndChildRep() != 0 ||
-        TestCliImportUnpacksResults(argv[1]) != 0) {
+    if (TestInputDiagnosticsAndCompatibleNames() != 0 || TestReadsNestedProfileResults() != 0 ||
+        TestUnpacksRecursiveProfileResults() != 0 || TestUnpacksShortRepSuffix() != 0 ||
+        TestRejectsExistingOutputWithoutPartialWrites() != 0 || TestRejectsUnsafeAndConflictingOutputModel() != 0 ||
+        TestRejectsInvalidInputAndChildRep() != 0 || TestCliImportUnpacksResults(argv[1]) != 0) {
         return 1;
     }
     return 0;

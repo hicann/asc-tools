@@ -218,6 +218,7 @@ add_library(npu_compute_launcher_core_test STATIC
   ${NPU_COMPUTE_SOURCE_DIR}/src/cli/report/collection_file_validator.cpp
   ${NPU_COMPUTE_SOURCE_DIR}/src/cli/report/pipe_trace_finalizer.cpp
   ${NPU_COMPUTE_SOURCE_DIR}/src/cli/config/config.cpp
+  ${NPU_COMPUTE_SOURCE_DIR}/src/cli/config/option_registry.cpp
   ${NPU_COMPUTE_SOURCE_DIR}/src/cli/import/import_output_directory.cpp
   ${NPU_COMPUTE_SOURCE_DIR}/src/cli/import/imported_profile_results.cpp
   ${NPU_COMPUTE_SOURCE_DIR}/src/cli/launch/injection_path.cpp

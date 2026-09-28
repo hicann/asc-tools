@@ -293,34 +293,47 @@ bool UnpackImportedEntries(
     return SyncDirectory(output_directory, error);
 }
 
+bool InvalidInput(const std::string& file, const std::string& reason, std::string* error)
+{
+    return Fail("Invalid input '" + file + "': " + reason + ". Please provide a valid npu-compute report file.", error);
+}
+
 bool ReadInputFile(const boost::filesystem::path& path, std::vector<uint8_t>* content, std::string* error)
 {
     boost::system::error_code status_error;
     const boost::filesystem::file_status status = boost::filesystem::symlink_status(path, status_error);
     if (status_error == boost::system::errc::no_such_file_or_directory ||
         (!status_error && !boost::filesystem::exists(status))) {
-        return Fail("--import report file does not exist: '" + path.string() + "'.", error);
+        return InvalidInput(path.string(), "file does not exist", error);
     }
     if (status_error) {
-        return Fail("cannot inspect input report '" + path.string() + "': " + status_error.message(), error);
+        return InvalidInput(path.string(), "cannot inspect file: " + status_error.message(), error);
     }
     if (boost::filesystem::is_directory(status)) {
-        return Fail("--import expects a report file, but '" + path.string() + "' is a directory.", error);
+        return InvalidInput(path.string(), "expected a regular file, but input is a directory", error);
     }
     if (!boost::filesystem::is_regular_file(status)) {
-        return Fail(
-            "--import requires a regular report file; symbolic links are not supported: '" + path.string() + "'.",
-            error);
+        return InvalidInput(path.string(), "expected a regular file; symbolic links are not supported", error);
     }
 
+    errno = 0;
     std::ifstream input(path.string(), std::ios::binary);
     if (!input.is_open()) {
-        return Fail("cannot open input report '" + path.string() + "'.", error);
+        const int code = errno;
+        const std::string reason = code == 0 ?
+                                       "cannot open file" :
+                                       "cannot open file: " + std::error_code(code, std::generic_category()).message();
+        return InvalidInput(path.string(), reason, error);
     }
-    content->assign(std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>());
+    try {
+        content->assign(std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>());
+    } catch (const std::ios_base::failure& failure) {
+        content->clear();
+        return InvalidInput(path.string(), "cannot read file: " + std::string(failure.what()), error);
+    }
     if (input.bad()) {
         content->clear();
-        return Fail("cannot read input report '" + path.string() + "'.", error);
+        return InvalidInput(path.string(), "cannot read file", error);
     }
     return true;
 }
@@ -332,7 +345,10 @@ bool DecodeImportedEntries(
     DecodedRep decoded;
     std::string decode_error;
     if (!DecodeRep(encoded, &decoded, &decode_error)) {
-        return Fail("invalid npu-compute report '" + logical_path + "': " + decode_error, error);
+        if (decode_error == "allocate decoded rep data failed") {
+            return Fail(decode_error, error);
+        }
+        return InvalidInput(logical_path, "invalid report file: " + decode_error, error);
     }
 
     std::vector<ImportedProfileEntry> imported;

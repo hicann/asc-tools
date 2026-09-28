@@ -9,7 +9,6 @@
 # ----------------------------------------------------------------------------------------------------------
 import os
 import subprocess
-import sys
 from pathlib import Path
 
 import pytest
@@ -26,12 +25,36 @@ SECTIONS = [
     "MemoryL0",
     "MemoryUB",
     "L2Cache",
+    "ArithmeticUtilization",
+    "ResourceConflictRatio",
 ]
-HARDWARE_INFO_PROLOGUE = (
-    "import os, pathlib; "
-    "pathlib.Path(os.environ['NPU_COMPUTE_OUTPUT'], 'HardwareInfo.jsonl')"
-    ".write_text('{}\\n' * 5, encoding='utf-8'); "
+FIXTURE = Path(
+    os.environ.get(
+        "NPU_COMPUTE_REP_FIXTURE", str(BIN_DIR / "npu_compute_rep_fixture_app")
+    )
 )
+BASIC_SECTIONS = ["Pipeline", *SECTIONS[:-1]]
+
+
+def fixture_command(*arguments):
+    assert FIXTURE.is_file(), f"report fixture was not built: {FIXTURE}"
+    return [str(FIXTURE), "--mode", "cli-echo", "--", *arguments]
+
+
+def received_arguments(result):
+    return [
+        bytes.fromhex(line.removeprefix("argument=")).decode()
+        for line in result.stdout.splitlines()
+        if line.startswith("argument=")
+    ]
+
+
+def received_config(result):
+    return dict(
+        line.split("=", 1)
+        for line in result.stdout.splitlines()
+        if line.startswith(("sections=", "replay="))
+    )
 
 
 def run_cli(*arguments, cwd=None):
@@ -61,7 +84,15 @@ def test_help_lists_only_the_public_command_line_options():
     result = run_cli("--help")
 
     assert result.returncode == 0
-    assert "npu-compute [options] [program] [program-arguments]" in result.stdout
+    assert "npu-compute [options] [--] [program] [program-arguments]" in result.stdout
+    assert "Optional '--' separates" not in result.stdout
+    assert (
+        result.stdout.count(
+            "Optional separator between npu-compute options and the program."
+        )
+        == 1
+    )
+    assert "Required if the program name starts with '-'." in result.stdout
     for option in (
         "-h, --help",
         "--section",
@@ -169,23 +200,20 @@ def test_help_prints_all_errors_before_usage_and_does_not_run_program(tmp_path):
     assert list(tmp_path.iterdir()) == []
 
 
-@pytest.mark.parametrize("program", ("hh", "jojhhh"))
-def test_missing_section_identifies_the_parsed_program(program, tmp_path):
-    result = run_cli(program, "-h", "/path/to/run.sh", cwd=tmp_path)
-
-    assert result.returncode == 2
-    assert result.stdout == ""
-    assert result.stderr == (
-        f"[ERROR] npu-compute: collection requires at least one --section before program '{program}'.\n"
-    )
-    assert list(tmp_path.iterdir()) == []
+def test_default_basic_is_sent_to_application(tmp_path):
+    result = run_cli(*fixture_command(), cwd=tmp_path)
+    assert result.returncode == 0, result.stderr
+    assert received_config(result) == {
+        "sections": ",".join(BASIC_SECTIONS),
+        "replay": "kernel",
+    }
 
 
 def test_list_sections_outputs_only_ids_in_fixed_order():
     result = run_cli("--list-sections")
 
     assert result.returncode == 0
-    assert result.stdout.splitlines() == SECTIONS
+    assert result.stdout.splitlines() == SECTIONS[:5] + ["Pipeline"] + SECTIONS[5:]
     assert result.stderr == ""
 
 
@@ -208,26 +236,9 @@ def test_help_takes_precedence_over_list_sections(arguments, tmp_path):
 
 @pytest.mark.parametrize("section", SECTIONS)
 def test_each_supported_section_is_accepted(section, tmp_path):
-    code = HARDWARE_INFO_PROLOGUE + (
-        "print('NPU_COMPUTE_SECTIONS=' + os.environ['NPU_COMPUTE_SECTIONS'])"
-    )
-    result = run_cli("--section", section, sys.executable, "-c", code, cwd=tmp_path)
-
-    assert result.returncode == 0
-    environment = dict(
-        line.split("=", 1) for line in result.stdout.splitlines() if "=" in line
-    )
-    assert environment["NPU_COMPUTE_SECTIONS"] == section
-
-
-@pytest.mark.parametrize(
-    "removed_section", ("ArithmeticUtilization", "ResourceConflictRatio")
-)
-def test_sections_without_csv_writer_are_rejected(removed_section):
-    result = run_cli("--section", removed_section, "/bin/true")
-
-    assert result.returncode == 2
-    assert f"unsupported section name '{removed_section}'" in result.stderr
+    result = run_cli("--section", section, *fixture_command(), cwd=tmp_path)
+    assert result.returncode == 0, result.stderr
+    assert received_config(result)["sections"] == section
 
 
 @pytest.mark.parametrize("abbreviation", ("--l", "--list"))
@@ -240,10 +251,6 @@ def test_long_option_abbreviations_are_rejected(abbreviation):
 
 
 def test_collection_deduplicates_sections_and_sets_default_replay_mode(tmp_path):
-    code = HARDWARE_INFO_PROLOGUE + (
-        "print('NPU_COMPUTE_SECTIONS=' + os.environ['NPU_COMPUTE_SECTIONS']); "
-        "print('NPU_COMPUTE_REPLAY_MODE=' + os.environ['NPU_COMPUTE_REPLAY_MODE'])"
-    )
     result = run_cli(
         "--section",
         "Memory",
@@ -251,68 +258,41 @@ def test_collection_deduplicates_sections_and_sets_default_replay_mode(tmp_path)
         "Memory",
         "--section",
         "L2Cache",
-        sys.executable,
-        "-c",
-        code,
+        *fixture_command(),
         cwd=tmp_path,
     )
-
-    assert result.returncode == 0
-    environment = dict(
-        line.split("=", 1) for line in result.stdout.splitlines() if "=" in line
-    )
-    assert environment["NPU_COMPUTE_SECTIONS"] == "Memory,L2Cache"
-    assert environment["NPU_COMPUTE_REPLAY_MODE"] == "kernel"
+    assert result.returncode == 0, result.stderr
+    assert received_config(result) == {"sections": "Memory,L2Cache", "replay": "kernel"}
 
 
 def test_arguments_after_program_are_passed_to_the_app_verbatim(tmp_path):
-    code = HARDWARE_INFO_PROLOGUE + ("import sys; print('\\n'.join(sys.argv[1:]))")
-    result = run_cli(
-        "--section",
-        "Memory",
-        sys.executable,
-        "-c",
-        code,
+    arguments = [
         "--section",
         "app-owned-value",
         "",
         "two words",
         "",
-        cwd=tmp_path,
-    )
-
-    assert result.returncode == 0
-    assert result.stdout.splitlines() == [
-        "--section",
-        "app-owned-value",
-        "",
-        "two words",
-        "",
+        "line\nbreak",
+        "--help=x",
     ]
+    result = run_cli("--section", "Memory", *fixture_command(*arguments), cwd=tmp_path)
+    assert result.returncode == 0, result.stderr
+    assert received_arguments(result) == arguments
 
 
 @pytest.mark.parametrize("app_argument", ("-h", "--help"))
 def test_help_after_program_is_passed_to_the_app(app_argument, tmp_path):
-    code = HARDWARE_INFO_PROLOGUE + "import sys; print(sys.argv[1])"
     result = run_cli(
-        "--section",
-        "Memory",
-        sys.executable,
-        "-c",
-        code,
-        app_argument,
-        cwd=tmp_path,
+        "--section", "Memory", *fixture_command(app_argument), cwd=tmp_path
     )
-
-    assert result.returncode == 0
-    assert result.stdout.strip() == app_argument
+    assert result.returncode == 0, result.stderr
+    assert received_arguments(result) == [app_argument]
 
 
 @pytest.mark.parametrize(
     "arguments",
     [
         (),
-        ("/bin/true",),
         ("--section", "Memory"),
         ("--section", "Unknown", "/bin/true"),
         ("--section", "HardwareInfo", "/bin/true"),
@@ -326,7 +306,7 @@ def test_help_after_program_is_passed_to_the_app(app_argument, tmp_path):
             "kernel",
             "/bin/true",
         ),
-        ("--section", "Memory", "--", "/bin/true"),
+        ("--section", "Memory", "--"),
         ("--help=value",),
         ("-hh",),
         ("--list-sections", "--section", "Memory"),
@@ -353,7 +333,9 @@ def test_missing_import_report_returns_report_error(arguments, tmp_path):
     result = run_cli(*arguments, cwd=tmp_path)
 
     assert result.returncode == 4
-    assert "--import report file does not exist: 'missing.npu-rep'" in result.stderr
+    assert "file does not exist" in result.stderr
+    assert "Please provide a valid npu-compute report file." in result.stderr
+    assert list(tmp_path.iterdir()) == []
 
 
 def test_collection_rejects_export_path_without_report_suffix(tmp_path):
@@ -388,7 +370,7 @@ def test_pr_prototype_options_are_rejected(obsolete_option):
 def test_missing_value_records_option_occurrence(option, tail):
     missing = {
         "--replay-mode": "--replay-mode requires a mode. Supported value: kernel.",
-        "--import": "--import requires an input report file path.",
+        "--import": "--import requires an input report file.",
         "--export": "--export requires an output path: a report file or directory.",
     }[option]
     result = run_cli(option, "--help", option, *tail)
@@ -422,3 +404,240 @@ def test_replay_missing_value_preserves_other_error_order():
         "[ERROR] npu-compute: unsupported section name 'Invalid'. Names are case-sensitive; use --list-sections to see supported names.",
         "[ERROR] npu-compute: --replay-mode may only be specified once",
     ]
+
+
+@pytest.fixture
+def argv_app(tmp_path, monkeypatch):
+    def create(name):
+        app = tmp_path / name
+        assert FIXTURE.is_file()
+        app.symlink_to(FIXTURE)
+        return name
+
+    monkeypatch.setenv("PATH", str(tmp_path) + os.pathsep + os.environ.get("PATH", ""))
+    return create
+
+
+@pytest.mark.parametrize("program", ("--app", "-app", "--help", "-h", "--"))
+def test_separator_launches_dash_named_program(program, argv_app, tmp_path):
+    app = argv_app(program)
+    arguments = [
+        "--help",
+        "-h",
+        "--export",
+        "app-owned",
+        "--section",
+        "Pipeline",
+        "--",
+        "",
+        "two words",
+    ]
+    result = run_cli(
+        "--section",
+        "Memory",
+        "--",
+        app,
+        "--mode",
+        "cli-echo",
+        "--",
+        *arguments,
+        cwd=tmp_path,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "Usage:" not in result.stdout
+    assert received_arguments(result) == arguments
+    assert not (tmp_path / "app-owned").exists()
+
+
+@pytest.mark.parametrize("separator", ((), ("--",)))
+def test_optional_separator_preserves_application_arguments(
+    separator, argv_app, tmp_path
+):
+    app = argv_app("argv-app")
+    arguments = ["--", "--help", "--export", "app-owned", "", "two words"]
+    result = run_cli(
+        "--section",
+        "Memory",
+        *separator,
+        app,
+        "--mode",
+        "cli-echo",
+        "--",
+        *arguments,
+        cwd=tmp_path,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert received_arguments(result) == arguments
+
+
+@pytest.mark.parametrize(
+    ("options", "error"),
+    [
+        (("--section",), "--section requires a section name."),
+        (("--replay-mode",), "--replay-mode requires a mode."),
+        (("--import",), "--import requires an input report file."),
+        (("-i",), "--import requires an input report file."),
+        (("--export",), "--export requires an output path:"),
+        (("-o",), "--export requires an output path:"),
+        (("--import", "missing.npu-rep"), "--import cannot be combined"),
+        (("--list-sections",), "use --list-sections as a standalone command."),
+        (("--bad",), "unknown option '--bad'"),
+    ],
+)
+def test_separator_errors_do_not_launch_application(options, error, argv_app, tmp_path):
+    app = argv_app("--app")
+    result = run_cli(*options, "--", app, "--help", cwd=tmp_path)
+
+    assert result.returncode == 2
+    assert error in result.stderr
+    assert "sections=" not in result.stdout
+    assert list(tmp_path.iterdir()) == [tmp_path / "--app"]
+
+
+@pytest.mark.parametrize("option", ["--help", "--list-sets", "--list-sections"])
+@pytest.mark.parametrize("value", ["", "app"])
+def test_flag_value_errors_are_specific_and_do_not_launch(option, value, tmp_path):
+    result = run_cli(option + "=" + value, *fixture_command(), cwd=tmp_path)
+    assert result.returncode == 2
+    assert result.stdout == ""
+    assert result.stderr == f"[ERROR] npu-compute: {option} does not take a value.\n"
+    assert list(tmp_path.iterdir()) == []
+
+
+@pytest.mark.parametrize(
+    ("arguments", "message"),
+    [
+        (("--import",), "--import requires an input report file."),
+        (("--import=",), "--import requires a non-empty input report file."),
+        (("--import", ""), "--import requires a non-empty input report file."),
+    ],
+)
+def test_import_argument_errors(arguments, message, tmp_path):
+    result = run_cli(*arguments, cwd=tmp_path)
+    assert result.returncode == 2
+    assert result.stdout == ""
+    assert result.stderr == f"[ERROR] npu-compute: {message}\n"
+    assert list(tmp_path.iterdir()) == []
+
+
+@pytest.mark.parametrize("kind", ["missing", "directory", "empty", "corrupt"])
+def test_invalid_import_preserves_reason_and_creates_no_output(kind, tmp_path):
+    file = tmp_path / "app"
+    if kind == "directory":
+        file.mkdir()
+    elif kind == "empty":
+        file.write_bytes(b"")
+    elif kind == "corrupt":
+        file.write_bytes(b"invalid" * 32)
+    before = set(tmp_path.iterdir())
+    result = run_cli("--import", "app", cwd=tmp_path)
+    assert result.returncode == 4
+    assert result.stdout == ""
+    assert "Invalid input 'app':" in result.stderr
+    assert "Please provide a valid npu-compute report file." in result.stderr
+    reason = {
+        "missing": "file does not exist",
+        "directory": "directory",
+        "empty": "shorter than its header",
+        "corrupt": "invalid rep header magic",
+    }[kind]
+    assert reason in result.stderr
+    assert "file path" not in result.stderr
+    assert set(tmp_path.iterdir()) == before
+
+
+def test_help_does_not_read_import_file(tmp_path):
+    result = run_cli("--import", "app", "--help", cwd=tmp_path)
+    assert result.returncode == 0
+    assert result.stderr == ""
+    assert result.stdout.count("Usage:") == 1
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_help_has_one_definition_per_option():
+    result = run_cli("--help")
+    assert result.returncode == 0
+    definitions = []
+    for line in result.stdout.splitlines():
+        if len(line) - len(line.lstrip()) not in (2, 6):
+            continue
+        words = line.split()
+        if words:
+            definitions.append(words[1] if words[0].endswith(",") else words[0])
+    for option in [
+        "--help",
+        "--list-sets",
+        "--list-sections",
+        "--set",
+        "--section",
+        "--replay-mode",
+        "--import",
+        "--export",
+    ]:
+        assert definitions.count(option) == 1
+    assert "No section is selected by default" not in result.stdout
+    assert "file path" not in result.stdout
+
+
+@pytest.mark.parametrize(
+    ("options", "sections"),
+    [
+        (("--set", "basic"), BASIC_SECTIONS),
+        (("--set", "full"), [*BASIC_SECTIONS, "ResourceConflictRatio"]),
+        (
+            (
+                "--section",
+                "Memory",
+                "--set",
+                "basic",
+                "--set",
+                "basic",
+                "--section",
+                "Memory",
+            ),
+            ["Memory", *[name for name in BASIC_SECTIONS if name != "Memory"]],
+        ),
+    ],
+)
+def test_set_expansion_and_first_occurrence_order(options, sections, tmp_path):
+    result = run_cli(*options, *fixture_command(), cwd=tmp_path)
+    assert result.returncode == 0, result.stderr
+    assert received_config(result)["sections"] == ",".join(sections)
+
+
+@pytest.mark.parametrize(
+    "options",
+    [("--list-sets", "--section", "Memory"), ("--import", "app", "--set", "basic")],
+)
+def test_invalid_modes_do_not_launch(options, tmp_path):
+    result = run_cli(*options, *fixture_command(), cwd=tmp_path)
+    assert result.returncode == 2
+    assert result.stdout == ""
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_collected_report_imports_and_unsupported_name_leaves_no_output(tmp_path):
+    input_file = tmp_path / "collected.npu-rep"
+    result = run_cli("--export", str(input_file), *fixture_command(), cwd=tmp_path)
+    assert result.returncode == 0, result.stderr
+    output = tmp_path / "restored"
+    output.mkdir()
+    imported = run_cli(
+        "--import", str(input_file), "--export", str(output), cwd=tmp_path
+    )
+    assert imported.returncode == 0, imported.stderr
+    assert imported.stdout == ""
+    children = list(output.iterdir())
+    assert len(children) == 1
+    assert (children[0] / "HardwareInfo.jsonl").is_file()
+    assert (children[0] / "Memory.csv").is_file()
+    renamed = tmp_path / "app"
+    renamed.write_bytes(input_file.read_bytes())
+    before = set(tmp_path.iterdir())
+    invalid = run_cli("--import", "app", cwd=tmp_path)
+    assert invalid.returncode == 4
+    assert "unsupported report file name" in invalid.stderr
+    assert "Please provide a valid npu-compute report file." in invalid.stderr
+    assert set(tmp_path.iterdir()) == before
