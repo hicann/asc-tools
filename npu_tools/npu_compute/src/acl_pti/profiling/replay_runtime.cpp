@@ -45,6 +45,15 @@ aclptiResult ReplayRuntime::RegisterBinary(
     return HandleProfilingResult(binaryRegistry_.RegisterBinary(data, size, options, binary));
 }
 
+aclptiResult ReplayRuntime::RegisterBinaryFromFile(
+    const char* path, const aclrtBinaryLoadOptions* options, aclrtBinHandle binary)
+{
+    if (!CollectPipeline() || !ProfilingAvailable()) {
+        return ACLPTI_SUCCESS;
+    }
+    return HandleProfilingResult(binaryRegistry_.RegisterBinaryFromFile(path, options, binary));
+}
+
 aclptiResult ReplayRuntime::RegisterBinaryFunction(aclrtBinHandle binary, const char* name, aclrtFuncHandle function)
 {
     if (!CollectPipeline() || !ProfilingAvailable()) {

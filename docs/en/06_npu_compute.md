@@ -43,7 +43,7 @@ npu-compute [options] [--] [program] [program-arguments]
 
 `program` is the target program to collect. It can be specified using an absolute path, a relative path, or a command name. When a command name is used, the program must be discoverable through the `PATH` environment variable. The target can be a compiled executable or a script with execute permission. Everything after the target program is passed to that program as an argument.
 
-The operators to be collected in the target program must currently be written in Ascend C and invoked using `<<<>>>`. For chip support and other restrictions, see [Constraints](#constraints).
+The operators to be collected in the target program must currently be written in Ascend C and invoked using `<<<>>>` or aclnn. For chip support and other restrictions, see [Constraints](#constraints).
 
 For example:
 
@@ -192,7 +192,7 @@ For instructions on viewing npu-compute reports with visualization tools, see th
 - Chip type: only Ascend 950 (dav-3510) is currently supported.
 - Programming language: operators to be collected must currently be written in Ascend C.
 - Kernel function type: currently, the kernel type must be specified using the `__cube__`, `__vector__`, or `__mix__(cube,vec)` qualifier.
-- Operator invocation: currently, only a single invocation of a single operator using `<<<>>>` is supported. Support for aclnn invocation is expected on September 30.
+- Operator invocation: currently, a single invocation of a single operator using `<<<>>>` or aclnn is supported.
 - The `Pipeline` Section generates the pipeline diagram through sampling and is independent of the number of cores enabled by the user. Even when all cores are enabled, the diagram displays data for at most 6 cores.
 - The target program must run independently without `npu-compute` and successfully execute at least one NPU kernel during its run.
 - The target program must be executable. A script can also be run by using an interpreter such as `bash` as the target program.

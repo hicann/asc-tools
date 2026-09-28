@@ -42,7 +42,9 @@ typedef enum aclptiRuntimeCallbackId {
     ACLPTI_RUNTIME_CBID_aclrtLaunchKernelWithArgsArray = 17,
     ACLPTI_RUNTIME_CBID_aclrtLaunchSIMTKernelWithArgsArray = 18,
     ACLPTI_RUNTIME_CBID_aclrtMallocAlign32 = 19,
-    ACLPTI_RUNTIME_CBID_SIZE = 20,
+    ACLPTI_RUNTIME_CBID_aclrtMallocWithCfg = 20,
+    ACLPTI_RUNTIME_CBID_aclrtBinaryLoadFromFile = 21,
+    ACLPTI_RUNTIME_CBID_SIZE = 22,
 } aclptiRuntimeCallbackId;
 
 typedef struct aclptiAclrtLaunchKernelWithHostArgsParams {
@@ -102,6 +104,12 @@ typedef struct aclptiAclrtBinaryLoadFromDataParams {
     aclrtBinHandle* binHandle;
 } aclptiAclrtBinaryLoadFromDataParams;
 
+typedef struct aclptiAclrtBinaryLoadFromFileParams {
+    const char* path;
+    aclrtBinaryLoadOptions* options;
+    aclrtBinHandle* binHandle;
+} aclptiAclrtBinaryLoadFromFileParams;
+
 typedef struct aclptiAclrtBinaryGetFunctionParams {
     aclrtBinHandle binHandle;
     const char* kernelName;
@@ -119,6 +127,13 @@ typedef struct aclptiAclrtMallocAlign32Params {
     size_t size;
     aclrtMemMallocPolicy policy;
 } aclptiAclrtMallocAlign32Params;
+
+typedef struct aclptiAclrtMallocWithCfgParams {
+    void** devPtr;
+    size_t size;
+    aclrtMemMallocPolicy policy;
+    aclrtMallocConfig* cfg;
+} aclptiAclrtMallocWithCfgParams;
 
 typedef struct aclptiAclrtMemsetParams {
     void* devPtr;

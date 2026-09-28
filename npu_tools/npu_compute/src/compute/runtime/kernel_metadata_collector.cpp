@@ -9,6 +9,7 @@
  */
 #include "runtime/kernel_metadata_collector.h"
 
+#include <array>
 #include <limits>
 #include <cstring>
 #include <dlfcn.h>
@@ -105,6 +106,17 @@ std::optional<uint64_t> GridSize(const dim3& grid)
     return size;
 }
 
+std::optional<std::string> ResolveRuntimeFunctionName(aclrtFuncHandle function)
+{
+    constexpr std::size_t kFunctionNameCapacity = 4096;
+    std::array<char, kFunctionNameCapacity> name{};
+    const aclError status = aclrtGetFunctionName(function, static_cast<uint32_t>(name.size()), name.data());
+    if (status != ACL_SUCCESS || name.front() == '\0' || name.back() != '\0') {
+        return std::nullopt;
+    }
+    return std::string(name.data());
+}
+
 } // namespace
 
 void KernelMetadataCollector::OnCallback(aclptiCallbackId cbid, const aclptiCallbackData& data)
@@ -116,32 +128,54 @@ void KernelMetadataCollector::OnCallback(aclptiCallbackId cbid, const aclptiCall
     if (frozen_) {
         return;
     }
-    if (cbid == ACLPTI_RUNTIME_CBID_aclrtBinaryGetFunction || cbid == ACLPTI_RUNTIME_CBID_aclrtGetFuncBySymbol) {
-        aclptiAclrtBinaryGetFunctionParams params{};
+    if (cbid == ACLPTI_RUNTIME_CBID_aclrtBinaryGetFunction ||
+        cbid == ACLPTI_RUNTIME_CBID_aclrtBinaryGetFunctionByEntry || cbid == ACLPTI_RUNTIME_CBID_aclrtGetFuncBySymbol) {
+        aclrtBinHandle binHandle = nullptr;
+        aclrtFuncHandle* funcHandle = nullptr;
+        const char* kernelName = nullptr;
         std::string symbolName;
         if (cbid == ACLPTI_RUNTIME_CBID_aclrtBinaryGetFunction) {
-            params = *static_cast<const aclptiAclrtBinaryGetFunctionParams*>(data.functionParams);
+            const auto& lookup = *static_cast<const aclptiAclrtBinaryGetFunctionParams*>(data.functionParams);
+            binHandle = lookup.binHandle;
+            kernelName = lookup.kernelName;
+            funcHandle = lookup.funcHandle;
+        } else if (cbid == ACLPTI_RUNTIME_CBID_aclrtBinaryGetFunctionByEntry) {
+            const auto& lookup = *static_cast<const aclptiAclrtBinaryGetFunctionByEntryParams*>(data.functionParams);
+            binHandle = lookup.binHandle;
+            funcHandle = lookup.funcHandle;
+            if (data.callbackSite == ACLPTI_API_ENTER) {
+                // Entry lookup has no kernel name parameter; retain a stable diagnostic name for OpInfoSummary.
+                symbolName = "entry_" + std::to_string(lookup.funcEntry);
+                kernelName = symbolName.c_str();
+            }
         } else {
             const auto& lookup = *static_cast<const aclptiAclrtGetFuncBySymbolParams*>(data.functionParams);
-            params.funcHandle = lookup.funcHandle;
+            funcHandle = lookup.funcHandle;
             if (data.callbackSite == ACLPTI_API_ENTER) {
                 symbolName = ResolveSymbolName(lookup.symbol);
-                params.kernelName = symbolName.empty() ? nullptr : symbolName.c_str();
+                kernelName = symbolName.empty() ? nullptr : symbolName.c_str();
             }
         }
-        if (params.funcHandle == nullptr) {
+        if (funcHandle == nullptr) {
             return;
         }
         if (data.callbackSite == ACLPTI_API_ENTER) {
-            pendingNames_.erase(params.funcHandle);
-            if (params.kernelName != nullptr) {
-                pendingNames_[params.funcHandle] = {params.binHandle, params.kernelName};
+            pendingNames_.erase(funcHandle);
+            if (kernelName != nullptr) {
+                pendingNames_[funcHandle] = {binHandle, kernelName};
             }
         } else if (data.callbackSite == ACLPTI_API_EXIT) {
-            const auto pending = pendingNames_.find(params.funcHandle);
+            const auto pending = pendingNames_.find(funcHandle);
             if (pending != pendingNames_.end()) {
-                if (data.retval == ACL_SUCCESS && *params.funcHandle != nullptr) {
-                    names_[*params.funcHandle] = std::move(pending->second);
+                if (data.retval == ACL_SUCCESS && *funcHandle != nullptr) {
+                    auto resolved = pending->second;
+                    if (cbid == ACLPTI_RUNTIME_CBID_aclrtBinaryGetFunctionByEntry) {
+                        const auto runtimeName = ResolveRuntimeFunctionName(*funcHandle);
+                        if (runtimeName.has_value()) {
+                            resolved.second = *runtimeName;
+                        }
+                    }
+                    names_[*funcHandle] = std::move(resolved);
                 }
                 pendingNames_.erase(pending);
             }

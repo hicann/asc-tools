@@ -39,13 +39,14 @@
 namespace npucompute {
 namespace {
 
-constexpr std::array<aclptiCallbackId, 8> kHardwareInfoTriggerCallbackIds = {
+constexpr std::array<aclptiCallbackId, 9> kHardwareInfoTriggerCallbackIds = {
     ACLPTI_RUNTIME_CBID_aclrtLaunchKernel,
     ACLPTI_RUNTIME_CBID_aclrtLaunchKernelWithHostArgs,
     ACLPTI_RUNTIME_CBID_aclrtLaunchSIMTKernelWithHostArgs,
     ACLPTI_RUNTIME_CBID_aclrtLaunchKernelWithArgsArray,
     ACLPTI_RUNTIME_CBID_aclrtLaunchSIMTKernelWithArgsArray,
     ACLPTI_RUNTIME_CBID_aclrtBinaryGetFunction,
+    ACLPTI_RUNTIME_CBID_aclrtBinaryGetFunctionByEntry,
     ACLPTI_RUNTIME_CBID_aclrtBinaryUnLoad,
     ACLPTI_RUNTIME_CBID_aclrtGetFuncBySymbol,
 };
@@ -670,6 +671,7 @@ void NpuComputeRuntime::HardwareInfoTriggerCallback(
         std::fprintf(stderr, "[libnpu-compute] Kernel metadata collection failed\n");
     }
     const bool isLaunch = cbid != ACLPTI_RUNTIME_CBID_aclrtBinaryGetFunction &&
+                          cbid != ACLPTI_RUNTIME_CBID_aclrtBinaryGetFunctionByEntry &&
                           cbid != ACLPTI_RUNTIME_CBID_aclrtBinaryUnLoad &&
                           cbid != ACLPTI_RUNTIME_CBID_aclrtGetFuncBySymbol;
     const bool accepted =

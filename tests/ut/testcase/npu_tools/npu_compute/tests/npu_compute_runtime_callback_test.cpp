@@ -40,13 +40,14 @@ namespace {
 constexpr char kSections[] = "PipeUtilization,Memory";
 constexpr char kHardwareInfoFile[] = "HardwareInfo.jsonl";
 constexpr char kDeviceCountFile[] = "device_count.calls";
-constexpr std::array<aclptiCallbackId, 8> kHardwareInfoTriggerCbids = {
+constexpr std::array<aclptiCallbackId, 9> kHardwareInfoTriggerCbids = {
     ACLPTI_RUNTIME_CBID_aclrtLaunchKernel,
     ACLPTI_RUNTIME_CBID_aclrtLaunchKernelWithHostArgs,
     ACLPTI_RUNTIME_CBID_aclrtLaunchSIMTKernelWithHostArgs,
     ACLPTI_RUNTIME_CBID_aclrtLaunchKernelWithArgsArray,
     ACLPTI_RUNTIME_CBID_aclrtLaunchSIMTKernelWithArgsArray,
     ACLPTI_RUNTIME_CBID_aclrtBinaryGetFunction,
+    ACLPTI_RUNTIME_CBID_aclrtBinaryGetFunctionByEntry,
     ACLPTI_RUNTIME_CBID_aclrtBinaryUnLoad,
     ACLPTI_RUNTIME_CBID_aclrtGetFuncBySymbol,
 };

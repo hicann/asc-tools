@@ -20,6 +20,7 @@
 #include <cstdint>
 #include <cstring>
 #include <limits>
+#include <optional>
 #include <vector>
 #include <utility>
 
@@ -52,7 +53,8 @@ struct ReplayLaunchArguments {
 };
 
 aclError GetHiddenParameterInfo(
-    aclrtFuncHandle function, std::size_t& parameterCount, std::size_t& hiddenOffset, std::size_t& hiddenSize)
+    aclrtFuncHandle function, std::size_t& parameterCount, std::size_t& hiddenOffset, std::size_t& hiddenSize,
+    std::optional<std::size_t> hostArgsFallbackOffset = std::nullopt)
 {
     if (function == nullptr) {
         return ACL_ERROR_INVALID_PARAM;
@@ -64,11 +66,35 @@ aclError GetHiddenParameterInfo(
     if (getCount == nullptr || getInfo == nullptr) {
         return ACL_ERROR_INTERNAL_ERROR;
     }
-    if (getCount(function, &parameterCount) != ACL_SUCCESS || parameterCount == 0) {
+    const auto useHostArgsFallback = [&](aclError result) {
+        if (!hostArgsFallbackOffset.has_value()) {
+            return false;
+        }
+        hiddenOffset = *hostArgsFallbackOffset;
+        hiddenSize = sizeof(void*);
+        npucompute::detail::DebugLog(
+            "aclpti", "pipeline host-args metadata unavailable status=%d; using args offset=%zu", result, hiddenOffset);
+        return true;
+    };
+    const aclError countResult = getCount(function, &parameterCount);
+    if (countResult != ACL_SUCCESS) {
+        if (useHostArgsFallback(countResult)) {
+            return ACL_SUCCESS;
+        }
         return ACL_ERROR_FEATURE_UNSUPPORTED;
     }
-    if (getInfo(function, parameterCount - 1, &hiddenOffset, &hiddenSize) != ACL_SUCCESS ||
-        hiddenSize != sizeof(void*)) {
+    if (parameterCount == 0) {
+        if (useHostArgsFallback(ACL_ERROR_FEATURE_UNSUPPORTED)) {
+            return ACL_SUCCESS;
+        }
+        return ACL_ERROR_FEATURE_UNSUPPORTED;
+    }
+    const aclError infoResult = getInfo(function, parameterCount - 1, &hiddenOffset, &hiddenSize);
+    if (infoResult != ACL_SUCCESS || hiddenSize != sizeof(void*)) {
+        const aclError metadataResult = infoResult == ACL_SUCCESS ? ACL_ERROR_FEATURE_UNSUPPORTED : infoResult;
+        if (useHostArgsFallback(metadataResult)) {
+            return ACL_SUCCESS;
+        }
         return ACL_ERROR_FEATURE_UNSUPPORTED;
     }
     return ACL_SUCCESS;
@@ -105,15 +131,6 @@ aclError BuildInstrumentedReplayHostArgs(
     if ((argsSize != 0 && originalArgs == nullptr) || (placeholderCount != 0 && originalPlaceholders == nullptr)) {
         return ACL_ERROR_INVALID_PARAM;
     }
-    std::size_t parameterCount = 0;
-    std::size_t hiddenOffset = 0;
-    std::size_t hiddenSize = 0;
-    const aclError status = GetHiddenParameterInfo(function, parameterCount, hiddenOffset, hiddenSize);
-    if (status != ACL_SUCCESS) {
-        return status;
-    }
-    (void)parameterCount;
-
     std::size_t insertionOffset = 0;
     if (placeholderCount != 0) {
         const std::uint32_t lastAddressOffset = originalPlaceholders[placeholderCount - 1].addrOffset;
@@ -130,6 +147,16 @@ aclError BuildInstrumentedReplayHostArgs(
         }
         insertionOffset = (argsSize + 7U) & ~static_cast<std::size_t>(7U);
     }
+    // ACLNN-generated functions may not expose ParamInfo. For host-args launches, argsSize is the
+    // complete original argument area, so the probe parameter can be appended at its aligned end.
+    std::size_t parameterCount = 0;
+    std::size_t hiddenOffset = 0;
+    std::size_t hiddenSize = 0;
+    const aclError status = GetHiddenParameterInfo(function, parameterCount, hiddenOffset, hiddenSize, insertionOffset);
+    if (status != ACL_SUCCESS) {
+        return status;
+    }
+    (void)parameterCount;
     if (insertionOffset > hiddenOffset || hiddenOffset > std::numeric_limits<std::size_t>::max() - hiddenSize) {
         return ACL_ERROR_INVALID_PARAM;
     }
@@ -351,6 +378,21 @@ aclError AclrtBinaryLoadFromDataHandler(
         });
 }
 
+aclError AclrtBinaryLoadFromFileHandler(const char* path, aclrtBinaryLoadOptions* options, aclrtBinHandle* binHandle)
+{
+    aclptiAclrtBinaryLoadFromFileParams params{path, options, binHandle};
+    return InvokeRuntimeCallback<aclrtBinaryLoadFromFileFunc>(
+        ACLPTI_RUNTIME_CBID_aclrtBinaryLoadFromFile, ACL_RT_API_aclrtBinaryLoadFromFile, "aclrtBinaryLoadFromFile",
+        params, [&params](aclrtBinaryLoadFromFileFunc original) -> aclError {
+            const aclError status = original(params.path, params.options, params.binHandle);
+            if (status != ACL_SUCCESS) {
+                return status;
+            }
+            return MapProfilingResult(
+                profiling::GetReplayRuntime().RegisterBinaryFromFile(params.path, params.options, *params.binHandle));
+        });
+}
+
 aclError AclrtBinaryGetFunctionHandler(
     const aclrtBinHandle binHandle, const char* kernelName, aclrtFuncHandle* funcHandle)
 {
@@ -390,6 +432,22 @@ aclError AclrtMallocAlign32Handler(void** devPtr, std::size_t size, aclrtMemMall
         ACLPTI_RUNTIME_CBID_aclrtMallocAlign32, ACL_RT_API_aclrtMallocAlign32, "aclrtMallocAlign32", params,
         [&params](aclrtMallocAlign32Func mallocFunction) -> aclError {
             const aclError result = mallocFunction(params.devPtr, params.size, params.policy);
+            if (result != ACL_SUCCESS) {
+                return result;
+            }
+            const aclptiResult mirrorStatus =
+                profiling::GetReplayRuntime().MirrorMalloc(params.devPtr, params.size, params.policy);
+            return MapProfilingResult(mirrorStatus);
+        });
+}
+
+aclError AclrtMallocWithCfgHandler(void** devPtr, std::size_t size, aclrtMemMallocPolicy policy, aclrtMallocConfig* cfg)
+{
+    aclptiAclrtMallocWithCfgParams params{devPtr, size, policy, cfg};
+    return InvokeRuntimeCallback<aclrtMallocWithCfgFunc>(
+        ACLPTI_RUNTIME_CBID_aclrtMallocWithCfg, ACL_RT_API_aclrtMallocWithCfg, "aclrtMallocWithCfg", params,
+        [&params](aclrtMallocWithCfgFunc mallocFunction) -> aclError {
+            const aclError result = mallocFunction(params.devPtr, params.size, params.policy, params.cfg);
             if (result != ACL_SUCCESS) {
                 return result;
             }
@@ -564,11 +622,16 @@ bool RegisterRuntimeApiHandlers()
             ACL_RT_API_aclrtBinaryLoadFromData, acltoolRegisterAclrtBinaryLoadFromDataCallbacks,
             &AclrtBinaryLoadFromDataHandler) &&
         RegisterRuntimeHandler(
+            ACL_RT_API_aclrtBinaryLoadFromFile, acltoolRegisterAclrtBinaryLoadFromFileCallbacks,
+            &AclrtBinaryLoadFromFileHandler) &&
+        RegisterRuntimeHandler(
             ACL_RT_API_aclrtBinaryGetFunction, acltoolRegisterAclrtBinaryGetFunctionCallbacks,
             &AclrtBinaryGetFunctionHandler) &&
         RegisterRuntimeHandler(ACL_RT_API_aclrtMalloc, acltoolRegisterAclrtMallocCallbacks, &AclrtMallocHandler) &&
         RegisterRuntimeHandler(
             ACL_RT_API_aclrtMallocAlign32, acltoolRegisterAclrtMallocAlign32Callbacks, &AclrtMallocAlign32Handler) &&
+        RegisterRuntimeHandler(
+            ACL_RT_API_aclrtMallocWithCfg, acltoolRegisterAclrtMallocWithCfgCallbacks, &AclrtMallocWithCfgHandler) &&
         RegisterRuntimeHandler(ACL_RT_API_aclrtMemset, acltoolRegisterAclrtMemsetCallbacks, &AclrtMemsetHandler) &&
         RegisterRuntimeHandler(ACL_RT_API_aclrtFree, acltoolRegisterAclrtFreeCallbacks, &AclrtFreeHandler) &&
         RegisterRuntimeHandler(

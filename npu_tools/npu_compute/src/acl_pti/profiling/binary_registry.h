@@ -30,6 +30,7 @@ public:
     };
     aclptiResult RegisterBinary(
         const void* data, std::size_t size, const aclrtBinaryLoadOptions* options, aclrtBinHandle binary);
+    aclptiResult RegisterBinaryFromFile(const char* path, const aclrtBinaryLoadOptions* options, aclrtBinHandle binary);
     aclptiResult RegisterBinaryFunction(aclrtBinHandle binary, const char* name, aclrtFuncHandle function);
     aclptiResult RegisterBinaryFunction(aclrtBinHandle binary, std::uint64_t entry, aclrtFuncHandle function);
     aclptiResult RegisterSymbolFunction(aclrtFuncHandle function);
@@ -47,6 +48,8 @@ private:
     };
     template <typename Function, typename Key>
     aclptiResult ResolveBinaryFunction(aclrtApiId id, aclrtBinHandle binary, Key key, aclrtFuncHandle function);
+    aclptiResult RegisterInstrumentedBinary(
+        const void* data, std::size_t size, const aclrtBinaryLoadOptions* options, aclrtBinHandle binary);
     std::mutex mutex_;
     std::unordered_map<aclrtBinHandle, Binary> binaries_;
 };

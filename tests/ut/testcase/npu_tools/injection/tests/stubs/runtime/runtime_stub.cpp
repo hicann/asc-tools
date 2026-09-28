@@ -23,7 +23,7 @@
 
 namespace {
 
-constexpr std::size_t kRuntimeApiCount = 30;
+constexpr std::size_t kRuntimeApiCount = 31;
 constexpr std::size_t kSocNameCapacity = 64;
 
 struct KernelArgs {
@@ -243,6 +243,8 @@ aclError RealAclrtFunctionGetParamCount(const void*, size_t* count)
 
 aclError RealAclrtFunctionGetParamInfo(const void*, size_t, size_t*, size_t*) { return ACL_ERROR_INVALID_PARAM; }
 
+aclError RealAclrtGetFunctionName(aclrtFuncHandle, uint32_t, char*) { return ACL_ERROR_INVALID_PARAM; }
+
 const char* RealAclrtGetSocName() { return g_socName.data(); }
 
 template <typename Function>
@@ -303,6 +305,8 @@ std::array<RuntimeEntry, kRuntimeApiCount> g_runtimeEntries = {{
     {"aclrtMallocWithCfg", ToGenericFunction(&RealAclrtMallocWithCfg), ToGenericFunction(&RealAclrtMallocWithCfg)},
     {"aclrtBinaryLoadFromFile", ToGenericFunction(&RealAclrtBinaryLoadFromFile),
      ToGenericFunction(&RealAclrtBinaryLoadFromFile)},
+    {"aclrtGetFunctionName", ToGenericFunction(&RealAclrtGetFunctionName),
+     ToGenericFunction(&RealAclrtGetFunctionName)},
 }};
 
 std::mutex g_runtimeMutex;
@@ -534,7 +538,10 @@ extern "C" aclError RuntimeStubFunctionGetBinary(aclrtFuncHandle, aclrtBinHandle
 
 extern "C" aclError RuntimeStubGetFunctionName(aclrtFuncHandle, uint32_t, char*) __asm__("aclrtGetFunctionName");
 
-extern "C" aclError RuntimeStubGetFunctionName(aclrtFuncHandle, uint32_t, char*) { return ACL_ERROR_INVALID_PARAM; }
+extern "C" aclError RuntimeStubGetFunctionName(aclrtFuncHandle function, uint32_t bytes, char* name)
+{
+    return CallCurrent<aclError (*)(aclrtFuncHandle, uint32_t, char*)>("aclrtGetFunctionName", function, bytes, name);
+}
 
 extern "C" aclError aclrtBinaryGetFunctionByEntry(aclrtBinHandle binary, uint64_t entry, aclrtFuncHandle* function)
 {

@@ -11,6 +11,7 @@
 #include "binary_instrumenter.h"
 #include "common/debug_log.h"
 
+#include <fstream>
 #include <mutex>
 #include <new>
 #include <unordered_map>
@@ -52,6 +53,37 @@ aclptiResult BinaryRegistry::ResolveBinaryFunction(
 }
 
 aclptiResult BinaryRegistry::RegisterBinary(
+    const void* data, std::size_t size, const aclrtBinaryLoadOptions* options, aclrtBinHandle binary)
+{
+    return RegisterInstrumentedBinary(data, size, options, binary);
+}
+
+aclptiResult BinaryRegistry::RegisterBinaryFromFile(
+    const char* path, const aclrtBinaryLoadOptions* options, aclrtBinHandle binary)
+{
+    if (path == nullptr || path[0] == '\0' || binary == nullptr) {
+        return ACLPTI_ERROR_PROFILING_FAILED;
+    }
+    try {
+        std::ifstream input(path, std::ios::binary | std::ios::ate);
+        if (!input || input.tellg() <= 0) {
+            return ACLPTI_ERROR_PROFILING_FAILED;
+        }
+        const auto size = static_cast<std::size_t>(input.tellg());
+        std::vector<char> data(size);
+        input.seekg(0);
+        if (!input.read(data.data(), static_cast<std::streamsize>(data.size()))) {
+            return ACLPTI_ERROR_PROFILING_FAILED;
+        }
+        return RegisterInstrumentedBinary(data.data(), data.size(), options, binary);
+    } catch (const std::bad_alloc&) {
+        return ACLPTI_ERROR_OUT_OF_MEMORY;
+    } catch (...) {
+        return ACLPTI_ERROR_PROFILING_FAILED;
+    }
+}
+
+aclptiResult BinaryRegistry::RegisterInstrumentedBinary(
     const void* data, std::size_t size, const aclrtBinaryLoadOptions* options, aclrtBinHandle binary)
 {
     const auto load =

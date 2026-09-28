@@ -9,11 +9,30 @@
  */
 #include <gtest/gtest.h>
 
+#include "injection/runtime_stub_api.h"
 #include "runtime/kernel_metadata_collector.h"
+#include <cstring>
 #include <iostream>
 #include <limits>
 
+static_assert(ACLPTI_RUNTIME_CBID_aclrtMallocWithCfg == 20);
+static_assert(ACLPTI_RUNTIME_CBID_aclrtBinaryLoadFromFile == 21);
+
 extern "C" __attribute__((noinline)) void MetadataKernelFixture() {}
+
+namespace {
+aclError ResolveEntryKernelName(aclrtFuncHandle, uint32_t bytes, char* name)
+{
+    constexpr char kName[] = "aclnn_entry_kernel";
+    if (name == nullptr || bytes < sizeof(kName)) {
+        return ACL_ERROR_INVALID_PARAM;
+    }
+    std::memcpy(name, kName, sizeof(kName));
+    return ACL_SUCCESS;
+}
+
+aclError RejectEntryKernelName(aclrtFuncHandle, uint32_t, char*) { return ACL_ERROR_INVALID_PARAM; }
+} // namespace
 
 #define CHECK(condition)                                      \
     do {                                                      \
@@ -103,6 +122,44 @@ static int RunSuiteMain()
     data.callbackSite = ACLPTI_API_ENTER;
     failed.OnCallback(ACLPTI_RUNTIME_CBID_aclrtLaunchKernel, data);
     CHECK(!failed.Snapshot().name);
+
+    npucompute::KernelMetadataCollector byEntry;
+    CHECK(RuntimeStubSetOriginFunction("aclrtGetFunctionName", &ResolveEntryKernelName) == ACL_SUCCESS);
+    aclrtFuncHandle entryHandle = nullptr;
+    aclptiAclrtBinaryGetFunctionByEntryParams entryParams{nullptr, 42, &entryHandle};
+    data.functionParams = &entryParams;
+    data.callbackSite = ACLPTI_API_ENTER;
+    byEntry.OnCallback(ACLPTI_RUNTIME_CBID_aclrtBinaryGetFunctionByEntry, data);
+    entryHandle = reinterpret_cast<aclrtFuncHandle>(0x4000);
+    data.callbackSite = ACLPTI_API_EXIT;
+    data.retval = ACL_SUCCESS;
+    byEntry.OnCallback(ACLPTI_RUNTIME_CBID_aclrtBinaryGetFunctionByEntry, data);
+    aclptiAclrtLaunchKernelParams entryLaunch{};
+    entryLaunch.funcHandle = entryHandle;
+    entryLaunch.numBlocks = 16;
+    data.functionParams = &entryLaunch;
+    data.callbackSite = ACLPTI_API_ENTER;
+    byEntry.OnCallback(ACLPTI_RUNTIME_CBID_aclrtLaunchKernel, data);
+    const auto entryMetadata = byEntry.Snapshot();
+    CHECK(entryMetadata.name == "aclnn_entry_kernel");
+    CHECK(entryMetadata.blockDim == 16);
+
+    npucompute::KernelMetadataCollector unresolvedEntry;
+    CHECK(RuntimeStubSetOriginFunction("aclrtGetFunctionName", &RejectEntryKernelName) == ACL_SUCCESS);
+    entryHandle = nullptr;
+    entryParams.funcEntry = 43;
+    data.functionParams = &entryParams;
+    data.callbackSite = ACLPTI_API_ENTER;
+    unresolvedEntry.OnCallback(ACLPTI_RUNTIME_CBID_aclrtBinaryGetFunctionByEntry, data);
+    entryHandle = reinterpret_cast<aclrtFuncHandle>(0x4001);
+    data.callbackSite = ACLPTI_API_EXIT;
+    data.retval = ACL_SUCCESS;
+    unresolvedEntry.OnCallback(ACLPTI_RUNTIME_CBID_aclrtBinaryGetFunctionByEntry, data);
+    entryLaunch.funcHandle = entryHandle;
+    data.functionParams = &entryLaunch;
+    data.callbackSite = ACLPTI_API_ENTER;
+    unresolvedEntry.OnCallback(ACLPTI_RUNTIME_CBID_aclrtLaunchKernel, data);
+    CHECK(unresolvedEntry.Snapshot().name == "entry_43");
 
     for (bool overflow : {false, true}) {
         npucompute::KernelMetadataCollector simt;

@@ -11,6 +11,7 @@
 #include "acl_pti/profiling/binary_registry.h"
 #include <cstdio>
 #include <cstring>
+#include <fstream>
 #include <vector>
 
 using namespace aclpti::profiling;
@@ -139,6 +140,20 @@ int main()
     failLoad = -1;
     const int companionIndex = loads;
     CHECK(registry.RegisterBinary(input, sizeof(input), nullptr, a) == ACLPTI_SUCCESS);
+
+    const char* filePath = "/tmp/npu_compute_binary_registry_test.bin";
+    {
+        std::ofstream file(filePath, std::ios::binary | std::ios::trunc);
+        CHECK(file.good());
+        file.write(input, sizeof(input));
+        CHECK(file.good());
+    }
+    aclrtBinHandle fileBinary = nullptr;
+    CHECK(Load(input, sizeof(input), nullptr, &fileBinary) == ACL_SUCCESS);
+    CHECK(registry.RegisterBinaryFromFile(filePath, nullptr, fileBinary) == ACLPTI_SUCCESS);
+    CHECK(fileBinary != nullptr);
+    std::remove(filePath);
+
     CHECK(Lookup(a, "kernel", &f) == ACL_SUCCESS);
     failBinary = true;
     CHECK(registry.RegisterSymbolFunction(f) == ACLPTI_ERROR_PROFILING_FAILED);

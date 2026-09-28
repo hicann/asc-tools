@@ -184,7 +184,8 @@ int RealLaunch(void* function, uint32_t, const void* args_data, std::size_t args
 {
     ++g_launch_calls;
     g_launch_handles.push_back(function);
-    if (args_data == nullptr || args_data != g_expected_args_data || args_size != sizeof(KernelArgs)) {
+    if (args_data == nullptr || args_size < sizeof(KernelArgs) ||
+        (args_size == sizeof(KernelArgs) && args_data != g_expected_args_data)) {
         return -1;
     }
     const auto* args = static_cast<const KernelArgs*>(args_data);

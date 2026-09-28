@@ -34,6 +34,7 @@ public:
 
     aclptiResult RegisterBinary(
         const void* data, std::size_t size, const aclrtBinaryLoadOptions* options, aclrtBinHandle binary);
+    aclptiResult RegisterBinaryFromFile(const char* path, const aclrtBinaryLoadOptions* options, aclrtBinHandle binary);
     aclptiResult RegisterBinaryFunction(aclrtBinHandle binary, const char* name, aclrtFuncHandle function);
     aclptiResult RegisterBinaryFunction(aclrtBinHandle binary, std::uint64_t entry, aclrtFuncHandle function);
     aclptiResult RegisterSymbolFunction(aclrtFuncHandle function);
