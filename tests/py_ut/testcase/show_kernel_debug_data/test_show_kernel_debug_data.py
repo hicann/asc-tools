@@ -981,6 +981,262 @@ class TestAscendump(unittest.TestCase):
         self.assertEqual(len(fifo_dump.dump_core_contents), 1)
         self.assertEqual(fifo_dump.dump_core_contents[0].block_info.core_id, 5)
 
+    @staticmethod
+    def _build_fifo_tlv(tag, value):
+        return TLV(tag=tag, length=len(value), value=value)
+
+    @staticmethod
+    def _serialize_tlv(tlv):
+        return struct.pack(TLV.get_tl_format(), tlv.tag, tlv.length) + tlv.value
+
+    def _build_super_tensor_head(self, data, tensor_length, desc=77, tensor_offset=0):
+        aligned_data = data + b"\x00" * ((-len(data)) % 32)
+        value = struct.pack(
+            "<IIIIHHI8II4xQQI4x",
+            0,
+            3,
+            desc,
+            0,
+            0,
+            0,
+            0,
+            *([0] * 8),
+            0,
+            tensor_length,
+            tensor_offset,
+            len(data),
+        )
+        return self._build_fifo_tlv(11, value + aligned_data)
+
+    def _build_super_tensor_body(self, data, tensor_length, tensor_offset):
+        aligned_data = data + b"\x00" * ((-len(data)) % 32)
+        value = struct.pack("<IIQQI4x", 0, 0, tensor_length, tensor_offset, len(data))
+        return self._build_fifo_tlv(12, value + aligned_data)
+
+    def test_parse_super_tensor_assembles_one_logical_tensor(self):
+        tensor_data = struct.pack("10i", *range(10))
+        content = FifoDumpCoreContent()
+        content.block_info = FifoBlockInfo(core_id=5, magic=44678)
+        content.add_tlv_data(
+            self._build_super_tensor_head(tensor_data[:16], len(tensor_data))
+        )
+        content.add_tlv_data(
+            self._build_super_tensor_body(tensor_data[16:32], len(tensor_data), 16)
+        )
+        content.add_tlv_data(
+            self._build_super_tensor_body(tensor_data[32:], len(tensor_data), 32)
+        )
+
+        tensors = content.dump_tensor_map[77]
+        self.assertEqual(len(tensors), 1)
+        self.assertEqual(tensors[0].dump_data, tensor_data)
+        self.assertEqual(tensors[0].dump_value, list(range(10)))
+        content.write_to_dir(self.test_dir)
+        dump_file = os.path.join(
+            self.test_dir, "5", "index_77", "core_5_index_77_loop_0.bin"
+        )
+        with open(dump_file, "rb") as f:
+            self.assertEqual(f.read(), tensor_data)
+
+    def test_super_tensor_body_without_head_is_rejected(self):
+        content = FifoDumpCoreContent()
+        with self.assertRaisesRegex(RuntimeError, "body without head"):
+            content.add_tlv_data(self._build_super_tensor_body(b"1234", 8, 4))
+
+    def test_super_tensor_head_with_nonzero_offset_is_rejected(self):
+        content = FifoDumpCoreContent()
+        with self.assertRaisesRegex(RuntimeError, "invalid super tensor offset"):
+            content.add_tlv_data(
+                self._build_super_tensor_head(b"1234", 8, tensor_offset=4)
+            )
+
+    def test_super_tensor_duplicate_head_is_ignored(self):
+        content = FifoDumpCoreContent()
+        content.add_tlv_data(self._build_super_tensor_head(b"1234", 8))
+        content.add_tlv_data(self._build_super_tensor_head(b"1234", 8))
+        content.add_tlv_data(self._build_super_tensor_body(b"5678", 8, 4))
+        self.assertEqual(content.dump_tensor_map[77][0].dump_data, b"12345678")
+
+    def test_super_tensor_conflicting_duplicate_head_is_rejected(self):
+        content = FifoDumpCoreContent()
+        content.add_tlv_data(self._build_super_tensor_head(b"1234", 8))
+        with self.assertRaisesRegex(RuntimeError, "new super tensor"):
+            content.add_tlv_data(self._build_super_tensor_head(b"5678", 8))
+        self.assertEqual(content.dump_tensor_map, {})
+
+    def test_super_tensor_duplicate_body_is_ignored(self):
+        content = FifoDumpCoreContent()
+        content.add_tlv_data(self._build_super_tensor_head(b"1234", 12))
+        content.add_tlv_data(self._build_super_tensor_body(b"5678", 12, 4))
+        content.add_tlv_data(self._build_super_tensor_body(b"5678", 12, 4))
+        content.add_tlv_data(self._build_super_tensor_body(b"90ab", 12, 8))
+        self.assertEqual(content.dump_tensor_map[77][0].dump_data, b"1234567890ab")
+
+    def test_super_tensor_replayed_tail_after_completion_is_ignored(self):
+        content = FifoDumpCoreContent()
+        content.add_tlv_data(self._build_super_tensor_head(b"1234", 8))
+        tail = self._build_super_tensor_body(b"5678", 8, 4)
+        content.add_tlv_data(tail)
+        content.add_tlv_data(tail)
+        self.assertEqual(len(content.dump_tensor_map[77]), 1)
+        self.assertEqual(content.dump_tensor_map[77][0].dump_data, b"12345678")
+
+    def test_super_tensor_non_contiguous_offset_is_rejected(self):
+        content = FifoDumpCoreContent()
+        content.add_tlv_data(self._build_super_tensor_head(b"1234", 12))
+        with self.assertRaisesRegex(RuntimeError, "non-contiguous"):
+            content.add_tlv_data(self._build_super_tensor_body(b"5678", 12, 8))
+        self.assertEqual(content.dump_tensor_map, {})
+
+    def test_super_tensor_length_change_is_rejected(self):
+        content = FifoDumpCoreContent()
+        content.add_tlv_data(self._build_super_tensor_head(b"1234", 12))
+        with self.assertRaisesRegex(RuntimeError, "length changed"):
+            content.add_tlv_data(self._build_super_tensor_body(b"5678", 16, 4))
+        self.assertEqual(content.dump_tensor_map, {})
+
+    def test_super_tensor_overrun_is_rejected(self):
+        content = FifoDumpCoreContent()
+        content.add_tlv_data(self._build_super_tensor_head(b"1234", 6))
+        with self.assertRaisesRegex(RuntimeError, "exceeds tensor length"):
+            content.add_tlv_data(self._build_super_tensor_body(b"5678", 6, 4))
+        self.assertEqual(content.dump_tensor_map, {})
+
+    def test_super_tensor_incomplete_at_eof_is_rejected(self):
+        content = FifoDumpCoreContent()
+        content.add_tlv_data(self._build_super_tensor_head(b"1234", 8))
+        with self.assertRaisesRegex(RuntimeError, "incomplete super tensor"):
+            content.ensure_super_tensor_complete()
+        self.assertEqual(content.dump_tensor_map, {})
+
+    def test_super_tensor_interleaved_tlv_is_rejected(self):
+        content = FifoDumpCoreContent()
+        content.add_tlv_data(self._build_super_tensor_head(b"1234", 8))
+        with self.assertRaisesRegex(RuntimeError, "unexpected TLV"):
+            content.add_tlv_data(
+                TLV(tag=DumpType.TIME_STAMP.value, length=0, value=b"")
+            )
+        self.assertEqual(content.dump_tensor_map, {})
+
+    def test_fifo_parser_ignores_unused_tail_after_complete_super_tensor(self):
+        tensor_data = struct.pack("i", 7)
+        block_info = struct.pack(
+            FifoBlockInfo.get_format(),
+            32768,
+            5,
+            1,
+            64,
+            44678,
+            0,
+            0,
+            0,
+            *([0] * 6),
+        )
+        content = block_info + self._serialize_tlv(
+            self._build_super_tensor_head(tensor_data, len(tensor_data))
+        )
+        content += struct.pack("f", 1.2) * 8
+        test_file = os.path.join(self.test_dir, "fifo_unused_tail.bin")
+        with open(test_file, "wb") as f:
+            f.write(content)
+
+        fifo_dump = FifoDumpBinFile(test_file, "aiv", "5")
+        fifo_dump.parse()
+
+        self.assertEqual(
+            fifo_dump.dump_core_contents[0].dump_tensor_map[77][0].dump_data,
+            tensor_data,
+        )
+
+    def test_fifo_parser_rejects_unused_tail_during_incomplete_super_tensor(self):
+        block_info = struct.pack(
+            FifoBlockInfo.get_format(),
+            32768,
+            5,
+            1,
+            64,
+            44678,
+            0,
+            0,
+            0,
+            *([0] * 6),
+        )
+        content = block_info + self._serialize_tlv(
+            self._build_super_tensor_head(b"1234", 8)
+        )
+        content += struct.pack("f", 1.2) * 8
+        test_file = os.path.join(self.test_dir, "fifo_incomplete_tail.bin")
+        with open(test_file, "wb") as f:
+            f.write(content)
+
+        fifo_dump = FifoDumpBinFile(test_file, "aiv", "5")
+        with self.assertRaisesRegex(RuntimeError, "TLV length overflow"):
+            fifo_dump.parse()
+
+    def test_fifo_parser_skips_replayed_super_tensor_head_tail_before_skip(self):
+        tensor_data = struct.pack("3i", 7, 8, 9)
+        block_info = struct.pack(
+            FifoBlockInfo.get_format(),
+            32768,
+            5,
+            1,
+            208,
+            44678,
+            0,
+            0,
+            0,
+            *([0] * 6),
+        )
+        content = block_info
+        content += self._serialize_tlv(
+            self._build_super_tensor_head(tensor_data[:4], len(tensor_data))
+        )
+        content += self._serialize_tlv(
+            self._build_super_tensor_body(tensor_data[4:8], len(tensor_data), 4)
+        )
+        content += struct.pack("f", 1.2) * 14
+        content += struct.pack(TLV.get_tl_format(), 10, 0)
+        content += self._serialize_tlv(
+            self._build_super_tensor_body(tensor_data[8:], len(tensor_data), 8)
+        )
+        test_file = os.path.join(self.test_dir, "fifo_replayed_head_tail.bin")
+        with open(test_file, "wb") as f:
+            f.write(content)
+
+        fifo_dump = FifoDumpBinFile(test_file, "aic", "5")
+        fifo_dump.parse()
+
+        self.assertEqual(
+            fifo_dump.dump_core_contents[0].dump_tensor_map[77][0].dump_data,
+            tensor_data,
+        )
+
+    def test_fifo_parser_rejects_replayed_tail_candidate_off_ring_boundary(self):
+        block_info = struct.pack(
+            FifoBlockInfo.get_format(),
+            32768,
+            5,
+            1,
+            216,
+            44678,
+            0,
+            0,
+            0,
+            *([0] * 6),
+        )
+        content = block_info
+        content += self._serialize_tlv(self._build_super_tensor_head(b"1234", 12))
+        content += self._serialize_tlv(self._build_super_tensor_body(b"5678", 12, 4))
+        content += struct.pack("f", 1.2) * 14
+        content += struct.pack(TLV.get_tl_format(), 10, 0)
+        test_file = os.path.join(self.test_dir, "fifo_false_replayed_head_tail.bin")
+        with open(test_file, "wb") as f:
+            f.write(content)
+
+        fifo_dump = FifoDumpBinFile(test_file, "aic", "5")
+        with self.assertRaisesRegex(RuntimeError, "TLV length overflow"):
+            fifo_dump.parse()
+
     def test_parse_invalid_magic(self):
         content = struct.pack(
             FifoBlockInfo.get_format(), 64, 5, 1, 0, 4660, 0, 0, 0, 0, 0, 0, 0, 0, 0

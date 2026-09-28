@@ -26,6 +26,9 @@ FILE_FLAG = os.O_WRONLY | os.O_CREAT
 FILE_MODE_640 = stat.S_IRUSR | stat.S_IWUSR | stat.S_IRGRP
 
 ONE_MEGA_BYTE = 1024 * 1024
+FIFO_SUPER_TENSOR_VALUE_FMT = "<IIIIHHI8II4xQQI4x"
+FIFO_SUPER_TENSOR_BODY_VALUE_FMT = "<IIQQI4x"
+FIFO_SKIP_TYPE = 10
 
 
 class TimeStampId(Enum):
@@ -390,6 +393,68 @@ class FifoDumpTensor(DumpTensor):
             raise RuntimeError("FifoDumpTensor: dump_size out of range")
         self.dump_data = tlv.value[data_start:data_end]
         self._parse_dump_data()
+
+
+@dataclass(repr=False)
+class FifoSuperDumpTensor(DumpTensor):
+    tensor_length: int = 0
+    tensor_offset: int = 0
+
+    def parse_from(self, tlv):
+        self.tag = tlv.tag
+        self.length = tlv.length
+
+        fmt = FIFO_SUPER_TENSOR_VALUE_FMT
+        head_size = struct.calcsize(fmt)
+        if len(tlv.value) < head_size:
+            raise RuntimeError("FifoSuperDumpTensor: invalid TLV value length")
+
+        unpacked = struct.unpack(fmt, tlv.value[:head_size])
+        dim = unpacked[6]
+        if dim > 8:
+            raise RuntimeError(f"FifoSuperDumpTensor: invalid shape dim={dim}")
+        self.dump_header = DumpMessageHeader(
+            addr=unpacked[0],
+            data_type=unpacked[1],
+            desc=unpacked[2],
+            buffer_id=unpacked[3],
+            position=unpacked[4],
+            reserved=0,
+        )
+        self.dump_shape = list(unpacked[7 : 7 + dim])
+        self.tensor_length = unpacked[16]
+        self.tensor_offset = unpacked[17]
+        dump_size = unpacked[18]
+        data_end = head_size + dump_size
+        if data_end > len(tlv.value):
+            raise RuntimeError("FifoSuperDumpTensor: dump_size out of range")
+        self.dump_data = tlv.value[head_size:data_end]
+
+
+@dataclass(repr=False)
+class FifoSuperDumpTensorBody:
+    tag: int = 0
+    length: int = 0
+    tensor_length: int = 0
+    tensor_offset: int = 0
+    dump_data: bytes = b""
+
+    def parse_from(self, tlv):
+        self.tag = tlv.tag
+        self.length = tlv.length
+
+        fmt = FIFO_SUPER_TENSOR_BODY_VALUE_FMT
+        head_size = struct.calcsize(fmt)
+        if len(tlv.value) < head_size:
+            raise RuntimeError("FifoSuperDumpTensorBody: invalid TLV value length")
+
+        _, _, self.tensor_length, self.tensor_offset, dump_size = struct.unpack(
+            fmt, tlv.value[:head_size]
+        )
+        data_end = head_size + dump_size
+        if data_end > len(tlv.value):
+            raise RuntimeError("FifoSuperDumpTensorBody: dump_size out of range")
+        self.dump_data = tlv.value[head_size:data_end]
 
 
 @dataclass(repr=False)
@@ -883,6 +948,10 @@ class DumpCoreContent:
 
 @dataclass
 class FifoDumpCoreContent(DumpCoreContent):
+    super_tensor: FifoSuperDumpTensor = None
+    super_tensor_chunks: List[bytes] = field(default_factory=list)
+    last_super_tensor: FifoSuperDumpTensor = None
+
     def _flow_name(self):
         return "fifo"
 
@@ -900,6 +969,120 @@ class FifoDumpCoreContent(DumpCoreContent):
     def _create_time_stamp_info(self):
         return FifoTimeStampInfo()
 
+    def _discard_super_tensor(self, message):
+        self.super_tensor = None
+        self.super_tensor_chunks.clear()
+        raise RuntimeError(message)
+
+    def _finish_super_tensor(self):
+        dump_tensor = self.super_tensor
+        dump_tensor.dump_data = b"".join(self.super_tensor_chunks)
+        dump_tensor.dump_value.clear()
+        dump_tensor._parse_dump_data()
+        data_type = dump_tensor.dump_header.data_type
+        self.index_dtype_dt[dump_tensor.dump_header.desc] = dtype_to_data_type.get(
+            data_type, ""
+        )
+        self._add_dump_tensor(dump_tensor)
+        self.last_super_tensor = dump_tensor
+        self.super_tensor = None
+        self.super_tensor_chunks.clear()
+
+    def _start_super_tensor(self, tlv):
+        if self.super_tensor is not None:
+            duplicate = FifoSuperDumpTensor()
+            duplicate.parse_from(tlv)
+            if (
+                duplicate.tensor_length == self.super_tensor.tensor_length
+                and duplicate.tensor_offset == 0
+                and duplicate.dump_header == self.super_tensor.dump_header
+                and duplicate.dump_shape == self.super_tensor.dump_shape
+                and duplicate.dump_data == self.super_tensor_chunks[0]
+            ):
+                return
+            self._discard_super_tensor(
+                "FifoDumpCoreContent: new super tensor before previous tensor completed"
+            )
+        dump_tensor = FifoSuperDumpTensor()
+        dump_tensor.parse_from(tlv)
+        if dump_tensor.tensor_offset != 0:
+            self._discard_super_tensor(
+                f"FifoDumpCoreContent: invalid super tensor offset={dump_tensor.tensor_offset}"
+            )
+        dump_size = len(dump_tensor.dump_data)
+        if dump_size == 0 or dump_size > dump_tensor.tensor_length:
+            self._discard_super_tensor(
+                "FifoDumpCoreContent: invalid super tensor first chunk size"
+            )
+        self.super_tensor = dump_tensor
+        self.super_tensor_chunks.append(dump_tensor.dump_data)
+        if dump_size == dump_tensor.tensor_length:
+            self._finish_super_tensor()
+
+    def _append_super_tensor_body(self, tlv):
+        if self.super_tensor is None:
+            body = FifoSuperDumpTensorBody()
+            body.parse_from(tlv)
+            body_end = body.tensor_offset + len(body.dump_data)
+            if (
+                self.last_super_tensor is not None
+                and body.tensor_length == len(self.last_super_tensor.dump_data)
+                and body_end <= body.tensor_length
+                and self.last_super_tensor.dump_data[body.tensor_offset : body_end]
+                == body.dump_data
+            ):
+                return
+            self._discard_super_tensor(
+                "FifoDumpCoreContent: super tensor body without head"
+            )
+        body = FifoSuperDumpTensorBody()
+        body.parse_from(tlv)
+        expected_offset = sum(len(chunk) for chunk in self.super_tensor_chunks)
+        if body.tensor_length != self.super_tensor.tensor_length:
+            self._discard_super_tensor(
+                "FifoDumpCoreContent: super tensor length changed"
+            )
+        if body.tensor_offset != expected_offset:
+            assembled = b"".join(self.super_tensor_chunks)
+            body_end = body.tensor_offset + len(body.dump_data)
+            if (
+                body_end <= expected_offset
+                and assembled[body.tensor_offset : body_end] == body.dump_data
+            ):
+                return
+            self._discard_super_tensor(
+                f"FifoDumpCoreContent: non-contiguous super tensor offset={body.tensor_offset}, "
+                f"expected={expected_offset}"
+            )
+        dump_size = len(body.dump_data)
+        remaining = body.tensor_length - body.tensor_offset
+        if dump_size == 0 or dump_size > remaining:
+            self._discard_super_tensor(
+                "FifoDumpCoreContent: super tensor body exceeds tensor length"
+            )
+        self.super_tensor_chunks.append(body.dump_data)
+        if dump_size == remaining:
+            self._finish_super_tensor()
+
+    def add_tlv_data(self, tlv):
+        if tlv.tag == DumpType.SUPER_TENSOR_TYPE.value:
+            self._start_super_tensor(tlv)
+            return
+        if tlv.tag == DumpType.SUPER_TENSOR_BODY_TYPE.value:
+            self._append_super_tensor_body(tlv)
+            return
+        if self.super_tensor is not None:
+            self._discard_super_tensor(
+                f"FifoDumpCoreContent: unexpected TLV type {tlv.tag} during super tensor assembly"
+            )
+        super().add_tlv_data(tlv)
+
+    def ensure_super_tensor_complete(self):
+        if self.super_tensor is not None:
+            self._discard_super_tensor(
+                "FifoDumpCoreContent: incomplete super tensor at end of file"
+            )
+
 
 class DumpType(Enum):
     DEFAULT_TYPE = 0
@@ -909,6 +1092,8 @@ class DumpType(Enum):
     ASSERT_TYPE = 4
     META_TYPE = 5
     TIME_STAMP = 6
+    SUPER_TENSOR_TYPE = 11
+    SUPER_TENSOR_BODY_TYPE = 12
     SIMT_PRINTF_TYPE = 0xF0E00F0E
     SIMT_ASSERT_TYPE = 0xF0F00F0F
 
@@ -1055,6 +1240,43 @@ class FifoDumpBinFile:
             for loop, dump_tensor in enumerate(tensors):
                 yield index, loop, dump_tensor
 
+    @staticmethod
+    def _skip_replayed_super_tensor_head_tail(bin_file, file_size, core_content):
+        if core_content.super_tensor is None:
+            return False
+        tl_size = TLV.get_tl_size()
+        replayed_tail_len = struct.calcsize(
+            FIFO_SUPER_TENSOR_VALUE_FMT
+        ) - struct.calcsize(FIFO_SUPER_TENSOR_BODY_VALUE_FMT)
+        original_pos = bin_file.tell()
+        candidate_pos = original_pos - tl_size + replayed_tail_len
+        if candidate_pos + tl_size > file_size:
+            return False
+        bin_file.seek(candidate_pos)
+        candidate_head = bin_file.read(tl_size)
+        candidate_tag, candidate_length = struct.unpack(
+            TLV.get_tl_format(), candidate_head
+        )
+        candidate_remain = file_size - bin_file.tell()
+        ring_len = core_content.block_info.remain_len
+        candidate_end = candidate_pos + tl_size + candidate_length
+        stream_len = candidate_end - FifoBlockInfo.get_size() - replayed_tail_len
+        ends_at_ring_boundary = (
+            ring_len > 0 and stream_len >= 0 and stream_len % ring_len == 0
+        )
+        if (
+            candidate_tag != FIFO_SKIP_TYPE
+            or candidate_length > candidate_remain
+            or not ends_at_ring_boundary
+        ):
+            bin_file.seek(original_pos)
+            return False
+        bin_file.seek(candidate_pos)
+        DUMP_PARSER_LOG.debug(
+            f"ignore {replayed_tail_len} bytes of replayed super tensor head tail"
+        )
+        return True
+
     def parse(self):
         file_size = os.path.getsize(self.dump_bin)
         core_content = FifoDumpCoreContent()
@@ -1077,12 +1299,21 @@ class FifoDumpBinFile:
                     raise RuntimeError("FifoDumpBinFile: incomplete TLV header")
                 tlv = TLV()
                 tlv.tag, tlv.length = struct.unpack(tlv.get_tl_format(), tl_head)
-                if tlv.length > file_size:
-                    raise RuntimeError(
-                        f"FifoDumpBinFile: TLV length overflow, length={tlv.length}"
-                    )
                 remain_size = file_size - bin_file.tell()
                 if tlv.length > remain_size:
+                    if self._skip_replayed_super_tensor_head_tail(
+                        bin_file, file_size, core_content
+                    ):
+                        continue
+                    if (
+                        core_content.super_tensor is None
+                        and block_info.remain_len > 0
+                        and remain_size <= block_info.remain_len
+                    ):
+                        DUMP_PARSER_LOG.debug(
+                            f"ignore {remain_size + TLV.get_tl_size()} bytes of unused FIFO tail"
+                        )
+                        break
                     raise RuntimeError(
                         f"FifoDumpBinFile: TLV length overflow, length={tlv.length}, remain={remain_size}"
                     )
@@ -1092,6 +1323,8 @@ class FifoDumpBinFile:
 
                 if tlv.tag in (
                     DumpType.TENSOR_TYPE.value,
+                    DumpType.SUPER_TENSOR_TYPE.value,
+                    DumpType.SUPER_TENSOR_BODY_TYPE.value,
                     DumpType.SCALAR_TYPE.value,
                     DumpType.ASSERT_TYPE.value,
                     DumpType.SIMT_PRINTF_TYPE.value,
@@ -1101,6 +1334,7 @@ class FifoDumpBinFile:
                 ):
                     core_content.add_tlv_data(tlv)
                     self.index_dtype_dt.update(core_content.index_dtype_dt)
+            core_content.ensure_super_tensor_complete()
         self.dump_core_contents.append(core_content)
 
     def write_result(self, output_dir):
