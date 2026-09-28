@@ -184,12 +184,14 @@ npu-compute --import ./reports/profile.npu-rep --export ./restored
 
 `PipeTrace.json` 支持使用 Chrome Trace 兼容工具进行可视化。
 
+使用可视化工具查看 npu-compute 报告的方法，请参见[可视化工具使用说明](https://gitcode.com/opdevtools/plugin_release/tree/dev#npu-compute-%E5%B7%A5%E5%85%B7%E4%BC%98%E5%85%88)。
+
 ## 约束说明
 
 - 芯片类型：当前仅支持 Ascend 950（dav-3510）。
 - 编程语言：待采集的算子当前仅支持 Ascend C。
 - Kernel 函数类型：目前需使用 `__cube__`、`__vector__` 或 `__mix__(cube,vec)` 限定符指定 Kernel 类型。
-- 算子调用方式：当前仅支持通过 `<<<>>>` 方式进行单算子单次调用。
+- 算子调用方式：当前仅支持通过 `<<<>>>` 方式进行单算子单次调用，预计9.30支持aclnn调用方式。
 - `Pipeline` Section 基于采样机制生成流水图，与用户启用的核数无直接关系；即使启用全部核，流水图最多展示 6 个核的数据。
 - 目标程序必须能在未使用 `npu-compute` 时独立运行，并在运行过程中至少成功执行一次 NPU 核函数。
 - 目标程序必须是可执行文件；脚本也可以通过 `bash` 等解释器作为目标程序运行。

@@ -184,12 +184,14 @@ Different sections have different CSV columns. Use the first row of each CSV as 
 
 `PipeTrace.json` can be visualized with Chrome Trace-compatible tools.
 
+For instructions on viewing npu-compute reports with visualization tools, see the [Visualization Tool Guide](https://gitcode.com/opdevtools/plugin_release/tree/dev#npu-compute-%E5%B7%A5%E5%85%B7%E4%BC%98%E5%85%88).
+
 ## Constraints
 
 - Chip type: only Ascend 950 (dav-3510) is currently supported.
 - Programming language: operators to be collected must currently be written in Ascend C.
 - Kernel function type: currently, the kernel type must be specified using the `__cube__`, `__vector__`, or `__mix__(cube,vec)` qualifier.
-- Operator invocation: currently, only a single invocation of a single operator using `<<<>>>` is supported.
+- Operator invocation: currently, only a single invocation of a single operator using `<<<>>>` is supported. Support for aclnn invocation is expected on September 30.
 - The `Pipeline` Section generates the pipeline diagram through sampling and is independent of the number of cores enabled by the user. Even when all cores are enabled, the diagram displays data for at most 6 cores.
 - The target program must run independently without `npu-compute` and successfully execute at least one NPU kernel during its run.
 - The target program must be executable. A script can also be run by using an interpreter such as `bash` as the target program.
