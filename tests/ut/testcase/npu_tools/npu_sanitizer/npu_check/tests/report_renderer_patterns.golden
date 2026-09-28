@@ -12,19 +12,19 @@
 ===== memcheck.double_free =====
 ========= ERROR:[MEMCHECK] Malloc/Free error encountered : Double free
 =========     at pc 0x<pc> in <kernelName>
-=========     by aicore (<coreId>) type (<blockType>) block (<blockId>) pipe (<pipeName>) in launch (<launchId>)
+=========     by aicore (<coreId>) type (<blockType>) block (<blockId>) pipe (<pipeName>)
 =========     Address 0x<base>
 
 ===== memcheck.invalid_access =====
 ========= ERROR:[MEMCHECK] Invalid <space> <access> of size <accessBytes> bytes
 =========     <location>
-=========     by aicore (<coreId>) type (<blockType>) block (<blockId>) pipe (<pipeName>) in launch (<launchId>)
+=========     by aicore (<coreId>) type (<blockType>) block (<blockId>) pipe (<pipeName>)
 =========     Address 0x<address> is out of bounds<capacityContext>
 
 ===== memcheck.invalid_free =====
 ========= ERROR:[MEMCHECK] Malloc/Free error encountered : Invalid pointer to free
 =========     at pc 0x<pc> in <kernelName>
-=========     by aicore (<coreId>) type (<blockType>) block (<blockId>) pipe (<pipeName>) in launch (<launchId>)
+=========     by aicore (<coreId>) type (<blockType>) block (<blockId>) pipe (<pipeName>)
 =========     Address 0x<address>
 
 ===== memcheck.leak =====
@@ -34,21 +34,21 @@
 ===== memcheck.misaligned_access =====
 ========= ERROR:[MEMCHECK] Invalid <space> <access> of size <accessBytes> bytes
 =========     <location>
-=========     by aicore (<coreId>) type (<blockType>) block (<blockId>) pipe (<pipeName>) in launch (<launchId>)
+=========     by aicore (<coreId>) type (<blockType>) block (<blockId>) pipe (<pipeName>)
 =========     Address 0x<address> is misaligned
 =========     required alignment is <requiredAlign> bytes
 
 ===== memcheck.use_after_free =====
 ========= ERROR:[MEMCHECK] Invalid <space> <access> of size <accessBytes> bytes
 =========     <location>
-=========     by aicore (<coreId>) type (<blockType>) block (<blockId>) pipe (<pipeName>) in launch (<launchId>)
+=========     by aicore (<coreId>) type (<blockType>) block (<blockId>) pipe (<pipeName>)
 =========     Address 0x<address> is used after free
 =========     and belongs to allocation at 0x<base> of size <bytes> bytes
 
 ===== memcheck.use_before_alloc =====
 ========= ERROR:[MEMCHECK] Invalid <space> <access> of size <accessBytes> bytes
 =========     <location>
-=========     by aicore (<coreId>) type (<blockType>) block (<blockId>) pipe (<pipeName>) in launch (<launchId>)
+=========     by aicore (<coreId>) type (<blockType>) block (<blockId>) pipe (<pipeName>)
 =========     Address 0x<address> is used before allocation is available
 =========     allocation 0x<base> of size <bytes> bytes was created at serial <allocSerialNo>
 
@@ -126,42 +126,42 @@
 
 ===== synccheck.deadlock =====
 ========= ERROR:[SYNCCHECK] Deadlock detected. <reason>.
-=========     trigger point: <triggerOperation> by aicore (<triggerCoreId>) type (<triggerType>) block (<triggerBlock>) pipe (<triggerPipe>) in launch (<triggerLaunchId>) at <triggerLocation>
+=========     trigger point: <triggerOperation> by aicore (<triggerCoreId>) type (<triggerType>) block (<triggerBlock>) pipe (<triggerPipe>) at <triggerLocation>
 <relatedPointLine>=========     waiting mask 0x<waitingMask>, timeout <timeoutNs> ns
 <objectLine>
 ===== synccheck.instruction_sequence_mismatch =====
 ========= ERROR:[SYNCCHECK] Synchronization instruction sequence error detected. <reason>.
-=========     trigger point: <triggerOperation> by aicore (<triggerCoreId>) type (<triggerType>) block (<triggerBlock>) pipe (<triggerPipe>) in launch (<triggerLaunchId>) at <triggerLocation>
+=========     trigger point: <triggerOperation> by aicore (<triggerCoreId>) type (<triggerType>) block (<triggerBlock>) pipe (<triggerPipe>) at <triggerLocation>
 <relatedPointLine>=========     sequence index <sequenceIndex>, active mask 0x<activeMask>
 
 ===== synccheck.inter_core_divergent =====
 ========= ERROR:[SYNCCHECK] Barrier error detected. <reason>.
-=========     trigger point: <triggerOperation> by aicore (<triggerCoreId>) type (<triggerType>) block (<triggerBlock>) in launch (<triggerLaunchId>) at <triggerLocation>
+=========     trigger point: <triggerOperation> by aicore (<triggerCoreId>) type (<triggerType>) block (<triggerBlock>) at <triggerLocation>
 <relatedPointLine>=========     scope <scope>, active mask 0x<activeMask>, expected mask 0x<expectedMask>
 <objectLine>
 ===== synccheck.intra_core_divergent =====
 ========= ERROR:[SYNCCHECK] Barrier error detected. <reason>.
 =========     trigger point: <triggerOperation> at <triggerLocation>
-=========     by aicore (<triggerCoreId>) type (<triggerType>) block (<triggerBlock>) pipe (<triggerPipe>) in launch (<triggerLaunchId>)
+=========     by aicore (<triggerCoreId>) type (<triggerType>) block (<triggerBlock>) pipe (<triggerPipe>)
 =========     scope <scope>, active mask 0x<activeMask>, expected mask 0x<expectedMask>
 <objectLine>
 ===== synccheck.invalid_argument =====
 ========= ERROR:[SYNCCHECK] Synchronization error detected. <reason>.
-=========     trigger point: <triggerOperation> by aicore (<triggerCoreId>) type (<triggerType>) block (<triggerBlock>) pipe (<triggerPipe>) in launch (<triggerLaunchId>) at <triggerLocation>
+=========     trigger point: <triggerOperation> by aicore (<triggerCoreId>) type (<triggerType>) block (<triggerBlock>) pipe (<triggerPipe>) at <triggerLocation>
 <objectLine>
 ===== synccheck.object_not_initialized =====
 ========= ERROR:[SYNCCHECK] Synchronization error detected. <reason>.
-=========     trigger point: <triggerOperation> by aicore (<triggerCoreId>) type (<triggerType>) block (<triggerBlock>) pipe (<triggerPipe>) in launch (<triggerLaunchId>) at <triggerLocation>
+=========     trigger point: <triggerOperation> by aicore (<triggerCoreId>) type (<triggerType>) block (<triggerBlock>) pipe (<triggerPipe>) at <triggerLocation>
 =========     primitive <primitiveKind>
 <objectLine>
 ===== synccheck.pairing_mismatch =====
-========= ERROR:[SYNCCHECK] Synchronization pairing mismatch: <reasonText> <triggerOperation>.
-=========     trigger point: <triggerOperation> by aicore (<triggerCoreId>) type (<triggerType>) block (<triggerBlock>) pipe (<triggerPipe>) in launch (<triggerLaunchId>) at <triggerLocation>
+========= ERROR:[SYNCCHECK] Synchronization pairing mismatch: <reasonText>.
+=========     trigger point: <triggerOperation> by aicore (<triggerCoreId>) type (<triggerType>) block (<triggerBlock>) pipe (<triggerPipe>) at <triggerLocation>
 <relatedPointLine><expectedOperationLine>=========     pair kind <pairKind>, key (<pairKey>)
 
 ===== synccheck.participant_mismatch =====
 ========= ERROR:[SYNCCHECK] Synchronization error detected. <reason>.
-=========     trigger point: <triggerOperation> by aicore (<triggerCoreId>) type (<triggerType>) block (<triggerBlock>) pipe (<triggerPipe>) in launch (<triggerLaunchId>) at <triggerLocation>
+=========     trigger point: <triggerOperation> by aicore (<triggerCoreId>) type (<triggerType>) block (<triggerBlock>) pipe (<triggerPipe>) at <triggerLocation>
 <relatedPointLine>=========     scope <scope>, active mask 0x<activeMask>, expected mask 0x<expectedMask>
 <objectLine>
 ===== soccheck.cross_core_state_inconsistent =====

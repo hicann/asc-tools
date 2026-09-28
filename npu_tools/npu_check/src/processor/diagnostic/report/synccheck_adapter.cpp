@@ -149,23 +149,22 @@ const char* CloseOperation(NpuCheckSyncPairKind pairKind)
 }
 
 struct PairingReasonRule {
-    NpuCheckSyncMismatchReason reason;
-    bool triggerIsOpen;
+    NpuCheckSyncMismatchReason reason; // 1. 重复set 2. wait没有set 3. set没有wait
+    bool triggerIsOpen;                // 是否为SET_FLAG / GET_BUF
     bool relatedIsOpen;
-    bool relatedIsActual;
-    const char* reasonText;
-    const char* missingPointText;
-    bool emitExpectedCloseBeforeOpen;
+    bool relatedIsActual; // 关联点是否为实际执行过的操作。true表示前一次实际操作，false表示报告期望出现的操作
+    const char* missingPointText; // 期望操作未出现时的补充说明。DUPLICATE_OPEN报expected xx before another xx
+    bool emitExpectedCloseBeforeOpen; // 是否额外提示 再次set前应该先wait
 };
 
 const PairingReasonRule* FindPairingReasonRule(NpuCheckSyncMismatchReason reason)
 {
     static constexpr PairingReasonRule rules[] = {
-        {NpuCheckSyncMismatchReason::DUPLICATE_OPEN, true, true, true, "duplicate", "", true},
-        {NpuCheckSyncMismatchReason::UNMATCHED_CLOSE, false, true, false, "unmatched",
-         "but no matching point exists for this pair key", false},
-        {NpuCheckSyncMismatchReason::UNCONSUMED_OPEN, true, false, false, "redundant",
-         "but no matching point was observed", false},
+        {NpuCheckSyncMismatchReason::DUPLICATE_OPEN, true, true, true, "", true},
+        {NpuCheckSyncMismatchReason::UNMATCHED_CLOSE, false, true, false,
+         "but no matching point was found for this pair key", false},
+        {NpuCheckSyncMismatchReason::UNCONSUMED_OPEN, true, false, false,
+         "but no matching point was found for this pair key", false},
     };
     for (const PairingReasonRule& rule : rules) {
         if (rule.reason == reason) {
@@ -300,8 +299,7 @@ std::string ActualRelatedPointLine(const NpuCheckSyncPoint& point, const ReportF
     os << "=========     related point: " << OrUnknown(point.operation) << " by aicore ("
        << FieldOr(fields, "relatedCoreId", "<unknown>") << ") type (" << FieldOr(fields, "relatedType", "UNKNOWN")
        << ") block (" << FieldOr(fields, "relatedBlock", "0") << ") pipe ("
-       << FieldOr(fields, "relatedPipe", "<unknown>") << ") in launch ("
-       << FieldOr(fields, "relatedLaunchId", "<unknown>") << ") at "
+       << FieldOr(fields, "relatedPipe", "<unknown>") << ") at "
        << FieldOr(fields, "relatedLocation", "pc 0x0 in <unknown>") << '\n';
     return os.str();
 }
@@ -340,11 +338,12 @@ ReportRecord ToReportRecord(const NpuCheckSynccheckReport& report)
             fields["pairKey"] = FormatPairKey(detail.key);
             const char* open = OpenOperation(detail.key.pairKind);
             const char* close = CloseOperation(detail.key.pairKind);
-            fields["reasonText"] = rule.reasonText;
+            fields["reasonText"] = rule.relatedIsActual ? "duplicate " + std::string(open) :
+                                                          report.triggerPoint.operation + " without matching " +
+                                                              report.relatedPoint.operation;
             if (rule.relatedIsActual) {
                 fields["relatedPointLine"] = "=========     related point: previous " + report.relatedPoint.operation +
-                                             " in launch (" + fields["relatedLaunchId"] + ") at " +
-                                             fields["relatedLocation"] + " is still pending\n";
+                                             " at " + fields["relatedLocation"] + " is still pending\n";
             } else {
                 fields["relatedPointLine"] = "=========     related point: expected " + report.relatedPoint.operation +
                                              ", " + rule.missingPointText + "\n";

@@ -253,7 +253,7 @@ ReportRecord MakeSyncRecord()
         {ReportTool::SYNCCHECK, "pairing_mismatch"},
         ReportSeverity::ERROR,
         {
-            {"reasonText", "unmatched"},
+            {"reasonText", "WAIT_FLAG without matching SET_FLAG"},
             {"triggerOperation", "WAIT_FLAG"},
             {"triggerCoreId", "2"},
             {"triggerType", "AIC"},
@@ -441,7 +441,7 @@ TEST(ReportRendererTest, ListsAndRendersBuiltinTemplates)
     EXPECT_EQ(
         rendered, "========= ERROR:[MEMCHECK] Invalid GM read of size 16 bytes\n"
                   "=========     at kernel+0x10 in kernel.cpp:42\n"
-                  "=========     by aicore (3) type (AIC) block (7) pipe (MTE2) in launch (41)\n"
+                  "=========     by aicore (3) type (AIC) block (7) pipe (MTE2)\n"
                   "=========     Address 0x1000 is out of bounds\n");
 
     EXPECT_EQ(npucheck::RenderReportRecord(MakeInitcheckRecord(), {}, &rendered), ReportRenderStatus::SUCCESS);
@@ -463,7 +463,8 @@ TEST(ReportRendererTest, ListsAndRendersBuiltinTemplates)
         std::string::npos);
 
     EXPECT_EQ(npucheck::RenderReportRecord(MakeSyncRecord(), {}, &rendered), ReportRenderStatus::SUCCESS);
-    EXPECT_NE(rendered.find("Synchronization pairing mismatch: unmatched WAIT_FLAG"), std::string::npos);
+    EXPECT_NE(
+        rendered.find("Synchronization pairing mismatch: WAIT_FLAG without matching SET_FLAG"), std::string::npos);
 
     EXPECT_EQ(npucheck::RenderReportRecord(MakeSocRecord(), {}, &rendered), ReportRenderStatus::SUCCESS);
     EXPECT_NE(rendered.find("========= ERROR:[SOCCHECK] SOC register mismatch detected."), std::string::npos);
@@ -729,7 +730,7 @@ TEST(ReportRendererTest, UsesRaceAccessCoreForCrossPipeTemplate)
     EXPECT_NE(rendered.find("Second access by aicore (7) pipe (V) in launch (42)"), std::string::npos);
 }
 
-TEST(ReportRendererTest, IncludesLaunchIdForCommonDeviceExecutionPoint)
+TEST(ReportRendererTest, OmitsLaunchIdForMemcheckDeviceExecutionPoint)
 {
     NpuCheckMemcheckReport report{};
     report.common.tool = ReportTool::MEMCHECK;
@@ -744,13 +745,15 @@ TEST(ReportRendererTest, IncludesLaunchIdForCommonDeviceExecutionPoint)
     ASSERT_EQ(
         npucheck::RenderNpuCheckReportRecord(NpuCheckReportRecord::From(report), {}, &rendered),
         ReportRenderStatus::SUCCESS);
-    EXPECT_NE(rendered.find("by aicore (18) type (AIV) block (0) pipe (MTE2) in launch (41)"), std::string::npos);
+    EXPECT_NE(rendered.find("by aicore (18) type (AIV) block (0) pipe (MTE2)"), std::string::npos);
+    EXPECT_EQ(rendered.find("in launch ("), std::string::npos);
 
     report.common.exec.launchId = 0;
     ASSERT_EQ(
         npucheck::RenderNpuCheckReportRecord(NpuCheckReportRecord::From(report), {}, &rendered),
         ReportRenderStatus::SUCCESS);
-    EXPECT_NE(rendered.find("pipe (MTE2) in launch (<unknown>)"), std::string::npos);
+    EXPECT_NE(rendered.find("pipe (MTE2)"), std::string::npos);
+    EXPECT_EQ(rendered.find("in launch ("), std::string::npos);
 }
 
 TEST(ReportRendererTest, FallsBackToProgramCounterWhenFaultIsNotSymbolized)
@@ -1104,14 +1107,24 @@ TEST(ReportRendererTest, RendersPairingMismatchReasonForDifferentOperationKinds)
     const Case cases[] = {
         {NpuCheckSyncPairKind::SET_WAIT_FLAG, NpuCheckSyncMismatchReason::DUPLICATE_OPEN,
          "Synchronization pairing mismatch: duplicate SET_FLAG.",
-         "related point: previous SET_FLAG in launch (<unknown>) at SyncOperation+0x10 in sync.cpp:24 is still "
+         "related point: previous SET_FLAG at SyncOperation+0x10 in sync.cpp:24 is still "
          "pending"},
         {NpuCheckSyncPairKind::SET_WAIT_FLAG, NpuCheckSyncMismatchReason::UNMATCHED_CLOSE,
-         "Synchronization pairing mismatch: unmatched WAIT_FLAG.",
-         "related point: expected SET_FLAG, but no matching point exists for this pair key"},
+         "Synchronization pairing mismatch: WAIT_FLAG without matching SET_FLAG.",
+         "related point: expected SET_FLAG, but no matching point was found for this pair key"},
+        {NpuCheckSyncPairKind::SET_WAIT_FLAG, NpuCheckSyncMismatchReason::UNCONSUMED_OPEN,
+         "Synchronization pairing mismatch: SET_FLAG without matching WAIT_FLAG.",
+         "related point: expected WAIT_FLAG, but no matching point was found for this pair key"},
+        {NpuCheckSyncPairKind::GET_RLS_BUF, NpuCheckSyncMismatchReason::DUPLICATE_OPEN,
+         "Synchronization pairing mismatch: duplicate GET_BUF.",
+         "related point: previous GET_BUF at SyncOperation+0x10 in sync.cpp:24 is still "
+         "pending"},
+        {NpuCheckSyncPairKind::GET_RLS_BUF, NpuCheckSyncMismatchReason::UNMATCHED_CLOSE,
+         "Synchronization pairing mismatch: RLS_BUF without matching GET_BUF.",
+         "related point: expected GET_BUF, but no matching point was found for this pair key"},
         {NpuCheckSyncPairKind::GET_RLS_BUF, NpuCheckSyncMismatchReason::UNCONSUMED_OPEN,
-         "Synchronization pairing mismatch: redundant GET_BUF.",
-         "related point: expected RLS_BUF, but no matching point was observed"},
+         "Synchronization pairing mismatch: GET_BUF without matching RLS_BUF.",
+         "related point: expected RLS_BUF, but no matching point was found for this pair key"},
     };
 
     for (const Case& testCase : cases) {
@@ -1123,6 +1136,7 @@ TEST(ReportRendererTest, RendersPairingMismatchReasonForDifferentOperationKinds)
             ReportRenderStatus::SUCCESS);
         EXPECT_NE(rendered.find(testCase.expectedHeadline), std::string::npos);
         EXPECT_NE(rendered.find(testCase.expectedRelated), std::string::npos);
+        EXPECT_EQ(rendered.find("in launch ("), std::string::npos);
         EXPECT_EQ(rendered.find("observed sequence"), std::string::npos);
     }
 }
@@ -1165,11 +1179,11 @@ TEST(ReportRendererTest, RendersStructuredPairingMismatchEvidence)
         ReportRenderStatus::SUCCESS);
     EXPECT_NE(rendered.find("Synchronization pairing mismatch: duplicate SET_FLAG."), std::string::npos);
     EXPECT_NE(
-        rendered.find(
-            "related point: previous SET_FLAG in launch (41) at FirstSet+0x10 in sync.cpp:24 is still pending"),
+        rendered.find("related point: previous SET_FLAG at FirstSet+0x10 in sync.cpp:24 is still pending"),
         std::string::npos);
-    EXPECT_NE(rendered.find("pipe (MTE2) in launch (42) at SecondSet+0x20 in sync.cpp:30"), std::string::npos);
+    EXPECT_NE(rendered.find("pipe (MTE2) at SecondSet+0x20 in sync.cpp:30"), std::string::npos);
     EXPECT_NE(rendered.find("expected WAIT_FLAG before another SET_FLAG"), std::string::npos);
+    EXPECT_EQ(rendered.find("in launch ("), std::string::npos);
     EXPECT_NE(
         rendered.find("pair kind SET_WAIT_FLAG, key (srcPipe=PIPE_V, dstPipe=PIPE_MTE2, id=42)"), std::string::npos);
     EXPECT_EQ(CountOccurrences(rendered, "=========  Device Frames:"), 2U);
@@ -1197,7 +1211,7 @@ TEST(ReportRendererTest, IncludesLaunchIdForSoccheckProducerAndConsumer)
     EXPECT_NE(rendered.find("producer aicore (3) in launch (41) expected"), std::string::npos);
 }
 
-TEST(ReportRendererTest, IncludesLaunchIdForSynccheckActualRelatedPoint)
+TEST(ReportRendererTest, OmitsLaunchIdForSynccheckActualRelatedPoint)
 {
     NpuCheckSynccheckReport report = MakeSynccheckReport(NpuCheckReportPattern::SYNCCHECK_PARTICIPANT_MISMATCH);
     report.triggerPoint.exec.launchId = 42;
@@ -1215,10 +1229,10 @@ TEST(ReportRendererTest, IncludesLaunchIdForSynccheckActualRelatedPoint)
     ASSERT_EQ(
         npucheck::RenderNpuCheckReportRecord(NpuCheckReportRecord::From(report), {}, &rendered),
         ReportRenderStatus::SUCCESS);
-    EXPECT_NE(rendered.find("pipe (S) in launch (42) at pc 0x100 in sync_kernel"), std::string::npos);
+    EXPECT_NE(rendered.find("pipe (S) at pc 0x100 in sync_kernel"), std::string::npos);
     EXPECT_NE(
-        rendered.find("related point: BARRIER by aicore (3) type (AIV) block (1) pipe (MTE2) in launch (41)"),
-        std::string::npos);
+        rendered.find("related point: BARRIER by aicore (3) type (AIV) block (1) pipe (MTE2) at"), std::string::npos);
+    EXPECT_EQ(rendered.find("in launch ("), std::string::npos);
 }
 
 TEST(ReportRendererTest, RendersUnconsumedGetBufferWithExpectedRelatedPoint)
@@ -1251,8 +1265,10 @@ TEST(ReportRendererTest, RendersUnconsumedGetBufferWithExpectedRelatedPoint)
     ASSERT_EQ(
         npucheck::RenderNpuCheckReportRecord(NpuCheckReportRecord::From(report), {}, &rendered),
         ReportRenderStatus::SUCCESS);
-    EXPECT_NE(rendered.find("Synchronization pairing mismatch: redundant GET_BUF."), std::string::npos);
-    EXPECT_NE(rendered.find("related point: expected RLS_BUF, but no matching point was observed"), std::string::npos);
+    EXPECT_NE(rendered.find("Synchronization pairing mismatch: GET_BUF without matching RLS_BUF."), std::string::npos);
+    EXPECT_NE(
+        rendered.find("related point: expected RLS_BUF, but no matching point was found for this pair key"),
+        std::string::npos);
     EXPECT_NE(rendered.find("pair kind GET_RLS_BUF, key (pipe=PIPE_MTE2, id=42, mode=3)"), std::string::npos);
 }
 
@@ -1444,7 +1460,8 @@ TEST(ReportRendererTest, RendersStructuredReportsFromEachCheckerStruct)
         rendered.find("========= WARNING:[RACECHECK] Potential RAW hazard detected at UB 0x2000 in block (8) :"),
         std::string::npos);
     EXPECT_NE(
-        rendered.find("========= ERROR:[SYNCCHECK] Synchronization pairing mismatch: unmatched WAIT_FLAG."),
+        rendered.find(
+            "========= ERROR:[SYNCCHECK] Synchronization pairing mismatch: WAIT_FLAG without matching SET_FLAG."),
         std::string::npos);
     EXPECT_NE(rendered.find("========= ERROR:[SOCCHECK] SOC register mismatch detected."), std::string::npos);
     EXPECT_NE(rendered.find("========= ERROR SUMMARY: 4 errors"), std::string::npos);

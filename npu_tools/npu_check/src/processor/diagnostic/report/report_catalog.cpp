@@ -33,46 +33,40 @@ const PatternCatalog& Catalog()
             ReportTool::MEMCHECK, NpuCheckReportPattern::MEMCHECK_INVALID_ACCESS, "invalid_access",
             "========= {{Severity}}:[MEMCHECK] Invalid {{space}} {{access}} of size {{accessBytes}} bytes\n"
             "=========     {{location}}\n"
-            "=========     by aicore ({{coreId}}) type ({{blockType}}) block ({{blockId}}) pipe ({{pipeName}}) "
-            "in launch ({{launchId}})\n"
+            "=========     by aicore ({{coreId}}) type ({{blockType}}) block ({{blockId}}) pipe ({{pipeName}})\n"
             "=========     Address 0x{{address}} is out of bounds{{capacityContext}}\n"),
         MakePattern(
             ReportTool::MEMCHECK, NpuCheckReportPattern::MEMCHECK_MISALIGNED_ACCESS, "misaligned_access",
             "========= {{Severity}}:[MEMCHECK] Invalid {{space}} {{access}} of size {{accessBytes}} bytes\n"
             "=========     {{location}}\n"
-            "=========     by aicore ({{coreId}}) type ({{blockType}}) block ({{blockId}}) pipe ({{pipeName}}) "
-            "in launch ({{launchId}})\n"
+            "=========     by aicore ({{coreId}}) type ({{blockType}}) block ({{blockId}}) pipe ({{pipeName}})\n"
             "=========     Address 0x{{address}} is misaligned\n"
             "=========     required alignment is {{requiredAlign}} bytes\n"),
         MakePattern(
             ReportTool::MEMCHECK, NpuCheckReportPattern::MEMCHECK_USE_AFTER_FREE, "use_after_free",
             "========= {{Severity}}:[MEMCHECK] Invalid {{space}} {{access}} of size {{accessBytes}} bytes\n"
             "=========     {{location}}\n"
-            "=========     by aicore ({{coreId}}) type ({{blockType}}) block ({{blockId}}) pipe ({{pipeName}}) "
-            "in launch ({{launchId}})\n"
+            "=========     by aicore ({{coreId}}) type ({{blockType}}) block ({{blockId}}) pipe ({{pipeName}})\n"
             "=========     Address 0x{{address}} is used after free\n"
             "=========     and belongs to allocation at 0x{{base}} of size {{bytes}} bytes\n"),
         MakePattern(
             ReportTool::MEMCHECK, NpuCheckReportPattern::MEMCHECK_USE_BEFORE_ALLOC, "use_before_alloc",
             "========= {{Severity}}:[MEMCHECK] Invalid {{space}} {{access}} of size {{accessBytes}} bytes\n"
             "=========     {{location}}\n"
-            "=========     by aicore ({{coreId}}) type ({{blockType}}) block ({{blockId}}) pipe ({{pipeName}}) "
-            "in launch ({{launchId}})\n"
+            "=========     by aicore ({{coreId}}) type ({{blockType}}) block ({{blockId}}) pipe ({{pipeName}})\n"
             "=========     Address 0x{{address}} is used before allocation is available\n"
             "=========     allocation 0x{{base}} of size {{bytes}} bytes was created at serial {{allocSerialNo}}\n"),
         MakePattern(
             ReportTool::MEMCHECK, NpuCheckReportPattern::MEMCHECK_INVALID_FREE, "invalid_free",
             "========= {{Severity}}:[MEMCHECK] Malloc/Free error encountered : Invalid pointer to free\n"
             "=========     at pc 0x{{pc}} in {{kernelName}}\n"
-            "=========     by aicore ({{coreId}}) type ({{blockType}}) block ({{blockId}}) pipe ({{pipeName}}) "
-            "in launch ({{launchId}})\n"
+            "=========     by aicore ({{coreId}}) type ({{blockType}}) block ({{blockId}}) pipe ({{pipeName}})\n"
             "=========     Address 0x{{address}}\n"),
         MakePattern(
             ReportTool::MEMCHECK, NpuCheckReportPattern::MEMCHECK_DOUBLE_FREE, "double_free",
             "========= {{Severity}}:[MEMCHECK] Malloc/Free error encountered : Double free\n"
             "=========     at pc 0x{{pc}} in {{kernelName}}\n"
-            "=========     by aicore ({{coreId}}) type ({{blockType}}) block ({{blockId}}) pipe ({{pipeName}}) "
-            "in launch ({{launchId}})\n"
+            "=========     by aicore ({{coreId}}) type ({{blockType}}) block ({{blockId}}) pipe ({{pipeName}})\n"
             "=========     Address 0x{{base}}\n"),
         MakePattern(
             ReportTool::MEMCHECK, NpuCheckReportPattern::MEMCHECK_LEAK, "leak",
@@ -193,15 +187,14 @@ const PatternCatalog& Catalog()
             "========= {{Severity}}:[SYNCCHECK] Barrier error detected. {{reason}}.\n"
             "=========     trigger point: {{triggerOperation}} at {{triggerLocation}}\n"
             "=========     by aicore ({{triggerCoreId}}) type ({{triggerType}}) block ({{triggerBlock}}) "
-            "pipe ({{triggerPipe}}) in launch ({{triggerLaunchId}})\n"
+            "pipe ({{triggerPipe}})\n"
             "=========     scope {{scope}}, active mask 0x{{activeMask}}, expected mask 0x{{expectedMask}}\n"
             "{{objectLine}}"),
         MakePattern(
             ReportTool::SYNCCHECK, NpuCheckReportPattern::SYNCCHECK_INTER_CORE_DIVERGENT, "inter_core_divergent",
             "========= {{Severity}}:[SYNCCHECK] Barrier error detected. {{reason}}.\n"
             "=========     trigger point: {{triggerOperation}} by aicore ({{triggerCoreId}}) type ({{triggerType}}) "
-            "block ({{triggerBlock}}) in launch ({{triggerLaunchId}}) "
-            "at "
+            "block ({{triggerBlock}}) at "
             "{{triggerLocation}}\n"
             "{{relatedPointLine}}"
             "=========     scope {{scope}}, active mask 0x{{activeMask}}, expected mask 0x{{expectedMask}}\n"
@@ -211,15 +204,14 @@ const PatternCatalog& Catalog()
             "========= {{Severity}}:[SYNCCHECK] Synchronization error detected. {{reason}}.\n"
             "=========     trigger point: {{triggerOperation}} by aicore ({{triggerCoreId}}) type ({{triggerType}}) "
             "block ({{triggerBlock}}) "
-            "pipe ({{triggerPipe}}) in launch ({{triggerLaunchId}}) at {{triggerLocation}}\n"
+            "pipe ({{triggerPipe}}) at {{triggerLocation}}\n"
             "{{objectLine}}"),
         MakePattern(
             ReportTool::SYNCCHECK, NpuCheckReportPattern::SYNCCHECK_PAIRING_MISMATCH, "pairing_mismatch",
-            "========= {{Severity}}:[SYNCCHECK] Synchronization pairing mismatch: {{reasonText}} "
-            "{{triggerOperation}}.\n"
+            "========= {{Severity}}:[SYNCCHECK] Synchronization pairing mismatch: {{reasonText}}.\n"
             "=========     trigger point: {{triggerOperation}} by aicore ({{triggerCoreId}}) type ({{triggerType}}) "
             "block ({{triggerBlock}}) "
-            "pipe ({{triggerPipe}}) in launch ({{triggerLaunchId}}) at {{triggerLocation}}\n"
+            "pipe ({{triggerPipe}}) at {{triggerLocation}}\n"
             "{{relatedPointLine}}"
             "{{expectedOperationLine}}"
             "=========     pair kind {{pairKind}}, key ({{pairKey}})\n"),
@@ -228,7 +220,7 @@ const PatternCatalog& Catalog()
             "========= {{Severity}}:[SYNCCHECK] Synchronization error detected. {{reason}}.\n"
             "=========     trigger point: {{triggerOperation}} by aicore ({{triggerCoreId}}) type ({{triggerType}}) "
             "block ({{triggerBlock}}) "
-            "pipe ({{triggerPipe}}) in launch ({{triggerLaunchId}}) at {{triggerLocation}}\n"
+            "pipe ({{triggerPipe}}) at {{triggerLocation}}\n"
             "{{relatedPointLine}}"
             "=========     scope {{scope}}, active mask 0x{{activeMask}}, expected mask 0x{{expectedMask}}\n"
             "{{objectLine}}"),
@@ -237,7 +229,7 @@ const PatternCatalog& Catalog()
             "========= {{Severity}}:[SYNCCHECK] Deadlock detected. {{reason}}.\n"
             "=========     trigger point: {{triggerOperation}} by aicore ({{triggerCoreId}}) type ({{triggerType}}) "
             "block ({{triggerBlock}}) "
-            "pipe ({{triggerPipe}}) in launch ({{triggerLaunchId}}) at {{triggerLocation}}\n"
+            "pipe ({{triggerPipe}}) at {{triggerLocation}}\n"
             "{{relatedPointLine}}"
             "=========     waiting mask 0x{{waitingMask}}, timeout {{timeoutNs}} ns\n"
             "{{objectLine}}"),
@@ -246,7 +238,7 @@ const PatternCatalog& Catalog()
             "========= {{Severity}}:[SYNCCHECK] Synchronization error detected. {{reason}}.\n"
             "=========     trigger point: {{triggerOperation}} by aicore ({{triggerCoreId}}) type ({{triggerType}}) "
             "block ({{triggerBlock}}) "
-            "pipe ({{triggerPipe}}) in launch ({{triggerLaunchId}}) at {{triggerLocation}}\n"
+            "pipe ({{triggerPipe}}) at {{triggerLocation}}\n"
             "=========     primitive {{primitiveKind}}\n"
             "{{objectLine}}"),
         MakePattern(
@@ -255,7 +247,7 @@ const PatternCatalog& Catalog()
             "========= {{Severity}}:[SYNCCHECK] Synchronization instruction sequence error detected. {{reason}}.\n"
             "=========     trigger point: {{triggerOperation}} by aicore ({{triggerCoreId}}) type ({{triggerType}}) "
             "block ({{triggerBlock}}) "
-            "pipe ({{triggerPipe}}) in launch ({{triggerLaunchId}}) at {{triggerLocation}}\n"
+            "pipe ({{triggerPipe}}) at {{triggerLocation}}\n"
             "{{relatedPointLine}}"
             "=========     sequence index {{sequenceIndex}}, active mask 0x{{activeMask}}\n"),
 
