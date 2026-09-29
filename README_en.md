@@ -8,9 +8,13 @@ Ascend C Tools is a debugging toolkit provided by [CANN](https://hiascend.com/so
 
     The cpu debug tool essentially provides a CPU debugging library that enables Ascend C source code to be compiled with a standard GCC compiler into operator binaries that can run and be debugged on the CPU. This tool assists developers in performing basic functional and accuracy verification on the CPU, and provides debugging methods such as GDB debugging and printf output.
 
-- **npu check**
+- **npu-check**
 
-    The npu check tool is used to inspect the implementation logic of Kernel source code. Its features include: memory checking, multi-thread checking, memory lifecycle management, memory address dependency management, and synchronization event management.
+    npu-check is a runtime correctness checking tool for Ascend NPUs. It checks memory accesses, synchronization pairing, and register initialization to help developers locate errors during operator execution.
+
+- **npu-compute**
+
+    npu-compute runs NPU applications and collects operator performance data, including compute and pipeline utilization, memory accesses, and pipeline timelines. It generates performance reports to help analyze performance bottlenecks.
 
 - **msobjdump**
 
@@ -37,7 +41,7 @@ The directory structure of this repository is as follows:
 ├── npu_tools                           // Ascend C Tools NPU-side tools
 │   ├── npu_check                       // Ascend C Tools npu-check implementation source code
 │   └── npu_compute                     // Ascend C Tools npu-compute implementation source code
-├── npuchk                              // Ascend C Tools npu check inspection tool
+├── npuchk                              // Ascend C Tools CPU debug checks and log analysis script
 ├── scripts                             // Ascend C Tools packaging scripts
 ├── tests                               // Ascend C Tools UT test cases
 ├── third_party                         // Third-party library files that Ascend C Tools depends on

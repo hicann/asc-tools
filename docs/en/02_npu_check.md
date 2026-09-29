@@ -1,145 +1,114 @@
-# npu_check
+# npu-check
 
 ## Overview
 
-The twin debugging provided by Ascend C Tools includes the debug function and the npu check function. The debug function covers aspects such as interface usage validation and parameter verification. On top of that, npu check provides memory checking, memory lifecycle management, memory address dependency management, and synchronization event management. Note that npu check only outputs complete verification logs and analysis when the debug phase exits normally (i.e., no ASSERT failures).
+npu-check is a runtime correctness checking tool for Ascend NPUs. It helps users check operator correctness during development. Run an application with npu-check to view error types, locations, and check results.
+
+This guide is intended for Ascend C operator developers. It covers environment setup, command-line usage, checking features, report reading, and usage examples.
+
+When using this tool through an Agent, refer to the [tool-npu-check Skill](../../skills/tool-npu-check/SKILL.md) for applicability checks, checker selection, controlled execution, report interpretation, and operator retesting.
+
+### Checking Features
+
+| Feature | Purpose | Issues Checked |
+| --- | --- | --- |
+| `memcheck` | Checks GM reads and writes and supported L1, L0A, L0B, and L0C accesses | GM allocation bounds, invalid addresses, use after free, and on-chip memory capacity bounds |
+| `synccheck` | Checks whether device synchronization operations are correctly paired | Repeated event notifications, waits for events that have not been notified, notifications without corresponding waits, and mismatched notification/wait pairs |
+| `initcheck` | Checks whether persistent registers are set before their first dependent use | Data-transfer or compute instructions using persistent registers before they are set, or registers set only after use |
+
+The three features can be used separately or enabled together for the same application run.
+
+### Usage Scenarios
+
+Typical uses of npu-check include:
+
+- Checking normal inputs, boundary inputs, and tail-block handling after developing an operator.
+- Checking memory accesses after changing tiling, copy lengths, or strides.
+- Checking synchronization after modifying inter-pipeline synchronization logic.
+- Investigating intermittent incorrect results or device execution errors.
+
+Correct numerical results do not necessarily mean the code is correct. For example, a program may read beyond an allocation while still producing correct output because the extra data does not contribute to the final computation.
 
 ## Environment Preparation
 
-Please refer to [Quick Start](00_quick_start.md) to complete the environment preparation.
-
-## Usage
-
-When operators developed with the Ascend C programming language are executed in the CPU domain via [cpu_debug](01_cpu_debug.md), the npu check tool simultaneously checks the operator implementation. The execution process and detected errors are saved as *_npuchk.log files in the npuchk folder under the execution path of the CPU-domain operator executable. Run the following command to generate the check results in one step:
-
-  ``` bash
-  # Without specifying a log file, the script automatically searches for log files in the current directory. git_clone_path is the clone path of this repository.
-  python3 ${git_clone_path}/asc-tools/npuchk/ascendc_npuchk_report.py
-
-  # Specify a log file
-  python3 ${git_clone_path}/asc-tools/npuchk/ascendc_npuchk_report.py npuchk/xxx_npuchk.log
-  ```
-
-- Errors detected: After the command finishes, failure results are displayed on screen. For example, error code ErrorRead3 and related failure information:
-
-  ``` bash
-  [V] [ErrorRead3] on read 0x7f328c11b010 0x800B
-  Rule: Read out of bounds, length exceeds the actual valid data (start/end) allocated via Ascend C framework's alloc_buf
-  ### vadd((__ubuf__ half*)7f328c11b810, (__ubuf__ half*)0xf328c11b010, (__ubuf__*)0x7f328c11b410, (uint8_t)1, (uint8_t)1, (uint8_t)1, (uint8_t)1, (uint8_t)8, (uint8_t)8, (uint8_t)8);
-
-  ---------------------- ERROR STATISTICS ----------------------
-  1, ErrorRead3, Read out of bounds, length exceeds the actual valid data (start/end) allocated via Ascend C framework's alloc_buf
-  ```
-
-- No errors detected: Command completes with no screen output.
-
-If errors are detected, you can view the detailed execution process in the log. Based on the log information, the following functional areas are covered.
-
-### Anomaly Detection
-
-npu check validates the legality of memory reads/writes, instruction synchronization, and tensor operations. Common failure types and their corresponding fields are as follows:
-
-- **ErrorRead1:**
-    Illegal memory read: The entire memory region was not allocated via Ascend C framework's AllocTensor or has already been freed by FreeTensor.
-- **ErrorRead2:**
-    [Suspicious] Reading invalid data: The memory being read was partially/entirely never written to, so the data may be invalid.
-- **ErrorRead3:**
-    Read out of bounds: The length exceeds the actual valid data (start/end) allocated via Ascend C framework's AllocTensor.
-- **ErrorRead4:**
-    Read address is not 32-byte aligned.
-- **ErrorWrite1:**
-    Illegal memory write: The memory was not allocated via Ascend C framework's AllocTensor or has already been freed by FreeTensor.
-- **ErrorWrite2:**
-    Write out of bounds: The length exceeds the actual valid data (start/end) allocated via Ascend C framework's AllocTensor.
-- **ErrorWrite3:**
-    [Suspicious] Duplicate write: The previously written memory has not been consumed, and is being overwritten.
-- **ErrorWrite4:**
-    Write address is not 32-byte aligned.
-- **ErrorSync1:**
-    Write synchronization issue: Missing pipe barrier within a pipe or missing set/wait between pipes.
-- **ErrorSync2:**
-    Read synchronization issue: Missing pipe barrier within a pipe or missing set/wait between pipes.
-- **ErrorSync3:**
-    set/wait pairing mismatch: Missing either set or wait.
-- **ErrorSync4:**
-    Duplicate eventID in set/wait operations, e.g., mte2:set0/set0, vector:set0/wait0.
-- **ErrorLeak:**
-    Memory leak: Memory was allocated but not freed.
-- **ErrorFree:**
-    Double free: Memory was already freed via free_buf, and free_buf is called again.
-- **ErrorBuffer0:**
-    Tensor memory was not initialized using Ascend C framework's InitBuffer.
-- **ErrorBuffer1:**
-    Tensor queue type is inconsistent with the type used during initialization.
-- **ErrorBuffer2:**
-    VECIN/VECOUT/VECCALC operations are non-compliant.
-- **ErrorBuffer3:**
-    Tensor operation memory is invalid. Possible causes: memory not allocated / memory out of bounds.
-- **ErrorBuffer4:**
-    TBufPool resource pool was not initialized using Ascend C framework's InitBufPool interface.
-
-### EnQue/DeQue Error Scenario Check
-
-For VECIN/VECOUT/VECCALC type Tensors, the tool checks whether a Tensor is in the correct state when it appears in a data transfer/compute instruction, to ensure synchronization correctness. Abnormal states are recorded in the log.
-
-### GM Memory Multi-Core Conflict Check
-
-Based on the GM global memory management mechanism, the tool records the GM address range operated by each core. If overlapping write address ranges are detected across multiple cores, an error is recorded. In Atomic add scenarios, overlapping addresses are not flagged as errors.
-
-## Usage Example
-
-Using the [add](https://gitcode.com/cann/asc-devkit/blob/master/examples/01_simd_cpp_api/00_introduction/01_add/add_tpipe_tque/add_tpipe_tque.asc) example, after calling the CPU debugging API and using gdb/printf to debug the operator kernel function, developers can use the npu check tool to check the kernel source code implementation logic based on the generated log file.
-
-**Step 1**: Construct an error case
-
-Add the following FreeTensor operation in the CopyIn function of the add_custom code.
-
-``` cpp
-AscendC::LocalTensor<float> xLocal = inQueueX.AllocTensor<float>();
-AscendC::LocalTensor<float> yLocal = inQueueY.AllocTensor<float>();
-// Add the following line here to construct an error example
-inQueueX.FreeTensor(xLocal);
-// The remaining code stays unchanged
-AscendC::DataCopy(xLocal, xGm, blockLength);
-AscendC::DataCopy(yLocal, yGm, blockLength);
-inQueueX.EnQue(xLocal);
-inQueueY.EnQue(yLocal);
-```
-
-Performing FreeTensor here will result in an illegal memory write.
-
-**Step 2**: Use cpu debug to generate the log file
-
-Refer to [cpu_debug](01_cpu_debug.md) and run the following commands to compile and generate the CPU-domain operator executable. The add_custom_x_x_npuchk.log file is saved in the npuchk folder under the newly created build folder in the execution path.
+Follow the [Quick Start](00_quick_start.md) to prepare the environment. Before using npu-check, install a CANN package compatible with the target NPU and driver, then load the CANN environment variables. Replace `<CANN-install-directory>` in the following command with the actual installation directory:
 
 ```bash
-mkdir -p build && cd build;
-cmake ..  -DCMAKE_ASC_RUN_MODE=cpu -DCMAKE_ASC_ARCHITECTURES=${SOC_VERSION}; make -j
-python3 ../scripts/gen_data.py
-./demo
-python3 ../scripts/verify_result.py output/output.bin output/golden.bin
+source <CANN-install-directory>/cann/set_env.sh
 ```
 
-**Step 3**: Find the corresponding log file and run the check
+Run the following command to check that `npu-check` is available:
 
-Since this is a multi-core example, each core generates a separate log file. Taking core 0 as an example, the generated log file is add_custom_0_0_vec_npuchk.log. Run the following command to perform the check:
-
-``` shell
-python3 ${git_clone_path}/asc-tools/npuchk/ascendc_npuchk_report.py npuchk/add_custom_0_0_vec_npuchk.log
+```bash
+npu-check --help
 ```
 
-  - If no xxx_npuchk.log file is specified, the script will automatically search for files with the "_npuchk.log" suffix in the current directory.
+The target program must be able to run independently in the current environment and execute its kernels successfully.
 
-You can then view the stack trace information recorded by npu check in the log file.
+### Source Location Information
 
-**Step 4**: Determine the error type based on the screen output
+To locate source files and line numbers directly from a report, preserve line information when compiling the operator.
 
-When the example case has errors, the following information will be displayed:
+## Command Format
 
-``` shell
-----------------------ERROR STATISTICS----------------------
-1, ErrorBuffer2, VECIN/VECOUT/VECCALC operations are non-compliant
-1, ErrorWrite1, Illegal memory write: Memory was not allocated via Ascend C framework's alloc_buf or has already been freed
+```text
+npu-check [--tool <name>]... [--log-file <filepath>] [--] <application> [args...]
 ```
 
-You can then determine the error type based on the anomaly detection section above.
+### Options
+
+| Option | Input | Default Behavior | Description |
+| --- | --- | --- | --- |
+| `--tool <name>` | `memcheck`, `synccheck`, `initcheck` | Enables `memcheck` when omitted | Can be specified multiple times to enable multiple tools; repeating the same tool does not repeat the check |
+| `--log-file <filepath>` | A file path | Displays the report in the terminal | Saves diagnostic information |
+| `-h`, `--help` | None | Does not display help | Displays command help |
+| `--` | None | Optional | Separates tool options from application arguments |
+
+## Usage Examples
+
+Check device memory accesses:
+
+```bash
+npu-check --tool memcheck ./my_app
+```
+
+When no feature is specified, memory access checking (`memcheck`) is enabled by default:
+
+```bash
+npu-check ./my_app
+```
+
+Run synchronization checking only:
+
+```bash
+npu-check --tool synccheck ./my_app
+```
+
+Enable all checks:
+
+```bash
+npu-check --tool memcheck --tool synccheck --tool initcheck ./my_app
+```
+
+### Specifying the Report Location
+
+Save to a specified file:
+
+```bash
+mkdir -p reports
+npu-check --tool memcheck --log-file reports/memcheck.log ./my_app
+```
+
+When `--log-file` is specified, the report is written to the file and is not also displayed in the terminal. The application's console output is not affected.
+
+## Constraints
+
+- Device checking currently covers Ascend 950 (dav-3510).
+- This tool can only be used in the environment of the CANN package version that contains it.
+- A single invocation of a single operator through either `<<<>>>` or ACLNN is currently supported.
+- `memcheck` checks GM accesses from supported instructions and accesses beyond buffer boundaries in L1, L0A, L0B, and L0C.
+- `synccheck` checks intra-core synchronization pairing issues and repeated synchronization setting issues.
+- `initcheck` checks only currently supported data-transfer and Fixpipe instructions and their explicit persistent-register dependencies.
+- The target program must be able to run independently without `npu-check`.
+- The target program must be an executable file.
+- Multi-process and multi-threaded execution are not supported.

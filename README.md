@@ -8,9 +8,13 @@ Ascend C Tools是[CANN](https://hiascend.com/software/cann) （Compute Architect
 
     cpu debug工具本质上是提供了CPU调试库文件，使得Ascend C源码可以通过通用GCC编译器编译得到在CPU上运行、调测的算子二进制文件。该工具辅助开发者在CPU上完成功能和精度的基本验证，并提供了gdb调试、printf打印等调试手段。
 
-- **npu check**
+- **npu-check**
 
-    npu check工具，用于检查Kernel源码实现逻辑，功能包含：内存检查、多线程检查、内存生命周期管理、内存地址依赖管理、同步事件管理等。
+    npu-check是面向昇腾NPU的运行时正确性检查工具，提供内存访问检查、同步配对检查和寄存器初始化检查，帮助开发者定位算子运行中的错误。
+
+- **npu-compute**
+
+    npu-compute用于运行NPU应用并采集算子性能数据，包括计算与流水线利用率、内存访问和流水时间线等，生成性能报告以辅助分析性能瓶颈。
 
 - **msobjdump**
 
@@ -37,7 +41,7 @@ Ascend C Tools是[CANN](https://hiascend.com/software/cann) （Compute Architect
 ├── npu_tools                           // Ascend C Tools NPU侧工具
 │   ├── npu_check                       // Ascend C Tools npu-check实现源代码
 │   └── npu_compute                     // Ascend C Tools npu-compute实现源代码
-├── npuchk                              // Ascend C Tools npu check检查工具
+├── npuchk                              // Ascend C Tools CPU调试检查与日志分析脚本
 ├── scripts                             // Ascend C Tools打包脚本
 ├── tests                               // Ascend C Tools的UT用例
 ├── third_party                         // Ascend C Tools依赖的第三方库文件

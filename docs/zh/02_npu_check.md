@@ -1,146 +1,114 @@
-# npu_check
+# npu-check
 
 ## 概述
 
-Ascend C Tools提供的孪生调试分为debug功能和npu check功能，debug功能包含诸如是否合法使用接口，参数校验等，在此之上npu check提供了内存检查、内存生命周期管理、内存地址依赖管理、同步事件管理等功能。需要注意的是，只有当debug阶段正常退出（即未有ASSERT校验），npu check才会输出完整的校验日志及分析。
+npu-check 是面向昇腾 NPU 的运行时正确性检查工具，帮助客户在算子开发中进行正确性检查。通过 npu-check 启动应用，即可查看错误类型、发生位置和检查结果。
+
+本手册面向 Ascend C 算子开发者，介绍环境准备、命令行用法、检查功能、报告阅读和典型使用示例。
+
+通过 Agent 使用本工具时，可参考 [tool-npu-check Skill](../../skills/tool-npu-check/SKILL.md)，了解适用范围、检查类型选择、受控运行、报告解读和算子复测。
+
+### 检查功能
+
+| 功能 | 主要用途 | 适合检查的问题 |
+| --- | --- | --- |
+| `memcheck` | 检查 GM 读写访问及受支持的 L1、L0A、L0B、L0C 访问 | GM 分配范围越界、无效地址、释放后访问，以及片上内存容量越界 |
+| `synccheck` | 检查设备同步操作是否正确配对 | 重复设置事件、等待未设置的事件、设置事件后未等待，事件设置和等待不配对问题 |
+| `initcheck` | 检查持久化寄存器在首次依赖使用前是否已被设置 | 搬运或计算指令依赖的持久化寄存器尚未设置，或者仅在使用后设置 |
+
+三种功能可以分别运行，也可以在同一次应用执行中同时启用。
+
+### 使用场景
+
+npu-check 常见使用场景：
+
+- 完成新算子后，检查正常输入范围、边界输入范围和尾块处理是否异常。
+- 调整分块、搬运长度或 stride 后，检查访问是否异常。
+- 修改流水间同步逻辑后，检查同步操作。
+- 应用出现结果偶发错误或设备执行异常时，尝试定位问题。
+
+正确的数值结果不代表代码一定正确。例如，程序可能已经读出了分配范围，但超出的数据没有参与最终计算，输出仍然正确。
 
 ## 环境准备
 
-请参考[快速入门](00_quick_start.md)完成环境准备
+请参考[快速入门](00_quick_start.md)完成环境准备。使用前，请安装与目标 NPU 和驱动匹配的 CANN 软件包，并加载 CANN 环境变量。以下命令中的 `<CANN安装目录>` 替换为实际安装目录：
 
-## 使用方法
+```bash
+source <CANN安装目录>/cann/set_env.sh
+```
 
-基于Ascend C编程语言开发的算子通过[cpu_debug](01_cpu_debug.md)在CPU域执行时，npu check工具会同步对算子实现进行检查，算子的执行过程和检索到的Error以*_npuchk.log文件的形式保存在CPU域算子可执行文件执行路径下npuchk文件夹内。通过执行以下命令，一键式生成检查结果。
+运行以下命令，检查 `npu-check` 是否可以正常调用：
 
-  ``` bash
-  # 未指定log文件，自动在当前路径下搜索log文件，其中git_clone_path为本代码仓克隆路径
-  python3 ${git_clone_path}/asc-tools/npuchk/ascendc_npuchk_report.py
+```bash
+npu-check --help
+```
 
-  # 指定log文件
-  python3 ${git_clone_path}/asc-tools/npuchk/ascendc_npuchk_report.py npuchk/xxx_npuchk.log
-  ```
+目标程序应能够在当前环境中独立运行，并且可以成功执行核函数。
 
-- 检测到Error：命令行执行完毕后，失败结果打屏。例如错误码ErrorRead3及相关失败信息如下：
+### 关于源码信息
 
-  ``` bash
-  [V] [ErrorRead3] on read 0x7f328c11b010 0x800B
-  Rule：读取越界，长度超出经Ascend C框架的alloc_buf申请实际有效的数据（开始/结尾）
-  ### vadd((__ubuf__ half*)7f328c11b810, (__ubuf__ half*)0xf328c11b010, (__ubuf__*)0x7f328c11b410, (uint8_t)1, (uint8_t)1, (uint8_t)1, (uint8_t)1, (uint8_t)8, (uint8_t)8, (uint8_t)8);
+若需要根据报告直接定位到源码文件和行号，编译算子时需要保留行号信息。
 
-  ---------------------- ERROR STATISTICS ----------------------
-  1， ErrorRead3，读取越界，长度超出经Ascend C框架的alloc_buf申请实际有效的数据（开始/结尾）
-  ```
+## 命令格式
 
-- 未检测到Error：命令执行完毕，无打屏。
+```text
+npu-check [--tool <name>]... [--log-file <filepath>] [--] <application> [args...]
+```
 
-若检测到Error，可在log中查看详细的执行过程。根据日志信息，划分为以下几个功能点。
+### 选项
 
-### 异常检测
-
-npu check对内存读写、指令同步、Tensor操作的合法性进行检测，常见的失败类型及对应字段如下，
-
-- **ErrorRead1:**
-    非法内存读取数据：整段内存未经过Ascend C框架的AllocTensor申请或已被FreeTensor。
-- **ErrorRead2:**
-    [可疑问题]读取无效数据；读取的内存部分/全部从未被写过，读取的数据可能是无效数据。
-- **ErrorRead3:**
-    读取越界，长度超出Ascend C框架的AllocTensor申请实际有效的数据（开始/结尾）。
-- **ErrorRead4:**
-    读取地址非32字节对齐。
-- **ErrorWrite1:**
-    非法内存写入数据，未经过Ascend C框架的AllocTensor申请或已被FreeTensor。
-- **ErrorWrite2:**
-    写入越界，长度超出经Ascend C框架的AllocTensor申请实际有效的数据（开始/结尾）。
-- **ErrorWrite3:**
-    [可疑问题]重复写入，前一次写入的内存没有被取走，重复写入。
-- **ErrorWrite4:**
-    写入地址非32字节对齐。
-- **ErrorSync1:**
-    写入存在同步问题，pipe内缺少pipe barrier或pipe间缺少set/wait。
-- **ErrorSync2:**
-    读取存在同步问题，pipe内缺少pipe barrier或pipe间缺少set/wait。
-- **ErrorSync3:**
-    set/wait使用不配对，缺少set或者wait。
-- **ErrorSync4:**
-    出现set/wait的eventID重复，比如mte2:set0/set0，vector:set0/wait0。
-- **ErrorLeak:**
-    内存泄漏，存在申请内存未释放问题。
-- **ErrorFree:**
-    内存重复释放，调用free_buf释放过，再次调用free_buf。
-- **ErrorBuffer0:**
-    tensor内存未使用Ascend C框架的InitBuffer进行初始化。
-- **ErrorBuffer1:**
-    tensor的que类型与初始化时不一致。
-- **ErrorBuffer2:**
-    VECIN/VECOUT/VECCALC的操作不合规。
-- **ErrorBuffer3:**
-    tensor的操作内存不合法，可能原因：内存未分配/内存越界。
-- **ErrorBuffer4:**
-    TBufPool资源池未使用Ascend C框架的InitBufPool接口初始化。
-
-### EnQue/DeQue错误场景检查
-
-对于VECIN/VECOUT/VECCALC类型的Tensor，判断Tensor出现在搬运/计算指令时是否处于正确的状态，以保证同步的正确性，对于异常的状态，会在日志中记录。
-
-### GM内存多核踩踏检查
-
-基于GM全局内存的管理机制，记录每个核操作的GM地址范围，发现多核写入地址范围有重叠的情况，记录错误；支持Atomic add场景下，对于重叠地址不记录错误。
-
+| 选项 | 输入 | 默认行为 | 说明 |
+| --- | --- | --- | --- |
+| `--tool <name>` | `memcheck`、`synccheck`、`initcheck` | 未指定时启用 `memcheck` | 可多次指定，用于同时启用多个工具；重复指定同一工具不会重复检查 |
+| `--log-file <filepath>` | 文件路径 | 报告显示在终端 | 保存检查诊断信息 |
+| `-h`、`--help` | 无 | 不显示帮助 | 显示命令帮助 |
+| `--` | 无 | 可选添加 | 用于分隔工具参数和应用参数 |
 
 ## 使用示例
 
-下面以[add](https://gitcode.com/cann/asc-devkit/blob/master/examples/01_simd_cpp_api/00_introduction/01_add/add_tpipe_tque/add_tpipe_tque.asc)为示例，介绍在调用CPU调测API并使用gdb/printf对算子核函数进行调试之后，开发者可以基于生成的log文件使用npu check工具检查Kernel源码的实现逻辑。
-
-**步骤1**:构造错误用例
-
-在add_custom代码的CopyIn函数中加入如下FreeTensor操作。
-
-``` cpp
-AscendC::LocalTensor<float> xLocal = inQueueX.AllocTensor<float>();
-AscendC::LocalTensor<float> yLocal = inQueueY.AllocTensor<float>();
-// 此处增加以下一行代码来构造错误示例
-inQueueX.FreeTensor(xLocal);
-// 剩余代码保持不变
-AscendC::DataCopy(xLocal, xGm, blockLength);
-AscendC::DataCopy(yLocal, yGm, blockLength);
-inQueueX.EnQue(xLocal);
-inQueueY.EnQue(yLocal);
-```
-
-在这里进行FreeTensor会导致非法内存写入数据。
-
-**步骤2**:使用cpu debug生成log文件
-
-参考[cpu_debug](01_cpu_debug.md)执行以下命令编译生成CPU域的算子可执行文件，add_custom_x_x_npuchk.log文件保存在执行路径中新建的build文件夹下npuchk文件夹中。
+检查设备内存访问：
 
 ```bash
-mkdir -p build && cd build;
-cmake ..  -DCMAKE_ASC_RUN_MODE=cpu -DCMAKE_ASC_ARCHITECTURES=${SOC_VERSION}; make -j
-python3 ../scripts/gen_data.py
-./demo
-python3 ../scripts/verify_result.py output/output.bin output/golden.bin
+npu-check --tool memcheck ./my_app
 ```
 
-**步骤3**:找到对应的log文件进行检查
+不指定功能的情况下，默认使能内存访问检查(memcheck)：
 
-由于用例为多核用例，每个核都会生成一个相应的log文件，以0核为例，生成log文件为add_custom_0_0_vec_npuchk.log，执行如下命令进行检查。
-
-``` shell
-python3 ${git_clone_path}/asc-tools/npuchk/ascendc_npuchk_report.py npuchk/add_custom_0_0_vec_npuchk.log
+```bash
+npu-check ./my_app
 ```
 
-  - 若不指定xxx_npuchk.log，脚本将会自动检索路径下的以“_npuchk.log”为后缀的文件进行检查。
+仅运行同步检查：
 
-此时查看log文件可以看到执行时npu check日志记录的堆栈信息。
-
-**步骤4**:根据打屏信息判断错误类型
-
-示例用例出现错误，会出现如下信息。
-
-``` shell
-----------------------ERROR STATISTICS----------------------
-1，ErrorBuffer2，VECIN/VECOUT/VECCALC的操作不合规
-1，ErrorWrite1，非法内存写入数据：未经过Ascend C框架的alloc_buf申请或已经free
+```bash
+npu-check --tool synccheck ./my_app
 ```
 
-此时可根据上方异常检测部分判断错误类型。
+使能全部检查：
+
+```bash
+npu-check --tool memcheck --tool synccheck --tool initcheck ./my_app
+```
+
+### 指定报告输出位置
+
+保存到指定文件：
+
+```bash
+mkdir -p reports
+npu-check --tool memcheck --log-file reports/memcheck.log ./my_app
+```
+
+指定 `--log-file` 后，检查报告写入文件，不再在终端重复显示。应用程序的打屏行为不受影响。
+
+## 约束说明
+
+- 当前设备检查范围为 Ascend 950（dav-3510）
+- 本工具仅支持在包含该工具的CANN包版本环境下使用
+- 当前支持<<<>>>和aclnn的单算子单次调用
+- `memcheck` 检查已支持指令的 GM 访问，以及 L1、L0A、L0B、L0C 的超出buffer边界的访问
+- `synccheck` 的检查范围是核内同步配对问题和重复设置同步问题
+- `initcheck` 仅检查当前已支持的搬运、Fixpipe 指令及其明确的持久化寄存器依赖
+- 目标程序必须能在未使用 `npu-check` 时独立运行
+- 目标程序必须是可执行文件
+- 不支持多进程和多线程运行
