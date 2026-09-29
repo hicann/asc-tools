@@ -69,7 +69,7 @@ npu-compute --section PipeUtilization bash ./run.sh
 | `--set arg` | 选择 basic 或 full，区分大小写。未指定 `--set` 和 `--section` 时默认使用 basic。支持重复指定，可与 `--section` 组合。 |
 | `--section arg` | 指定要采集的指标组（Section）名称，区分大小写。使用该命令行选项时必须配合指标组名称，没有默认值。可多次使用该选项指定不同指标组。 |
 | `--replay-mode arg` | Kernel 重放模式，当前仅支持 `kernel`，默认值为 `kernel`。 |
-| `-o arg`、`--export arg` | 采集时指定报告文件路径或已有目录；导入时指定保存解包结果的已有目录，工具会在其中创建新的结果子目录。未指定时，报告或解包结果保存在当前目录。 |
+| `-o arg`、`--export arg` | 采集时指定报告文件路径或已有目录；导入时指定保存解包结果的已有目录，工具会在其中创建新的结果子目录。不使用该选项时，报告或解包结果保存在当前目录。 |
 | `-i arg`、`--import arg` | 导入并解包 npu-compute 生成的 `.npu-rep` 报告，可配合 `--export` 指定保存位置。 |
 | `--` | 可选分隔符，放在目标程序前，用于分隔工具选项和目标程序及其参数。 |
 

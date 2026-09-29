@@ -133,8 +133,9 @@ def test_program_not_found_returns_127():
     result = run_cli(program)
 
     assert result.returncode == 127
-    assert result.stderr == (
-        f"[ERROR] npu-compute: failed to start program '{program}': No such file or directory\n"
+    assert (
+        f"failed to start program '{program}': No such file or directory"
+        in result.stderr
     )
 
 
@@ -146,9 +147,16 @@ def test_program_not_executable_returns_126(tmp_path):
     result = run_cli(str(program))
 
     assert result.returncode == 126
-    assert result.stderr == (
-        f"[ERROR] npu-compute: failed to start program '{program}': Permission denied\n"
+    assert (
+        f"failed to start program '{program}': not an executable file" in result.stderr
     )
+
+
+def test_directory_keeps_permission_denied_error(tmp_path):
+    result = run_cli(str(tmp_path))
+
+    assert result.returncode == 126
+    assert f"failed to start program '{tmp_path}': Permission denied" in result.stderr
 
 
 def test_child_environment_is_overridden_without_changing_parent(monkeypatch):
@@ -287,3 +295,30 @@ def test_sigterm_is_forwarded_and_child_is_reaped(tmp_path):
                 os.kill(app_pid, signal.SIGKILL)
             except ProcessLookupError:
                 pass
+
+
+@pytest.mark.parametrize(
+    ("termination_signal", "description"),
+    [(signal.SIGSEGV, "Segmentation fault"), (signal.SIGTERM, "Terminated")],
+)
+def test_child_signal_reports_description_and_number(
+    tmp_path, termination_signal, description
+):
+    environment = os.environ.copy()
+    environment["LC_ALL"] = "C"
+    result = run_cli(
+        sys.executable,
+        "-c",
+        "import os, resource, signal; "
+        "resource.setrlimit(resource.RLIMIT_CORE, (0, 0)); "
+        f"os.kill(os.getpid(), {termination_signal.value})",
+        cwd=tmp_path,
+        env=environment,
+    )
+
+    assert result.returncode == 128 + termination_signal
+    assert (
+        f"APP terminated by signal {description} ({termination_signal.value})"
+        in result.stderr
+    )
+    assert list(tmp_path.glob("*.npu-rep")) == []

@@ -16,6 +16,7 @@
 
 #include <fcntl.h>
 #include <signal.h>
+#include <sys/stat.h>
 #include <sys/wait.h>
 #include <unistd.h>
 #include <poll.h>
@@ -215,7 +216,11 @@ int ExitCodeFromStatus(int status, std::string* error)
     }
     if (WIFSIGNALED(status)) {
         const int signal_number = WTERMSIG(status);
-        SetError("APP terminated by signal " + std::to_string(signal_number), error);
+        const char* description = ::strsignal(signal_number);
+        SetError(
+            "APP terminated by signal " + std::string(description == nullptr ? "unknown" : description) + " (" +
+                std::to_string(signal_number) + ")",
+            error);
         return 128 + signal_number;
     }
     SetError("waitpid returned an unsupported APP status", error);
@@ -382,8 +387,13 @@ bool ProcessHandle::Start(
             SetError(ErrnoMessage("child setpgid", child_error.error_number), error);
             impl_->exitCode = kInternalErrorExitCode;
         } else {
-            SetError(
-                "failed to start program '" + request.program + "': " + std::strerror(child_error.error_number), error);
+            struct stat program_stat {};
+            const bool missing_execute_bit =
+                child_error.error_number == EACCES && stat(request.program.c_str(), &program_stat) == 0 &&
+                S_ISREG(program_stat.st_mode) && (program_stat.st_mode & (S_IXUSR | S_IXGRP | S_IXOTH)) == 0;
+            const char* detail =
+                missing_execute_bit ? "not an executable file" : std::strerror(child_error.error_number);
+            SetError("failed to start program '" + request.program + "': " + detail, error);
             impl_->exitCode =
                 child_error.error_number == ENOENT ? kProgramNotFoundExitCode : kProgramNotExecutableExitCode;
         }
