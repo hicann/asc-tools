@@ -20,7 +20,6 @@
 #include <cstdint>
 #include <cstring>
 #include <limits>
-#include <optional>
 #include <vector>
 #include <utility>
 
@@ -53,10 +52,11 @@ struct ReplayLaunchArguments {
 };
 
 aclError GetHiddenParameterInfo(
-    aclrtFuncHandle function, std::size_t& parameterCount, std::size_t& hiddenOffset, std::size_t& hiddenSize,
-    std::optional<std::size_t> hostArgsFallbackOffset = std::nullopt)
+    aclrtFuncHandle function, std::size_t& parameterCount, std::size_t& hiddenOffset, std::size_t& hiddenSize)
 {
     if (function == nullptr) {
+        npucompute::detail::DebugLog(
+            "aclpti", "error operation=instrumented_param_metadata status=%d function=null", ACL_ERROR_INVALID_PARAM);
         return ACL_ERROR_INVALID_PARAM;
     }
     const auto getCount = reinterpret_cast<aclrtFunctionGetParamCountFunc>(
@@ -64,39 +64,51 @@ aclError GetHiddenParameterInfo(
     const auto getInfo = reinterpret_cast<aclrtFunctionGetParamInfoFunc>(
         acltoolGetOriginalRuntimeApi(ACL_RT_API_aclrtFunctionGetParamInfo));
     if (getCount == nullptr || getInfo == nullptr) {
+        npucompute::detail::DebugLog(
+            "aclpti", "error operation=instrumented_param_api_lookup function=%p get_count=%p get_info=%p status=%d",
+            function, reinterpret_cast<void*>(getCount), reinterpret_cast<void*>(getInfo), ACL_ERROR_INTERNAL_ERROR);
         return ACL_ERROR_INTERNAL_ERROR;
     }
-    const auto useHostArgsFallback = [&](aclError result) {
-        if (!hostArgsFallbackOffset.has_value()) {
-            return false;
-        }
-        hiddenOffset = *hostArgsFallbackOffset;
-        hiddenSize = sizeof(void*);
+    const aclError countStatus = getCount(function, &parameterCount);
+    if (countStatus != ACL_SUCCESS) {
         npucompute::detail::DebugLog(
-            "aclpti", "pipeline host-args metadata unavailable status=%d; using args offset=%zu", result, hiddenOffset);
-        return true;
-    };
-    const aclError countResult = getCount(function, &parameterCount);
-    if (countResult != ACL_SUCCESS) {
-        if (useHostArgsFallback(countResult)) {
-            return ACL_SUCCESS;
-        }
+            "aclpti",
+            "error operation=instrumented_param_count function=%p api=aclrtFunctionGetParamCount status=%d "
+            "param_count=%zu",
+            function, countStatus, parameterCount);
         return ACL_ERROR_FEATURE_UNSUPPORTED;
     }
     if (parameterCount == 0) {
-        if (useHostArgsFallback(ACL_ERROR_FEATURE_UNSUPPORTED)) {
-            return ACL_SUCCESS;
-        }
+        npucompute::detail::DebugLog(
+            "aclpti",
+            "error operation=instrumented_param_count function=%p api=aclrtFunctionGetParamCount status=%d "
+            "param_count=0",
+            function, countStatus);
         return ACL_ERROR_FEATURE_UNSUPPORTED;
     }
-    const aclError infoResult = getInfo(function, parameterCount - 1, &hiddenOffset, &hiddenSize);
-    if (infoResult != ACL_SUCCESS || hiddenSize != sizeof(void*)) {
-        const aclError metadataResult = infoResult == ACL_SUCCESS ? ACL_ERROR_FEATURE_UNSUPPORTED : infoResult;
-        if (useHostArgsFallback(metadataResult)) {
-            return ACL_SUCCESS;
-        }
+    const std::size_t hiddenParameterIndex = parameterCount - 1;
+    const aclError infoStatus = getInfo(function, hiddenParameterIndex, &hiddenOffset, &hiddenSize);
+    if (infoStatus != ACL_SUCCESS) {
+        npucompute::detail::DebugLog(
+            "aclpti",
+            "error operation=instrumented_param_info function=%p api=aclrtFunctionGetParamInfo status=%d "
+            "param_count=%zu param_index=%zu param_offset=%zu param_size=%zu expected_size=%zu",
+            function, infoStatus, parameterCount, hiddenParameterIndex, hiddenOffset, hiddenSize, sizeof(void*));
         return ACL_ERROR_FEATURE_UNSUPPORTED;
     }
+    if (hiddenSize != sizeof(void*)) {
+        npucompute::detail::DebugLog(
+            "aclpti",
+            "error operation=instrumented_param_info function=%p api=aclrtFunctionGetParamInfo status=%d "
+            "param_count=%zu param_index=%zu param_offset=%zu param_size=%zu expected_size=%zu",
+            function, infoStatus, parameterCount, hiddenParameterIndex, hiddenOffset, hiddenSize, sizeof(void*));
+        return ACL_ERROR_FEATURE_UNSUPPORTED;
+    }
+    npucompute::detail::DebugLog(
+        "aclpti",
+        "instrumented hidden parameter metadata function=%p param_count=%zu param_index=%zu param_offset=%zu "
+        "param_size=%zu",
+        function, parameterCount, hiddenParameterIndex, hiddenOffset, hiddenSize);
     return ACL_SUCCESS;
 }
 
@@ -108,12 +120,25 @@ aclError BuildInstrumentedReplayArgsArray(
     std::size_t hiddenSize = 0;
     const aclError status = GetHiddenParameterInfo(function, parameterCount, hiddenOffset, hiddenSize);
     if (status != ACL_SUCCESS) {
+        npucompute::detail::DebugLog(
+            "aclpti", "error operation=instrumented_replay_args_array status=%d function=%p original_args=%p", status,
+            function, originalArgs);
         return status;
     }
-    (void)hiddenOffset;
-    (void)hiddenSize;
+    std::uint32_t traceArgumentOffset = 0;
+    if (!profiling::GetReplayRuntime().GetInstrumentedTraceArgumentOffset(function, traceArgumentOffset) ||
+        hiddenOffset != traceArgumentOffset) {
+        npucompute::detail::DebugLog(
+            "aclpti", "error operation=instrumented_replay_args_array function=%p hidden_offset=%zu trace_offset=%u",
+            function, hiddenOffset, traceArgumentOffset);
+        return ACL_ERROR_FEATURE_UNSUPPORTED;
+    }
     const std::size_t originalCount = parameterCount - 1;
     if (originalCount != 0 && originalArgs == nullptr) {
+        npucompute::detail::DebugLog(
+            "aclpti",
+            "error operation=instrumented_replay_args_array status=%d function=%p param_count=%zu original_args=null",
+            ACL_ERROR_INVALID_PARAM, function, parameterCount);
         return ACL_ERROR_INVALID_PARAM;
     }
     prepared.argumentPointers.reserve(parameterCount);
@@ -129,41 +154,77 @@ aclError BuildInstrumentedReplayHostArgs(
     const aclrtPlaceHolderInfo* originalPlaceholders, std::size_t placeholderCount, ReplayLaunchArguments& prepared)
 {
     if ((argsSize != 0 && originalArgs == nullptr) || (placeholderCount != 0 && originalPlaceholders == nullptr)) {
+        npucompute::detail::DebugLog(
+            "aclpti",
+            "error operation=instrumented_replay_host_args status=%d function=%p args=%p args_size=%zu "
+            "placeholders=%p placeholder_count=%zu",
+            ACL_ERROR_INVALID_PARAM, function, originalArgs, argsSize, originalPlaceholders, placeholderCount);
         return ACL_ERROR_INVALID_PARAM;
     }
+    std::uint32_t traceArgumentOffset = 0;
+    if (!profiling::GetReplayRuntime().GetInstrumentedTraceArgumentOffset(function, traceArgumentOffset)) {
+        npucompute::detail::DebugLog(
+            "aclpti", "error operation=instrumented_trace_offset function=%p args_size=%zu", function, argsSize);
+        return ACL_ERROR_PROFILING_FAILURE;
+    }
+    const std::size_t hiddenOffset = traceArgumentOffset;
+    constexpr std::size_t hiddenSize = sizeof(void*);
+    npucompute::detail::DebugLog(
+        "aclpti", "instrumented host args function=%p source=binary_registry trace_offset=%u args_size=%zu", function,
+        traceArgumentOffset, argsSize);
+
     std::size_t insertionOffset = 0;
     if (placeholderCount != 0) {
-        const std::uint32_t lastAddressOffset = originalPlaceholders[placeholderCount - 1].addrOffset;
+        std::uint32_t lastAddressOffset = 0;
+        for (std::size_t index = 0; index < placeholderCount; ++index) {
+            lastAddressOffset = std::max(lastAddressOffset, originalPlaceholders[index].addrOffset);
+        }
         if (lastAddressOffset > std::numeric_limits<std::uint32_t>::max() - sizeof(void*)) {
+            npucompute::detail::DebugLog(
+                "aclpti",
+                "error operation=instrumented_replay_host_args status=%d function=%p "
+                "reason=placeholder_offset_overflow "
+                "last_address_offset=%u args_size=%zu",
+                ACL_ERROR_INVALID_PARAM, function, lastAddressOffset, argsSize);
             return ACL_ERROR_INVALID_PARAM;
         }
         insertionOffset = static_cast<std::size_t>(lastAddressOffset) + sizeof(void*);
         if (insertionOffset > argsSize) {
+            npucompute::detail::DebugLog(
+                "aclpti",
+                "error operation=instrumented_replay_host_args status=%d function=%p reason=insertion_after_args "
+                "insertion_offset=%zu args_size=%zu",
+                ACL_ERROR_INVALID_PARAM, function, insertionOffset, argsSize);
             return ACL_ERROR_INVALID_PARAM;
         }
     } else {
         if (argsSize > std::numeric_limits<std::size_t>::max() - 7U) {
+            npucompute::detail::DebugLog(
+                "aclpti",
+                "error operation=instrumented_replay_host_args status=%d function=%p reason=alignment_overflow "
+                "args_size=%zu",
+                ACL_ERROR_INVALID_PARAM, function, argsSize);
             return ACL_ERROR_INVALID_PARAM;
         }
         insertionOffset = (argsSize + 7U) & ~static_cast<std::size_t>(7U);
     }
-    // ACLNN-generated functions may not expose ParamInfo. For host-args launches, argsSize is the
-    // complete original argument area, so the probe parameter can be appended at its aligned end.
-    std::size_t parameterCount = 0;
-    std::size_t hiddenOffset = 0;
-    std::size_t hiddenSize = 0;
-    const aclError status = GetHiddenParameterInfo(function, parameterCount, hiddenOffset, hiddenSize, insertionOffset);
-    if (status != ACL_SUCCESS) {
-        return status;
-    }
-    (void)parameterCount;
     if (insertionOffset > hiddenOffset || hiddenOffset > std::numeric_limits<std::size_t>::max() - hiddenSize) {
+        npucompute::detail::DebugLog(
+            "aclpti",
+            "error operation=instrumented_replay_host_args status=%d function=%p reason=hidden_offset_invalid "
+            "insertion_offset=%zu hidden_offset=%zu hidden_size=%zu args_size=%zu",
+            ACL_ERROR_INVALID_PARAM, function, insertionOffset, hiddenOffset, hiddenSize, argsSize);
         return ACL_ERROR_INVALID_PARAM;
     }
     const std::size_t paddingBytes = hiddenOffset - insertionOffset;
     const std::size_t prefixSize = std::max(argsSize, insertionOffset);
     if (prefixSize > std::numeric_limits<std::size_t>::max() - paddingBytes ||
         prefixSize + paddingBytes > std::numeric_limits<std::size_t>::max() - hiddenSize) {
+        npucompute::detail::DebugLog(
+            "aclpti",
+            "error operation=instrumented_replay_host_args status=%d function=%p reason=expanded_size_overflow "
+            "prefix_size=%zu padding_bytes=%zu hidden_size=%zu",
+            ACL_ERROR_INVALID_PARAM, function, prefixSize, paddingBytes, hiddenSize);
         return ACL_ERROR_INVALID_PARAM;
     }
     const std::size_t expandedSize = prefixSize + paddingBytes + hiddenSize;
@@ -182,6 +243,11 @@ aclError BuildInstrumentedReplayHostArgs(
             if (placeholder.dataOffset >= insertionOffset) {
                 if (paddingBytes > std::numeric_limits<std::uint32_t>::max() - hiddenSize ||
                     placeholder.dataOffset > std::numeric_limits<std::uint32_t>::max() - (paddingBytes + hiddenSize)) {
+                    npucompute::detail::DebugLog(
+                        "aclpti",
+                        "error operation=instrumented_replay_host_args status=%d function=%p "
+                        "reason=placeholder_data_offset_overflow data_offset=%u padding_bytes=%zu hidden_size=%zu",
+                        ACL_ERROR_INVALID_PARAM, function, placeholder.dataOffset, paddingBytes, hiddenSize);
                     return ACL_ERROR_INVALID_PARAM;
                 }
                 placeholder.dataOffset += static_cast<std::uint32_t>(paddingBytes + hiddenSize);
@@ -234,7 +300,13 @@ aclError InvokeLaunch(
     return InvokeRuntimeCallback<Function>(cbid, apiId, apiName, params, [&](Function original) -> aclError {
         const auto function = params.*functionMember;
         const auto invoke = [&](aclrtFuncHandle selectedFunction, bool instrumented) {
-            return launch(original, selectedFunction, instrumented);
+            const aclError launchStatus = launch(original, selectedFunction, instrumented);
+            if (instrumented) {
+                npucompute::detail::DebugLog(
+                    "aclpti", "pipeline replay launch api=%s instrumented=%d original=%p selected=%p status=%d",
+                    apiName, instrumented ? 1 : 0, function, selectedFunction, launchStatus);
+            }
+            return launchStatus;
         };
         const aclError result = invoke(function, false);
         if (result != ACL_SUCCESS) {

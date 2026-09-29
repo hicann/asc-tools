@@ -93,11 +93,13 @@ aclptiResult BinaryRegistry::RegisterInstrumentedBinary(
     }
     try {
         std::vector<char> patched;
-        if (!InstrumentKernelEnd(data, size, patched) || patched.empty()) {
+        std::uint32_t traceArgumentOffset = 0;
+        if (!InstrumentKernelEnd(data, size, patched, &traceArgumentOffset) || patched.empty() ||
+            traceArgumentOffset == 0 || traceArgumentOffset % sizeof(void*) != 0) {
             return ACLPTI_ERROR_PROFILING_FAILED;
         }
         std::lock_guard<std::mutex> lock(mutex_);
-        const auto inserted = binaries_.emplace(binary, Binary{nullptr, {}, std::move(patched)});
+        const auto inserted = binaries_.emplace(binary, Binary{nullptr, {}, std::move(patched), traceArgumentOffset});
         if (!inserted.second) {
             return ACLPTI_ERROR_PROFILING_FAILED;
         }
@@ -156,11 +158,36 @@ aclrtFuncHandle BinaryRegistry::FindInstrumentedFunction(aclrtFuncHandle origina
     for (const auto& binary : binaries_) {
         const auto found = binary.second.functions.find(original);
         if (found != binary.second.functions.end()) {
+            npucompute::detail::DebugLog(
+                "aclpti", "pipeline function mapping selected: binary=%p original=%p companion=%p", binary.first,
+                original, found->second);
             return found->second;
         }
     }
-    npucompute::detail::DebugLog("aclpti", "pipeline function missing; enable pipeline before binary load");
+    npucompute::detail::DebugLog(
+        "aclpti",
+        "error operation=pipeline_function_lookup original=%p status=%d; "
+        "enable pipeline before binary load and obtain the function by name or entry",
+        original, ACLPTI_ERROR_PROFILING_FAILED);
     return nullptr;
+}
+
+bool BinaryRegistry::GetInstrumentedTraceArgumentOffset(aclrtFuncHandle function, std::uint32_t& offset)
+{
+    offset = 0;
+    if (function == nullptr) {
+        return false;
+    }
+    std::lock_guard<std::mutex> lock(mutex_);
+    for (const auto& binary : binaries_) {
+        for (const auto& mapping : binary.second.functions) {
+            if (mapping.second == function) {
+                offset = binary.second.traceArgumentOffset;
+                return offset != 0;
+            }
+        }
+    }
+    return false;
 }
 
 aclptiResult BinaryRegistry::PrepareBinaryUnload(aclrtBinHandle binary, UnloadContext& context)

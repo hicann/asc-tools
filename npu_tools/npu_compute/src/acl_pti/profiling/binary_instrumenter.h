@@ -10,11 +10,14 @@
 #pragma once
 
 #include <cstddef>
+#include <cstdint>
 #include <vector>
 
 namespace aclpti::profiling {
 
 // Runs the fixed kernel-end toolchain and returns a complete instrumented ELF image.
-bool InstrumentKernelEnd(const void* data, std::size_t size, std::vector<char>& output);
+// If requested, returns the exact --tune-argsize offset on success, or zero on failure.
+bool InstrumentKernelEnd(
+    const void* data, std::size_t size, std::vector<char>& output, std::uint32_t* traceArgumentOffset = nullptr);
 
 } // namespace aclpti::profiling

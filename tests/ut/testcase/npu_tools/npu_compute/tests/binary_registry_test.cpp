@@ -116,8 +116,11 @@ extern "C" aclError BinaryRegistryTestGetFunctionName(aclrtFuncHandle, uint32_t,
     return ACL_SUCCESS;
 }
 namespace aclpti::profiling {
-bool InstrumentKernelEnd(const void*, std::size_t, std::vector<char>& output)
+bool InstrumentKernelEnd(const void*, std::size_t, std::vector<char>& output, std::uint32_t* traceArgumentOffset)
 {
+    if (traceArgumentOffset != nullptr) {
+        *traceArgumentOffset = 56;
+    }
     output = {'E', 'L', 'F'};
     return !failTools;
 }
@@ -163,6 +166,11 @@ int main()
     failName = false;
     CHECK(registry.RegisterSymbolFunction(f) == ACLPTI_SUCCESS);
     CHECK(registry.FindInstrumentedFunction(f) == &functionTokens[companionIndex]);
+    std::uint32_t traceOffset = 0;
+    CHECK(registry.GetInstrumentedTraceArgumentOffset(registry.FindInstrumentedFunction(f), traceOffset));
+    CHECK(traceOffset == 56);
+    CHECK(!registry.GetInstrumentedTraceArgumentOffset(f, traceOffset));
+    CHECK(traceOffset == 0);
 
     aclrtBinHandle b = nullptr;
     aclrtFuncHandle g = nullptr;
@@ -193,6 +201,7 @@ int main()
         CHECK(registry.CompleteBinaryUnload(context) == ACLPTI_SUCCESS);
     }
     CHECK(registry.FindInstrumentedFunction(f) == nullptr);
+    CHECK(!registry.GetInstrumentedTraceArgumentOffset(&functionTokens[companionIndex], traceOffset));
     failUnload = b;
     {
         BinaryRegistry::UnloadContext context;

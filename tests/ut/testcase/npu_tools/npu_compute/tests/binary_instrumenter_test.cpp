@@ -124,8 +124,10 @@ int main()
     const std::vector<char> aggregateInput = MakeElfWithKernelArgumentSizes({}, {{24, 24}, {0, 24}});
     const std::vector<char> missingArgumentMetadata = MakeElfWithKernelArgumentSizes({});
     std::vector<char> output;
+    std::uint32_t traceOffset = 123;
     if (aclpti::profiling::InstrumentKernelEnd(
-            missingArgumentMetadata.data(), missingArgumentMetadata.size(), output)) {
+            missingArgumentMetadata.data(), missingArgumentMetadata.size(), output, &traceOffset) ||
+        traceOffset != 0) {
         return 1;
     }
     // A failed linker invocation must not invalidate the extracted asset cache.
@@ -146,11 +148,14 @@ int main()
     for (auto& worker : workers) {
         worker.join();
     }
-    if (!aclpti::profiling::InstrumentKernelEnd(input.data(), input.size(), output)) {
+    if (!aclpti::profiling::InstrumentKernelEnd(input.data(), input.size(), output, &traceOffset) ||
+        traceOffset != 232) {
         return 3;
     }
     std::vector<char> aggregateOutput;
-    if (!aclpti::profiling::InstrumentKernelEnd(aggregateInput.data(), aggregateInput.size(), aggregateOutput)) {
+    if (!aclpti::profiling::InstrumentKernelEnd(
+            aggregateInput.data(), aggregateInput.size(), aggregateOutput, &traceOffset) ||
+        traceOffset != 48) {
         return 4;
     }
     return success ? 0 : 5;

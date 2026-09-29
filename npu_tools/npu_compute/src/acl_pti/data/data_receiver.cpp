@@ -144,20 +144,31 @@ aclptiResult DataProcessor::ReceiveRawData(const MsprofRawData* raw)
         return ACLPTI_ERROR_INVALID_STATE;
     }
     auto& replay = *active_;
+    const auto core = raw == nullptr ? std::nullopt : BiuCoreKind(raw->type);
+    const size_t recordSize = raw == nullptr             ? 0 :
+                              raw->type == LOG_DATA_TYPE ? 32 :
+                              raw->type == PMU_DATA_TYPE ? 128 :
+                              core                       ? 4 :
+                                                           1;
     const auto fail = [&](aclptiResult status, bool primary) {
         ++replay.stats.failedRecordCount;
         if (primary) {
             ++replay.stats.rejectedChunkCount;
         }
         npucompute::detail::DebugLog(
-            "aclpti-data", "raw callback invalid chunk: replay=%llu status=%d",
-            static_cast<unsigned long long>(replay.info.replayId), static_cast<int>(status));
+            "aclpti-data",
+            "raw callback invalid chunk: replay=%llu kind=%d status=%d primary=%d type=%d device=%d "
+            "module=%d offset=%zu chunk_size=%zu last=%d expected_record_size=%zu expected_device=%d",
+            static_cast<unsigned long long>(replay.info.replayId), static_cast<int>(replay.info.kind),
+            static_cast<int>(status), primary ? 1 : 0, raw == nullptr ? -1 : static_cast<int>(raw->type),
+            raw == nullptr ? -1 : raw->deviceId, raw == nullptr ? -1 : raw->chunkModule,
+            raw == nullptr ? 0 : raw->offset, raw == nullptr ? 0 : raw->chunkSize,
+            raw != nullptr && raw->isLastChunk ? 1 : 0, recordSize, replay.deviceId);
         return status;
     };
     if (raw == nullptr) {
         return fail(ACLPTI_ERROR_INVALID_RAW_DATA, false);
     }
-    const auto core = BiuCoreKind(raw->type);
     // Task logs may accompany every replay kind, but primary payloads must match that kind.
     const bool primary = (replay.info.kind == ReplayKind::Pipeline && core.has_value()) ||
                          (replay.info.kind == ReplayKind::Pmu && raw->type == PMU_DATA_TYPE) ||
@@ -169,14 +180,16 @@ aclptiResult DataProcessor::ReceiveRawData(const MsprofRawData* raw)
     if (raw->chunkSize == 0 || raw->chunkSize > sizeof(raw->chunk)) {
         return fail(ACLPTI_ERROR_INVALID_RAW_DATA, primary);
     }
-    const size_t recordSize = log ? 32 : raw->type == PMU_DATA_TYPE ? 128 : core ? 4 : 1;
     if (raw->chunkSize % recordSize != 0) {
         return fail(ACLPTI_ERROR_INVALID_RAW_DATA, primary);
     }
     if (primary) {
         replay.stats.receivedBytes += raw->chunkSize;
     }
-    if (raw->deviceId < 0 || (replay.deviceId >= 0 && replay.deviceId != raw->deviceId)) {
+    if (raw->deviceId < 0) {
+        return fail(ACLPTI_ERROR_INVALID_RAW_DATA, primary);
+    }
+    if (replay.deviceId >= 0 && replay.deviceId != raw->deviceId) {
         return fail(ACLPTI_ERROR_INVALID_RAW_DATA, primary);
     }
     try {

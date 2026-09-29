@@ -11,6 +11,7 @@
 
 #include <boost/filesystem.hpp>
 
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <fstream>
@@ -49,6 +50,18 @@ std::vector<uint32_t> TraceWords(uint64_t timestamp, uint16_t blockId, uint16_t 
     };
 }
 
+uint32_t EventWord(uint8_t ctrl, uint16_t event, uint16_t cycles)
+{
+    return (static_cast<uint32_t>(ctrl & 0xfU) << 28U) | (static_cast<uint32_t>(event & 0xfffU) << 16U) | cycles;
+}
+
+uint32_t DfxWord(uint8_t ctrl, uint16_t regionId, uint16_t cycles)
+{
+    return (static_cast<uint32_t>(ctrl & 0xfU) << 28U) | (static_cast<uint32_t>(regionId & 0xfffU) << 16U) | cycles;
+}
+
+uint32_t StampWord(uint32_t value) { return 0xe0000000U | value; }
+
 int TestParseIntervals()
 {
     aclptiPipelineData replay;
@@ -59,26 +72,30 @@ int TestParseIntervals()
 
     npucompute::BiuClockConfig clocks{100000000.0, 1000000000.0, 2000000000.0, "unit-test"};
     npucompute::BiuParseStats stats;
-    std::vector<npucompute::BiuInterval> intervals;
+    std::vector<npucompute::BiuTraceEvent> intervals;
     const aclptiResult status = npucompute::ParsePipelineReplay(
         7, replay, clocks,
-        [&intervals](const npucompute::BiuInterval& interval) {
+        [&intervals](const npucompute::BiuTraceEvent& interval) {
             intervals.push_back(interval);
             return ACLPTI_SUCCESS;
         },
         &stats);
 
     CHECK(status == ACLPTI_SUCCESS);
-    CHECK(intervals.size() == 2);
-    CHECK(intervals[0].channel.groupId == 0);
-    CHECK(intervals[0].channel.coreKind == aclptiBiuCoreKind::Aic);
-    CHECK(intervals[0].pipe == npucompute::BiuPipe::Scalar);
-    CHECK(intervals[0].blockId == 4);
-    CHECK(std::abs(intervals[0].startUs - 0.01) < 1e-12);
-    CHECK(std::abs(intervals[0].durationUs - 0.02) < 1e-12);
-    CHECK(intervals[1].channel.groupId == 2);
-    CHECK(std::abs(intervals[1].startUs - 1.005) < 1e-12);
-    CHECK(std::abs(intervals[1].durationUs - 0.0045) < 1e-12);
+    std::vector<npucompute::BiuTraceEvent> busyIntervals;
+    std::copy_if(intervals.begin(), intervals.end(), std::back_inserter(busyIntervals), [](const auto& event) {
+        return !event.isDfx;
+    });
+    CHECK(busyIntervals.size() == 2);
+    CHECK(busyIntervals[0].channel.groupId == 0);
+    CHECK(busyIntervals[0].channel.coreKind == aclptiBiuCoreKind::Aic);
+    CHECK(busyIntervals[0].name == "SCALAR");
+    CHECK(busyIntervals[0].blockId == 4);
+    CHECK(std::abs(busyIntervals[0].startUs - 0.01) < 1e-12);
+    CHECK(std::abs(busyIntervals[0].durationUs - 0.02) < 1e-12);
+    CHECK(busyIntervals[1].channel.groupId == 2);
+    CHECK(std::abs(busyIntervals[1].startUs - 1.005) < 1e-12);
+    CHECK(std::abs(busyIntervals[1].durationUs - 0.0045) < 1e-12);
     CHECK(stats.payloadBytes == 80);
     CHECK(stats.paddingBytes == 8);
     CHECK(stats.intervalCount == 2);
@@ -138,6 +155,119 @@ int TestDecodeFailures()
     return 0;
 }
 
+int TestDfxEventsAndChip6Fixp()
+{
+    aclptiPipelineData replay;
+    replay.deviceId = 0;
+    replay.format = aclptiBiuFormat::Chip6;
+    auto words = std::vector<uint32_t>{StampWord(0), StampWord(0), StampWord(0), StampWord(0)};
+    // DFX trace start/end for region 7 on VECTOR.
+    words.push_back(DfxWord(1, 0x407, 10));
+    words.push_back(DfxWord(1, 0xc07, 15));
+    // msopprof encodes FIXP DFX events with ctrl=10 (not Chip6 state bit 6).
+    words.push_back(DfxWord(10, 0x40b, 10));
+    words.push_back(DfxWord(10, 0xc0b, 15));
+    words.push_back(0xefffffffU);
+    replay.channels[{0, aclptiBiuCoreKind::Aic}] = words;
+
+    auto markerWords = std::vector<uint32_t>{StampWord(0), StampWord(0), StampWord(0), StampWord(0)};
+    // A user DFX mark before the internal tail sequence must remain visible.
+    markerWords.push_back(DfxWord(2, 13, 1));
+    for (const uint16_t marker : {0xd88, 0xd99, 0xdaa, 0xdbb, 0xdcc, 0xddd, 0xdee, 0xdff}) {
+        markerWords.push_back(DfxWord(0, marker, 1));
+    }
+    // Kernel-end probe repeats the last marker after its drain delay to validate the sequence.
+    markerWords.push_back(DfxWord(0, 0xdff, 3500));
+    markerWords.push_back(0xefffffffU);
+    replay.channels[{1, aclptiBiuCoreKind::Aic}] = markerWords;
+
+    npucompute::BiuClockConfig clocks{1e9, 1e9, 1e9, "unit-test"};
+    npucompute::BiuParseStats stats;
+    std::vector<npucompute::BiuTraceEvent> events;
+    const auto status = npucompute::ParsePipelineReplay(
+        4, replay, clocks,
+        [&events](const npucompute::BiuTraceEvent& event) {
+            events.push_back(event);
+            return ACLPTI_SUCCESS;
+        },
+        &stats);
+    CHECK(status == ACLPTI_SUCCESS);
+    CHECK(stats.intervalCount == 0);
+    CHECK(stats.dfxEventCount == 7);
+    CHECK(events.size() == 7);
+    std::vector<std::string> names;
+    for (const auto& event : events) {
+        names.push_back(event.name);
+    }
+    CHECK(std::find(names.begin(), names.end(), "MarkStamp1031") != names.end());
+    CHECK(std::find(names.begin(), names.end(), "MarkStamp3079") != names.end());
+    CHECK(std::find(names.begin(), names.end(), "Region7") != names.end());
+    CHECK(std::find(names.begin(), names.end(), "MarkStamp1035") != names.end());
+    CHECK(std::find(names.begin(), names.end(), "MarkStamp3083") != names.end());
+    CHECK(std::find(names.begin(), names.end(), "Region11") != names.end());
+    CHECK(std::find(names.begin(), names.end(), "MarkStamp13") != names.end());
+    CHECK(std::find(names.begin(), names.end(), "MarkStamp3464") == names.end());
+    CHECK(std::find(names.begin(), names.end(), "MarkStamp3479") == names.end());
+    const auto mark =
+        std::find_if(events.begin(), events.end(), [](const auto& event) { return event.name == "MarkStamp1031"; });
+    CHECK(mark != events.end());
+    CHECK(mark->pipe == npucompute::BiuPipe::Vector);
+    CHECK(std::abs(mark->durationUs - 0.001) < 1e-12);
+    const auto region =
+        std::find_if(events.begin(), events.end(), [](const auto& event) { return event.name == "Region7"; });
+    CHECK(region != events.end());
+    CHECK(region->pipe == npucompute::BiuPipe::Vector);
+    CHECK(std::abs(region->durationUs - 0.015) < 1e-12);
+    const auto fixpDfxMark =
+        std::find_if(events.begin(), events.end(), [](const auto& event) { return event.name == "MarkStamp1035"; });
+    CHECK(fixpDfxMark != events.end());
+    CHECK(fixpDfxMark->pipe == npucompute::BiuPipe::Fixp);
+    const auto fixpDfxRegion =
+        std::find_if(events.begin(), events.end(), [](const auto& event) { return event.name == "Region11"; });
+    CHECK(fixpDfxRegion != events.end());
+    CHECK(fixpDfxRegion->pipe == npucompute::BiuPipe::Fixp);
+    CHECK(std::abs(fixpDfxRegion->durationUs - 0.015) < 1e-12);
+    return 0;
+}
+
+int TestIncompleteEndMarkSequenceKeepsDfxEvents()
+{
+    aclptiPipelineData replay;
+    replay.deviceId = 0;
+    replay.format = aclptiBiuFormat::Chip6;
+    auto words = std::vector<uint32_t>{StampWord(0), StampWord(0), StampWord(0), StampWord(0)};
+    words.push_back(DfxWord(0, 0xd88, 1));
+    words.push_back(DfxWord(0, 0xd99, 1));
+    // A normal user mark invalidates the candidate end-mark sequence.
+    words.push_back(DfxWord(1, 27, 1));
+    words.push_back(0xefffffffU);
+    replay.channels[{0, aclptiBiuCoreKind::Aic}] = words;
+
+    npucompute::BiuClockConfig clocks{1e9, 1e9, 1e9, "unit-test"};
+    npucompute::BiuParseStats stats;
+    std::vector<npucompute::BiuTraceEvent> events;
+    CHECK(
+        npucompute::ParsePipelineReplay(
+            5, replay, clocks,
+            [&events](const npucompute::BiuTraceEvent& event) {
+                events.push_back(event);
+                return ACLPTI_SUCCESS;
+            },
+            &stats) == ACLPTI_SUCCESS);
+    CHECK(stats.dfxEventCount == 3);
+    CHECK(events.size() == 3);
+    CHECK(std::find_if(events.begin(), events.end(), [](const auto& event) {
+              return event.name == "MarkStamp3464";
+          }) != events.end());
+    CHECK(std::find_if(events.begin(), events.end(), [](const auto& event) {
+              return event.name == "MarkStamp3481";
+          }) != events.end());
+    CHECK(std::find_if(events.begin(), events.end(), [](const auto& event) {
+              return event.name == "MarkStamp27";
+          }) != events.end());
+    return 0;
+}
+
 int TestOnlyRequiresUsedCoreClock()
 {
     aclptiPipelineData replay;
@@ -172,8 +302,9 @@ int TestPipeTraceWriter()
         std::fprintf(stderr, "PipeTraceWriter::Begin failed: %d %s\n", beginStatus, error.c_str());
     }
     CHECK(beginStatus == ACLPTI_SUCCESS);
-    npucompute::BiuInterval interval{{7, 0, 3, aclptiBiuCoreKind::Aiv1}, npucompute::BiuPipe::Vector, 5, 1.25, 0.5};
-    CHECK(writer.Append(interval) == ACLPTI_SUCCESS);
+    npucompute::BiuTraceEvent event{
+        {7, 0, 3, aclptiBiuCoreKind::Aiv1}, npucompute::BiuPipe::Vector, 5, "VECTOR", "rail_idle", 1.25, 0.5, false};
+    CHECK(writer.Append(event) == ACLPTI_SUCCESS);
     CHECK(writer.Commit() == ACLPTI_SUCCESS);
 
     std::ifstream input((directory / "PipeTrace.json").string());
@@ -183,6 +314,18 @@ int TestPipeTraceWriter()
     CHECK(json.find("\"pid\":\"group3.veccore1\"") != std::string::npos);
     CHECK(json.find("\"tid\":\"VECTOR\"") != std::string::npos);
     CHECK(json.find("\"ph\":\"X\"") != std::string::npos);
+
+    npucompute::PipeTraceWriter regionWriter;
+    CHECK(regionWriter.Begin(directory / "region.json", &error) == ACLPTI_SUCCESS);
+    npucompute::BiuTraceEvent regionEvent{
+        {7, 0, 3, aclptiBiuCoreKind::Aiv1}, npucompute::BiuPipe::Vector, 5, "Region10", "good", 1.25, 0.5, true};
+    CHECK(regionWriter.Append(regionEvent) == ACLPTI_SUCCESS);
+    CHECK(regionWriter.Commit() == ACLPTI_SUCCESS);
+    std::ifstream regionInput((directory / "region.json").string());
+    const std::string regionJson((std::istreambuf_iterator<char>(regionInput)), std::istreambuf_iterator<char>());
+    CHECK(regionJson.find("\"cname\":\"good\"") != std::string::npos);
+    CHECK(regionJson.find("\"cname\":\"orange\"") == std::string::npos);
+
     npucompute::PipeTraceWriter emptyWriter;
     CHECK(emptyWriter.Begin(directory / "empty.json", &error) == ACLPTI_SUCCESS);
     CHECK(emptyWriter.Commit() == ACLPTI_SUCCESS);
@@ -199,6 +342,12 @@ int main()
         return result;
     }
     if (const int result = TestDecodeFailures(); result != 0) {
+        return result;
+    }
+    if (const int result = TestDfxEventsAndChip6Fixp(); result != 0) {
+        return result;
+    }
+    if (const int result = TestIncompleteEndMarkSequenceKeepsDfxEvents(); result != 0) {
         return result;
     }
     if (const int result = TestOnlyRequiresUsedCoreClock(); result != 0) {

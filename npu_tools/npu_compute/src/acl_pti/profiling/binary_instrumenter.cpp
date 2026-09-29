@@ -319,6 +319,17 @@ void AppendTlv(std::string& output, std::uint16_t tag, const std::string& value)
 
 std::string NormalizeMetadata(const Metadata& original, const Metadata& patched, std::uint32_t traceArgumentOffset)
 {
+    if (!original.hasParameterLayout) {
+        // Legacy HostArgs kernels have no ArgsArray ABI. Preserve non-parameter TLVs only.
+        std::string output;
+        for (const auto& item : patched.values) {
+            if (item.tag != kParamSummary && item.tag != kParamInfo) {
+                AppendTlv(output, item.tag, item.value);
+            }
+        }
+        return output;
+    }
+    Require(patched.hasParameterLayout, "instrumented parameter summary is missing");
     Require(original.parameters.size() < std::numeric_limits<std::uint32_t>::max(), "too many kernel parameters");
     for (const auto& item : original.values) {
         if (item.tag == kParamSummary) {
@@ -582,12 +593,6 @@ bool PatchKernelParamMetadata(
             const ElfSection& destinationSection = destinations.sections[destination->second];
             const auto& sourceMetadata = entry.second;
             const auto destinationMetadata = ReadMetadata(patched, destinationSection);
-            Require(
-                sourceMetadata.hasParameterLayout == destinationMetadata.hasParameterLayout,
-                "instrumented kernel metadata kind changed");
-            if (!sourceMetadata.hasParameterLayout) {
-                continue;
-            }
             const auto metadata = NormalizeMetadata(sourceMetadata, destinationMetadata, traceArgumentOffset);
             if (metadata == patched.substr(
                                 static_cast<std::size_t>(destinationSection.offset),
@@ -618,9 +623,13 @@ bool PatchKernelParamMetadata(
 
 } // namespace
 
-bool InstrumentKernelEnd(const void* data, std::size_t size, std::vector<char>& output)
+bool InstrumentKernelEnd(
+    const void* data, std::size_t size, std::vector<char>& output, std::uint32_t* outputTraceArgumentOffset)
 {
     output.clear();
+    if (outputTraceArgumentOffset != nullptr) {
+        *outputTraceArgumentOffset = 0;
+    }
     KernelEndTools tools;
     if (!ResolveTools(tools)) {
         return false;
@@ -675,6 +684,9 @@ bool InstrumentKernelEnd(const void* data, std::size_t size, std::vector<char>& 
         return false;
     }
     output.assign(patchedImage.begin(), patchedImage.end());
+    if (outputTraceArgumentOffset != nullptr) {
+        *outputTraceArgumentOffset = traceArgumentOffset;
+    }
     return true;
 }
 } // namespace aclpti::profiling

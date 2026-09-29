@@ -132,6 +132,9 @@ aclptiResult ReplayRuntime::ReplayKernel(
         rangeProfiler_.ReplayKernel(replayMemory_, binaryRegistry_, originalFunction, launchFunction, stream);
     // One original launch owns all rounds above and exactly one complete result publication.
     const aclptiResult shutdownStatus = StopProfiling();
+    npucompute::detail::DebugLog(
+        "aclpti", "replay runtime result original=%p replay_status=%d shutdown_status=%d", originalFunction,
+        static_cast<int>(status), static_cast<int>(shutdownStatus));
     if (status == ACLPTI_SUCCESS) {
         return shutdownStatus;
     }

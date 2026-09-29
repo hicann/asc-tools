@@ -180,17 +180,52 @@ int RealMemset(void* destination, std::size_t destination_size, int value, std::
     return 0;
 }
 
+std::size_t g_parameter_query_calls = 0;
+std::size_t g_instrumented_launch_calls = 0;
+
+aclError MissingParameterCount(const void*, std::size_t*)
+{
+    ++g_parameter_query_calls;
+    return 107000; // Runtime rejects legacy kernels without parameter layout metadata.
+}
+
+aclError MissingParameterInfo(const void*, std::size_t, std::size_t*, std::size_t*)
+{
+    ++g_parameter_query_calls;
+    return 107000;
+}
+
 int RealLaunch(void* function, uint32_t, const void* args_data, std::size_t args_size, void*)
 {
     ++g_launch_calls;
     g_launch_handles.push_back(function);
-    if (args_data == nullptr || args_size < sizeof(KernelArgs) ||
-        (args_size == sizeof(KernelArgs) && args_data != g_expected_args_data)) {
+    if (args_data == nullptr) {
         return -1;
     }
-    const auto* args = static_cast<const KernelArgs*>(args_data);
-    g_kernel_inputs.push_back(*args->value);
-    ++*args->value;
+    const bool instrumented = function == &g_function_tokens[1] || function == &g_function_tokens[3];
+    if (instrumented) {
+        // The instrumentation stub places the hidden pointer at byte 56, independent of argsSize.
+        if (args_size != 56 + sizeof(void*) || args_data == g_expected_args_data ||
+            std::memcmp(args_data, g_expected_args_data, sizeof(KernelArgs)) != 0) {
+            return -1;
+        }
+        const auto* bytes = static_cast<const unsigned char*>(args_data);
+        if (!std::all_of(bytes + sizeof(KernelArgs), bytes + 56, [](unsigned char byte) { return byte == 0; })) {
+            return -1;
+        }
+        void* hidden = reinterpret_cast<void*>(1);
+        std::memcpy(&hidden, bytes + 56, sizeof(hidden));
+        if (hidden != nullptr) {
+            return -1;
+        }
+        ++g_instrumented_launch_calls;
+    } else if (args_data != g_expected_args_data || args_size != sizeof(KernelArgs)) {
+        return -1;
+    }
+    KernelArgs args{};
+    std::memcpy(&args, args_data, sizeof(args));
+    g_kernel_inputs.push_back(*args.value);
+    ++*args.value;
     return 0;
 }
 
@@ -366,6 +401,8 @@ int main(int argc, char** argv)
     CHECK(RuntimeStubSetOriginFunction("aclrtBinaryGetFunctionByEntry", &RealBinaryEntry) == 0);
     CHECK(RuntimeStubSetOriginFunction("aclrtBinaryUnLoad", &RealBinaryUnload) == 0);
     CHECK(RuntimeStubSetOriginFunction("aclrtLaunchKernelWithHostArgs", &RealLaunchWithHostArgs) == 0);
+    CHECK(RuntimeStubSetOriginFunction("aclrtFunctionGetParamCount", &MissingParameterCount) == 0);
+    CHECK(RuntimeStubSetOriginFunction("aclrtFunctionGetParamInfo", &MissingParameterInfo) == 0);
     CHECK(RuntimeStubSetOriginFunction("aclrtSetDevice", &RealSetDevice) == 0);
     CHECK(RuntimeStubSetOriginFunction("aclrtResetDevice", &RealResetDevice) == 0);
     CHECK(RuntimeStubSetOriginFunction("aclrtSynchronizeStream", &RealSynchronize) == 0);
@@ -460,6 +497,8 @@ int main(int argc, char** argv)
         },
         &profilingLog));
     CHECK(firstLaunchStatus == ACL_SUCCESS);
+    CHECK(g_parameter_query_calls == 0);
+    CHECK(g_instrumented_launch_calls == 1);
     CHECK(g_start_calls == 5);
     CHECK(g_stop_calls == 5);
     CHECK(g_start_data_type == 8);

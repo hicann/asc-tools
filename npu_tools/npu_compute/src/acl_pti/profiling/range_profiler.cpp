@@ -446,6 +446,10 @@ aclptiResult RangeProfiler::ReplayKernel(
             const bool pipeline = rounds[round].kind == data::ReplayKind::Pipeline;
             const auto function =
                 pipeline ? binaryRegistry.FindInstrumentedFunction(originalFunction) : originalFunction;
+            npucompute::detail::DebugLog(
+                "aclpti", "replay function round=%zu kind=%s replay_id=%llu original=%p selected=%p device=%d", round,
+                pipeline ? "pipeline" : "pmu", static_cast<unsigned long long>(config.prepareInfo.replayId),
+                originalFunction, function, deviceId);
             aclError launchStatus;
             if (pipeline && function == nullptr) {
                 // The original launch validated originalFunction, but does not guarantee an

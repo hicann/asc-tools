@@ -743,6 +743,29 @@ int TestReplayDeviceIsInferredFromRawData()
     return 0;
 }
 
+int TestPipelineReplayWithoutRawDataKeepsUnknownDevice()
+{
+    ResultSink sink;
+    auto& module = data::ProfilingDataManager::Instance();
+    aclptiProfilingDataCallback moduleCallback = [&sink](const auto& result) { return sink.Accept(result); };
+    CHECK(module.Initialize(std::move(moduleCallback)) == ACLPTI_SUCCESS);
+    CHECK(module.PrepareReplay({16, PmuEvents({}), data::ReplayKind::Pipeline}) == ACLPTI_SUCCESS);
+    CHECK(module.RecordReplayStatus({16, ACLPTI_ERROR_RESULT_UNRELIABLE}).status == ACLPTI_ERROR_RESULT_UNRELIABLE);
+    CHECK(module.ReleaseReplay(16) == ACLPTI_SUCCESS);
+    CHECK(module.Shutdown() == ACLPTI_SUCCESS);
+
+    const auto result = sink.Wait();
+    CHECK(result != nullptr);
+    CHECK(result->pipelineData.size() == 1);
+    const auto& replay = result->pipelineData.at(16);
+    CHECK(replay.deviceId == -1);
+    CHECK(replay.status == ACLPTI_ERROR_RESULT_UNRELIABLE);
+    CHECK(replay.stats.receivedBytes == 0);
+    CHECK(replay.stats.acceptedBytes == 0);
+    CHECK(replay.channels.empty());
+    return 0;
+}
+
 int TestDecoderAllocationFailure()
 {
     ResultSink sink;
@@ -1264,6 +1287,9 @@ int main()
         return 1;
     }
     if (TestReplayDeviceIsInferredFromRawData() != 0) {
+        return 1;
+    }
+    if (TestPipelineReplayWithoutRawDataKeepsUnknownDevice() != 0) {
         return 1;
     }
     if (TestDecoderAllocationFailure() != 0) {

@@ -31,6 +31,10 @@ public:
     aclptiResult SetConfig(const aclptiRangeProfilerSetConfigParams* params);
 
     bool CollectPipeline() const { return rangeProfiler_.CollectPipeline(); }
+    bool GetInstrumentedTraceArgumentOffset(aclrtFuncHandle function, std::uint32_t& offset)
+    {
+        return binaryRegistry_.GetInstrumentedTraceArgumentOffset(function, offset);
+    }
 
     aclptiResult RegisterBinary(
         const void* data, std::size_t size, const aclrtBinaryLoadOptions* options, aclrtBinHandle binary);

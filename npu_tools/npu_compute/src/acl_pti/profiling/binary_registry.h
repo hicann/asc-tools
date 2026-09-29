@@ -38,6 +38,8 @@ public:
     aclptiResult CompleteBinaryUnload(UnloadContext& context);
     // Null means the function was not loaded with pipeline instrumentation enabled.
     aclrtFuncHandle FindInstrumentedFunction(aclrtFuncHandle original);
+    // Lookup by companion function; valid only while its instrumented binary is registered.
+    bool GetInstrumentedTraceArgumentOffset(aclrtFuncHandle function, std::uint32_t& offset);
 
 private:
     struct Binary {
@@ -45,6 +47,7 @@ private:
         std::unordered_map<aclrtFuncHandle, aclrtFuncHandle> functions;
         // Runtime may retain the image pointer; keep it alive through companion unload.
         std::vector<char> instrumentedImage;
+        std::uint32_t traceArgumentOffset = 0;
     };
     template <typename Function, typename Key>
     aclptiResult ResolveBinaryFunction(aclrtApiId id, aclrtBinHandle binary, Key key, aclrtFuncHandle function);

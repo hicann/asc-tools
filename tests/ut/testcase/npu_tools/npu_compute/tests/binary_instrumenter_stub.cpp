@@ -12,8 +12,12 @@
 namespace aclpti::profiling {
 // Stub only the binary instrumentation boundary; binary ownership, lookup and replay
 // execute the production implementation against the Runtime stub.
-bool InstrumentKernelEnd(const void* data, std::size_t size, std::vector<char>& output)
+bool InstrumentKernelEnd(
+    const void* data, std::size_t size, std::vector<char>& output, std::uint32_t* traceArgumentOffset)
 {
+    if (traceArgumentOffset != nullptr) {
+        *traceArgumentOffset = 56;
+    }
     output.assign(static_cast<const char*>(data), static_cast<const char*>(data) + size);
     return true;
 }

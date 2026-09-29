@@ -140,6 +140,21 @@ aclptiResult DataProcessor::FinishActive(aclptiResult status)
         }
     }
     Wait();
+    if (active_->info.kind == ReplayKind::Pipeline) {
+        npucompute::detail::DebugLog(
+            "aclpti-data",
+            "pipeline replay finalized: replay=%llu kind=%d device=%d status=%d received_bytes=%llu "
+            "accepted_bytes=%llu "
+            "rejected_chunks=%llu failed_records=%llu copied_records=%llu copied_bytes=%llu queued_items=%llu",
+            static_cast<unsigned long long>(active_->info.replayId), static_cast<int>(active_->info.kind),
+            active_->deviceId, static_cast<int>(status), static_cast<unsigned long long>(active_->stats.receivedBytes),
+            static_cast<unsigned long long>(active_->stats.acceptedBytes),
+            static_cast<unsigned long long>(active_->stats.rejectedChunkCount),
+            static_cast<unsigned long long>(active_->stats.failedRecordCount),
+            static_cast<unsigned long long>(active_->callbackStats.copiedRecordCount),
+            static_cast<unsigned long long>(active_->callbackStats.copiedBytes),
+            static_cast<unsigned long long>(submitted_));
+    }
     return FinishReplayResult(active_->info.replayId, active_->deviceId, active_->stats, status);
 }
 

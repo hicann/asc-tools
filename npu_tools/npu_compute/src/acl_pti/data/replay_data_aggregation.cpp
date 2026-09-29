@@ -8,6 +8,7 @@
  * See LICENSE in the root of the software repository for the full text of the License.
  */
 #include "data_processor.h"
+#include "common/debug_log.h"
 #include <algorithm>
 #include <iterator>
 
@@ -194,6 +195,17 @@ aclptiResult DataProcessor::FinishReplayResult(
         replay.taskPmuLogs.clear();
     }
     replay.status = status;
+    if (replay.kind == ReplayKind::Pipeline) {
+        npucompute::detail::DebugLog(
+            "aclpti-data",
+            "pipeline replay result staged: replay=%llu device=%d status=%d received_bytes=%llu accepted_bytes=%llu "
+            "rejected_chunks=%llu failed_records=%llu channels=%zu",
+            static_cast<unsigned long long>(replayId), replay.deviceId, static_cast<int>(replay.status),
+            static_cast<unsigned long long>(replay.stats.receivedBytes),
+            static_cast<unsigned long long>(replay.stats.acceptedBytes),
+            static_cast<unsigned long long>(replay.stats.rejectedChunkCount),
+            static_cast<unsigned long long>(replay.stats.failedRecordCount), replay.pipelineData.size());
+    }
     if (result_.status == ACLPTI_SUCCESS || status == ACLPTI_ERROR_RESULT_UNRELIABLE) {
         result_.status = status;
     }

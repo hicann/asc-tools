@@ -532,6 +532,15 @@ aclptiResult NpuComputeRuntime::ProcessPmuData(std::shared_ptr<const aclptiProfi
         bool pipelineReplaySeen = false;
         for (const auto& [replayId, replay] : result->pipelineData) {
             pipelineReplaySeen = true;
+            npucompute::detail::DebugLog(
+                "npu-compute",
+                "BIU replay input: replay=%llu device=%d status=%d receivedBytes=%llu acceptedBytes=%llu "
+                "rejectedChunks=%llu failedRecords=%llu channels=%zu",
+                static_cast<unsigned long long>(replayId), replay.deviceId, static_cast<int>(replay.status),
+                static_cast<unsigned long long>(replay.stats.receivedBytes),
+                static_cast<unsigned long long>(replay.stats.acceptedBytes),
+                static_cast<unsigned long long>(replay.stats.rejectedChunkCount),
+                static_cast<unsigned long long>(replay.stats.failedRecordCount), replay.channels.size());
             const std::string fragmentName = "result-" + std::to_string(pipeline_result_sequence_) + "-device-" +
                                              std::to_string(replay.deviceId) + "-replay-" + std::to_string(replayId) +
                                              ".json";
@@ -539,29 +548,38 @@ aclptiResult NpuComputeRuntime::ProcessPmuData(std::shared_ptr<const aclptiProfi
             std::string writerError;
             aclptiResult parseStatus = writer.Begin(pipeline_process_directory_ / fragmentName, &writerError);
             BiuParseStats stats;
-            if (parseStatus == ACLPTI_SUCCESS &&
-                !deviceApi.GetSyscntFrequencyHz(replay.deviceId, &biu_clock_config_.syscntFrequencyHz)) {
-                std::fprintf(
-                    stderr,
-                    "[libnpu-compute] failed to query positive device oscillator frequency "
-                    "(halGetDeviceInfo INFO_TYPE_DEV_OSC_FREQUE) for device %d\n",
-                    replay.deviceId);
-                parseStatus = ACLPTI_ERROR_INVALID_PARAMETER;
+            if (parseStatus == ACLPTI_SUCCESS) {
+                const bool frequencyAvailable =
+                    deviceApi.GetSyscntFrequencyHz(replay.deviceId, &biu_clock_config_.syscntFrequencyHz);
+                npucompute::detail::DebugLog(
+                    "npu-compute", "BIU oscillator frequency query: replay=%llu device=%d success=%d frequencyHz=%.3f",
+                    static_cast<unsigned long long>(replayId), replay.deviceId, frequencyAvailable ? 1 : 0,
+                    biu_clock_config_.syscntFrequencyHz);
+                if (!frequencyAvailable) {
+                    std::fprintf(
+                        stderr,
+                        "[libnpu-compute] failed to query positive device oscillator frequency "
+                        "(halGetDeviceInfo INFO_TYPE_DEV_OSC_FREQUE) for device %d\n",
+                        replay.deviceId);
+                    parseStatus = ACLPTI_ERROR_INVALID_PARAMETER;
+                }
             }
             biu_clock_config_.source = "halGetDeviceInfo device oscillator and device AI-core frequencies";
             if (parseStatus == ACLPTI_SUCCESS) {
                 parseStatus = ParsePipelineReplay(
                     replayId, replay, biu_clock_config_,
-                    [&writer](const BiuInterval& interval) { return writer.Append(interval); }, &stats);
+                    [&writer](const BiuTraceEvent& event) { return writer.Append(event); }, &stats);
             }
             if (stats.incompleteIntervalCount != 0) {
                 std::fprintf(
                     stderr,
                     "[libnpu-compute] WARNING: BIU device=%d replay=%llu: skipped %llu incomplete intervals "
-                    "(missing start or end); retained %llu complete intervals. Pipeline trace may be partial.\n",
+                    "(missing start or end); retained %llu pipe intervals and %llu DFX trace events. "
+                    "Pipeline trace may be partial.\n",
                     replay.deviceId, static_cast<unsigned long long>(replayId),
                     static_cast<unsigned long long>(stats.incompleteIntervalCount),
-                    static_cast<unsigned long long>(stats.intervalCount));
+                    static_cast<unsigned long long>(stats.intervalCount),
+                    static_cast<unsigned long long>(stats.dfxEventCount));
             }
             if (parseStatus == ACLPTI_SUCCESS) {
                 parseStatus = writer.Commit();

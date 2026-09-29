@@ -39,26 +39,30 @@ struct BiuClockConfig {
 
 enum class BiuPipe : uint8_t { Scalar, Vector, Cube, Mte1, Mte2, Mte3, Fixp };
 
-struct BiuInterval {
+struct BiuTraceEvent {
     BiuChannelKey channel;
     BiuPipe pipe = BiuPipe::Scalar;
     uint16_t blockId = 0;
+    std::string name;
+    std::string color;
     double startUs = 0.0;
     double durationUs = 0.0;
+    bool isDfx = false;
 };
 
-using BiuIntervalSink = std::function<aclptiResult(const BiuInterval&)>;
+using BiuTraceEventSink = std::function<aclptiResult(const BiuTraceEvent&)>;
 
 struct BiuParseStats {
     uint64_t payloadBytes = 0;
     uint64_t paddingBytes = 0;
     uint64_t intervalCount = 0;
+    uint64_t dfxEventCount = 0;
     uint64_t invalidRecordCount = 0;
     uint64_t incompleteIntervalCount = 0;
 };
 
 aclptiResult ParsePipelineReplay(
-    uint64_t replayId, const aclptiPipelineData& replay, const BiuClockConfig& clocks, const BiuIntervalSink& sink,
+    uint64_t replayId, const aclptiPipelineData& replay, const BiuClockConfig& clocks, const BiuTraceEventSink& sink,
     BiuParseStats* stats);
 
 class PipeTraceWriter {
@@ -70,7 +74,7 @@ public:
     PipeTraceWriter& operator=(const PipeTraceWriter&) = delete;
 
     aclptiResult Begin(const boost::filesystem::path& outputPath, std::string* error = nullptr);
-    aclptiResult Append(const BiuInterval& interval);
+    aclptiResult Append(const BiuTraceEvent& event);
     aclptiResult Commit();
     void Abort() noexcept;
     uint64_t EventCount() const;
