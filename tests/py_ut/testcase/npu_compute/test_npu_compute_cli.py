@@ -210,11 +210,13 @@ def test_default_basic_is_sent_to_application(tmp_path):
     }
 
 
-def test_list_sections_outputs_only_ids_in_fixed_order():
+def test_list_sections_outputs_only_ids_in_alphabetical_order():
     result = run_cli("--list-sections")
 
     assert result.returncode == 0
-    assert result.stdout.splitlines() == SECTIONS[:5] + ["Pipeline"] + SECTIONS[5:]
+    assert result.stdout.splitlines() == sorted(
+        [*SECTIONS, "Pipeline"], key=str.casefold
+    )
     assert result.stderr == ""
 
 

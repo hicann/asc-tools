@@ -38,7 +38,13 @@ def test_list_sets_and_errors_do_not_launch(tmp_path):
         ("basic", basic),
         ("full", [*basic, "ResourceConflictRatio"]),
     ):
-        expected += name + ":\n" + "".join("  " + member + "\n" for member in members)
+        expected += (
+            name
+            + ":\n"
+            + "".join(
+                "  " + member + "\n" for member in sorted(members, key=str.casefold)
+            )
+        )
     result = subprocess.run(
         [str(CLI), "--list-sets"],
         cwd=tmp_path,

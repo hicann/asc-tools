@@ -12,8 +12,10 @@
 
 #include <algorithm>
 #include <array>
+#include <cctype>
 #include <cstdio>
 #include <string>
+#include <string_view>
 #include <utility>
 
 namespace npucompute::cli {
@@ -27,6 +29,13 @@ constexpr std::array<const char*, 8> kSupportedSections = {
 void AddError(const std::string& message, std::vector<std::string>* errors) { errors->push_back(message); }
 
 constexpr std::array<const char*, 2> kSupportedSets = {"basic", "full"};
+
+bool AlphabeticalSectionLess(std::string_view lhs, std::string_view rhs)
+{
+    return std::lexicographical_compare(
+        lhs.begin(), lhs.end(), rhs.begin(), rhs.end(),
+        [](unsigned char left, unsigned char right) { return std::tolower(left) < std::tolower(right); });
+}
 
 std::vector<std::string> SetSections(const std::string& name)
 {
@@ -340,7 +349,9 @@ void PrintSections(FILE* stream)
     if (stream == nullptr) {
         return;
     }
-    for (const char* section : kSupportedSections) {
+    auto sections = kSupportedSections;
+    std::sort(sections.begin(), sections.end(), AlphabeticalSectionLess);
+    for (const char* section : sections) {
         std::fprintf(stream, "%s\n", section);
     }
 }
@@ -352,7 +363,9 @@ void PrintSets(FILE* stream)
     }
     for (const char* name : kSupportedSets) {
         std::fprintf(stream, "%s:\n", name);
-        for (const auto& section : SetSections(name)) {
+        auto sections = SetSections(name);
+        std::sort(sections.begin(), sections.end(), AlphabeticalSectionLess);
+        for (const auto& section : sections) {
             std::fprintf(stream, "  %s\n", section.c_str());
         }
     }

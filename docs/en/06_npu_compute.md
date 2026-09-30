@@ -8,14 +8,14 @@ The following sections are currently supported:
 
 | Section | Description |
 | :--- | :--- |
-| `PipeUtilization` | Compute and pipeline utilization data |
+| `ArithmeticUtilization` | Cube FP/INT instruction counts and Cube/Vector active cycle ratios |
+| `L2Cache` | L2 Cache access data |
 | `Memory` | Main memory and on-chip memory access data |
 | `MemoryL0` | L0 memory access data |
 | `MemoryUB` | Unified Buffer access data |
-| `L2Cache` | L2 Cache access data |
-| `ArithmeticUtilization` | Cube FP/INT instruction counts and Cube/Vector active cycle ratios |
-| `ResourceConflictRatio` | Pipeline wait ratios and Vector resource conflict ratios |
 | `Pipeline` | Pipeline Timeline data |
+| `PipeUtilization` | Compute and pipeline utilization data |
+| `ResourceConflictRatio` | Pipeline wait ratios and Vector resource conflict ratios |
 
 Section names are case-sensitive.
 
@@ -79,9 +79,9 @@ Repeated identical `--section` options are collected once. `--replay-mode`, `--i
 
 A collection command requires a target program. If neither `--section` nor `--set` is specified, the basic set is collected.
 
-`basic` contains Pipeline, PipeUtilization, Memory, MemoryL0, MemoryUB, L2Cache, and ArithmeticUtilization. `full` additionally contains ResourceConflictRatio.
+`basic` contains ArithmeticUtilization, L2Cache, Memory, MemoryL0, MemoryUB, Pipeline, and PipeUtilization. `full` additionally contains ResourceConflictRatio.
 
-`--set` can be combined with `--section`. The tool expands them in argument order and removes duplicates after the first occurrence. For example, `--section Memory --set basic` collects Memory first, followed by the remaining sections in basic order. `--set` cannot be combined with `--import`; `--list-sets` must be used alone and cannot be specified more than once.
+`--set` can be combined with `--section`. The tool expands them in argument order and removes duplicates after the first occurrence. For example, `--section Memory --set basic` collects Memory first, followed by the remaining sections in basic. `--set` cannot be combined with `--import`; `--list-sets` must be used alone and cannot be specified more than once.
 
 ```bash
 npu-compute --list-sets
@@ -90,8 +90,8 @@ npu-compute --set basic --section ResourceConflictRatio ./application
 
 ```bash
 npu-compute \
-  --section PipeUtilization \
   --section Memory \
+  --section PipeUtilization \
   ./application
 ```
 
@@ -132,14 +132,14 @@ Multiple sections can be specified in one command. The following example lists a
 
 ```bash
 npu-compute \
-  --section PipeUtilization \
+  --section ArithmeticUtilization \
+  --section L2Cache \
   --section Memory \
   --section MemoryL0 \
   --section MemoryUB \
-  --section L2Cache \
-  --section ArithmeticUtilization \
-  --section ResourceConflictRatio \
   --section Pipeline \
+  --section PipeUtilization \
+  --section ResourceConflictRatio \
   ./application
 ```
 

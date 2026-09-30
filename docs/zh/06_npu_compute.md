@@ -8,14 +8,14 @@
 
 | Section | 说明 |
 | :--- | :--- |
-| `PipeUtilization` | 计算与流水线利用率数据 |
+| `ArithmeticUtilization` | Cube FP/INT 指令数与 Cube、Vector 活跃周期占比 |
+| `L2Cache` | L2 Cache 访问数据 |
 | `Memory` | 主存和片上存储访问数据 |
 | `MemoryL0` | L0 存储访问数据 |
 | `MemoryUB` | Unified Buffer 访问数据 |
-| `L2Cache` | L2 Cache 访问数据 |
-| `ArithmeticUtilization` | Cube FP/INT 指令数与 Cube、Vector 活跃周期占比 |
-| `ResourceConflictRatio` | 流水等待率与 Vector 资源冲突率 |
 | `Pipeline` | 流水 Timeline 数据 |
+| `PipeUtilization` | 计算与流水线利用率数据 |
+| `ResourceConflictRatio` | 流水等待率与 Vector 资源冲突率 |
 
 Section 名称区分大小写。
 
@@ -79,9 +79,9 @@ npu-compute --section PipeUtilization bash ./run.sh
 
 采集命令指定目标程序即可；未指定 `--section` 和 `--set` 时默认采集 basic。
 
-`basic` 包含 Pipeline、PipeUtilization、Memory、MemoryL0、MemoryUB、L2Cache 和 ArithmeticUtilization；`full` 在此基础上增加 ResourceConflictRatio。
+`basic` 包含 ArithmeticUtilization、L2Cache、Memory、MemoryL0、MemoryUB、Pipeline 和 PipeUtilization；`full` 在此基础上增加 ResourceConflictRatio。
 
-`--set` 可以与 `--section` 组合。工具按照参数出现顺序展开两者，并按首次出现顺序去重。例如 `--section Memory --set basic` 会优先采集 Memory，再按 basic 顺序补充其余 Section。`--set` 不能与 `--import` 组合；`--list-sets` 必须单独使用，且不能重复指定。
+`--set` 可以与 `--section` 组合。工具按照参数出现顺序展开两者，并按首次出现顺序去重。例如 `--section Memory --set basic` 会优先采集 Memory，再补充 basic 中尚未选择的 Section。`--set` 不能与 `--import` 组合；`--list-sets` 必须单独使用，且不能重复指定。
 
 ```bash
 npu-compute --list-sets
@@ -90,8 +90,8 @@ npu-compute --set basic --section ResourceConflictRatio ./application
 
 ```bash
 npu-compute \
-  --section PipeUtilization \
   --section Memory \
+  --section PipeUtilization \
   ./application
 ```
 
@@ -132,14 +132,14 @@ npu-compute --section Memory --export ./reports ./application
 
 ```bash
 npu-compute \
-  --section PipeUtilization \
+  --section ArithmeticUtilization \
+  --section L2Cache \
   --section Memory \
   --section MemoryL0 \
   --section MemoryUB \
-  --section L2Cache \
-  --section ArithmeticUtilization \
-  --section ResourceConflictRatio \
   --section Pipeline \
+  --section PipeUtilization \
+  --section ResourceConflictRatio \
   ./application
 ```
 
