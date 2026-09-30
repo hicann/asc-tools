@@ -71,14 +71,18 @@ bool HasMagic(const uint8_t* data) { return std::equal(kNpuRepMagic.begin(), kNp
 
 bool ValidateRepBytes(const std::vector<uint8_t>& encoded, std::string* error)
 {
-    if (encoded.size() < kNpuRepHeadSize || !HasMagic(encoded.data())) {
+    if (encoded.size() < kNpuRepMagic.size() || !HasMagic(encoded.data())) {
         return Fail("invalid rep header", error);
+    }
+    if (encoded.size() < kNpuRepHeaderFieldsEnd) {
+        return Fail("truncated rep header fields", error);
     }
     const uint16_t head_length = ReadLe16(encoded.data() + 14U);
     const uint32_t file_count = ReadLe32(encoded.data() + 16U);
     const uint32_t file_info_length = ReadLe32(encoded.data() + 20U);
     const uint64_t rep_length = ReadLe64(encoded.data() + 28U);
-    if (head_length != kNpuRepHeadSize || file_info_length != kNpuRepFileInfoSize || rep_length != encoded.size()) {
+    if (head_length < kNpuRepHeaderFieldsEnd || head_length > encoded.size() ||
+        file_info_length != kNpuRepFileInfoSize || rep_length != encoded.size()) {
         return Fail("invalid rep header lengths", error);
     }
 

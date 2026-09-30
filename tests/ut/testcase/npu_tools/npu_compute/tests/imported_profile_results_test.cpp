@@ -323,8 +323,10 @@ int TestRejectsInvalidInputAndChildRep()
     const boost::filesystem::path input = temporary.Path() / "broken.npu-rep";
     CHECK(WriteFile(input, parent));
     CHECK(!ReadImportedProfileResults(input, &results, &error));
-    CHECK(error.find("broken.npu.rep") != std::string::npos);
-    CHECK(error.find("Please provide a valid npu-compute report file.") != std::string::npos);
+    CHECK(error.find(input.string()) != std::string::npos);
+    CHECK(error.find("broken.npu.rep") == std::string::npos);
+    CHECK(error.find("is corrupted") != std::string::npos);
+    CHECK(error.find("invalid npu-compute report ") != std::string::npos);
     CHECK(results.empty());
     return 0;
 }
@@ -333,21 +335,21 @@ int TestInputDiagnosticsAndCompatibleNames()
 {
     TempDirectory temporary;
     CHECK(!temporary.Path().empty());
-    const std::string hint = "Please provide a valid npu-compute report file.";
+    const std::string hint = "--import expects a report file, but ";
     std::vector<ImportedProfileEntry> results;
     std::string error;
     const auto missing = temporary.Path() / "app";
     CHECK(!ReadImportedProfileResults(missing, &results, &error));
-    CHECK(error == "Invalid input '" + missing.string() + "': file does not exist. " + hint);
+    CHECK(error == hint + "'" + missing.string() + "' does not exist.");
     CHECK(!ReadImportedProfileResults(temporary.Path(), &results, &error));
-    CHECK(error.find("directory") != std::string::npos && error.find(hint) != std::string::npos);
+    CHECK(error == hint + "'" + temporary.Path().string() + "' is a directory.");
     const auto input = temporary.Path() / "invalid.npu-rep";
     CHECK(WriteFile(input, {}));
     CHECK(!ReadImportedProfileResults(input, &results, &error));
-    CHECK(error.find("shorter than its header") != std::string::npos && error.find(hint) != std::string::npos);
+    CHECK(error == "invalid npu-compute report '" + input.string() + "': invalid file format: the file is empty.");
     CHECK(WriteFile(input, std::vector<uint8_t>(128, 0)));
     CHECK(!ReadImportedProfileResults(input, &results, &error));
-    CHECK(error.find("invalid rep header magic") != std::string::npos && error.find(hint) != std::string::npos);
+    CHECK(error == "invalid npu-compute report '" + input.string() + "': invalid file format.");
     CHECK(results.empty());
     boost::filesystem::create_symlink(input, temporary.Path() / "link.npu-rep");
     CHECK(!ReadImportedProfileResults(temporary.Path() / "link.npu-rep", &results, &error));
@@ -376,11 +378,11 @@ int TestInputDiagnosticsAndCompatibleNames()
             ::_exit(2);
         }
         const bool rejected = !ReadImportedProfileResults(input, &results, &error);
-        if (!rejected || error.find("cannot open file") == std::string::npos) {
+        if (!rejected || error.find("cannot be opened") == std::string::npos) {
             std::fprintf(stderr, "unreadable input result: %s\n", error.c_str());
         }
         ::_exit(
-            rejected && error.find("cannot open file") != std::string::npos && error.find(hint) != std::string::npos ?
+            rejected && error.find("cannot be opened") != std::string::npos && error.find(hint) != std::string::npos ?
                 0 :
                 1);
     }
@@ -390,7 +392,7 @@ int TestInputDiagnosticsAndCompatibleNames()
     CHECK(::chmod(input.c_str(), 0600) == 0);
     // Linux exposes this as a regular file, but reading unmapped address zero fails.
     CHECK(!ReadImportedProfileResults("/proc/self/mem", &results, &error));
-    CHECK(error.find("cannot read file") != std::string::npos);
+    CHECK(error.find("cannot be read") != std::string::npos);
     CHECK(error.find(hint) != std::string::npos);
     CHECK(results.empty());
     return 0;

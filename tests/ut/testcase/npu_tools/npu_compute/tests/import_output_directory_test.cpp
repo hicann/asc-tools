@@ -234,9 +234,7 @@ int TestInvalidTargets()
     std::string error;
 
     CHECK(!npucompute::cli::ImportOutputDirectory::Create("/input/report.unknown", std::nullopt, &directory, &error));
-    CHECK(
-        error == "Invalid input '/input/report.unknown': unsupported report file name. "
-                 "Please provide a valid npu-compute report file.");
+    CHECK(error == "--import expects a report file, but '/input/report.unknown' has an unsupported report file name.");
     CHECK(boost::filesystem::is_empty(temporary.Path()));
     CHECK(!npucompute::cli::ImportOutputDirectory::Create(
         "/input/report.npu-rep", std::optional<std::string>("missing-output-root"), &directory, &error));

@@ -295,7 +295,7 @@ bool UnpackImportedEntries(
 
 bool InvalidInput(const std::string& file, const std::string& reason, std::string* error)
 {
-    return Fail("Invalid input '" + file + "': " + reason + ". Please provide a valid npu-compute report file.", error);
+    return Fail("--import expects a report file, but '" + file + "' " + reason + ".", error);
 }
 
 bool ReadInputFile(const boost::filesystem::path& path, std::vector<uint8_t>* content, std::string* error)
@@ -304,16 +304,16 @@ bool ReadInputFile(const boost::filesystem::path& path, std::vector<uint8_t>* co
     const boost::filesystem::file_status status = boost::filesystem::symlink_status(path, status_error);
     if (status_error == boost::system::errc::no_such_file_or_directory ||
         (!status_error && !boost::filesystem::exists(status))) {
-        return InvalidInput(path.string(), "file does not exist", error);
+        return InvalidInput(path.string(), "does not exist", error);
     }
     if (status_error) {
-        return InvalidInput(path.string(), "cannot inspect file: " + status_error.message(), error);
+        return InvalidInput(path.string(), "cannot be inspected: " + status_error.message(), error);
     }
     if (boost::filesystem::is_directory(status)) {
-        return InvalidInput(path.string(), "expected a regular file, but input is a directory", error);
+        return InvalidInput(path.string(), "is a directory", error);
     }
     if (!boost::filesystem::is_regular_file(status)) {
-        return InvalidInput(path.string(), "expected a regular file; symbolic links are not supported", error);
+        return InvalidInput(path.string(), "is not a supported file; symbolic links are not supported", error);
     }
 
     errno = 0;
@@ -321,34 +321,51 @@ bool ReadInputFile(const boost::filesystem::path& path, std::vector<uint8_t>* co
     if (!input.is_open()) {
         const int code = errno;
         const std::string reason = code == 0 ?
-                                       "cannot open file" :
-                                       "cannot open file: " + std::error_code(code, std::generic_category()).message();
+                                       "cannot be opened" :
+                                       "cannot be opened: " + std::error_code(code, std::generic_category()).message();
         return InvalidInput(path.string(), reason, error);
     }
     try {
         content->assign(std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>());
     } catch (const std::ios_base::failure& failure) {
         content->clear();
-        return InvalidInput(path.string(), "cannot read file: " + std::string(failure.what()), error);
+        return InvalidInput(path.string(), "cannot be read: " + std::string(failure.what()), error);
     }
     if (input.bad()) {
         content->clear();
-        return InvalidInput(path.string(), "cannot read file", error);
+        return InvalidInput(path.string(), "cannot be read", error);
     }
     return true;
 }
 
+bool InvalidReport(const std::string& file, const std::string& reason, std::string* error)
+{
+    return Fail("invalid npu-compute report '" + file + "': " + reason + ".", error);
+}
+
 bool DecodeImportedEntries(
     const std::vector<uint8_t>& encoded, const std::string& logical_path, std::vector<ImportedProfileEntry>* results,
-    std::string* error)
+    std::string* error, bool nested = false)
 {
     DecodedRep decoded;
     std::string decode_error;
-    if (!DecodeRep(encoded, &decoded, &decode_error)) {
-        if (decode_error == "allocate decoded rep data failed") {
-            return Fail(decode_error, error);
+    RepDecodeError category;
+    if (!DecodeRep(encoded, &decoded, &decode_error, &category)) {
+        switch (category) {
+            case RepDecodeError::Internal:
+                return Fail(decode_error, error);
+            case RepDecodeError::UnsupportedVersion:
+                return InvalidReport(logical_path, "unsupported report version", error);
+            case RepDecodeError::InvalidFormat:
+                if (!nested) {
+                    return InvalidReport(
+                        logical_path,
+                        encoded.empty() ? "invalid file format: the file is empty" : "invalid file format", error);
+                }
+                [[fallthrough]];
+            default:
+                return InvalidReport(logical_path, "file is corrupted", error);
         }
-        return InvalidInput(logical_path, "invalid report file: " + decode_error, error);
     }
 
     std::vector<ImportedProfileEntry> imported;
@@ -358,8 +375,7 @@ bool DecodeImportedEntries(
         entry.name = std::move(decoded_entry.file_name);
         entry.type = decoded_entry.file_type;
         if (entry.type == NpuRepFileType::NpuRep) {
-            const std::string child_path = logical_path + "/" + entry.name;
-            if (!DecodeImportedEntries(decoded_entry.payload, child_path, &entry.children, error)) {
+            if (!DecodeImportedEntries(decoded_entry.payload, logical_path, &entry.children, error, true)) {
                 return false;
             }
         } else {

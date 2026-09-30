@@ -88,8 +88,7 @@ bool ValidateInputName(const boost::filesystem::path& inputRep, std::string* err
     std::string name = inputRep.filename().string();
     if (!RemoveSuffix(&name)) {
         return Fail(
-            "Invalid input '" + inputRep.string() +
-                "': unsupported report file name. Please provide a valid npu-compute report file.",
+            "--import expects a report file, but '" + inputRep.string() + "' has an unsupported report file name.",
             error);
     }
     return true;

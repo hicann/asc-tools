@@ -8,6 +8,7 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 # ----------------------------------------------------------------------------------------------------------
 import os
+import struct
 import subprocess
 from pathlib import Path
 
@@ -333,8 +334,8 @@ def test_missing_import_report_returns_report_error(arguments, tmp_path):
     result = run_cli(*arguments, cwd=tmp_path)
 
     assert result.returncode == 4
-    assert "file does not exist" in result.stderr
-    assert "Please provide a valid npu-compute report file." in result.stderr
+    assert "does not exist" in result.stderr
+    assert "--import expects a report file, but " in result.stderr
     assert list(tmp_path.iterdir()) == []
 
 
@@ -370,7 +371,7 @@ def test_pr_prototype_options_are_rejected(obsolete_option):
 def test_missing_value_records_option_occurrence(option, tail):
     missing = {
         "--replay-mode": "--replay-mode requires a mode. Supported value: kernel.",
-        "--import": "--import requires an input report file.",
+        "--import": "--import expects a report file, but no file was provided.",
         "--export": "--export requires an output path: a report file or directory.",
     }[option]
     result = run_cli(option, "--help", option, *tail)
@@ -477,8 +478,8 @@ def test_optional_separator_preserves_application_arguments(
     [
         (("--section",), "--section requires a section name."),
         (("--replay-mode",), "--replay-mode requires a mode."),
-        (("--import",), "--import requires an input report file."),
-        (("-i",), "--import requires an input report file."),
+        (("--import",), "--import expects a report file, but no file was provided."),
+        (("-i",), "--import expects a report file, but no file was provided."),
         (("--export",), "--export requires an output path:"),
         (("-o",), "--export requires an output path:"),
         (("--import", "missing.npu-rep"), "--import cannot be combined"),
@@ -509,9 +510,15 @@ def test_flag_value_errors_are_specific_and_do_not_launch(option, value, tmp_pat
 @pytest.mark.parametrize(
     ("arguments", "message"),
     [
-        (("--import",), "--import requires an input report file."),
-        (("--import=",), "--import requires a non-empty input report file."),
-        (("--import", ""), "--import requires a non-empty input report file."),
+        (("--import",), "--import expects a report file, but no file was provided."),
+        (
+            ("--import=",),
+            "--import expects a report file, but no file was specified.",
+        ),
+        (
+            ("--import", ""),
+            "--import expects a report file, but no file was specified.",
+        ),
     ],
 )
 def test_import_argument_errors(arguments, message, tmp_path):
@@ -522,8 +529,9 @@ def test_import_argument_errors(arguments, message, tmp_path):
     assert list(tmp_path.iterdir()) == []
 
 
+@pytest.mark.parametrize("option", ["-i", "--import"])
 @pytest.mark.parametrize("kind", ["missing", "directory", "empty", "corrupt"])
-def test_invalid_import_preserves_reason_and_creates_no_output(kind, tmp_path):
+def test_invalid_import_preserves_reason_and_creates_no_output(option, kind, tmp_path):
     file = tmp_path / "app"
     if kind == "directory":
         file.mkdir()
@@ -532,16 +540,25 @@ def test_invalid_import_preserves_reason_and_creates_no_output(kind, tmp_path):
     elif kind == "corrupt":
         file.write_bytes(b"invalid" * 32)
     before = set(tmp_path.iterdir())
-    result = run_cli("--import", "app", cwd=tmp_path)
+    result = run_cli(option, "app", cwd=tmp_path)
     assert result.returncode == 4
     assert result.stdout == ""
-    assert "Invalid input 'app':" in result.stderr
-    assert "Please provide a valid npu-compute report file." in result.stderr
+    if kind in ("missing", "directory"):
+        assert result.stderr.startswith(
+            "[ERROR] npu-compute: --import expects a report file, but 'app' "
+        )
+    else:
+        assert result.stderr.startswith(
+            "[ERROR] npu-compute: invalid npu-compute report 'app': "
+        )
+        assert "--import expects" not in result.stderr
+    assert "Invalid input" not in result.stderr
+    assert "regular file" not in result.stderr
     reason = {
-        "missing": "file does not exist",
+        "missing": "does not exist",
         "directory": "directory",
-        "empty": "shorter than its header",
-        "corrupt": "invalid rep header magic",
+        "empty": "invalid file format: the file is empty",
+        "corrupt": "invalid file format",
     }[kind]
     assert reason in result.stderr
     assert "file path" not in result.stderr
@@ -639,5 +656,56 @@ def test_collected_report_imports_and_unsupported_name_leaves_no_output(tmp_path
     invalid = run_cli("--import", "app", cwd=tmp_path)
     assert invalid.returncode == 4
     assert "unsupported report file name" in invalid.stderr
-    assert "Please provide a valid npu-compute report file." in invalid.stderr
+    assert "--import expects a report file, but " in invalid.stderr
     assert set(tmp_path.iterdir()) == before
+
+
+@pytest.mark.parametrize("option", ["-i", "--import"])
+@pytest.mark.parametrize(
+    "kind",
+    [
+        "empty",
+        "short_magic",
+        "wrong_magic",
+        "short_version",
+        "truncated",
+        "bad_length",
+        "unknown_version",
+        "nested",
+    ],
+)
+def test_import_format_diagnostics(option, kind, tmp_path):
+    magic = b"npu-rep\0"
+    header = struct.pack("<8sIHHIIIQ", magic, 0x10000, 1, 36, 0, 160, 0, 36)
+    samples = {
+        "empty": (b"", "invalid file format: the file is empty"),
+        "short_magic": (magic[:4], "invalid file format"),
+        "wrong_magic": (b"x" + header[1:], "invalid file format"),
+        "short_version": (magic, "file is corrupted"),
+        "truncated": (header[:20], "file is corrupted"),
+        "bad_length": (header + b"extra", "file is corrupted"),
+        "unknown_version": (
+            magic + struct.pack("<I", 0x20000) + header[12:],
+            "unsupported report version",
+        ),
+    }
+    # The outer report is valid, but its nested report cannot be decoded.
+    payload = b"invalid"
+    nested_header = struct.pack(
+        "<8sIHHIIIQ", magic, 0x10000, 1, 36, 1, 160, 0, 196 + len(payload)
+    )
+    info = struct.pack(
+        "<8s128sHHIQQ", magic, b"internal.rep", 1, 0, 0, len(payload), 196
+    )
+    samples["nested"] = (nested_header + info + payload, "file is corrupted")
+    data, reason = samples[kind]
+    file = tmp_path / "input.npu-rep"
+    file.write_bytes(data)
+    result = run_cli(option, file.name, cwd=tmp_path)
+    assert result.returncode == 4
+    assert (
+        result.stderr
+        == f"[ERROR] npu-compute: invalid npu-compute report '{file.name}': {reason}.\n"
+    )
+    assert result.stdout == ""
+    assert list(tmp_path.iterdir()) == [file]

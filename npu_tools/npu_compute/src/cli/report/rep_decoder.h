@@ -30,7 +30,10 @@ struct DecodedRep {
     std::vector<DecodedRepEntry> entries;
 };
 
-bool DecodeRep(const std::vector<uint8_t>& encoded, DecodedRep* decoded, std::string* error);
+enum class RepDecodeError { None, InvalidFormat, Corrupted, UnsupportedVersion, Internal };
+
+bool DecodeRep(
+    const std::vector<uint8_t>& encoded, DecodedRep* decoded, std::string* error, RepDecodeError* category = nullptr);
 
 } // namespace npucompute::cli
 

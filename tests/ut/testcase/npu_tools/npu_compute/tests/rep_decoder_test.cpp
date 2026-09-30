@@ -215,3 +215,48 @@ static int RunSuiteMain()
 }
 
 TEST(NpuComputeRepDecoder, Main) { ASSERT_EQ(RunSuiteMain(), 0) << "NpuComputeRepDecoder reported failure"; }
+
+TEST(NpuComputeRepDecoder, ClassifiesTruncationAndSupportsExtendedHeaders)
+{
+    using npucompute::cli::RepDecodeError;
+    std::vector<uint8_t> encoded;
+    ASSERT_TRUE(BuildRep(&encoded));
+    DecodedRep decoded;
+    std::string error;
+    RepDecodeError category;
+    for (std::size_t size = 0; size < encoded.size(); ++size) {
+        std::vector<uint8_t> truncated(encoded.begin(), encoded.begin() + size);
+        ASSERT_FALSE(DecodeRep(truncated, &decoded, &error, &category)) << size;
+        EXPECT_EQ(category, size < 8 ? RepDecodeError::InvalidFormat : RepDecodeError::Corrupted) << size;
+        EXPECT_TRUE(decoded.entries.empty());
+    }
+    auto unknown = encoded;
+    WriteLe32(0x00020000U, unknown.data() + 8);
+    ASSERT_FALSE(DecodeRep(unknown, &decoded, &error, &category));
+    EXPECT_EQ(category, RepDecodeError::UnsupportedVersion);
+    ASSERT_FALSE(DecodeRep(encoded, nullptr, &error, &category));
+    EXPECT_EQ(category, RepDecodeError::Internal);
+
+    ASSERT_TRUE(DecodeRep(encoded, &decoded, &error));
+    const auto original = decoded;
+    for (std::size_t extra : {1U, 12U, 64U}) {
+        auto extended = encoded;
+        extended.insert(extended.begin() + 36, extra, 0xA5);
+        WriteLe16(36 + extra, extended.data() + 14);
+        WriteLe64(extended.size(), extended.data() + 28);
+        std::size_t offset = 36 + extra + 160 * original.entries.size();
+        for (std::size_t i = 0; i < original.entries.size(); ++i) {
+            WriteLe64(offset, extended.data() + 36 + extra + 160 * i + 152);
+            offset += original.entries[i].payload.size();
+        }
+        ASSERT_TRUE(DecodeRep(extended, &decoded, &error, &category)) << error;
+        EXPECT_EQ(category, RepDecodeError::None);
+        ASSERT_EQ(decoded.entries.size(), original.entries.size());
+        for (std::size_t i = 0; i < original.entries.size(); ++i) {
+            EXPECT_EQ(decoded.entries[i].payload, original.entries[i].payload);
+        }
+        WriteLe16(extended.size() + 1, extended.data() + 14);
+        ASSERT_FALSE(DecodeRep(extended, &decoded, &error, &category));
+        EXPECT_EQ(category, RepDecodeError::Corrupted);
+    }
+}

@@ -82,25 +82,40 @@ bool ReadFileName(const uint8_t* data, std::string* name, std::string* error)
 
 } // namespace
 
-bool DecodeRep(const std::vector<uint8_t>& encoded, DecodedRep* decoded, std::string* error)
+bool DecodeRep(const std::vector<uint8_t>& encoded, DecodedRep* decoded, std::string* error, RepDecodeError* category)
 {
+    auto classify = [category](RepDecodeError value) {
+        if (category != nullptr)
+            *category = value;
+    };
+    classify(RepDecodeError::Corrupted);
     if (error != nullptr) {
         error->clear();
     }
     if (decoded == nullptr) {
+        classify(RepDecodeError::Internal);
         return Fail("decoded rep output is null", error);
     }
     *decoded = {};
 
     try {
-        if (encoded.size() < kNpuRepHeadSize) {
-            return Fail("rep is shorter than its header", error);
-        }
-        const uint8_t* head = encoded.data();
-        if (!HasMagic(head)) {
+        if (encoded.size() < kNpuRepMagic.size() || !HasMagic(encoded.data())) {
+            classify(RepDecodeError::InvalidFormat);
             return Fail("invalid rep header magic", error);
         }
+        const uint8_t* head = encoded.data();
+        if (encoded.size() < 8U + sizeof(uint32_t)) {
+            return Fail("truncated rep version", error);
+        }
         const uint32_t version = ReadLe32(head + 8U);
+        if (version != kNpuRepVersion) {
+            classify(RepDecodeError::UnsupportedVersion);
+            return Fail("unsupported rep version", error);
+        }
+        // Bound all known fields before reading; this is not an exact header-size requirement.
+        if (encoded.size() < kNpuRepHeaderFieldsEnd) {
+            return Fail("truncated rep header fields", error);
+        }
         const uint16_t origin = ReadLe16(head + 12U);
         const uint16_t head_length = ReadLe16(head + 14U);
         const uint32_t file_count = ReadLe32(head + 16U);
@@ -108,13 +123,10 @@ bool DecodeRep(const std::vector<uint8_t>& encoded, DecodedRep* decoded, std::st
         const uint32_t reserved = ReadLe32(head + 24U);
         const uint64_t rep_length = ReadLe64(head + 28U);
 
-        if (version != kNpuRepVersion) {
-            return Fail("unsupported rep version", error);
-        }
         if (origin != kNpuRepOrigin) {
             return Fail("unsupported rep origin", error);
         }
-        if (head_length != kNpuRepHeadSize) {
+        if (head_length < kNpuRepHeaderFieldsEnd || head_length > encoded.size()) {
             return Fail("invalid rep header length", error);
         }
         if (file_info_length != kNpuRepFileInfoSize) {
@@ -186,8 +198,10 @@ bool DecodeRep(const std::vector<uint8_t>& encoded, DecodedRep* decoded, std::st
             *decoded = {};
             return Fail("rep contains unreferenced payload bytes", error);
         }
+        classify(RepDecodeError::None);
         return true;
     } catch (const std::bad_alloc&) {
+        classify(RepDecodeError::Internal);
         *decoded = {};
         return Fail("allocate decoded rep data failed", error);
     }

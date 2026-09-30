@@ -381,3 +381,23 @@ static int RunSuiteMain()
 }
 
 TEST(NpuComputeRepReportWriter, Main) { ASSERT_EQ(RunSuiteMain(), 0) << "NpuComputeRepReportWriter reported failure"; }
+
+TEST(NpuComputeRepReportWriter, PublishesExtendedHeaderAndRejectsTruncation)
+{
+    TempDirectory temporary;
+    std::vector<uint8_t> encoded;
+    std::string error;
+    ASSERT_TRUE(EncodeRep({}, &encoded, &error));
+    encoded.insert(encoded.end(), 12, 0xA5);
+    encoded[14] = 48;
+    encoded[28] = 48;
+    const ReportTarget target{temporary.Path() / "extended.npu-rep"};
+    ASSERT_TRUE(PublishRepReport(encoded, target, &error)) << error;
+    EXPECT_TRUE(boost::filesystem::exists(target.path));
+    for (std::size_t size = 0; size < encoded.size(); ++size) {
+        const ReportTarget invalid{temporary.Path() / (std::to_string(size) + ".npu-rep")};
+        const std::vector<uint8_t> truncated(encoded.begin(), encoded.begin() + size);
+        EXPECT_FALSE(PublishRepReport(truncated, invalid, &error)) << size;
+        EXPECT_FALSE(boost::filesystem::exists(invalid.path));
+    }
+}

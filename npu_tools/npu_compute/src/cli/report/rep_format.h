@@ -19,7 +19,10 @@ namespace npucompute::cli {
 inline constexpr std::array<uint8_t, 8> kNpuRepMagic = {'n', 'p', 'u', '-', 'r', 'e', 'p', '\0'};
 inline constexpr uint32_t kNpuRepVersion = 0x00010000U;
 inline constexpr uint16_t kNpuRepOrigin = 1U;
+// Bytes emitted by the current encoder. Readers may accept header extensions.
 inline constexpr std::size_t kNpuRepHeadSize = 36U;
+// End of the last field understood by the current version.
+inline constexpr std::size_t kNpuRepHeaderFieldsEnd = 28U + sizeof(uint64_t);
 inline constexpr std::size_t kNpuRepFileInfoSize = 160U;
 inline constexpr std::size_t kNpuRepFileNameSize = 128U;
 

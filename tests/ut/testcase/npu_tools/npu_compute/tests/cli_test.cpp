@@ -133,7 +133,7 @@ int TestImportExportParsing()
     CHECK(config.import_path == "old.npu-rep");
     CHECK(!config.export_path);
     CHECK(!Parse({"npu-compute", "--import", ""}, &config, &errors));
-    CHECK(errors == std::vector<std::string>({"--import requires a non-empty input report file."}));
+    CHECK(errors == std::vector<std::string>({"--import expects a report file, but no file was specified."}));
     CHECK(!config.import_path);
     return 0;
 }
@@ -490,8 +490,8 @@ int TestSeparatorMissingValues()
     const MissingValueCase cases[] = {
         {"--section", "--section requires a section name. Use --list-sections to see supported names."},
         {"--replay-mode", "--replay-mode requires a mode. Supported value: kernel."},
-        {"--import", "--import requires an input report file."},
-        {"-i", "--import requires an input report file."},
+        {"--import", "--import expects a report file, but no file was provided."},
+        {"-i", "--import expects a report file, but no file was provided."},
         {"--export", "--export requires an output path: a report file or directory."},
         {"-o", "--export requires an output path: a report file or directory."},
     };
@@ -686,12 +686,12 @@ TEST(NpuComputeCli, ImportReportsMissingAndEmptyFile)
     std::vector<std::string> errors;
     for (const char* option : {"--import", "-i"}) {
         EXPECT_FALSE(Parse({"npu-compute", option}, &config, &errors));
-        EXPECT_EQ(errors, std::vector<std::string>{"--import requires an input report file."});
+        EXPECT_EQ(errors, std::vector<std::string>{"--import expects a report file, but no file was provided."});
         EXPECT_FALSE(Parse({"npu-compute", option, ""}, &config, &errors));
-        EXPECT_EQ(errors, std::vector<std::string>{"--import requires a non-empty input report file."});
+        EXPECT_EQ(errors, std::vector<std::string>{"--import expects a report file, but no file was specified."});
     }
     EXPECT_FALSE(Parse({"npu-compute", "--import="}, &config, &errors));
-    EXPECT_EQ(errors, std::vector<std::string>{"--import requires a non-empty input report file."});
+    EXPECT_EQ(errors, std::vector<std::string>{"--import expects a report file, but no file was specified."});
 }
 
 TEST(NpuComputeCli, FlagValuesReportSpecificErrors)
@@ -702,8 +702,9 @@ TEST(NpuComputeCli, FlagValuesReportSpecificErrors)
         for (const std::string suffix : {"=", "=value"}) {
             EXPECT_FALSE(Parse({"npu-compute", option + suffix, "--import"}, &config, &errors));
             EXPECT_EQ(
-                errors, (std::vector<std::string>{
-                            option + " does not take a value.", "--import requires an input report file."}));
+                errors,
+                (std::vector<std::string>{
+                    option + " does not take a value.", "--import expects a report file, but no file was provided."}));
             EXPECT_FALSE(config.show_help);
             EXPECT_FALSE(config.list_sets);
             EXPECT_FALSE(config.list_sections);
